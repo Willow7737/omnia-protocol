@@ -1,30 +1,43 @@
 ---
-name: 🐛 Bug Report
-about: Create a report to help us improve the protocol
-title: '[BUG] '
-labels: bug
-assignees: ''
+name: Bug Report
+about: Report a reproducible bug or unexpected behavior.
+title: "[Bug]: "
+labels: [bug, triage]
+assignees: []
 ---
 
-**Describe the bug**
+## 🐛 Description
+
 A clear and concise description of what the bug is.
 
-**To Reproduce**
+## 再現手順 (Steps to Reproduce)
+
 Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
+
+1. Go to \'...
+2. Click on \'....\'
+3. Scroll down to \'....\'
 4. See error
 
-**Expected behavior**
+## 💡 Expected Behavior
+
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## 🖥️ Actual Behavior
 
-**Environment (please complete the following information):**
- - OS: [e.g. iOS]
- - Version [e.g. 22]
+A clear and concise description of what actually happened.
 
-**Additional context**
+## 📋 Environment
+
+- **OS:** [e.g. macOS, Windows, Linux]
+- **Version:** [e.g. 1.0.0]
+- **Node.js Version (if applicable):** [e.g. 16.x]
+- **Browser (if applicable):** [e.g. Chrome, Firefox]
+
+## 📸 Screenshots/Logs
+
+If applicable, add screenshots or console logs to help explain your problem.
+
+## ➕ Additional Context
+
 Add any other context about the problem here.

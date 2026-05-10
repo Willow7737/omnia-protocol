@@ -1,12 +1,17 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Omnia Protocol Banner" width="100%">
+  <img src="./assets/banner.png" alt="Omnia Protocol Banner" width="100%">
 </p>
 
 <p align="center">
+  <a href="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml">
+    <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
   <img src="https://img.shields.io/badge/Status-Genesis_Draft-blue?style=for-the-badge" alt="Status">
   <img src="https://img.shields.io/badge/Version-1.0-green?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/License-CC0-lightgrey?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Maintained%20by-Omnia%20Community-orange?style=for-the-badge" alt="Maintained by">
+  <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
+  <img src="https://img.shields.io/github/forks/Willow7737/omnia-protocol?style=for-the-badge&color=lightgray" alt="GitHub Forks">
 </p>
 
 <h1 align="center">Omnia Protocol</h1>
@@ -53,20 +58,19 @@ Omnia is not a company, a coin, or an app. It is a **protocol**—a fundamental 
 
 Traditional blockchains operate like a single-file line, forcing unrelated events to wait for each other. Omnia utilizes **Causal Consistency**, allowing independent transactions to process in parallel.
 
-```mermaid
-graph LR
-    G[Genesis] --> A[Alice pays Bob]
-    G --> C[Carol pays Dave]
-    G --> E[Eve pays Frank]
-    A --> B[Bob pays Carol]
-    C --> B
-    style G fill:#f9f,stroke:#333,stroke-width:4px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-```
+<p align="center">
+  <img src="./assets/consensus_comparison_diagram.png" alt="Causal Consistency Diagram" width="80%">
+</p>
 
 ---
 
 ## 🏗️ The Five Layers
+
+Omnia Protocol is structured into five distinct, yet interconnected, layers, each addressing a critical aspect of decentralized coordination and reality fusion.
+
+<p align="center">
+  <img src="./assets/architecture_visual.png" alt="Omnia Protocol 5-Layer Architecture" width="100%">
+</p>
 
 ### 1. The Substrate (Physics-Aware Consensus)
 The foundation that establishes agreement without relying on clock time, using **Causal Graphs**, **Vector Clocks**, and **CRDTs**.
@@ -140,6 +144,18 @@ Omnia thrives through open collaboration. See [**CONTRIBUTING.md**](./CONTRIBUTI
 
 ---
 
+## 💬 Community & Support
+
+Join our growing community and stay up-to-date with the latest developments:
+
+- **GitHub Issues:** For bug reports and feature requests.
+- **GitHub Discussions:** For general questions, ideas, and in-depth discussions.
+- **Discord:** Real-time chat and community support.
+- **Forum:** For detailed proposals and governance discussions.
+- **Email:** `conduct@omnia.protocol` (for conduct-related issues).
+
+---
+
 ## 📜 License
 
 **Public Domain (CC0)** — No entity owns this protocol. Use it freely. Build on it. Improve it.
@@ -148,4 +164,8 @@ Omnia thrives through open collaboration. See [**CONTRIBUTING.md**](./CONTRIBUTI
 
 <p align="center">
   <strong>Omnia is the infrastructure for a future where trust is mathematically guaranteed.</strong>
+</p>
+
+<p align="center">
+  Made with ❤️ by the Omnia Community
 </p>
