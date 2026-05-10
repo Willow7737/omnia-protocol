@@ -150,16 +150,17 @@ Omnia leverages **zk-SNARKs** to allow users to prove facts without revealing un
 Omnia thrives through open collaboration. See [**CONTRIBUTING.md**](./CONTRIBUTING.md) for guidelines.
 
 ---
+### 💬 Community & Support
 
-## 💬 Community & Support
+Omnia is a public-interest protocol. Join the conversation across our various channels:
 
-Join our growing community and stay up-to-date with the latest developments:
-
-- **GitHub Issues:** For bug reports and feature requests.
-- **GitHub Discussions:** For general questions, ideas, and in-depth discussions.
-- **Discord:** Real-time chat and community support.
-- **Forum:** For detailed proposals and governance discussions.
-- **Email:** `conduct@omnia.protocol` (for conduct-related issues).
+- **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - The primary place for questions, ideas, and general community interaction.
+- **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - For bug reports, feature requests, and technical research proposals.
+- **[Project Dashboard](./PROJECT_DASHBOARD.md)** - For real-time project health and status updates.
+- **[Requirements & Status](./STATUS.md)** - For granular tracking of technical requirements.
+- **Discord:** Real-time chat and community (Link coming soon)
+- **Forum:** Detailed discussions and proposals (Link coming soon)
+- **Email:** `conduct@omnia.protocol` (for conduct-related issues)
 
 ---
 
