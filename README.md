@@ -165,7 +165,3 @@ Join our growing community and stay up-to-date with the latest developments:
 <p align="center">
   <strong>Omnia is the infrastructure for a future where trust is mathematically guaranteed.</strong>
 </p>
-
-<p align="center">
-  Made with ❤️ by the Omnia Community
-</p>
