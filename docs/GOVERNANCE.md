@@ -58,7 +58,7 @@ The protocol evolves to meet changing needs without requiring hard forks.
 **Who decides:** Community members
 
 **Process:**
-1. Issue raised (GitHub, forum, Discord)
+1. Issue raised (GitHub, forum, [Discord](https://discord.gg/qYkpAeSYR))
 2. Community discussion (1 week)
 3. Consensus-building (1 week)
 4. Implementation (if consensus reached)

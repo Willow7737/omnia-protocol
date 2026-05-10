@@ -396,7 +396,7 @@ However, humans will always have a voice through their participation and voting.
 **A:** 
 
 - Check the documentation: docs.omnia.protocol
-- Ask on Discord: discord.gg/omnia
+- Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
 - Post on the forum: forum.omnia.protocol
 - Email support: support@omnia.protocol
 

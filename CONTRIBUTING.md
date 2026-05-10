@@ -470,7 +470,7 @@ Omnia is a public-interest protocol. Join the conversation across our various ch
 - **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - The primary place for questions, ideas, and general community interaction.
 - **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - For bug reports, feature requests, and technical research proposals.
 - **[Project Dashboard](./PROJECT_DASHBOARD.md)** - For real-time project health and status updates.
-- **Discord:** Real-time chat and community (Link coming soon)
+- **Discord:** Real-time chat and community [Join our Discord](https://discord.gg/qYkpAeSYR)
 - **Forum:** Detailed discussions and proposals (Link coming soon)
 - **Email:** `conduct@omnia.protocol` (for conduct issues)
 
