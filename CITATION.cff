@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this protocol in your research, please cite it as below."
+authors:
+- family-names: "Omnia"
+  given-names: "Community"
+title: "Omnia Protocol: The Universal Coordination Layer for Reality"
+version: 1.0.0
+date-released: 2026-05-10
+url: "https://github.com/Willow7737/omnia-protocol"
