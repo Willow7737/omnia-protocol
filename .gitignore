@@ -1,7 +1,7 @@
 # Assets
-assets/*.png
-assets/*.jpg
-assets/*.jpeg
+# assets/*.png
+# assets/*.jpg
+# assets/*.jpeg
 
 # OS files
 .DS_Store
