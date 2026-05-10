@@ -1,0 +1,55 @@
+graph LR
+    subgraph Farm["🌾 Farm (Ethiopia)"]
+        F1["Harvest Coffee"]
+        F2["RF Fingerprint"]
+        F3["Quantum Seal"]
+        F1 --> F2 --> F3
+    end
+    
+    subgraph Coop["🏭 Cooperative"]
+        C1["Wash & Grade"]
+        C2["Update RF"]
+        C3["Verify Seal"]
+        C1 --> C2 --> C3
+    end
+    
+    subgraph Export["📦 Export"]
+        E1["Container"]
+        E2["GPS Tracking"]
+        E3["Temp Sensors"]
+        E1 --> E2 --> E3
+    end
+    
+    subgraph Roast["☕ Roasting"]
+        R1["Roast to Spec"]
+        R2["Carbon Calc"]
+        R3["Sign Hash"]
+        R1 --> R2 --> R3
+    end
+    
+    subgraph Retail["🛍️ Retail"]
+        RT1["Verify Chain"]
+        RT2["Display Provenance"]
+        RT3["QR Code"]
+        RT1 --> RT2 --> RT3
+    end
+    
+    subgraph Consumer["👤 Consumer"]
+        CS1["Scan QR"]
+        CS2["See Full Journey"]
+        CS3["Verify Authenticity"]
+        CS1 --> CS2 --> CS3
+    end
+    
+    F3 -->|"Cryptographic<br/>Proof"| C1
+    C3 -->|"Atomic<br/>Transaction"| E1
+    E3 -->|"Verified<br/>Handoff"| R1
+    R3 -->|"Complete<br/>Chain"| RT1
+    RT3 -->|"Consumer<br/>Verification"| CS1
+    
+    style Farm fill:#065f46
+    style Coop fill:#065f46
+    style Export fill:#0c4a6e
+    style Roast fill:#78350f
+    style Retail fill:#7c2d12
+    style Consumer fill:#1e293b

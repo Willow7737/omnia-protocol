@@ -1,0 +1,46 @@
+graph TB
+    subgraph User["👤 User (You)"]
+        DID["Decentralized Identifier<br/>did:omnia:z6Mk..."]
+        PK["Private Key<br/>(Stored Securely)"]
+        DID -.->|"Cryptographically<br/>Linked"| PK
+    end
+    
+    subgraph Credentials["📜 Verifiable Credentials"]
+        C1["Age Credential<br/>(Over 18)"]
+        C2["Education<br/>(University Degree)"]
+        C3["Health<br/>(Vaccinated)"]
+        C4["Reputation<br/>(Score: 87/100)"]
+    end
+    
+    subgraph Recovery["🔐 Social Recovery"]
+        G1["Guardian 1"]
+        G2["Guardian 2"]
+        G3["Guardian 3"]
+        G4["Guardian 4"]
+        G5["Guardian 5"]
+    end
+    
+    subgraph ZKProof["🔒 Zero-Knowledge Proofs"]
+        ZK1["Prove Age<br/>Without Birth Date"]
+        ZK2["Prove Education<br/>Without Diploma"]
+        ZK3["Prove Health Status<br/>Without Records"]
+    end
+    
+    subgraph Usage["✅ Use Cases"]
+        U1["Travel"]
+        U2["Employment"]
+        U3["Healthcare"]
+        U4["Finance"]
+    end
+    
+    User --> Credentials
+    Credentials --> ZKProof
+    User --> Recovery
+    Recovery -->|"3 of 5<br/>Confirmation"| User
+    ZKProof --> Usage
+    
+    style User fill:#4c1d95
+    style Credentials fill:#6d28d9
+    style Recovery fill:#5b21b6
+    style ZKProof fill:#7c3aed
+    style Usage fill:#8b5cf6

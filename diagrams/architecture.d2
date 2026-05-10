@@ -1,0 +1,284 @@
+direction: down
+
+# Main title
+title: "Omnia Protocol: Five-Layer Architecture"
+
+# Layer 5: Economic Layer
+layer5: {
+  label: "Layer 5: Economic Layer"
+  style: {
+    fill: "#1a1f3a"
+    stroke: "#6366f1"
+    stroke-width: 3
+  }
+  
+  ubc: {
+    label: "Universal Basic Compute"
+    style: {
+      fill: "#312e81"
+      stroke: "#818cf8"
+    }
+  }
+  
+  rpgf: {
+    label: "Retroactive Public Goods Funding"
+    style: {
+      fill: "#312e81"
+      stroke: "#818cf8"
+    }
+  }
+  
+  adaptive: {
+    label: "Adaptive Monetary Policy"
+    style: {
+      fill: "#312e81"
+      stroke: "#818cf8"
+    }
+  }
+  
+  ubc -> rpgf: "funds"
+  rpgf -> adaptive: "responds to"
+}
+
+# Layer 4: Identity Layer
+layer4: {
+  label: "Layer 4: Identity Layer"
+  style: {
+    fill: "#1a1f3a"
+    stroke: "#8b5cf6"
+    stroke-width: 3
+  }
+  
+  dids: {
+    label: "Decentralized Identifiers (DIDs)"
+    style: {
+      fill: "#4c1d95"
+      stroke: "#c084fc"
+    }
+  }
+  
+  credentials: {
+    label: "Verifiable Credentials"
+    style: {
+      fill: "#4c1d95"
+      stroke: "#c084fc"
+    }
+  }
+  
+  reputation: {
+    label: "Reputation System"
+    style: {
+      fill: "#4c1d95"
+      stroke: "#c084fc"
+    }
+  }
+  
+  recovery: {
+    label: "Social Recovery"
+    style: {
+      fill: "#4c1d95"
+      stroke: "#c084fc"
+    }
+  }
+  
+  dids -> credentials: "issues"
+  credentials -> reputation: "builds"
+  reputation -> recovery: "enables"
+}
+
+# Layer 3: Binding Layer
+layer3: {
+  label: "Layer 3: Binding Layer (Physical Anchoring)"
+  style: {
+    fill: "#1a1f3a"
+    stroke: "#ec4899"
+    stroke-width: 3
+  }
+  
+  rf: {
+    label: "RF Fingerprinting"
+    style: {
+      fill: "#831843"
+      stroke: "#f472b6"
+    }
+  }
+  
+  quantum: {
+    label: "Quantum Sealing"
+    style: {
+      fill: "#831843"
+      stroke: "#f472b6"
+    }
+  }
+  
+  grav: {
+    label: "Gravitational Timestamps"
+    style: {
+      fill: "#831843"
+      stroke: "#f472b6"
+    }
+  }
+  
+  bio: {
+    label: "Biometric Binding"
+    style: {
+      fill: "#831843"
+      stroke: "#f472b6"
+    }
+  }
+  
+  sat: {
+    label: "Satellite Mesh"
+    style: {
+      fill: "#831843"
+      stroke: "#f472b6"
+    }
+  }
+  
+  rf -> quantum: "verifies"
+  quantum -> grav: "confirms"
+  grav -> bio: "authenticates"
+  bio -> sat: "cross-validates"
+}
+
+# Layer 2: Domain Shards
+layer2: {
+  label: "Layer 2: Domain Shards"
+  style: {
+    fill: "#1a1f3a"
+    stroke: "#f59e0b"
+    stroke-width: 3
+  }
+  
+  financial: {
+    label: "Financial Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  computational: {
+    label: "Computational Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  physical: {
+    label: "Physical Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  biological: {
+    label: "Biological Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  energy: {
+    label: "Energy Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  temporal: {
+    label: "Temporal Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  identity_shard: {
+    label: "Identity Shard"
+    style: {
+      fill: "#78350f"
+      stroke: "#fbbf24"
+    }
+  }
+  
+  financial -> computational: "atomic"
+  computational -> physical: "atomic"
+  physical -> biological: "atomic"
+  biological -> energy: "atomic"
+  energy -> temporal: "atomic"
+  temporal -> identity_shard: "atomic"
+}
+
+# Layer 1: The Substrate
+layer1: {
+  label: "Layer 1: The Substrate (Physics-Aware Consensus)"
+  style: {
+    fill: "#1a1f3a"
+    stroke: "#10b981"
+    stroke-width: 3
+  }
+  
+  causal: {
+    label: "Causal Graph Consensus"
+    style: {
+      fill: "#064e3b"
+      stroke: "#6ee7b7"
+    }
+  }
+  
+  vectors: {
+    label: "Vector Clocks"
+    style: {
+      fill: "#064e3b"
+      stroke: "#6ee7b7"
+    }
+  }
+  
+  crdts: {
+    label: "CRDTs"
+    style: {
+      fill: "#064e3b"
+      stroke: "#6ee7b7"
+    }
+  }
+  
+  relativistic: {
+    label: "Relativistic Boundaries"
+    style: {
+      fill: "#064e3b"
+      stroke: "#6ee7b7"
+    }
+  }
+  
+  causal -> vectors: "uses"
+  vectors -> crdts: "ensures"
+  crdts -> relativistic: "enables"
+}
+
+# Connections between layers
+layer5 -> layer4: "governs"
+layer4 -> layer3: "anchors"
+layer3 -> layer2: "verifies"
+layer2 -> layer1: "coordinates"
+
+# Side annotations
+notes: {
+  style: {
+    fill: "#0f172a"
+    stroke: "#64748b"
+    stroke-width: 1
+  }
+  
+  note1: {
+    label: "✓ No intermediaries\n✓ Mathematically guaranteed trust\n✓ Interplanetary scale\n✓ AI-ready governance"
+    style: {
+      fill: "#1e293b"
+      stroke: "#94a3b8"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+graph TD
+    subgraph Traditional["Traditional Blockchain (Sequential)"]
+        B0["Block 0<br/>Genesis"]
+        B1["Block 1<br/>Alice → Bob"]
+        B2["Block 2<br/>Carol → Dave"]
+        B3["Block 3<br/>Bob → Carol"]
+        B4["Block 4<br/>Eve → Frank"]
+        
+        B0 --> B1
+        B1 --> B2
+        B2 --> B3
+        B3 --> B4
+        
+        style B0 fill:#10b981
+        style B1 fill:#f59e0b
+        style B2 fill:#f59e0b
+        style B3 fill:#f59e0b
+        style B4 fill:#f59e0b
+    end
+    
+    subgraph Omnia["Omnia Protocol (Causal Graph)"]
+        G0["Genesis"]
+        G1["Alice → Bob"]
+        G2["Carol → Dave"]
+        G3["Eve → Frank"]
+        G4["Bob → Carol"]
+        
+        G0 --> G1
+        G0 --> G2
+        G0 --> G3
+        G1 --> G4
+        G2 --> G4
+        G3 --> G4
+        
+        style G0 fill:#10b981
+        style G1 fill:#8b5cf6
+        style G2 fill:#8b5cf6
+        style G3 fill:#8b5cf6
+        style G4 fill:#6366f1
+    end
+    
+    Traditional -->|"Slow: Sequential<br/>Throughput: 7-15 TPS<br/>Latency: 10-15 seconds"| Comparison["⚡ Omnia is 1000x Faster"]
+    Omnia -->|"Fast: Parallel<br/>Throughput: 10,000+ TPS<br/>Latency: 1-5 seconds"| Comparison
+    
+    style Comparison fill:#1e293b,stroke:#64748b,color:#e2e8f0

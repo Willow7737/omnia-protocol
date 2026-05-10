@@ -1,0 +1,47 @@
+graph TD
+    subgraph Community["🌍 Omnia Community"]
+        H["All Participants<br/>Humans, AI, Collectives"]
+    end
+    
+    subgraph Pillars["Three Pillars of Governance"]
+        TG["⚙️ Technical Governance<br/>Protocol Changes"]
+        EG["💰 Economic Governance<br/>Monetary Policy"]
+        SG["🤝 Social Governance<br/>Community Standards"]
+    end
+    
+    subgraph Voting["🗳️ Voting Mechanisms"]
+        QV["Quadratic Voting<br/>Power = √Stake"]
+        CV["Conviction Voting<br/>Lock Tokens = More Power"]
+        DV["Delegation<br/>Vote Through Representatives"]
+    end
+    
+    subgraph Proposals["📋 Proposal Types"]
+        T1["Tier 1: Minor Updates<br/>1 Week"]
+        T2["Tier 2: Standard<br/>4 Weeks"]
+        T3["Tier 3: Major Changes<br/>12 Weeks"]
+    end
+    
+    subgraph Execution["✅ Execution"]
+        SF["Shadow Fork"]
+        TN["Testnet"]
+        MN["Mainnet"]
+    end
+    
+    subgraph Incentives["🎁 Incentives"]
+        RPGF["Retroactive Public<br/>Goods Funding"]
+        REP["Reputation<br/>Increase"]
+        VOTE["Voting Rights"]
+    end
+    
+    Community --> Pillars
+    Pillars --> Voting
+    Voting --> Proposals
+    Proposals --> Execution
+    Execution --> Incentives
+    
+    style Community fill:#1e293b,stroke:#64748b
+    style Pillars fill:#0f172a,stroke:#475569
+    style Voting fill:#0f172a,stroke:#475569
+    style Proposals fill:#0f172a,stroke:#475569
+    style Execution fill:#0f172a,stroke:#475569
+    style Incentives fill:#1e293b,stroke:#64748b
