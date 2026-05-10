@@ -23,6 +23,13 @@
 
 ---
 
+## 📊 Transparency Dashboard
+
+To uphold our commitment to radical transparency, we maintain a live dashboard of our progress, requirements, and team health.
+
+- [**Project Dashboard**](./PROJECT_DASHBOARD.md) - High-level overview, team status, and risk assessment.
+- [**Requirements & Status**](./STATUS.md) - Granular tracking of technical requirements and completion.
+
 ## 🌌 Vision
 
 Imagine a world where trust is not given—it is **mathematically guaranteed**. Omnia is building the infrastructure for a future where:
