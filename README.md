@@ -21,6 +21,7 @@
   <em>A decentralized protocol that replaces trust with mathematics, enabling value exchange, identity verification, and physical-digital fusion without intermediaries.</em>
 </p>
 
+[![Discord](https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white&color=black)](https://discord.gg/qYkpAeSYR)
 ---
 
 ## 📊 Transparency Dashboard
