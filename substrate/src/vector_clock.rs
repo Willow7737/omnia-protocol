@@ -75,7 +75,7 @@ impl VectorClock {
         let entry = self.clocks.entry(node_id).or_insert(0);
         *entry = entry
             .checked_add(1)
-            .ok_or(VectorClockError::ClockOverflow { node_id })?;
+            .ok_or(VectorClockError::ClockOverflow { node: node_id })?;
         Ok(*entry)
     }
 

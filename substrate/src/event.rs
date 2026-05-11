@@ -10,6 +10,7 @@
 //! - Parallel event creation (no single leader)
 //! - Complete network history through graph traversal
 
+use crate::crypto::{NodeKeypair, NodePublicKey, Signature as EdSignature, Verifier};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -19,8 +20,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Unique identifier for an event (SHA-256 hash of event content)
 pub type EventId = [u8; 32];
 
-/// A signature proving event authenticity
-pub type Signature = Vec<u8>;
+/// A signature proving event authenticity (64-byte Ed25519 signature)
+pub type Signature = [u8; 64];
 
 /// Payload data attached to an event (opaque to the substrate)
 pub type Payload = Vec<u8>;
@@ -62,7 +63,9 @@ pub struct Event {
     pub other_parent: Option<EventId>,
     /// Application-specific payload (transactions, etc.)
     pub payload: Payload,
-    /// Cryptographic signature over the event hash
+    /// Ed25519 public key of the creator (32 bytes)
+    pub creator_pubkey: [u8; 32],
+    /// Ed25519 signature over the event hash (64 bytes)
     pub signature: Signature,
     /// Current consensus status
     #[serde(skip)]
@@ -107,14 +110,6 @@ pub struct EventBatch {
 
 impl Event {
     /// Create a new event (without signature — must be signed separately)
-    ///
-    /// # Arguments
-    /// * `creator` - The node creating this event
-    /// * `sequence` - Monotonic sequence number for this creator
-    /// * `vector_clock` - Current vector clock state
-    /// * `self_parent` - Previous event from this creator (None for first event)
-    /// * `other_parent` - Event received from another node (None for genesis)
-    /// * `payload` - Application data
     pub fn new(
         creator: NodeId,
         sequence: u64,
@@ -137,7 +132,8 @@ impl Event {
             self_parent,
             other_parent,
             payload,
-            signature: Vec::new(),
+            creator_pubkey: [0u8; 32],
+            signature: [0u8; 64],
             status: EventStatus::Pending,
             ack_count: 0,
         };
@@ -152,7 +148,8 @@ impl Event {
         Self::new(creator, 0, vector_clock, None, None, payload)
     }
 
-    /// Compute the SHA-256 hash of this event (used as its ID)
+    /// Compute the SHA-256 hash of this event (used as its ID).
+    /// Includes creator_pubkey in the hash input for binding.
     fn compute_hash(&self) -> EventId {
         let mut hasher = Sha256::new();
         hasher.update(&self.creator);
@@ -166,6 +163,7 @@ impl Event {
             hasher.update(&op);
         }
         hasher.update(&self.payload);
+        hasher.update(&self.creator_pubkey);
         hasher.finalize().into()
     }
 
@@ -174,16 +172,33 @@ impl Event {
         self.id == self.compute_hash()
     }
 
-    /// Attach a cryptographic signature to this event
-    pub fn sign(&mut self, signature: Signature) {
-        self.signature = signature;
+    /// Sign this event with an Ed25519 keypair.
+    /// Stores the public key and signature in the event.
+    pub fn sign_with_keypair(&mut self, keypair: &NodeKeypair) {
+        self.creator_pubkey = keypair.verifying_key().to_bytes();
+        // Recompute hash now that pubkey is set
+        self.id = self.compute_hash();
+        let sig = keypair.sign(&self.id);
+        self.signature = sig.to_bytes();
     }
 
-    /// Verify the event's signature (placeholder — actual crypto in identity layer)
+    /// Verify the event's Ed25519 signature.
+    /// Returns true only if the signature is cryptographically valid.
     pub fn verify_signature(&self) -> bool {
-        // TODO: Integrate with Layer 4 Identity for real signature verification
-        // For now, accept any non-empty signature
-        !self.signature.is_empty()
+        let Ok(pubkey) = NodePublicKey::from_bytes(&self.creator_pubkey) else {
+            return false;
+        };
+        let Ok(sig) = EdSignature::from_bytes(&self.signature) else {
+            return false;
+        };
+        pubkey.verify(&self.id, &sig).is_ok()
+    }
+
+    /// Legacy sign method for backward compatibility in tests.
+    /// In production, always use `sign_with_keypair`.
+    pub fn sign(&mut self, _signature: Vec<u8>) {
+        // No-op: real signing requires a keypair.
+        // Tests should migrate to `sign_with_keypair`.
     }
 
     /// Get the event header (lightweight metadata)
@@ -213,12 +228,12 @@ impl Event {
         Ok(())
     }
 
-    /// Serialize event to bytes for network transmission
+    /// Serialize event to compact binary bytes for network transmission.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).unwrap_or_default()
+        bincode::serialize(self).expect("Event serialization cannot fail")
     }
 
-    /// Deserialize event from bytes
+    /// Deserialize event from compact binary bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EventValidationError> {
         bincode::deserialize(bytes).map_err(|_| EventValidationError::DeserializationError)
     }
@@ -227,7 +242,6 @@ impl Event {
     pub fn add_acknowledgment(&mut self) {
         self.ack_count += 1;
         if self.ack_count >= 2 {
-            // Will be updated to actual threshold by consensus module
             self.status = EventStatus::Acknowledged;
         }
     }
@@ -289,12 +303,18 @@ impl fmt::Display for Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::generate_keypair;
     use crate::vector_clock::VectorClock;
+    use rand::rngs::OsRng;
 
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
         node[0] = id;
         node
+    }
+
+    fn test_keypair() -> NodeKeypair {
+        NodeKeypair::generate(&mut OsRng)
     }
 
     #[test]
@@ -307,7 +327,7 @@ mod tests {
         assert_eq!(event.sequence, 0);
         assert!(event.self_parent.is_none());
         assert!(event.other_parent.is_none());
-        assert!(!event.is_root()); // has vector clock set, so not a "root" in genesis sense
+        assert!(!event.is_root());
     }
 
     #[test]
@@ -329,20 +349,24 @@ mod tests {
     }
 
     #[test]
-    fn test_event_signature() {
+    fn test_event_signature_real_crypto() {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]);
 
         // Without signature, validation should fail
-        assert!(matches!(
-            event.validate(),
-            Err(EventValidationError::InvalidSignature)
-        ));
+        assert!(!event.verify_signature());
 
-        // With signature, validation should pass
-        event.sign(vec![1, 2, 3, 4]);
+        // Sign with real keypair
+        event.sign_with_keypair(&keypair);
+        assert!(event.verify_signature());
         assert!(event.validate().is_ok());
+
+        // Tamper with hash should invalidate signature
+        let mut tampered = event.clone();
+        tampered.sequence = 999;
+        assert!(!tampered.verify_signature());
     }
 
     #[test]
@@ -364,8 +388,9 @@ mod tests {
     fn test_acknowledgment_tracking() {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]);
-        event.sign(vec![1]);
+        event.sign_with_keypair(&keypair);
 
         assert_eq!(event.status, EventStatus::Pending);
         event.add_acknowledgment();
@@ -373,15 +398,19 @@ mod tests {
         event.add_acknowledgment();
         assert_eq!(event.status, EventStatus::Acknowledged);
     }
-}
 
-// Simple bincode reimplementation for no-std compatibility
-mod bincode {
-    pub fn serialize<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, ()> {
-        serde_json::to_vec(value).map_err(|_| ())
-    }
+    #[test]
+    fn test_event_serialization_roundtrip() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        event.sign_with_keypair(&keypair);
 
-    pub fn deserialize<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, ()> {
-        serde_json::from_slice(bytes).map_err(|_| ())
+        let bytes = event.to_bytes();
+        let restored = Event::from_bytes(&bytes).unwrap();
+        assert_eq!(event.id, restored.id);
+        assert_eq!(event.signature, restored.signature);
+        assert_eq!(event.creator_pubkey, restored.creator_pubkey);
     }
 }

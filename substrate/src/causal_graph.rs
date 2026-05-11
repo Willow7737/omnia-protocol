@@ -90,14 +90,6 @@ impl CausalGraph {
     }
 
     /// Insert a new event into the graph
-    ///
-    /// # Arguments
-    /// * `event` - The event to insert (must have valid hash and signature)
-    ///
-    /// # Errors
-    /// * `DuplicateEvent` — Event already exists
-    /// * `MissingParent` — One or both parents not in graph
-    /// * `CycleDetected` — Adding this event would create a cycle
     pub fn insert(&mut self, event: Event) -> Result<(), CausalGraphError> {
         let event_id = event.id;
 
@@ -135,7 +127,7 @@ impl CausalGraph {
             }
         }
 
-        // Check for cycles: ensure the event doesn't reference itself transitively
+        // Check for cycles
         if let Some(sp) = event.self_parent {
             if self.is_ancestor_of(&event_id, &sp)? {
                 return Err(CausalGraphError::CycleDetected(format!(
@@ -153,7 +145,7 @@ impl CausalGraph {
             }
         }
 
-        // Remove parents from tips (they now have children)
+        // Remove parents from tips
         if let Some(sp) = event.self_parent {
             self.tips.remove(&sp);
         }
@@ -245,14 +237,14 @@ impl CausalGraph {
         self.node_sequences.get(node_id).copied().unwrap_or(0)
     }
 
-    /// Check if `ancestor` is an ancestor of `descendant` (causal path exists)
+    /// Check if `ancestor` is an ancestor of `descendant`
     pub fn is_ancestor_of(
         &self,
         descendant: &EventId,
         ancestor: &EventId,
     ) -> Result<bool, CausalGraphError> {
         if descendant == ancestor {
-            return Ok(false); // An event is not its own ancestor
+            return Ok(false);
         }
 
         let mut visited = HashSet::new();
@@ -286,7 +278,7 @@ impl CausalGraph {
         Ok(false)
     }
 
-    /// Get all ancestors of an event (causal history)
+    /// Get all ancestors of an event
     pub fn get_ancestors(&self, event_id: &EventId) -> Result<HashSet<EventId>, CausalGraphError> {
         let mut ancestors = HashSet::new();
         let mut queue = VecDeque::new();
@@ -315,7 +307,7 @@ impl CausalGraph {
         Ok(ancestors)
     }
 
-    /// Calculate the depth of an event (longest path from genesis)
+    /// Calculate the depth of an event
     fn calculate_depth(&self, event_id: &EventId) -> Result<usize, CausalGraphError> {
         let mut memo = HashMap::new();
         self.calculate_depth_memo(event_id, &mut memo)
@@ -345,7 +337,7 @@ impl CausalGraph {
         Ok(depth)
     }
 
-    /// Find events that are concurrent with the given event (independent, parallelizable)
+    /// Find events that are concurrent with the given event
     pub fn find_concurrent(&self, event_id: &EventId) -> Vec<&Event> {
         let Some(event) = self.events.get(event_id) else {
             return Vec::new();
@@ -359,8 +351,7 @@ impl CausalGraph {
             .collect()
     }
 
-    /// Get a topological ordering of events from a starting set
-    /// Uses Kahn's algorithm for deterministic ordering
+    /// Get a topological ordering of events
     pub fn topological_order(&self, start_from: Option<&VectorClock>) -> Vec<EventId> {
         let relevant_events: Vec<&Event> = match start_from {
             Some(vc) => self
@@ -374,12 +365,10 @@ impl CausalGraph {
         let mut in_degree: HashMap<EventId, usize> = HashMap::new();
         let mut children: HashMap<EventId, Vec<EventId>> = HashMap::new();
 
-        // Initialize in-degree for relevant events
         for event in &relevant_events {
             in_degree.entry(event.id).or_insert(0);
         }
 
-        // Count in-degrees among relevant events only
         for event in &relevant_events {
             for parent in [event.self_parent, event.other_parent].iter().flatten() {
                 if in_degree.contains_key(parent) {
@@ -389,14 +378,12 @@ impl CausalGraph {
             }
         }
 
-        // Start with events that have no parents in the relevant set
         let mut queue: VecDeque<EventId> = in_degree
             .iter()
             .filter(|(_, &deg)| deg == 0)
             .map(|(id, _)| *id)
             .collect();
 
-        // Sort for determinism
         let mut queue_vec: Vec<EventId> = queue.into_iter().collect();
         queue_vec.sort_by(|a, b| {
             let event_a = self.events.get(a).unwrap();
@@ -428,7 +415,7 @@ impl CausalGraph {
         result
     }
 
-    /// Find events that are in our graph but not in the given set (for sync)
+    /// Find events that are in our graph but not in the given set
     pub fn diff(&self, known_events: &HashSet<EventId>) -> Vec<&Event> {
         self.events
             .values()
@@ -436,7 +423,7 @@ impl CausalGraph {
             .collect()
     }
 
-    /// Find events newer than a given vector clock (for sync)
+    /// Find events newer than a given vector clock
     pub fn since(&self, clock: &VectorClock) -> Vec<&Event> {
         self.events
             .values()
@@ -495,7 +482,7 @@ impl CausalGraph {
             .collect()
     }
 
-    /// Consolidate old tips by removing oldest (simple strategy)
+    /// Consolidate old tips
     fn consolidate_tips(&mut self) {
         if self.tips.len() <= MAX_TIPS {
             return;
@@ -507,20 +494,17 @@ impl CausalGraph {
             .filter_map(|id| self.events.get(id))
             .collect();
 
-        // Sort by timestamp (oldest first)
         tip_events.sort_by_key(|e| e.timestamp);
 
-        // Remove oldest tips beyond threshold
-        let to_remove = self.tips.len() - MAX_TIPS + MAX_TIPS / 10; // Remove 10% extra
+        let to_remove = self.tips.len() - MAX_TIPS + MAX_TIPS / 10;
         for event in tip_events.into_iter().take(to_remove) {
             self.tips.remove(&event.id);
         }
     }
 
-    /// Verify graph integrity (no dangling references, no cycles)
+    /// Verify graph integrity
     pub fn verify_integrity(&self) -> Result<(), CausalGraphError> {
         for (id, event) in &self.events {
-            // Check self-parent exists
             if let Some(sp) = event.self_parent {
                 if !self.events.contains_key(&sp) {
                     return Err(CausalGraphError::IntegrityError(format!(
@@ -530,7 +514,6 @@ impl CausalGraph {
                     )));
                 }
             }
-            // Check other-parent exists
             if let Some(op) = event.other_parent {
                 if !self.events.contains_key(&op) {
                     return Err(CausalGraphError::IntegrityError(format!(
@@ -540,7 +523,6 @@ impl CausalGraph {
                     )));
                 }
             }
-            // Verify hash
             if !event.verify_hash() {
                 return Err(CausalGraphError::IntegrityError(format!(
                     "event {} has invalid hash",
@@ -549,7 +531,6 @@ impl CausalGraph {
             }
         }
 
-        // Check for cycles (from each tip, walk back)
         for tip in &self.tips {
             let mut visited = HashSet::new();
             let mut queue = VecDeque::new();
@@ -586,7 +567,7 @@ impl Default for CausalGraph {
     }
 }
 
-/// A read-only snapshot of the causal graph for concurrent access
+/// A read-only snapshot of the causal graph
 #[derive(Clone, Debug)]
 pub struct GraphSnapshot {
     pub events: HashMap<EventId, Event>,
@@ -633,7 +614,6 @@ mod tests {
 
         let event = Event::genesis(n1, vec![1, 2, 3]);
         let id = event.id;
-        event.validate().unwrap();
         let mut signed = event;
         signed.sign(vec![1, 2, 3]);
 
@@ -676,20 +656,17 @@ mod tests {
         let mut graph = CausalGraph::new();
         let n1 = test_node(1);
 
-        // Genesis
         let mut g = Event::genesis(n1, vec![]);
         g.sign(vec![1]);
         let g_id = g.id;
         graph.insert(g).unwrap();
 
-        // Child of genesis
         let vc = VectorClock::with_node(n1, 2);
         let mut child = Event::new(n1, 1, vc, Some(g_id), None, vec![]);
         child.sign(vec![1]);
         let child_id = child.id;
         graph.insert(child).unwrap();
 
-        // Grandchild
         let vc = VectorClock::with_node(n1, 3);
         let mut gc = Event::new(n1, 2, vc, Some(child_id), None, vec![]);
         gc.sign(vec![1]);
@@ -711,13 +688,11 @@ mod tests {
         let n1 = test_node(1);
         let n2 = test_node(2);
 
-        // n1 creates event
         let mut e1 = Event::genesis(n1, vec![1]);
         e1.sign(vec![1]);
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
-        // n2 creates event (different branch, concurrent)
         let mut e2 = Event::genesis(n2, vec![2]);
         e2.sign(vec![1]);
         let e2_id = e2.id;
@@ -732,14 +707,12 @@ mod tests {
         let mut graph = CausalGraph::new();
         let n1 = test_node(1);
 
-        // First event is a tip
         let mut e1 = Event::genesis(n1, vec![]);
         e1.sign(vec![1]);
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
         assert!(graph.tips().any(|&t| t == e1_id));
 
-        // Second event references first, so first is no longer a tip
         let mut e2 = Event::new(
             n1,
             1,
@@ -761,7 +734,6 @@ mod tests {
         let mut graph = CausalGraph::new();
         let n1 = test_node(1);
 
-        // Chain: g -> a -> b
         let mut g = Event::genesis(n1, vec![]);
         g.sign(vec![1]);
         let g_id = g.id;
