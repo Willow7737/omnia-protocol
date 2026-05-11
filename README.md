@@ -81,6 +81,8 @@ Omnia Protocol is structured into five distinct, yet interconnected, layers, eac
 
 ### 1. The Substrate (Physics-Aware Consensus)
 The foundation that establishes agreement without relying on clock time, using **Causal Graphs**, **Vector Clocks**, and **CRDTs**.
+- **Implementation:** [substrate/](./substrate/) (Rust)
+- **Research:** [substrate/RESEARCH.md](./substrate/RESEARCH.md)
 
 ### 2. Domain Shards (Specialized Lanes)
 - **Financial:** Assets and derivatives.
@@ -140,7 +142,7 @@ Omnia leverages **zk-SNARKs** to allow users to prove facts without revealing un
 ## 🚀 Getting Started
 
 ### 📚 Documentation
-- [**Architecture**](./docs/specifications/ARCHITECTURE.md) - Technical deep-dives.
+- [**Architecture**](./ARCHITECTURE.md) - Technical deep-dives and Layer 1 specifications.
 - [**Implementation**](./docs/specifications/IMPLEMENTATION.md) - Protocol specifications.
 - [**Governance**](./docs/GOVERNANCE.md) - Community and decision-making.
 - [**Use Cases**](./docs/USE_CASES.md) - Real-world applications.

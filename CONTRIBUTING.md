@@ -33,14 +33,17 @@ git checkout -b feature/your-feature-name
 
 ### 3. Set Up Development Environment
 
+#### For the Protocol Substrate (Rust)
 ```bash
-# Install dependencies
+cd substrate
+cargo build
+cargo test
+```
+
+#### For Web/Tooling (Node.js)
+```bash
 pnpm install
-
-# Build the project
 pnpm build
-
-# Run tests
 pnpm test
 ```
 

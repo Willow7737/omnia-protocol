@@ -1,0 +1,126 @@
+//! CRDT (Conflict-free Replicated Data Types) Module
+//!
+//! CRDTs are data structures that can be replicated across multiple nodes and
+//! merged without coordination. This is fundamental to Omnia's design:
+//! causally independent operations on CRDTs converge automatically.
+//!
+//! This module provides three core CRDT types:
+//! - GCounter: Grow-only counter (monotonic increment)
+//! - OrSet: Observed-Remove Set (add/remove with unique tokens)
+//! - LwwRegister: Last-Write-Wins Register (timestamp-based resolution)
+//!
+//! All CRDTs in this module are:
+//! - Associative: merge(a, merge(b, c)) == merge(merge(a, b), c)
+//! - Commutative: merge(a, b) == merge(b, a)
+//! - Idempotent: merge(a, a) == a
+
+pub mod g_counter;
+pub mod lww_register;
+pub mod or_set;
+
+pub use g_counter::GCounter;
+pub use lww_register::LwwRegister;
+pub use or_set::OrSet;
+
+use crate::vector_clock::{NodeId, VectorClock};
+use serde::{Deserialize, Serialize};
+
+/// Trait for state-based CRDTs
+///
+/// State-based CRDTs work by replicating the entire state and merging.
+/// They are simpler to implement and reason about than operation-based CRDTs.
+pub trait CvRDT: Clone {
+    /// Merge another CRDT into this one
+    fn merge(&mut self, other: &Self);
+
+    /// Create a merged copy
+    fn merged(&self, other: &Self) -> Self
+    where
+        Self: Sized,
+    {
+        let mut result = self.clone();
+        result.merge(other);
+        result
+    }
+}
+
+/// Trait for operation-based CRDTs
+///
+/// Op-based CRDTs replicate only the operations, not full state.
+/// More efficient for large data structures but require reliable broadcast.
+pub trait CmRDT {
+    type Operation;
+
+    /// Apply an operation to this CRDT
+    fn apply(&mut self, op: &Self::Operation);
+}
+
+/// Trait for CRDTs that can be used as account state
+///
+/// Account state CRDTs must support:
+/// - Incremental updates (no full state replacement needed)
+/// - Deterministic merge for consensus
+/// - Efficient serialization
+pub trait AccountCRDT: CvRDT + Serialize + for<'de> Deserialize<'de> {
+    /// Get a stable hash of the current state
+    fn state_hash(&self) -> [u8; 32];
+
+    /// Get the vector clock of the last update
+    fn last_update(&self) -> &VectorClock;
+}
+
+/// Wrapper for account balances using G-Counter CRDT
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AccountBalance {
+    /// The underlying counter
+    counter: GCounter,
+    /// Track which node last updated
+    last_updater: Option<NodeId>,
+    /// Vector clock at last update
+    vector_clock: VectorClock,
+}
+
+impl AccountBalance {
+    pub fn new() -> Self {
+        Self {
+            counter: GCounter::new(),
+            last_updater: None,
+            vector_clock: VectorClock::new(),
+        }
+    }
+
+    pub fn increment(&mut self, node_id: NodeId, amount: u64) {
+        self.counter.increment(node_id, amount);
+        self.last_updater = Some(node_id);
+    }
+
+    pub fn value(&self) -> u64 {
+        self.counter.value()
+    }
+}
+
+impl CvRDT for AccountBalance {
+    fn merge(&mut self, other: &Self) {
+        self.counter.merge(&other.counter);
+        // Keep the update from the higher clock
+        if self.vector_clock.happened_before(&other.vector_clock) {
+            self.last_updater = other.last_updater;
+        }
+    }
+}
+
+impl AccountCRDT for AccountBalance {
+    fn state_hash(&self) -> [u8; 32] {
+        self.counter.state_hash()
+    }
+
+    fn last_update(&self) -> &VectorClock {
+        &self.vector_clock
+    }
+}
+
+impl Default for AccountBalance {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -1,5 +1,10 @@
 # Omnia Protocol Architecture
 
+> [!IMPORTANT]
+> This document has been superseded by the new [**Architecture Documentation**](../../ARCHITECTURE.md) which includes Layer 1 Substrate specifications.
+
+## Table of Contents
+
 ## Table of Contents
 
 1. [System Overview](#system-overview)

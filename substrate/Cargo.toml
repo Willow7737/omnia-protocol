@@ -1,0 +1,27 @@
+[package]
+name = "omnia-substrate"
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+description = "Layer 1: The Substrate — Causal graph consensus, vector clocks, CRDTs, and gossip protocol"
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+rust-version = "1.75"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "1.0"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio = { version = "1.35", features = ["full"] }
+tokio-test = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "throughput"
+harness = false
