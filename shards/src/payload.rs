@@ -13,6 +13,7 @@ use crate::computational::ops::ComputationalOp;
 use crate::physical::ops::PhysicalOp;
 use crate::biological::ops::BiologicalOp;
 use crate::identity::ops::IdentityOp;
+use crate::economics_shard::EconomicsOp;
 
 /// The top-level payload that wraps every shard operation.
 ///
@@ -31,7 +32,7 @@ pub struct ShardPayload {
 
 /// Union type over all possible shard operations.
 ///
-/// Each variant corresponds to one of the five domain shards. The
+/// Each variant corresponds to one of the six domain shards. The
 /// `CrossShard` variant is used for inter-shard messaging.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ShardOp {
@@ -45,6 +46,8 @@ pub enum ShardOp {
     Biological(BiologicalOp),
     /// Identity domain operation (DID lifecycle, social recovery).
     Identity(IdentityOp),
+    /// Economics domain operation (UBC, useful work, governance).
+    Economics(EconomicsOp),
     /// Cross-shard message carrying a payload from one shard to another.
     CrossShard(CrossShardMessage),
 }

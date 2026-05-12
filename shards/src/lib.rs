@@ -43,6 +43,7 @@
 pub mod biological;
 pub mod computational;
 pub mod cross_shard;
+pub mod economics_shard;
 pub mod financial;
 pub mod identity;
 pub mod physical;
@@ -52,6 +53,7 @@ pub mod shard;
 
 // Re-export core types
 pub use cross_shard::CrossShardMessage;
+pub use economics_shard::{EconomicsOp, EconomicsVoteChoice};
 pub use payload::{ShardOp, ShardPayload};
 pub use router::ShardRouter;
 pub use shard::{Shard, ShardError, ShardId};
@@ -70,7 +72,155 @@ pub use computational::{ComputationalOp, ComputationalState, ComputationalValida
 pub use physical::{PhysicalOp, PhysicalState, PhysicalValidator, ProvenanceEvent};
 pub use biological::{BiologicalOp, BiologicalState, BiologicalValidator, ConsentRecord};
 
+use std::collections::HashMap;
 use omnia_substrate::Event;
+
+// ---------------------------------------------------------------------------
+// Economics shard implementation
+// ---------------------------------------------------------------------------
+
+/// Simplified internal state for the Economics shard.
+///
+/// Tracks UBC balances per DID and the current epoch. The full
+/// economics logic (governance, useful-work verification) lives in
+/// the `omnia-economics` crate; this state is sufficient for shard
+/// routing and basic balance operations.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EconomicsShardState {
+    /// UBC balances keyed by DID.
+    balances: HashMap<String, u64>,
+    /// Current epoch number.
+    current_epoch: u64,
+    /// Default UBC quota per DID per epoch.
+    default_quota: u64,
+}
+
+impl EconomicsShardState {
+    fn new() -> Self {
+        Self {
+            balances: HashMap::new(),
+            current_epoch: 0,
+            default_quota: 1000,
+        }
+    }
+
+    fn apply(&mut self, op: &EconomicsOp) -> Result<(), ShardError> {
+        match op {
+            EconomicsOp::MintUbc { did, amount } => {
+                if *amount == 0 {
+                    return Err(ShardError::ValidationFailed("Mint amount must be > 0".into()));
+                }
+                *self.balances.entry(did.clone()).or_insert(0) += amount;
+                Ok(())
+            }
+            EconomicsOp::SpendUbc { did, amount } => {
+                if *amount == 0 {
+                    return Err(ShardError::ValidationFailed("Spend amount must be > 0".into()));
+                }
+                let balance = self.balances.get(did).copied().unwrap_or(0);
+                if balance < *amount {
+                    return Err(ShardError::ValidationFailed(
+                        format!("Insufficient UBC: have {}, need {}", balance, amount)
+                    ));
+                }
+                self.balances.insert(did.clone(), balance - amount);
+                Ok(())
+            }
+            EconomicsOp::RegisterDid { did } => {
+                self.balances.entry(did.clone()).or_insert(self.default_quota);
+                Ok(())
+            }
+            EconomicsOp::AdvanceEpoch => {
+                self.current_epoch += 1;
+                // Reset all balances to default quota
+                for balance in self.balances.values_mut() {
+                    *balance = self.default_quota;
+                }
+                Ok(())
+            }
+            EconomicsOp::SubmitWork { did, .. } => {
+                // Simplified: reward 100 UBC for any submitted work
+                *self.balances.entry(did.clone()).or_insert(self.default_quota) += 100;
+                Ok(())
+            }
+            EconomicsOp::CreateProposal { .. } | EconomicsOp::Vote { .. } => {
+                // Governance operations accepted but not tracked in simplified state
+                Ok(())
+            }
+        }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("EconomicsShardState serialization cannot fail")
+    }
+}
+
+/// The Economics shard — handles UBC tokens, useful work rewards, and governance.
+///
+/// This shard implements the `Shard` trait so it can be registered with
+/// `ShardRouter`, making the economics layer a first-class shard in the
+/// Omnia architecture.
+pub struct EconomicsShard {
+    state: EconomicsShardState,
+}
+
+impl EconomicsShard {
+    /// Create a new Economics shard with default state.
+    pub fn new() -> Self {
+        Self {
+            state: EconomicsShardState::new(),
+        }
+    }
+
+    /// Get a reference to the internal state.
+    pub fn state(&self) -> &EconomicsShardState {
+        &self.state
+    }
+}
+
+impl Default for EconomicsShard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Shard for EconomicsShard {
+    fn shard_id(&self) -> ShardId {
+        ShardId::economics()
+    }
+
+    fn process_event(&mut self, _event: &Event, op: ShardOp) -> Result<(), ShardError> {
+        match op {
+            ShardOp::Economics(econ_op) => self.state.apply(&econ_op),
+            _ => Err(ShardError::InvalidOperation(
+                "Economics shard received non-Economics operation".into(),
+            )),
+        }
+    }
+
+    fn state_snapshot(&self) -> Vec<u8> {
+        self.state.to_bytes()
+    }
+
+    fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
+        match op {
+            ShardOp::Economics(econ_op) => {
+                match econ_op {
+                    EconomicsOp::SpendUbc { amount, .. } if *amount == 0 => {
+                        Err(ShardError::ValidationFailed("Spend amount must be > 0".into()))
+                    }
+                    EconomicsOp::MintUbc { amount, .. } if *amount == 0 => {
+                        Err(ShardError::ValidationFailed("Mint amount must be > 0".into()))
+                    }
+                    _ => Ok(()),
+                }
+            }
+            _ => Err(ShardError::InvalidOperation(
+                "Economics shard received non-Economics operation".into(),
+            )),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Concrete shard implementations that implement the `Shard` trait

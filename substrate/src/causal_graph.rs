@@ -73,6 +73,8 @@ pub struct CausalGraph {
     max_depth: usize,
     /// Number of finalized events
     finalized_count: usize,
+    /// Per-event depth (computed during insert, used for pruning)
+    depths: HashMap<EventId, usize>,
 }
 
 impl CausalGraph {
@@ -86,6 +88,7 @@ impl CausalGraph {
             frontier: VectorClock::new(),
             max_depth: 0,
             finalized_count: 0,
+            depths: HashMap::new(),
         }
     }
 
@@ -180,6 +183,7 @@ impl CausalGraph {
         // Update max depth
         let depth = self.calculate_depth(&event_id)?;
         self.max_depth = self.max_depth.max(depth);
+        self.depths.insert(event_id, depth);
 
         // Prune tips if too many
         if self.tips.len() > MAX_TIPS {
@@ -483,6 +487,119 @@ impl CausalGraph {
             .filter(|id| finalized.contains(id))
             .filter_map(|id| self.events.get(&id))
             .collect()
+    }
+
+    /// Compute the Merkle root of all event hashes in the graph.
+    ///
+    /// This is the state commitment posted to Ethereum L1 by the ZK-rollup.
+    /// The root changes whenever a new event is inserted, providing a
+    /// cryptographic fingerprint of the entire L2 state.
+    pub fn state_root(&self) -> [u8; 32] {
+        let mut ids: Vec<&EventId> = self.events.keys().collect();
+        if ids.is_empty() {
+            return [0u8; 32];
+        }
+
+        // Sort for deterministic ordering
+        ids.sort();
+
+        // Build Merkle tree bottom-up
+        let mut level: Vec<[u8; 32]> = ids.iter()
+            .map(|id| blake3::hash(&**id).as_bytes().to_owned())
+            .collect();
+
+        while level.len() > 1 {
+            let mut next_level = Vec::new();
+            for chunk in level.chunks(2) {
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(&chunk[0]);
+                if chunk.len() > 1 {
+                    hasher.update(&chunk[1]);
+                } else {
+                    // Odd node out — hash with itself
+                    hasher.update(&chunk[0]);
+                }
+                next_level.push(*hasher.finalize().as_bytes());
+            }
+            level = next_level;
+        }
+
+        level[0]
+    }
+
+    /// Verify that an event is included in the current state root.
+    /// Returns the Merkle proof path (sibling hashes at each level).
+    ///
+    /// Used by ZK circuits to prove event inclusion on L1.
+    pub fn merkle_proof(&self, event_id: &EventId) -> Option<Vec<([u8; 32], bool)>> {
+        let mut ids: Vec<&EventId> = self.events.keys().collect();
+        ids.sort();
+
+        let pos = ids.iter().position(|&id| id == event_id)?;
+        let mut proof = Vec::new();
+        let mut index = pos;
+        let mut level: Vec<[u8; 32]> = ids.iter()
+            .map(|id| blake3::hash(&**id).as_bytes().to_owned())
+            .collect();
+
+        while level.len() > 1 {
+            let sibling = if index % 2 == 0 {
+                // We're the left child, sibling is right
+                if index + 1 < level.len() {
+                    (level[index + 1], true) // true = sibling is right
+                } else {
+                    (level[index], true) // Odd node, sibling is self
+                }
+            } else {
+                // We're the right child, sibling is left
+                (level[index - 1], false) // false = sibling is left
+            };
+            proof.push(sibling);
+            index /= 2;
+
+            let mut next_level = Vec::new();
+            for chunk in level.chunks(2) {
+                let mut hasher = blake3::Hasher::new();
+                hasher.update(&chunk[0]);
+                if chunk.len() > 1 {
+                    hasher.update(&chunk[1]);
+                } else {
+                    hasher.update(&chunk[0]);
+                }
+                next_level.push(*hasher.finalize().as_bytes());
+            }
+            level = next_level;
+        }
+
+        Some(proof)
+    }
+
+    /// Remove payload data from events with depth less than `min_depth`.
+    ///
+    /// Preserves the event ID in the graph structure (for Merkle root
+    /// computation) but removes the full Event data (payload) to save
+    /// memory. This is called after events have been committed to L1
+    /// and are no longer needed for consensus.
+    pub fn prune_old_events(&mut self, min_depth: usize) {
+        let to_prune: Vec<EventId> = self.depths.iter()
+            .filter(|(_, &depth)| depth < min_depth)
+            .map(|(id, _)| *id)
+            .collect();
+
+        for id in &to_prune {
+            if let Some(event) = self.events.get_mut(id) {
+                // Keep the event shell (for parent links and depth) but clear payload
+                event.payload.clear();
+            }
+        }
+
+        // Clean up tips that no longer exist
+        self.tips.retain(|id| self.events.contains_key(id));
+    }
+
+    /// Get the total size of all payloads in bytes.
+    pub fn payload_size(&self) -> usize {
+        self.events.values().map(|e| e.payload.len()).sum()
     }
 
     /// Consolidate old tips
@@ -827,5 +944,98 @@ mod tests {
         graph.finalize_event(&e_id).unwrap();
         assert_eq!(graph.get(&e_id).unwrap().status, EventStatus::Finalized);
         assert_eq!(graph.stats().finalized_events, 1);
+    }
+
+    #[test]
+    fn test_state_root_changes_on_insert() {
+        let mut graph = CausalGraph::new();
+        let root1 = graph.state_root();
+        assert_eq!(root1, [0u8; 32]); // Empty graph
+
+        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
+        event.sign(vec![1]);
+        graph.insert(event).unwrap();
+
+        let root2 = graph.state_root();
+        assert_ne!(root1, root2); // Root changed after insert
+
+        let mut event2 = Event::genesis(test_node(2), vec![4, 5, 6]);
+        event2.sign(vec![1]);
+        graph.insert(event2).unwrap();
+
+        let root3 = graph.state_root();
+        assert_ne!(root2, root3); // Root changed again
+    }
+
+    #[test]
+    fn test_merkle_proof_verification() {
+        let mut graph = CausalGraph::new();
+        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
+        event.sign(vec![1]);
+        let id = event.id;
+        graph.insert(event).unwrap();
+
+        let proof = graph.merkle_proof(&id).unwrap();
+        let root = graph.state_root();
+
+        // Verify proof manually
+        let leaf = blake3::hash(&id).as_bytes().to_owned();
+        let mut current = leaf;
+        for (sibling, sibling_is_right) in proof {
+            let mut hasher = blake3::Hasher::new();
+            if sibling_is_right {
+                hasher.update(&current);
+                hasher.update(&sibling);
+            } else {
+                hasher.update(&sibling);
+                hasher.update(&current);
+            }
+            current = *hasher.finalize().as_bytes();
+        }
+
+        assert_eq!(current, root);
+    }
+
+    #[test]
+    fn test_prune_old_events() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        // Create a chain of events with increasing depth
+        let mut prev_id = None;
+        for i in 0..5u8 {
+            let mut event = if let Some(pid) = prev_id {
+                Event::new(
+                    n1,
+                    i as u64,
+                    VectorClock::with_node(n1, (i + 1) as u64),
+                    Some(pid),
+                    None,
+                    vec![i],
+                )
+            } else {
+                Event::genesis(n1, vec![i])
+            };
+            event.sign(vec![1]);
+            let id = event.id;
+            graph.insert(event).unwrap();
+            prev_id = Some(id);
+        }
+
+        assert_eq!(graph.len(), 5);
+        let size_before = graph.payload_size();
+        assert!(size_before > 0);
+
+        // Prune events with depth < 3 (events at depth 1 and 2)
+        graph.prune_old_events(3);
+
+        // Events with depth >= 3 still have payloads
+        // Events with depth < 3 have empty payloads
+        let size_after = graph.payload_size();
+        assert!(size_after < size_before);
+        assert!(size_after > 0); // Depth 3, 4, 5 still have payloads
+
+        // Graph structure is preserved
+        assert_eq!(graph.len(), 5);
     }
 }

@@ -55,6 +55,13 @@ impl ShardId {
         id[0..8].copy_from_slice(b"IDENT__0");
         Self(id)
     }
+
+    /// Well-known ShardId for the Economics shard.
+    pub fn economics() -> Self {
+        let mut id = [0u8; 32];
+        id[0..8].copy_from_slice(b"ECONOM00");
+        Self(id)
+    }
 }
 
 impl std::fmt::Display for ShardId {

@@ -18,9 +18,15 @@ use crate::shard::{Shard, ShardError, ShardId};
 /// dispatches incoming events based on the `shard_id` in the payload.
 /// It also handles cross-shard messages by routing them to their
 /// target shard.
+///
+/// Replay protection is enforced via per-creator nonce tracking:
+/// each `creator_pubkey` must submit events with strictly increasing
+/// nonces, preventing stale or duplicate events from being processed.
 pub struct ShardRouter {
     /// Registered shards, indexed by their shard ID.
     shards: HashMap<ShardId, Box<dyn Shard>>,
+    /// Last seen nonce per creator pubkey — replay protection.
+    last_nonces: HashMap<[u8; 32], u64>,
 }
 
 impl ShardRouter {
@@ -28,6 +34,7 @@ impl ShardRouter {
     pub fn new() -> Self {
         Self {
             shards: HashMap::new(),
+            last_nonces: HashMap::new(),
         }
     }
 
@@ -54,6 +61,7 @@ impl ShardRouter {
             ShardOp::Physical(_) => ShardId::physical(),
             ShardOp::Biological(_) => ShardId::biological(),
             ShardOp::Identity(_) => ShardId::identity(),
+            ShardOp::Economics(_) => ShardId::economics(),
             ShardOp::CrossShard(_) => unreachable!(),
         };
 
@@ -84,15 +92,25 @@ impl ShardRouter {
 
     /// Route an event by deserializing its payload.
     ///
-    /// Convenience method that deserializes the event's payload and
-    /// delegates to `route()`.
+    /// Convenience method that deserializes the event's payload,
+    /// checks the nonce for replay protection, and delegates to `route()`.
     pub fn route_event(&mut self, event: &Event) -> Result<(), ShardError> {
         if event.payload.is_empty() {
             return Ok(());
         }
 
         let payload = ShardPayload::from_bytes(&event.payload)
-            .map_err(|e| ShardError::DeserializationError(e.to_string()))?;
+            .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {}", e)))?;
+
+        // Replay protection — check nonce
+        let creator = event.creator_pubkey;
+        let last_nonce = self.last_nonces.get(&creator).copied().unwrap_or(0);
+        if payload.nonce <= last_nonce {
+            return Err(ShardError::ValidationFailed(
+                format!("Replay detected: nonce {} <= last {}", payload.nonce, last_nonce)
+            ));
+        }
+        self.last_nonces.insert(creator, payload.nonce);
 
         self.route(event, payload.operation)
     }
