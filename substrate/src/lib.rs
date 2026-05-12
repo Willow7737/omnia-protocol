@@ -11,6 +11,11 @@
 //! - **Gossip Protocol**: Epidemic event propagation for efficient, fault-tolerant
 //!   distribution across the network
 //! - **Consensus**: BFT finality mechanism for deterministic event ordering
+//!
+//! The substrate also supports **Layer 2 event processors** (such as domain
+//! shards) through the `EventProcessor` trait. Processors can be attached to
+//! the substrate via `with_event_processor()` and are invoked automatically
+//! in the main run loop after consensus processing.
 
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
@@ -51,6 +56,32 @@ pub const TARGET_TPS: u32 = 10_000;
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
 use thiserror::Error;
+
+/// Trait for Layer 2 event processors (e.g., domain shards).
+///
+/// Implementations receive every event that passes through consensus
+/// and can perform domain-specific state transitions. The substrate
+/// treats event processors as opaque — it doesn't know or care about
+/// the internal structure of the processor.
+///
+/// # Example
+///
+/// ```ignore
+/// use omnia_substrate::EventProcessor;
+///
+/// struct MyShard;
+///
+/// impl EventProcessor for MyShard {
+///     fn process_event(&mut self, event: &Event) -> Result<(), String> {
+///         // Handle the event
+///         Ok(())
+///     }
+/// }
+/// ```
+pub trait EventProcessor: Send + Sync {
+    /// Process a single event. Return an error string if processing fails.
+    fn process_event(&mut self, event: &Event) -> std::result::Result<(), String>;
+}
 
 /// Errors at the substrate layer
 #[derive(Error, Debug)]
@@ -115,6 +146,8 @@ pub struct Substrate {
     gossip: Option<GossipProtocol>,
     consensus: ConsensusEngine,
     running: bool,
+    /// Optional Layer 2 event processor (e.g., domain shard router).
+    event_processor: Option<Box<dyn EventProcessor>>,
 }
 
 impl Substrate {
@@ -128,6 +161,7 @@ impl Substrate {
             gossip: None,
             consensus,
             running: false,
+            event_processor: None,
         }
     }
 
@@ -153,8 +187,17 @@ impl Substrate {
         }
     }
 
-    /// Run the substrate main loop. Processes network events and consensus
-    /// until `stop()` is called.
+    /// Attach a Layer 2 event processor (e.g., a shard router).
+    ///
+    /// The processor will be called for every event in the causal graph
+    /// during the main run loop, after consensus processing.
+    pub fn with_event_processor(mut self, processor: Box<dyn EventProcessor>) -> Self {
+        self.event_processor = Some(processor);
+        self
+    }
+
+    /// Run the substrate main loop. Processes network events, consensus,
+    /// and Layer 2 event processors until `stop()` is called.
     pub async fn run(&mut self) {
         self.running = true;
 
@@ -168,6 +211,9 @@ impl Substrate {
 
             // Run consensus on all events in graph
             let _committed = self.process_consensus().await;
+
+            // Process Layer 2 event processors (e.g., domain shards)
+            let _ = self.process_event_processors().await;
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
@@ -234,6 +280,26 @@ impl Substrate {
             graph: graph_stats,
             consensus: consensus_stats,
             running: self.running,
+        }
+    }
+
+    /// Process events through the attached Layer 2 event processor.
+    ///
+    /// Iterates over all events in the causal graph and forwards them
+    /// to the registered event processor. Errors are logged but do not
+    /// halt the substrate.
+    pub async fn process_event_processors(&mut self) {
+        if let Some(ref mut processor) = self.event_processor {
+            let graph = self.graph.read().await;
+            for event_id in graph.event_ids() {
+                if let Some(event) = graph.get(&event_id) {
+                    if !event.payload.is_empty() {
+                        if let Err(e) = processor.process_event(event) {
+                            tracing::warn!("Event processor error: {}", e);
+                        }
+                    }
+                }
+            }
         }
     }
 
