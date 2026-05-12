@@ -187,10 +187,18 @@ impl QuantumCommitment {
     /// commitments are not identical placeholders).
     pub fn links_to(&self, previous: &QuantumCommitment) -> bool {
         // In the full implementation, the current commitment's signed data
-        // would include the previous commitment's hash. For the stub, we
-        // simply check that the hashes are different (indicating the chain
-        // is growing) and that both are non-zero.
-        self.data_hash != previous.data_hash || self.data_hash != [0u8; 32]
+        // would include the previous commitment's hash. For now, we verify
+        // that both commitments are valid (non-zero hashes) and that they
+        // are different (indicating chain progression).
+        //
+        // TODO: In production, embed previous.data_hash in current signed data
+        // and verify the signature covers it.
+
+        let valid_current = self.data_hash != [0u8; 32];
+        let valid_previous = previous.data_hash != [0u8; 32];
+        let progressing = self.data_hash != previous.data_hash;
+
+        valid_current && valid_previous && progressing
     }
 
     /// Compute the BLAKE3 hash of the given data.

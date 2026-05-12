@@ -128,6 +128,31 @@ impl ProvenanceTracker {
         Ok(())
     }
 
+    /// Destroy an item, preventing any future transfers.
+    ///
+    /// Creates a `Destroyed` provenance event. Once destroyed, the item
+    /// cannot be transferred or verified further.
+    pub fn destroy_item(
+        &mut self,
+        item_id: [u8; 32],
+        rf_proof: RfFingerprint,
+        commitment: QuantumCommitment,
+    ) -> Result<(), ProvenanceTrackerError> {
+        let anchor = self.anchors.get_mut(&item_id).ok_or_else(|| {
+            ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4]))
+        })?;
+
+        if anchor.is_destroyed() {
+            return Err(ProvenanceTrackerError::Destroyed(format!(
+                "{:?}",
+                &item_id[..4]
+            )));
+        }
+
+        anchor.provenance_log.destroy(rf_proof, commitment);
+        Ok(())
+    }
+
     /// Verify an item's current RF fingerprint and provenance chain.
     ///
     /// # Arguments
@@ -344,6 +369,41 @@ mod tests {
             test_commitment(b"transfer1"),
         );
 
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_destroy_item() {
+        let mut tracker = ProvenanceTracker::new();
+        let item_id = test_item_id(1);
+
+        tracker
+            .anchor_item(
+                item_id,
+                "did:omnia:owner".to_string(),
+                test_rf("did:omnia:owner", [0x55u8; 32]),
+                test_commitment(b"creation"),
+                [0xCDu8; 32],
+            )
+            .unwrap();
+
+        tracker
+            .destroy_item(
+                item_id,
+                test_rf("did:omnia:owner", [0x55u8; 32]),
+                test_commitment(b"destruction"),
+            )
+            .unwrap();
+
+        assert!(tracker.get_anchor(&item_id).unwrap().is_destroyed());
+
+        // Transfer after destroy should fail
+        let result = tracker.transfer_item(
+            item_id,
+            "did:omnia:other".to_string(),
+            test_rf("did:omnia:other", [0x66u8; 32]),
+            test_commitment(b"transfer_after_destroy"),
+        );
         assert!(result.is_err());
     }
 
