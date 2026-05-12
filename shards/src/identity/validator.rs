@@ -36,16 +36,19 @@ impl IdentityValidator {
                 }
                 Ok(())
             }
-            IdentityOp::RecoverDid { did, recovery_shares } => {
-                let config = state.recovery_registry.get(did);
-                if let Some(config) = config {
-                    if (recovery_shares.len() as u8) < config.threshold {
+            IdentityOp::RecoverDid { did, shares } => {
+                if let Some(config) = state.recovery_registry.get(did) {
+                    if shares.len() < config.threshold as usize {
                         return Err(ShardError::ValidationFailed(
                             "Insufficient recovery shares".into(),
                         ));
                     }
+                } else {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "No recovery config for DID: {}",
+                        did
+                    )));
                 }
-                // If no recovery config exists, the operation will fail at apply time
                 Ok(())
             }
             IdentityOp::VerifyDid { did } => {
@@ -57,12 +60,69 @@ impl IdentityValidator {
                 }
                 Ok(())
             }
-            IdentityOp::AddAgent { did, .. } => {
+            IdentityOp::AddAgent { did, agent } => {
+                if !state.dids.contains_key(did) {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "Owner DID not found: {}",
+                        did
+                    )));
+                }
+                if state.agent_registry.contains_key(&agent.did) {
+                    return Err(ShardError::StateConflict(format!(
+                        "Agent already exists: {}",
+                        agent.did
+                    )));
+                }
+                Ok(())
+            }
+            IdentityOp::EnrollBiometric { did, .. } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
                         "DID not found: {}",
                         did
                     )));
+                }
+                Ok(())
+            }
+            IdentityOp::VerifyBiometric { did, .. } => {
+                if !state.biometric_registry.contains_key(did) {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "No biometric enrolled for DID: {}",
+                        did
+                    )));
+                }
+                Ok(())
+            }
+            IdentityOp::RevokeAgent { agent_did } => {
+                if !state.agent_registry.contains_key(agent_did) {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "Agent not found: {}",
+                        agent_did
+                    )));
+                }
+                Ok(())
+            }
+            IdentityOp::ConfigureRecovery {
+                did,
+                threshold,
+                total_shares,
+                ..
+            } => {
+                if !state.dids.contains_key(did) {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "DID not found: {}",
+                        did
+                    )));
+                }
+                if *threshold < 2 {
+                    return Err(ShardError::InvalidOperation(
+                        "Recovery threshold must be at least 2".into(),
+                    ));
+                }
+                if *threshold > *total_shares {
+                    return Err(ShardError::InvalidOperation(
+                        "Recovery threshold cannot exceed total shares".into(),
+                    ));
                 }
                 Ok(())
             }

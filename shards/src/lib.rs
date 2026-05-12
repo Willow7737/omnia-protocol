@@ -62,8 +62,9 @@ pub use financial::{
     FinancialValidator,
 };
 pub use identity::{
-    AgentIdentity, Did, DidDocument, DidUpdate, IdentityOp, IdentityState,
-    IdentityValidator, RecoveryConfig, RecoveryShare,
+    AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError, DidUpdate,
+    IdentityOp, IdentityState, IdentityValidator, RecoveryConfig, RecoveryShare, ShamirRecovery,
+    DID_METHOD, DID_PREFIX, format_did,
 };
 pub use computational::{ComputationalOp, ComputationalState, ComputationalValidator, TaskStatus};
 pub use physical::{PhysicalOp, PhysicalState, PhysicalValidator, ProvenanceEvent};
