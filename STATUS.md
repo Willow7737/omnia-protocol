@@ -1,4 +1,4 @@
-# Requirements & Completion Status
+# 📝 Requirements & Completion Status
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -23,9 +23,9 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-2.2** | Public Key Registry | P0 | ✅ Completed |
 | **REQ-2.3** | Verifiable Credentials (VCs) | P1 | ✅ Completed |
 | **REQ-2.4** | Social Recovery Mechanism | P2 | ✅ Completed |
-| **REQ-2.5** | Shamir's Secret Sharing | P1 | ✅ Completed |
-| **REQ-2.6** | Biometric Anchors | P2 | ✅ Completed |
-| **REQ-2.7** | AI Agent Identity | P1 | ✅ Completed |
+| **REQ-2.5** | Shamir's Secret Sharing (GF(256)) | P1 | ✅ Completed |
+| **REQ-2.6** | Biometric Anchors (BLAKE3) | P2 | ✅ Completed |
+| **REQ-2.7** | AI Agent Identity (5 capability types) | P1 | ✅ Completed |
 
 ## 3. Financial & Settlement
 
@@ -36,7 +36,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-3.3** | Cross-Shard Transactions | P1 | ✅ Completed |
 | **REQ-3.4** | Replay Protection (per-creator nonces) | P0 | ✅ Completed |
 | **REQ-3.5** | Settlement-Agnostic ZK-Rollup | P0 | ✅ Completed |
-| **REQ-3.6** | Ethereum Adapter | P1 | ✅ Completed |
+| **REQ-3.6** | Ethereum Adapter (OmniaRollup.sol) | P1 | ✅ Completed |
 
 ## 4. Physical Binding
 
@@ -44,16 +44,16 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | :--- | :--- | :--- | :--- |
 | **REQ-4.1** | Provenance Log (append-only CRDT) | P0 | ✅ Completed |
 | **REQ-4.2** | Provenance Tracker (lifecycle) | P1 | ✅ Completed |
-| **REQ-4.3** | RF Fingerprint Hashing | P2 | 🏗️ Stub |
-| **REQ-4.4** | Quantum Commitment | P2 | 🏗️ Stub |
+| **REQ-4.3** | RF Fingerprint Hashing | P2 | 🔄 Stub |
+| **REQ-4.4** | Quantum Commitment | P2 | 🔄 Stub |
 
 ## 5. Economics & Governance
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
 | **REQ-5.1** | UBC Token (soulbound quota) | P0 | ✅ Completed |
-| **REQ-5.2** | Quadratic Voting | P1 | ✅ Completed |
-| **REQ-5.3** | Proof-of-Useful-Work | P2 | 🏗️ Stub |
+| **REQ-5.2** | Quadratic Voting + Decay | P1 | ✅ Completed |
+| **REQ-5.3** | Proof-of-Useful-Work | P2 | 🔄 Stub |
 
 ## 6. Future Requirements
 
@@ -70,20 +70,20 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 ---
 
-## Summary of Completion
+## 📊 Summary of Completion
 
-| Category | Total Requirements | Completed | Stub | Not Started | Progress |
+| Category | Total | ✅ Done | 🔄 Stub | 🌑 Not Started | Progress |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Core Protocol** | 8 | 8 | 0 | 0 | 100% |
-| **Identity** | 7 | 7 | 0 | 0 | 100% |
-| **Financial & Settlement** | 6 | 6 | 0 | 0 | 100% |
-| **Physical Binding** | 4 | 2 | 2 | 0 | 50% |
-| **Economics** | 3 | 2 | 1 | 0 | 67% |
-| **Future** | 8 | 0 | 0 | 8 | 0% |
-| **TOTAL** | **36** | **25** | **3** | **8** | **69%** |
+| **Core Protocol** | 8 | 8 | 0 | 0 | ██████████ 100% |
+| **Identity** | 7 | 7 | 0 | 0 | ██████████ 100% |
+| **Financial & Settlement** | 6 | 6 | 0 | 0 | ██████████ 100% |
+| **Physical Binding** | 4 | 2 | 2 | 0 | █████░░░░░ 50% |
+| **Economics** | 3 | 2 | 1 | 0 | ███████░░░ 67% |
+| **Future** | 8 | 0 | 0 | 8 | ░░░░░░░░░░ 0% |
+| **TOTAL** | **36** | **25** | **3** | **8** | ███████░░░ 69% |
 
 ---
 *Legend:*
 - 🌑 **Not Started:** No work done.
-- 🏗️ **Stub:** Code structure exists but needs real implementation (hardware, library integration, etc.).
+- 🔄 **Stub:** Code structure exists but needs real implementation (hardware, library integration, etc.).
 - ✅ **Completed:** Fully implemented and tested.

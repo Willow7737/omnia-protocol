@@ -1,6 +1,6 @@
-# Omnia Protocol: Frequently Asked Questions
+# ❓ Omnia Protocol: Frequently Asked Questions
 
-## General Questions
+## 🌌 General Questions
 
 ### Q: What is Omnia?
 
@@ -12,11 +12,11 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 **A:** No. Omnia is a protocol, not a coin. While Omnia has a token model (UBC — Universal Basic Compute), the protocol itself is much broader. It's a framework for:
 
-- Identity management
-- Supply chain tracking
-- AI agent governance
-- Economic coordination
-- Physical-digital binding
+- 🆔 Identity management
+- 📦 Supply chain tracking
+- 🤖 AI agent governance
+- 💰 Economic coordination
+- 🔗 Physical-digital binding
 
 ### Q: Who controls Omnia?
 
@@ -26,11 +26,11 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 **A:** Yes. All code is open source and available on GitHub. The protocol is public domain (CC0), meaning anyone can use, modify, or build on it.
 
-### Q: What is the current state of the project?
+### Q: What is the current state of the project? 📊
 
-**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer has an Ethereum adapter but uses a hash chain stub rather than full R1CS circuits. Some features like real RF fingerprinting, real PQC signatures, and real ZK proofs are stubs awaiting hardware or library integration. There is no mobile wallet, no REST API, and no validator network yet. All interaction is via the Rust library.
+**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer has an Ethereum adapter but uses a hash chain stub rather than full R1CS circuits. Some features like real RF fingerprinting, real PQC signatures, and real ZK proofs are ⚠️ stubs awaiting hardware or library integration. There is 🌑 no mobile wallet, 🌑 no REST API, and 🌑 no validator network yet. All interaction is via the Rust library.
 
-### Q: How do I run the tests?
+### Q: How do I run the tests? 🧪
 
 **A:** Clone the repository and run:
 
@@ -44,9 +44,9 @@ You should see 200+ tests passing.
 
 ---
 
-## Technical Questions
+## ⚙️ Technical Questions
 
-### Q: How does causal graph consensus work?
+### Q: How does causal graph consensus work? 🧠
 
 **A:** Instead of organizing events into sequential blocks, Omnia maintains a directed acyclic graph (DAG) where:
 
@@ -65,7 +65,7 @@ If Alice pays Bob, and Carol pays Dave:
 
 This is much faster than traditional blockchains where every transaction waits in a single queue.
 
-### Q: What are zero-knowledge proofs?
+### Q: What are zero-knowledge proofs? 🔐
 
 **A:** Zero-knowledge proofs let you prove something is true without revealing the underlying information.
 
@@ -78,17 +78,17 @@ You take a massive piece of paper with a small hole in it. You place it over the
 - Prove you have enough money without revealing your balance
 - Prove a medicine is authentic without revealing supply chain details
 
-**Current status:** The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target.
+**Current status:** ⚠️ The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target.
 
-### Q: How does physical anchoring work?
+### Q: How does physical anchoring work? 🔗
 
-**A:** The provenance log is fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify, destroy). This gives every tracked item a cryptographic birth certificate and ownership history.
+**A:** The provenance log is ✅ fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify, destroy). This gives every tracked item a cryptographic birth certificate and ownership history.
 
-RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
+⚠️ RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
 
-Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
+🌑 Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
 
-### Q: What's a Decentralized Identifier (DID)?
+### Q: What's a Decentralized Identifier (DID)? 🆔
 
 **A:** A DID is a permanent, self-created digital address that you own forever.
 
@@ -100,11 +100,11 @@ Physical time anchors (previously described as "Gravitational Timestamps") are n
 - It cannot be revoked or censored
 - It's portable across platforms
 
-The `did:omnia:` method is fully implemented with validation.
+The `did:omnia:` method is ✅ fully implemented with validation.
 
-### Q: How does social recovery work?
+### Q: How does social recovery work? 🛡️
 
-**A:** Social recovery uses Shamir's Secret Sharing over GF(256). Your private key is split into shares using threshold cryptography, and each share is given to a trusted guardian.
+**A:** Social recovery uses **Shamir's Secret Sharing over GF(256)**. Your private key is split into shares using threshold cryptography, and each share is given to a trusted guardian.
 
 1. Your key is split into N shares using Shamir's Secret Sharing
 2. Any threshold number of shares (e.g., 3 of 5) can reconstruct the key
@@ -112,57 +112,60 @@ The `did:omnia:` method is fully implemented with validation.
 4. The key is reconstructed from the threshold number of shares
 5. No single guardian has your full key
 
-### Q: What's Universal Basic Compute (UBC)?
+### Q: What's Universal Basic Compute (UBC)? 💻
 
 **A:** Every identity on Omnia receives a free monthly quota via the UBC token. The UBC token is soulbound (non-transferable) and provides a baseline of compute and transaction capacity. This ensures participation doesn't require money.
 
-The quota system operates on epochs with automatic advancement. The specific quota amounts (transactions, storage, compute hours) are configurable parameters in the economics layer.
+The quota system operates on epochs with automatic advancement. The specific quota amounts are configurable parameters in the economics layer.
 
-### Q: How does governance work?
+### Q: How does governance work? 🗳️
 
-**A:** Quadratic voting with exponential reputation decay is currently implemented. This means:
+**A:** ✅ **Quadratic voting with exponential reputation decay is currently implemented.** This means:
 
 - Voting power scales as the square root of stake (preventing whale dominance)
 - Reputation decays exponentially over time (preventing permanent power concentration)
 
-Conviction voting (locking tokens for longer periods to increase voting power) and delegation (delegating your vote to a trusted representative) are planned for Phase 1 but not yet implemented.
+📋 **Planned for Phase 1 (not yet implemented):**
+- Conviction voting (locking tokens for longer periods to increase voting power)
+- Delegation (delegating your vote to a trusted representative)
 
 ---
 
-## Economic Questions
+## 💰 Economic Questions
 
 ### Q: How is Omnia currency created?
 
 **A:** Omnia uses the UBC (Universal Basic Compute) token model. UBC tokens are soulbound — they are issued monthly to each identity and cannot be transferred. The token provides quota for transactions and compute.
 
-Proof-of-useful-work stubs exist (3 work types defined) but are not production-ready. There is no validator reward mechanism or staking system yet. Slashing is not implemented.
+⚠️ Proof-of-useful-work stubs exist (3 work types defined) but are not production-ready. 🌑 There is no validator reward mechanism or staking system yet. 🌑 Slashing is not implemented.
 
 ### Q: What's the fee structure?
 
-**A:** There is no fee mechanism implemented yet. The UBC quota system covers transaction costs for all participants. A fee mechanism for high-frequency or commercial use is planned but not yet started.
+**A:** 🌑 There is no fee mechanism implemented yet. The UBC quota system covers transaction costs for all participants. A fee mechanism for high-frequency or commercial use is planned but not yet started.
 
 ### Q: Can I convert Omnia to other currencies?
 
-**A:** No DEX integration exists yet. There is currently no way to exchange Omnia tokens for other currencies.
+**A:** 🌑 No DEX integration exists yet. There is currently no way to exchange Omnia tokens for other currencies.
 
 ---
 
-## Security Questions
+## 🛡️ Security Questions
 
 ### Q: Is Omnia secure?
 
 **A:** Omnia uses multiple layers of security that are implemented and tested:
 
-1. **Cryptography:** Ed25519 signatures, BLAKE3 hashing
-2. **Consensus:** Byzantine-fault-tolerant consensus (tolerates 1/3 faulty nodes)
-3. **Replay protection:** Nonce tracking in both CausalGraph and ShardRouter
-4. **State commitments:** Merkle state root and inclusion proofs
-5. **Event pruning:** Sustainable state management
-
-**Not yet implemented:**
-- Economic security (slashing, staking)
-- Post-quantum cryptography (Dilithium integration pending)
-- Real ZK proofs (currently a hash chain stub)
+| Security Layer | Status |
+|---------------|--------|
+| ✅ Ed25519 signatures | Implemented |
+| ✅ BLAKE3 hashing | Implemented |
+| ✅ BFT consensus (<1/3 faulty nodes) | Implemented |
+| ✅ Replay protection (nonce tracking) | Implemented |
+| ✅ State commitments (Merkle root) | Implemented |
+| ✅ Event pruning (sustainability) | Implemented |
+| 🔄 Post-quantum cryptography (Dilithium) | Stub |
+| 🌑 Economic security (slashing, staking) | Not started |
+| 🌑 Real ZK proofs | Stub (hash chain) |
 
 ### Q: What if my private key is compromised?
 
@@ -170,52 +173,53 @@ Proof-of-useful-work stubs exist (3 work types defined) but are not production-r
 
 ---
 
-## Practical Questions
+## 🛠️ Practical Questions
 
-### Q: How do I get started?
+### Q: How do I get started? 🚀
 
-**A:** Currently, all interaction with Omnia is via the Rust library. There is no wallet, mobile app, or REST API. To experiment:
+**A:** Currently, all interaction with Omnia is via the Rust library. There is 🌑 no wallet, 🌑 no mobile app, and 🌑 no REST API. To experiment:
 
 1. Clone the repository
 2. Run `cargo test --workspace` to see all tests passing
 3. Explore the crate APIs in `substrate/`, `shards/`, `binding/`, `economics/`, `zk/`
 
-### Q: Which wallet should I use?
+### Q: Which wallet should I use? 👛
 
-**A:** No wallet exists yet. All interaction is via the Rust library. A mobile wallet is planned for Phase 1.
+**A:** 🌑 No wallet exists yet. All interaction is via the Rust library API. A mobile wallet is planned for Phase 1.
 
-### Q: Can I use Omnia on my phone?
+### Q: Can I use Omnia on my phone? 📱
 
-**A:** No mobile app exists yet. A mobile wallet is planned for Phase 1.
+**A:** 🌑 No mobile app exists yet. A mobile wallet is planned for Phase 1.
 
-### Q: How long does a transaction take?
+### Q: How long does a transaction take? ⏱️
 
-**A:** Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
+**A:** ⚠️ Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
 
 ---
 
-## Long-Term Vision
+## 🔮 Long-Term Vision
 
 *The following describes the long-term vision for Omnia. These are aspirational goals, not current capabilities.*
 
-### Q: Will Omnia work on Mars?
+### Q: Will Omnia work on Mars? 🚀
 
-**A:** This is a long-term vision. Omnia's causal graph consensus is designed to support partitioned operation (local finality with eventual global consistency), which could in principle work across interplanetary distances. However, no testing or implementation for interplanetary scenarios has been done.
+**A:** This is a long-term vision 🔮. Omnia's causal graph consensus is designed to support partitioned operation (local finality with eventual global consistency), which could in principle work across interplanetary distances. However, no testing or implementation for interplanetary scenarios has been done.
 
-### Q: Will AI agents run Omnia?
+### Q: Will AI agents run Omnia? 🤖
 
-**A:** AI agent identity is implemented (5 capability types). AI agents can currently have identities on the network. Full governance rights for AI agents and AI-driven decision-making are aspirational goals for Phase 3 (Years 5-10).
+**A:** ✅ AI agent identity is implemented (5 capability types). AI agents can currently have identities on the network. 🔮 Full governance rights for AI agents and AI-driven decision-making are aspirational goals for Phase 3 (Years 5-10).
 
 ---
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
-### Q: I have a question not answered here
+### Q: I have a question not answered here ❓
 
 **A:**
-- Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
-- Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
-- Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
+- 📖 Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- 💬 Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
+- 🐛 Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
+- 💡 Start a discussion: [GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)
 
 ---
 

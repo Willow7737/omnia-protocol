@@ -1,4 +1,4 @@
-# Layer 1: The Substrate — Research Document
+# 🧪 Layer 1: The Substrate — Research Document
 
 [← Back to Architecture](../ARCHITECTURE.md)
 
@@ -91,10 +91,10 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 | Approach | Pros for Omnia | Cons |
 |----------|---------------|------|
-| Pure Hashgraph | Virtual voting is elegant; proven high throughput | Patented; requires complete history; virtual voting complex to implement correctly |
+| Pure Hashgraph | Virtual voting is elegant; proven throughput | Patented; requires complete history; virtual voting complex to implement correctly |
 | Pure IOTA | Simple tip selection; feeless; IoT-friendly | FPC finality not as strong as BFT; tip selection parameter tuning difficult |
 | Pure AlephBFT | Strong BFT guarantees; leaderless; async | Committee-based (not fully permissionless); higher complexity |
-| **Omnia Hybrid** | Causal ordering from Hashgraph + CRDT convergence + simple BFT finality | Novel combination — requires thorough testing |
+| **Omnia Hybrid** | Causal ordering + CRDT convergence + simple BFT finality | Novel combination — requires thorough testing |
 
 ### Key Differentiators
 
@@ -111,9 +111,19 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 ---
 
-## Implementation Results
+## 🧪 Implementation Results
 
-### What Worked
+| Research Claim | Implementation Status |
+|----------------|----------------------|
+| Hashgraph-like DAG with two-parent events | ✅ Implemented |
+| Vector clock-based partial ordering | ✅ Implemented |
+| AlephBFT-inspired BFT finality | ✅ Implemented (simplified for permissionless model) |
+| CRDT semantics for state convergence | ✅ Implemented (GCounter, OrSet, LWWRegister) |
+| 10,000+ TPS target | ⚠️ Not yet benchmarked |
+| 1-5 second finality | ⚠️ Not yet benchmarked |
+| O(new_events) consensus processing | ✅ Achieved via unprocessed queue |
+
+### What Worked ✅
 
 **Hashgraph-like DAG with two-parent events** — The two-parent event structure (self-parent + other-parent) proved to be an effective way to represent causality. Events naturally form a DAG that captures all happened-before relationships, and the structure is straightforward to implement and reason about.
 
@@ -125,13 +135,13 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 **Replay protection via nonce tracking** — Simple per-creator nonce tracking prevents replay attacks without adding significant complexity. Both the CausalGraph and ShardRouter maintain nonce maps, ensuring that each event from a given creator is processed exactly once.
 
-### What Was Adapted
+### What Was Adapted 🔄
 
 **AlephBFT finality simplified for permissionless model** — AlephBFT's committee-based finality was adapted to work in a more permissionless setting. The full rotating committee mechanism was simplified to a supermajority witness model, which provides BFT guarantees without requiring the committee management overhead. This is a practical trade-off for Phase 0; the full AlephBFT committee model can be reintroduced when a validator network is established.
 
 **Financial shard uses strict causal ordering** — The FinancialShard does not use CRDTs for balance management. Instead, it uses strict causal ordering to ensure that balance debits always happen before corresponding credits. This is because financial balances cannot be modeled as CRDTs (you cannot merge two debits of the same balance independently). The causal ordering guarantee from the substrate ensures correctness.
 
-### Performance Notes
+### Performance Notes ⚠️
 
 **O(new_events) processing achieved** — The `unprocessed_events` queue successfully limits consensus processing to only new events per round. However, the system has **not yet been benchmarked at scale**. The 10,000+ TPS target remains unverified. Specific performance characteristics (latency, throughput under load, memory usage at scale) require dedicated benchmarking with realistic workloads.
 
@@ -139,7 +149,9 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 **No real-world network testing** — All testing has been done in simulated environments. Real-world network conditions (latency spikes, partitions, adversarial behavior) have not been tested.
 
-### References
+---
+
+## 📚 References
 
 - Baird, L. "The Swirlds Hashgraph Consensus Algorithm" (2016)
 - Popov, S. "The Tangle" IOTA Whitepaper (2018)

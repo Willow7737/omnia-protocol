@@ -1,6 +1,6 @@
-# Omnia Protocol Architecture
+# 🏗️ Omnia Protocol Architecture
 
-> **⚠️ This document describes the full architecture vision. Only the sections labeled "Implemented" reflect the actual codebase. Sections labeled "Planned" or "Aspirational" describe future goals. For the current implementation details, see the root [ARCHITECTURE.md](../../ARCHITECTURE.md).**
+> **⚠️ This document describes the full architecture vision. Only sections labeled ✅ Implemented reflect the actual codebase. Sections labeled 📋 Planned or 🔮 Aspirational describe future goals. For current implementation details, see the root [ARCHITECTURE.md](../../ARCHITECTURE.md).**
 
 ## Table of Contents
 
@@ -23,25 +23,25 @@ Omnia is a five-layer distributed system designed to enable trustless coordinati
 
 ```
 ┌─────────────────────────────────────────┐
-│  Layer 5: Economics (UBC, Governance)   │
+│  LAYER 5: Economics (UBC, Governance)   │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
-│  Layer 4: Identity (DIDs, Shamir, Bio) │
+│  LAYER 4: Identity (DIDs, Shamir, Bio) │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
-│  Layer 3: Binding (Provenance, RF, QC) │
+│  LAYER 3: Binding (Provenance, RF, QC) │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
-│  Layer 2: Domain Shards (6 shards)     │
+│  LAYER 2: Domain Shards (6 shards)     │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
-│  Layer 1: Substrate (Causal Graph)     │
+│  LAYER 1: Substrate (Causal Graph)     │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
-│  Phase 0: ZK-Rollup (Settlement Layer) │
+│  PHASE 0: ZK-Rollup (Settlement Layer) │ ✅ IMPLEMENTED
 └─────────────────────────────────────────┘
 ```
 
-**Implementation status:** All five core layers are scaffolded and tested (200+ tests). Phase 0 (ZK-rollup settlement) has an Ethereum adapter. Some features within layers are stubs (RF fingerprinting, quantum commitments, ZK circuit).
+**Implementation status:** All five core layers are scaffolded and tested (200+ tests). Phase 0 (ZK-rollup settlement) has an Ethereum adapter. Some features within layers are ⚠️ stubs (RF fingerprinting, quantum commitments, ZK circuit).
 
 ---
 
-## Layer 1: The Substrate — Implemented ✅
+## Layer 1: The Substrate — ✅ Implemented
 
 ### Purpose
 
@@ -49,7 +49,7 @@ The foundation that enables the network to agree on what happened without relyin
 
 ### Key Components
 
-#### Causal Graph Consensus — Implemented ✅
+#### Causal Graph Consensus — ✅ Implemented
 
 Instead of organizing events into sequential blocks, Omnia maintains a **directed acyclic graph (DAG)** where:
 
@@ -63,7 +63,7 @@ Instead of organizing events into sequential blocks, Omnia maintains a **directe
 - Network latency does not block unrelated transactions
 - O(new_events) consensus processing via `unprocessed_events` queue
 
-#### Vector Clocks — Implemented ✅
+#### Vector Clocks — ✅ Implemented
 
 Each node maintains a **vector clock** — a data structure that tracks what it has seen from every other node.
 
@@ -79,41 +79,38 @@ Node A's vector clock: [3, 2, 5, 1]
 - If neither `VC_A < VC_B` nor `VC_B < VC_A`, the events are concurrent
 - Nodes can determine ordering without global synchronization
 
-#### CRDTs — Implemented ✅
+#### CRDTs — ✅ Implemented
 
 For state that requires convergence, Omnia uses CRDTs:
 
 - **GCounter**: Grow-only counter for monotonic values
 - **OrSet**: Observed-remove set with add-wins semantics
 - **LWWRegister**: Last-write-wins register for single values
-- Allow concurrent updates without coordination
-- Guarantee that all nodes eventually reach the same state
-- Provide deterministic merge semantics
 
-**Note:** The FinancialShard uses strict causal ordering, not CRDTs, for balance consistency.
+⚠️ **Note:** The FinancialShard uses strict causal ordering, not CRDTs, for balance consistency.
 
-#### Replay Protection — Implemented ✅
+#### Replay Protection — ✅ Implemented
 
 Per-creator nonce tracking in both CausalGraph and ShardRouter prevents replay attacks.
 
-#### State Commitments — Implemented ✅
+#### State Commitments — ✅ Implemented
 
 - `state_root()` — Merkle root of the entire graph state
 - `merkle_proof()` — Inclusion proof for any event
 - `prune_old_events()` — Event pruning for long-term sustainability
 
-### Relativistic Boundaries — Aspirational 🔮
+### Relativistic Boundaries — 🔮 Aspirational
 
 For interplanetary operation, the protocol would need to acknowledge that communication has physical limits:
 
 - Earth-to-Mars: 3-22 minutes one way
 - Mars-to-Jupiter: 5-60 minutes one way
 
-**Planned solution:** Each region maintains its own causal graph and periodically synchronizes with other regions. This is not yet implemented or tested.
+**Planned solution:** Each region maintains its own causal graph and periodically synchronizes with other regions. This is 🔮 not yet implemented or tested.
 
 ---
 
-## Layer 2: Domain Shards — Implemented ✅
+## Layer 2: Domain Shards — ✅ Implemented
 
 ### Purpose
 
@@ -132,22 +129,22 @@ Each domain shard is a **projection of the unified state** that:
 
 | Shard | Purpose | Status |
 |-------|---------|--------|
-| Financial | Balances, transfers, replay protection | ✅ Implemented |
-| Identity | DID management, credentials | ✅ Implemented |
-| Physical | Object registration, provenance | ✅ Implemented |
-| Computational | AI training, proofs | ✅ Implemented |
-| Biological | Health records, bio-signals | ✅ Implemented |
-| Economics | UBC, governance, useful work | ✅ Implemented |
+| 💰 Financial | Balances, transfers, replay protection | ✅ Implemented |
+| 🆔 Identity | DID management, credentials | ✅ Implemented |
+| 📦 Physical | Object registration, provenance | ✅ Implemented |
+| 🧮 Computational | AI training, proofs | ✅ Implemented |
+| 🧬 Biological | Health records, bio-signals | ✅ Implemented |
+| 📊 Economics | UBC, governance, useful work | ✅ Implemented |
 
-**Note:** The original spec included Energy and Temporal shards. The actual codebase implements 6 shards (Financial, Identity, Physical, Computational, Biological, Economics).
+⚠️ **Note:** The original spec included Energy and Temporal shards. The actual codebase implements 6 shards (Financial, Identity, Physical, Computational, Biological, Economics).
 
-### Cross-Shard Transactions — Implemented ✅
+### Cross-Shard Transactions — ✅ Implemented
 
 Cross-shard messaging with causality proofs is implemented. A single transaction can atomically touch multiple shards via the ShardRouter.
 
 ---
 
-## Layer 3: The Binding Layer — Partially Implemented 🏗️
+## Layer 3: The Binding Layer — 🏗️ Partially Implemented
 
 ### Purpose
 
@@ -155,7 +152,7 @@ Anchor the digital system to physical reality without requiring trusted intermed
 
 ### Physical Anchoring Methods
 
-#### Provenance Log — Implemented ✅
+#### Provenance Log — ✅ Implemented
 
 The provenance log is fully implemented as an append-only CRDT. It provides:
 
@@ -163,35 +160,46 @@ The provenance log is fully implemented as an append-only CRDT. It provides:
 - Complete ownership history (cryptographic birth certificate)
 - No intermediaries needed for verification
 
-#### RF Fingerprinting — Stub 🏗️
+#### RF Fingerprinting — ⚠️ Stub
 
 Every physical object emits unique electromagnetic noise due to manufacturing imperfections. The stub implementation uses Hamming distance comparison.
 
 **What's real:** The data structure and comparison logic exist.
-**What's not real:** Requires SDR hardware (HackRF/USRP) for actual RF signal capture. The current implementation does not process real RF data.
+**What's not real:** 🌑 Requires SDR hardware (HackRF/USRP) for actual RF signal capture.
 
-#### Quantum Commitments — Stub 🏗️
+#### Quantum Commitments — ⚠️ Stub
 
 The quantum commitment stub uses a hybrid classical + PQC placeholder.
 
 **What's real:** The data structure and commitment flow exist.
-**What's not real:** Requires CRYSTALS-Dilithium integration for real post-quantum security. No actual quantum entanglement is used.
+**What's not real:** 🌑 Requires CRYSTALS-Dilithium integration for real post-quantum security.
 
-#### Gravitational Timestamps — Not Implemented 🌑
+#### Physical Time Anchors — 🌑 Not Implemented
 
-This was previously described as using atomic clocks to detect relativistic time dilation for location verification. This is **not implemented** and has no code. The protocol currently relies on logical time (vector clocks) rather than physical time anchors.
+Previously described as "Gravitational Timestamps" using atomic clocks to detect relativistic time dilation for location verification. This is **not implemented** and has no code. The protocol currently relies on logical time (vector clocks) rather than physical time anchors.
 
-#### Biometric Binding — Implemented ✅
+#### Biometric Binding — ✅ Implemented
 
-Privacy-preserving biometric anchors using `BLAKE3(salt || template)`. The template is never stored in cleartext. The salt ensures that even if the same biometric is registered twice, the hashes differ.
+Privacy-preserving biometric anchors using `BLAKE3(salt || template)`. The template is never stored in cleartext.
 
-#### Satellite Mesh — Not Implemented 🌑
+#### Satellite Mesh — 🌑 Not Implemented
 
 GPS + Galileo + Starlink cross-validation for location verification is not implemented.
 
+### Example: Ethical Diamonds — 🔮 Aspirational Use Case
+
+The provenance log can theoretically support this use case, but real RF fingerprinting, quantum seals, and satellite mesh are 🌑 not implemented:
+
+1. **Mining:** Diamond is extracted. RF fingerprint is recorded. Quantum seal is applied.
+2. **Cutting:** Cutter signs the transaction with hardware attestation. RF fingerprint is updated.
+3. **Polishing:** Polisher signs. RF fingerprint is verified.
+4. **Shipping:** Container has quantum seal and GPS tracking via satellite mesh.
+5. **Retail:** Jeweler verifies all signatures and physical properties.
+6. **Consumer:** Scans ring. Full chain is visible: mine → cutter → polisher → shipper → jeweler → you.
+
 ---
 
-## Layer 4: Identity Layer — Implemented ✅
+## Layer 4: Identity Layer — ✅ Implemented
 
 ### Purpose
 
@@ -199,7 +207,7 @@ Enable self-sovereign identity where individuals, AI agents, and collectives own
 
 ### Components
 
-#### Decentralized Identifiers (DIDs) — Implemented ✅
+#### Decentralized Identifiers (DIDs) — ✅ Implemented
 
 The `did:omnia:` method is fully implemented with validation.
 
@@ -211,84 +219,89 @@ The `did:omnia:` method is fully implemented with validation.
 - Cannot be revoked or censored
 - Portable across platforms
 
-#### Social Recovery — Implemented ✅
+#### Social Recovery — ✅ Implemented
 
-Social recovery uses Shamir's Secret Sharing over GF(256).
+Social recovery uses **Shamir's Secret Sharing over GF(256)**:
 
-**How it works:**
 1. Private key is split into N shares using Shamir's Secret Sharing
 2. Shares are distributed to trusted guardians
 3. Threshold number of shares (e.g., 3 of 5) can reconstruct the key
 4. No single guardian has the full key
 5. No company or government involved
 
-#### Biometric Anchors — Implemented ✅
+#### Biometric Anchors — ✅ Implemented
 
 Privacy-preserving biometric anchors: `BLAKE3(salt || template)`. Template never stored in cleartext.
 
-#### AI Agent Identity — Implemented ✅
+#### AI Agent Identity — ✅ Implemented
 
 AI agent identities with 5 capability types are implemented.
 
-#### Reputation System — Partially Implemented 🏗️
+#### Reputation System — 🏗️ Partially Implemented
 
-Exponential reputation decay is implemented. Full reputation scoring (transaction history, credential issuance, community votes, validator performance) is not yet implemented.
+| Component | Status |
+|-----------|--------|
+| ✅ Exponential reputation decay | Implemented |
+| 🌑 Full reputation scoring | Not yet implemented |
+| 📋 Reputation thresholds | Planned |
 
 ---
 
-## Layer 5: Economic Layer — Partially Implemented 🏗️
+## Layer 5: Economic Layer — 🏗️ Partially Implemented
 
 ### Purpose
 
 Create a monetary system that serves people, not extracts from them.
 
-### Universal Basic Compute (UBC) — Implemented ✅
+### Universal Basic Compute (UBC) — ✅ Implemented
 
 Every identity receives a soulbound (non-transferable) monthly quota. The UBC token and QuotaSystem with epoch advancement are implemented.
 
-### Quadratic Voting — Implemented ✅
+### Quadratic Voting — ✅ Implemented
 
 Quadratic voting with exponential reputation decay is implemented.
 
-### Conviction Voting — Planned 📋
+### Conviction Voting — 📋 Planned
 
 Locking tokens for longer periods to increase voting power is planned for Phase 1.
 
-### Delegation — Planned 📋
+### Delegation — 📋 Planned
 
 Delegating voting power to trusted representatives is planned for Phase 1.
 
-### Retroactive Public Goods Funding (RPGF) — Aspirational 🔮
+### RPGF — 🔮 Aspirational
 
-RPGF is an aspirational concept. There is no treasury, no fee mechanism, and no RPGF distribution system implemented.
+Retroactive Public Goods Funding is an aspirational concept. There is no treasury, no fee mechanism, and no RPGF distribution system implemented.
 
-### Fee Structure — Not Implemented 🌑
+### Fee Structure — 🌑 Not Implemented
 
-There is no fee mechanism. UBC quotas cover all transaction costs. A fee mechanism for high-frequency and commercial use is planned but not started.
+There is no fee mechanism. UBC quotas cover all transaction costs.
 
-### Adaptive Monetary Policy — Aspirational 🔮
+### Adaptive Monetary Policy — 🔮 Aspirational
 
-The concept of algorithmic monetary policy responding to network state is aspirational. The current implementation has a fixed UBC quota model.
+The concept of algorithmic monetary policy responding to network state is aspirational.
 
 ---
 
 ## Cross-Layer Interactions
 
-### Example: Supply Chain — Aspirational 🔮
+### Example: Supply Chain — 🔮 Aspirational
 
-The following describes a future use case. The provenance log is implemented, but real RF fingerprinting, quantum seals, and satellite mesh are not.
+The provenance log is ✅ implemented, but real RF fingerprinting, quantum seals, and satellite mesh are 🌑 not.
 
-**Layer 1 (Substrate):** Causal graph tracks the sequence of events — ✅ Implemented
-**Layer 2 (Domain Shards):** Financial, Physical, Identity shards — ✅ Implemented
-**Layer 3 (Binding):** RF fingerprint, quantum seal, satellite mesh — 🏗️ Stubs / 🌑 Not Implemented
-**Layer 4 (Identity):** DID verification — ✅ Implemented
-**Layer 5 (Economic):** Fee structure, RPGF — 🌑 Not Implemented
+| Layer | Feature | Status |
+|-------|---------|--------|
+| Layer 1 (Substrate) | Causal graph tracks event sequence | ✅ Implemented |
+| Layer 2 (Shards) | Financial, Physical, Identity shards | ✅ Implemented |
+| Layer 3 (Binding) | RF fingerprint, quantum seal, satellite mesh | ⚠️ Stubs / 🌑 Not Implemented |
+| Layer 4 (Identity) | DID verification | ✅ Implemented |
+| Layer 5 (Economic) | Fee structure, RPGF | 🌑 Not Implemented |
 
 ---
 
 ## Consensus Mechanism
 
-### Causal+ Consistency — Implemented ✅
+### Causal+ Consistency — ✅ Implemented
 
 Omnia implements causal consistency, which guarantees:
 
@@ -296,11 +309,11 @@ Omnia implements causal consistency, which guarantees:
 2. **Consistency:** All nodes eventually see the same state (via CRDTs)
 3. **Liveness:** The system continues to make progress even if some nodes are offline
 
-### Finality — Implemented ✅
+### Finality — ✅ Implemented
 
 BFT finality via the ConsensusEngine with supermajority witness model (inspired by Hashgraph + AlephBFT).
 
-**Time to finality:** Not yet benchmarked at scale. The O(new_events) processing design targets low latency, but specific numbers have not been measured.
+⚠️ **Time to finality:** Not yet benchmarked at scale. The O(new_events) processing design targets low latency, but specific numbers have not been measured.
 
 ---
 
@@ -308,11 +321,11 @@ BFT finality via the ConsensusEngine with supermajority witness model (inspired 
 
 ### Throughput
 
-**Not yet benchmarked.** The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability. The 10,000+ TPS target has not been verified with benchmarks.
+⚠️ **Not yet benchmarked.** The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability. The 10,000+ TPS target has not been verified with benchmarks.
 
 ### Latency
 
-**Not yet benchmarked.** No real-world network testing has been performed.
+⚠️ **Not yet benchmarked.** No real-world network testing has been performed.
 
 ### Storage
 
@@ -320,7 +333,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 
 ---
 
-## Security Model
+## 🛡️ Security Model
 
 ### Threat Model
 
@@ -331,37 +344,51 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 
 ### Security Guarantees — Designed, Not Production-Tested
 
-- **Consistency:** If 2/3 of validators are honest, the system maintains consistency (BFT guarantee)
-- **Liveness:** If the network is connected and 2/3 of validators are honest, the system makes progress
-- **Replay protection:** Per-creator nonce tracking prevents replay attacks
+| Guarantee | Status |
+|-----------|--------|
+| ✅ Consistency (2/3 honest → system consistent) | Designed |
+| ✅ Liveness (connected + 2/3 honest → progress) | Designed |
+| ✅ Replay protection (nonce tracking) | Implemented |
+| ✅ State commitments (Merkle root + proofs) | Implemented |
+| ✅ Event pruning (sustainability) | Implemented |
+| 🌑 Economic security (slashing, staking) | Not implemented |
 
-### Economic Security — Not Implemented 🌑
+### Cryptographic Primitives
+
+| Primitive | Status |
+|-----------|--------|
+| ✅ Ed25519 signatures | Implemented |
+| ✅ BLAKE3 hashing | Implemented |
+| ⚠️ zk-SNARKs (hash chain stub) | Stub |
+| 🔄 CRYSTALS-Dilithium (PQC signatures) | Stub |
+
+### Economic Security — 🌑 Not Implemented
 
 Slashing, staking, and economic security mechanisms are not implemented. There is no validator network.
 
 ---
 
-## Future Enhancements — Aspirational 🔮
+## 🔮 Future Enhancements — Aspirational
 
 ### Quantum Resistance
-- CRYSTALS-Dilithium (signatures) — stub exists
-- SPHINCS+ (hash-based signatures) — not started
-- Gradual migration, no hard fork — planned
+- 🔄 CRYSTALS-Dilithium (signatures) — stub exists
+- 🌑 SPHINCS+ (hash-based signatures) — not started
+- 📋 Gradual migration, no hard fork — planned
 
 ### Homomorphic Encryption
-- Computing on encrypted data without decryption — aspirational
+- 🔮 Computing on encrypted data without decryption — aspirational
 
 ### Proof-of-Useful-Work
-- Scientific computation, AI training, rendering — stubs exist (3 work types)
-- Real verification of useful work — not implemented
+- ⚠️ Scientific computation, AI training, rendering — stubs exist (3 work types)
+- 🌑 Real verification of useful work — not implemented
 
 ### Interplanetary Operation
-- Relativistic consensus — aspirational
-- Local autonomy with eventual consistency — aspirational
+- 🔮 Relativistic consensus — aspirational
+- 🔮 Local autonomy with eventual consistency — aspirational
 
 ---
 
-## References
+## 📚 References
 
 - Lamport, L. (1978). "Time, Clocks, and the Ordering of Events in a Distributed System"
 - Shapiro, M., & Preguiça, N. (2011). "Conflict-free Replicated Data Types"

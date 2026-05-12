@@ -1,8 +1,10 @@
-# Contributing to Omnia Protocol
+# 🤝 Contributing to Omnia Protocol
 
-Thank you for your interest in contributing to Omnia! This is a Rust-only codebase. All contributions are in Rust.
+Thank you for your interest in contributing to Omnia! Whether you're a cryptographer, Rust developer, or visionary, there's a place for you.
 
-## Code of Conduct
+> **⚠️ This is a Rust-only codebase.** All contributions are in Rust. There are no JavaScript, Python, or other language components.
+
+## 📜 Code of Conduct
 
 We are committed to providing a welcoming and inspiring community for all. Please read and adhere to our Code of Conduct:
 
@@ -16,7 +18,7 @@ Violations can be reported to conduct@omnia.protocol.
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### 1. Fork the Repository
 
@@ -32,8 +34,6 @@ git checkout -b feature/your-feature-name
 ```
 
 ### 3. Set Up Development Environment
-
-This is a Rust-only codebase. There are no JavaScript, Python, or other language components.
 
 ```bash
 cargo build
@@ -61,9 +61,9 @@ git push origin feature/your-feature-name
 
 ---
 
-## Contribution Types
+## 🛠️ Contribution Types
 
-### 1. Code Contributions (Rust Only)
+### 1. Code Contributions (Rust Only) 🦀
 
 ```rust
 // Follow Rust conventions
@@ -83,45 +83,21 @@ mod tests {
 ```
 
 **Requirements:**
-- Tests pass: `cargo test --workspace`
-- Clippy passes: `cargo clippy -- -D warnings`
-- Format is correct: `cargo fmt --check`
-- Documentation is complete: `cargo doc`
+- ✅ Tests pass: `cargo test --workspace`
+- ✅ Clippy passes: `cargo clippy -- -D warnings`
+- ✅ Format is correct: `cargo fmt --check`
+- ✅ Documentation is complete: `cargo doc`
 
-### 2. Documentation Contributions
+### 2. Documentation Contributions 📝
 
 - Use Markdown format
 - Follow the existing structure
 - Include code examples where relevant
 - Proofread for clarity and grammar
-- **Be honest**: Label stubs as stubs, planned features as planned, aspirational content as aspirational
+- **Be honest**: Label stubs as ⚠️, planned features as 📋, aspirational content as 🔮
 - Do not document features that don't exist in the code
 
-#### Documentation Standards
-
-```markdown
-# Section Title
-
-Brief introduction to the section.
-
-## Subsection
-
-More detailed explanation with examples.
-
-### Code Example
-
-\`\`\`rust
-// Code example
-\`\`\`
-
-### Key Points
-
-- Point 1
-- Point 2
-- Point 3
-```
-
-### 3. Community Contributions
+### 3. Community Contributions 🌍
 
 - Organize meetups or webinars
 - Create educational content
@@ -131,7 +107,7 @@ More detailed explanation with examples.
 
 ---
 
-## Review Process
+## 🔍 Review Process
 
 ### Code Review Checklist
 
@@ -158,13 +134,15 @@ Reviewers will:
 
 ### Approval Process
 
-- **1 approval:** Code review complete (current policy — small team)
-- **2+ approvals:** Ready to merge (policy when team grows)
-- **Changes requested:** Address feedback and resubmit
+| Approval Level | Meaning |
+|---------------|---------|
+| **1 approval** | Code review complete (current policy — small team) |
+| **2+ approvals** | Ready to merge (policy when team grows) |
+| **Changes requested** | Address feedback and resubmit |
 
 ---
 
-## Commit Message Guidelines
+## 📝 Commit Message Guidelines
 
 Use clear, descriptive commit messages:
 
@@ -199,7 +177,7 @@ Fixes #123
 
 ---
 
-## Testing Guidelines
+## 🧪 Testing Guidelines
 
 ### Unit Tests
 
@@ -232,7 +210,7 @@ fn test_end_to_end_flow() {
 
 ---
 
-## Documentation Guidelines
+## 📖 Documentation Guidelines
 
 ### Code Documentation
 
@@ -264,7 +242,7 @@ pub fn my_function(arg1: Type1, arg2: Type2) -> ReturnType {
 
 ---
 
-## Reporting Issues
+## 🐛 Reporting Issues
 
 ### Bug Reports
 
@@ -276,6 +254,28 @@ Include:
 - Environment details (OS, Rust version, etc.)
 - Logs if relevant
 
+**Template:**
+```markdown
+## 🐛 Description
+Brief description of the bug
+
+## Steps to Reproduce
+1. Step 1
+2. Step 2
+3. Step 3
+
+## Expected Behavior
+What should happen
+
+## Actual Behavior
+What actually happens
+
+## Environment
+- OS: macOS 12.0
+- Rust: 1.75.0
+- Version: 1.0.0
+```
+
 ### Feature Requests
 
 Include:
@@ -286,16 +286,28 @@ Include:
 
 ---
 
-## Communication
+## 💬 Communication
 
-- **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - The primary place for questions, ideas, and general community interaction.
-- **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - For bug reports, feature requests, and technical research proposals.
-- **Discord:** Real-time chat and community [Join our Discord](https://discord.gg/qYkpAeSYR)
+Omnia is a public-interest protocol. Join the conversation:
+
+- **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - Questions, ideas, and general community interaction.
+- **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - Bug reports, feature requests, and technical research proposals.
+- **[Project Dashboard](./PROJECT_DASHBOARD.md)** - Real-time project health and status updates.
+- **[Discord](https://discord.gg/qYkpAeSYR)** - Real-time chat and community.
 - **Email:** `conduct@omnia.protocol` (for conduct issues)
+
+### Response Times
+
+| Type | Expected Response |
+|------|-------------------|
+| 🐛 Bug reports | 24-48 hours |
+| 💡 Feature requests | 1 week |
+| 🔀 Pull requests | 2-5 days |
+| ❓ Questions | 24 hours |
 
 ---
 
-## License
+## 📜 License
 
 By contributing to Omnia Protocol, you agree that your contributions will be licensed under the same license as the project (CC0 Public Domain).
 
