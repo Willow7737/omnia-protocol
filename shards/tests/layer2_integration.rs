@@ -81,20 +81,23 @@ async fn test_financial_shard_wired_into_substrate() {
 
     // 5. Submit event and run consensus
     substrate.submit_event(event).await.unwrap();
-    let committed = substrate.process_consensus().await;
-    assert!(!committed.is_empty(), "Event should be committed");
+    let _ = substrate.process_consensus().await;
 
-    // 6. Process committed events through shard processor
+    // 6. Process finalized events through shard processor
+    //    submit_event() processes the event through consensus directly,
+    //    so process_consensus() may return empty for already-processed events.
+    //    Use finalized_events() to get all committed event IDs.
+    let finalized_ids = substrate.finalized_events();
+    assert!(!finalized_ids.is_empty(), "Event should be finalized");
+    let finalized_events: Vec<Event> = {
+        let graph = substrate.graph().await;
+        finalized_ids
+            .iter()
+            .filter_map(|id| graph.get(id).cloned())
+            .collect()
+    };
     if let Some(ref mut proc) = substrate.shard_processor {
-        // Collect committed events before borrowing processor
-        let committed_events: Vec<Event> = {
-            let graph = substrate.graph().await;
-            committed
-                .iter()
-                .filter_map(|id| graph.get(id).cloned())
-                .collect()
-        };
-        for event in &committed_events {
+        for event in &finalized_events {
             proc.process_event(event).unwrap();
         }
     }
@@ -149,19 +152,23 @@ async fn test_identity_shard_wired_into_substrate() {
 
     // 5. Submit event and run consensus
     substrate.submit_event(event).await.unwrap();
-    let committed = substrate.process_consensus().await;
-    assert!(!committed.is_empty(), "Event should be committed");
+    let _ = substrate.process_consensus().await;
 
-    // 6. Process committed events through shard processor
+    // 6. Process finalized events through shard processor
+    //    submit_event() processes the event through consensus directly,
+    //    so process_consensus() may return empty for already-processed events.
+    //    Use finalized_events() to get all committed event IDs.
+    let finalized_ids = substrate.finalized_events();
+    assert!(!finalized_ids.is_empty(), "Event should be finalized");
+    let finalized_events: Vec<Event> = {
+        let graph = substrate.graph().await;
+        finalized_ids
+            .iter()
+            .filter_map(|id| graph.get(id).cloned())
+            .collect()
+    };
     if let Some(ref mut proc) = substrate.shard_processor {
-        let committed_events: Vec<Event> = {
-            let graph = substrate.graph().await;
-            committed
-                .iter()
-                .filter_map(|id| graph.get(id).cloned())
-                .collect()
-        };
-        for event in &committed_events {
+        for event in &finalized_events {
             proc.process_event(event).unwrap();
         }
     }

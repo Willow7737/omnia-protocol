@@ -4,7 +4,7 @@
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
 use crate::causal_graph::{CausalGraph, CausalGraphError};
-use crate::event::{Event, EventBatch, EventRequest};
+use crate::event::{Event, EventBatch, EventId, EventRequest};
 use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
@@ -221,8 +221,8 @@ impl GossipProtocol {
     /// This is the bridge between p2p network events and consensus —
     /// network events land in the graph where Substrate::process_consensus()
     /// can pick them up.
-    pub async fn process_pending_events(&mut self) -> Result<usize, GossipError> {
-        let mut processed = 0;
+    pub async fn process_pending_events(&mut self) -> Result<Vec<EventId>, GossipError> {
+        let mut inserted_ids = Vec::new();
 
         // Drain network events into pending queue
         if let Some(ref mut rx) = self.network_rx {
@@ -264,10 +264,10 @@ impl GossipProtocol {
 
         for event in to_process {
             let mut graph = self.graph.write().await;
-            match graph.insert(event) {
+            match graph.insert(event.clone()) {
                 Ok(_) => {
                     self.stats.events_accepted += 1;
-                    processed += 1;
+                    inserted_ids.push(event.id);
                 }
                 Err(CausalGraphError::DuplicateEvent(_)) => {
                     self.stats.events_rejected += 1;
@@ -279,7 +279,7 @@ impl GossipProtocol {
             }
         }
 
-        Ok(processed)
+        Ok(inserted_ids)
     }
 }
 

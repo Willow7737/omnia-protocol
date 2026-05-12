@@ -42,7 +42,6 @@ pub use gossip::{
 };
 pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
-pub use crate::EventProcessor;
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -152,6 +151,12 @@ pub struct Substrate {
     /// When set, the `run()` loop will feed every newly-committed event
     /// to this processor, ensuring shards only observe finalized state.
     pub shard_processor: Option<Box<dyn EventProcessor>>,
+    /// Events waiting for consensus processing.
+    ///
+    /// Events are added to this queue when inserted (locally via
+    /// `submit_event()` or from the network via gossip). `process_consensus()`
+    /// drains this queue, making consensus O(new_events) instead of O(total).
+    unprocessed_events: Vec<EventId>,
 }
 
 impl Substrate {
@@ -166,6 +171,7 @@ impl Substrate {
             consensus,
             running: false,
             shard_processor: None,
+            unprocessed_events: Vec::new(),
         }
     }
 
@@ -212,10 +218,15 @@ impl Substrate {
         self.running = true;
 
         while self.running {
-            // 1. Drain network events into graph
+            // 1. Drain network events into graph + queue
             if let Some(ref mut gossip) = self.gossip {
-                if let Err(e) = gossip.process_pending_events().await {
-                    tracing::warn!("Gossip processing error: {}", e);
+                match gossip.process_pending_events().await {
+                    Ok(inserted) => {
+                        self.unprocessed_events.extend(inserted);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Gossip processing error: {}", e);
+                    }
                 }
             }
 
@@ -257,6 +268,9 @@ impl Substrate {
             let mut graph = self.graph.write().await;
             graph.insert(event.clone()).map_err(SubstrateError::from)?;
         }
+
+        // Track for consensus processing
+        self.unprocessed_events.push(event.id);
 
         let graph = self.graph.read().await;
         self.consensus
@@ -330,37 +344,19 @@ impl Substrate {
         }
     }
 
-    /// Process consensus for all events currently in the graph.
+    /// Process consensus for unprocessed events only.
+    ///
+    /// Drains the `unprocessed_events` queue, making consensus O(new_events)
+    /// instead of O(total_events). Events are added to the queue when inserted
+    /// locally (via `submit_event()`) or from the network (via gossip).
     pub async fn process_consensus(&mut self) -> Vec<EventId> {
         let graph = self.graph.read().await;
         let mut all_committed = Vec::new();
 
-        // Get all event IDs and process them through consensus
-        // We iterate by getting each event via the public `get()` method
-        let tip_ids: Vec<EventId> = graph.tips().copied().collect();
-        let all_ids: Vec<EventId> = {
-            // Walk the graph from tips to collect all event IDs
-            let mut visited = std::collections::HashSet::new();
-            let mut queue = std::collections::VecDeque::new();
-            for id in &tip_ids {
-                queue.push_back(*id);
-            }
-            while let Some(id) = queue.pop_front() {
-                if visited.insert(id) {
-                    if let Some(event) = graph.get(&id) {
-                        if let Some(sp) = event.self_parent {
-                            queue.push_back(sp);
-                        }
-                        if let Some(op) = event.other_parent {
-                            queue.push_back(op);
-                        }
-                    }
-                }
-            }
-            visited.into_iter().collect()
-        };
+        // Drain only unprocessed events (topologically ordered)
+        let to_process: Vec<EventId> = self.unprocessed_events.drain(..).collect();
 
-        for id in &all_ids {
+        for id in &to_process {
             if let Some(event) = graph.get(id) {
                 if let Ok(committed) = self.consensus.process_event(event, &graph) {
                     all_committed.extend(committed);

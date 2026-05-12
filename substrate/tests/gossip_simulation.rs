@@ -401,8 +401,8 @@ async fn test_process_pending_events_drains_network_rx() {
     drop(tx);
 
     // Process pending events
-    let processed = gossip.process_pending_events().await.unwrap();
-    assert_eq!(processed, 1, "Should process 1 network event");
+    let inserted = gossip.process_pending_events().await.unwrap();
+    assert_eq!(inserted.len(), 1, "Should process 1 network event");
 
     // Verify event is in graph
     let g = gossip.graph().read().await;
