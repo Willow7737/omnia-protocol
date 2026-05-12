@@ -318,3 +318,97 @@ fn test_crdt_100_percent_convergence() {
         assert_eq!(alt1.state_hash(), alt2.state_hash(), "Hash mismatch for {}", desc);
     }
 }
+
+/// Test: Network-received events flow through consensus to finality.
+///
+/// Verifies that when events arrive via the simulated network,
+/// they get inserted into the graph, processed through consensus,
+/// and reach finality — the core fix for the p2p consensus gap.
+#[tokio::test]
+async fn test_network_event_processed_through_consensus() {
+    let network = TestNetwork::new(4).await;
+
+    // Create events from all 4 nodes as if they came from the network
+    let mut event_ids = Vec::new();
+    for i in 0..4 {
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8 + 10]);
+        event.sign_with_keypair(&keypair);
+        event_ids.push(event.id);
+
+        // Insert into shared graph (simulates network receive)
+        {
+            let mut shared = network.shared_graph.write().await;
+            shared.insert(event.clone()).unwrap();
+        }
+    }
+
+    // Propagate to all nodes (simulates gossip)
+    network.propagate_all().await;
+
+    // Process consensus on all nodes
+    network.process_consensus_all().await;
+
+    // Verify all nodes have all events
+    for (i, node_arc) in network.nodes.iter().enumerate() {
+        let node = node_arc.read().await;
+        let graph = node.graph().await;
+        for id in &event_ids {
+            assert!(graph.contains(id), "Node {} missing event", i);
+        }
+    }
+
+    // Verify events are finalized (4 witnesses in round 0 => supermajority)
+    let node0 = network.nodes[0].read().await;
+    for id in &event_ids {
+        assert!(node0.is_finalized(id), "Event {:?} should be finalized", &id[..4]);
+    }
+}
+
+/// Test: process_pending_events() correctly drains network_rx into the
+/// pending queue and inserts events into the graph.
+#[tokio::test]
+async fn test_process_pending_events_drains_network_rx() {
+    use libp2p::PeerId;
+    use tokio::sync::mpsc;
+
+    let graph = Arc::new(RwLock::new(CausalGraph::new()));
+    let mut gossip = GossipProtocol::new(test_node(1), GossipConfig::default(), graph);
+
+    // Create a fake network receiver
+    let (tx, rx) = mpsc::channel(10);
+    gossip.network_rx = Some(rx);
+
+    // Create and serialize an event
+    let keypair = generate_keypair();
+    let mut event = Event::genesis(test_node(2), vec![1, 2, 3]);
+    event.sign_with_keypair(&keypair);
+    let event_id = event.id;
+    let bytes = event.to_bytes();
+
+    // Send it as a network event
+    // Build a dummy PeerId from a public key
+    let dummy_peer_id = PeerId::random();
+    tx.send(NetworkEvent::GossipReceived {
+        topic: "omnia_events".to_string(),
+        data: bytes,
+        propagation_source: dummy_peer_id,
+    })
+    .await
+    .unwrap();
+
+    // Drop tx so recv doesn't hang
+    drop(tx);
+
+    // Process pending events
+    let processed = gossip.process_pending_events().await.unwrap();
+    assert_eq!(processed, 1, "Should process 1 network event");
+
+    // Verify event is in graph
+    let g = gossip.graph().read().await;
+    assert!(g.contains(&event_id));
+
+    // Verify stats
+    assert_eq!(gossip.stats().events_received, 1);
+    assert_eq!(gossip.stats().events_accepted, 1);
+}

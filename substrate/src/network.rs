@@ -149,19 +149,17 @@ impl OmniaNetwork {
         }
     }
 
-    /// Run the network event loop with a command channel and an event consumer.
+    /// Run the network event loop with a command channel.
     ///
-    /// FIX(bug-1): The `cmd_rx` channel allows external code (e.g.
-    /// `broadcast_event`) to publish messages without owning the Swarm.
+    /// The network layer only: runs the libp2p swarm, sends NetworkEvents
+    /// to `event_tx` (for external consumers like GossipProtocol), and
+    /// receives NetworkCommands from `cmd_rx` to publish/subscribe.
     ///
-    /// FIX(bug-2): The `event_rx` receiver is consumed here so the mpsc
-    /// channel never fills up. Without draining it, `handle_swarm_event`
-    /// would block after 1000 events.
+    /// Event consumption (graph insertion + consensus) is handled by
+    /// GossipProtocol::process_pending_events(), not here.
     pub async fn run_with_commands(
         &mut self,
         mut cmd_rx: mpsc::Receiver<NetworkCommand>,
-        mut event_rx: mpsc::Receiver<NetworkEvent>,
-        graph: std::sync::Arc<tokio::sync::RwLock<crate::causal_graph::CausalGraph>>,
     ) {
         use futures::StreamExt;
         loop {
@@ -169,21 +167,6 @@ impl OmniaNetwork {
                 event = self.swarm.select_next_some() => {
                     self.handle_swarm_event(event).await;
                 }
-                // FIX(bug-2): Drain the event channel so it never blocks.
-                Some(net_event) = event_rx.recv() => {
-                    if let NetworkEvent::GossipReceived { data, .. } = net_event {
-                        match crate::event::Event::from_bytes(&data) {
-                            Ok(event) => {
-                                let mut g = graph.write().await;
-                                let _ = g.insert(event);
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to deserialize gossip event: {:?}", e);
-                            }
-                        }
-                    }
-                }
-                // FIX(bug-1): Process publish commands from broadcast_event().
                 cmd = cmd_rx.recv() => {
                     match cmd {
                         Some(NetworkCommand::Publish { topic, data }) => {

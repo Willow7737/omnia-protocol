@@ -83,10 +83,11 @@ pub struct GossipProtocol {
     node_id: NodeId,
     config: GossipConfig,
     graph: Arc<RwLock<CausalGraph>>,
-    // FIX(bug-1): Command channel to publish through the network task.
-    // After start_with_network(), OmniaNetwork is owned by the spawned
-    // task. broadcast_event() sends Publish commands through this channel.
+    // Command channel to publish through the network task.
     network_cmd_tx: Option<mpsc::Sender<NetworkCommand>>,
+    // Network event receiver — drained into pending_events by
+    // process_pending_events() so that p2p events flow through consensus.
+    pub network_rx: Option<mpsc::Receiver<NetworkEvent>>,
     pending_events: VecDeque<Event>,
     recent_gossip: HashSet<[u8; 32]>,
     stats: GossipStats,
@@ -102,6 +103,7 @@ impl GossipProtocol {
             config,
             graph,
             network_cmd_tx: None,
+            network_rx: None,
             pending_events: VecDeque::new(),
             recent_gossip: HashSet::new(),
             stats: GossipStats::default(),
@@ -111,42 +113,39 @@ impl GossipProtocol {
         }
     }
 
-    /// Attach a real network layer.
-    /// The network is consumed by start_with_network() — this method just
-    /// flags that a network is available.
+    /// Deprecated — use start_with_network() instead.
+    /// Cannot hold OmniaNetwork because Swarm is !Send.
     pub fn attach_network(&mut self, _network: OmniaNetwork) {
-        // Cannot hold OmniaNetwork because Swarm is !Send.
-        // Use start_with_network() instead.
+        // No-op. Use start_with_network() which moves the network into
+        // a spawned task and wires event_rx into process_pending_events().
     }
 
     /// Start with an OmniaNetwork. Moves the network into a spawned task.
     ///
-    /// FIX(bug-1): A command channel is created so broadcast_event() can
-    /// publish even after the network is moved into the spawned task.
-    ///
-    /// FIX(bug-2): The event_rx is consumed by run_with_commands() so the
-    /// mpsc channel never fills up and blocks.
+    /// The event_rx is stored in self.network_rx so that
+    /// process_pending_events() can drain network events into the
+    /// pending queue and process them through the graph + consensus.
     pub async fn start_with_network(&mut self, mut network: OmniaNetwork) {
         self.running = true;
 
-        // Take the event_rx out of the network — it will be consumed by
-        // run_with_commands() inside the spawned task.
+        // Take the event_rx out of the network — we consume it in
+        // process_pending_events() instead of letting the network task
+        // insert into the graph directly.
         let event_rx = network
             .event_rx
             .take()
             .expect("event_rx should be present after OmniaNetwork::new()");
+        self.network_rx = Some(event_rx);
 
         // Command channel for broadcast_event() → network task
         let (cmd_tx, cmd_rx) = mpsc::channel::<NetworkCommand>(256);
         self.network_cmd_tx = Some(cmd_tx);
 
-        // Clone the graph Arc for the spawned task
-        let graph = Arc::clone(&self.graph);
-
         // Spawn the network event loop. The task owns OmniaNetwork.
-        // It processes: swarm events, event_rx (drains channel), cmd_rx (publish).
+        // It only processes swarm events + command channel (publish/subscribe).
+        // Event consumption is handled by GossipProtocol.
         tokio::spawn(async move {
-            network.run_with_commands(cmd_rx, event_rx, graph).await;
+            network.run_with_commands(cmd_rx).await;
         });
 
         info!(
@@ -207,45 +206,65 @@ impl GossipProtocol {
         Ok(())
     }
 
-    /// Process an incoming network event.
-    pub async fn handle_network_event(
-        &mut self,
-        event: NetworkEvent,
-    ) -> Result<usize, GossipError> {
-        match event {
-            NetworkEvent::GossipReceived { data, .. } => {
-                match Event::from_bytes(&data) {
-                    Ok(event) => {
-                        if !self.seen_events.contains(&event.id) {
-                            self.seen_events.insert(event.id);
-                            self.pending_events.push_back(event);
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to deserialize gossip event: {:?}", e);
-                        self.stats.events_rejected += 1;
-                    }
-                }
-                self.process_pending_events().await
-            }
-            _ => Ok(0),
-        }
-    }
-
     pub fn stats(&self) -> &GossipStats {
         &self.stats
     }
 
-    async fn process_pending_events(&mut self) -> Result<usize, GossipError> {
+    /// Read access to the underlying graph (for testing/inspection).
+    pub fn graph(&self) -> &Arc<RwLock<CausalGraph>> {
+        &self.graph
+    }
+
+    /// Process pending events: first drain network_rx into the pending queue,
+    /// then insert all pending events into the graph.
+    ///
+    /// This is the bridge between p2p network events and consensus —
+    /// network events land in the graph where Substrate::process_consensus()
+    /// can pick them up.
+    pub async fn process_pending_events(&mut self) -> Result<usize, GossipError> {
         let mut processed = 0;
-        let to_process: Vec<Event> = self
-            .pending_events
-            .drain(..self.pending_events.len())
-            .collect();
+
+        // Drain network events into pending queue
+        if let Some(ref mut rx) = self.network_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(NetworkEvent::GossipReceived { data, .. }) => {
+                        match Event::from_bytes(&data) {
+                            Ok(event) => {
+                                if !self.seen_events.contains(&event.id) {
+                                    self.seen_events.insert(event.id);
+                                    self.pending_events.push_back(event);
+                                    self.stats.events_received += 1;
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to deserialize gossip event: {:?}", e);
+                                self.stats.events_rejected += 1;
+                            }
+                        }
+                    }
+                    Ok(NetworkEvent::PeerConnected(peer_id)) => {
+                        info!("Peer connected: {:?}", peer_id);
+                    }
+                    Ok(NetworkEvent::PeerDisconnected(peer_id)) => {
+                        info!("Peer disconnected: {:?}", peer_id);
+                    }
+                    Ok(_) => {}
+                    Err(mpsc::error::TryRecvError::Empty) => break,
+                    Err(mpsc::error::TryRecvError::Disconnected) => {
+                        self.network_rx = None;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Process all pending events (both locally created and network received)
+        let to_process: Vec<Event> = self.pending_events.drain(..).collect();
 
         for event in to_process {
             let mut graph = self.graph.write().await;
-            match graph.insert(event.clone()) {
+            match graph.insert(event) {
                 Ok(_) => {
                     self.stats.events_accepted += 1;
                     processed += 1;

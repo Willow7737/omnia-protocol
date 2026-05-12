@@ -153,6 +153,34 @@ impl Substrate {
         }
     }
 
+    /// Run the substrate main loop. Processes network events and consensus
+    /// until `stop()` is called.
+    pub async fn run(&mut self) {
+        self.running = true;
+
+        while self.running {
+            // Process any network-received events
+            if let Some(ref mut gossip) = self.gossip {
+                if let Err(e) = gossip.process_pending_events().await {
+                    tracing::warn!("Gossip processing error: {}", e);
+                }
+            }
+
+            // Run consensus on all events in graph
+            let _committed = self.process_consensus().await;
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    }
+
+    /// Start with network and run main loop.
+    pub async fn start_with_network(&mut self, network: network::OmniaNetwork) {
+        if let Some(ref mut gossip) = self.gossip {
+            gossip.start_with_network(network).await;
+        }
+        self.run().await;
+    }
+
     pub async fn submit_event(&mut self, mut event: Event) -> Result<()> {
         event.validate().map_err(SubstrateError::from)?;
 
