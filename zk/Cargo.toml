@@ -1,0 +1,22 @@
+[package]
+name = "omnia-zk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+description = "Phase 0: Settlement-agnostic ZK-rollup — Ethereum adapter + Bitcoin/Solana/Celestia stubs"
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+
+[dependencies]
+omnia-substrate = { path = "../substrate" }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+blake3 = "1.5"
+tokio = { version = "1.35", features = ["full"] }
+tracing = "0.1"
+thiserror = "1.0"
+async-trait = "0.1"
+hex = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"

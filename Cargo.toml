@@ -4,5 +4,6 @@ members = [
     "shards",
     "binding",
     "economics",
+    "zk",
 ]
 resolver = "2"
