@@ -14,8 +14,8 @@
 //!
 //! The substrate also supports **Layer 2 event processors** (such as domain
 //! shards) through the `EventProcessor` trait. Processors can be attached to
-//! the substrate via `with_event_processor()` and are invoked automatically
-//! in the main run loop after consensus processing.
+//! the substrate via `with_shard_processor()` and are invoked automatically
+//! in the main run loop for each newly-committed event.
 
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
@@ -42,6 +42,7 @@ pub use gossip::{
 };
 pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
+pub use crate::EventProcessor;
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -146,8 +147,11 @@ pub struct Substrate {
     gossip: Option<GossipProtocol>,
     consensus: ConsensusEngine,
     running: bool,
-    /// Optional Layer 2 event processor (e.g., domain shard router).
-    event_processor: Option<Box<dyn EventProcessor>>,
+    /// Optional Layer 2 shard processor (e.g., domain shard router).
+    ///
+    /// When set, the `run()` loop will feed every newly-committed event
+    /// to this processor, ensuring shards only observe finalized state.
+    pub shard_processor: Option<Box<dyn EventProcessor>>,
 }
 
 impl Substrate {
@@ -161,7 +165,7 @@ impl Substrate {
             gossip: None,
             consensus,
             running: false,
-            event_processor: None,
+            shard_processor: None,
         }
     }
 
@@ -187,33 +191,52 @@ impl Substrate {
         }
     }
 
-    /// Attach a Layer 2 event processor (e.g., a shard router).
+    /// Attach a Layer 2 shard processor (e.g., a shard router).
     ///
-    /// The processor will be called for every event in the causal graph
-    /// during the main run loop, after consensus processing.
-    pub fn with_event_processor(mut self, processor: Box<dyn EventProcessor>) -> Self {
-        self.event_processor = Some(processor);
+    /// The processor will be called for each newly-committed event
+    /// during the main run loop, after consensus processing. Only
+    /// committed events are forwarded, ensuring shards never see
+    /// un-finalized state.
+    pub fn with_shard_processor(mut self, processor: Box<dyn EventProcessor>) -> Self {
+        self.shard_processor = Some(processor);
         self
     }
 
     /// Run the substrate main loop. Processes network events, consensus,
-    /// and Layer 2 event processors until `stop()` is called.
+    /// and Layer 2 shard processors until `stop()` is called.
+    ///
+    /// Only committed events are forwarded to the shard processor,
+    /// ensuring that shards never observe un-finalized state that
+    /// could later be rolled back.
     pub async fn run(&mut self) {
         self.running = true;
 
         while self.running {
-            // Process any network-received events
+            // 1. Drain network events into graph
             if let Some(ref mut gossip) = self.gossip {
                 if let Err(e) = gossip.process_pending_events().await {
                     tracing::warn!("Gossip processing error: {}", e);
                 }
             }
 
-            // Run consensus on all events in graph
-            let _committed = self.process_consensus().await;
+            // 2. Run consensus — returns newly committed event IDs
+            let committed = self.process_consensus().await;
 
-            // Process Layer 2 event processors (e.g., domain shards)
-            let _ = self.process_event_processors().await;
+            // 3. Process committed events through shard processor
+            if let Some(ref mut processor) = self.shard_processor {
+                let graph = self.graph.read().await;
+                for event_id in &committed {
+                    if let Some(event) = graph.get(event_id) {
+                        if let Err(e) = processor.process_event(event) {
+                            tracing::warn!(
+                                "Shard processor error for event {}: {}",
+                                hex::encode(&event_id[..4]),
+                                e
+                            );
+                        }
+                    }
+                }
+            }
 
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
@@ -283,19 +306,23 @@ impl Substrate {
         }
     }
 
-    /// Process events through the attached Layer 2 event processor.
+    /// Process events through the attached Layer 2 shard processor.
     ///
     /// Iterates over all events in the causal graph and forwards them
-    /// to the registered event processor. Errors are logged but do not
+    /// to the registered shard processor. Errors are logged but do not
     /// halt the substrate.
+    ///
+    /// Note: The `run()` loop only forwards *committed* events to the
+    /// shard processor. This method processes *all* events and is
+    /// primarily kept for direct-use scenarios.
     pub async fn process_event_processors(&mut self) {
-        if let Some(ref mut processor) = self.event_processor {
+        if let Some(ref mut processor) = self.shard_processor {
             let graph = self.graph.read().await;
             for event_id in graph.event_ids() {
                 if let Some(event) = graph.get(&event_id) {
                     if !event.payload.is_empty() {
                         if let Err(e) = processor.process_event(event) {
-                            tracing::warn!("Event processor error: {}", e);
+                            tracing::warn!("Shard processor error: {}", e);
                         }
                     }
                 }
