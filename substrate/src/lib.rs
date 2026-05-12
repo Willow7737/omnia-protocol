@@ -17,8 +17,8 @@
 
 pub mod causal_graph;
 pub mod consensus;
-pub mod crypto;
 pub mod crdt;
+pub mod crypto;
 pub mod event;
 pub mod gossip;
 pub mod network;
@@ -27,11 +27,15 @@ pub mod vector_clock;
 // Re-export commonly used types
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats};
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState};
-pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
-pub use event::{Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError};
-pub use gossip::{GossipConfig, GossipDigest, GossipError, GossipMessage, GossipProtocol, GossipStats};
-pub use network::{NetworkEvent, OmniaNetwork, OmniaBehaviour};
+pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
+pub use event::{
+    Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
+};
+pub use gossip::{
+    GossipConfig, GossipDigest, GossipError, GossipMessage, GossipProtocol, GossipStats,
+};
+pub use network::{NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 
 /// Semantic version of this crate
@@ -158,11 +162,16 @@ impl Substrate {
         }
 
         let graph = self.graph.read().await;
-        self.consensus.process_event(&event, &graph).map_err(SubstrateError::from)?;
+        self.consensus
+            .process_event(&event, &graph)
+            .map_err(SubstrateError::from)?;
         drop(graph);
 
         if let Some(ref mut gossip) = self.gossip {
-            gossip.broadcast_event(event).await.map_err(SubstrateError::from)?;
+            gossip
+                .broadcast_event(event)
+                .await
+                .map_err(SubstrateError::from)?;
         }
 
         Ok(())
@@ -188,10 +197,9 @@ impl Substrate {
         self.consensus.get_committed()
     }
 
-    pub fn stats(&self) -> SubstrateStats {
-        let graph_stats = futures::executor::block_on(async {
-            self.graph.read().await.stats()
-        });
+    /// Get substrate statistics (async — never blocks inside a Tokio runtime).
+    pub async fn stats(&self) -> SubstrateStats {
+        let graph_stats = self.graph.read().await.stats();
         let consensus_stats = self.consensus.stats();
 
         SubstrateStats {
@@ -199,6 +207,47 @@ impl Substrate {
             consensus: consensus_stats,
             running: self.running,
         }
+    }
+
+    /// Process consensus for all events currently in the graph.
+    pub async fn process_consensus(&mut self) -> Vec<EventId> {
+        let graph = self.graph.read().await;
+        let mut all_committed = Vec::new();
+
+        // Get all event IDs and process them through consensus
+        // We iterate by getting each event via the public `get()` method
+        let tip_ids: Vec<EventId> = graph.tips().copied().collect();
+        let all_ids: Vec<EventId> = {
+            // Walk the graph from tips to collect all event IDs
+            let mut visited = std::collections::HashSet::new();
+            let mut queue = std::collections::VecDeque::new();
+            for id in &tip_ids {
+                queue.push_back(*id);
+            }
+            while let Some(id) = queue.pop_front() {
+                if visited.insert(id) {
+                    if let Some(event) = graph.get(&id) {
+                        if let Some(sp) = event.self_parent {
+                            queue.push_back(sp);
+                        }
+                        if let Some(op) = event.other_parent {
+                            queue.push_back(op);
+                        }
+                    }
+                }
+            }
+            visited.into_iter().collect()
+        };
+
+        for id in &all_ids {
+            if let Some(event) = graph.get(id) {
+                if let Ok(committed) = self.consensus.process_event(event, &graph) {
+                    all_committed.extend(committed);
+                }
+            }
+        }
+
+        all_committed
     }
 }
 
@@ -262,12 +311,12 @@ mod tests {
         assert_eq!(graph.len(), 1);
     }
 
-    #[test]
-    fn test_substrate_stats() {
+    #[tokio::test]
+    async fn test_substrate_stats() {
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config);
 
-        let stats = substrate.stats();
+        let stats = substrate.stats().await;
         assert_eq!(stats.graph.total_events, 0);
         assert!(!stats.running);
     }

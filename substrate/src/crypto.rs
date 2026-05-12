@@ -3,7 +3,7 @@
 //! Provides Ed25519 signing and verification for consensus-critical events.
 //! All operations use constant-time implementations from `ed25519-dalek`.
 
-pub use ed25519_dalek::{SigningKey, VerifyingKey, Signature, SignatureError, Signer, Verifier};
+pub use ed25519_dalek::{Signature, SignatureError, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 
 /// A node keypair for signing events.

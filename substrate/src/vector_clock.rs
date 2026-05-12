@@ -198,8 +198,7 @@ impl VectorClock {
             }
             let mut node_id = [0u8; 32];
             node_id.copy_from_slice(&bytes[offset..offset + 32]);
-            let clock =
-                u64::from_le_bytes(bytes[offset + 32..offset + 40].try_into().unwrap());
+            let clock = u64::from_le_bytes(bytes[offset + 32..offset + 40].try_into().unwrap());
             clocks.insert(node_id, clock);
             offset += 40;
         }

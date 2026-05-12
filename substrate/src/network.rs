@@ -1,19 +1,15 @@
-//! Real P2P networking layer using libp2p
+//! Real P2P networking layer using libp2p 0.53
 //!
 //! Provides QUIC transport, GossipSub for event propagation, mDNS for peer discovery,
 //! and request-response for sync operations. Uses tokio::sync primitives exclusively
 //! — never std::sync::Mutex across await points.
 
 use libp2p::{
-    identity, PeerId, Swarm, SwarmBuilder,
     gossipsub::{self, IdentTopic, MessageAuthenticity, ValidationMode},
-    mdns::{tokio::Behaviour as MdnsBehaviour, Config as MdnsConfig},
-    request_response::{self, ProtocolSupport, ResponseChannel},
-    Multiaddr, StreamProtocol,
+    identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
-use tokio::sync::mpsc;
 use std::collections::HashMap;
-use std::io;
+use tokio::sync::mpsc;
 
 /// Events emitted by the network layer.
 #[derive(Debug)]
@@ -21,15 +17,19 @@ pub enum NetworkEvent {
     PeerConnected(PeerId),
     PeerDisconnected(PeerId),
     MessageReceived(PeerId, Vec<u8>),
-    GossipReceived { topic: String, data: Vec<u8>, propagation_source: PeerId },
+    GossipReceived {
+        topic: String,
+        data: Vec<u8>,
+        propagation_source: PeerId,
+    },
 }
 
 /// Combined libp2p behaviour for Omnia.
 #[derive(libp2p::swarm::NetworkBehaviour)]
 pub struct OmniaBehaviour {
     pub gossipsub: gossipsub::Behaviour,
-    pub mdns: MdnsBehaviour,
-    pub req_res: request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
+    pub mdns: libp2p::mdns::tokio::Behaviour,
+    pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
 }
 
 /// The Omnia P2P network handle.
@@ -43,21 +43,18 @@ pub struct OmniaNetwork {
 
 impl OmniaNetwork {
     /// Create a new network instance listening on the given address.
-    pub async fn new(listen_addr: Multiaddr) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(
+        listen_addr: Multiaddr,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
-
-        // QUIC transport
-        let transport = libp2p::quic::tokio::Transport::new(libp2p::quic::Config::default(), local_key.clone())
-            .map(|(peer_id, conn), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(conn)))
-            .boxed();
 
         // GossipSub configuration
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .validation_mode(ValidationMode::Strict)
-            .message_id_fn(|msg| {
+            .message_id_fn(|msg: &gossipsub::Message| {
                 let hash = blake3::hash(&msg.data);
-                gossipsub::MessageId::from(hash.as_bytes())
+                gossipsub::MessageId::from(hash.as_bytes().to_vec())
             })
             .build()?;
 
@@ -66,11 +63,15 @@ impl OmniaNetwork {
             gossipsub_config,
         )?;
 
-        let mdns = MdnsBehaviour::new(MdnsConfig::default(), local_peer_id)?;
+        let mdns =
+            libp2p::mdns::tokio::Behaviour::new(libp2p::mdns::Config::default(), local_peer_id)?;
 
-        let req_res = request_response::cbor::Behaviour::new(
-            [(StreamProtocol::new("/omnia/1.0.0"), ProtocolSupport::Full)],
-            request_response::Config::default(),
+        let req_res = libp2p::request_response::cbor::Behaviour::new(
+            [(
+                StreamProtocol::new("/omnia/1.0.0"),
+                libp2p::request_response::ProtocolSupport::Full,
+            )],
+            libp2p::request_response::Config::default(),
         );
 
         let behaviour = OmniaBehaviour {
@@ -79,7 +80,15 @@ impl OmniaNetwork {
             req_res,
         };
 
-        let mut swarm = SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id).build();
+        let mut swarm = SwarmBuilder::with_existing_identity(local_key)
+            .with_tokio()
+            .with_quic()
+            .with_behaviour(|_| behaviour)?
+            .with_swarm_config(|cfg| {
+                cfg.with_idle_connection_timeout(std::time::Duration::from_secs(60))
+            })
+            .build();
+
         swarm.listen_on(listen_addr)?;
 
         let (event_tx, event_rx) = mpsc::channel(1000);
@@ -97,19 +106,22 @@ impl OmniaNetwork {
         self.local_peer_id
     }
 
-    pub fn dial(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn dial(
+        &mut self,
+        peer_id: PeerId,
+        addr: Multiaddr,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let p2p_addr = addr.with(libp2p::multiaddr::Protocol::P2p(peer_id));
         self.swarm.dial(p2p_addr)?;
         Ok(())
     }
 
-    pub fn subscribe(&mut self, topic: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn subscribe(&mut self, topic: &str) -> Result<bool, gossipsub::SubscriptionError> {
         let topic = IdentTopic::new(topic);
-        self.swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
-        Ok(())
+        self.swarm.behaviour_mut().gossipsub.subscribe(&topic)
     }
 
-    pub fn publish(&mut self, topic: &str, data: Vec<u8>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn publish(&mut self, topic: &str, data: Vec<u8>) -> Result<(), gossipsub::PublishError> {
         let topic = IdentTopic::new(topic);
         self.swarm.behaviour_mut().gossipsub.publish(topic, data)?;
         Ok(())
@@ -117,6 +129,7 @@ impl OmniaNetwork {
 
     /// Run the network event loop. This should be spawned on a tokio task.
     pub async fn run(&mut self) {
+        use futures::StreamExt;
         loop {
             tokio::select! {
                 event = self.swarm.select_next_some() => {
@@ -126,10 +139,7 @@ impl OmniaNetwork {
         }
     }
 
-    async fn handle_swarm_event(
-        &mut self,
-        event: libp2p::swarm::SwarmEvent<OmniaBehaviourEvent>,
-    ) {
+    async fn handle_swarm_event(&mut self, event: libp2p::swarm::SwarmEvent<OmniaBehaviourEvent>) {
         use libp2p::swarm::SwarmEvent;
         match event {
             SwarmEvent::Behaviour(OmniaBehaviourEvent::Gossipsub(gossipsub::Event::Message {
@@ -137,20 +147,29 @@ impl OmniaNetwork {
                 message,
                 ..
             })) => {
-                let _ = self.event_tx.send(NetworkEvent::GossipReceived {
-                    topic: message.topic.into_string(),
-                    data: message.data,
-                    propagation_source,
-                }).await;
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::GossipReceived {
+                        topic: message.topic.to_string(),
+                        data: message.data,
+                        propagation_source,
+                    })
+                    .await;
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 tracing::info!("Listening on {}", address);
             }
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                let _ = self.event_tx.send(NetworkEvent::PeerConnected(peer_id)).await;
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::PeerConnected(peer_id))
+                    .await;
             }
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                let _ = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await;
+                let _ = self
+                    .event_tx
+                    .send(NetworkEvent::PeerDisconnected(peer_id))
+                    .await;
             }
             _ => {}
         }

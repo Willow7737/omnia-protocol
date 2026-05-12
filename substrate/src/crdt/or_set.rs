@@ -64,10 +64,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
         self.sequence += 1;
         let token = (node_id, self.sequence);
 
-        self.adds
-            .entry(element)
-            .or_default()
-            .insert(token);
+        self.adds.entry(element).or_default().insert(token);
 
         token
     }
@@ -112,11 +109,9 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
     pub fn elements(&self) -> Vec<T> {
         self.adds
             .iter()
-            .filter(|(elem, adds)| {
-                match self.removes.get(elem) {
-                    Some(removes) => adds.difference(removes).next().is_some(),
-                    None => true,
-                }
+            .filter(|(elem, adds)| match self.removes.get(elem) {
+                Some(removes) => adds.difference(removes).next().is_some(),
+                None => true,
             })
             .map(|(elem, _)| elem.clone())
             .collect()

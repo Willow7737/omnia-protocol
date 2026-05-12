@@ -169,17 +169,17 @@ impl CausalGraph {
         // Add to tips
         self.tips.insert(event_id);
 
-        // Update max depth
-        let depth = self.calculate_depth(&event_id)?;
-        self.max_depth = self.max_depth.max(depth);
-
         // Track finalized count
         if event.status == EventStatus::Finalized {
             self.finalized_count += 1;
         }
 
-        // Store the event
+        // Store the event BEFORE calculating depth (depth calculation looks up events in the map)
         self.events.insert(event_id, event);
+
+        // Update max depth
+        let depth = self.calculate_depth(&event_id)?;
+        self.max_depth = self.max_depth.max(depth);
 
         // Prune tips if too many
         if self.tips.len() > MAX_TIPS {
@@ -442,9 +442,7 @@ impl CausalGraph {
             pending_events: self
                 .events
                 .values()
-                .filter(|e| {
-                    e.status == EventStatus::Pending || e.status == EventStatus::Gossiped
-                })
+                .filter(|e| e.status == EventStatus::Pending || e.status == EventStatus::Gossiped)
                 .count(),
         }
     }
@@ -643,7 +641,14 @@ mod tests {
         let n1 = test_node(1);
 
         let fake_parent = [99u8; 32];
-        let event = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(fake_parent), None, vec![]);
+        let event = Event::new(
+            n1,
+            1,
+            VectorClock::with_node(n1, 2),
+            Some(fake_parent),
+            None,
+            vec![],
+        );
 
         assert!(matches!(
             graph.insert(event),
@@ -739,12 +744,26 @@ mod tests {
         let g_id = g.id;
         graph.insert(g).unwrap();
 
-        let mut a = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(g_id), None, vec![]);
+        let mut a = Event::new(
+            n1,
+            1,
+            VectorClock::with_node(n1, 2),
+            Some(g_id),
+            None,
+            vec![],
+        );
         a.sign(vec![1]);
         let a_id = a.id;
         graph.insert(a).unwrap();
 
-        let mut b = Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(a_id), None, vec![]);
+        let mut b = Event::new(
+            n1,
+            2,
+            VectorClock::with_node(n1, 3),
+            Some(a_id),
+            None,
+            vec![],
+        );
         b.sign(vec![1]);
         let b_id = b.id;
         graph.insert(b).unwrap();

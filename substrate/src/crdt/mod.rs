@@ -92,6 +92,7 @@ impl AccountBalance {
     pub fn increment(&mut self, node_id: NodeId, amount: u64) {
         self.counter.increment(node_id, amount);
         self.last_updater = Some(node_id);
+        let _ = self.vector_clock.increment(node_id);
     }
 
     pub fn value(&self) -> u64 {

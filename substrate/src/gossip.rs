@@ -89,15 +89,10 @@ pub struct GossipProtocol {
     last_sync: Instant,
     running: bool,
     seen_events: HashSet<[u8; 32]>,
-    network_rx: Option<mpsc::Receiver<NetworkEvent>>,
 }
 
 impl GossipProtocol {
-    pub fn new(
-        node_id: NodeId,
-        config: GossipConfig,
-        graph: Arc<RwLock<CausalGraph>>,
-    ) -> Self {
+    pub fn new(node_id: NodeId, config: GossipConfig, graph: Arc<RwLock<CausalGraph>>) -> Self {
         Self {
             node_id,
             config,
@@ -109,25 +104,21 @@ impl GossipProtocol {
             last_sync: Instant::now(),
             running: false,
             seen_events: HashSet::new(),
-            network_rx: None,
         }
     }
 
     /// Attach a real network layer.
     pub fn attach_network(&mut self, network: OmniaNetwork) {
-        self.network_rx = Some(network.event_rx);
         self.network = Some(network);
     }
 
     /// Start the gossip protocol (spawns network task if attached).
     pub async fn start(&mut self) {
         self.running = true;
-        if let Some(ref mut network) = self.network {
-            let mut network = std::mem::replace(network, 
-                OmniaNetwork::new("/ip4/127.0.0.1/udp/0/quic-v1".parse().unwrap()).await.unwrap()
-            );
+        if let Some(network) = self.network.take() {
             tokio::spawn(async move {
-                network.run().await;
+                let mut net = network;
+                net.run().await;
             });
         }
         info!(
@@ -146,25 +137,35 @@ impl GossipProtocol {
     }
 
     /// Broadcast a locally created event to the network.
-    pub async fn broadcast_event(&self, event: Event) -> Result<(), GossipError> {
+    pub async fn broadcast_event(&mut self, event: Event) -> Result<(), GossipError> {
         // Add to our graph first
         {
             let mut graph = self.graph.write().await;
-            graph.insert(event.clone()).map_err(GossipError::GraphError)?;
+            graph
+                .insert(event.clone())
+                .map_err(|e| GossipError::GraphError(e.to_string()))?;
         }
 
         // Serialize and publish via network
         let bytes = event.to_bytes();
-        if let Some(ref network) = self.network {
-            network.publish("omnia_events", bytes).await
+        let bytes_len = bytes.len();
+        if let Some(ref mut network) = self.network {
+            network
+                .publish("omnia_events", bytes)
                 .map_err(|e| GossipError::NetworkError(e.to_string()))?;
         }
+
+        self.stats.events_sent += 1;
+        self.stats.bytes_sent += bytes_len as u64;
 
         Ok(())
     }
 
     /// Process an incoming network event.
-    pub async fn handle_network_event(&mut self, event: NetworkEvent) -> Result<usize, GossipError> {
+    pub async fn handle_network_event(
+        &mut self,
+        event: NetworkEvent,
+    ) -> Result<usize, GossipError> {
         match event {
             NetworkEvent::GossipReceived { data, .. } => {
                 match Event::from_bytes(&data) {
@@ -191,8 +192,10 @@ impl GossipProtocol {
 
     async fn process_pending_events(&mut self) -> Result<usize, GossipError> {
         let mut processed = 0;
-        let to_process: Vec<Event> =
-            self.pending_events.drain(..self.pending_events.len()).collect();
+        let to_process: Vec<Event> = self
+            .pending_events
+            .drain(..self.pending_events.len())
+            .collect();
 
         for event in to_process {
             let mut graph = self.graph.write().await;

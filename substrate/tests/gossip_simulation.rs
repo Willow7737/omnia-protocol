@@ -127,7 +127,8 @@ impl SimulatedNetwork {
 
                 // Exchange events: sender shares all events with receiver
                 let sender_events: Vec<EventId> = sender.created_events.clone();
-                let receiver_events: HashSet<EventId> = receiver.created_events.iter().copied().collect();
+                let receiver_events: HashSet<EventId> =
+                    receiver.created_events.iter().copied().collect();
 
                 let mut new_events = 0;
                 for event_id in sender_events {
@@ -212,7 +213,10 @@ fn test_three_node_event_propagation() {
         );
     }
 
-    println!("PASS: All {} events propagated to all 3 nodes", total_events);
+    println!(
+        "PASS: All {} events propagated to all 3 nodes",
+        total_events
+    );
 }
 
 /// Test: CRDT convergence across 3 nodes with concurrent increments
@@ -251,10 +255,15 @@ fn test_three_node_crdt_convergence() {
     assert_ne!(counter_a.value(), counter_b.value());
     assert_ne!(counter_b.value(), counter_c.value());
 
-    // Simulate gossip: A sends to B, then B sends to C
+    // Simulate gossip: full mesh merge (A→B, A→C, B→A, B→C, C→A, C→B)
+    // In a real gossip protocol, all nodes eventually see all others' state.
     println!("\nMerging A -> B...");
     counter_b.merge(&counter_a);
     println!("B after merge with A: {}", counter_b.value());
+
+    println!("Merging A -> C...");
+    counter_c.merge(&counter_a);
+    println!("C after merge with A: {}", counter_c.value());
 
     println!("Merging B -> C...");
     counter_c.merge(&counter_b);
@@ -263,6 +272,10 @@ fn test_three_node_crdt_convergence() {
     println!("Merging C -> A...");
     counter_a.merge(&counter_c);
     println!("A after merge with C: {}", counter_a.value());
+
+    println!("Merging C -> B...");
+    counter_b.merge(&counter_c);
+    println!("B after merge with C: {}", counter_b.value());
 
     // After full propagation, all counters should converge
     let expected_total = 5 + 3 + 7; // 15
@@ -324,9 +337,15 @@ fn test_crdt_100_percent_convergence() {
         let mut c3 = GCounter::new();
 
         // Apply increments
-        for _ in 0..increments[0] { c1.increment(n1, 1); }
-        for _ in 0..increments[1] { c2.increment(n2, 1); }
-        for _ in 0..increments[2] { c3.increment(n3, 1); }
+        for _ in 0..increments[0] {
+            c1.increment(n1, 1);
+        }
+        for _ in 0..increments[1] {
+            c2.increment(n2, 1);
+        }
+        for _ in 0..increments[2] {
+            c3.increment(n3, 1);
+        }
 
         // Full mesh merge (simulate gossip convergence)
         let mut merged = c1.clone();
@@ -360,7 +379,11 @@ fn test_crdt_100_percent_convergence() {
             desc
         );
 
-        println!("    Converged to {} (expected {})", merged.value(), expected);
+        println!(
+            "    Converged to {} (expected {})",
+            merged.value(),
+            expected
+        );
     }
 
     println!("\nPASS: 100% CRDT convergence across all test cases");

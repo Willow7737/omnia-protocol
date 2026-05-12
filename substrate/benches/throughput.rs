@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use omnia_substrate::*;
 use omnia_substrate::crypto::NodeKeypair;
+use omnia_substrate::*;
 use rand::rngs::OsRng;
 use std::time::Duration;
 
@@ -75,5 +75,10 @@ fn benchmark_vector_clock_merge(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_event_creation, benchmark_graph_insertion, benchmark_vector_clock_merge);
+criterion_group!(
+    benches,
+    benchmark_event_creation,
+    benchmark_graph_insertion,
+    benchmark_vector_clock_merge
+);
 criterion_main!(benches);
