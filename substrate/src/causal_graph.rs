@@ -204,6 +204,11 @@ impl CausalGraph {
         self.events.contains_key(event_id)
     }
 
+    /// Get all event IDs in the graph
+    pub fn event_ids(&self) -> Vec<EventId> {
+        self.events.keys().copied().collect()
+    }
+
     /// Get the number of events in the graph
     pub fn len(&self) -> usize {
         self.events.len()

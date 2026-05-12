@@ -357,7 +357,8 @@ impl ConsensusEngine {
             return Ok(committed);
         }
 
-        let round = self.event_rounds.get(&event_id).copied().unwrap_or(0);
+        // FIX(bug-3): Removed shadowing line `let round = ...` that overwrote
+        // the correct `round` parameter. Using the parameter directly.
 
         // For small networks, reduce commit delay
         let effective_delay = self.config.commit_delay_rounds.min(round.saturating_sub(1));

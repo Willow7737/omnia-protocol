@@ -32,12 +32,22 @@ pub struct OmniaBehaviour {
     pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
 }
 
+/// Command sent from external callers to the network event loop.
+#[derive(Debug)]
+pub enum NetworkCommand {
+    /// Publish data to a gossipsub topic.
+    Publish { topic: String, data: Vec<u8> },
+    /// Subscribe to a gossipsub topic.
+    Subscribe { topic: String },
+}
+
 /// The Omnia P2P network handle.
+#[allow(dead_code)]
 pub struct OmniaNetwork {
     swarm: Swarm<OmniaBehaviour>,
     local_peer_id: PeerId,
     event_tx: mpsc::Sender<NetworkEvent>,
-    pub event_rx: mpsc::Receiver<NetworkEvent>,
+    pub event_rx: Option<mpsc::Receiver<NetworkEvent>>,
     known_peers: HashMap<PeerId, Multiaddr>,
 }
 
@@ -97,7 +107,7 @@ impl OmniaNetwork {
             swarm,
             local_peer_id,
             event_tx,
-            event_rx,
+            event_rx: Some(event_rx),
             known_peers: HashMap::new(),
         })
     }
@@ -134,6 +144,63 @@ impl OmniaNetwork {
             tokio::select! {
                 event = self.swarm.select_next_some() => {
                     self.handle_swarm_event(event).await;
+                }
+            }
+        }
+    }
+
+    /// Run the network event loop with a command channel and an event consumer.
+    ///
+    /// FIX(bug-1): The `cmd_rx` channel allows external code (e.g.
+    /// `broadcast_event`) to publish messages without owning the Swarm.
+    ///
+    /// FIX(bug-2): The `event_rx` receiver is consumed here so the mpsc
+    /// channel never fills up. Without draining it, `handle_swarm_event`
+    /// would block after 1000 events.
+    pub async fn run_with_commands(
+        &mut self,
+        mut cmd_rx: mpsc::Receiver<NetworkCommand>,
+        mut event_rx: mpsc::Receiver<NetworkEvent>,
+        graph: std::sync::Arc<tokio::sync::RwLock<crate::causal_graph::CausalGraph>>,
+    ) {
+        use futures::StreamExt;
+        loop {
+            tokio::select! {
+                event = self.swarm.select_next_some() => {
+                    self.handle_swarm_event(event).await;
+                }
+                // FIX(bug-2): Drain the event channel so it never blocks.
+                Some(net_event) = event_rx.recv() => {
+                    if let NetworkEvent::GossipReceived { data, .. } = net_event {
+                        match crate::event::Event::from_bytes(&data) {
+                            Ok(event) => {
+                                let mut g = graph.write().await;
+                                let _ = g.insert(event);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to deserialize gossip event: {:?}", e);
+                            }
+                        }
+                    }
+                }
+                // FIX(bug-1): Process publish commands from broadcast_event().
+                cmd = cmd_rx.recv() => {
+                    match cmd {
+                        Some(NetworkCommand::Publish { topic, data }) => {
+                            if let Err(e) = self.publish(&topic, data) {
+                                tracing::warn!("Publish failed: {:?}", e);
+                            }
+                        }
+                        Some(NetworkCommand::Subscribe { topic }) => {
+                            if let Err(e) = self.subscribe(&topic) {
+                                tracing::warn!("Subscribe failed: {:?}", e);
+                            }
+                        }
+                        None => {
+                            // Command channel closed — shut down
+                            return;
+                        }
+                    }
                 }
             }
         }

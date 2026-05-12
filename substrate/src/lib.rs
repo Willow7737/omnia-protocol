@@ -35,7 +35,7 @@ pub use event::{
 pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipMessage, GossipProtocol, GossipStats,
 };
-pub use network::{NetworkEvent, OmniaBehaviour, OmniaNetwork};
+pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 
 /// Semantic version of this crate

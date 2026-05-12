@@ -4,16 +4,16 @@
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
 use crate::causal_graph::{CausalGraph, CausalGraphError};
-use crate::event::{Event, EventBatch, EventRequest, EventStatus};
-use crate::network::{NetworkEvent, OmniaNetwork};
+use crate::event::{Event, EventBatch, EventRequest};
+use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
-use tracing::{debug, info, trace, warn};
+use tracing::{info, warn};
 
 const DEFAULT_GOSSIP_INTERVAL_MS: u64 = 100;
 const MAX_EVENTS_PER_GOSSIP: usize = 100;
@@ -78,11 +78,15 @@ pub enum GossipMessage {
 
 /// Async gossip protocol engine.
 /// Uses tokio::sync::RwLock — never std::sync::Mutex across await points.
+#[allow(dead_code)]
 pub struct GossipProtocol {
     node_id: NodeId,
     config: GossipConfig,
     graph: Arc<RwLock<CausalGraph>>,
-    network: Option<OmniaNetwork>,
+    // FIX(bug-1): Command channel to publish through the network task.
+    // After start_with_network(), OmniaNetwork is owned by the spawned
+    // task. broadcast_event() sends Publish commands through this channel.
+    network_cmd_tx: Option<mpsc::Sender<NetworkCommand>>,
     pending_events: VecDeque<Event>,
     recent_gossip: HashSet<[u8; 32]>,
     stats: GossipStats,
@@ -97,7 +101,7 @@ impl GossipProtocol {
             node_id,
             config,
             graph,
-            network: None,
+            network_cmd_tx: None,
             pending_events: VecDeque::new(),
             recent_gossip: HashSet::new(),
             stats: GossipStats::default(),
@@ -108,19 +112,52 @@ impl GossipProtocol {
     }
 
     /// Attach a real network layer.
-    pub fn attach_network(&mut self, network: OmniaNetwork) {
-        self.network = Some(network);
+    /// The network is consumed by start_with_network() — this method just
+    /// flags that a network is available.
+    pub fn attach_network(&mut self, _network: OmniaNetwork) {
+        // Cannot hold OmniaNetwork because Swarm is !Send.
+        // Use start_with_network() instead.
     }
 
-    /// Start the gossip protocol (spawns network task if attached).
+    /// Start with an OmniaNetwork. Moves the network into a spawned task.
+    ///
+    /// FIX(bug-1): A command channel is created so broadcast_event() can
+    /// publish even after the network is moved into the spawned task.
+    ///
+    /// FIX(bug-2): The event_rx is consumed by run_with_commands() so the
+    /// mpsc channel never fills up and blocks.
+    pub async fn start_with_network(&mut self, mut network: OmniaNetwork) {
+        self.running = true;
+
+        // Take the event_rx out of the network — it will be consumed by
+        // run_with_commands() inside the spawned task.
+        let event_rx = network
+            .event_rx
+            .take()
+            .expect("event_rx should be present after OmniaNetwork::new()");
+
+        // Command channel for broadcast_event() → network task
+        let (cmd_tx, cmd_rx) = mpsc::channel::<NetworkCommand>(256);
+        self.network_cmd_tx = Some(cmd_tx);
+
+        // Clone the graph Arc for the spawned task
+        let graph = Arc::clone(&self.graph);
+
+        // Spawn the network event loop. The task owns OmniaNetwork.
+        // It processes: swarm events, event_rx (drains channel), cmd_rx (publish).
+        tokio::spawn(async move {
+            network.run_with_commands(cmd_rx, event_rx, graph).await;
+        });
+
+        info!(
+            node = ?&self.node_id[..4],
+            "Gossip protocol started with network"
+        );
+    }
+
+    /// Start the gossip protocol without a network (local-only).
     pub async fn start(&mut self) {
         self.running = true;
-        if let Some(network) = self.network.take() {
-            tokio::spawn(async move {
-                let mut net = network;
-                net.run().await;
-            });
-        }
         info!(
             node = ?&self.node_id[..4],
             "Gossip protocol started"
@@ -129,6 +166,7 @@ impl GossipProtocol {
 
     pub fn stop(&mut self) {
         self.running = false;
+        self.network_cmd_tx = None;
         info!("Gossip protocol stopped");
     }
 
@@ -137,6 +175,10 @@ impl GossipProtocol {
     }
 
     /// Broadcast a locally created event to the network.
+    /// FIX(bug-1): Sends a Publish command through the channel. The
+    /// network task (running in a spawned task) picks it up and calls
+    /// OmniaNetwork::publish(). This works even after start() because
+    /// the command channel is independent of the Swarm ownership.
     pub async fn broadcast_event(&mut self, event: Event) -> Result<(), GossipError> {
         // Add to our graph first
         {
@@ -146,12 +188,16 @@ impl GossipProtocol {
                 .map_err(|e| GossipError::GraphError(e.to_string()))?;
         }
 
-        // Serialize and publish via network
+        // Send publish command to the network task
         let bytes = event.to_bytes();
         let bytes_len = bytes.len();
-        if let Some(ref mut network) = self.network {
-            network
-                .publish("omnia_events", bytes)
+        if let Some(ref cmd_tx) = self.network_cmd_tx {
+            cmd_tx
+                .send(NetworkCommand::Publish {
+                    topic: "omnia_events".to_string(),
+                    data: bytes,
+                })
+                .await
                 .map_err(|e| GossipError::NetworkError(e.to_string()))?;
         }
 
