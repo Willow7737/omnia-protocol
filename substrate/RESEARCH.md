@@ -109,6 +109,36 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 - **Target latency**: 1-5 seconds for finality
 - **Concurrency**: Causally independent transactions processed in parallel with no coordination
 
+---
+
+## Implementation Results
+
+### What Worked
+
+**Hashgraph-like DAG with two-parent events** — The two-parent event structure (self-parent + other-parent) proved to be an effective way to represent causality. Events naturally form a DAG that captures all happened-before relationships, and the structure is straightforward to implement and reason about.
+
+**Vector clocks for partial ordering** — Vector clocks provide an efficient mechanism for detecting concurrent vs. causally ordered events. The `happened_before`, `concurrent`, and `merge` operations are all O(n) in the number of known nodes, which is acceptable for the expected network size.
+
+**CRDT state convergence** — Using CRDTs (GCounter, OrSet, LWWRegister) for state management eliminates the need for consensus on causally independent state updates. The merge operation is deterministic, so all nodes converge to identical state after receiving the same set of events, regardless of order.
+
+**O(new_events) consensus processing** — By maintaining an `unprocessed_events` queue in the CausalGraph, the consensus engine only processes new events each round rather than walking the entire graph. This is a significant performance improvement over approaches that require full graph traversal for each consensus round.
+
+**Replay protection via nonce tracking** — Simple per-creator nonce tracking prevents replay attacks without adding significant complexity. Both the CausalGraph and ShardRouter maintain nonce maps, ensuring that each event from a given creator is processed exactly once.
+
+### What Was Adapted
+
+**AlephBFT finality simplified for permissionless model** — AlephBFT's committee-based finality was adapted to work in a more permissionless setting. The full rotating committee mechanism was simplified to a supermajority witness model, which provides BFT guarantees without requiring the committee management overhead. This is a practical trade-off for Phase 0; the full AlephBFT committee model can be reintroduced when a validator network is established.
+
+**Financial shard uses strict causal ordering** — The FinancialShard does not use CRDTs for balance management. Instead, it uses strict causal ordering to ensure that balance debits always happen before corresponding credits. This is because financial balances cannot be modeled as CRDTs (you cannot merge two debits of the same balance independently). The causal ordering guarantee from the substrate ensures correctness.
+
+### Performance Notes
+
+**O(new_events) processing achieved** — The `unprocessed_events` queue successfully limits consensus processing to only new events per round. However, the system has **not yet been benchmarked at scale**. The 10,000+ TPS target remains unverified. Specific performance characteristics (latency, throughput under load, memory usage at scale) require dedicated benchmarking with realistic workloads.
+
+**CausalGraph insertion is O(1) amortized** — Insertion uses hash map operations, giving O(1) amortized performance. This is not O(1) guaranteed — hash map operations can occasionally be O(n) due to resizing. In practice, this has not been a performance concern.
+
+**No real-world network testing** — All testing has been done in simulated environments. Real-world network conditions (latency spikes, partitions, adversarial behavior) have not been tested.
+
 ### References
 
 - Baird, L. "The Swirlds Hashgraph Consensus Algorithm" (2016)

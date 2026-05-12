@@ -4,20 +4,19 @@
 
 ### Q: What is Omnia?
 
-**A:** Omnia is a universal coordination layer for reality—a decentralized protocol that replaces trust with mathematics. It enables value exchange, identity verification, and physical-digital fusion without intermediaries.
+**A:** Omnia is a universal coordination layer for reality — a decentralized protocol that replaces trust with mathematics. It enables value exchange, identity verification, and physical-digital fusion without intermediaries.
 
 Think of it like the internet. No one owns the internet; it's just a set of rules (TCP/IP) that lets computers talk to each other. Omnia is the same idea, but for **value, identity, and trust**.
 
 ### Q: Is Omnia a cryptocurrency?
 
-**A:** No. Omnia is a protocol, not a coin. While Omnia has a currency (used for transactions and incentives), the protocol itself is much broader. It's a framework for:
+**A:** No. Omnia is a protocol, not a coin. While Omnia has a token model (UBC — Universal Basic Compute), the protocol itself is much broader. It's a framework for:
 
 - Identity management
 - Supply chain tracking
-- AI governance
-- Energy trading
-- Scientific research
-- And much more
+- AI agent governance
+- Economic coordination
+- Physical-digital binding
 
 ### Q: Who controls Omnia?
 
@@ -27,20 +26,21 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 **A:** Yes. All code is open source and available on GitHub. The protocol is public domain (CC0), meaning anyone can use, modify, or build on it.
 
-### Q: How is Omnia different from Bitcoin or Ethereum?
+### Q: What is the current state of the project?
 
-**A:** 
+**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer has an Ethereum adapter but uses a hash chain stub rather than full R1CS circuits. Some features like real RF fingerprinting, real PQC signatures, and real ZK proofs are stubs awaiting hardware or library integration. There is no mobile wallet, no REST API, and no validator network yet. All interaction is via the Rust library.
 
-| Aspect | Bitcoin | Ethereum | Omnia |
-|--------|---------|----------|-------|
-| **Throughput** | 7 TPS | 15 TPS | 10,000+ TPS |
-| **Latency** | 10 minutes | 15 seconds | 1-5 seconds |
-| **Scalability** | Limited | L2 solutions | Native |
-| **Privacy** | Pseudonymous | Transparent | Zero-knowledge proofs |
-| **Use Cases** | Money only | Smart contracts | Everything |
-| **Governance** | Miners | Stakers | Community |
-| **Identity** | No | No | Yes (DIDs) |
-| **Physical Anchoring** | No | No | Yes |
+### Q: How do I run the tests?
+
+**A:** Clone the repository and run:
+
+```bash
+git clone https://github.com/Willow7737/omnia-protocol.git
+cd omnia-protocol
+cargo test --workspace
+```
+
+You should see 200+ tests passing.
 
 ---
 
@@ -71,22 +71,22 @@ This is much faster than traditional blockchains where every transaction waits i
 
 **Analogy:** You and a friend are looking for Wally in a crowded picture. You found him. How do you prove it without showing where he is?
 
-You take a massive piece of paper with a small hole in it. You place it over the picture so only Wally is visible through the hole. Your friend sees Wally and knows you found him—but learns nothing about where he is in the full picture.
+You take a massive piece of paper with a small hole in it. You place it over the picture so only Wally is visible through the hole. Your friend sees Wally and knows you found him — but learns nothing about where he is in the full picture.
 
 **In Omnia:**
 - Prove you're over 18 without revealing your birth date
 - Prove you have enough money without revealing your balance
 - Prove a medicine is authentic without revealing supply chain details
 
+**Current status:** The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target.
+
 ### Q: How does physical anchoring work?
 
-**A:** Omnia uses multiple methods to anchor digital transactions to physical reality:
+**A:** The provenance log is fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify, destroy). This gives every tracked item a cryptographic birth certificate and ownership history.
 
-1. **RF Fingerprinting:** Every object emits unique electromagnetic noise. This can't be forged.
-2. **Quantum Sealing:** Entangled photons prove an object hasn't been tampered with.
-3. **Gravitational Timestamps:** Atomic clocks detect relativistic time dilation based on location.
-4. **Biometric Binding:** Cardiac signals prove a living human is present.
-5. **Satellite Mesh:** GPS + Galileo + Starlink cross-validation prevents spoofing.
+RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
+
+Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
 
 ### Q: What's a Decentralized Identifier (DID)?
 
@@ -100,38 +100,32 @@ You take a massive piece of paper with a small hole in it. You place it over the
 - It cannot be revoked or censored
 - It's portable across platforms
 
+The `did:omnia:` method is fully implemented with validation.
+
 ### Q: How does social recovery work?
 
-**A:** If you lose your private key, trusted friends can help you recover:
+**A:** Social recovery uses Shamir's Secret Sharing over GF(256). Your private key is split into shares using threshold cryptography, and each share is given to a trusted guardian.
 
-1. You designate 5 trusted friends as recovery guardians
-2. If you lose your key, you initiate recovery from a new device
-3. 3 of 5 guardians must confirm it's really you
-4. Your identity is reconstructed with a new key
-5. No company or government involved
+1. Your key is split into N shares using Shamir's Secret Sharing
+2. Any threshold number of shares (e.g., 3 of 5) can reconstruct the key
+3. If you lose your key, guardians provide their shares
+4. The key is reconstructed from the threshold number of shares
+5. No single guardian has your full key
 
 ### Q: What's Universal Basic Compute (UBC)?
 
-**A:** Every identity on Omnia receives a free monthly quota:
+**A:** Every identity on Omnia receives a free monthly quota via the UBC token. The UBC token is soulbound (non-transferable) and provides a baseline of compute and transaction capacity. This ensures participation doesn't require money.
 
-- 1,000 transactions
-- 100 GB storage
-- 1,000 compute hours
-- 1,000 AI inference calls
+The quota system operates on epochs with automatic advancement. The specific quota amounts (transactions, storage, compute hours) are configurable parameters in the economics layer.
 
-This ensures participation doesn't require money. A farmer in Kenya and a programmer in San Francisco both start equal.
+### Q: How does governance work?
 
-### Q: How does Retroactive Public Goods Funding (RPGF) work?
+**A:** Quadratic voting with exponential reputation decay is currently implemented. This means:
 
-**A:** Instead of giving grants to projects that promise to build something, Omnia rewards projects that have already proven they created value.
+- Voting power scales as the square root of stake (preventing whale dominance)
+- Reputation decays exponentially over time (preventing permanent power concentration)
 
-**Process:**
-1. Builder creates open-source tools or research
-2. Protocol measures actual impact (usage, adoption, contribution)
-3. Funding is distributed automatically based on proven value
-4. No application, no committee, no politics
-
-**Example:** A developer builds a better wallet. 100,000 people use it. After 6 months, the protocol automatically sends the developer $500,000 worth of Omnia tokens.
+Conviction voting (locking tokens for longer periods to increase voting power) and delegation (delegating your vote to a trusted representative) are planned for Phase 1 but not yet implemented.
 
 ---
 
@@ -139,78 +133,17 @@ This ensures participation doesn't require money. A farmer in Kenya and a progra
 
 ### Q: How is Omnia currency created?
 
-**A:** Omnia currency is created through:
+**A:** Omnia uses the UBC (Universal Basic Compute) token model. UBC tokens are soulbound — they are issued monthly to each identity and cannot be transferred. The token provides quota for transactions and compute.
 
-1. **Validator Rewards:** 5% annual return on validator stake
-2. **UBC Subsidies:** Free quota for all users
-3. **RPGF Funding:** Rewards for public goods
-4. **Proof-of-Useful-Work:** Rewards for scientific computation
-
-The total supply is managed algorithmically based on network state.
+Proof-of-useful-work stubs exist (3 work types defined) but are not production-ready. There is no validator reward mechanism or staking system yet. Slashing is not implemented.
 
 ### Q: What's the fee structure?
 
-**A:**
+**A:** There is no fee mechanism implemented yet. The UBC quota system covers transaction costs for all participants. A fee mechanism for high-frequency or commercial use is planned but not yet started.
 
-| User Type | Fee | Where It Goes |
-|-----------|-----|---------------|
-| **New users / Low activity** | Covered by UBC quota | Effectively free |
-| **Regular users** | 0.01% | RPGF pool |
-| **High-frequency / Commercial** | 0.1% | Subsidizes UBC |
-| **Spam / Attack** | Exponentially increasing | Burned (self-defeating) |
+### Q: Can I convert Omnia to other currencies?
 
-### Q: Can I speculate on Omnia currency?
-
-**A:** You can, but the protocol is designed to discourage it. The primary purpose of Omnia currency is settlement, not investment.
-
-**Mechanisms:**
-- Wealth circulation: High-velocity money is taxed less; hoarding is gently discouraged
-- Reputation decay: Power diminishes over time if not used responsibly
-- Adaptive monetary policy: Currency responds to network state, not speculation
-
-### Q: How does Omnia prevent inflation?
-
-**A:** Through several mechanisms:
-
-1. **Algorithmic supply:** New currency is created based on network needs, not arbitrary decisions
-2. **Burn mechanisms:** Spam fees and slashing conditions burn currency
-3. **Velocity incentives:** Fast-moving money is rewarded; hoarding is discouraged
-4. **Adaptive policy:** If inflation rises, the protocol reduces new supply
-
----
-
-## Governance Questions
-
-### Q: How does governance work?
-
-**A:** Omnia uses three pillars:
-
-1. **Technical Governance:** Core developers decide protocol changes (weighted by contributions)
-2. **Economic Governance:** Token holders decide monetary policy (quadratic voting)
-3. **Social Governance:** Community decides standards (simple majority)
-
-### Q: What's quadratic voting?
-
-**A:** Voting power = sqrt(stake)
-
-**Example:**
-- Alice stakes 100 tokens → voting power = 10
-- Bob stakes 10,000 tokens → voting power = 100
-- Carol stakes 1,000,000 tokens → voting power = 1,000
-
-**Effect:** One large stakeholder (Carol) has 10x power, not 10,000x. This prevents whale dominance while rewarding commitment.
-
-### Q: Can I change my vote?
-
-**A:** Yes. You can change your vote anytime before voting ends. This encourages thoughtful deliberation.
-
-### Q: What if I disagree with a governance decision?
-
-**A:** You have several options:
-
-1. **Propose a change:** Submit a proposal to reverse the decision
-2. **Exit:** Withdraw your stake and leave the network
-3. **Fork:** Create an alternative version of the protocol
+**A:** No DEX integration exists yet. There is currently no way to exchange Omnia tokens for other currencies.
 
 ---
 
@@ -218,39 +151,22 @@ The total supply is managed algorithmically based on network state.
 
 ### Q: Is Omnia secure?
 
-**A:** Omnia uses multiple layers of security:
+**A:** Omnia uses multiple layers of security that are implemented and tested:
 
-1. **Cryptography:** EdDSA signatures, SHA-3 hashing, zk-SNARKs
+1. **Cryptography:** Ed25519 signatures, BLAKE3 hashing
 2. **Consensus:** Byzantine-fault-tolerant consensus (tolerates 1/3 faulty nodes)
-3. **Economic Security:** Validators must stake collateral that's slashed for misbehavior
-4. **Physical Anchoring:** Multiple methods verify physical reality
+3. **Replay protection:** Nonce tracking in both CausalGraph and ShardRouter
+4. **State commitments:** Merkle state root and inclusion proofs
+5. **Event pruning:** Sustainable state management
 
-**Security Guarantee:** If 2/3 of validators are honest, the system maintains consistency and liveness.
+**Not yet implemented:**
+- Economic security (slashing, staking)
+- Post-quantum cryptography (Dilithium integration pending)
+- Real ZK proofs (currently a hash chain stub)
 
 ### Q: What if my private key is compromised?
 
-**A:** You have options:
-
-1. **Social Recovery:** Use your recovery guardians to create a new key
-2. **Freeze Account:** Temporarily freeze your account while you recover
-3. **Move Funds:** Transfer funds to a new account before the attacker does
-
-### Q: What if the network is attacked?
-
-**A:** The protocol has emergency safeguards:
-
-1. **Pause Mechanism:** Validators can vote to pause the network (75% approval)
-2. **Rollback:** Network can roll back to a previous checkpoint (90% approval)
-3. **Fork:** Community can fork to an alternative version
-
-### Q: Is my data private?
-
-**A:** Yes. Omnia uses zero-knowledge proofs to prove things about you without revealing underlying data.
-
-**Examples:**
-- Prove you're over 18 without revealing your birth date
-- Prove you have enough money without revealing your balance
-- Prove you're vaccinated without revealing your full medical record
+**A:** You can use social recovery via Shamir's Secret Sharing to reconstruct your key from guardian shares. The implementation supports configurable thresholds (e.g., 3 of 5 guardians).
 
 ---
 
@@ -258,149 +174,49 @@ The total supply is managed algorithmically based on network state.
 
 ### Q: How do I get started?
 
-**A:** 
+**A:** Currently, all interaction with Omnia is via the Rust library. There is no wallet, mobile app, or REST API. To experiment:
 
-1. **Create a DID:** Download the Omnia wallet and create a decentralized identifier
-2. **Get UBC Quota:** You automatically receive free monthly quota
-3. **Make a Transaction:** Send Omnia to a friend or buy something
-4. **Build a Reputation:** Complete tasks and build your reputation score
-5. **Participate in Governance:** Vote on proposals and shape the protocol
+1. Clone the repository
+2. Run `cargo test --workspace` to see all tests passing
+3. Explore the crate APIs in `substrate/`, `shards/`, `binding/`, `economics/`, `zk/`
 
 ### Q: Which wallet should I use?
 
-**A:** Options include:
-
-- **Official Omnia Wallet:** Recommended for beginners
-- **Hardware Wallets:** Recommended for security
-- **Community Wallets:** Built by community members
-
-All wallets are open source and audited.
+**A:** No wallet exists yet. All interaction is via the Rust library. A mobile wallet is planned for Phase 1.
 
 ### Q: Can I use Omnia on my phone?
 
-**A:** Yes. Omnia is designed for mobile-first access.
-
-- Works on iOS and Android
-- Offline support (transactions sync when online)
-- Biometric authentication
-- Low bandwidth requirements
+**A:** No mobile app exists yet. A mobile wallet is planned for Phase 1.
 
 ### Q: How long does a transaction take?
 
-**A:** 
-
-- **Local verification:** 100ms
-- **Cross-shard transaction:** 500ms-2s
-- **Finality:** 1-5 seconds
-
-Compare to traditional systems:
-- Bank transfer: 1-3 days
-- Ethereum: 15 seconds (finality in 15 minutes)
-- Bitcoin: 10 minutes (finality in 1 hour)
-
-### Q: How much does a transaction cost?
-
-**A:** 
-
-- **Regular users:** Covered by UBC quota (effectively free)
-- **High-frequency users:** 0.01% fee
-- **Commercial users:** 0.1% fee
-
-Compare to traditional systems:
-- Bank transfer: $10-50
-- Credit card: 2-3%
-- Ethereum: $1-100 (varies)
-
-### Q: Can I convert Omnia to other currencies?
-
-**A:** Yes. Omnia can be traded on decentralized exchanges:
-
-- Direct peer-to-peer swaps
-- Atomic swaps with other blockchains
-- Fiat on-ramps (through regulated partners)
-
-### Q: What if Omnia shuts down?
-
-**A:** Omnia cannot shut down. It's decentralized and run by thousands of validators worldwide. Even if the core team disappears, the network continues.
-
-Your data is stored on-chain and accessible forever.
+**A:** Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
 
 ---
 
-## Vision Questions
+## Long-Term Vision
 
-### Q: Will Omnia replace banks?
+*The following describes the long-term vision for Omnia. These are aspirational goals, not current capabilities.*
 
-**A:** Eventually, yes. Omnia provides all the services banks provide (payments, lending, savings) without the intermediary.
+### Q: Will Omnia work on Mars?
 
-However, banks may evolve to provide services on top of Omnia rather than disappearing entirely.
-
-### Q: Will Omnia replace governments?
-
-**A:** No. Omnia is a coordination layer, not a government. Governments can use Omnia for:
-
-- Transparent voting
-- Public goods funding
-- Supply chain tracking
-- Identity verification
-
-But governance decisions remain with elected representatives.
+**A:** This is a long-term vision. Omnia's causal graph consensus is designed to support partitioned operation (local finality with eventual global consistency), which could in principle work across interplanetary distances. However, no testing or implementation for interplanetary scenarios has been done.
 
 ### Q: Will AI agents run Omnia?
 
-**A:** Eventually, yes. In Phase 3 (Years 5-10), AI agents will have full governance rights and may become the primary decision-makers on the protocol.
-
-However, humans will always have a voice through their participation and voting.
-
-### Q: Can Omnia work on Mars?
-
-**A:** Yes. Omnia is designed for interplanetary operation:
-
-- Mars operates independently (local finality in minutes)
-- Earth and Mars sync every 22 minutes
-- Atomic swaps enable trade across planets
-- No waiting for Earth's approval
+**A:** AI agent identity is implemented (5 capability types). AI agents can currently have identities on the network. Full governance rights for AI agents and AI-driven decision-making are aspirational goals for Phase 3 (Years 5-10).
 
 ---
 
 ## Troubleshooting
 
-### Q: My transaction is stuck
-
-**A:** 
-
-1. Check your internet connection
-2. Verify you have enough UBC quota
-3. Check the network status (omnia.protocol/status)
-4. Try again in a few minutes
-
-### Q: I lost my recovery phrase
-
-**A:** 
-
-1. Contact your recovery guardians
-2. They can help you recover your account
-3. Create a new recovery phrase
-
-### Q: I think my account is compromised
-
-**A:** 
-
-1. Immediately freeze your account
-2. Contact your recovery guardians
-3. Create a new account and transfer funds
-4. Report the issue to the security team
-
 ### Q: I have a question not answered here
 
-**A:** 
-
-- Check the documentation: docs.omnia.protocol
+**A:**
+- Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
 - Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
-- Post on the forum: forum.omnia.protocol
-- Email support: support@omnia.protocol
+- Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
 
 ---
 
-**Last Updated:** May 2026  
-**Version:** 1.0
+**Last Updated:** May 2026

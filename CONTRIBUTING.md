@@ -1,6 +1,6 @@
 # Contributing to Omnia Protocol
 
-Thank you for your interest in contributing to Omnia! Whether you're a cryptographer, developer, designer, economist, or visionary, there's a place for you.
+Thank you for your interest in contributing to Omnia! This is a Rust-only codebase. All contributions are in Rust.
 
 ## Code of Conduct
 
@@ -21,7 +21,7 @@ Violations can be reported to conduct@omnia.protocol.
 ### 1. Fork the Repository
 
 ```bash
-gh repo fork omnia-protocol/omnia-protocol --clone
+gh repo fork Willow7737/omnia-protocol --clone
 cd omnia-protocol
 ```
 
@@ -33,18 +33,11 @@ git checkout -b feature/your-feature-name
 
 ### 3. Set Up Development Environment
 
-#### For the Protocol Substrate (Rust)
-```bash
-cd substrate
-cargo build
-cargo test
-```
+This is a Rust-only codebase. There are no JavaScript, Python, or other language components.
 
-#### For Web/Tooling (Node.js)
 ```bash
-pnpm install
-pnpm build
-pnpm test
+cargo build
+cargo test --workspace
 ```
 
 ### 4. Make Your Changes
@@ -64,15 +57,13 @@ git push origin feature/your-feature-name
 - Create a pull request on GitHub
 - Provide a clear description of your changes
 - Link any related issues
-- Wait for code review (2+ approvals required)
+- Wait for code review (1 approval for now — small team; 2+ approvals as team grows)
 
 ---
 
 ## Contribution Types
 
-### 1. Code Contributions
-
-#### For Rust Code
+### 1. Code Contributions (Rust Only)
 
 ```rust
 // Follow Rust conventions
@@ -92,44 +83,19 @@ mod tests {
 ```
 
 **Requirements:**
-- Tests pass: `cargo test`
+- Tests pass: `cargo test --workspace`
 - Clippy passes: `cargo clippy -- -D warnings`
-- Format is correct: `cargo fmt`
+- Format is correct: `cargo fmt --check`
 - Documentation is complete: `cargo doc`
 
-#### For JavaScript/TypeScript Code
-
-```typescript
-// Follow TypeScript conventions
-// - Use eslint for linting
-// - Use prettier for formatting
-// - Write tests for all exported functions
-
-export function myFunction(input: string): string {
-  // Implementation
-}
-
-describe('myFunction', () => {
-  it('should work correctly', () => {
-    expect(myFunction('test')).toBe('result');
-  });
-});
-```
-
-**Requirements:**
-- Tests pass: `pnpm test`
-- ESLint passes: `pnpm lint`
-- Format is correct: `pnpm format`
-- Types are correct: `pnpm type-check`
-
 ### 2. Documentation Contributions
-
-#### Writing Documentation
 
 - Use Markdown format
 - Follow the existing structure
 - Include code examples where relevant
 - Proofread for clarity and grammar
+- **Be honest**: Label stubs as stubs, planned features as planned, aspirational content as aspirational
+- Do not document features that don't exist in the code
 
 #### Documentation Standards
 
@@ -155,53 +121,13 @@ More detailed explanation with examples.
 - Point 3
 ```
 
-### 3. Design Contributions
-
-#### UI/UX Design
-
-- Submit designs as high-fidelity mockups
-- Include interaction flows
-- Provide design rationale
-- Consider accessibility (WCAG 2.1 AA)
-
-#### Visual Assets
-
-- Submit as SVG or PNG (high resolution)
-- Include source files (Figma, Adobe XD)
-- Provide usage guidelines
-- Ensure consistency with design system
-
-### 4. Research Contributions
-
-#### Writing Research Papers
-
-- Submit as PDF or Markdown
-- Include abstract, introduction, methodology, results, conclusion
-- Cite sources properly
-- Provide reproducible results
-
-#### Sharing Research
-
-- Post in the research forum
-- Link to published papers
-- Engage in peer review
-- Contribute to knowledge base
-
-### 5. Community Contributions
-
-#### Event Organization
+### 3. Community Contributions
 
 - Organize meetups or webinars
 - Create educational content
 - Moderate community discussions
 - Provide support to new members
-
-#### Translations
-
 - Translate documentation to other languages
-- Ensure accuracy and consistency
-- Maintain translation glossary
-- Update translations as docs change
 
 ---
 
@@ -212,11 +138,13 @@ More detailed explanation with examples.
 Before submitting a pull request, ensure:
 
 - [ ] Code follows project style guide
-- [ ] Tests are included and passing
+- [ ] Tests are included and passing (`cargo test --workspace`)
 - [ ] Documentation is updated
 - [ ] No breaking changes (or documented)
 - [ ] Commit messages are clear
 - [ ] No security vulnerabilities
+- [ ] Clippy passes (`cargo clippy -- -D warnings`)
+- [ ] Formatting is correct (`cargo fmt --check`)
 
 ### Reviewer Responsibilities
 
@@ -225,13 +153,13 @@ Reviewers will:
 1. **Check functionality:** Does the code do what it claims?
 2. **Check quality:** Is the code well-written and maintainable?
 3. **Check tests:** Are there adequate tests?
-4. **Check documentation:** Is the documentation clear?
+4. **Check documentation:** Is the documentation clear and honest?
 5. **Check security:** Are there any security issues?
 
 ### Approval Process
 
-- **1 approval:** Code review complete
-- **2+ approvals:** Ready to merge
+- **1 approval:** Code review complete (current policy — small team)
+- **2+ approvals:** Ready to merge (policy when team grows)
 - **Changes requested:** Address feedback and resubmit
 
 ---
@@ -300,6 +228,7 @@ fn test_end_to_end_flow() {
 - Test happy paths and error cases
 - Test edge cases
 - Test security-sensitive code thoroughly
+- Run all workspace tests: `cargo test --workspace`
 
 ---
 
@@ -333,21 +262,6 @@ pub fn my_function(arg1: Type1, arg2: Type2) -> ReturnType {
 }
 ```
 
-### README Files
-
-- Include project overview
-- Provide quick start guide
-- Link to detailed documentation
-- Include examples
-- List dependencies
-
-### API Documentation
-
-- Document all endpoints
-- Include request/response examples
-- Explain error codes
-- Provide authentication details
-
 ---
 
 ## Reporting Issues
@@ -359,30 +273,8 @@ Include:
 - Steps to reproduce
 - Expected behavior
 - Actual behavior
-- Environment details (OS, version, etc.)
-- Screenshots or logs if relevant
-
-**Template:**
-```markdown
-## Description
-Brief description of the bug
-
-## Steps to Reproduce
-1. Step 1
-2. Step 2
-3. Step 3
-
-## Expected Behavior
-What should happen
-
-## Actual Behavior
-What actually happens
-
-## Environment
-- OS: macOS 12.0
-- Node: 16.0.0
-- Version: 1.0.0
-```
+- Environment details (OS, Rust version, etc.)
+- Logs if relevant
 
 ### Feature Requests
 
@@ -394,107 +286,18 @@ Include:
 
 ---
 
-## Recognition & Rewards
-
-### Contributor Recognition
-
-- Listed in CONTRIBUTORS.md
-- GitHub profile linked
-- Social media shoutout
-- Monthly community newsletter
-
-### RPGF Rewards
-
-Contributors can earn RPGF rewards:
-
-| Contribution | Reward |
-|--------------|--------|
-| Merged PR (code) | 100-1,000 Omnia |
-| Merged PR (docs) | 50-500 Omnia |
-| Research paper | 500-5,000 Omnia |
-| Community event | 200-2,000 Omnia |
-| Translation | 100-500 Omnia |
-
-**Process:**
-1. Contribute and get merged
-2. Apply for RPGF funding
-3. Community votes on reward
-4. Funds distributed automatically
-
----
-
-## Development Workflow
-
-### Setting Up Your Environment
-
-```bash
-# Clone the repository
-gh repo clone omnia-protocol/omnia-protocol
-
-# Install dependencies
-cd omnia-protocol
-pnpm install
-
-# Create a feature branch
-git checkout -b feature/your-feature
-
-# Make changes
-# ...
-
-# Run tests
-pnpm test
-
-# Format code
-pnpm format
-
-# Commit and push
-git add .
-git commit -m "feat: your feature"
-git push origin feature/your-feature
-```
-
-### Continuous Integration
-
-All pull requests run through CI:
-
-- Tests must pass
-- Linting must pass
-- Coverage must not decrease
-- Security checks must pass
-
----
-
 ## Communication
-
-### Where to Ask Questions
-
-Omnia is a public-interest protocol. Join the conversation across our various channels:
 
 - **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - The primary place for questions, ideas, and general community interaction.
 - **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - For bug reports, feature requests, and technical research proposals.
-- **[Project Dashboard](./PROJECT_DASHBOARD.md)** - For real-time project health and status updates.
 - **Discord:** Real-time chat and community [Join our Discord](https://discord.gg/qYkpAeSYR)
-- **Forum:** Detailed discussions and proposals (Link coming soon)
 - **Email:** `conduct@omnia.protocol` (for conduct issues)
-
-### Response Times
-
-- **Bug reports:** 24-48 hours
-- **Feature requests:** 1 week
-- **Pull requests:** 2-5 days
-- **Questions:** 24 hours
 
 ---
 
 ## License
 
 By contributing to Omnia Protocol, you agree that your contributions will be licensed under the same license as the project (CC0 Public Domain).
-
----
-
-## Thank You
-
-Thank you for contributing to Omnia! Together, we're building the infrastructure for a better future.
 
 ---
 

@@ -4,25 +4,29 @@
 
 ## Overview
 
-Omnia Protocol is a universal coordination layer that replaces trust with mathematics. It uses causal consistency (causal graphs, vector clocks, CRDTs) instead of sequential blockchains to achieve parallel transaction processing.
+Omnia Protocol is a universal coordination layer that replaces trust with mathematics. It uses causal consistency (causal graphs, vector clocks, CRDTs) instead of sequential blockchains to achieve parallel transaction processing. The protocol is settlement-agnostic — it can settle on any L1 that provides data availability and proof verification.
 
-## The Five Layers
+## The Six Layers
 
 ```
 ┌─────────────────────────────────────────┐
 │  LAYER 5: Economics (UBC, Governance)   │
 ├─────────────────────────────────────────┤
-│  LAYER 4: Identity (DIDs, Recovery)     │
+│  LAYER 4: Identity (DIDs, Shamir, Bio) │
 ├─────────────────────────────────────────┤
-│  LAYER 3: Binding (Physical Anchors)    │
+│  LAYER 3: Binding (Provenance, RF, QC) │
 ├─────────────────────────────────────────┤
-│  LAYER 2: Domain Shards (5 lanes)       │
+│  LAYER 2: Domain Shards (6 shards)     │
 ├─────────────────────────────────────────┤
-│  LAYER 1: Substrate (Causal Graph)      │ ← Current phase
+│  LAYER 1: Substrate (Causal Graph)     │
+├─────────────────────────────────────────┤
+│  Phase 0: ZK-Rollup (Settlement Layer) │
 └─────────────────────────────────────────┘
 ```
 
-## Layer 1: The Substrate (Current Implementation)
+All five core layers are implemented and tested. Phase 0 (ZK-rollup settlement) is in progress with an Ethereum adapter and stubs for other L1s.
+
+## Layer 1: The Substrate
 
 ### Core Components
 
@@ -36,13 +40,18 @@ Omnia Protocol is a universal coordination layer that replaces trust with mathem
 - Fundamental unit of the protocol
 - Two-parent structure (self-parent + other-parent) forming a DAG
 - Contains: vector clock, payload, cryptographic signature
+- Ed25519 signatures with replay protection via nonce tracking
 - Located in: `substrate/src/event.rs`
 
 #### 3. CausalGraph
 - DAG storage for all events
-- O(1) insertion and lookup
+- O(1) amortized insertion (hash map lookup) and O(1) amortized lookup
 - Topological ordering for deterministic sequencing
 - Concurrent event detection for parallel execution
+- `state_root()` — Merkle root of the entire graph state
+- `merkle_proof()` — Inclusion proof for any event
+- `prune_old_events()` — Event pruning for long-term sustainability
+- `unprocessed_events` queue — O(new_events) consensus processing, not O(n) full graph walk
 - Located in: `substrate/src/causal_graph.rs`
 
 #### 4. CRDTs (Conflict-free Replicated Data Types)
@@ -53,6 +62,7 @@ Omnia Protocol is a universal coordination layer that replaces trust with mathem
 
 #### 5. GossipProtocol
 - Epidemic event propagation across the network
+- Built on libp2p (QUIC transport + GossipSub + mDNS discovery)
 - Gossip-about-gossip pattern (inspired by Hashgraph)
 - Bandwidth-efficient: only missing events transmitted
 - Located in: `substrate/src/gossip.rs`
@@ -61,16 +71,18 @@ Omnia Protocol is a universal coordination layer that replaces trust with mathem
 - BFT finality mechanism running on top of the causal graph
 - Witness/fame/commit model (inspired by Hashgraph + AlephBFT)
 - Optimistic confirmation for low-latency finality
+- Processes only new (unprocessed) events, not the entire graph each round
 - Located in: `substrate/src/consensus.rs`
 
 ### Design Decisions
 
 #### Why Causal Consistency over Blockchain?
+
 | Property | Blockchain | Causal Graph (Omnia) |
 |----------|-----------|---------------------|
 | Ordering | Total (sequential) | Partial (parallel) |
-| Throughput | ~100-1000 TPS | 10,000+ TPS target |
-| Latency | ~12s block time | ~1-5s finality |
+| Throughput | ~100-1000 TPS | Not yet benchmarked at scale |
+| Latency | ~12s block time | Not yet benchmarked at scale |
 | Concurrency | None (single chain) | Automatic (DAG) |
 | Finality | Probabilistic | Deterministic (BFT) |
 
@@ -92,44 +104,61 @@ Every module has comprehensive unit tests. The critical integration test simulat
 - CRDT state converges to identical values on all nodes
 - All tests in: `substrate/tests/`
 
-### Performance Targets
+### Performance Notes
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| Throughput | 10,000+ TPS | In progress |
-| Latency | 1-5 seconds | In progress |
-| Convergence | 100% CRDT merge | Verified |
-| Fault tolerance | <1/3 Byzantine | Designed |
+The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round, rather than walking the entire graph. This gives O(new_events) processing per consensus round. Full throughput benchmarking (targeting 10,000+ TPS) has not yet been performed. CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
 
-## Integration Points (Future Layers)
+## Layer Integration
 
 ### Layer 2: Domain Shards
-- Each shard runs its own CRDT state
-- Cross-shard messaging via the Substrate's causal graph
-- Shard router assigns transactions to shards by domain
+- 6 shards: Financial, Identity, Physical, Computational, Biological, Economics
+- `EventProcessor` trait — each shard implements this to process events
+- `ShardRouter` dispatches events to the correct shard by domain
+- Cross-shard messaging via the Substrate's causal graph with causality proofs
+- Replay protection via per-creator nonce tracking (`last_nonces` in `ShardRouter`)
+- FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
 
 ### Layer 3: Binding
 - Physical anchors linked to events in the causal graph
-- RF fingerprinting + quantum-resistant commitments
-- Supply chain provenance as append-only CRDT log
+- `ProvenanceLog` — append-only CRDT log for supply chain tracking
+- `PhysicalAnchor` — combines RF fingerprinting stub, quantum commitment stub, and provenance
+- `ProvenanceTracker` — full create/transfer/verify/destroy lifecycle
+- RF fingerprinting is a stub (Hamming distance comparison); real implementation requires SDR hardware
+- Quantum commitments are a stub (hybrid classical + PQC placeholder); real implementation requires CRYSTALS-Dilithium
 
 ### Layer 4: Identity
-- DIDs (`did:omnia:`) stored in the causal graph
-- Social recovery via Shamir's Secret Sharing
-- AI agent identities with capability flags
+- `did:omnia:` method with full validation
+- Shamir's Secret Sharing over GF(256) for social recovery
+- Privacy-preserving biometric anchors: `BLAKE3(salt || template)` — template never stored in cleartext
+- `AgentIdentity` with 5 capability types for AI agent identities
+- Social recovery with configurable guardian threshold
 
 ### Layer 5: Economics
-- UBC tokens tracked as non-transferable balances (CRDT)
-- Quota system with monthly reset
-- Quadratic voting recorded in the causal graph
+- UBC tokens tracked as non-transferable (soulbound) balances
+- `QuotaSystem` with epoch-based advancement and monthly reset
+- Quadratic voting with exponential reputation decay (implemented)
+- Conviction voting and delegation are planned for Phase 1 (not yet implemented)
+- Proof-of-useful-work stubs (3 work types defined, not production-ready)
+
+### Phase 0: ZK-Rollup
+- Settlement-agnostic architecture via `SettlementLayer` trait
+- Ethereum adapter with Solidity contract (OmniaRollup.sol)
+- Stubs for Bitcoin, Solana, Celestia adapters
+- L2 operator with batch builder
+- ZK circuit stub — currently uses hash chain, not a full R1CS circuit (arkworks integration is the production target)
+- Merkle state root and inclusion proofs
+- Event pruning (`prune_old_events`) for long-term state sustainability
 
 ## Security Considerations
 
 1. **No unwrap() in production paths** — all errors handled explicitly
-2. **Constant-time crypto** — where needed for side-channel resistance
-3. **Byzantine fault tolerance** — <1/3 malicious nodes tolerated
-4. **No single point of failure** — leaderless design
-5. **Deterministic convergence** — CRDTs guarantee identical state
+2. **Replay protection** — nonce tracking in both CausalGraph and ShardRouter
+3. **Constant-time crypto** — where needed for side-channel resistance
+4. **Byzantine fault tolerance** — <1/3 malicious nodes tolerated
+5. **No single point of failure** — leaderless design
+6. **Deterministic convergence** — CRDTs guarantee identical state
+7. **State commitments** — `state_root()` and `merkle_proof()` enable verifiable state
+8. **Sustainability** — `prune_old_events()` prevents unbounded state growth
 
 ## References
 

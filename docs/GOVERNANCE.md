@@ -1,5 +1,7 @@
 # Omnia Protocol Governance
 
+> **⚠️ This document describes the governance vision. Only quadratic voting with exponential decay is currently implemented. Sections are labeled as Implemented, Planned, or Aspirational.**
+
 ## Principles
 
 ### 1. Decentralization
@@ -16,7 +18,7 @@ All governance decisions are recorded on-chain and auditable by anyone.
 
 ### 4. Inclusivity
 
-Everyone—humans, AI agents, collectives—has a voice in governance.
+Everyone — humans, AI agents, collectives — has a voice in governance.
 
 ### 5. Adaptability
 
@@ -28,7 +30,7 @@ The protocol evolves to meet changing needs without requiring hard forks.
 
 ### Three Pillars
 
-#### 1. Technical Governance (Protocol Changes)
+#### 1. Technical Governance (Protocol Changes) — Planned
 
 **Who decides:** Core developers and researchers
 
@@ -41,26 +43,22 @@ The protocol evolves to meet changing needs without requiring hard forks.
 
 **Voting:** Weighted by code contributions and reputation
 
-#### 2. Economic Governance (Monetary Policy)
+#### 2. Economic Governance (Monetary Policy) — Partially Implemented
 
 **Who decides:** Token holders and UBC recipients
 
-**Process:**
-1. Economic proposal submitted
-2. Impact analysis (1 week)
-3. Community vote (2 weeks)
-4. Implementation (if >66% approval)
+**Voting:** Quadratic voting (voting power = sqrt(stake)) — **Implemented**
 
-**Voting:** Quadratic voting (voting power = sqrt(stake))
+Full economic governance process (proposal submission, impact analysis, voting periods) is planned but not yet implemented.
 
-#### 3. Social Governance (Community Standards)
+#### 3. Social Governance (Community Standards) — Planned
 
 **Who decides:** Community members
 
 **Process:**
-1. Issue raised (GitHub, forum, [Discord](https://discord.gg/qYkpAeSYR))
-2. Community discussion (1 week)
-3. Consensus-building (1 week)
+1. Issue raised (GitHub, Discord)
+2. Community discussion
+3. Consensus-building
 4. Implementation (if consensus reached)
 
 **Voting:** Simple majority (>50%)
@@ -69,7 +67,7 @@ The protocol evolves to meet changing needs without requiring hard forks.
 
 ## Voting Mechanisms
 
-### Quadratic Voting
+### Quadratic Voting — Implemented ✅
 
 Voting power = sqrt(stake)
 
@@ -80,7 +78,9 @@ Voting power = sqrt(stake)
 
 **Effect:** One large stakeholder (Carol) has 10x power, not 10,000x. This prevents whale dominance while still rewarding commitment.
 
-### Conviction Voting
+This is implemented in `economics/src/governance.rs` with exponential reputation decay.
+
+### Conviction Voting — Planned 📋
 
 Voters can lock tokens for longer periods to increase voting power.
 
@@ -92,7 +92,9 @@ Voters can lock tokens for longer periods to increase voting power.
 
 **Effect:** Long-term believers have more influence than short-term speculators.
 
-### Delegation
+This is planned for Phase 1 but not yet implemented.
+
+### Delegation — Planned 📋
 
 Voters can delegate their voting power to trusted representatives.
 
@@ -104,9 +106,11 @@ Voters can delegate their voting power to trusted representatives.
 
 **Use case:** Voters who lack time or expertise can delegate to domain experts.
 
+This is planned for Phase 1 but not yet implemented.
+
 ---
 
-## Governance Cycles
+## Governance Cycles — Planned 📋
 
 ### Monthly Governance
 
@@ -127,16 +131,9 @@ Voters can delegate their voting power to trusted representatives.
 - Assess community health
 - Plan next quarter's initiatives
 
-### Annual Summits
-
-**Once per year:**
-- In-person gathering (rotating locations)
-- Strategic planning
-- Community celebration
-
 ---
 
-## Proposal Types
+## Proposal Types — Planned 📋
 
 ### Tier 1: Minor Updates (Fast Track)
 
@@ -173,7 +170,7 @@ Voters can delegate their voting power to trusted representatives.
 
 ---
 
-## Dispute Resolution
+## Dispute Resolution — Planned 📋
 
 ### Conflict Resolution Process
 
@@ -190,7 +187,7 @@ Voters can delegate their voting power to trusted representatives.
 - Community votes on resolution
 - Decision is binding
 
-### Slashing Conditions
+### Slashing — Aspirational 🔮
 
 Validators can be slashed (lose stake) for:
 
@@ -201,33 +198,23 @@ Validators can be slashed (lose stake) for:
 | Malicious behavior | 50-100% | Attacking the network |
 | Censoring transactions | 25% | Refusing to include valid transactions |
 
+Slashing is aspirational — there is no validator network or staking system yet.
+
 ---
 
-## Reputation System
+## Reputation System — Partially Implemented 🏗️
 
-### Reputation Scoring
+### Reputation Decay — Implemented ✅
 
-Each identity has a reputation score (0-100) based on:
-
-| Factor | Weight | How It's Measured |
-|--------|--------|-------------------|
-| **Transaction history** | 30% | Successful transactions / total transactions |
-| **Credential issuance** | 20% | Credentials issued / credentials revoked |
-| **Community votes** | 20% | Upvotes / downvotes on proposals |
-| **Time active** | 15% | Months on network (capped at 5 years) |
-| **Validator performance** | 15% | Uptime / slash events |
-
-### Reputation Decay
-
-Reputation decays over time if not maintained:
-
-- **Active users:** Decay 1% per month
-- **Inactive users:** Decay 5% per month
-- **Minimum:** 10 (cannot go below)
+Reputation decays exponentially over time. This is implemented in the governance module. Active users experience slower decay than inactive users.
 
 **Effect:** Power cannot concentrate. Even early adopters must stay active to maintain influence.
 
-### Reputation Thresholds
+### Reputation Scoring — Not Started 🌑
+
+The full reputation scoring system (transaction history, credential issuance, community votes, validator performance) is not yet implemented. Only the decay mechanism exists.
+
+### Reputation Thresholds — Planned 📋
 
 | Threshold | Privileges |
 |-----------|-----------|
@@ -239,16 +226,16 @@ Reputation decays over time if not maintained:
 
 ---
 
-## Treasury Management
+## Treasury Management — Aspirational 🔮
 
 ### Revenue Sources
 
 | Source | Amount | Use |
 |--------|--------|-----|
-| **Transaction fees** | 0.01% | RPGF pool |
-| **High-frequency fees** | 0.1% | UBC subsidies |
-| **Validator rewards** | 5% of new supply | Incentivize validation |
-| **Slashing proceeds** | Variable | RPGF pool |
+| **Transaction fees** | Not yet implemented | RPGF pool |
+| **High-frequency fees** | Not yet implemented | UBC subsidies |
+| **Validator rewards** | Not yet implemented | Incentivize validation |
+| **Slashing proceeds** | Not yet implemented | RPGF pool |
 
 ### Spending Categories
 
@@ -260,29 +247,20 @@ Reputation decays over time if not maintained:
 | **Infrastructure** | 10% | Nodes, storage, bandwidth |
 | **Emergency reserve** | 5% | Crisis response |
 
-### RPGF Process
+All treasury management is aspirational — there are no transaction fees, no validator rewards, and no treasury mechanism implemented yet.
+
+### RPGF Process — Aspirational 🔮
 
 **Quarterly RPGF Rounds:**
 
-1. **Nomination Phase** (2 weeks)
-   - Community nominates projects
-   - Projects describe impact
-
-2. **Evaluation Phase** (2 weeks)
-   - Community evaluates impact
-   - Metrics are verified
-
-3. **Voting Phase** (2 weeks)
-   - Quadratic voting on allocations
-   - Top projects receive funding
-
-4. **Distribution Phase** (1 week)
-   - Funds automatically distributed
-   - Recipients announced
+1. **Nomination Phase** (2 weeks) — Community nominates projects
+2. **Evaluation Phase** (2 weeks) — Community evaluates impact
+3. **Voting Phase** (2 weeks) — Quadratic voting on allocations
+4. **Distribution Phase** (1 week) — Funds automatically distributed
 
 ---
 
-## Amending Governance
+## Amending Governance — Planned 📋
 
 ### Governance Change Process
 
@@ -310,57 +288,29 @@ Governance cannot:
 
 ### How to Get Involved
 
-#### 1. Become a Validator
-
-**Requirements:**
-- Stake 10,000 Omnia or equivalent compute
-- Run a node 24/7
-- Participate in governance
-
-**Rewards:**
-- 5% annual return on stake
-- RPGF rewards for contributions
-- Reputation increase
-
-#### 2. Contribute Code
+#### 1. Contribute Code
 
 **Process:**
 1. Fork repository
 2. Create feature branch
 3. Implement with tests
 4. Submit pull request
-5. Code review (2+ approvals)
+5. Code review (1 approval for now — small team)
 6. Merge
 
-**Rewards:**
-- RPGF funding for merged PRs
-- Reputation increase
-- Governance voting rights after 10 contributions
-
-#### 3. Participate in Governance
+#### 2. Participate in Governance
 
 **Process:**
-1. Acquire Omnia tokens or reputation
-2. Vote on proposals
-3. Propose changes
-4. Discuss on forums
+1. Run the protocol locally
+2. Test governance features (quadratic voting, reputation decay)
+3. Propose changes via GitHub Issues or Discussions
 
-**Rewards:**
-- Influence protocol direction
-- Reputation increase
-- Potential RPGF funding
-
-#### 4. Build Applications
+#### 3. Build Applications
 
 **Process:**
-1. Build tool/service on Omnia
+1. Build tool/service using the Omnia Rust library
 2. Attract users
-3. Apply for RPGF funding
-
-**Rewards:**
-- RPGF funding based on impact
-- Reputation increase
-- Community recognition
+3. Apply for RPGF funding (when implemented)
 
 ---
 
@@ -382,52 +332,31 @@ Governance cannot:
 - 75% approval
 - 3-month implementation period
 
-### Q: What happens if governance is compromised?
-
-**A:** The protocol has emergency safeguards:
-
-1. **Pause mechanism:** Validators can vote to pause the network (requires 75% approval)
-2. **Rollback:** Network can roll back to previous checkpoint (requires 90% approval)
-3. **Fork:** Community can fork to alternative version
-
-### Q: How are disputes resolved?
-
-**A:** Through the three-step process:
-
-1. **Negotiation:** Parties discuss directly
-2. **Arbitration:** Neutral arbitrator proposes solution
-3. **Community vote:** If needed, community votes on resolution
-
-### Q: Can I sell my voting power?
-
-**A:** No. Voting power is tied to reputation and stake, which cannot be transferred. You can only delegate your vote to another person, and you can revoke delegation anytime.
-
 ---
 
 ## Governance Roadmap
 
-### Year 1: Foundation
+### Year 1: Foundation — In Progress
+- ✅ Implement quadratic voting with exponential decay
+- 📋 Establish governance processes
+- 📋 Build community participation
+- 📋 Launch RPGF program
 
-- Establish governance processes
-- Build community participation
-- Implement quadratic voting
-- Launch RPGF program
-
-### Year 2: Maturation
-
+### Year 2: Maturation — Planned 📋
 - Expand validator participation
 - Increase governance frequency
 - Introduce conviction voting
 - Establish academic partnerships
 
-### Year 3: Decentralization
-
+### Year 3: Decentralization — Planned 📋
 - Reduce core team influence
 - Empower community governance
 - Implement self-modifying protocol
 - Enable AI agent participation
 
-### Year 4+: Post-Human Governance
+### Year 4+: Post-Human Governance — Aspirational 🔮
+
+*This section describes a long-term vision. It is not currently being developed.*
 
 - AI agents have full voting rights
 - Collective intelligence guides decisions
@@ -436,6 +365,9 @@ Governance cannot:
 
 ---
 
-**Status:** Governance Framework  
-**Version:** 1.0  
+**Status:** Governance Framework — Partially Implemented
+**Implemented:** Quadratic voting with exponential decay
+**Planned:** Conviction voting, delegation, treasury, validator governance
+**Aspirational:** RPGF, slashing, post-human governance
+**Version:** 2.0
 **Last Updated:** May 2026
