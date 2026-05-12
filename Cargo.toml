@@ -3,5 +3,6 @@ members = [
     "substrate",
     "shards",
     "binding",
+    "economics",
 ]
 resolver = "2"

@@ -35,6 +35,8 @@ pub struct DidDocument {
     /// Whether social recovery is enabled for this DID.
     pub recovery_enabled: bool,
     /// Authentication methods (public keys authorized to sign for this DID).
+    // TODO: Recovery should add the new recovered key to authentication
+    // and optionally remove the compromised old key. Currently untouched.
     pub authentication: Vec<[u8; 32]>,
     /// Service endpoints associated with this DID.
     pub services: HashMap<String, String>,
@@ -144,7 +146,11 @@ impl IdentityState {
                     ));
                 }
 
-                // Attempt reconstruction to validate shares
+                // TODO: The reconstructed secret should be used to generate a new keypair
+                // and rotate the DID's public_key and authentication list. Currently
+                // we only validate the shares and set recovery_enabled = true.
+                // Production fix: derive new key from reconstructed secret, update
+                // doc.public_key and doc.authentication, invalidate old key.
                 let _reconstructed = ShamirRecovery::reconstruct(shares).ok_or_else(|| {
                     ShardError::ValidationFailed("Recovery reconstruction failed".into())
                 })?;
@@ -242,8 +248,11 @@ impl IdentityState {
                         total_shares: *total_shares,
                     },
                 );
-                // Store the recovery shares internally (in a real system, these would
-                // be distributed to guardians). For now we just configure the threshold.
+                // TODO: Shares are generated but immediately dropped. In production,
+                // these must be encrypted and distributed to guardians off-chain.
+                // Each guardian receives one share. No single guardian can reconstruct
+                // the secret alone. Consider: encrypt share_i with guardian_i's public
+                // key and send via secure channel (not the causal graph).
                 let _ = shares; // Shares are returned to the caller via a separate API
                 Ok(())
             }

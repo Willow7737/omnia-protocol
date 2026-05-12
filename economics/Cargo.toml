@@ -1,0 +1,19 @@
+[package]
+name = "omnia-economics"
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+description = "Layer 5: Economics — Universal Basic Compute token, Proof-of-Useful-Work, and Quadratic Voting with Reputation Decay"
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+
+[dependencies]
+omnia-substrate = { path = "../substrate" }
+omnia-shards = { path = "../shards" }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+thiserror = "1.0"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
