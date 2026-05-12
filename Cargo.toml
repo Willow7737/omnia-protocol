@@ -2,5 +2,6 @@
 members = [
     "substrate",
     "shards",
+    "binding",
 ]
 resolver = "2"
