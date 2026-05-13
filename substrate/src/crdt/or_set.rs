@@ -176,11 +176,40 @@ impl<T: Clone + Ord + Hash + Serialize> Default for OrSet<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];
         n[0] = id;
         n
+    }
+
+    /// Strategy for generating arbitrary OrSet<u32> states.
+    /// Produces an OrSet by applying a random sequence of add/remove operations.
+    fn orset_strategy() -> impl Strategy<Value = OrSet<u32>> {
+        prop::collection::vec((any::<u8>(), any::<bool>(), any::<u32>()), 0..20)
+            .prop_map(|ops| {
+                let mut set: OrSet<u32> = OrSet::new();
+                for (node_byte, is_add, element) in ops {
+                    let mut node_id = [0u8; 32];
+                    node_id[0] = node_byte;
+                    if is_add {
+                        set.add(node_id, element);
+                    } else {
+                        set.remove(&element);
+                    }
+                }
+                set
+            })
+    }
+
+    /// Compare two OrSets by their observable elements (ignoring internal sequence counter).
+    fn orset_elements_eq(a: &OrSet<u32>, b: &OrSet<u32>) -> bool {
+        let mut elems_a = a.elements();
+        let mut elems_b = b.elements();
+        elems_a.sort();
+        elems_b.sort();
+        elems_a == elems_b
     }
 
     #[test]
@@ -333,5 +362,67 @@ mod tests {
         assert!(set_a.contains(&"shared"));
         // Should have 2 tokens for the same element
         assert_eq!(set_a.tokens(&"shared").unwrap().len(), 2);
+    }
+
+    // ── Property-based tests (proptest) ──────────────────────────────
+
+    proptest! {
+        /// For any two OrSets a, b: merge(a, b) and merge(b, a) produce
+        /// the same observable elements (commutativity of observable state).
+        #[test]
+        fn proptest_merge_commutative(
+            a in orset_strategy(),
+            b in orset_strategy()
+        ) {
+            let merged_ab = a.merged(&b);
+            let merged_ba = b.merged(&a);
+            prop_assert!(orset_elements_eq(&merged_ab, &merged_ba),
+                "merge(a,b) and merge(b,a) produced different element sets");
+        }
+
+        /// For any OrSet a: merge(a, a) == a (idempotency).
+        /// Since both operands are identical, struct equality holds
+        /// (same adds, removes, and sequence counter).
+        #[test]
+        fn proptest_merge_idempotent(a in orset_strategy()) {
+            let merged = a.merged(&a);
+            prop_assert_eq!(merged, a);
+        }
+
+        /// If an element is concurrently added and removed, add wins.
+        /// This is the core add-wins semantics of the OR-Set.
+        #[test]
+        fn proptest_add_wins(
+            node_a_byte in any::<u8>(),
+            node_b_byte in any::<u8>(),
+            element in any::<u32>()
+        ) {
+            // Ensure different nodes for concurrent operations
+            prop_assume!(node_a_byte != node_b_byte);
+
+            let mut node_a = [0u8; 32];
+            node_a[0] = node_a_byte;
+            let mut node_b = [0u8; 32];
+            node_b[0] = node_b_byte;
+
+            // Node A adds the element
+            let mut set_a: OrSet<u32> = OrSet::new();
+            set_a.add(node_a, element);
+
+            // Node B has the same state and removes the element
+            let mut set_b = set_a.clone();
+            set_b.remove(&element);
+
+            // Meanwhile, Node A adds it again concurrently (new token)
+            set_a.add(node_a, element);
+
+            // After merging in either direction, element should be present
+            let merged_ab = set_a.merged(&set_b);
+            let merged_ba = set_b.merged(&set_a);
+            prop_assert!(merged_ab.contains(&element),
+                "add-wins violated: element absent after merge(a,b)");
+            prop_assert!(merged_ba.contains(&element),
+                "add-wins violated: element absent after merge(b,a)");
+        }
     }
 }

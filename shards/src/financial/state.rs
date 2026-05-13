@@ -91,6 +91,9 @@ pub struct FinancialState {
 }
 
 impl FinancialState {
+    /// Version byte prefixed to serialized snapshots for format migration.
+    const FINANCIAL_STATE_VERSION: u8 = 1;
+
     /// Create an empty financial state with no accounts.
     pub fn new() -> Self {
         Self {
@@ -166,13 +169,30 @@ impl FinancialState {
     }
 
     /// Serialize the state to bytes for snapshots.
+    ///
+    /// The output is prefixed with a version byte to support future
+    /// state-format migrations.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("FinancialState serialization cannot fail")
+        let mut bytes = vec![Self::FINANCIAL_STATE_VERSION];
+        bytes.extend(bincode::serialize(self).expect("FinancialState serialization cannot fail"));
+        bytes
     }
 
     /// Deserialize state from bytes.
+    ///
+    /// Reads and validates the version byte before deserializing the
+    /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+        if bytes.is_empty() {
+            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+        }
+        let version = bytes[0];
+        if version != Self::FINANCIAL_STATE_VERSION {
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                format!("Unsupported financial state version: {}", version),
+            )));
+        }
+        bincode::deserialize(&bytes[1..])
     }
 }
 

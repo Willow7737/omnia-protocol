@@ -34,6 +34,7 @@
 pub mod circuit;
 pub mod operator;
 pub mod proof;
+pub mod proof_bundle;
 pub mod settlement;
 
 // Re-export the core trait and adapters
@@ -41,3 +42,6 @@ pub use settlement::{
     BitcoinAdapter, CelestiaAdapter, EthereumAdapter, SettlementError, SettlementLayer,
     SolanaAdapter,
 };
+
+// Re-export proof bundle types
+pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};

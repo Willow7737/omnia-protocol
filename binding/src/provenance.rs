@@ -91,6 +91,9 @@ pub struct ProvenanceLog {
 }
 
 impl ProvenanceLog {
+    /// Version byte prefixed to serialized snapshots for format migration.
+    const PROVENANCE_LOG_VERSION: u8 = 1;
+
     /// Create a new provenance log for an item.
     ///
     /// # Arguments
@@ -260,13 +263,30 @@ impl ProvenanceLog {
     }
 
     /// Serialize the provenance log to bytes.
+    ///
+    /// The output is prefixed with a version byte to support future
+    /// state-format migrations.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("ProvenanceLog serialization cannot fail")
+        let mut bytes = vec![Self::PROVENANCE_LOG_VERSION];
+        bytes.extend(bincode::serialize(self).expect("ProvenanceLog serialization cannot fail"));
+        bytes
     }
 
     /// Deserialize a provenance log from bytes.
+    ///
+    /// Reads and validates the version byte before deserializing the
+    /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+        if bytes.is_empty() {
+            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+        }
+        let version = bytes[0];
+        if version != Self::PROVENANCE_LOG_VERSION {
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                format!("Unsupported provenance log version: {}", version),
+            )));
+        }
+        bincode::deserialize(&bytes[1..])
     }
 }
 

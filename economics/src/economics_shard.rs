@@ -86,6 +86,9 @@ pub struct EconomicsState {
 }
 
 impl EconomicsState {
+    /// Version byte prefixed to serialized snapshots for format migration.
+    const ECONOMICS_STATE_VERSION: u8 = 1;
+
     /// Create a new economics state with default parameters.
     ///
     /// Uses the default UBC quota (1000 units/month) and a governance
@@ -160,13 +163,30 @@ impl EconomicsState {
     }
 
     /// Serialize the economics state to bytes.
+    ///
+    /// The output is prefixed with a version byte to support future
+    /// state-format migrations.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("EconomicsState serialization cannot fail")
+        let mut bytes = vec![Self::ECONOMICS_STATE_VERSION];
+        bytes.extend(bincode::serialize(self).expect("EconomicsState serialization cannot fail"));
+        bytes
     }
 
     /// Deserialize economics state from bytes.
+    ///
+    /// Reads and validates the version byte before deserializing the
+    /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+        if bytes.is_empty() {
+            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+        }
+        let version = bytes[0];
+        if version != Self::ECONOMICS_STATE_VERSION {
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                format!("Unsupported economics state version: {}", version),
+            )));
+        }
+        bincode::deserialize(&bytes[1..])
     }
 }
 

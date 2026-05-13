@@ -106,7 +106,7 @@ async fn test_financial_shard_wired_into_substrate() {
     let router = router.lock().unwrap();
     let financial = router.get_shard(&ShardId::financial()).unwrap();
     let snapshot = financial.state_snapshot();
-    let state: FinancialState = bincode::deserialize(&snapshot).unwrap();
+    let state = FinancialState::from_bytes(&snapshot).unwrap();
     assert_eq!(state.balance_of(&account), 1000);
     assert_eq!(state.total_supply, 1000);
 }

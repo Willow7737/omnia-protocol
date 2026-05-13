@@ -190,11 +190,25 @@ fn current_timestamp() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];
         n[0] = id;
         n
+    }
+
+    /// Strategy for generating arbitrary LwwRegister<u64> states.
+    /// Uses `set_with_meta` for deterministic control over timestamp, node_id, and version.
+    fn lww_strategy() -> impl Strategy<Value = LwwRegister<u64>> {
+        (any::<u64>(), 0u64..10000, any::<u8>(), 0u64..100)
+            .prop_map(|(value, timestamp, node_byte, version)| {
+                let mut node_id = [0u8; 32];
+                node_id[0] = node_byte;
+                let mut reg = LwwRegister::new(node_id);
+                reg.set_with_meta(value, timestamp, node_id, version);
+                reg
+            })
     }
 
     #[test]
@@ -328,5 +342,69 @@ mod tests {
 
         reg.set(100);
         assert_eq!(reg.get(), Some(&100));
+    }
+
+    // ── Property-based tests (proptest) ──────────────────────────────
+
+    proptest! {
+        /// For any two LWWRegisters a, b: merge(a, b) always produces
+        /// the same deterministic result when called multiple times.
+        #[test]
+        fn proptest_merge_deterministic(
+            a in lww_strategy(),
+            b in lww_strategy()
+        ) {
+            let merged1 = a.merged(&b);
+            let merged2 = a.merged(&b);
+            prop_assert_eq!(merged1, merged2);
+        }
+
+        /// For any LWWRegister a: merge(a, a) == a
+        #[test]
+        fn proptest_merge_idempotent(a in lww_strategy()) {
+            let merged = a.merged(&a);
+            prop_assert_eq!(merged, a);
+        }
+
+        /// Register with higher version wins on merge; if versions are
+        /// equal, higher timestamp wins; if both equal, higher node_id wins.
+        #[test]
+        fn proptest_newer_wins(
+            val_a in any::<u64>(),
+            val_b in any::<u64>(),
+            ts_a in 0u64..10000,
+            ts_b in 0u64..10000,
+            node_a_byte in any::<u8>(),
+            node_b_byte in any::<u8>(),
+            ver_a in 0u64..100,
+            ver_b in 0u64..100
+        ) {
+            let mut node_a = [0u8; 32];
+            node_a[0] = node_a_byte;
+            let mut node_b = [0u8; 32];
+            node_b[0] = node_b_byte;
+
+            let mut reg_a = LwwRegister::new(node_a);
+            reg_a.set_with_meta(val_a, ts_a, node_a, ver_a);
+
+            let mut reg_b = LwwRegister::new(node_b);
+            reg_b.set_with_meta(val_b, ts_b, node_b, ver_b);
+
+            let merged = reg_a.merged(&reg_b);
+
+            // Determine expected winner using the same logic as should_win
+            let a_wins = if ver_a != ver_b {
+                ver_a > ver_b
+            } else if ts_a != ts_b {
+                ts_a > ts_b
+            } else {
+                node_a > node_b
+            };
+
+            let expected_value = if a_wins { val_a } else { val_b };
+            prop_assert_eq!(merged.get(), Some(&expected_value),
+                "expected value {} (a_wins={}), got {:?}",
+                expected_value, a_wins, merged.get());
+        }
     }
 }

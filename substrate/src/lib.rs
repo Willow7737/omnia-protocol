@@ -36,6 +36,7 @@ pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
+    MAX_EVENT_AGE_MS, MAX_TIMESTAMP_DRIFT_MS,
 };
 pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipMessage, GossipProtocol, GossipStats,
