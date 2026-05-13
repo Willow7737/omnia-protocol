@@ -26,7 +26,7 @@ rand = "0.10"
 
 # FIX 4: Async runtime and libp2p networking
 tokio = { version = "1.35", features = ["full"] }
-libp2p = { version = "0.53", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio"] }
+libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio"] }
 futures = "0.3"
 async-trait = "0.1"
 blake3 = "1.5"
