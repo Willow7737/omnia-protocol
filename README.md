@@ -28,7 +28,7 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│  LAYER 5: Economics (UBC, Governance)   │ ✅ IMPLEMENTED
+│  LAYER 5: Economics (UBC, Governance)  │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
 │  LAYER 4: Identity (DIDs, Shamir, Bio) │ ✅ IMPLEMENTED
 ├─────────────────────────────────────────┤
