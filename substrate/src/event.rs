@@ -17,6 +17,14 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Maximum allowed clock drift for event timestamps (5 minutes in milliseconds).
+/// Events with timestamps more than this far in the future are rejected.
+pub const MAX_TIMESTAMP_DRIFT_MS: u64 = 300_000;
+
+/// Maximum age for an event before it is considered ancient (365 days in milliseconds).
+/// Events older than this are rejected as unreasonably stale.
+pub const MAX_EVENT_AGE_MS: u64 = 31_536_000_000;
+
 /// Unique identifier for an event (SHA-256 hash of event content)
 pub type EventId = [u8; 32];
 
@@ -237,14 +245,47 @@ impl Event {
         }
     }
 
-    /// Full validation: hash integrity + signature
+    /// Full validation: unsigned check, hash integrity, signature, timestamp sanity, and rejection status.
+    ///
+    /// Checks are performed in order of increasing cost:
+    /// 1. Unsigned event (zero signature or pubkey)
+    /// 2. Hash integrity
+    /// 3. Cryptographic signature
+    /// 4. Future timestamp (beyond MAX_TIMESTAMP_DRIFT_MS)
+    /// 5. Ancient timestamp (older than MAX_EVENT_AGE_MS)
+    /// 6. Rejected status
     pub fn validate(&self) -> Result<(), EventValidationError> {
+        // Check for unsigned events: all-zero signature or pubkey means never signed
+        if self.signature == [0u8; 64] || self.creator_pubkey == [0u8; 32] {
+            return Err(EventValidationError::UnsignedEvent);
+        }
         if !self.verify_hash() {
             return Err(EventValidationError::InvalidHash);
         }
         if !self.verify_signature() {
             return Err(EventValidationError::InvalidSignature);
         }
+
+        // Timestamp sanity checks
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        // Reject events too far in the future
+        if let Some(max_allowed) = now_ms.checked_add(MAX_TIMESTAMP_DRIFT_MS) {
+            if self.timestamp > max_allowed {
+                return Err(EventValidationError::FutureTimestamp);
+            }
+        }
+
+        // Reject events that are unreasonably old
+        if let Some(oldest_allowed) = now_ms.checked_sub(MAX_EVENT_AGE_MS) {
+            if self.timestamp < oldest_allowed {
+                return Err(EventValidationError::AncientTimestamp);
+            }
+        }
+
         if self.status == EventStatus::Rejected {
             return Err(EventValidationError::RejectedEvent);
         }
@@ -304,6 +345,12 @@ pub enum EventValidationError {
     RejectedEvent,
     #[error("Failed to deserialize event")]
     DeserializationError,
+    #[error("Event timestamp is too far in the future")]
+    FutureTimestamp,
+    #[error("Event timestamp is unreasonably old")]
+    AncientTimestamp,
+    #[error("Event is unsigned (zero signature or pubkey)")]
+    UnsignedEvent,
 }
 
 impl fmt::Display for Event {
@@ -416,6 +463,98 @@ mod tests {
         assert_eq!(event.ack_count, 1);
         event.add_acknowledgment();
         assert_eq!(event.status, EventStatus::Acknowledged);
+    }
+
+    #[test]
+    fn test_validate_unsigned_event() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        // Event::new creates an event with all-zero signature and pubkey
+        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::UnsignedEvent));
+    }
+
+    #[test]
+    fn test_validate_future_timestamp() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+
+        // Set timestamp 10 minutes in the future (beyond 5-minute drift)
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        event.timestamp = now_ms + 600_000; // 10 minutes ahead
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::FutureTimestamp));
+    }
+
+    #[test]
+    fn test_validate_ancient_timestamp() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+
+        // Set timestamp to 2 years ago (well beyond 1-year max age)
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let two_years_ms: u64 = 2 * 365 * 24 * 60 * 60 * 1000;
+        event.timestamp = now_ms - two_years_ms;
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::AncientTimestamp));
+    }
+
+    #[test]
+    fn test_validate_tampered_payload() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        event.sign_with_keypair(&keypair);
+
+        // Tamper with the payload — hash check should fail
+        let mut tampered = event.clone();
+        tampered.payload = vec![9, 9, 9];
+        // The id still matches the original, but compute_hash will differ
+        let result = tampered.validate();
+        assert_eq!(result, Err(EventValidationError::InvalidHash));
+    }
+
+    #[test]
+    fn test_validate_rejected_event() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        event.sign_with_keypair(&keypair);
+        event.status = EventStatus::Rejected;
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::RejectedEvent));
+    }
+
+    #[test]
+    fn test_validate_valid_signed_event() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![4, 5, 6]);
+        event.sign_with_keypair(&keypair);
+
+        // A freshly signed event with recent timestamp should pass all checks
+        let result = event.validate();
+        assert!(result.is_ok());
     }
 
     #[test]

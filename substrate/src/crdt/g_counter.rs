@@ -98,11 +98,27 @@ impl Default for GCounter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];
         n[0] = id;
         n
+    }
+
+    /// Strategy for generating arbitrary GCounter states.
+    /// Produces a GCounter by applying a random sequence of increments.
+    fn gcounter_strategy() -> impl Strategy<Value = GCounter> {
+        prop::collection::vec((any::<u8>(), 1u64..1000), 0..20)
+            .prop_map(|increments| {
+                let mut counter = GCounter::new();
+                for (node_byte, amount) in increments {
+                    let mut node_id = [0u8; 32];
+                    node_id[0] = node_byte;
+                    counter.increment(node_id, amount);
+                }
+                counter
+            })
     }
 
     #[test]
@@ -238,5 +254,69 @@ mod tests {
         let mut counter2 = GCounter::new();
         counter2.increment(n1, 1);
         assert_eq!(counter.state_hash(), counter2.state_hash());
+    }
+
+    // ── Property-based tests (proptest) ──────────────────────────────
+
+    proptest! {
+        /// For any two GCounters a, b: merge(a, b) == merge(b, a)
+        #[test]
+        fn proptest_merge_commutative(
+            a in gcounter_strategy(),
+            b in gcounter_strategy()
+        ) {
+            let merged_ab = a.merged(&b);
+            let merged_ba = b.merged(&a);
+            prop_assert_eq!(merged_ab, merged_ba);
+        }
+
+        /// For any GCounter a: merge(a, a) == a
+        #[test]
+        fn proptest_merge_idempotent(a in gcounter_strategy()) {
+            let merged = a.merged(&a);
+            prop_assert_eq!(merged, a);
+        }
+
+        /// For any three GCounters a, b, c:
+        /// merge(merge(a, b), c) == merge(a, merge(b, c))
+        #[test]
+        fn proptest_merge_associative(
+            a in gcounter_strategy(),
+            b in gcounter_strategy(),
+            c in gcounter_strategy()
+        ) {
+            let ab_then_c = a.merged(&b).merged(&c);
+            let a_then_bc = a.merged(&b.merged(&c));
+            prop_assert_eq!(ab_then_c, a_then_bc);
+        }
+
+        /// Value never decreases after increment or merge
+        #[test]
+        fn proptest_monotonic(
+            a in gcounter_strategy(),
+            b in gcounter_strategy(),
+            node_byte in any::<u8>(),
+            amount in 1u64..1000
+        ) {
+            // Increment never decreases value
+            let mut node_id = [0u8; 32];
+            node_id[0] = node_byte;
+            let mut counter = a.clone();
+            let before_inc = counter.value();
+            counter.increment(node_id, amount);
+            let after_inc = counter.value();
+            prop_assert!(after_inc >= before_inc,
+                "value decreased after increment: {} -> {}", before_inc, after_inc);
+
+            // Merge never decreases value
+            let val_a = a.value();
+            let val_b = b.value();
+            let merged = a.merged(&b);
+            let val_merged = merged.value();
+            prop_assert!(val_merged >= val_a,
+                "merged value {} < a value {}", val_merged, val_a);
+            prop_assert!(val_merged >= val_b,
+                "merged value {} < b value {}", val_merged, val_b);
+        }
     }
 }
