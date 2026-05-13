@@ -10,6 +10,7 @@
 //! Phase 0: All methods return `NotImplemented`.
 
 use super::{SettlementError, SettlementLayer};
+use crate::proof_bundle::ProofBundle;
 use async_trait::async_trait;
 
 /// Bitcoin settlement adapter.
@@ -63,6 +64,12 @@ impl SettlementLayer for BitcoinAdapter {
     ) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Bitcoin bridging requires Lightning or atomic swaps".into(),
+        ))
+    }
+
+    async fn submit_batch(&self, _bundle: &ProofBundle) -> Result<String, SettlementError> {
+        Err(SettlementError::NotImplemented(
+            "Bitcoin batch submission requires BitVM or sidechain".into(),
         ))
     }
 }

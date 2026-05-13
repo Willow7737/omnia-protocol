@@ -18,11 +18,11 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # FIX 1: Real bincode for compact binary serialization
-bincode = "3.0"
+bincode = "1"
 
 # FIX 2: Ed25519 signatures
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
-rand = "0.10"
+rand = "0.8"
 
 # FIX 4: Async runtime and libp2p networking
 tokio = { version = "1.35", features = ["full"] }

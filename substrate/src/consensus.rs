@@ -480,7 +480,6 @@ mod tests {
     use crate::crypto::generate_keypair;
     use crate::event::Event;
     use crate::vector_clock::VectorClock;
-    use rand::rngs::OsRng;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];

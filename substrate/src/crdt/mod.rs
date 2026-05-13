@@ -25,10 +25,61 @@ pub use or_set::OrSet;
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 
-/// Trait for state-based CRDTs
+/// Trait for state-based CRDTs (CvRDTs)
 ///
-/// State-based CRDTs work by replicating the entire state and merging.
-/// They are simpler to implement and reason about than operation-based CRDTs.
+/// State-based CRDTs replicate the entire state and merge it using a
+/// deterministic merge function. The merge function **must** satisfy three
+/// mathematical properties that together guarantee eventual convergence
+/// across all replicas without coordination:
+///
+/// # Mathematical Properties
+///
+/// ## 1. Commutativity
+///
+/// The order of merging does not affect the result:
+///
+/// ```text
+/// merge(A, B) = merge(B, A)    ∀ A, B ∈ S
+/// ```
+///
+/// This ensures that regardless of the order in which replicas exchange
+/// state, they arrive at the same result.
+///
+/// ## 2. Associativity
+///
+/// Grouping of merges does not affect the result:
+///
+/// ```text
+/// merge(merge(A, B), C) = merge(A, merge(B, C))    ∀ A, B, C ∈ S
+/// ```
+///
+/// This ensures that multi-replica merges converge regardless of the
+/// merge topology (star, chain, tree, etc.).
+///
+/// ## 3. Idempotency
+///
+/// Merging a state with itself yields the same state:
+///
+/// ```text
+/// merge(A, A) = A    ∀ A ∈ S
+///
+/// ```
+/// This ensures that redundant re-delivery of state (e.g., due to
+/// network retries) does not change the result.
+///
+/// # Convergence Proof Sketch
+///
+/// Given commutativity + associativity + idempotency, any set of
+/// replicas {R₁, R₂, …, Rₙ} that eventually perform pairwise merges
+/// (in any order, with possible duplicates) will converge to the
+/// same state:
+///
+/// ```text
+/// S_final = merge(R₁, merge(R₂, merge(..., Rₙ)))
+/// ```
+///
+/// The result is independent of merge order (commutativity + associativity)
+/// and of duplicate deliveries (idempotency). ∎
 pub trait CvRDT: Clone {
     /// Merge another CRDT into this one
     fn merge(&mut self, other: &Self);

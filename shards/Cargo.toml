@@ -10,12 +10,12 @@ repository = "https://github.com/Willow7737/omnia-protocol"
 [dependencies]
 omnia-substrate = { path = "../substrate" }
 serde = { version = "1.0", features = ["derive"] }
-bincode = "3.0"
+bincode = "1"
 thiserror = "2.0"
 tracing = "0.1"
 hex = "0.4"
 tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
-rand = "0.10"
+rand = "0.8"
 blake3 = "1.5"
 
 [dev-dependencies]

@@ -329,9 +329,13 @@ mod tests {
 
         assert_ne!(hash1, hash2);
 
-        // Same state -> same hash
-        let reg2 = LwwRegister::with_value(node(1), "hello");
+        // Same state -> same hash (use set_with_meta for deterministic timestamps)
+        let mut reg2 = LwwRegister::new(node(1));
+        reg2.set_with_meta("hello", reg.timestamp, reg.node_id, reg.version);
         assert_eq!(reg.state_hash(), reg2.state_hash());
+
+        // Idempotency: calling state_hash twice returns the same value
+        assert_eq!(reg.state_hash(), reg.state_hash());
     }
 
     #[test]
@@ -364,6 +368,34 @@ mod tests {
         fn proptest_merge_idempotent(a in lww_strategy()) {
             let merged = a.merged(&a);
             prop_assert_eq!(merged, a);
+        }
+
+        /// For any two LWWRegisters a, b: merge(a, b) and merge(b, a) produce
+        /// the same observable value (commutativity of observable state).
+        #[test]
+        fn proptest_merge_commutative(
+            a in lww_strategy(),
+            b in lww_strategy()
+        ) {
+            let merged_ab = a.merged(&b);
+            let merged_ba = b.merged(&a);
+            prop_assert_eq!(merged_ab.get(), merged_ba.get(),
+                "merge(a,b) and merge(b,a) produced different values");
+        }
+
+        /// For any three LWWRegisters a, b, c:
+        /// merge(merge(a, b), c) and merge(a, merge(b, c)) produce
+        /// the same observable value (associativity of observable state).
+        #[test]
+        fn proptest_merge_associative(
+            a in lww_strategy(),
+            b in lww_strategy(),
+            c in lww_strategy()
+        ) {
+            let ab_then_c = a.merged(&b).merged(&c);
+            let a_then_bc = a.merged(&b.merged(&c));
+            prop_assert_eq!(ab_then_c.get(), a_then_bc.get(),
+                "merge(merge(a,b),c) and merge(a,merge(b,c)) produced different values");
         }
 
         /// Register with higher version wins on merge; if versions are

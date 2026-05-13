@@ -5,6 +5,7 @@
 //! Future: migrate to EIP-4844 blobs for cheaper DA.
 
 use super::{SettlementError, SettlementLayer};
+use crate::proof_bundle::ProofBundle;
 use async_trait::async_trait;
 
 /// Ethereum settlement adapter.
@@ -100,6 +101,21 @@ impl SettlementLayer for EthereumAdapter {
             "[Ethereum] Withdrawal request: {} UBC from {}",
             amount,
             l2_did
+        );
+        Ok(tx_hash)
+    }
+
+    async fn submit_batch(&self, bundle: &ProofBundle) -> Result<String, SettlementError> {
+        // Phase 0: Simulate submitting a proof bundle to Ethereum.
+        // In production, this would serialize the bundle and send it to the
+        // OmniaRollup contract, which verifies the ZK proof and updates the
+        // committed state root on-chain.
+        let bundle_bytes = bundle.to_bytes().map_err(|e| SettlementError::RpcError(e.to_string()))?;
+        let tx_hash = format!("0x{}", hex::encode(blake3::hash(&bundle_bytes).as_bytes()));
+        tracing::info!(
+            "[Ethereum] Submitted proof bundle, state_root={}, tx: {}",
+            hex::encode(&bundle.state_root[..8]),
+            &tx_hash[..16]
         );
         Ok(tx_hash)
     }

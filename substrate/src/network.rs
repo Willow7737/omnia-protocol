@@ -39,6 +39,8 @@ pub enum NetworkCommand {
     Publish { topic: String, data: Vec<u8> },
     /// Subscribe to a gossipsub topic.
     Subscribe { topic: String },
+    /// Dial a specific peer at the given address.
+    Dial { peer_id: PeerId, addr: Multiaddr },
 }
 
 /// The Omnia P2P network handle.
@@ -177,6 +179,11 @@ impl OmniaNetwork {
                         Some(NetworkCommand::Subscribe { topic }) => {
                             if let Err(e) = self.subscribe(&topic) {
                                 tracing::warn!("Subscribe failed: {:?}", e);
+                            }
+                        }
+                        Some(NetworkCommand::Dial { peer_id, addr }) => {
+                            if let Err(e) = self.dial(peer_id, addr) {
+                                tracing::warn!("Dial failed: {:?}", e);
                             }
                         }
                         None => {

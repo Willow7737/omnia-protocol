@@ -6,6 +6,7 @@
 //! to consensus, the causal graph, or shard logic.
 
 use async_trait::async_trait;
+use crate::proof_bundle::ProofBundle;
 
 pub mod bitcoin;
 pub mod celestia;
@@ -52,6 +53,9 @@ pub trait SettlementLayer: Send + Sync {
         l2_did: &str,
         amount: u64,
     ) -> Result<String, SettlementError>;
+
+    /// Submit a proof bundle to the L1 for verification and settlement.
+    async fn submit_batch(&self, bundle: &ProofBundle) -> Result<String, SettlementError>;
 }
 
 /// Errors that can occur during settlement operations.

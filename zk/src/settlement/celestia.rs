@@ -6,6 +6,7 @@
 //! Phase 0: All methods return `NotImplemented`.
 
 use super::{SettlementError, SettlementLayer};
+use crate::proof_bundle::ProofBundle;
 use async_trait::async_trait;
 
 /// Celestia settlement adapter.
@@ -58,6 +59,12 @@ impl SettlementLayer for CelestiaAdapter {
     ) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Celestia has no asset layer".into(),
+        ))
+    }
+
+    async fn submit_batch(&self, _bundle: &ProofBundle) -> Result<String, SettlementError> {
+        Err(SettlementError::NotImplemented(
+            "Celestia batch submission requires blob submission via node RPC".into(),
         ))
     }
 }

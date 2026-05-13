@@ -351,6 +351,12 @@ pub enum EventValidationError {
     AncientTimestamp,
     #[error("Event is unsigned (zero signature or pubkey)")]
     UnsignedEvent,
+    #[error("Event parent references form a cycle")]
+    CircularParentReference,
+    #[error("Event references a non-existent parent")]
+    MissingParent,
+    #[error("Event has obviously invalid data (zero amount)")]
+    ZeroAmount,
 }
 
 impl fmt::Display for Event {
@@ -370,7 +376,6 @@ mod tests {
     use super::*;
     use crate::crypto::generate_keypair;
     use crate::vector_clock::VectorClock;
-    use rand::rngs::OsRng;
 
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
@@ -379,7 +384,7 @@ mod tests {
     }
 
     fn test_keypair() -> NodeKeypair {
-        NodeKeypair::generate(&mut OsRng)
+        generate_keypair()
     }
 
     #[test]
@@ -570,5 +575,168 @@ mod tests {
         assert_eq!(event.id, restored.id);
         assert_eq!(event.signature, restored.signature);
         assert_eq!(event.creator_pubkey, restored.creator_pubkey);
+    }
+
+    // ── Adversarial tests (Sprint 1, Task 1.2) ────────────────────────
+
+    /// Test that a malformed (non-zero but incorrect) signature is rejected.
+    /// This differs from the all-zero signature test: here the signature bytes
+    /// are non-zero but do not correspond to the event hash under the claimed pubkey.
+    #[test]
+    fn test_validate_malformed_signature() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        event.sign_with_keypair(&keypair);
+
+        // Replace signature with non-zero garbage that is still 64 bytes
+        let mut tampered = event.clone();
+        tampered.signature = [0xABu8; 64];
+        // The hash is still valid (we didn't change the id), but the signature
+        // won't verify against the pubkey for this event hash.
+        let result = tampered.validate();
+        assert_eq!(result, Err(EventValidationError::InvalidSignature));
+    }
+
+    /// Test that an event signed with one keypair but whose ID was then
+    /// replaced with a different hash (simulating a tampered event ID with
+    /// a valid-looking signature from a different context) is rejected.
+    #[test]
+    fn test_validate_tampered_id_with_valid_signature() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair_a = test_keypair();
+        let keypair_b = test_keypair();
+
+        // Sign with keypair A
+        let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![]);
+        event.sign_with_keypair(&keypair_a);
+
+        // Now create a different event and sign with keypair B, then swap the ID
+        let mut other_event = Event::new(creator, 1, vc, None, None, vec![9, 9, 9]);
+        other_event.sign_with_keypair(&keypair_b);
+
+        // Swap the ID and signature from other_event into event (cross-contamination)
+        let mut forged = event.clone();
+        forged.id = other_event.id;
+        // The hash won't match, so this should fail hash integrity first
+        let result = forged.validate();
+        assert_eq!(result, Err(EventValidationError::InvalidHash));
+    }
+
+    /// Test that an event with all-zero signature but non-zero pubkey is rejected.
+    #[test]
+    fn test_validate_zero_signature_nonzero_pubkey() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        event.sign_with_keypair(&keypair);
+
+        // Zero out the signature but keep the pubkey
+        event.signature = [0u8; 64];
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::UnsignedEvent));
+    }
+
+    /// Test that an event with non-zero signature but all-zero pubkey is rejected.
+    #[test]
+    fn test_validate_nonzero_signature_zero_pubkey() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        event.sign_with_keypair(&keypair);
+
+        // Zero out the pubkey but keep the signature
+        event.creator_pubkey = [0u8; 32];
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::UnsignedEvent));
+    }
+
+    /// Test that an event with a timestamp exactly at the MAX_TIMESTAMP_DRIFT_MS boundary
+    /// (just barely too far in the future) is rejected. Uses a generous margin to
+    /// avoid timing-dependent flakiness.
+    #[test]
+    fn test_validate_future_timestamp_at_boundary() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        // Set well beyond the drift limit (10 seconds margin to avoid race conditions)
+        event.timestamp = now_ms + MAX_TIMESTAMP_DRIFT_MS + 10_000;
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::FutureTimestamp));
+    }
+
+    /// Test that an event with a timestamp exactly at the MAX_EVENT_AGE_MS boundary
+    /// (just barely too old) is rejected.
+    #[test]
+    fn test_validate_ancient_timestamp_at_boundary() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        // Set exactly 1ms older than the max age
+        event.timestamp = now_ms - MAX_EVENT_AGE_MS - 1;
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert_eq!(result, Err(EventValidationError::AncientTimestamp));
+    }
+
+    /// Test that the new CircularParentReference error variant exists and is constructible.
+    #[test]
+    fn test_circular_parent_reference_error_variant() {
+        let err = EventValidationError::CircularParentReference;
+        assert_eq!(
+            format!("{}", err),
+            "Event parent references form a cycle"
+        );
+    }
+
+    /// Test that the new MissingParent error variant exists and is constructible.
+    #[test]
+    fn test_missing_parent_error_variant() {
+        let err = EventValidationError::MissingParent;
+        assert_eq!(format!("{}", err), "Event references a non-existent parent");
+    }
+
+    /// Test that the new ZeroAmount error variant exists and is constructible.
+    #[test]
+    fn test_zero_amount_error_variant() {
+        let err = EventValidationError::ZeroAmount;
+        assert_eq!(
+            format!("{}", err),
+            "Event has obviously invalid data (zero amount)"
+        );
+    }
+
+    /// Test that an event whose payload was tampered after signing fails validation
+    /// with InvalidHash (more adversarial variant with different tamper strategy).
+    #[test]
+    fn test_validate_subtly_tampered_payload() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; 100]);
+        event.sign_with_keypair(&keypair);
+
+        // Flip a single bit in the payload
+        let mut tampered = event.clone();
+        tampered.payload[50] ^= 0x01;
+        let result = tampered.validate();
+        assert_eq!(result, Err(EventValidationError::InvalidHash));
     }
 }

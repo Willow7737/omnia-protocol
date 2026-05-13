@@ -1038,4 +1038,166 @@ mod tests {
         // Graph structure is preserved
         assert_eq!(graph.len(), 5);
     }
+
+    // ── Merkle Proof Hardening Tests (Sprint 1, Task 2.4) ───────────
+
+    /// Helper: build a chain of events with distinct payloads and return their IDs.
+    fn build_chain(graph: &mut CausalGraph, node: NodeId, count: usize) -> Vec<EventId> {
+        let mut ids = Vec::new();
+        let mut prev_id = None;
+        for i in 0..count {
+            let payload = vec![i as u8; 8]; // 8-byte distinct payload per event
+            let mut event = if let Some(pid) = prev_id {
+                Event::new(
+                    node,
+                    i as u64,
+                    VectorClock::with_node(node, (i + 1) as u64),
+                    Some(pid),
+                    None,
+                    payload,
+                )
+            } else {
+                Event::genesis(node, payload)
+            };
+            event.sign(vec![1]);
+            let id = event.id;
+            graph.insert(event).unwrap();
+            prev_id = Some(id);
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// Helper: verify a Merkle proof against a known root.
+    fn verify_merkle_proof(event_id: &EventId, proof: &[( [u8; 32], bool)], root: &[u8; 32]) -> bool {
+        let leaf = blake3::hash(event_id).as_bytes().to_owned();
+        let mut current = leaf;
+        for (sibling, sibling_is_right) in proof {
+            let mut hasher = blake3::Hasher::new();
+            if *sibling_is_right {
+                hasher.update(&current);
+                hasher.update(sibling);
+            } else {
+                hasher.update(sibling);
+                hasher.update(&current);
+            }
+            current = *hasher.finalize().as_bytes();
+        }
+        current == *root
+    }
+
+    /// Test that state_root() remains identical before and after pruning.
+    ///
+    /// Pruning only clears event payloads, not event IDs. Since the Merkle tree
+    /// is built over event IDs (not payloads), the root must not change.
+    #[test]
+    fn test_state_root_unchanged_after_pruning() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let ids = build_chain(&mut graph, n1, 7);
+        assert_eq!(graph.len(), 7);
+
+        // Record root before pruning
+        let root_before = graph.state_root();
+        assert_ne!(root_before, [0u8; 32]); // Non-trivial graph
+
+        // Prune events with depth < 4 (prunes depths 1, 2, 3)
+        graph.prune_old_events(4);
+
+        // Root must be identical after pruning
+        let root_after = graph.state_root();
+        assert_eq!(
+            root_before, root_after,
+            "state_root changed after pruning — Merkle tree must be built over event IDs only"
+        );
+
+        // Verify some payloads were actually cleared
+        let size_before_prune: usize = ids.iter()
+            .map(|id| graph.get(id).unwrap().payload.len())
+            .sum();
+        // Some events should have empty payloads (pruned) and some shouldn't
+        let pruned_count = ids.iter()
+            .filter(|id| graph.get(id).unwrap().payload.is_empty())
+            .count();
+        assert!(pruned_count > 0, "No events were pruned — test is ineffective");
+        assert!(pruned_count < ids.len(), "All events were pruned — test is ineffective");
+    }
+
+    /// Test that merkle_proof() still produces valid proofs for events
+    /// that were NOT pruned (i.e., events whose payloads are intact).
+    #[test]
+    fn test_merkle_proof_valid_after_pruning_for_unpruned_events() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let ids = build_chain(&mut graph, n1, 7);
+        assert_eq!(graph.len(), 7);
+
+        // Prune events with depth < 4 (prunes depths 1, 2, 3)
+        graph.prune_old_events(4);
+
+        let root = graph.state_root();
+
+        // Find events that were NOT pruned (payload still present)
+        let unpruned_ids: Vec<EventId> = ids.iter()
+            .filter(|id| !graph.get(id).unwrap().payload.is_empty())
+            .copied()
+            .collect();
+
+        assert!(!unpruned_ids.is_empty(), "No unpruned events to test");
+
+        // Verify Merkle proofs for all unpruned events
+        for id in &unpruned_ids {
+            let proof = graph.merkle_proof(id)
+                .expect("merkle_proof should return Some for existing event");
+            assert!(
+                verify_merkle_proof(id, &proof, &root),
+                "Merkle proof failed for unpruned event after pruning"
+            );
+        }
+    }
+
+    /// Test that pruned events (with empty payloads) still have valid
+    /// Merkle proofs for their existence in the graph.
+    ///
+    /// This is critical for L1 verification: even after old events are
+    /// pruned (payloads cleared to save memory), their existence in the
+    /// DAG must still be provable via Merkle inclusion proofs.
+    #[test]
+    fn test_merkle_proof_valid_for_pruned_events() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let ids = build_chain(&mut graph, n1, 7);
+        assert_eq!(graph.len(), 7);
+
+        // Record root BEFORE pruning (root must not change)
+        let root_before = graph.state_root();
+
+        // Prune events with depth < 4 (prunes depths 1, 2, 3)
+        graph.prune_old_events(4);
+
+        // Root must be unchanged
+        let root_after = graph.state_root();
+        assert_eq!(root_before, root_after);
+
+        // Find events that WERE pruned (payload cleared)
+        let pruned_ids: Vec<EventId> = ids.iter()
+            .filter(|id| graph.get(id).unwrap().payload.is_empty())
+            .copied()
+            .collect();
+
+        assert!(!pruned_ids.is_empty(), "No pruned events to test");
+
+        // Verify Merkle proofs still work for pruned events
+        for id in &pruned_ids {
+            let proof = graph.merkle_proof(id)
+                .expect("merkle_proof should return Some for pruned event still in graph");
+            assert!(
+                verify_merkle_proof(id, &proof, &root_after),
+                "Merkle proof failed for pruned event — existence must still be provable"
+            );
+        }
+    }
 }

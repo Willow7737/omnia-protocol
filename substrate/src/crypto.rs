@@ -7,14 +7,15 @@ pub use ed25519_dalek::{Signature, SignatureError, Signer, SigningKey, Verifier,
 use rand::rngs::OsRng;
 
 /// A node keypair for signing events.
-pub type NodeKeypair = ed25519_dalek::SigningKey;
+pub type NodeKeypair = SigningKey;
 
 /// A node public key for verifying events.
-pub type NodePublicKey = ed25519_dalek::VerifyingKey;
+pub type NodePublicKey = VerifyingKey;
 
 /// Generate a new random Ed25519 keypair using OS RNG.
 pub fn generate_keypair() -> NodeKeypair {
-    NodeKeypair::generate(&mut OsRng)
+    let mut csprng = OsRng;
+    SigningKey::generate(&mut csprng)
 }
 
 #[cfg(test)]

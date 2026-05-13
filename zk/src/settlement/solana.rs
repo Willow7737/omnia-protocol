@@ -6,6 +6,7 @@
 //! Phase 0: All methods return `NotImplemented`.
 
 use super::{SettlementError, SettlementLayer};
+use crate::proof_bundle::ProofBundle;
 use async_trait::async_trait;
 
 /// Solana settlement adapter.
@@ -58,6 +59,12 @@ impl SettlementLayer for SolanaAdapter {
     ) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Solana bridging requires SPL token program".into(),
+        ))
+    }
+
+    async fn submit_batch(&self, _bundle: &ProofBundle) -> Result<String, SettlementError> {
+        Err(SettlementError::NotImplemented(
+            "Solana batch submission requires Anchor program".into(),
         ))
     }
 }
