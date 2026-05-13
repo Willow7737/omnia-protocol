@@ -43,7 +43,11 @@ impl PhysicalState {
     /// Apply a physical operation, mutating state.
     pub fn apply(&mut self, op: &PhysicalOp, vc: &VectorClock) -> Result<(), ShardError> {
         match op {
-            PhysicalOp::AnchorItem { item_id, owner, metadata } => {
+            PhysicalOp::AnchorItem {
+                item_id,
+                owner,
+                metadata,
+            } => {
                 if self.provenance.contains_key(item_id) {
                     return Err(ShardError::StateConflict(format!(
                         "Item already anchored: {:?}",

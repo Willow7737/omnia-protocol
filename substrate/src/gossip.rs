@@ -21,14 +21,22 @@ const MAX_EVENTS_PER_GOSSIP: usize = 100;
 const MAX_PENDING_EVENTS: usize = 100_000;
 const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 3000;
 
+/// Configuration for the gossip protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GossipConfig {
+    /// Interval between gossip rounds in milliseconds
     pub interval_ms: u64,
+    /// Maximum events per gossip message
     pub max_events_per_message: usize,
+    /// Number of peers to gossip to per round
     pub fanout: usize,
+    /// Timeout for peer responses in milliseconds
     pub peer_timeout_ms: u64,
+    /// Whether to use eager push strategy
     pub eager_push: bool,
+    /// Maximum number of pending events
     pub max_pending: usize,
+    /// Random seed for peer selection
     pub seed: u64,
     /// Bootstrap peer addresses to dial on startup.
     /// Stored as strings (multiaddr format, e.g. "/ip4/1.2.3.4/udp/4001/quic")
@@ -61,37 +69,60 @@ impl Default for GossipConfig {
     }
 }
 
+/// Gossip protocol statistics
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GossipStats {
+    /// Number of gossip rounds initiated
     pub rounds_initiated: u64,
+    /// Number of gossip rounds received
     pub rounds_received: u64,
+    /// Number of events sent
     pub events_sent: u64,
+    /// Number of events received
     pub events_received: u64,
+    /// Number of events accepted into the graph
     pub events_accepted: u64,
+    /// Number of events rejected
     pub events_rejected: u64,
     /// Number of events rejected specifically due to invalid signatures.
     pub messages_rejected_invalid_sig: u64,
+    /// Number of syncs completed
     pub syncs_completed: u64,
+    /// Average events per sync operation
     pub avg_events_per_sync: f64,
+    /// Time since last sync in milliseconds
     pub time_since_last_sync_ms: u64,
+    /// Number of known peers
     pub known_peers: usize,
+    /// Total bytes sent
     pub bytes_sent: u64,
+    /// Total bytes received
     pub bytes_received: u64,
 }
 
+/// A digest of gossip state for efficient synchronization
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GossipDigest {
+    /// Node identifier
     pub node_id: NodeId,
+    /// Frontier vector clock
     pub frontier: VectorClock,
+    /// Number of events known
     pub event_count: usize,
+    /// Recent event ID prefixes
     pub recent_events: Vec<[u8; 8]>,
 }
 
+/// Messages in the gossip protocol
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GossipMessage {
+    /// State digest for synchronization
     Digest(GossipDigest),
+    /// Request for missing events
     Request(EventRequest),
+    /// Batch of events
     Events(EventBatch),
+    /// Acknowledgment of received events
     Ack(Vec<[u8; 32]>),
 }
 
@@ -116,6 +147,7 @@ pub struct GossipProtocol {
     network_cmd_tx: Option<mpsc::Sender<NetworkCommand>>,
     // Network event receiver — drained into pending_events by
     // process_pending_events() so that p2p events flow through consensus.
+    /// Network event receiver
     pub network_rx: Option<mpsc::Receiver<NetworkEvent>>,
     pending_events: VecDeque<Event>,
     recent_gossip: HashSet<[u8; 32]>,
@@ -130,6 +162,7 @@ pub struct GossipProtocol {
 }
 
 impl GossipProtocol {
+    /// Create a new gossip protocol instance
     pub fn new(node_id: NodeId, config: GossipConfig, graph: Arc<RwLock<CausalGraph>>) -> Self {
         Self {
             node_id,
@@ -201,12 +234,14 @@ impl GossipProtocol {
         );
     }
 
+    /// Stop the gossip protocol
     pub fn stop(&mut self) {
         self.running = false;
         self.network_cmd_tx = None;
         info!("Gossip protocol stopped");
     }
 
+    /// Check if the gossip protocol is running
     pub fn is_running(&self) -> bool {
         self.running
     }
@@ -244,6 +279,7 @@ impl GossipProtocol {
         Ok(())
     }
 
+    /// Get gossip protocol statistics
     pub fn stats(&self) -> &GossipStats {
         &self.stats
     }
@@ -372,7 +408,7 @@ impl GossipProtocol {
         // This avoids borrow-checker conflicts between the mutable borrow
         // on network_rx and immutable borrows on other self fields.
         enum DrainedEvent {
-            Gossip { event: Event, source: PeerId },
+            Gossip { event: Box<Event>, source: PeerId },
             PeerConnected(PeerId),
             PeerDisconnected(PeerId),
         }
@@ -389,7 +425,7 @@ impl GossipProtocol {
                     }) => match Event::from_bytes(&data) {
                         Ok(event) => {
                             drained.push(DrainedEvent::Gossip {
-                                event,
+                                event: Box::new(event),
                                 source: propagation_source,
                             });
                         }
@@ -442,7 +478,7 @@ impl GossipProtocol {
 
                     if !self.seen_events.contains(&event.id) {
                         self.seen_events.insert(event.id);
-                        self.pending_events.push_back(event);
+                        self.pending_events.push_back(*event);
                         self.stats.events_received += 1;
                     }
                 }
@@ -491,17 +527,23 @@ fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     })
 }
 
+/// Errors from the gossip protocol
 #[derive(Error, Debug, Clone)]
 pub enum GossipError {
     #[error("Graph error: {0}")]
+    /// Error from the causal graph
     GraphError(String),
     #[error("Network error: {0}")]
+    /// Network communication error
     NetworkError(String),
     #[error("Serialization error: {0}")]
+    /// Serialization/deserialization error
     SerializationError(String),
     #[error("Protocol not running")]
+    /// Protocol is not running
     NotRunning,
     #[error("Event validation failed: {0}")]
+    /// Event validation failed
     ValidationFailed(String),
 }
 
@@ -709,9 +751,7 @@ mod tests {
     #[test]
     fn test_gossip_config_bootstrap_peers_custom() {
         let config = GossipConfig {
-            bootstrap_peers: vec![
-                "/ip4/1.2.3.4/udp/4001/quic/p2p/12D3KooWABSApKz".to_string()
-            ],
+            bootstrap_peers: vec!["/ip4/1.2.3.4/udp/4001/quic/p2p/12D3KooWABSApKz".to_string()],
             ..Default::default()
         };
         assert_eq!(config.bootstrap_peers.len(), 1);
@@ -743,16 +783,23 @@ mod tests {
             protocol.last_seen.insert(PeerId::random(), Instant::now());
         }
 
-        assert!(!protocol.detect_partition(), "All peers recently seen => no partition");
+        assert!(
+            !protocol.detect_partition(),
+            "All peers recently seen => no partition"
+        );
     }
 
     #[test]
     fn test_detect_partition_with_silent_peers() {
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
-        let mut protocol = GossipProtocol::new(node(1), GossipConfig {
-            partition_threshold_ms: 100,
-            ..Default::default()
-        }, graph);
+        let mut protocol = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                partition_threshold_ms: 100,
+                ..Default::default()
+            },
+            graph,
+        );
 
         // Add 3 peers: 2 silent (>100ms ago), 1 recent
         // 2/3 silent => 2*3 > 3 => 6 > 3 => partition detected
@@ -769,10 +816,14 @@ mod tests {
     #[test]
     fn test_detect_partition_below_threshold() {
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
-        let mut protocol = GossipProtocol::new(node(1), GossipConfig {
-            partition_threshold_ms: 100,
-            ..Default::default()
-        }, graph);
+        let mut protocol = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                partition_threshold_ms: 100,
+                ..Default::default()
+            },
+            graph,
+        );
 
         // Add 3 peers: 1 silent, 2 recent
         // 1/3 silent => 1*3 > 3? 3 > 3 => false => no partition
@@ -783,16 +834,23 @@ mod tests {
         protocol.last_seen.insert(PeerId::random(), now);
         protocol.last_seen.insert(PeerId::random(), now);
 
-        assert!(!protocol.detect_partition(), "1/3 peers silent => not enough for partition");
+        assert!(
+            !protocol.detect_partition(),
+            "1/3 peers silent => not enough for partition"
+        );
     }
 
     #[test]
     fn test_partition_event_transitions() {
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
-        let mut protocol = GossipProtocol::new(node(1), GossipConfig {
-            partition_threshold_ms: 100,
-            ..Default::default()
-        }, graph);
+        let mut protocol = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                partition_threshold_ms: 100,
+                ..Default::default()
+            },
+            graph,
+        );
 
         // Initially healthy
         assert_eq!(protocol.check_partition(), None);
@@ -804,7 +862,10 @@ mod tests {
         }
 
         // Should detect partition
-        assert_eq!(protocol.check_partition(), Some(GossipEvent::PartitionDetected));
+        assert_eq!(
+            protocol.check_partition(),
+            Some(GossipEvent::PartitionDetected)
+        );
 
         // Already in partition state — no new event
         assert_eq!(protocol.check_partition(), None);
@@ -816,7 +877,10 @@ mod tests {
         }
 
         // Should detect healing
-        assert_eq!(protocol.check_partition(), Some(GossipEvent::PartitionHealed));
+        assert_eq!(
+            protocol.check_partition(),
+            Some(GossipEvent::PartitionHealed)
+        );
 
         // Already healthy — no new event
         assert_eq!(protocol.check_partition(), None);

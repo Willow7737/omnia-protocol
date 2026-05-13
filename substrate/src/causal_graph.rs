@@ -10,8 +10,8 @@
 //! - Topological ordering for deterministic event sequencing
 //! - Diff calculation for efficient synchronization
 
-use crate::event::{Event, EventHeader, EventId, EventStatus};
-use crate::vector_clock::{CausalOrder, NodeId, VectorClock};
+use crate::event::{Event, EventId, EventStatus};
+use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use thiserror::Error;
@@ -26,27 +26,39 @@ const MAX_TIPS: usize = 10_000;
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum CausalGraphError {
     #[error("Event {0} already exists in graph")]
+    /// Event already exists in the graph
     DuplicateEvent(String),
     #[error("Parent event {0} not found")]
+    /// Parent event referenced but not found
     MissingParent(String),
     #[error("Cycle detected — cannot add event {0}")]
+    /// Adding this event would create a cycle
     CycleDetected(String),
     #[error("Maximum ancestry depth exceeded starting from {0}")]
+    /// Ancestry traversal exceeded maximum depth
     MaxDepthExceeded(String),
     #[error("Invalid event: {0}")]
+    /// Event failed validation
     InvalidEvent(String),
     #[error("Graph integrity check failed: {0}")]
+    /// Graph integrity violation
     IntegrityError(String),
 }
 
 /// Statistics about the causal graph
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphStats {
+    /// Total number of events in the graph
     pub total_events: usize,
+    /// Number of current tip events
     pub tip_count: usize,
+    /// Number of distinct creator nodes
     pub node_count: usize,
+    /// Maximum depth of any event
     pub max_depth: usize,
+    /// Number of finalized events
     pub finalized_events: usize,
+    /// Number of pending events
     pub pending_events: usize,
 }
 
@@ -98,10 +110,9 @@ impl CausalGraph {
 
         // Check for duplicate
         if self.events.contains_key(&event_id) {
-            return Err(CausalGraphError::DuplicateEvent(format!(
-                "{}",
-                hex::encode(&event_id[..8])
-            )));
+            return Err(CausalGraphError::DuplicateEvent(
+                hex::encode(&event_id[..8]).to_string(),
+            ));
         }
 
         // Validate event hash
@@ -133,18 +144,16 @@ impl CausalGraph {
         // Check for cycles
         if let Some(sp) = event.self_parent {
             if self.is_ancestor_of(&event_id, &sp)? {
-                return Err(CausalGraphError::CycleDetected(format!(
-                    "{}",
-                    hex::encode(&event_id[..8])
-                )));
+                return Err(CausalGraphError::CycleDetected(
+                    hex::encode(&event_id[..8]).to_string(),
+                ));
             }
         }
         if let Some(op) = event.other_parent {
             if self.is_ancestor_of(&event_id, &op)? {
-                return Err(CausalGraphError::CycleDetected(format!(
-                    "{}",
-                    hex::encode(&event_id[..8])
-                )));
+                return Err(CausalGraphError::CycleDetected(
+                    hex::encode(&event_id[..8]).to_string(),
+                ));
             }
         }
 
@@ -266,10 +275,9 @@ impl CausalGraph {
         while let Some(current_id) = queue.pop_front() {
             depth += 1;
             if depth > MAX_ANCESTRY_DEPTH {
-                return Err(CausalGraphError::MaxDepthExceeded(format!(
-                    "{}",
-                    hex::encode(&descendant[..8])
-                )));
+                return Err(CausalGraphError::MaxDepthExceeded(
+                    hex::encode(&descendant[..8]).to_string(),
+                ));
             }
 
             if let Some(event) = self.events.get(&current_id) {
@@ -298,10 +306,9 @@ impl CausalGraph {
         while let Some(current_id) = queue.pop_front() {
             depth += 1;
             if depth > MAX_ANCESTRY_DEPTH {
-                return Err(CausalGraphError::MaxDepthExceeded(format!(
-                    "{}",
-                    hex::encode(&event_id[..8])
-                )));
+                return Err(CausalGraphError::MaxDepthExceeded(
+                    hex::encode(&event_id[..8]).to_string(),
+                ));
             }
 
             if let Some(event) = self.events.get(&current_id) {
@@ -504,7 +511,8 @@ impl CausalGraph {
         ids.sort();
 
         // Build Merkle tree bottom-up
-        let mut level: Vec<[u8; 32]> = ids.iter()
+        let mut level: Vec<[u8; 32]> = ids
+            .iter()
             .map(|id| blake3::hash(&**id).as_bytes().to_owned())
             .collect();
 
@@ -538,7 +546,8 @@ impl CausalGraph {
         let pos = ids.iter().position(|&id| id == event_id)?;
         let mut proof = Vec::new();
         let mut index = pos;
-        let mut level: Vec<[u8; 32]> = ids.iter()
+        let mut level: Vec<[u8; 32]> = ids
+            .iter()
             .map(|id| blake3::hash(&**id).as_bytes().to_owned())
             .collect();
 
@@ -581,7 +590,9 @@ impl CausalGraph {
     /// memory. This is called after events have been committed to L1
     /// and are no longer needed for consensus.
     pub fn prune_old_events(&mut self, min_depth: usize) {
-        let to_prune: Vec<EventId> = self.depths.iter()
+        let to_prune: Vec<EventId> = self
+            .depths
+            .iter()
             .filter(|(_, &depth)| depth < min_depth)
             .map(|(id, _)| *id)
             .collect();
@@ -690,8 +701,11 @@ impl Default for CausalGraph {
 /// A read-only snapshot of the causal graph
 #[derive(Clone, Debug)]
 pub struct GraphSnapshot {
+    /// All events in the snapshot
     pub events: HashMap<EventId, Event>,
+    /// Current tip event IDs
     pub tips: Vec<EventId>,
+    /// Frontier vector clock
     pub frontier: VectorClock,
 }
 
@@ -1069,7 +1083,11 @@ mod tests {
     }
 
     /// Helper: verify a Merkle proof against a known root.
-    fn verify_merkle_proof(event_id: &EventId, proof: &[( [u8; 32], bool)], root: &[u8; 32]) -> bool {
+    fn verify_merkle_proof(
+        event_id: &EventId,
+        proof: &[([u8; 32], bool)],
+        root: &[u8; 32],
+    ) -> bool {
         let leaf = blake3::hash(event_id).as_bytes().to_owned();
         let mut current = leaf;
         for (sibling, sibling_is_right) in proof {
@@ -1113,15 +1131,23 @@ mod tests {
         );
 
         // Verify some payloads were actually cleared
-        let size_before_prune: usize = ids.iter()
+        let size_before_prune: usize = ids
+            .iter()
             .map(|id| graph.get(id).unwrap().payload.len())
             .sum();
         // Some events should have empty payloads (pruned) and some shouldn't
-        let pruned_count = ids.iter()
+        let pruned_count = ids
+            .iter()
             .filter(|id| graph.get(id).unwrap().payload.is_empty())
             .count();
-        assert!(pruned_count > 0, "No events were pruned — test is ineffective");
-        assert!(pruned_count < ids.len(), "All events were pruned — test is ineffective");
+        assert!(
+            pruned_count > 0,
+            "No events were pruned — test is ineffective"
+        );
+        assert!(
+            pruned_count < ids.len(),
+            "All events were pruned — test is ineffective"
+        );
     }
 
     /// Test that merkle_proof() still produces valid proofs for events
@@ -1140,7 +1166,8 @@ mod tests {
         let root = graph.state_root();
 
         // Find events that were NOT pruned (payload still present)
-        let unpruned_ids: Vec<EventId> = ids.iter()
+        let unpruned_ids: Vec<EventId> = ids
+            .iter()
             .filter(|id| !graph.get(id).unwrap().payload.is_empty())
             .copied()
             .collect();
@@ -1149,7 +1176,8 @@ mod tests {
 
         // Verify Merkle proofs for all unpruned events
         for id in &unpruned_ids {
-            let proof = graph.merkle_proof(id)
+            let proof = graph
+                .merkle_proof(id)
                 .expect("merkle_proof should return Some for existing event");
             assert!(
                 verify_merkle_proof(id, &proof, &root),
@@ -1183,7 +1211,8 @@ mod tests {
         assert_eq!(root_before, root_after);
 
         // Find events that WERE pruned (payload cleared)
-        let pruned_ids: Vec<EventId> = ids.iter()
+        let pruned_ids: Vec<EventId> = ids
+            .iter()
             .filter(|id| graph.get(id).unwrap().payload.is_empty())
             .copied()
             .collect();
@@ -1192,7 +1221,8 @@ mod tests {
 
         // Verify Merkle proofs still work for pruned events
         for id in &pruned_ids {
-            let proof = graph.merkle_proof(id)
+            let proof = graph
+                .merkle_proof(id)
                 .expect("merkle_proof should return Some for pruned event still in graph");
             assert!(
                 verify_merkle_proof(id, &proof, &root_after),

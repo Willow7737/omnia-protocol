@@ -87,7 +87,11 @@ async fn test_bitcoin_adapter_not_implemented() {
     let result = adapter.post_batch(b"test").await;
     assert!(result.is_err());
     let err_msg = result.unwrap_err().to_string();
-    assert!(err_msg.contains("Not implemented") || err_msg.contains("NotImplemented"), "Unexpected error: {}", err_msg);
+    assert!(
+        err_msg.contains("Not implemented") || err_msg.contains("NotImplemented"),
+        "Unexpected error: {}",
+        err_msg
+    );
 }
 
 #[tokio::test]
@@ -104,9 +108,7 @@ async fn test_solana_adapter_not_implemented() {
     let adapter = SolanaAdapter;
     assert_eq!(adapter.chain_id(), "solana");
 
-    let result = adapter
-        .verify_proof(&[0u8; 32], &[1u8; 32], &[])
-        .await;
+    let result = adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[]).await;
     assert!(result.is_err());
 }
 

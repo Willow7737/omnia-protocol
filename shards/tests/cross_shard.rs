@@ -17,7 +17,11 @@ fn test_node(id: u8) -> NodeId {
 }
 
 /// Create a signed event with the given payload, creator, and keypair.
-fn create_test_event_with_keypair(creator: NodeId, payload: Vec<u8>, keypair: &NodeKeypair) -> Event {
+fn create_test_event_with_keypair(
+    creator: NodeId,
+    payload: Vec<u8>,
+    keypair: &NodeKeypair,
+) -> Event {
     let vc = VectorClock::with_node(creator, 1);
     let mut event = Event::new(creator, 0, vc, None, None, payload);
     event.sign_with_keypair(keypair);
@@ -51,8 +55,11 @@ fn test_financial_transfer_lifecycle() {
         operation: ShardOp::Financial(mint_op),
         nonce: 1,
     };
-    let mint_event = create_test_event_with_keypair(test_node(1), mint_payload.to_bytes(), &sender_keypair);
-    router.route_event(&mint_event).expect("Mint should succeed");
+    let mint_event =
+        create_test_event_with_keypair(test_node(1), mint_payload.to_bytes(), &sender_keypair);
+    router
+        .route_event(&mint_event)
+        .expect("Mint should succeed");
 
     // Transfer tokens from sender to recipient
     // The sender's account is identified by event.creator_pubkey
@@ -65,8 +72,11 @@ fn test_financial_transfer_lifecycle() {
         operation: ShardOp::Financial(transfer_op),
         nonce: 2,
     };
-    let transfer_event = create_test_event_with_keypair(test_node(1), transfer_payload.to_bytes(), &sender_keypair);
-    router.route_event(&transfer_event).expect("Transfer should succeed");
+    let transfer_event =
+        create_test_event_with_keypair(test_node(1), transfer_payload.to_bytes(), &sender_keypair);
+    router
+        .route_event(&transfer_event)
+        .expect("Transfer should succeed");
 
     // Check that we can mint to the same account again
     let mint_op2 = FinancialOp::Mint {
@@ -79,7 +89,9 @@ fn test_financial_transfer_lifecycle() {
         nonce: 3,
     };
     let mint_event2 = create_test_event(test_node(1), mint_payload2.to_bytes());
-    router.route_event(&mint_event2).expect("Second mint should succeed");
+    router
+        .route_event(&mint_event2)
+        .expect("Second mint should succeed");
 }
 
 #[test]
@@ -122,7 +134,9 @@ fn test_identity_did_lifecycle() {
         nonce: 1,
     };
     let create_event = create_test_event(owner, create_payload.to_bytes());
-    router.route_event(&create_event).expect("Create DID should succeed");
+    router
+        .route_event(&create_event)
+        .expect("Create DID should succeed");
 
     // Try to create the same DID again (should fail)
     let doc2 = omnia_shards::DidDocument::new(did.clone(), owner, 2000);
@@ -212,7 +226,9 @@ fn test_burn_operation() {
         nonce: 1,
     };
     let mint_event = create_test_event(minter, mint_payload.to_bytes());
-    router.route_event(&mint_event).expect("Mint should succeed");
+    router
+        .route_event(&mint_event)
+        .expect("Mint should succeed");
 
     // Burn some tokens
     let burn_op = FinancialOp::Burn {
@@ -225,7 +241,9 @@ fn test_burn_operation() {
         nonce: 2,
     };
     let burn_event = create_test_event(minter, burn_payload.to_bytes());
-    router.route_event(&burn_event).expect("Burn should succeed");
+    router
+        .route_event(&burn_event)
+        .expect("Burn should succeed");
 
     // Try to burn more than the balance
     let overburn_op = FinancialOp::Burn {

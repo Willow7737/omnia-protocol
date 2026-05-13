@@ -4,10 +4,10 @@
 //! actually mutating state. This is used for pre-flight checks and for
 //! rejecting invalid operations before they enter the consensus pipeline.
 
-use crate::payload::ShardOp;
-use crate::shard::ShardError;
 use super::ops::FinancialOp;
 use super::state::FinancialState;
+use crate::payload::ShardOp;
+use crate::shard::ShardError;
 
 /// Validator for the Financial shard.
 ///
@@ -90,7 +90,10 @@ mod tests {
     }
 
     /// Helper: create a signed event from the given keypair with the given payload.
-    fn make_signed_event(keypair: &omnia_substrate::crypto::NodeKeypair, payload: Vec<u8>) -> Event {
+    fn make_signed_event(
+        keypair: &omnia_substrate::crypto::NodeKeypair,
+        payload: Vec<u8>,
+    ) -> Event {
         let creator = keypair.verifying_key().to_bytes();
         let vc = VectorClock::with_node(creator, 1);
         let mut event = Event::new(creator, 0, vc, None, None, payload);
@@ -101,7 +104,9 @@ mod tests {
     /// Helper: create a FinancialState with a single account having the given balance.
     fn state_with_balance(account: AccountId, balance: u64) -> FinancialState {
         let mut state = FinancialState::new();
-        state.balances.insert(account, AccountBalance::with_balance(balance));
+        state
+            .balances
+            .insert(account, AccountBalance::with_balance(balance));
         state.total_supply = balance;
         state
     }
@@ -399,10 +404,7 @@ mod tests {
         let event = make_signed_event(&keypair, vec![1]);
 
         let result = state.apply(&mint, &event);
-        assert!(
-            result.is_ok(),
-            "Mint to new account should succeed"
-        );
+        assert!(result.is_ok(), "Mint to new account should succeed");
 
         // Account should now exist with the minted balance
         assert_eq!(state.balance_of(&new_account), 200);
@@ -572,7 +574,10 @@ mod tests {
         // For Burn, the event's creator_pubkey doesn't matter — Burn takes `from` from the op
         let keypair2 = generate_keypair();
         let burn_event = make_signed_event(&keypair2, vec![1]);
-        assert!(state.apply(&burn, &burn_event).is_ok(), "Burn should succeed");
+        assert!(
+            state.apply(&burn, &burn_event).is_ok(),
+            "Burn should succeed"
+        );
         assert_eq!(state.balance_of(&sender_pubkey), 20);
 
         // Now try to transfer 50 — should fail (only 20 left)

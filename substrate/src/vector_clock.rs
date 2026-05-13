@@ -24,11 +24,17 @@ pub type LogicalClock = u64;
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum VectorClockError {
     #[error("Cannot compare vector clocks: node IDs are incompatible")]
+    /// Node IDs are incompatible for comparison
     IncompatibleNodes,
     #[error("Invalid node ID: {0}")]
+    /// The node ID is invalid
     InvalidNodeId(String),
     #[error("Clock overflow detected for node {node:?}")]
-    ClockOverflow { node: NodeId },
+    /// A clock value overflowed
+    ClockOverflow {
+        /// The node whose clock overflowed
+        node: NodeId,
+    },
 }
 
 /// VectorClock tracks the logical time across all known nodes.
@@ -508,9 +514,12 @@ mod tests {
         let merged_b = vc_b.merged(&vc_partition);
 
         // The happened_before relationship must still hold after merge
-        assert!(merged_a.happened_before(&merged_b),
+        assert!(
+            merged_a.happened_before(&merged_b),
             "happened_before not preserved after merge: {:?} vs {:?}",
-            merged_a, merged_b);
+            merged_a,
+            merged_b
+        );
     }
 
     /// Test a multi-round partition reconciliation scenario.
@@ -549,7 +558,7 @@ mod tests {
         vc2.merge(&vc3);
         // But vc2 is missing n1's updates from round 2
         assert_eq!(vc2.get(&n1), 0); // vc2 doesn't know about n1
-        // After final reconciliation between vc1 and vc2
+                                     // After final reconciliation between vc1 and vc2
         vc2.merge(&vc1);
         assert_eq!(vc2.get(&n1), 6);
         assert_eq!(vc2.get(&n2), 3);

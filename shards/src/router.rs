@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use omnia_substrate::Event;
 
 use crate::cross_shard::CrossShardMessage;
-use crate::payload::{ShardPayload, ShardOp};
+use crate::payload::{ShardOp, ShardPayload};
 use crate::shard::{Shard, ShardError, ShardId};
 
 /// Routes shard events to the appropriate shard handler.
@@ -106,9 +106,10 @@ impl ShardRouter {
         let creator = event.creator_pubkey;
         let last_nonce = self.last_nonces.get(&creator).copied().unwrap_or(0);
         if payload.nonce <= last_nonce {
-            return Err(ShardError::ValidationFailed(
-                format!("Replay detected: nonce {} <= last {}", payload.nonce, last_nonce)
-            ));
+            return Err(ShardError::ValidationFailed(format!(
+                "Replay detected: nonce {} <= last {}",
+                payload.nonce, last_nonce
+            )));
         }
         self.last_nonces.insert(creator, payload.nonce);
 

@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use omnia_substrate::{Event, VectorClock};
 use serde::{Deserialize, Serialize};
 
-use crate::shard::ShardError;
 use super::ops::{AccountId, FinancialOp};
+use crate::shard::ShardError;
 
 /// A single account's balance with causal tracking.
 ///
@@ -118,10 +118,9 @@ impl FinancialState {
                 let vc = &event.vector_clock;
 
                 // Debit the sender
-                let from_balance = self
-                    .balances
-                    .get_mut(&from)
-                    .ok_or_else(|| ShardError::ValidationFailed("Sender account not found".into()))?;
+                let from_balance = self.balances.get_mut(&from).ok_or_else(|| {
+                    ShardError::ValidationFailed("Sender account not found".into())
+                })?;
 
                 if from_balance.value() < *amount {
                     return Err(ShardError::ValidationFailed("Insufficient balance".into()));
@@ -129,20 +128,14 @@ impl FinancialState {
                 from_balance.decrement(*amount, vc)?;
 
                 // Credit the recipient
-                let to_balance = self
-                    .balances
-                    .entry(*to)
-                    .or_insert_with(AccountBalance::new);
+                let to_balance = self.balances.entry(*to).or_default();
                 to_balance.increment(*amount, vc);
 
                 Ok(())
             }
             FinancialOp::Mint { to, amount } => {
                 let vc = &event.vector_clock;
-                let balance = self
-                    .balances
-                    .entry(*to)
-                    .or_insert_with(AccountBalance::new);
+                let balance = self.balances.entry(*to).or_default();
                 balance.increment(*amount, vc);
                 self.total_supply += amount;
                 Ok(())
@@ -184,13 +177,16 @@ impl FinancialState {
     /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         if bytes.is_empty() {
-            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                "Empty state bytes".into(),
+            )));
         }
         let version = bytes[0];
         if version != Self::FINANCIAL_STATE_VERSION {
-            return Err(Box::new(bincode::ErrorKind::Custom(
-                format!("Unsupported financial state version: {}", version),
-            )));
+            return Err(Box::new(bincode::ErrorKind::Custom(format!(
+                "Unsupported financial state version: {}",
+                version
+            ))));
         }
         bincode::deserialize(&bytes[1..])
     }

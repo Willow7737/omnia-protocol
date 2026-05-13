@@ -6,7 +6,7 @@
 //! Layer's ProvenanceTracker works alongside the existing PhysicalShard.
 
 use omnia_binding::{
-    CommitmentPhase, PhysicalAnchor, ProvenanceLog, ProvenanceTracker, PqPublicKey,
+    CommitmentPhase, PhysicalAnchor, PqPublicKey, ProvenanceLog, ProvenanceTracker,
     QuantumCommitment, RfFingerprint,
 };
 use omnia_substrate::VectorClock;

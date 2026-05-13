@@ -3,10 +3,10 @@
 //! Pre-flight validation for DID operations. Checks whether an operation
 //! would succeed without actually mutating state.
 
-use crate::payload::ShardOp;
-use crate::shard::ShardError;
 use super::ops::IdentityOp;
 use super::state::IdentityState;
+use crate::payload::ShardOp;
+use crate::shard::ShardError;
 
 /// Validator for the Identity shard.
 pub struct IdentityValidator;

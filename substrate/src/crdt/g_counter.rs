@@ -69,7 +69,7 @@ impl GCounter {
         let mut hasher = Sha256::new();
         for (node, count) in &self.counts {
             hasher.update(node);
-            hasher.update(&count.to_le_bytes());
+            hasher.update(count.to_le_bytes());
         }
         hasher.finalize().into()
     }
@@ -109,16 +109,15 @@ mod tests {
     /// Strategy for generating arbitrary GCounter states.
     /// Produces a GCounter by applying a random sequence of increments.
     fn gcounter_strategy() -> impl Strategy<Value = GCounter> {
-        prop::collection::vec((any::<u8>(), 1u64..1000), 0..20)
-            .prop_map(|increments| {
-                let mut counter = GCounter::new();
-                for (node_byte, amount) in increments {
-                    let mut node_id = [0u8; 32];
-                    node_id[0] = node_byte;
-                    counter.increment(node_id, amount);
-                }
-                counter
-            })
+        prop::collection::vec((any::<u8>(), 1u64..1000), 0..20).prop_map(|increments| {
+            let mut counter = GCounter::new();
+            for (node_byte, amount) in increments {
+                let mut node_id = [0u8; 32];
+                node_id[0] = node_byte;
+                counter.increment(node_id, amount);
+            }
+            counter
+        })
     }
 
     #[test]

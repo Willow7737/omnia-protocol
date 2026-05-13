@@ -10,8 +10,8 @@
 //! 7. Reputation decay for inactive voters
 
 use omnia_economics::{
-    EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken,
-    UsefulWorkProof, UsefulWorkType, VoteChoice, DEFAULT_UBC_QUOTA,
+    EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof,
+    UsefulWorkType, VoteChoice, DEFAULT_UBC_QUOTA,
 };
 
 /// Helper: create a non-zero result hash.
@@ -41,7 +41,13 @@ fn test_ubc_spend_success() {
 fn test_ubc_spend_insufficient() {
     let mut token = UbcToken::new("did:omnia:alice".to_string(), 100, 0);
     let result = token.spend(200);
-    assert!(matches!(result, Err(EconomicsError::InsufficientUbc { have: 100, need: 200 })));
+    assert!(matches!(
+        result,
+        Err(EconomicsError::InsufficientUbc {
+            have: 100,
+            need: 200
+        })
+    ));
 }
 
 #[test]
@@ -89,10 +95,16 @@ fn test_quota_system_register_and_spend() {
     system.register_did("did:omnia:alice");
 
     assert!(system.is_registered("did:omnia:alice"));
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA)
+    );
 
     assert!(system.spend("did:omnia:alice", 300).is_ok());
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 300)
+    );
 }
 
 #[test]
@@ -107,11 +119,17 @@ fn test_quota_system_advance_epoch() {
     let mut system = QuotaSystem::default_system();
     system.register_did("did:omnia:alice");
     system.spend("did:omnia:alice", 800).unwrap();
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 800));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 800)
+    );
 
     system.advance_epoch();
     assert_eq!(system.current_epoch, 1);
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA)
+    );
 }
 
 #[test]
@@ -121,7 +139,10 @@ fn test_quota_system_reward() {
     system.spend("did:omnia:alice", 500).unwrap();
 
     system.reward("did:omnia:alice", 200).unwrap();
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 500 + 200));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 500 + 200)
+    );
 }
 
 #[test]
@@ -150,7 +171,10 @@ fn test_useful_work_proof_zero_compute_units() {
         0,
         vec![1, 2, 3, 4],
     );
-    assert!(matches!(proof.validate(), Err(EconomicsError::WorkProofInvalid)));
+    assert!(matches!(
+        proof.validate(),
+        Err(EconomicsError::WorkProofInvalid)
+    ));
 }
 
 #[test]
@@ -183,7 +207,8 @@ fn test_governance_decay() {
     assert_eq!(gov.effective_weight("did:omnia:alice", 0), 10);
 
     // After voting at epoch 0, then 1 epoch of inactivity
-    gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 0).ok();
+    gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 0)
+        .ok();
     // Now last_active = 0, current_epoch = 1
     // inactive = 1, decay = 10 * 0.9^1 = 9
     assert_eq!(gov.effective_weight("did:omnia:alice", 1), 9);
@@ -199,15 +224,18 @@ fn test_governance_voting() {
 
     let mut gov = GovernanceState::new(0.1);
     gov.set_weight("did:omnia:alice", 100); // weight = 10
-    gov.set_weight("did:omnia:bob", 400);   // weight = 20
+    gov.set_weight("did:omnia:bob", 400); // weight = 20
 
-    gov.create_proposal("prop1".into(), "Test proposal".into(), 10, 0).unwrap();
+    gov.create_proposal("prop1".into(), "Test proposal".into(), 10, 0)
+        .unwrap();
 
     // Alice votes For (weight 10)
-    gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 0).unwrap();
+    gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 0)
+        .unwrap();
 
     // Bob votes Against (weight 20)
-    gov.vote("did:omnia:bob", "prop1", VoteChoice::Against, 0).unwrap();
+    gov.vote("did:omnia:bob", "prop1", VoteChoice::Against, 0)
+        .unwrap();
 
     let proposal = gov.get_proposal("prop1").unwrap();
     assert_eq!(proposal.votes_for, 10);
@@ -222,7 +250,8 @@ fn test_governance_expired_proposal() {
     let mut gov = GovernanceState::new(0.1);
     gov.set_weight("did:omnia:alice", 100);
 
-    gov.create_proposal("prop1".into(), "Expires soon".into(), 5, 0).unwrap();
+    gov.create_proposal("prop1".into(), "Expires soon".into(), 5, 0)
+        .unwrap();
 
     // Voting after expiration fails
     let result = gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 6);
@@ -250,15 +279,40 @@ fn test_economics_state_full_lifecycle() {
     let epoch = state.current_epoch();
 
     // Step 1: Register two DIDs
-    state.apply(&EconomicsOp::RegisterDid { did: "did:omnia:alice".into() }, epoch).unwrap();
-    state.apply(&EconomicsOp::RegisterDid { did: "did:omnia:bob".into() }, epoch).unwrap();
+    state
+        .apply(
+            &EconomicsOp::RegisterDid {
+                did: "did:omnia:alice".into(),
+            },
+            epoch,
+        )
+        .unwrap();
+    state
+        .apply(
+            &EconomicsOp::RegisterDid {
+                did: "did:omnia:bob".into(),
+            },
+            epoch,
+        )
+        .unwrap();
 
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA));
     assert_eq!(state.balance_of("did:omnia:bob"), Some(DEFAULT_UBC_QUOTA));
 
     // Step 2: Alice spends UBC
-    state.apply(&EconomicsOp::SpendUbc { did: "did:omnia:alice".into(), amount: 300 }, epoch).unwrap();
-    assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300));
+    state
+        .apply(
+            &EconomicsOp::SpendUbc {
+                did: "did:omnia:alice".into(),
+                amount: 300,
+            },
+            epoch,
+        )
+        .unwrap();
+    assert_eq!(
+        state.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 300)
+    );
 
     // Step 3: Alice submits useful work for a reward
     let proof = UsefulWorkProof::new(
@@ -270,8 +324,19 @@ fn test_economics_state_full_lifecycle() {
         500, // 500 compute units → 500 UBC reward
         vec![1, 2, 3, 4],
     );
-    state.apply(&EconomicsOp::SubmitWork { did: "did:omnia:alice".into(), proof }, epoch).unwrap();
-    assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300 + 500));
+    state
+        .apply(
+            &EconomicsOp::SubmitWork {
+                did: "did:omnia:alice".into(),
+                proof,
+            },
+            epoch,
+        )
+        .unwrap();
+    assert_eq!(
+        state.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 300 + 500)
+    );
 
     // Step 4: Advance epoch — balances reset
     state.apply(&EconomicsOp::AdvanceEpoch, 0).unwrap();
@@ -280,33 +345,48 @@ fn test_economics_state_full_lifecycle() {
     assert_eq!(state.balance_of("did:omnia:bob"), Some(DEFAULT_UBC_QUOTA));
 
     // Step 5: Create a governance proposal
-    state.apply(&EconomicsOp::CreateProposal {
-        id: "prop1".into(),
-        description: "Increase UBC quota".into(),
-        expires_at_epoch: 5,
-    }, 1).unwrap();
+    state
+        .apply(
+            &EconomicsOp::CreateProposal {
+                id: "prop1".into(),
+                description: "Increase UBC quota".into(),
+                expires_at_epoch: 5,
+            },
+            1,
+        )
+        .unwrap();
 
     // Step 6: Set voting weights and vote
     // Note: set_weight sets last_active=0, so at epoch 1 there is 1 epoch of
     // inactivity decay (10%). Alice's effective weight = 10 * 0.9 = 9,
     // Bob's effective weight = 20 * 0.9 = 18.
     state.governance.set_weight("did:omnia:alice", 100); // base weight = 10
-    state.governance.set_weight("did:omnia:bob", 400);   // base weight = 20
+    state.governance.set_weight("did:omnia:bob", 400); // base weight = 20
 
-    state.apply(&EconomicsOp::Vote {
-        did: "did:omnia:alice".into(),
-        proposal_id: "prop1".into(),
-        choice: VoteChoice::For,
-    }, 1).unwrap();
+    state
+        .apply(
+            &EconomicsOp::Vote {
+                did: "did:omnia:alice".into(),
+                proposal_id: "prop1".into(),
+                choice: VoteChoice::For,
+            },
+            1,
+        )
+        .unwrap();
 
-    state.apply(&EconomicsOp::Vote {
-        did: "did:omnia:bob".into(),
-        proposal_id: "prop1".into(),
-        choice: VoteChoice::Against,
-    }, 1).unwrap();
+    state
+        .apply(
+            &EconomicsOp::Vote {
+                did: "did:omnia:bob".into(),
+                proposal_id: "prop1".into(),
+                choice: VoteChoice::Against,
+            },
+            1,
+        )
+        .unwrap();
 
     let proposal = state.governance.get_proposal("prop1").unwrap();
-    assert_eq!(proposal.votes_for, 9);   // 10 * 0.9^1 = 9
+    assert_eq!(proposal.votes_for, 9); // 10 * 0.9^1 = 9
     assert_eq!(proposal.votes_against, 18); // 20 * 0.9^1 = 18
     assert!(!proposal.passes());
 }
@@ -314,13 +394,31 @@ fn test_economics_state_full_lifecycle() {
 #[test]
 fn test_economics_serialization_roundtrip() {
     let mut state = EconomicsState::new();
-    state.apply(&EconomicsOp::RegisterDid { did: "did:omnia:alice".into() }, 0).unwrap();
-    state.apply(&EconomicsOp::SpendUbc { did: "did:omnia:alice".into(), amount: 100 }, 0).unwrap();
+    state
+        .apply(
+            &EconomicsOp::RegisterDid {
+                did: "did:omnia:alice".into(),
+            },
+            0,
+        )
+        .unwrap();
+    state
+        .apply(
+            &EconomicsOp::SpendUbc {
+                did: "did:omnia:alice".into(),
+                amount: 100,
+            },
+            0,
+        )
+        .unwrap();
 
     let bytes = state.to_bytes();
     let restored = EconomicsState::from_bytes(&bytes).unwrap();
 
-    assert_eq!(restored.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 100));
+    assert_eq!(
+        restored.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 100)
+    );
 }
 
 #[test]
@@ -331,7 +429,10 @@ fn test_quota_system_double_register_no_op() {
 
     // Re-registering should not reset the balance
     system.register_did("did:omnia:alice");
-    assert_eq!(system.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 500));
+    assert_eq!(
+        system.balance_of("did:omnia:alice"),
+        Some(DEFAULT_UBC_QUOTA - 500)
+    );
 }
 
 #[test]
@@ -339,7 +440,8 @@ fn test_governance_duplicate_proposal() {
     use omnia_economics::GovernanceState;
 
     let mut gov = GovernanceState::new(0.1);
-    gov.create_proposal("prop1".into(), "First".into(), 10, 0).unwrap();
+    gov.create_proposal("prop1".into(), "First".into(), 10, 0)
+        .unwrap();
 
     let result = gov.create_proposal("prop1".into(), "Duplicate".into(), 10, 0);
     assert!(matches!(result, Err(EconomicsError::DuplicateProposal(_))));
