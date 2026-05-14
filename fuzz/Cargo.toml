@@ -1,0 +1,37 @@
+[package]
+name = "omnia-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+omnia-substrate = { path = "../substrate" }
+omnia-shards = { path = "../shards" }
+
+[[bin]]
+name = "causal_graph_insert"
+path = "fuzz_targets/causal_graph_insert.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "event_validate"
+path = "fuzz_targets/event_validate.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "shard_route"
+path = "fuzz_targets/shard_route.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "vector_clock_merge"
+path = "fuzz_targets/vector_clock_merge.rs"
+test = false
+doc = false

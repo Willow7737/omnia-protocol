@@ -1,0 +1,54 @@
+name: Nightly Fuzz & Security
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+      - run: cargo install cargo-fuzz --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-fuzz"
+      - run: |
+          for target in causal_graph_insert event_validate shard_route vector_clock_merge; do
+            if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
+              echo "=== Fuzzing $target ==="
+              timeout 300 cargo fuzz run $target -- -max_total_time=300 || true
+            else
+              echo "Fuzz target $target not found — skipping"
+            fi
+          done
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-${{ github.run_id }}
+          path: fuzz/corpus/
+          retention-days: 7
+
+  security-scan:
+    name: Deep Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit --json > audit-report.json
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-${{ github.run_id }}
+          path: audit-report.json
+          retention-days: 30

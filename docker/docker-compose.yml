@@ -1,0 +1,163 @@
+version: "3.8"
+
+services:
+  omnia-bootstrap:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-bootstrap
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=bootstrap
+      - OMNIA_BOOTSTRAP_NODES=
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/9090
+      - OMNIA_TOTAL_NODES=5
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9090:9090/tcp"
+      - "9090:9090/udp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - bootstrap-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  omnia-node-1:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-1
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=node1
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/9090/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/9091
+      - OMNIA_TOTAL_NODES=5
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9091:9091/tcp"
+      - "9091:9091/udp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node1-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  omnia-node-2:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-2
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=node2
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/9090/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/9092
+      - OMNIA_TOTAL_NODES=5
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9092:9092/tcp"
+      - "9092:9092/udp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node2-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  omnia-node-3:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-3
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=node3
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/9090/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/9093
+      - OMNIA_TOTAL_NODES=5
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9093:9093/tcp"
+      - "9093:9093/udp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node3-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  omnia-node-4:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-4
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=node4
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/9090/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/9094
+      - OMNIA_TOTAL_NODES=5
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9094:9094/tcp"
+      - "9094:9094/udp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node4-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: omnia-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9095:9090"
+    networks:
+      - omnia-testnet
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: omnia-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=omnia-admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - omnia-testnet
+    profiles:
+      - monitoring
+
+networks:
+  omnia-testnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  bootstrap-data:
+  node1-data:
+  node2-data:
+  node3-data:
+  node4-data:
+  prometheus-data:
+  grafana-data:
