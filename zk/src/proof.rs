@@ -1,33 +1,46 @@
 //! Proof generation and verification utilities.
 //!
 //! This module provides helper functions for working with ZK proofs
-//! in the rollup context. Phase 0 uses hash-chain stubs; production
-//! will integrate with arkworks for Groth16/PLONK proofs.
+//! in the rollup context. Production code uses Groth16 verification
+//! via the [`prover`](crate::prover) module; legacy stub functions
+//! are retained for test compatibility only.
 
-/// Minimum proof size in bytes for Phase 0 stub verification.
+use crate::prover::{self, Proof, ProverError, VerifyingKey};
+
+/// Minimum proof size in bytes for compatibility checks.
+///
+/// A Groth16 proof on Bn254 consists of three group elements
+/// (2 G1 + 1 G2), which serializes to a fixed size. This constant
+/// is kept for backward compatibility with existing proof-bundle
+/// integrity checks.
 pub const MIN_PROOF_SIZE: usize = 32;
 
-/// Generate a dummy proof for Phase 0.
+/// Verify a Groth16 proof against a verifying key and public inputs.
 ///
-/// In production, this would invoke the ZK prover (Groth16, PLONK, or STARK).
-/// The dummy proof is a fixed-size byte vector that passes the Phase 0
-/// stub verifier.
-pub fn generate_dummy_proof() -> Vec<u8> {
-    vec![0xAB; 192]
-}
-
-/// Verify a Phase 0 stub proof.
+/// This is the production verification function. It deserializes the
+/// proof from bytes and delegates to [`prover::verify_proof`].
 ///
-/// A stub proof is considered valid if it is non-empty and at least
-/// [`MIN_PROOF_SIZE`] bytes long. This is a placeholder for the real
-/// verification logic that will check Groth16/PLONK proofs on L1.
-pub fn verify_stub_proof(proof: &[u8]) -> bool {
-    !proof.is_empty() && proof.len() >= MIN_PROOF_SIZE
+/// # Arguments
+///
+/// * `vk` — The Groth16 verifying key
+/// * `public_inputs` — The public inputs (expected new state root)
+/// * `proof_bytes` — The serialized Groth16 proof
+///
+/// # Errors
+///
+/// Returns [`ProverError`] if deserialization or verification fails.
+pub fn verify_groth16_proof(
+    vk: &VerifyingKey,
+    public_inputs: &[ark_bn254::Fr],
+    proof_bytes: &[u8],
+) -> Result<bool, ProverError> {
+    let proof: Proof = prover::deserialize_proof(proof_bytes)?;
+    prover::verify_proof(vk, public_inputs, &proof)
 }
 
 /// Compute a commitment hash for a batch of events.
 ///
-/// This is used as a stand-in for a real ZK proof in Phase 0.
+/// This is used as a stand-in for a real ZK proof commitment.
 /// The commitment is a BLAKE3 hash of the old state root, the
 /// serialized events, and the new state root.
 pub fn compute_batch_commitment(
@@ -42,6 +55,30 @@ pub fn compute_batch_commitment(
     *hasher.finalize().as_bytes()
 }
 
+// ---------------------------------------------------------------------------
+// Test-only stub functions (legacy Phase 0 compatibility)
+// ---------------------------------------------------------------------------
+
+/// Generate a dummy proof for test compatibility.
+///
+/// This produces a fixed-size byte vector that passes the legacy
+/// stub verifier. It is **not** a real ZK proof and must only be
+/// used in tests.
+#[cfg(test)]
+pub fn generate_dummy_proof() -> Vec<u8> {
+    vec![0xBB; 192]
+}
+
+/// Verify a Phase 0 stub proof (test-only).
+///
+/// A stub proof is considered valid if it is non-empty and at least
+/// [`MIN_PROOF_SIZE`] bytes long. This is a legacy placeholder for
+/// testing only — production code uses [`verify_groth16_proof`].
+#[cfg(test)]
+pub fn verify_stub_proof(proof: &[u8]) -> bool {
+    !proof.is_empty() && proof.len() >= MIN_PROOF_SIZE
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,7 +87,7 @@ mod tests {
     fn test_generate_dummy_proof() {
         let proof = generate_dummy_proof();
         assert_eq!(proof.len(), 192);
-        assert!(proof.iter().all(|&b| b == 0xAB));
+        assert!(proof.iter().all(|&b| b == 0xBB));
     }
 
     #[test]

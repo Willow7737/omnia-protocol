@@ -19,6 +19,7 @@
 
 use crate::causal_graph::CausalGraph;
 use crate::event::{Event, EventId};
+use crate::slashing::{SlashOffense, SlashingEngine};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -115,6 +116,8 @@ pub struct ConsensusEngine {
     committed_count: u64,
     /// The last finalized vector clock
     _last_finalized: VectorClock,
+    /// Slashing engine for Byzantine fault penalties
+    slashing: SlashingEngine,
 }
 
 impl ConsensusEngine {
@@ -129,6 +132,7 @@ impl ConsensusEngine {
             node_info: HashMap::new(),
             committed_count: 0,
             _last_finalized: VectorClock::new(),
+            slashing: SlashingEngine::default(),
         }
     }
 
@@ -147,6 +151,34 @@ impl ConsensusEngine {
         // Skip if already processed
         if self.event_states.contains_key(&event_id) {
             return Ok(Vec::new());
+        }
+
+        // Check if the node is slashed — reject events from slashed validators
+        if self.slashing.is_slashed(&creator) {
+            tracing::warn!(
+                node = ?&creator[..4],
+                event = ?&event_id[..4],
+                "Rejecting event from slashed node"
+            );
+            return Err(ConsensusError::NodeSlashed(creator));
+        }
+
+        // Check for equivocation — same creator + sequence, different EventId
+        if let Some(info) = self.node_info.get(&creator) {
+            if let Some(last_event_id) = info.last_event {
+                if let Some(last_event) = graph.get(&last_event_id) {
+                    if SlashingEngine::check_equivocation(last_event, event) {
+                        let outcome = self
+                            .slashing
+                            .record_offense(creator, SlashOffense::Equivocation);
+                        tracing::warn!(
+                            node = ?&creator[..4],
+                            outcome = ?outcome,
+                            "Equivocation detected in process_event"
+                        );
+                    }
+                }
+            }
         }
 
         // Update node info
@@ -436,6 +468,43 @@ impl ConsensusEngine {
             .filter_map(|(id, _)| self.event_rounds.get(id).map(|&round| (*id, round)))
             .collect()
     }
+
+    /// Register a validator with the slashing engine.
+    ///
+    /// Delegates to [`SlashingEngine::register_validator`]. The validator
+    /// will be tracked for slashing purposes with the given stake.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` — The `NodeId` of the validator.
+    /// * `stake` — The amount of stake the validator is bonding.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use omnia_substrate::ConsensusEngine;
+    /// let mut engine = ConsensusEngine::new(config);
+    /// engine.register_validator(node_id, 10_000);
+    /// ```
+    pub fn register_validator(&mut self, node: NodeId, stake: u64) {
+        self.slashing.register_validator(node, stake);
+    }
+
+    /// Check if a node has been slashed.
+    ///
+    /// Delegates to [`SlashingEngine::is_slashed`].
+    ///
+    /// # Arguments
+    ///
+    /// * `node` — The `NodeId` to query.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the node's accumulated slash points meet or exceed the
+    /// slash threshold.
+    pub fn is_slashed(&self, node: &NodeId) -> bool {
+        self.slashing.is_slashed(node)
+    }
 }
 
 /// Consensus statistics
@@ -470,6 +539,9 @@ pub enum ConsensusError {
     #[error("Not enough nodes for consensus (need at least 4, got {0})")]
     /// Insufficient nodes for Byzantine fault tolerance
     InsufficientNodes(usize),
+    #[error("Node has been slashed: {0:?}")]
+    /// The node has been slashed and its events are rejected
+    NodeSlashed(NodeId),
 }
 
 #[cfg(test)]

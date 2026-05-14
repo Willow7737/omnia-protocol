@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::error::EconomicsError;
+use crate::fixed_point::DecayRate;
 use crate::governance::{GovernanceState, VoteChoice};
 use crate::quota::QuotaSystem;
 use crate::useful_work::UsefulWorkProof;
@@ -96,13 +97,13 @@ impl EconomicsState {
     pub fn new() -> Self {
         Self {
             quota: QuotaSystem::default_system(),
-            governance: GovernanceState::new(0.1),
+            governance: GovernanceState::new(DecayRate::ten_percent()),
             verified_work: HashMap::new(),
         }
     }
 
     /// Create a new economics state with custom parameters.
-    pub fn with_params(default_quota: u64, epoch_duration_ms: u64, decay_rate: f64) -> Self {
+    pub fn with_params(default_quota: u64, epoch_duration_ms: u64, decay_rate: DecayRate) -> Self {
         Self {
             quota: QuotaSystem::new(default_quota, epoch_duration_ms),
             governance: GovernanceState::new(decay_rate),

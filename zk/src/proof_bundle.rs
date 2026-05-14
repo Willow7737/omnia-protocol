@@ -191,7 +191,7 @@ mod tests {
         ProofBundle::new(
             prev,
             new_root,
-            vec![0xAB; 192], // Phase 0 dummy proof
+            vec![0xBB; 192], // Test dummy proof bytes
             [2u8; 32],
             eth_anchor(),
         )

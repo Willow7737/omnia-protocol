@@ -96,6 +96,10 @@ pub enum ShardError {
     /// The requested shard was not found in the router.
     #[error("Unknown shard: {0}")]
     UnknownShard(String),
+
+    /// The caller does not have enough UBC quota to pay the fee.
+    #[error("Insufficient fee: {0}")]
+    InsufficientFee(String),
 }
 
 /// The core trait that every domain shard must implement.

@@ -10,7 +10,7 @@
 //! 7. Reputation decay for inactive voters
 
 use omnia_economics::{
-    EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof,
+    DecayRate, EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof,
     UsefulWorkType, VoteChoice, DEFAULT_UBC_QUOTA,
 };
 
@@ -86,7 +86,7 @@ fn test_ubc_reward_additive() {
     let mut token = UbcToken::new("did:omnia:alice".to_string(), 1000, 0);
     token.spend(500).unwrap();
     token.reward(300);
-    assert_eq!(token.balance, 800); // 500 - 500 + 300 = 300... wait, 1000-500+300 = 800
+    assert_eq!(token.balance, 800);
 }
 
 #[test]
@@ -181,13 +181,13 @@ fn test_useful_work_proof_zero_compute_units() {
 fn test_governance_quadratic_weight() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.1);
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
-    // Alice has 100 stake → sqrt(100) = 10 weight
+    // Alice has 100 stake → isqrt(100) = 10 weight
     gov.set_weight("did:omnia:alice", 100);
     assert_eq!(gov.voting_weights.get("did:omnia:alice"), Some(&10));
 
-    // Bob has 10000 stake → sqrt(10000) = 100 weight
+    // Bob has 10000 stake → isqrt(10000) = 100 weight
     gov.set_weight("did:omnia:bob", 10000);
     assert_eq!(gov.voting_weights.get("did:omnia:bob"), Some(&100));
 
@@ -200,7 +200,7 @@ fn test_governance_quadratic_weight() {
 fn test_governance_decay() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.1); // 10% decay per epoch
+    let mut gov = GovernanceState::new(DecayRate::ten_percent()); // 10% decay per epoch
     gov.set_weight("did:omnia:alice", 100); // base weight = 10
 
     // At epoch 0, full weight
@@ -210,19 +210,22 @@ fn test_governance_decay() {
     gov.vote("did:omnia:alice", "prop1", VoteChoice::For, 0)
         .ok();
     // Now last_active = 0, current_epoch = 1
-    // inactive = 1, decay = 10 * 0.9^1 = 9
+    // inactive = 1, remaining_ppm = 900_000
+    // effective = 10 * 900_000 / 1_000_000 = 9
     assert_eq!(gov.effective_weight("did:omnia:alice", 1), 9);
 
-    // After 5 more epochs of inactivity (total 6 from epoch 0)
-    // inactive = 6, decay = 10 * 0.9^6 ≈ 5.3 → 5
-    assert_eq!(gov.effective_weight("did:omnia:alice", 6), 5);
+    // After more epochs of inactivity
+    // inactive = 6, remaining = 900_000^6 / 1_000_000^6
+    // Computed iteratively: should be approximately 5.3 → 5
+    let weight_at_6 = gov.effective_weight("did:omnia:alice", 6);
+    assert_eq!(weight_at_6, 5);
 }
 
 #[test]
 fn test_governance_voting() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.1);
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
     gov.set_weight("did:omnia:alice", 100); // weight = 10
     gov.set_weight("did:omnia:bob", 400); // weight = 20
 
@@ -247,7 +250,7 @@ fn test_governance_voting() {
 fn test_governance_expired_proposal() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.1);
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
     gov.set_weight("did:omnia:alice", 100);
 
     gov.create_proposal("prop1".into(), "Expires soon".into(), 5, 0)
@@ -262,7 +265,7 @@ fn test_governance_expired_proposal() {
 fn test_governance_inactive_voter() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.5); // 50% decay per epoch
+    let mut gov = GovernanceState::new(DecayRate::from_percent(50)); // 50% decay per epoch
     gov.set_weight("did:omnia:alice", 100); // weight = 10
 
     // After many inactive epochs, weight decays to 0
@@ -357,9 +360,9 @@ fn test_economics_state_full_lifecycle() {
         .unwrap();
 
     // Step 6: Set voting weights and vote
-    // Note: set_weight sets last_active=0, so at epoch 1 there is 1 epoch of
-    // inactivity decay (10%). Alice's effective weight = 10 * 0.9 = 9,
-    // Bob's effective weight = 20 * 0.9 = 18.
+    // With fixed-point, set_weight sets last_active=0, so at epoch 1 there is
+    // 1 epoch of inactivity decay (10%). Alice's effective weight = 10 * 900_000 / 1_000_000 = 9,
+    // Bob's effective weight = 20 * 900_000 / 1_000_000 = 18.
     state.governance.set_weight("did:omnia:alice", 100); // base weight = 10
     state.governance.set_weight("did:omnia:bob", 400); // base weight = 20
 
@@ -386,8 +389,8 @@ fn test_economics_state_full_lifecycle() {
         .unwrap();
 
     let proposal = state.governance.get_proposal("prop1").unwrap();
-    assert_eq!(proposal.votes_for, 9); // 10 * 0.9^1 = 9
-    assert_eq!(proposal.votes_against, 18); // 20 * 0.9^1 = 18
+    assert_eq!(proposal.votes_for, 9); // 10 * 900_000 / 1_000_000 = 9
+    assert_eq!(proposal.votes_against, 18); // 20 * 900_000 / 1_000_000 = 18
     assert!(!proposal.passes());
 }
 
@@ -439,10 +442,72 @@ fn test_quota_system_double_register_no_op() {
 fn test_governance_duplicate_proposal() {
     use omnia_economics::GovernanceState;
 
-    let mut gov = GovernanceState::new(0.1);
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
     gov.create_proposal("prop1".into(), "First".into(), 10, 0)
         .unwrap();
 
     let result = gov.create_proposal("prop1".into(), "Duplicate".into(), 10, 0);
     assert!(matches!(result, Err(EconomicsError::DuplicateProposal(_))));
+}
+
+#[test]
+fn test_governance_determinism_10k_calls() {
+    use omnia_economics::GovernanceState;
+
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
+    gov.set_weight("did:omnia:alice", 100);
+
+    // Call effective_weight 10,000 times — all results must be identical
+    let first = gov.effective_weight("did:omnia:alice", 5);
+    for _ in 0..10_000 {
+        assert_eq!(
+            gov.effective_weight("did:omnia:alice", 5),
+            first,
+            "effective_weight is not deterministic"
+        );
+    }
+}
+
+#[test]
+fn test_governance_edge_cases() {
+    use omnia_economics::fixed_point::BASIS_PPM;
+    use omnia_economics::GovernanceState;
+
+    // Zero base weight
+    let gov = GovernanceState::new(DecayRate::ten_percent());
+    assert_eq!(gov.effective_weight("unknown", 0), 0);
+
+    // Zero inactive epochs
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
+    gov.set_weight("alice", 100);
+    assert_eq!(gov.effective_weight("alice", 0), 10);
+
+    // Zero decay rate
+    let mut gov = GovernanceState::new(DecayRate::new(0));
+    gov.set_weight("alice", 100);
+    assert_eq!(gov.effective_weight("alice", 100), 10);
+
+    // Full decay rate (100%)
+    let mut gov = GovernanceState::new(DecayRate::new(BASIS_PPM));
+    gov.set_weight("alice", 100);
+    assert_eq!(gov.effective_weight("alice", 1), 0);
+}
+
+#[test]
+fn test_governance_quadratic_voting_isqrt() {
+    use omnia_economics::GovernanceState;
+
+    let mut gov = GovernanceState::new(DecayRate::ten_percent());
+
+    // 100 stake → isqrt(100) = 10
+    gov.set_weight("alice", 100);
+    assert_eq!(gov.voting_weights.get("alice"), Some(&10));
+
+    // 0 stake → minimum weight of 1
+    gov.set_weight("zero", 0);
+    assert_eq!(gov.voting_weights.get("zero"), Some(&1));
+
+    // u64::MAX stake → isqrt(u64::MAX) = 4294967295
+    gov.set_weight("whale", u64::MAX);
+    assert_eq!(gov.voting_weights.get("whale"), Some(&4294967295));
 }

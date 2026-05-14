@@ -45,26 +45,26 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-4.1** | Provenance Log (append-only CRDT) | P0 | ✅ Completed |
 | **REQ-4.2** | Provenance Tracker (lifecycle) | P1 | ✅ Completed |
 | **REQ-4.3** | RF Fingerprint Hashing | P2 | 🔄 Stub |
-| **REQ-4.4** | Quantum Commitment | P2 | 🔄 Stub |
+| **REQ-4.4** | Quantum Commitment (Ed25519 + Dilithium) | P2 | ✅ Completed |
 
 ## 5. Economics & Governance
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
 | **REQ-5.1** | UBC Token (soulbound quota) | P0 | ✅ Completed |
-| **REQ-5.2** | Quadratic Voting + Decay | P1 | ✅ Completed |
+| **REQ-5.2** | Quadratic Voting + Integer Decay (PPM fixed-point) | P1 | ✅ Completed |
 | **REQ-5.3** | Proof-of-Useful-Work | P2 | 🔄 Stub |
 
 ## 6. Future Requirements
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
-| **REQ-6.1** | Real ZK Circuit (arkworks R1CS) | P0 | 🌑 Not Started |
-| **REQ-6.2** | Real PQC Signatures (Dilithium) | P0 | 🌑 Not Started |
-| **REQ-6.3** | Fee Mechanism | P1 | 🌑 Not Started |
+| **REQ-6.1** | Real ZK Circuit (arkworks R1CS + Groth16) | P0 | ✅ Completed |
+| **REQ-6.2** | Real PQC Signatures (Dilithium) | P0 | ✅ Completed |
+| **REQ-6.3** | Fee Mechanism (FeeSchedule + QuotaSystem) | P1 | ✅ Completed |
 | **REQ-6.4** | Mobile Wallet | P1 | 🌑 Not Started |
 | **REQ-6.5** | Validator Network | P0 | 🌑 Not Started |
-| **REQ-6.6** | Slashing | P1 | 🌑 Not Started |
+| **REQ-6.6** | Slashing (Equivocation, Liveness, InvalidAttestation) | P1 | ✅ Completed |
 | **REQ-6.7** | Conviction Voting | P2 | 🌑 Not Started |
 | **REQ-6.8** | Delegation | P2 | 🌑 Not Started |
 
@@ -77,10 +77,10 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Core Protocol** | 8 | 8 | 0 | 0 | ██████████ 100% |
 | **Identity** | 7 | 7 | 0 | 0 | ██████████ 100% |
 | **Financial & Settlement** | 6 | 6 | 0 | 0 | ██████████ 100% |
-| **Physical Binding** | 4 | 2 | 2 | 0 | █████░░░░░ 50% |
+| **Physical Binding** | 4 | 3 | 1 | 0 | ████████░░ 75% |
 | **Economics** | 3 | 2 | 1 | 0 | ███████░░░ 67% |
-| **Future** | 8 | 0 | 0 | 8 | ░░░░░░░░░░ 0% |
-| **TOTAL** | **36** | **25** | **3** | **8** | ███████░░░ 69% |
+| **Future** | 8 | 4 | 0 | 4 | █████░░░░░ 50% |
+| **TOTAL** | **36** | **29** | **2** | **4** | ████████░░ 81% |
 
 ---
 *Legend:*

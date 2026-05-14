@@ -124,14 +124,31 @@ mod tests {
     use crate::provenance::ProvenanceLog;
     use crate::quantum_commit::QuantumCommitment;
     use crate::rf_fingerprint::RfFingerprint;
-    use omnia_substrate::VectorClock;
+    use omnia_substrate::{generate_keypair, NodeKeypair, VectorClock};
 
     fn test_rf(did: &str, hash: [u8; 32]) -> RfFingerprint {
         RfFingerprint::stub(did, hash)
     }
 
-    fn test_commitment(data: &[u8]) -> QuantumCommitment {
-        QuantumCommitment::new_stub(data, VectorClock::new())
+    fn test_keypair_and_pk() -> (NodeKeypair, PqPublicKey) {
+        let kp = generate_keypair();
+        let pk = PqPublicKey {
+            ed25519: kp.verifying_key().to_bytes(),
+            dilithium: Vec::new(),
+        };
+        (kp, pk)
+    }
+
+    fn test_commitment_signed(data: &[u8], kp: &NodeKeypair) -> QuantumCommitment {
+        QuantumCommitment::sign_classical(data, kp).unwrap()
+    }
+
+    fn test_commitment_with_vc(
+        data: &[u8],
+        kp: &NodeKeypair,
+        _vc: &VectorClock,
+    ) -> QuantumCommitment {
+        QuantumCommitment::sign_classical(data, kp).unwrap()
     }
 
     fn test_anchor_id() -> [u8; 32] {
@@ -140,51 +157,47 @@ mod tests {
 
     #[test]
     fn test_create_and_verify_anchor() {
+        let (kp, pk) = test_keypair_and_pk();
         let rf_hash = [0x55u8; 32];
         let rf = test_rf("did:omnia:factory", rf_hash);
+        let vc = VectorClock::new();
 
         // Create provenance log first so we can commit to its bytes
         let provenance = ProvenanceLog::new(
             test_anchor_id(),
             "did:omnia:factory".to_string(),
             test_rf("did:omnia:factory", rf_hash),
-            test_commitment(b"creation"),
+            test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
 
         // Create commitment over the provenance log bytes (as verify() expects)
-        let commitment = test_commitment(&provenance.to_bytes());
+        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
-        let pk = PqPublicKey {
-            ed25519: [0u8; 32],
-            dilithium: Vec::new(),
-        };
 
-        // Verify with matching RF
+        // Verify with matching RF and correct public key
         assert!(anchor.verify(&rf_hash, &pk));
     }
 
     #[test]
     fn test_verify_fails_with_wrong_rf() {
+        let (kp, pk) = test_keypair_and_pk();
         let rf_hash = [0x55u8; 32];
         let wrong_rf = [0xFFu8; 32];
         let rf = test_rf("did:omnia:factory", rf_hash);
+        let vc = VectorClock::new();
 
         let provenance = ProvenanceLog::new(
             test_anchor_id(),
             "did:omnia:factory".to_string(),
             test_rf("did:omnia:factory", rf_hash),
-            test_commitment(b"creation"),
+            test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
-        let commitment = test_commitment(&provenance.to_bytes());
+        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
-        let pk = PqPublicKey {
-            ed25519: [0u8; 32],
-            dilithium: Vec::new(),
-        };
 
         // Verify with wrong RF should fail
         assert!(!anchor.verify(&wrong_rf, &pk));
@@ -192,17 +205,19 @@ mod tests {
 
     #[test]
     fn test_verify_chain_only() {
+        let (kp, _) = test_keypair_and_pk();
         let rf_hash = [0x55u8; 32];
         let rf = test_rf("did:omnia:factory", rf_hash);
+        let vc = VectorClock::new();
 
         let provenance = ProvenanceLog::new(
             test_anchor_id(),
             "did:omnia:factory".to_string(),
             test_rf("did:omnia:factory", rf_hash),
-            test_commitment(b"creation"),
+            test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
-        let commitment = test_commitment(&provenance.to_bytes());
+        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
         assert!(anchor.verify_chain_only());
@@ -210,24 +225,26 @@ mod tests {
 
     #[test]
     fn test_current_holder() {
+        let (kp, _) = test_keypair_and_pk();
         let rf_hash = [0x55u8; 32];
         let rf = test_rf("did:omnia:alice", rf_hash);
+        let vc = VectorClock::new();
 
         let mut provenance = ProvenanceLog::new(
             test_anchor_id(),
             "did:omnia:alice".to_string(),
             test_rf("did:omnia:alice", rf_hash),
-            test_commitment(b"creation"),
+            test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
 
         provenance.transfer(
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob", [0x66u8; 32]),
-            test_commitment(b"transfer1"),
+            test_commitment_signed(b"transfer1", &kp),
         );
 
-        let commitment = test_commitment(&provenance.to_bytes());
+        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
         assert_eq!(anchor.current_holder(), "did:omnia:bob");
     }

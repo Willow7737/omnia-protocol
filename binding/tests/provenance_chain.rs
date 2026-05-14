@@ -9,21 +9,25 @@ use omnia_binding::{
     CommitmentPhase, PhysicalAnchor, PqPublicKey, ProvenanceLog, ProvenanceTracker,
     QuantumCommitment, RfFingerprint,
 };
-use omnia_substrate::VectorClock;
+use omnia_substrate::{generate_keypair, NodeKeypair, VectorClock};
 
 fn make_rf(did: &str, hash: [u8; 32]) -> RfFingerprint {
     RfFingerprint::stub(did, hash)
 }
 
-fn make_commitment(data: &[u8]) -> QuantumCommitment {
-    QuantumCommitment::new_stub(data, VectorClock::new())
+/// Create a keypair and corresponding PqPublicKey for testing.
+fn make_keypair_and_pk() -> (NodeKeypair, PqPublicKey) {
+    let kp = generate_keypair();
+    let pk = PqPublicKey {
+        ed25519: kp.verifying_key().to_bytes(),
+        dilithium: Vec::new(),
+    };
+    (kp, pk)
 }
 
-fn make_pk() -> PqPublicKey {
-    PqPublicKey {
-        ed25519: [0u8; 32],
-        dilithium: Vec::new(),
-    }
+/// Create a cryptographically signed commitment using Ed25519.
+fn make_commitment(data: &[u8], kp: &NodeKeypair) -> QuantumCommitment {
+    QuantumCommitment::sign_classical(data, kp).unwrap()
 }
 
 fn item_id(n: u8) -> [u8; 32] {
@@ -38,6 +42,7 @@ fn item_id(n: u8) -> [u8; 32] {
 
 #[test]
 fn test_provenance_chain_lifecycle() {
+    let (kp, _pk) = make_keypair_and_pk();
     let item = item_id(1);
     let anchor_id = [0xCDu8; 32];
 
@@ -46,7 +51,7 @@ fn test_provenance_chain_lifecycle() {
         item,
         "did:omnia:factory".to_string(),
         make_rf("did:omnia:factory", [0x11u8; 32]),
-        make_commitment(b"creation"),
+        make_commitment(b"creation", &kp),
         anchor_id,
     );
 
@@ -58,7 +63,7 @@ fn test_provenance_chain_lifecycle() {
     log.transfer(
         "did:omnia:distributor".to_string(),
         make_rf("did:omnia:distributor", [0x22u8; 32]),
-        make_commitment(b"transfer_factory_dist"),
+        make_commitment(b"transfer_factory_dist", &kp),
     );
     assert_eq!(log.len(), 2);
     assert_eq!(log.current_holder, "did:omnia:distributor");
@@ -68,7 +73,7 @@ fn test_provenance_chain_lifecycle() {
     log.transfer(
         "did:omnia:retailer".to_string(),
         make_rf("did:omnia:retailer", [0x33u8; 32]),
-        make_commitment(b"transfer_dist_retail"),
+        make_commitment(b"transfer_dist_retail", &kp),
     );
     assert_eq!(log.len(), 3);
     assert_eq!(log.current_holder, "did:omnia:retailer");
@@ -78,7 +83,7 @@ fn test_provenance_chain_lifecycle() {
     log.transfer(
         "did:omnia:customer".to_string(),
         make_rf("did:omnia:customer", [0x44u8; 32]),
-        make_commitment(b"transfer_retail_customer"),
+        make_commitment(b"transfer_retail_customer", &kp),
     );
     assert_eq!(log.len(), 4);
     assert_eq!(log.current_holder, "did:omnia:customer");
@@ -87,7 +92,7 @@ fn test_provenance_chain_lifecycle() {
     // Step 5: Verify the item at the customer's location
     log.verify(
         make_rf("did:omnia:customer", [0x44u8; 32]),
-        make_commitment(b"customer_verification"),
+        make_commitment(b"customer_verification", &kp),
     );
     assert_eq!(log.len(), 5);
     assert!(log.verify_chain());
@@ -99,6 +104,7 @@ fn test_provenance_chain_lifecycle() {
 
 #[test]
 fn test_tracker_supply_chain() {
+    let (kp, _pk) = make_keypair_and_pk();
     let mut tracker = ProvenanceTracker::new();
     let item = item_id(42);
 
@@ -108,7 +114,7 @@ fn test_tracker_supply_chain() {
             item,
             "did:omnia:miner".to_string(),
             make_rf("did:omnia:miner", [0xA0u8; 32]),
-            make_commitment(b"mined_diamond"),
+            make_commitment(b"mined_diamond", &kp),
             [0xEFu8; 32],
         )
         .unwrap();
@@ -119,7 +125,7 @@ fn test_tracker_supply_chain() {
             item,
             "did:omnia:cutter".to_string(),
             make_rf("did:omnia:cutter", [0xB0u8; 32]),
-            make_commitment(b"miner_to_cutter"),
+            make_commitment(b"miner_to_cutter", &kp),
         )
         .unwrap();
 
@@ -129,7 +135,7 @@ fn test_tracker_supply_chain() {
             item,
             "did:omnia:grader".to_string(),
             make_rf("did:omnia:grader", [0xC0u8; 32]),
-            make_commitment(b"cutter_to_grader"),
+            make_commitment(b"cutter_to_grader", &kp),
         )
         .unwrap();
 
@@ -139,7 +145,7 @@ fn test_tracker_supply_chain() {
             item,
             "did:omnia:jeweler".to_string(),
             make_rf("did:omnia:jeweler", [0xD0u8; 32]),
-            make_commitment(b"grader_to_jeweler"),
+            make_commitment(b"grader_to_jeweler", &kp),
         )
         .unwrap();
 
@@ -151,11 +157,12 @@ fn test_tracker_supply_chain() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 3: PhysicalAnchor verification
+// Test 3: PhysicalAnchor verification with real signatures
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_physical_anchor_verification() {
+    let (kp, pk) = make_keypair_and_pk();
     let rf_hash = [0x77u8; 32];
     let item = item_id(7);
 
@@ -163,12 +170,12 @@ fn test_physical_anchor_verification() {
         item,
         "did:omnia:creator".to_string(),
         make_rf("did:omnia:creator", rf_hash),
-        make_commitment(b"anchor_data"),
+        make_commitment(b"anchor_data", &kp),
         [0xFFu8; 32],
     );
 
     // Create commitment over the provenance log bytes (as verify() expects)
-    let commitment = make_commitment(&provenance.to_bytes());
+    let commitment = make_commitment(&provenance.to_bytes(), &kp);
 
     let anchor = PhysicalAnchor::new(
         make_rf("did:omnia:creator", rf_hash),
@@ -176,9 +183,7 @@ fn test_physical_anchor_verification() {
         provenance,
     );
 
-    let pk = make_pk();
-
-    // Verification with correct RF should succeed
+    // Verification with correct RF and public key should succeed
     assert!(anchor.verify(&rf_hash, &pk));
 
     // Verification with wrong RF should fail
@@ -192,19 +197,20 @@ fn test_physical_anchor_verification() {
 
 #[test]
 fn test_provenance_serialization_roundtrip() {
+    let (kp, _pk) = make_keypair_and_pk();
     let item = item_id(9);
     let mut log = ProvenanceLog::new(
         item,
         "did:omnia:origin".to_string(),
         make_rf("did:omnia:origin", [0xAAu8; 32]),
-        make_commitment(b"origin"),
+        make_commitment(b"origin", &kp),
         [0xBBu8; 32],
     );
 
     log.transfer(
         "did:omnia:next".to_string(),
         make_rf("did:omnia:next", [0xCCu8; 32]),
-        make_commitment(b"transfer"),
+        make_commitment(b"transfer", &kp),
     );
 
     let bytes = log.to_bytes();
@@ -217,14 +223,14 @@ fn test_provenance_serialization_roundtrip() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 5: Quantum commitment verification
+// Test 5: Quantum commitment verification with real Ed25519 signatures
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_quantum_commitment_data_integrity() {
+    let (kp, pk) = make_keypair_and_pk();
     let data = b"important physical event data";
-    let commitment = QuantumCommitment::new_stub(data, VectorClock::new());
-    let pk = make_pk();
+    let commitment = QuantumCommitment::sign_classical(data, &kp).unwrap();
 
     // Correct data should verify
     assert!(commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly));
@@ -256,6 +262,7 @@ fn test_rf_fingerprint_matching() {
 
 #[test]
 fn test_destroyed_item_no_transfer() {
+    let (kp, _pk) = make_keypair_and_pk();
     let mut tracker = ProvenanceTracker::new();
     let item = item_id(5);
 
@@ -264,7 +271,7 @@ fn test_destroyed_item_no_transfer() {
             item,
             "did:omnia:owner".to_string(),
             make_rf("did:omnia:owner", [0x55u8; 32]),
-            make_commitment(b"creation"),
+            make_commitment(b"creation", &kp),
             [0xCCu8; 32],
         )
         .unwrap();
@@ -274,7 +281,7 @@ fn test_destroyed_item_no_transfer() {
     let mut log = anchor.provenance_log.clone();
     log.destroy(
         make_rf("did:omnia:owner", [0x55u8; 32]),
-        make_commitment(b"destruction"),
+        make_commitment(b"destruction", &kp),
     );
 
     // The provenance log should now be marked as destroyed
@@ -287,6 +294,7 @@ fn test_destroyed_item_no_transfer() {
 
 #[test]
 fn test_double_anchor_rejected() {
+    let (kp, _pk) = make_keypair_and_pk();
     let mut tracker = ProvenanceTracker::new();
     let item = item_id(10);
 
@@ -295,7 +303,7 @@ fn test_double_anchor_rejected() {
             item,
             "did:omnia:creator".to_string(),
             make_rf("did:omnia:creator", [0x11u8; 32]),
-            make_commitment(b"creation"),
+            make_commitment(b"creation", &kp),
             [0xDDu8; 32],
         )
         .unwrap();
@@ -305,7 +313,7 @@ fn test_double_anchor_rejected() {
         item,
         "did:omnia:other".to_string(),
         make_rf("did:omnia:other", [0x22u8; 32]),
-        make_commitment(b"creation2"),
+        make_commitment(b"creation2", &kp),
         [0xEEu8; 32],
     );
 
@@ -319,7 +327,8 @@ fn test_double_anchor_rejected() {
 #[test]
 fn test_binding_layer_with_physical_shard() {
     use omnia_shards::{PhysicalOp, PhysicalState};
-    use omnia_substrate::VectorClock;
+
+    let (kp, _pk) = make_keypair_and_pk();
 
     // Create existing PhysicalShard state
     let mut physical_state = PhysicalState::new();
@@ -342,7 +351,7 @@ fn test_binding_layer_with_physical_shard() {
             item,
             "did:omnia:miner".to_string(),
             make_rf("did:omnia:miner", [0x11u8; 32]),
-            make_commitment(b"mined_diamond"),
+            make_commitment(b"mined_diamond", &kp),
             [0xAAu8; 32],
         )
         .unwrap();
@@ -360,7 +369,7 @@ fn test_binding_layer_with_physical_shard() {
             item,
             "did:omnia:jeweler".to_string(),
             make_rf("did:omnia:jeweler", [0x22u8; 32]),
-            make_commitment(b"miner_to_jeweler"),
+            make_commitment(b"miner_to_jeweler", &kp),
         )
         .unwrap();
 

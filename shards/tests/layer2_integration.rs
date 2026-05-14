@@ -50,7 +50,7 @@ async fn test_financial_shard_wired_into_substrate() {
     let mut substrate = Substrate::new(config);
 
     // 2. Create shard router with financial shard, shared via Arc<Mutex>
-    let router = Arc::new(Mutex::new(ShardRouter::new()));
+    let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
     router
         .lock()
         .unwrap()
@@ -122,7 +122,7 @@ async fn test_identity_shard_wired_into_substrate() {
     let mut substrate = Substrate::new(config);
 
     // 2. Create shard router with identity shard, shared via Arc<Mutex>
-    let router = Arc::new(Mutex::new(ShardRouter::new()));
+    let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
     router
         .lock()
         .unwrap()

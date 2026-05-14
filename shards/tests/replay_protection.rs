@@ -29,7 +29,7 @@ fn create_test_event_with_keypair(
 
 #[test]
 fn test_replay_protection() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
 
     let keypair = generate_keypair();
@@ -70,7 +70,7 @@ fn test_replay_protection() {
 
 #[test]
 fn test_replay_protection_different_creators() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
 
     let keypair1 = generate_keypair();
@@ -102,7 +102,7 @@ fn test_replay_protection_different_creators() {
 
 #[test]
 fn test_economics_shard_wired() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(EconomicsShard::new()));
 
     // Verify economics shard is registered
@@ -113,7 +113,7 @@ fn test_economics_shard_wired() {
 
 #[test]
 fn test_economics_shard_route_event() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(EconomicsShard::new()));
 
     let keypair = generate_keypair();
@@ -131,7 +131,7 @@ fn test_economics_shard_route_event() {
 
 #[test]
 fn test_all_six_shards_registered() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
     router.register(Box::new(ComputationalShard::new()));

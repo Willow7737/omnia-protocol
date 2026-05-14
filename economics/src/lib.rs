@@ -22,6 +22,7 @@
 
 pub mod economics_shard;
 pub mod error;
+pub mod fixed_point;
 pub mod governance;
 pub mod quota;
 pub mod ubc;
@@ -30,6 +31,7 @@ pub mod useful_work;
 // Re-export core types for convenience
 pub use economics_shard::{EconomicsOp, EconomicsState};
 pub use error::EconomicsError;
+pub use fixed_point::{BasisPpmExt, DecayRate, BASIS_PPM};
 pub use governance::{GovernanceState, Proposal, VoteChoice};
 pub use quota::{QuotaSystem, DEFAULT_EPOCH_DURATION_MS, DEFAULT_UBC_QUOTA};
 pub use ubc::UbcToken;
