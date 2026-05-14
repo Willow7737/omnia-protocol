@@ -24,6 +24,17 @@
 //!     └─────────┘         └─────────┘
 //! ```
 //!
+//! ## ZK Proof System
+//!
+//! The rollup uses Groth16 proofs over the Bn254 curve:
+//!
+//! - **Circuit**: [`RollupCircuit`](circuit::RollupCircuit) enforces that
+//!   `new_state_root == expected_new_state_root`
+//! - **Prover**: The [`prover`] module handles trusted setup, proof creation,
+//!   and verification
+//! - **Operator**: [`RollupOperator`](operator::RollupOperator) integrates
+//!   proof generation into the batch pipeline
+//!
 //! ## Adapters
 //!
 //! - **Ethereum**: Full implementation (simulated) with Solidity contract
@@ -35,6 +46,7 @@ pub mod circuit;
 pub mod operator;
 pub mod proof;
 pub mod proof_bundle;
+pub mod prover;
 pub mod settlement;
 
 // Re-export the core trait and adapters
@@ -45,3 +57,6 @@ pub use settlement::{
 
 // Re-export proof bundle types
 pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
+
+// Re-export prover types for convenience
+pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey};

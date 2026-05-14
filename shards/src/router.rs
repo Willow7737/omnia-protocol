@@ -3,12 +3,20 @@
 //! The `ShardRouter` is the central dispatch point for shard operations.
 //! When an event arrives with a shard payload, the router deserializes
 //! the payload, looks up the target shard, and delegates the operation.
+//!
+//! Fee enforcement is applied **before** routing: the router consults
+//! a `FeeSchedule` to determine the cost of the operation, then
+//! deducts the fee from the `QuotaSystem`. If the caller lacks
+//! sufficient UBC balance, the operation is rejected with
+//! `ShardError::InsufficientFee`.
 
 use std::collections::HashMap;
 
+use omnia_economics::QuotaSystem;
 use omnia_substrate::Event;
 
 use crate::cross_shard::CrossShardMessage;
+use crate::fee_schedule::FeeSchedule;
 use crate::payload::{ShardOp, ShardPayload};
 use crate::shard::{Shard, ShardError, ShardId};
 
@@ -22,19 +30,47 @@ use crate::shard::{Shard, ShardError, ShardId};
 /// Replay protection is enforced via per-creator nonce tracking:
 /// each `creator_pubkey` must submit events with strictly increasing
 /// nonces, preventing stale or duplicate events from being processed.
+///
+/// Fee enforcement is applied after nonce validation but before
+/// shard dispatch: the operation's fee is looked up in the
+/// `FeeSchedule` and deducted from the caller's UBC quota.
 pub struct ShardRouter {
     /// Registered shards, indexed by their shard ID.
     shards: HashMap<ShardId, Box<dyn Shard>>,
     /// Last seen nonce per creator pubkey — replay protection.
     last_nonces: HashMap<[u8; 32], u64>,
+    /// Per-operation-type fee schedule (UBC units).
+    fee_schedule: FeeSchedule,
+    /// UBC quota system for fee deduction.
+    quota: QuotaSystem,
 }
 
 impl ShardRouter {
-    /// Create a new, empty shard router.
-    pub fn new() -> Self {
+    /// Create a new shard router with the given fee schedule and quota system.
+    ///
+    /// The `fee_schedule` maps each operation type to its UBC cost.
+    /// The `quota` system tracks per-DID balances; every operation
+    /// whose fee is > 0 will deduct from the caller's balance.
+    pub fn new(fee_schedule: FeeSchedule, quota: QuotaSystem) -> Self {
         Self {
             shards: HashMap::new(),
             last_nonces: HashMap::new(),
+            fee_schedule,
+            quota,
+        }
+    }
+
+    /// Create a router with zero fees and an empty quota system.
+    ///
+    /// This is a backward-compatible constructor for tests and
+    /// scenarios that do not require fee enforcement. Because all
+    /// fees are zero, no quota deductions are ever attempted.
+    pub fn new_without_fees() -> Self {
+        Self {
+            shards: HashMap::new(),
+            last_nonces: HashMap::new(),
+            fee_schedule: FeeSchedule::zero(),
+            quota: QuotaSystem::default_system(),
         }
     }
 
@@ -93,7 +129,8 @@ impl ShardRouter {
     /// Route an event by deserializing its payload.
     ///
     /// Convenience method that deserializes the event's payload,
-    /// checks the nonce for replay protection, and delegates to `route()`.
+    /// checks the nonce for replay protection, deducts the fee
+    /// from the caller's quota, and delegates to `route()`.
     pub fn route_event(&mut self, event: &Event) -> Result<(), ShardError> {
         if event.payload.is_empty() {
             return Ok(());
@@ -113,6 +150,21 @@ impl ShardRouter {
         }
         self.last_nonces.insert(creator, payload.nonce);
 
+        // Fee enforcement — deduct before routing
+        let fee = self.fee_schedule.fee_for_op(&payload.operation);
+        if fee > 0 {
+            let did = Self::pubkey_to_did(&event.creator_pubkey);
+            self.quota.spend(&did, fee).map_err(|e| {
+                tracing::warn!(
+                    did = %did,
+                    fee = fee,
+                    error = %e,
+                    "Fee deduction failed — insufficient quota"
+                );
+                ShardError::InsufficientFee(format!("Quota exceeded: {}", e))
+            })?;
+        }
+
         self.route(event, payload.operation)
     }
 
@@ -130,11 +182,20 @@ impl ShardRouter {
     pub fn shard_count(&self) -> usize {
         self.shards.len()
     }
+
+    /// Convert a 32-byte Ed25519 public key to a DID string.
+    ///
+    /// Uses hex encoding of the public key bytes to form a
+    /// `did:omnia:<hex>` identifier. This DID is used as the
+    /// account key in the quota system.
+    pub fn pubkey_to_did(pubkey: &[u8; 32]) -> String {
+        format!("did:omnia:{}", hex::encode(pubkey))
+    }
 }
 
 impl Default for ShardRouter {
     fn default() -> Self {
-        Self::new()
+        Self::new_without_fees()
     }
 }
 

@@ -7,7 +7,7 @@ fuzz_target!(|data: &[u8]| {
     if data.len() < 64 {
         return;
     }
-    let router = ShardRouter::new();
+    let router = ShardRouter::new_without_fees();
     let mut creator = [0u8; 32];
     creator.copy_from_slice(&data[0..32]);
     let payload = data[64..].to_vec();

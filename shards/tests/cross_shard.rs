@@ -38,7 +38,7 @@ fn create_test_event(creator: NodeId, payload: Vec<u8>) -> Event {
 #[test]
 fn test_financial_transfer_lifecycle() {
     // Set up router with Financial shard
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
 
     let sender_keypair = generate_keypair();
@@ -96,7 +96,7 @@ fn test_financial_transfer_lifecycle() {
 
 #[test]
 fn test_insufficient_balance_transfer() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
 
     let sender = test_node(1);
@@ -119,7 +119,7 @@ fn test_insufficient_balance_transfer() {
 
 #[test]
 fn test_identity_did_lifecycle() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(IdentityShard::new()));
 
     let owner = test_node(1);
@@ -173,7 +173,7 @@ fn test_cross_shard_message_causality() {
 
 #[test]
 fn test_all_shards_registered() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
     router.register(Box::new(ComputationalShard::new()));
@@ -209,7 +209,7 @@ fn test_payload_serialization_roundtrip() {
 
 #[test]
 fn test_burn_operation() {
-    let mut router = ShardRouter::new();
+    let mut router = ShardRouter::new_without_fees();
     router.register(Box::new(FinancialShard::new()));
 
     let minter = test_node(1);

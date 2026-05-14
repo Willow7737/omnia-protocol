@@ -28,9 +28,10 @@
 //! # Usage
 //!
 //! ```ignore
-//! use omnia_shards::{ShardRouter, FinancialShard, IdentityShard};
+//! use omnia_shards::{FeeSchedule, ShardRouter, FinancialShard, IdentityShard};
+//! use omnia_economics::QuotaSystem;
 //!
-//! let mut router = ShardRouter::new();
+//! let mut router = ShardRouter::new(FeeSchedule::standard(), QuotaSystem::default_system());
 //! router.register(Box::new(FinancialShard::new()));
 //! router.register(Box::new(IdentityShard::new()));
 //!
@@ -44,6 +45,7 @@ pub mod biological;
 pub mod computational;
 pub mod cross_shard;
 pub mod economics_shard;
+pub mod fee_schedule;
 pub mod financial;
 pub mod identity;
 pub mod payload;
@@ -54,6 +56,7 @@ pub mod shard;
 // Re-export core types
 pub use cross_shard::CrossShardMessage;
 pub use economics_shard::{EconomicsOp, EconomicsVoteChoice};
+pub use fee_schedule::FeeSchedule;
 pub use payload::{ShardOp, ShardPayload};
 pub use router::ShardRouter;
 pub use shard::{Shard, ShardError, ShardId};

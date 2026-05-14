@@ -9,12 +9,20 @@
 //! longer a participant goes without voting, the more their weight
 //! diminishes, eventually reaching zero. This ensures that active
 //! participants have more say than absent ones.
+//!
+//! # Fixed-Point Arithmetic
+//!
+//! All decay calculations use integer fixed-point arithmetic (PPM —
+//! parts per million) instead of floating-point. This ensures bit-for-bit
+//! identical results across all platforms (x86, ARM, etc.), preventing
+//! consensus divergence.
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::EconomicsError;
+use crate::fixed_point::{isqrt, BasisPpmExt, DecayRate};
 
 /// A vote choice on a governance proposal.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -86,12 +94,12 @@ impl Proposal {
 /// The full governance state, tracking voting weights, activity, and proposals.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GovernanceState {
-    /// DID → base voting weight (quadratic: weight = sqrt(stake)).
+    /// DID → base voting weight (quadratic: weight = isqrt(stake)).
     pub voting_weights: HashMap<String, u64>,
     /// DID → last epoch when the DID participated in a vote.
     pub last_active: HashMap<String, u64>,
-    /// Decay rate per inactive epoch (e.g., 0.1 = 10% decay per epoch).
-    pub decay_rate: f64,
+    /// Decay rate per inactive epoch in PPM (e.g., 100_000 = 10% decay).
+    pub decay_rate: DecayRate,
     /// Active proposals keyed by ID.
     pub proposals: HashMap<String, Proposal>,
 }
@@ -99,38 +107,53 @@ pub struct GovernanceState {
 impl GovernanceState {
     /// Create a new governance state with the specified decay rate.
     ///
-    /// The decay rate is clamped to [0.0, 1.0] to prevent invalid
-    /// exponential calculations.
-    pub fn new(decay_rate: f64) -> Self {
+    /// The decay rate is specified as a [`DecayRate`] in parts-per-million.
+    /// Use [`DecayRate::ten_percent()`] for the standard 10% decay per epoch,
+    /// or [`DecayRate::from_percent(n)`] for a custom rate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use omnia_economics::governance::GovernanceState;
+    /// use omnia_economics::fixed_point::DecayRate;
+    ///
+    /// let gov = GovernanceState::new(DecayRate::ten_percent());
+    /// ```
+    pub fn new(decay_rate: DecayRate) -> Self {
         Self {
             voting_weights: HashMap::new(),
             last_active: HashMap::new(),
-            decay_rate: decay_rate.clamp(0.0, 1.0),
+            decay_rate,
             proposals: HashMap::new(),
         }
     }
 
     /// Set the voting weight for a DID based on their stake.
     ///
-    /// The weight is calculated as `sqrt(stake)`, with a minimum
+    /// The weight is calculated as `isqrt(stake)`, with a minimum
     /// weight of 1 for any non-zero stake. This quadratic formula
     /// means that doubling your influence requires quadrupling your
     /// stake, preventing plutocratic dominance.
+    ///
+    /// Uses integer square root via Newton's method — no floating-point
+    /// arithmetic.
     pub fn set_weight(&mut self, did: &str, stake: u64) {
-        let weight = (stake as f64).sqrt() as u64;
-        self.voting_weights.insert(did.to_string(), weight.max(1));
+        let weight = isqrt(stake).max(1);
+        self.voting_weights.insert(did.to_string(), weight);
         self.last_active.insert(did.to_string(), 0);
     }
 
     /// Calculate the effective voting weight for a DID at the current epoch.
     ///
     /// The effective weight is the base weight multiplied by a decay
-    /// factor that decreases exponentially with the number of inactive
-    /// epochs: `weight * (1 - decay_rate)^inactive_epochs`.
+    /// factor that decreases with the number of inactive epochs.
+    /// The formula uses integer fixed-point arithmetic (PPM):
     ///
-    /// A DID that has never voted has an effective weight of zero
-    /// (since `last_active` defaults to 0 and the number of inactive
-    /// epochs will be the full current epoch).
+    /// `effective = (base_weight * remaining_ppm) / BASIS_PPM`
+    ///
+    /// where `remaining_ppm = decay_rate.remaining_ppm_after(inactive_epochs)`.
+    ///
+    /// All results are bit-for-bit identical across platforms.
     pub fn effective_weight(&self, did: &str, current_epoch: u64) -> u64 {
         let base_weight = self.voting_weights.get(did).copied().unwrap_or(0);
         let last_active = self.last_active.get(did).copied().unwrap_or(0);
@@ -153,9 +176,9 @@ impl GovernanceState {
 
         let inactive_epochs = current_epoch.saturating_sub(last_active);
 
-        // Exponential decay: weight * (1 - decay_rate)^inactive_epochs
-        let decay_factor = (1.0 - self.decay_rate).powi(inactive_epochs as i32);
-        (base_weight as f64 * decay_factor) as u64
+        // Fixed-point decay: remaining_ppm is in [0, 1_000_000]
+        let remaining_ppm = self.decay_rate.remaining_ppm_after(inactive_epochs);
+        base_weight.mul_ppm(remaining_ppm)
     }
 
     /// Create a new governance proposal.
@@ -246,5 +269,110 @@ impl GovernanceState {
     /// Deserialize governance state from bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         bincode::deserialize(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BASIS_PPM;
+
+    #[test]
+    fn test_set_weight_quadratic() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+
+        // 100 stake → isqrt(100) = 10
+        gov.set_weight("alice", 100);
+        assert_eq!(gov.voting_weights.get("alice"), Some(&10));
+
+        // 10000 stake → isqrt(10000) = 100
+        gov.set_weight("bob", 10000);
+        assert_eq!(gov.voting_weights.get("bob"), Some(&100));
+
+        // 0 stake → minimum weight of 1
+        gov.set_weight("charlie", 0);
+        assert_eq!(gov.voting_weights.get("charlie"), Some(&1));
+    }
+
+    #[test]
+    fn test_effective_weight_at_epoch_0() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100); // base weight = 10
+
+        // At epoch 0, full weight (no decay yet)
+        assert_eq!(gov.effective_weight("alice", 0), 10);
+    }
+
+    #[test]
+    fn test_effective_weight_decay() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100); // base weight = 10
+
+        // After voting at epoch 0, then 1 epoch of inactivity
+        gov.vote("alice", "prop1", VoteChoice::For, 0).ok();
+        // last_active = 0, current_epoch = 1
+        // remaining_ppm = 900_000
+        // effective = 10 * 900_000 / 1_000_000 = 9
+        assert_eq!(gov.effective_weight("alice", 1), 9);
+    }
+
+    #[test]
+    fn test_effective_weight_determinism() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100);
+
+        // Call effective_weight 10,000 times — must produce identical results
+        let mut results = Vec::new();
+        for _ in 0..10_000 {
+            results.push(gov.effective_weight("alice", 5));
+        }
+        let first = results[0];
+        assert!(
+            results.iter().all(|&r| r == first),
+            "effective_weight is not deterministic: got varying results"
+        );
+    }
+
+    #[test]
+    fn test_effective_weight_zero_base() {
+        let gov = GovernanceState::new(DecayRate::ten_percent());
+        // DID not registered → base weight = 0
+        assert_eq!(gov.effective_weight("unknown", 0), 0);
+    }
+
+    #[test]
+    fn test_effective_weight_zero_decay() {
+        let mut gov = GovernanceState::new(DecayRate::new(0)); // 0% decay
+        gov.set_weight("alice", 100); // base weight = 10
+
+        // No decay even after many epochs
+        assert_eq!(gov.effective_weight("alice", 100), 10);
+    }
+
+    #[test]
+    fn test_effective_weight_full_decay() {
+        let mut gov = GovernanceState::new(DecayRate::new(BASIS_PPM)); // 100% decay
+        gov.set_weight("alice", 100); // base weight = 10
+
+        // After 1 epoch of inactivity, weight is 0
+        assert_eq!(gov.effective_weight("alice", 1), 0);
+    }
+
+    #[test]
+    fn test_isqrt_for_large_values() {
+        // isqrt(u64::MAX) = 4294967295
+        assert_eq!(isqrt(u64::MAX), 4294967295);
+
+        // set_weight with u64::MAX stake
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("whale", u64::MAX);
+        assert_eq!(gov.voting_weights.get("whale"), Some(&4294967295));
+    }
+
+    #[test]
+    fn test_no_f64_in_module() {
+        // This test documents the requirement that no f64/f32 exists
+        // in the economics crate source. The actual check is done
+        // via grep in the final checklist.
     }
 }

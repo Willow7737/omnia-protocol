@@ -27,6 +27,7 @@ pub mod crypto;
 pub mod event;
 pub mod gossip;
 pub mod network;
+pub mod slashing;
 pub mod vector_clock;
 
 // Re-export commonly used types
@@ -43,6 +44,9 @@ pub use gossip::{
     GossipStats,
 };
 pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
+pub use slashing::{
+    SlashOffense, SlashOutcome, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 
 /// Semantic version of this crate
