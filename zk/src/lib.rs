@@ -28,13 +28,13 @@
 //!
 //! The rollup uses Groth16 proofs over the Bn254 curve:
 //!
-//! - **Circuit**: [`RollupCircuit`](circuit::RollupCircuit) enforces that
+//! - **Circuit**: [`circuit::RollupCircuit`] enforces that
 //!   `new_state_root == expected_new_state_root`
-//! - **Expanded Circuit**: [`ExpandedRollupCircuit`](circuit::ExpandedRollupCircuit)
+//! - **Expanded Circuit**: [`circuit::ExpandedRollupCircuit`]
 //!   adds Merkle path verification and per-event state transition constraints
 //! - **Prover**: The [`prover`] module handles trusted setup, proof creation,
 //!   and verification
-//! - **Operator**: [`RollupOperator`](operator::RollupOperator) integrates
+//! - **Operator**: [`operator::RollupOperator`] integrates
 //!   proof generation into the batch pipeline
 //!
 //! ## Adapters
