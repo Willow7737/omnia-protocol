@@ -45,7 +45,9 @@ pub use gossip::{
 };
 pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use slashing::{
-    SlashOffense, SlashOutcome, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
+    SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 

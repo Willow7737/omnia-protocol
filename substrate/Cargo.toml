@@ -32,8 +32,12 @@ async-trait = "0.1"
 blake3 = "1.5"
 serde_json = "1.0"
 
+# Embedded key-value store for persistent slashing state
+sled = "0.34"
+
 [dev-dependencies]
 tokio-test = "0.4"
+tempfile = "3"
 criterion = { version = "0.8", features = ["html_reports"] }
 
 # FIX 6: Property-based testing

@@ -28,7 +28,7 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 ### Q: What is the current state of the project? 📊
 
-**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer has an Ethereum adapter but uses a hash chain stub rather than full R1CS circuits. Some features like real RF fingerprinting, real PQC signatures, and real ZK proofs are ⚠️ stubs awaiting hardware or library integration. There is 🌑 no mobile wallet, 🌑 no REST API, and 🌑 no validator network yet. All interaction is via the Rust library.
+**A:** All 5 core layers are implemented and tested (278+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (sled), chaos testing, and TLA+ formal verification. Some features like real RF fingerprinting remain ⚠️ stubs awaiting hardware. There is 🌑 no mobile wallet and 🌑 no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
 
 ### Q: How do I run the tests? 🧪
 
@@ -177,11 +177,12 @@ The quota system operates on epochs with automatic advancement. The specific quo
 
 ### Q: How do I get started? 🚀
 
-**A:** Currently, all interaction with Omnia is via the Rust library. There is 🌑 no wallet, 🌑 no mobile app, and 🌑 no REST API. To experiment:
+**A:** You can interact with Omnia via the Rust library or the `omnia-node` binary with REST API (Sprint 3). There is 🌑 no wallet and 🌑 no mobile app yet. To experiment:
 
 1. Clone the repository
 2. Run `cargo test --workspace` to see all tests passing
-3. Explore the crate APIs in `substrate/`, `shards/`, `binding/`, `economics/`, `zk/`
+3. Run `cargo run -p omnia-node` to start a node with HTTP health/metrics/Swagger UI
+4. Explore the crate APIs in `substrate/`, `shards/`, `binding/`, `economics/`, `zk/`
 
 ### Q: Which wallet should I use? 👛
 

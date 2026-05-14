@@ -30,6 +30,8 @@
 //!
 //! - **Circuit**: [`RollupCircuit`](circuit::RollupCircuit) enforces that
 //!   `new_state_root == expected_new_state_root`
+//! - **Expanded Circuit**: [`ExpandedRollupCircuit`](circuit::ExpandedRollupCircuit)
+//!   adds Merkle path verification and per-event state transition constraints
 //! - **Prover**: The [`prover`] module handles trusted setup, proof creation,
 //!   and verification
 //! - **Operator**: [`RollupOperator`](operator::RollupOperator) integrates
@@ -43,6 +45,7 @@
 //! - **Celestia**: Stub (returns `NotImplemented`)
 
 pub mod circuit;
+pub mod merkle;
 pub mod operator;
 pub mod proof;
 pub mod proof_bundle;
@@ -60,3 +63,9 @@ pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
 
 // Re-export prover types for convenience
 pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey};
+
+// Re-export expanded circuit types
+pub use circuit::{ExpandedRollupCircuit, EventWitness, MerklePathWitness};
+
+// Re-export merkle types
+pub use merkle::{MerkleProof, hash_to_fr, fr_to_hash, compute_root_from_proof, build_merkle_tree};

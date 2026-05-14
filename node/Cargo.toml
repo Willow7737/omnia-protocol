@@ -1,0 +1,53 @@
+[package]
+name = "omnia-node"
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+description = "Omnia node binary — runs a full node with REST API, consensus, slashing, shard routing, and economics"
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+
+[dependencies]
+# Workspace crate dependencies — each provides a distinct protocol layer
+omnia-substrate = { path = "../substrate" }   # Layer 1: causal graph consensus, slashing, gossip
+omnia-shards = { path = "../shards" }         # Layer 2: domain shard routing and fee enforcement
+omnia-economics = { path = "../economics" }   # Layer 5: UBC token, governance, useful-work rewards
+omnia-binding = { path = "../binding" }       # Layer 3: physical-digital binding layer
+omnia-zk = { path = "../zk" }                # Layer 4: ZK-rollup settlement bridge
+
+# Async runtime — needed for all async I/O, signal handling, and task spawning
+tokio = { version = "1", features = ["full", "signal"] }
+
+# CLI argument parsing with env var overrides — allows node_id=1 OMNIA_NODE_ID=2
+clap = { version = "4", features = ["derive", "env"] }
+
+# Structured logging — tracing is the Rust standard for instrumented applications
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }  # JSON output + env-filter
+
+# Lightweight HTTP framework — ideal for health/metrics/API endpoints
+axum = "0.7"
+
+# Serialization — Serde is the universal Rust serialization framework
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"  # JSON serialization for API request/response bodies
+
+# Prometheus metrics exposition — industry standard for monitoring
+prometheus = "0.13"
+
+# Ergonomic error handling — anyhow::Result with context chaining
+anyhow = "1"
+
+# Hex encoding for event IDs and node identifiers in JSON responses
+hex = "0.4"
+
+# Timestamp handling for API responses
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID generation for event and proposal identifiers
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+# HTTP client for integration tests
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }

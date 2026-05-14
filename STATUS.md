@@ -68,22 +68,37 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.7** | Conviction Voting | P2 | 🌑 Not Started |
 | **REQ-6.8** | Delegation | P2 | 🌑 Not Started |
 
+## 7. Sprint 3: Testnet Readiness
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-7.1** | Expanded ZK Circuit (Merkle path + event constraints) | P1 | ✅ Completed |
+| **REQ-7.2** | TLA+ Formal Verification (consensus safety/liveness) | P1 | ✅ Completed |
+| **REQ-7.3** | Persistent Slashing State (sled) | P1 | ✅ Completed |
+| **REQ-7.4** | Binary Entrypoint (omnia-node) | P2 | ✅ Completed |
+| **REQ-7.5** | REST API (axum + utoipa Swagger UI) | P2 | ✅ Completed |
+| **REQ-7.6** | Chaos Testing Framework | P2 | ✅ Completed |
+| **REQ-7.7** | Security Audit Preparation | P3 | ✅ Completed |
+| **REQ-7.8** | Production ZK Hash Gadget (Pedersen/Poseidon) | P1 | ⚠️ Placeholder |
+
 ---
 
 ## 📊 Summary of Completion
 
-| Category | Total | ✅ Done | 🔄 Stub | 🌑 Not Started | Progress |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Core Protocol** | 8 | 8 | 0 | 0 | ██████████ 100% |
-| **Identity** | 7 | 7 | 0 | 0 | ██████████ 100% |
-| **Financial & Settlement** | 6 | 6 | 0 | 0 | ██████████ 100% |
-| **Physical Binding** | 4 | 3 | 1 | 0 | ████████░░ 75% |
-| **Economics** | 3 | 2 | 1 | 0 | ███████░░░ 67% |
-| **Future** | 8 | 4 | 0 | 4 | █████░░░░░ 50% |
-| **TOTAL** | **36** | **29** | **2** | **4** | ████████░░ 81% |
+| Category | Total | ✅ Done | ⚠️ Placeholder | 🔄 Stub | 🌑 Not Started | Progress |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Core Protocol** | 8 | 8 | 0 | 0 | 0 | ██████████ 100% |
+| **Identity** | 7 | 7 | 0 | 0 | 0 | ██████████ 100% |
+| **Financial & Settlement** | 6 | 6 | 0 | 0 | 0 | ██████████ 100% |
+| **Physical Binding** | 4 | 3 | 0 | 1 | 0 | ████████░░ 75% |
+| **Economics** | 3 | 2 | 0 | 1 | 0 | ███████░░░ 67% |
+| **Future** | 8 | 4 | 0 | 0 | 4 | █████░░░░░ 50% |
+| **Sprint 3** | 8 | 7 | 1 | 0 | 0 | ████████░░ 88% |
+| **TOTAL** | **44** | **37** | **1** | **2** | **4** | ████████░░ 84% |
 
 ---
 *Legend:*
 - 🌑 **Not Started:** No work done.
 - 🔄 **Stub:** Code structure exists but needs real implementation (hardware, library integration, etc.).
+- ⚠️ **Placeholder:** Implementation exists but uses a simplified/non-production approach.
 - ✅ **Completed:** Fully implemented and tested.

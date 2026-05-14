@@ -1,0 +1,23 @@
+[package]
+name = "omnia-chaos-tests"
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+description = "Chaos testing framework for the Omnia Protocol — simulates network partitions, node crashes, message loss, and Byzantine behavior"
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+
+[dependencies]
+omnia-substrate = { path = "../substrate" }
+omnia-shards = { path = "../shards" }
+omnia-economics = { path = "../economics" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+rand = "0.8"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+bincode = "1"
+hex = "0.4"
+
+[dev-dependencies]
+tracing-subscriber = "0.3"

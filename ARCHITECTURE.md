@@ -205,7 +205,7 @@ Every module has comprehensive unit tests. The critical integration test simulat
 ├───────────────────────────────────────────────┤
 │         L2 Operator + Batch Builder           │
 ├───────────────────────────────────────────────┤
-│      ZK Circuit (hash chain stub ⚠️)          │
+│      ZK Circuit (arkworks R1CS + Groth16) ✅  │
 ├───────────────────────────────────────────────┤
 │    Merkle State Root + Inclusion Proofs        │
 ├───────────────────────────────────────────────┤

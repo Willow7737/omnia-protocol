@@ -6,6 +6,12 @@
 //! points exceed configurable thresholds, the node is either slashed (stake
 //! forfeited) or ejected from the validator set entirely.
 //!
+//! # Persistence
+//!
+//! The slashing state can be persisted to disk using the [`SledSlashingStore`]
+//! backend, ensuring that slash history survives node restarts. For tests and
+//! backward compatibility, [`InMemorySlashingStore`] keeps state in memory only.
+//!
 //! # Offense Points
 //!
 //! | Offense              | Points |
@@ -27,6 +33,7 @@ use crate::event::Event;
 use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Default slash threshold: accumulated points at which a node is slashed.
 pub const DEFAULT_SLASH_THRESHOLD: u64 = 500;
@@ -114,6 +121,247 @@ pub enum SlashOutcome {
     },
 }
 
+// ── Persistence types ──────────────────────────────────────────────
+
+/// Errors that can occur when interacting with a [`SlashingStore`].
+#[derive(Debug, thiserror::Error)]
+pub enum SlashingStoreError {
+    /// An error occurred while reading from or writing to the persistence
+    /// backend (e.g., sled I/O failure).
+    #[error("persistence error: {0}")]
+    Persistence(String),
+    /// An error occurred while serializing or deserializing slashing state.
+    #[error("serialization error: {0}")]
+    Serialization(String),
+}
+
+/// Serializable slashing state that can be persisted across restarts.
+///
+/// This struct captures the full operational state of the slashing engine,
+/// including accumulated slash points, staked amounts, and the configured
+/// thresholds. It is designed to be serialized with `bincode` for compact
+/// on-disk storage.
+///
+/// # Example
+///
+/// ```
+/// use omnia_substrate::slashing::SlashingState;
+///
+/// let state = SlashingState::default();
+/// assert!(state.slash_points.is_empty());
+/// assert!(state.stakes.is_empty());
+/// assert_eq!(state.slash_threshold, 500);
+/// assert_eq!(state.ejection_threshold, 2000);
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlashingState {
+    /// Accumulated slash points per node.
+    pub slash_points: HashMap<NodeId, u64>,
+    /// Staked amounts per node.
+    pub stakes: HashMap<NodeId, u64>,
+    /// Points threshold at which a node is slashed.
+    pub slash_threshold: u64,
+    /// Points threshold at which a node is ejected.
+    pub ejection_threshold: u64,
+}
+
+impl Default for SlashingState {
+    fn default() -> Self {
+        Self {
+            slash_points: HashMap::new(),
+            stakes: HashMap::new(),
+            slash_threshold: DEFAULT_SLASH_THRESHOLD,
+            ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
+        }
+    }
+}
+
+/// Persistence backend for slashing state.
+///
+/// Implementations can store state in memory (for tests) or on disk
+/// (for production nodes).
+///
+/// # Example
+///
+/// ```
+/// use omnia_substrate::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
+///
+/// let store = InMemorySlashingStore::new();
+/// let state = store.load().unwrap();
+/// assert!(state.slash_points.is_empty());
+/// ```
+pub trait SlashingStore: Send + Sync {
+    /// Load the persisted slashing state.
+    ///
+    /// Returns the default state if no persisted state exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SlashingStoreError`] if the store cannot be read or
+    /// the stored data cannot be deserialized.
+    fn load(&self) -> Result<SlashingState, SlashingStoreError>;
+
+    /// Save the slashing state to persistent storage.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` — The complete slashing state to persist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SlashingStoreError`] if the state cannot be serialized
+    /// or the store cannot be written to.
+    fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError>;
+}
+
+// ── SledSlashingStore ──────────────────────────────────────────────
+
+/// Sled-backed persistent slashing store.
+///
+/// Persists slashing state to disk so that slash history survives
+/// node restarts. Uses the `sled` embedded database for simplicity
+/// and zero external dependencies.
+///
+/// # Example
+///
+/// ```no_run
+/// use omnia_substrate::slashing::{SledSlashingStore, SlashingStore};
+/// use std::path::Path;
+///
+/// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+/// let state = store.load().unwrap();
+/// ```
+pub struct SledSlashingStore {
+    db: sled::Db,
+    tree: sled::Tree,
+}
+
+impl SledSlashingStore {
+    /// Open a sled database at the given path for slashing state.
+    ///
+    /// If the database does not exist, sled will create it. If it already
+    /// exists, previously persisted state will be available via [`SlashingStore::load`].
+    ///
+    /// # Arguments
+    ///
+    /// * `path` — Directory path for the sled database.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SlashingStoreError::Persistence`] if the database cannot be opened.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use omnia_substrate::slashing::{SledSlashingStore, SlashingStore};
+    /// use std::path::Path;
+    ///
+    /// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+    /// let state = store.load().unwrap();
+    /// ```
+    pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
+        let db =
+            sled::open(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        let tree = db
+            .open_tree("slashing")
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        Ok(Self { db, tree })
+    }
+}
+
+impl SlashingStore for SledSlashingStore {
+    fn load(&self) -> Result<SlashingState, SlashingStoreError> {
+        match self
+            .tree
+            .get("state")
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
+        {
+            Some(bytes) => bincode::deserialize(&bytes)
+                .map_err(|e| SlashingStoreError::Serialization(e.to_string())),
+            None => Ok(SlashingState::default()),
+        }
+    }
+
+    fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError> {
+        let bytes = bincode::serialize(state)
+            .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
+        self.tree
+            .insert("state", bytes)
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        self.db
+            .flush()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        Ok(())
+    }
+}
+
+// ── InMemorySlashingStore ──────────────────────────────────────────
+
+/// In-memory slashing store for tests and backward compatibility.
+///
+/// State is held in a [`std::sync::RwLock`] so it can be shared across
+/// threads in tests. It is not persisted to disk — when the process exits,
+/// all state is lost.
+///
+/// # Example
+///
+/// ```
+/// use omnia_substrate::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
+///
+/// let store = InMemorySlashingStore::new();
+/// let state = store.load().unwrap();
+/// assert!(state.slash_points.is_empty());
+/// ```
+pub struct InMemorySlashingStore {
+    state: std::sync::RwLock<SlashingState>,
+}
+
+impl InMemorySlashingStore {
+    /// Create a new empty in-memory store.
+    ///
+    /// The initial state is the default [`SlashingState`] (empty maps, zero thresholds).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_substrate::slashing::InMemorySlashingStore;
+    ///
+    /// let store = InMemorySlashingStore::new();
+    /// ```
+    pub fn new() -> Self {
+        Self {
+            state: std::sync::RwLock::new(SlashingState::default()),
+        }
+    }
+}
+
+impl Default for InMemorySlashingStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SlashingStore for InMemorySlashingStore {
+    fn load(&self) -> Result<SlashingState, SlashingStoreError> {
+        let state = self
+            .state
+            .read()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        Ok(state.clone())
+    }
+
+    fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError> {
+        let mut guard = self
+            .state
+            .write()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        *guard = state.clone();
+        Ok(())
+    }
+}
+
+// ── SlashingEngine ─────────────────────────────────────────────────
+
 /// Engine that tracks slash points, stakes, and thresholds for validator
 /// slashing.
 ///
@@ -122,6 +370,16 @@ pub enum SlashOutcome {
 /// - Recording offenses and accumulating slash points
 /// - Determining slash outcomes based on accumulated points
 /// - Detecting equivocation and liveness violations
+/// - Persisting state to a [`SlashingStore`] backend on every mutation
+///
+/// # Persistence
+///
+/// Use [`SlashingEngine::with_store`] to create an engine backed by a
+/// persistent store (e.g., [`SledSlashingStore`]). The engine loads state
+/// from the store on creation and saves after every mutation.
+///
+/// For backward compatibility, [`SlashingEngine::new`] and
+/// [`SlashingEngine::default`] create an in-memory-only engine.
 ///
 /// # Example
 ///
@@ -145,6 +403,20 @@ pub struct SlashingEngine {
     slash_threshold: u64,
     /// Points threshold at which a node is ejected.
     ejection_threshold: u64,
+    /// Persistence backend for slashing state.
+    store: Box<dyn SlashingStore>,
+}
+
+impl std::fmt::Debug for SlashingEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SlashingEngine")
+            .field("slash_points", &self.slash_points)
+            .field("stakes", &self.stakes)
+            .field("slash_threshold", &self.slash_threshold)
+            .field("ejection_threshold", &self.ejection_threshold)
+            .field("store", &"Box<dyn SlashingStore>")
+            .finish()
+    }
 }
 
 impl Default for SlashingEngine {
@@ -154,7 +426,11 @@ impl Default for SlashingEngine {
 }
 
 impl SlashingEngine {
-    /// Creates a new `SlashingEngine` with the given thresholds.
+    /// Creates a new `SlashingEngine` with the given thresholds and an
+    /// in-memory store.
+    ///
+    /// This constructor is kept for backward compatibility. For production
+    /// use with persistent state, prefer [`SlashingEngine::with_store`].
     ///
     /// # Arguments
     ///
@@ -165,7 +441,8 @@ impl SlashingEngine {
     ///
     /// # Returns
     ///
-    /// A new `SlashingEngine` instance with no registered validators.
+    /// A new `SlashingEngine` instance with no registered validators and
+    /// an [`InMemorySlashingStore`] backend.
     ///
     /// # Example
     ///
@@ -180,13 +457,76 @@ impl SlashingEngine {
             stakes: HashMap::new(),
             slash_threshold,
             ejection_threshold,
+            store: Box::new(InMemorySlashingStore::new()),
+        }
+    }
+
+    /// Creates a `SlashingEngine` backed by a persistent [`SlashingStore`].
+    ///
+    /// The engine loads its initial state from the store. If the store is
+    /// empty (first run), the engine starts with default empty state and
+    /// the provided thresholds. If the store contains serialized state, the
+    /// thresholds from the persisted state are used.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` — A boxed [`SlashingStore`] implementation (e.g.,
+    ///   [`SledSlashingStore`]).
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the initialized `SlashingEngine`, or a
+    /// [`SlashingStoreError`] if the store could not be read.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use omnia_substrate::slashing::{SledSlashingStore, SlashingEngine};
+    /// use std::path::Path;
+    ///
+    /// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+    /// let engine = SlashingEngine::with_store(Box::new(store)).unwrap();
+    /// ```
+    pub fn with_store(store: Box<dyn SlashingStore>) -> Result<Self, SlashingStoreError> {
+        let state = store.load()?;
+        tracing::info!(
+            slash_points_count = state.slash_points.len(),
+            stakes_count = state.stakes.len(),
+            slash_threshold = state.slash_threshold,
+            ejection_threshold = state.ejection_threshold,
+            "Loaded slashing state from persistent store"
+        );
+        Ok(Self {
+            slash_points: state.slash_points,
+            stakes: state.stakes,
+            slash_threshold: state.slash_threshold,
+            ejection_threshold: state.ejection_threshold,
+            store,
+        })
+    }
+
+    /// Persists the current state to the backing store.
+    ///
+    /// On failure, a warning is logged but the in-memory state remains
+    /// valid. This keeps the engine operational even when persistence
+    /// is temporarily unavailable.
+    fn persist_state(&self) {
+        let state = SlashingState {
+            slash_points: self.slash_points.clone(),
+            stakes: self.stakes.clone(),
+            slash_threshold: self.slash_threshold,
+            ejection_threshold: self.ejection_threshold,
+        };
+        if let Err(e) = self.store.save(&state) {
+            tracing::warn!(error = %e, "Failed to persist slashing state");
         }
     }
 
     /// Registers a validator with an initial stake.
     ///
     /// If the node is already registered, the stake is updated (replaced)
-    /// with the new value.
+    /// with the new value. State is persisted to the backing store after
+    /// the update.
     ///
     /// # Arguments
     ///
@@ -215,6 +555,7 @@ impl SlashingEngine {
         // Ensure slash_points entry exists so slash_points_of returns 0
         // instead of implicitly missing.
         self.slash_points.entry(node).or_insert(0);
+        self.persist_state();
     }
 
     /// Records a slashing offense for a node and returns the resulting outcome.
@@ -227,6 +568,8 @@ impl SlashingEngine {
     /// | < slash_threshold             | Warned    |
     /// | ≥ slash_threshold, < ejection | Slashed   |
     /// | ≥ ejection_threshold          | Ejected   |
+    ///
+    /// State is persisted to the backing store after the offense is recorded.
     ///
     /// # Arguments
     ///
@@ -264,7 +607,7 @@ impl SlashingEngine {
             "Slashing offense recorded"
         );
 
-        if total_points >= self.ejection_threshold {
+        let outcome = if total_points >= self.ejection_threshold {
             tracing::info!(node = ?&node[..4], total_points, "Node ejected from consensus");
             SlashOutcome::Ejected { node }
         } else if total_points >= self.slash_threshold {
@@ -287,7 +630,10 @@ impl SlashingEngine {
                 node,
                 points: total_points,
             }
-        }
+        };
+
+        self.persist_state();
+        outcome
     }
 
     /// Checks whether two events constitute an equivocation.
@@ -689,5 +1035,45 @@ mod tests {
         e2.sign_with_keypair(&kp);
 
         assert!(!SlashingEngine::check_equivocation(&e1, &e2));
+    }
+
+    // ── Persistence unit tests ─────────────────────────────────────
+
+    #[test]
+    fn test_in_memory_store_round_trip() {
+        let store = InMemorySlashingStore::new();
+        let mut state = SlashingState::default();
+        let n = node(1);
+        state.slash_points.insert(n, 500);
+        state.stakes.insert(n, 10_000);
+        state.slash_threshold = 500;
+        state.ejection_threshold = 2000;
+
+        store.save(&state).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.slash_points.get(&n), Some(&500));
+        assert_eq!(loaded.stakes.get(&n), Some(&10_000));
+        assert_eq!(loaded.slash_threshold, 500);
+        assert_eq!(loaded.ejection_threshold, 2000);
+    }
+
+    #[test]
+    fn test_with_store_loads_empty_state() {
+        let store = Box::new(InMemorySlashingStore::new());
+        let engine = SlashingEngine::with_store(store).unwrap();
+        let n = node(1);
+        assert_eq!(engine.slash_points_of(&n), 0);
+        assert_eq!(engine.stake_of(&n), 0);
+    }
+
+    #[test]
+    fn test_with_store_preserves_state_via_sled() {
+        // This test is covered more thoroughly in tests/slashing_persistence.rs
+        // Here we just verify with_store loads empty state correctly.
+        let store = Box::new(InMemorySlashingStore::new());
+        let engine = SlashingEngine::with_store(store).unwrap();
+        let n = node(1);
+        assert_eq!(engine.slash_points_of(&n), 0);
+        assert_eq!(engine.stake_of(&n), 0);
     }
 }

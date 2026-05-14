@@ -43,7 +43,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | **Financial Shard** | ✅ Implemented | 🟢 Low | Balances, transfers, replay protection (nonce tracking) |
 | **Physical Binding** | ✅ Implemented | 🟡 Medium | Provenance log full; RF/QC are stubs (need hardware) |
 | **UBC Economic Model** | ✅ Implemented | 🟡 Medium | Quota, quadratic voting; useful work & fees are stubs |
-| **ZK-Rollup Settlement** | ✅ Architecture | 🟡 Medium | Ethereum adapter done; ZK circuit is hash chain stub |
+| **ZK-Rollup Settlement** | ✅ Architecture | 🟡 Medium | Ethereum adapter done; expanded ZK circuit with Merkle path verification (hash gadget placeholder) |
 
 ---
 

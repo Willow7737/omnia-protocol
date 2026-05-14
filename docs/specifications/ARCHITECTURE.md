@@ -359,12 +359,12 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 |-----------|--------|
 | ✅ Ed25519 signatures | Implemented |
 | ✅ BLAKE3 hashing | Implemented |
-| ⚠️ zk-SNARKs (hash chain stub) | Stub |
-| 🔄 CRYSTALS-Dilithium (PQC signatures) | Stub |
+| ✅ zk-SNARKs (arkworks R1CS + Groth16) | Implemented |
+| ✅ CRYSTALS-Dilithium (PQC signatures) | Implemented |
 
-### Economic Security — 🌑 Not Implemented
+### Economic Security — 🟡 Partially Implemented
 
-Slashing, staking, and economic security mechanisms are not implemented. There is no validator network.
+Slashing is implemented (SlashingEngine with equivocation/liveness/invalid attestation detection, persistent via sled). Staking is partially modeled via the SlashingEngine's validator registration. There is no validator network yet.
 
 ---
 

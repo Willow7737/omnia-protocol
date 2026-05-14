@@ -7,9 +7,9 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-200%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-278%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Rust-1.75%2B-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-stable-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
@@ -65,13 +65,15 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 | Crate | Purpose | Tests | Status |
 |-------|---------|-------|--------|
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs | 75+ | ✅ |
-| `shards/` | 6 domain shards + cross-shard messaging | 33+ | ✅ |
-| `binding/` | Provenance log, RF stub, quantum commitment stub | 41+ | ✅ |
-| `economics/` | UBC token, quota, governance, useful work | 22+ | ✅ |
-| `zk/` | Settlement-agnostic ZK-rollup, Ethereum adapter | 8+ | ✅ |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (sled) | 144+ | ✅ |
+| `shards/` | 6 domain shards + cross-shard messaging | 46+ | ✅ |
+| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 26+ | ✅ |
+| `economics/` | UBC token, quota, governance, useful work | 37+ | ✅ |
+| `zk/` | ZK-rollup (arkworks R1CS + Groth16 + Merkle), Ethereum adapter | 25+ | ✅ |
+| `node/` | Binary entrypoint, REST API, health/metrics | ✅ | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ✅ | ✅ |
 
-**Total: 200+ tests, all passing.**
+**Total: 278+ lib tests + chaos/integration tests, all passing.**
 
 ---
 
@@ -96,12 +98,15 @@ cargo bench --no-run
 - libp2p gossip protocol (QUIC + GossipSub + mDNS)
 - Ed25519 signatures with replay protection
 - Performance: O(new_events) consensus processing (not O(n) graph walk)
+- SlashingEngine with equivocation/liveness/invalid attestation detection
+- Persistent slashing state via `sled` embedded database (`SledSlashingStore`)
 - Security: `state_root()`, `merkle_proof()`, `prune_old_events()`
 
 ### Layer 2: Domain Shards ✅
 - 6 shards: Financial, Identity, Physical, Computational, Biological, Economics
 - Shard router with automatic dispatch (`EventProcessor` trait)
 - Cross-shard messaging with causality proofs
+- Fee enforcement via FeeSchedule + QuotaSystem integration
 - Security: Per-creator nonce replay protection (`last_nonces` in ShardRouter)
 - FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
 
@@ -109,7 +114,8 @@ cargo bench --no-run
 - Append-only provenance log (CRDT)
 - Physical anchor (RF + quantum + provenance)
 - ProvenanceTracker with create/transfer/verify/destroy lifecycle
-- ⚠️ Stubs: RF fingerprinting (needs SDR hardware), quantum commitments (needs pqc_dilithium)
+- Hybrid PQC signatures (Ed25519 + CRYSTALS-Dilithium)
+- ⚠️ Stubs: RF fingerprinting (needs SDR hardware)
 
 ### Layer 4: Identity Hardening ✅
 - `did:omnia:` method with validation
@@ -122,6 +128,7 @@ cargo bench --no-run
 - Universal Basic Compute (UBC) — soulbound monthly quota
 - Quota system with epoch advancement
 - Quadratic voting with exponential reputation decay
+- Fixed-point governance decay (PPM arithmetic, no f64 in consensus)
 - ⚠️ Stub: Proof-of-useful-work (3 work types defined, not production)
 
 ### Phase 0: ZK-Rollup ✅
@@ -129,9 +136,11 @@ cargo bench --no-run
 - Ethereum adapter with Solidity contract (OmniaRollup.sol)
 - Bitcoin, Solana, Celestia stubs
 - L2 operator with batch builder
-- ⚠️ Stub: ZK circuit (hash chain, not full R1CS — arkworks integration is production target)
-- Merkle state root + inclusion proofs
+- ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
+- ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
+- Sparse Merkle tree proofs (BLAKE3 off-circuit)
 - Event pruning for sustainability
+- ⚠️ Placeholder: ExpandedRollupCircuit uses simplified field-addition hash (needs Pedersen/Poseidon for production)
 
 ---
 
@@ -139,14 +148,12 @@ cargo bench --no-run
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Real ZK proofs | ⚠️ Stub | Full arkworks R1CS circuit is production target |
-| Real PQC signatures | ⚠️ Stub | CRYSTALS-Dilithium integration pending |
 | Real RF fingerprinting | ⚠️ Stub | Needs HackRF/USRP hardware |
-| Fee mechanism | 🌑 Not started | UBC covers quotas, no transaction fees yet |
 | Mobile wallet | 🌑 Not started | Planned for Phase 1 |
-| REST API | 🌑 Not started | All interaction is via Rust library |
 | Validator network | 🌑 Not started | Single-node operator for Phase 0 |
-| Slashing | 🌑 Not started | Economic security not yet implemented |
+| Conviction voting | 🌑 Not started | Planned for Phase 1 |
+| Delegation | 🌑 Not started | Planned for Phase 1 |
+| Production ZK hash gadget | ⚠️ Placeholder | ExpandedRollupCircuit uses simplified field-addition hash; needs Pedersen/Poseidon for production |
 
 ---
 
@@ -168,15 +175,32 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Universal Basic Compute (UBC)
 - ✅ 6 domain shards with cross-shard messaging
 - ✅ Settlement-agnostic ZK-rollup architecture
-- 🔄 Full ZK circuit (arkworks R1CS)
-- 🔄 Real PQC signatures (Dilithium)
+- ✅ Full ZK circuit (arkworks R1CS)
+- ✅ Real PQC signatures (Dilithium)
 - 🌑 Local testnet (5 nodes)
+
+### Sprint 2 Completed 🎉
+- ✅ Real ZK proofs: arkworks R1CS + Groth16 proof system on BN254 curve
+- ✅ Real PQC signatures: ed25519-dalek + pqc_dilithium hybrid verification
+- ✅ Fee mechanism: FeeSchedule + QuotaSystem enforcement in ShardRouter
+- ✅ Slashing: SlashingEngine with equivocation/liveness/invalid attestation detection
+- ✅ Fixed-point governance decay: PPM arithmetic replacing f64 in consensus-critical paths
+- ✅ Real libp2p QUIC multi-node integration test (#[ignore] + CI cron)
+
+### Sprint 3 Completed 🎉
+- ✅ Expanded ZK circuit: Merkle path verification + per-event state transition constraints
+- ✅ TLA+ formal verification: consensus safety, agreement, validity, no-equivocation invariants
+- ✅ Persistent slashing state: sled-backed `SledSlashingStore` with graceful fallback
+- ✅ Binary entrypoint: `omnia-node` with CLI, health/metrics HTTP, graceful shutdown
+- ✅ REST API: axum + utoipa Swagger UI with events/shards/governance/economics/node endpoints
+- ✅ Chaos testing: partitions, crash recovery, byzantine behavior, message loss
+- ✅ Security audit preparation: scope, attack surface, self-assessment documentation
 
 ### Phase 1: The Root 📋 Planned
 *Goal: Independence*
 - 📋 Standalone validator network
 - 📋 Real RF fingerprinting (SDR hardware)
-- 📋 Fee mechanism
+- 📋 Production ZK hash gadget (Pedersen/Poseidon)
 - 📋 Mobile wallet
 - 📋 Conviction voting & delegation
 
