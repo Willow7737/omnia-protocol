@@ -4,6 +4,11 @@
 //! and request-response for sync operations. Uses tokio::sync primitives exclusively
 //! — never std::sync::Mutex across await points.
 
+// The libp2p NetworkBehaviour derive macro generates an event enum without
+// doc comments on its variants, which triggers missing_docs. Allow it here
+// since we cannot annotate the derived code directly.
+#![allow(missing_docs)]
+
 use libp2p::{
     gossipsub::{self, IdentTopic, MessageAuthenticity, ValidationMode},
     identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
@@ -14,21 +19,32 @@ use tokio::sync::mpsc;
 /// Events emitted by the network layer.
 #[derive(Debug)]
 pub enum NetworkEvent {
+    /// A peer has connected
     PeerConnected(PeerId),
+    /// A peer has disconnected
     PeerDisconnected(PeerId),
+    /// A direct message was received from a peer
     MessageReceived(PeerId, Vec<u8>),
+    /// A gossipsub message was received
     GossipReceived {
+        /// The topic the message was published to
         topic: String,
+        /// The message payload
         data: Vec<u8>,
+        /// The peer that propagated the message
         propagation_source: PeerId,
     },
 }
 
 /// Combined libp2p behaviour for Omnia.
+#[allow(missing_docs)]
 #[derive(libp2p::swarm::NetworkBehaviour)]
 pub struct OmniaBehaviour {
+    /// GossipSub event propagation behaviour
     pub gossipsub: gossipsub::Behaviour,
+    /// mDNS peer discovery behaviour
     pub mdns: libp2p::mdns::tokio::Behaviour,
+    /// Request-response sync behaviour
     pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
 }
 
@@ -36,11 +52,24 @@ pub struct OmniaBehaviour {
 #[derive(Debug)]
 pub enum NetworkCommand {
     /// Publish data to a gossipsub topic.
-    Publish { topic: String, data: Vec<u8> },
+    Publish {
+        /// Topic to publish to
+        topic: String,
+        /// Data payload
+        data: Vec<u8>,
+    },
     /// Subscribe to a gossipsub topic.
-    Subscribe { topic: String },
+    Subscribe {
+        /// Topic to subscribe to
+        topic: String,
+    },
     /// Dial a specific peer at the given address.
-    Dial { peer_id: PeerId, addr: Multiaddr },
+    Dial {
+        /// Peer to dial
+        peer_id: PeerId,
+        /// Address to dial
+        addr: Multiaddr,
+    },
 }
 
 /// The Omnia P2P network handle.
@@ -49,6 +78,7 @@ pub struct OmniaNetwork {
     swarm: Swarm<OmniaBehaviour>,
     local_peer_id: PeerId,
     event_tx: mpsc::Sender<NetworkEvent>,
+    /// Network event receiver
     pub event_rx: Option<mpsc::Receiver<NetworkEvent>>,
     known_peers: HashMap<PeerId, Multiaddr>,
 }
@@ -114,10 +144,12 @@ impl OmniaNetwork {
         })
     }
 
+    /// Get the local peer ID
     pub fn local_peer_id(&self) -> PeerId {
         self.local_peer_id
     }
 
+    /// Dial a peer at the given address
     pub fn dial(
         &mut self,
         peer_id: PeerId,
@@ -128,11 +160,13 @@ impl OmniaNetwork {
         Ok(())
     }
 
+    /// Subscribe to a gossipsub topic
     pub fn subscribe(&mut self, topic: &str) -> Result<bool, gossipsub::SubscriptionError> {
         let topic = IdentTopic::new(topic);
         self.swarm.behaviour_mut().gossipsub.subscribe(&topic)
     }
 
+    /// Publish data to a gossipsub topic
     pub fn publish(&mut self, topic: &str, data: Vec<u8>) -> Result<(), gossipsub::PublishError> {
         let topic = IdentTopic::new(topic);
         self.swarm.behaviour_mut().gossipsub.publish(topic, data)?;
@@ -159,10 +193,7 @@ impl OmniaNetwork {
     ///
     /// Event consumption (graph insertion + consensus) is handled by
     /// GossipProtocol::process_pending_events(), not here.
-    pub async fn run_with_commands(
-        &mut self,
-        mut cmd_rx: mpsc::Receiver<NetworkCommand>,
-    ) {
+    pub async fn run_with_commands(&mut self, mut cmd_rx: mpsc::Receiver<NetworkCommand>) {
         use futures::StreamExt;
         loop {
             tokio::select! {

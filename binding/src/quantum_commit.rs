@@ -68,20 +68,15 @@ pub struct PqPublicKey {
 }
 
 /// Whether we are in the classical-only, hybrid, or post-quantum phase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum CommitmentPhase {
     /// Phase 1: Only classical (Ed25519) signatures are verified.
+    #[default]
     ClassicalOnly,
     /// Phase 2: Both classical and PQC signatures must verify.
     Hybrid,
     /// Phase 3: Only PQC signatures are verified.
     PostQuantum,
-}
-
-impl Default for CommitmentPhase {
-    fn default() -> Self {
-        Self::ClassicalOnly
-    }
 }
 
 impl QuantumCommitment {
@@ -96,11 +91,7 @@ impl QuantumCommitment {
     /// * `data` — The raw data being committed
     /// * `classical_sig` — Ed25519 signature over the data hash (64 bytes)
     /// * `committed_at` — Causal timestamp for the commitment
-    pub fn new_classical(
-        data: &[u8],
-        classical_sig: Vec<u8>,
-        committed_at: VectorClock,
-    ) -> Self {
+    pub fn new_classical(data: &[u8], classical_sig: Vec<u8>, committed_at: VectorClock) -> Self {
         let hash = blake3::hash(data);
         Self {
             dilithium_sig: Vec::new(),

@@ -5,8 +5,8 @@
 //! this trait, ensuring that switching settlement layers requires zero changes
 //! to consensus, the causal graph, or shard logic.
 
-use async_trait::async_trait;
 use crate::proof_bundle::ProofBundle;
+use async_trait::async_trait;
 
 pub mod bitcoin;
 pub mod celestia;

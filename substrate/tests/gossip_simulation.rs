@@ -39,7 +39,10 @@ impl TestNetwork {
             nodes.push(Arc::new(RwLock::new(substrate)));
         }
 
-        Self { nodes, shared_graph }
+        Self {
+            nodes,
+            shared_graph,
+        }
     }
 
     /// Submit an event to a specific node AND to the shared graph.
@@ -314,8 +317,18 @@ fn test_crdt_100_percent_convergence() {
         assert_eq!(merged.value(), expected, "Main merge failed for {}", desc);
         assert_eq!(alt1.value(), expected, "Alt1 merge failed for {}", desc);
         assert_eq!(alt2.value(), expected, "Alt2 merge failed for {}", desc);
-        assert_eq!(merged.state_hash(), alt1.state_hash(), "Hash mismatch for {}", desc);
-        assert_eq!(alt1.state_hash(), alt2.state_hash(), "Hash mismatch for {}", desc);
+        assert_eq!(
+            merged.state_hash(),
+            alt1.state_hash(),
+            "Hash mismatch for {}",
+            desc
+        );
+        assert_eq!(
+            alt1.state_hash(),
+            alt2.state_hash(),
+            "Hash mismatch for {}",
+            desc
+        );
     }
 }
 
@@ -361,7 +374,11 @@ async fn test_network_event_processed_through_consensus() {
     // Verify events are finalized (4 witnesses in round 0 => supermajority)
     let node0 = network.nodes[0].read().await;
     for id in &event_ids {
-        assert!(node0.is_finalized(id), "Event {:?} should be finalized", &id[..4]);
+        assert!(
+            node0.is_finalized(id),
+            "Event {:?} should be finalized",
+            &id[..4]
+        );
     }
 }
 

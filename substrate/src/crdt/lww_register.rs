@@ -130,9 +130,9 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     /// Compute state hash
     pub fn state_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(&self.timestamp.to_le_bytes());
-        hasher.update(&self.node_id);
-        hasher.update(&self.version.to_le_bytes());
+        hasher.update(self.timestamp.to_le_bytes());
+        hasher.update(self.node_id);
+        hasher.update(self.version.to_le_bytes());
         if let Some(ref val) = self.value {
             let bytes = serde_json::to_vec(val).unwrap_or_default();
             hasher.update(&bytes);
@@ -201,14 +201,15 @@ mod tests {
     /// Strategy for generating arbitrary LwwRegister<u64> states.
     /// Uses `set_with_meta` for deterministic control over timestamp, node_id, and version.
     fn lww_strategy() -> impl Strategy<Value = LwwRegister<u64>> {
-        (any::<u64>(), 0u64..10000, any::<u8>(), 0u64..100)
-            .prop_map(|(value, timestamp, node_byte, version)| {
+        (any::<u64>(), 0u64..10000, any::<u8>(), 0u64..100).prop_map(
+            |(value, timestamp, node_byte, version)| {
                 let mut node_id = [0u8; 32];
                 node_id[0] = node_byte;
                 let mut reg = LwwRegister::new(node_id);
                 reg.set_with_meta(value, timestamp, node_id, version);
                 reg
-            })
+            },
+        )
     }
 
     #[test]

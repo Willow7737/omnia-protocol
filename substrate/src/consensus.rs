@@ -18,12 +18,11 @@
 //! - **Committed**: A famous witness and all its causal ancestors
 
 use crate::causal_graph::CausalGraph;
-use crate::event::{Event, EventId, EventStatus};
+use crate::event::{Event, EventId};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
-use tracing::{debug, info, trace};
 
 /// Supermajority threshold (>2/3)
 /// For N nodes, we need 2*N/3 + 1 for Byzantine fault tolerance
@@ -71,7 +70,10 @@ pub enum ConsensusState {
     /// Event has enough acknowledgments (optimistic)
     Acknowledged,
     /// Event is a witness in a round
-    Witness { round: u64 },
+    Witness {
+        /// The consensus round number
+        round: u64,
+    },
     /// Event is famous (seen by supermajority)
     Famous,
     /// Event is committed (final)
@@ -79,7 +81,7 @@ pub enum ConsensusState {
 }
 
 /// Information about a node's participation in consensus
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NodeConsensusInfo {
     /// Current round for this node
     pub current_round: u64,
@@ -91,19 +93,6 @@ pub struct NodeConsensusInfo {
     pub events_committed: u64,
     /// Last event ID from this node
     pub last_event: Option<EventId>,
-}
-
-impl Default for NodeConsensusInfo {
-    fn default() -> Self {
-        Self {
-            current_round: 0,
-            // Starts at 0 so that `round >= last_witness_round` is true for round 0
-            last_witness_round: 0,
-            events_created: 0,
-            events_committed: 0,
-            last_event: None,
-        }
-    }
 }
 
 /// The consensus engine
@@ -125,7 +114,7 @@ pub struct ConsensusEngine {
     /// Total events committed
     committed_count: u64,
     /// The last finalized vector clock
-    last_finalized: VectorClock,
+    _last_finalized: VectorClock,
 }
 
 impl ConsensusEngine {
@@ -139,7 +128,7 @@ impl ConsensusEngine {
             fame_status: HashMap::new(),
             node_info: HashMap::new(),
             committed_count: 0,
-            last_finalized: VectorClock::new(),
+            _last_finalized: VectorClock::new(),
         }
     }
 
@@ -452,11 +441,17 @@ impl ConsensusEngine {
 /// Consensus statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusStats {
+    /// Total number of events being tracked
     pub total_tracked: usize,
+    /// Number of committed events
     pub committed: u64,
+    /// Highest round reached across all nodes
     pub current_max_round: u64,
+    /// Event counts by consensus state
     pub by_state: HashMap<String, usize>,
+    /// Total number of consensus nodes
     pub total_nodes: usize,
+    /// Supermajority threshold
     pub threshold: usize,
 }
 
@@ -464,12 +459,16 @@ pub struct ConsensusStats {
 #[derive(Error, Debug, Clone)]
 pub enum ConsensusError {
     #[error("Graph error: {0}")]
+    /// Error from the causal graph
     GraphError(String),
     #[error("Event not found: {0:?}")]
+    /// Event not found in consensus state
     EventNotFound(EventId),
     #[error("Invalid state transition")]
+    /// Invalid state transition attempted
     InvalidStateTransition,
     #[error("Not enough nodes for consensus (need at least 4, got {0})")]
+    /// Insufficient nodes for Byzantine fault tolerance
     InsufficientNodes(usize),
 }
 

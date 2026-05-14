@@ -113,9 +113,10 @@ impl ProvenanceTracker {
         rf_proof: RfFingerprint,
         commitment: QuantumCommitment,
     ) -> Result<(), ProvenanceTrackerError> {
-        let anchor = self.anchors.get_mut(&item_id).ok_or_else(|| {
-            ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4]))
-        })?;
+        let anchor = self
+            .anchors
+            .get_mut(&item_id)
+            .ok_or_else(|| ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4])))?;
 
         if anchor.is_destroyed() {
             return Err(ProvenanceTrackerError::Destroyed(format!(
@@ -138,9 +139,10 @@ impl ProvenanceTracker {
         rf_proof: RfFingerprint,
         commitment: QuantumCommitment,
     ) -> Result<(), ProvenanceTrackerError> {
-        let anchor = self.anchors.get_mut(&item_id).ok_or_else(|| {
-            ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4]))
-        })?;
+        let anchor = self
+            .anchors
+            .get_mut(&item_id)
+            .ok_or_else(|| ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4])))?;
 
         if anchor.is_destroyed() {
             return Err(ProvenanceTrackerError::Destroyed(format!(
@@ -169,9 +171,10 @@ impl ProvenanceTracker {
         item_id: [u8; 32],
         current_rf: &[u8; 32],
     ) -> Result<(), ProvenanceTrackerError> {
-        let anchor = self.anchors.get(&item_id).ok_or_else(|| {
-            ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4]))
-        })?;
+        let anchor = self
+            .anchors
+            .get(&item_id)
+            .ok_or_else(|| ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4])))?;
 
         // Check RF fingerprint
         if !anchor.rf_fingerprint.verify(current_rf) {
@@ -257,10 +260,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(tracker.item_count(), 1);
-        assert_eq!(
-            tracker.current_holder(item_id),
-            Some("did:omnia:factory")
-        );
+        assert_eq!(tracker.current_holder(item_id), Some("did:omnia:factory"));
     }
 
     #[test]

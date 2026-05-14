@@ -3,10 +3,10 @@
 //! Pre-flight validation for biological operations, including ZK-proof
 //! validation stubs.
 
-use crate::payload::ShardOp;
-use crate::shard::ShardError;
 use super::ops::BiologicalOp;
 use super::state::BiologicalState;
+use crate::payload::ShardOp;
+use crate::shard::ShardError;
 
 /// Validator for the Biological shard.
 pub struct BiologicalValidator;
@@ -15,7 +15,12 @@ impl BiologicalValidator {
     /// Validate a biological operation against the given state.
     pub fn validate(state: &BiologicalState, op: &BiologicalOp) -> Result<(), ShardError> {
         match op {
-            BiologicalOp::GrantAccess { subject, consumer, scope, .. } => {
+            BiologicalOp::GrantAccess {
+                subject,
+                consumer,
+                scope,
+                ..
+            } => {
                 if scope.is_empty() {
                     return Err(ShardError::InvalidOperation("Scope cannot be empty".into()));
                 }
@@ -25,16 +30,24 @@ impl BiologicalValidator {
             BiologicalOp::RevokeAccess { subject, consumer } => {
                 let key = (*subject, *consumer);
                 if !state.consent_registry.contains_key(&key) {
-                    return Err(ShardError::ValidationFailed("Consent record not found".into()));
+                    return Err(ShardError::ValidationFailed(
+                        "Consent record not found".into(),
+                    ));
                 }
                 Ok(())
             }
-            BiologicalOp::QueryWithZkProof { subject, consumer, .. } => {
+            BiologicalOp::QueryWithZkProof {
+                subject, consumer, ..
+            } => {
                 let key = (*subject, *consumer);
                 match state.consent_registry.get(&key) {
                     Some(record) if !record.revoked => Ok(()),
-                    Some(_) => Err(ShardError::ValidationFailed("Consent has been revoked".into())),
-                    None => Err(ShardError::ValidationFailed("No consent for this query".into())),
+                    Some(_) => Err(ShardError::ValidationFailed(
+                        "Consent has been revoked".into(),
+                    )),
+                    None => Err(ShardError::ValidationFailed(
+                        "No consent for this query".into(),
+                    )),
                 }
             }
         }

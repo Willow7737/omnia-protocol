@@ -2,10 +2,10 @@
 //!
 //! Pre-flight validation for computational operations.
 
-use crate::payload::ShardOp;
-use crate::shard::ShardError;
 use super::ops::ComputationalOp;
 use super::state::ComputationalState;
+use crate::payload::ShardOp;
+use crate::shard::ShardError;
 
 /// Validator for the Computational shard.
 pub struct ComputationalValidator;
@@ -23,24 +23,20 @@ impl ComputationalValidator {
                 }
                 Ok(())
             }
-            ComputationalOp::SubmitProof { task_id, .. } => {
-                match state.tasks.get(task_id) {
-                    Some(task) if task.status == super::state::TaskStatus::Submitted => Ok(()),
-                    Some(_) => Err(ShardError::InvalidOperation(
-                        "Task is not in Submitted status".into(),
-                    )),
-                    None => Err(ShardError::ValidationFailed("Task not found".into())),
-                }
-            }
-            ComputationalOp::VerifyProof { task_id } => {
-                match state.tasks.get(task_id) {
-                    Some(task) if task.status == super::state::TaskStatus::Proved => Ok(()),
-                    Some(_) => Err(ShardError::InvalidOperation(
-                        "Task is not in Proved status".into(),
-                    )),
-                    None => Err(ShardError::ValidationFailed("Task not found".into())),
-                }
-            }
+            ComputationalOp::SubmitProof { task_id, .. } => match state.tasks.get(task_id) {
+                Some(task) if task.status == super::state::TaskStatus::Submitted => Ok(()),
+                Some(_) => Err(ShardError::InvalidOperation(
+                    "Task is not in Submitted status".into(),
+                )),
+                None => Err(ShardError::ValidationFailed("Task not found".into())),
+            },
+            ComputationalOp::VerifyProof { task_id } => match state.tasks.get(task_id) {
+                Some(task) if task.status == super::state::TaskStatus::Proved => Ok(()),
+                Some(_) => Err(ShardError::InvalidOperation(
+                    "Task is not in Proved status".into(),
+                )),
+                None => Err(ShardError::ValidationFailed("Task not found".into())),
+            },
         }
     }
 

@@ -46,8 +46,8 @@ pub mod cross_shard;
 pub mod economics_shard;
 pub mod financial;
 pub mod identity;
-pub mod physical;
 pub mod payload;
+pub mod physical;
 pub mod router;
 pub mod shard;
 
@@ -59,21 +59,20 @@ pub use router::ShardRouter;
 pub use shard::{Shard, ShardError, ShardId};
 
 // Re-export shard-specific types for convenience
+pub use biological::{BiologicalOp, BiologicalState, BiologicalValidator, ConsentRecord};
+pub use computational::{ComputationalOp, ComputationalState, ComputationalValidator, TaskStatus};
 pub use financial::{
-    AccountBalance as FinancialAccountBalance, FinancialOp, FinancialState,
-    FinancialValidator,
+    AccountBalance as FinancialAccountBalance, FinancialOp, FinancialState, FinancialValidator,
 };
 pub use identity::{
-    AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError, DidUpdate,
-    IdentityOp, IdentityState, IdentityValidator, RecoveryConfig, RecoveryShare, ShamirRecovery,
-    DID_METHOD, DID_PREFIX, format_did,
+    format_did, AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError,
+    DidUpdate, IdentityOp, IdentityState, IdentityValidator, RecoveryConfig, RecoveryShare,
+    ShamirRecovery, DID_METHOD, DID_PREFIX,
 };
-pub use computational::{ComputationalOp, ComputationalState, ComputationalValidator, TaskStatus};
 pub use physical::{PhysicalOp, PhysicalState, PhysicalValidator, ProvenanceEvent};
-pub use biological::{BiologicalOp, BiologicalState, BiologicalValidator, ConsentRecord};
 
-use std::collections::HashMap;
 use omnia_substrate::Event;
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Economics shard implementation
@@ -108,26 +107,33 @@ impl EconomicsShardState {
         match op {
             EconomicsOp::MintUbc { did, amount } => {
                 if *amount == 0 {
-                    return Err(ShardError::ValidationFailed("Mint amount must be > 0".into()));
+                    return Err(ShardError::ValidationFailed(
+                        "Mint amount must be > 0".into(),
+                    ));
                 }
                 *self.balances.entry(did.clone()).or_insert(0) += amount;
                 Ok(())
             }
             EconomicsOp::SpendUbc { did, amount } => {
                 if *amount == 0 {
-                    return Err(ShardError::ValidationFailed("Spend amount must be > 0".into()));
+                    return Err(ShardError::ValidationFailed(
+                        "Spend amount must be > 0".into(),
+                    ));
                 }
                 let balance = self.balances.get(did).copied().unwrap_or(0);
                 if balance < *amount {
-                    return Err(ShardError::ValidationFailed(
-                        format!("Insufficient UBC: have {}, need {}", balance, amount)
-                    ));
+                    return Err(ShardError::ValidationFailed(format!(
+                        "Insufficient UBC: have {}, need {}",
+                        balance, amount
+                    )));
                 }
                 self.balances.insert(did.clone(), balance - amount);
                 Ok(())
             }
             EconomicsOp::RegisterDid { did } => {
-                self.balances.entry(did.clone()).or_insert(self.default_quota);
+                self.balances
+                    .entry(did.clone())
+                    .or_insert(self.default_quota);
                 Ok(())
             }
             EconomicsOp::AdvanceEpoch => {
@@ -140,7 +146,10 @@ impl EconomicsShardState {
             }
             EconomicsOp::SubmitWork { did, .. } => {
                 // Simplified: reward 100 UBC for any submitted work
-                *self.balances.entry(did.clone()).or_insert(self.default_quota) += 100;
+                *self
+                    .balances
+                    .entry(did.clone())
+                    .or_insert(self.default_quota) += 100;
                 Ok(())
             }
             EconomicsOp::CreateProposal { .. } | EconomicsOp::Vote { .. } => {
@@ -204,17 +213,15 @@ impl Shard for EconomicsShard {
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
         match op {
-            ShardOp::Economics(econ_op) => {
-                match econ_op {
-                    EconomicsOp::SpendUbc { amount, .. } if *amount == 0 => {
-                        Err(ShardError::ValidationFailed("Spend amount must be > 0".into()))
-                    }
-                    EconomicsOp::MintUbc { amount, .. } if *amount == 0 => {
-                        Err(ShardError::ValidationFailed("Mint amount must be > 0".into()))
-                    }
-                    _ => Ok(()),
-                }
-            }
+            ShardOp::Economics(econ_op) => match econ_op {
+                EconomicsOp::SpendUbc { amount, .. } if *amount == 0 => Err(
+                    ShardError::ValidationFailed("Spend amount must be > 0".into()),
+                ),
+                EconomicsOp::MintUbc { amount, .. } if *amount == 0 => Err(
+                    ShardError::ValidationFailed("Mint amount must be > 0".into()),
+                ),
+                _ => Ok(()),
+            },
             _ => Err(ShardError::InvalidOperation(
                 "Economics shard received non-Economics operation".into(),
             )),

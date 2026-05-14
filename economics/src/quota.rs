@@ -57,9 +57,9 @@ impl QuotaSystem {
     /// If the DID is already registered, this is a no-op — the existing
     /// token and balance are preserved.
     pub fn register_did(&mut self, did: &str) {
-        self.tokens
-            .entry(did.to_string())
-            .or_insert_with(|| UbcToken::new(did.to_string(), self.default_quota, self.current_epoch));
+        self.tokens.entry(did.to_string()).or_insert_with(|| {
+            UbcToken::new(did.to_string(), self.default_quota, self.current_epoch)
+        });
     }
 
     /// Advance to the next epoch, resetting all UBC balances.

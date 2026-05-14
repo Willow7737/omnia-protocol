@@ -100,6 +100,7 @@ pub trait CvRDT: Clone {
 /// Op-based CRDTs replicate only the operations, not full state.
 /// More efficient for large data structures but require reliable broadcast.
 pub trait CmRDT {
+    /// The operation type for this CRDT
     type Operation;
 
     /// Apply an operation to this CRDT
@@ -132,6 +133,7 @@ pub struct AccountBalance {
 }
 
 impl AccountBalance {
+    /// Create a new account balance
     pub fn new() -> Self {
         Self {
             counter: GCounter::new(),
@@ -140,12 +142,14 @@ impl AccountBalance {
         }
     }
 
+    /// Increment the balance for a node
     pub fn increment(&mut self, node_id: NodeId, amount: u64) {
         self.counter.increment(node_id, amount);
         self.last_updater = Some(node_id);
         let _ = self.vector_clock.increment(node_id);
     }
 
+    /// Get the total balance value
     pub fn value(&self) -> u64 {
         self.counter.value()
     }

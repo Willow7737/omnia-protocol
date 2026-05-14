@@ -59,7 +59,11 @@ impl ComputationalState {
     /// Apply a computational operation, mutating state.
     pub fn apply(&mut self, op: &ComputationalOp, vc: &VectorClock) -> Result<(), ShardError> {
         match op {
-            ComputationalOp::SubmitTask { task_id, spec, reward } => {
+            ComputationalOp::SubmitTask {
+                task_id,
+                spec,
+                reward,
+            } => {
                 if self.tasks.contains_key(task_id) {
                     return Err(ShardError::StateConflict(format!(
                         "Task already exists: {:?}",

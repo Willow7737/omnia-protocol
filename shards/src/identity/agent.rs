@@ -125,12 +125,8 @@ impl AgentCapability {
             ) => r1 >= r2 && d2.iter().all(|d| d1.contains(d)),
 
             (
-                ContractExecution {
-                    contract_types: t1,
-                },
-                ContractExecution {
-                    contract_types: t2,
-                },
+                ContractExecution { contract_types: t1 },
+                ContractExecution { contract_types: t2 },
             ) => t2.iter().all(|t| t1.contains(t)),
 
             (
@@ -142,10 +138,7 @@ impl AgentCapability {
                 },
             ) => a >= b,
 
-            (
-                GovernanceVote { max_weight: a },
-                GovernanceVote { max_weight: b },
-            ) => a >= b,
+            (GovernanceVote { max_weight: a }, GovernanceVote { max_weight: b }) => a >= b,
 
             _ => false,
         }

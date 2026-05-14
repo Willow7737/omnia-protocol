@@ -140,7 +140,9 @@ impl EconomicsState {
                 did,
                 proposal_id,
                 choice,
-            } => self.governance.vote(did, proposal_id, choice.clone(), current_epoch),
+            } => self
+                .governance
+                .vote(did, proposal_id, choice.clone(), current_epoch),
             EconomicsOp::RegisterDid { did } => {
                 self.quota.register_did(did);
                 Ok(())
@@ -178,13 +180,16 @@ impl EconomicsState {
     /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         if bytes.is_empty() {
-            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                "Empty state bytes".into(),
+            )));
         }
         let version = bytes[0];
         if version != Self::ECONOMICS_STATE_VERSION {
-            return Err(Box::new(bincode::ErrorKind::Custom(
-                format!("Unsupported economics state version: {}", version),
-            )));
+            return Err(Box::new(bincode::ErrorKind::Custom(format!(
+                "Unsupported economics state version: {}",
+                version
+            ))));
         }
         bincode::deserialize(&bytes[1..])
     }

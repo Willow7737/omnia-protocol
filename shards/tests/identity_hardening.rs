@@ -116,9 +116,7 @@ fn test_full_identity_lifecycle() {
 
     // 3. Create recovery shares
     let secret = b"master_secret_key_32_bytes_long";
-    let shares = state
-        .create_recovery_shares(&did, secret, 3, 5)
-        .unwrap();
+    let shares = state.create_recovery_shares(&did, secret, 3, 5).unwrap();
     assert_eq!(shares.len(), 5);
 
     // 4. Recover with 3 shares
@@ -269,7 +267,10 @@ fn test_agent_revocation_disables_capabilities() {
         .unwrap();
 
     // Agent should have capability before revocation
-    let agent = state.agent_registry.get("did:omnia:agent:compute1").unwrap();
+    let agent = state
+        .agent_registry
+        .get("did:omnia:agent:compute1")
+        .unwrap();
     assert!(agent.has_capability(&AgentCapability::ComputeProof {
         max_compute_units: 500,
     }));
@@ -285,7 +286,10 @@ fn test_agent_revocation_disables_capabilities() {
         .unwrap();
 
     // Agent should NOT have capability after revocation
-    let agent = state.agent_registry.get("did:omnia:agent:compute1").unwrap();
+    let agent = state
+        .agent_registry
+        .get("did:omnia:agent:compute1")
+        .unwrap();
     assert!(!agent.has_capability(&AgentCapability::ComputeProof {
         max_compute_units: 500,
     }));

@@ -118,11 +118,7 @@ impl RollupOperator {
     }
 
     /// Extract events from a causal graph starting at a given index.
-    fn collect_from_graph(
-        graph: &CausalGraph,
-        start_index: usize,
-        limit: usize,
-    ) -> Vec<Event> {
+    fn collect_from_graph(graph: &CausalGraph, start_index: usize, limit: usize) -> Vec<Event> {
         let all_ids = graph.event_ids();
         all_ids
             .iter()

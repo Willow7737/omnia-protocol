@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # rand 0.9+ incompatible with ed25519-dalek (requires rand ~0.8)
+      - dependency-name: "rand"
+        versions: [">=0.9"]
+      # bincode 2.0+ has breaking API changes not yet migrated
+      - dependency-name: "bincode"
+        versions: [">=2.0"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

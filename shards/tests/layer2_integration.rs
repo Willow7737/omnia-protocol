@@ -12,8 +12,8 @@
 use std::sync::{Arc, Mutex};
 
 use omnia_shards::{
-    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState,
-    ShardId, ShardOp, ShardPayload, ShardRouter,
+    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState, ShardId,
+    ShardOp, ShardPayload, ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, Substrate, SubstrateConfig};
 

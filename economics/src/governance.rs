@@ -48,7 +48,12 @@ pub struct Proposal {
 
 impl Proposal {
     /// Create a new proposal.
-    pub fn new(id: String, description: String, created_at_epoch: u64, expires_at_epoch: u64) -> Self {
+    pub fn new(
+        id: String,
+        description: String,
+        created_at_epoch: u64,
+        expires_at_epoch: u64,
+    ) -> Self {
         Self {
             id,
             description,
@@ -72,7 +77,9 @@ impl Proposal {
 
     /// Get total participation (sum of all vote weights).
     pub fn total_participation(&self) -> u64 {
-        self.votes_for.saturating_add(self.votes_against).saturating_add(self.votes_abstain)
+        self.votes_for
+            .saturating_add(self.votes_against)
+            .saturating_add(self.votes_abstain)
     }
 }
 

@@ -109,12 +109,19 @@ pub struct Event {
 /// Lightweight event header for efficient gossip
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventHeader {
+    /// Event identifier
     pub id: EventId,
+    /// Creator node identifier
     pub creator: NodeId,
+    /// Sequence number from the creator
     pub sequence: u64,
+    /// Wall-clock timestamp
     pub timestamp: u64,
+    /// Vector clock for causal ordering
     pub vector_clock: VectorClock,
+    /// Hash of the creator's previous event
     pub self_parent: Option<EventId>,
+    /// Hash of an event from another node
     pub other_parent: Option<EventId>,
 }
 
@@ -132,6 +139,7 @@ pub struct EventRequest {
 /// Response to an event request
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventBatch {
+    /// Events in the batch
     pub events: Vec<Event>,
     /// Whether there are more events available
     pub has_more: bool,
@@ -183,18 +191,18 @@ impl Event {
     /// Includes creator_pubkey in the hash input for binding.
     fn compute_hash(&self) -> EventId {
         let mut hasher = Sha256::new();
-        hasher.update(&self.creator);
-        hasher.update(&self.sequence.to_le_bytes());
-        hasher.update(&self.timestamp.to_le_bytes());
-        hasher.update(&self.vector_clock.to_bytes());
+        hasher.update(self.creator);
+        hasher.update(self.sequence.to_le_bytes());
+        hasher.update(self.timestamp.to_le_bytes());
+        hasher.update(self.vector_clock.to_bytes());
         if let Some(sp) = self.self_parent {
-            hasher.update(&sp);
+            hasher.update(sp);
         }
         if let Some(op) = self.other_parent {
-            hasher.update(&op);
+            hasher.update(op);
         }
         hasher.update(&self.payload);
-        hasher.update(&self.creator_pubkey);
+        hasher.update(self.creator_pubkey);
         hasher.finalize().into()
     }
 
@@ -338,24 +346,34 @@ impl EventHeader {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EventValidationError {
     #[error("Event hash does not match content")]
+    /// Hash integrity check failed
     InvalidHash,
     #[error("Event signature is invalid")]
+    /// Cryptographic signature is invalid
     InvalidSignature,
     #[error("Event has been rejected")]
+    /// Event was previously rejected
     RejectedEvent,
     #[error("Failed to deserialize event")]
+    /// Deserialization failed
     DeserializationError,
     #[error("Event timestamp is too far in the future")]
+    /// Timestamp exceeds allowed drift
     FutureTimestamp,
     #[error("Event timestamp is unreasonably old")]
+    /// Timestamp is too old
     AncientTimestamp,
     #[error("Event is unsigned (zero signature or pubkey)")]
+    /// Event has no valid signature
     UnsignedEvent,
     #[error("Event parent references form a cycle")]
+    /// Parent references create a cycle
     CircularParentReference,
     #[error("Event references a non-existent parent")]
+    /// Referenced parent does not exist
     MissingParent,
     #[error("Event has obviously invalid data (zero amount)")]
+    /// Obviously invalid data detected
     ZeroAmount,
 }
 
@@ -700,10 +718,7 @@ mod tests {
     #[test]
     fn test_circular_parent_reference_error_variant() {
         let err = EventValidationError::CircularParentReference;
-        assert_eq!(
-            format!("{}", err),
-            "Event parent references form a cycle"
-        );
+        assert_eq!(format!("{}", err), "Event parent references form a cycle");
     }
 
     /// Test that the new MissingParent error variant exists and is constructible.

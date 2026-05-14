@@ -100,7 +100,10 @@ mod tests {
 
     #[test]
     fn test_invalid_hex() {
-        let invalid = format!("{}{}", DID_PREFIX, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ");
+        let invalid = format!(
+            "{}{}",
+            DID_PREFIX, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+        );
         assert!(validate_did(&invalid).is_err());
     }
 

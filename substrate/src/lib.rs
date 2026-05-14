@@ -38,7 +38,10 @@ pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_TIMESTAMP_DRIFT_MS,
 };
-pub use gossip::{GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol, GossipStats};
+pub use gossip::{
+    GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
+    GossipStats,
+};
 pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 
@@ -86,16 +89,22 @@ pub trait EventProcessor: Send + Sync {
 #[derive(Error, Debug)]
 pub enum SubstrateError {
     #[error("Vector clock error: {0}")]
+    /// Vector clock error
     VectorClock(#[from] VectorClockError),
     #[error("Causal graph error: {0}")]
+    /// Causal graph error
     CausalGraph(#[from] CausalGraphError),
     #[error("Event validation error: {0}")]
+    /// Event validation error
     EventValidation(#[from] EventValidationError),
     #[error("Gossip error: {0}")]
+    /// Gossip protocol error
     Gossip(#[from] GossipError),
     #[error("Consensus error: {0}")]
+    /// Consensus engine error
     Consensus(#[from] ConsensusError),
     #[error("Configuration error: {0}")]
+    /// Configuration error
     Config(String),
 }
 
@@ -105,13 +114,18 @@ pub type Result<T> = std::result::Result<T, SubstrateError>;
 /// Configuration for the entire substrate layer
 #[derive(Debug, Clone)]
 pub struct SubstrateConfig {
+    /// Unique identifier for this node
     pub node_id: NodeId,
+    /// Gossip protocol configuration
     pub gossip: GossipConfig,
+    /// Consensus engine configuration
     pub consensus: ConsensusConfig,
+    /// Total number of nodes in the network
     pub total_nodes: usize,
 }
 
 impl SubstrateConfig {
+    /// Create a new substrate configuration with default settings
     pub fn new(node_id: NodeId) -> Self {
         let total_nodes = 4;
         Self {
@@ -125,6 +139,7 @@ impl SubstrateConfig {
         }
     }
 
+    /// Create a substrate configuration with a custom network size
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
         Self {
             node_id,
@@ -159,6 +174,7 @@ pub struct Substrate {
 }
 
 impl Substrate {
+    /// Create a new Substrate runtime with the given configuration
     pub fn new(config: SubstrateConfig) -> Self {
         let graph = std::sync::Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
         let consensus = ConsensusEngine::new(config.consensus.clone());
@@ -174,6 +190,7 @@ impl Substrate {
         }
     }
 
+    /// Initialize the gossip protocol
     pub fn init_gossip(&mut self) {
         self.gossip = Some(GossipProtocol::new(
             self.config.node_id,
@@ -182,6 +199,7 @@ impl Substrate {
         ));
     }
 
+    /// Start the substrate runtime
     pub async fn start(&mut self) {
         self.running = true;
         if let Some(ref mut gossip) = self.gossip {
@@ -189,6 +207,7 @@ impl Substrate {
         }
     }
 
+    /// Stop the substrate runtime
     pub fn stop(&mut self) {
         self.running = false;
         if let Some(ref mut gossip) = self.gossip {
@@ -252,15 +271,16 @@ impl Substrate {
         }
     }
 
-    /// Start with network and run main loop.
-    pub async fn start_with_network(&mut self, network: network::OmniaNetwork) {
+    /// Start with network and run main loop
+    pub async fn start_with_network(&mut self, network: OmniaNetwork) {
         if let Some(ref mut gossip) = self.gossip {
             gossip.start_with_network(network).await;
         }
         self.run().await;
     }
 
-    pub async fn submit_event(&mut self, mut event: Event) -> Result<()> {
+    /// Submit an event to the substrate for processing
+    pub async fn submit_event(&mut self, event: Event) -> Result<()> {
         event.validate().map_err(SubstrateError::from)?;
 
         {
@@ -287,22 +307,27 @@ impl Substrate {
         Ok(())
     }
 
-    pub async fn graph(&self) -> tokio::sync::RwLockReadGuard<CausalGraph> {
+    /// Get read access to the causal graph
+    pub async fn graph(&self) -> tokio::sync::RwLockReadGuard<'_, CausalGraph> {
         self.graph.read().await
     }
 
+    /// Get consensus statistics
     pub fn consensus_stats(&self) -> consensus::ConsensusStats {
         self.consensus.stats()
     }
 
+    /// Get gossip protocol statistics
     pub fn gossip_stats(&self) -> Option<&GossipStats> {
         self.gossip.as_ref().map(|g| g.stats())
     }
 
+    /// Check if an event has been finalized
     pub fn is_finalized(&self, event_id: &EventId) -> bool {
         self.consensus.is_committed(event_id)
     }
 
+    /// Get all finalized event IDs
     pub fn finalized_events(&self) -> Vec<EventId> {
         self.consensus.get_committed()
     }
@@ -367,10 +392,14 @@ impl Substrate {
     }
 }
 
+/// Statistics about the substrate runtime
 #[derive(Debug, Clone)]
 pub struct SubstrateStats {
+    /// Graph statistics
     pub graph: GraphStats,
+    /// Consensus statistics
     pub consensus: consensus::ConsensusStats,
+    /// Whether the substrate is running
     pub running: bool,
 }
 

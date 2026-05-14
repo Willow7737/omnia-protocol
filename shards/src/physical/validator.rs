@@ -3,10 +3,10 @@
 //! Pre-flight validation for physical asset operations, especially
 //! ownership verification for transfers.
 
-use crate::payload::ShardOp;
-use crate::shard::ShardError;
 use super::ops::PhysicalOp;
 use super::state::PhysicalState;
+use crate::payload::ShardOp;
+use crate::shard::ShardError;
 
 /// Validator for the Physical shard.
 pub struct PhysicalValidator;

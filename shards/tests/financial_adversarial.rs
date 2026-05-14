@@ -7,7 +7,7 @@
 
 use omnia_shards::{FinancialOp, FinancialState, FinancialValidator, ShardError};
 use omnia_substrate::crypto::generate_keypair;
-use omnia_substrate::{Event, NodeKeypair, NodeId, VectorClock};
+use omnia_substrate::{Event, NodeId, NodeKeypair, VectorClock};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,7 +64,9 @@ fn test_double_spend_attack() {
     // Transfer 100 from A to B — should succeed
     let transfer1 = FinancialOp::Transfer { to: b, amount: 100 };
     let event1 = make_signed_event(&kp_a, 1, node);
-    state.apply(&transfer1, &event1).expect("first transfer should succeed");
+    state
+        .apply(&transfer1, &event1)
+        .expect("first transfer should succeed");
     assert_eq!(state.balance_of(&a), 0);
     assert_eq!(state.balance_of(&b), 100);
 
@@ -161,8 +163,12 @@ fn test_replay_attack_nonce_bypass() {
     // Apply the same transfer to both states
     let transfer = FinancialOp::Transfer { to: b, amount: 75 };
     let event1 = make_signed_event(&kp_a, 1, node);
-    state1.apply(&transfer, &event1).expect("transfer in state1");
-    state2.apply(&transfer, &event1).expect("transfer in state2");
+    state1
+        .apply(&transfer, &event1)
+        .expect("transfer in state1");
+    state2
+        .apply(&transfer, &event1)
+        .expect("transfer in state2");
 
     // Both states must be identical — deterministic
     assert_eq!(state1.balance_of(&a), state2.balance_of(&a));
@@ -207,12 +213,16 @@ fn test_concurrent_transfers_balance_consistency() {
     // Transfer 60 from A to B
     let transfer1 = FinancialOp::Transfer { to: b, amount: 60 };
     let event1 = make_signed_event(&kp_a, 1, node);
-    state.apply(&transfer1, &event1).expect("transfer A->B should succeed");
+    state
+        .apply(&transfer1, &event1)
+        .expect("transfer A->B should succeed");
 
     // Transfer 40 from A to C
     let transfer2 = FinancialOp::Transfer { to: c, amount: 40 };
     let event2 = make_signed_event(&kp_a, 2, node);
-    state.apply(&transfer2, &event2).expect("transfer A->C should succeed");
+    state
+        .apply(&transfer2, &event2)
+        .expect("transfer A->C should succeed");
 
     // Verify final balances
     assert_eq!(state.balance_of(&a), 0, "A should have 0");
@@ -326,11 +336,17 @@ fn test_burn_insufficient_balance() {
     state.apply(&mint_op, &event0).expect("mint should succeed");
 
     // Attempt to burn 50 — more than A holds
-    let burn_op = FinancialOp::Burn { from: a, amount: 50 };
+    let burn_op = FinancialOp::Burn {
+        from: a,
+        amount: 50,
+    };
 
     // Validator should catch it
     let val_result = FinancialValidator::validate(&state, &burn_op);
-    assert!(val_result.is_err(), "validator should reject oversized burn");
+    assert!(
+        val_result.is_err(),
+        "validator should reject oversized burn"
+    );
     match val_result.unwrap_err() {
         ShardError::ValidationFailed(msg) => {
             assert!(
@@ -380,7 +396,10 @@ fn test_total_supply_consistency() {
     state
         .apply(&FinancialOp::Mint { to: b, amount: 300 }, &event1)
         .expect("mint B");
-    assert_eq!(state.total_supply, 800, "second mint should add to total_supply");
+    assert_eq!(
+        state.total_supply, 800,
+        "second mint should add to total_supply"
+    );
 
     // Transfer 200 from A to C — should NOT change total_supply
     let event2 = make_signed_event(&kp_a, 2, node);
@@ -395,7 +414,13 @@ fn test_total_supply_consistency() {
     // Burn 100 from B — should reduce total_supply
     let event3 = make_signed_event(&kp_b, 3, node);
     state
-        .apply(&FinancialOp::Burn { from: b, amount: 100 }, &event3)
+        .apply(
+            &FinancialOp::Burn {
+                from: b,
+                amount: 100,
+            },
+            &event3,
+        )
         .expect("burn from B");
     assert_eq!(
         state.total_supply, 700,
@@ -413,11 +438,7 @@ fn test_total_supply_consistency() {
     );
 
     // Verify sum of all balances equals total_supply
-    let sum_balances: u64 = state
-        .balances
-        .values()
-        .map(|ab| ab.value())
-        .sum();
+    let sum_balances: u64 = state.balances.values().map(|ab| ab.value()).sum();
     assert_eq!(
         sum_balances, state.total_supply,
         "sum of balances must equal total_supply"
@@ -452,11 +473,14 @@ fn test_transfer_to_self() {
     // Transfer from A to A — should succeed with no net balance change
     let transfer = FinancialOp::Transfer { to: a, amount: 50 };
     let event1 = make_signed_event(&kp_a, 1, node);
-    state.apply(&transfer, &event1).expect("self-transfer should succeed");
+    state
+        .apply(&transfer, &event1)
+        .expect("self-transfer should succeed");
 
     // Balance should be unchanged (debit 50, credit 50)
     assert_eq!(
-        state.balance_of(&a), 100,
+        state.balance_of(&a),
+        100,
         "self-transfer should not change balance"
     );
 
@@ -467,5 +491,9 @@ fn test_transfer_to_self() {
     );
 
     // No double-counting: the balance entry for A should exist exactly once
-    assert_eq!(state.balances.len(), 1, "A should have exactly one balance entry");
+    assert_eq!(
+        state.balances.len(),
+        1,
+        "A should have exactly one balance entry"
+    );
 }

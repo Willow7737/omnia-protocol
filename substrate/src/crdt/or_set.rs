@@ -140,7 +140,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
             hasher.update(&elem_bytes);
             for (node, seq) in tokens {
                 hasher.update(node);
-                hasher.update(&seq.to_le_bytes());
+                hasher.update(seq.to_le_bytes());
             }
         }
         hasher.finalize().into()
@@ -187,20 +187,19 @@ mod tests {
     /// Strategy for generating arbitrary OrSet<u32> states.
     /// Produces an OrSet by applying a random sequence of add/remove operations.
     fn orset_strategy() -> impl Strategy<Value = OrSet<u32>> {
-        prop::collection::vec((any::<u8>(), any::<bool>(), any::<u32>()), 0..20)
-            .prop_map(|ops| {
-                let mut set: OrSet<u32> = OrSet::new();
-                for (node_byte, is_add, element) in ops {
-                    let mut node_id = [0u8; 32];
-                    node_id[0] = node_byte;
-                    if is_add {
-                        set.add(node_id, element);
-                    } else {
-                        set.remove(&element);
-                    }
+        prop::collection::vec((any::<u8>(), any::<bool>(), any::<u32>()), 0..20).prop_map(|ops| {
+            let mut set: OrSet<u32> = OrSet::new();
+            for (node_byte, is_add, element) in ops {
+                let mut node_id = [0u8; 32];
+                node_id[0] = node_byte;
+                if is_add {
+                    set.add(node_id, element);
+                } else {
+                    set.remove(&element);
                 }
-                set
-            })
+            }
+            set
+        })
     }
 
     /// Compare two OrSets by their observable elements (ignoring internal sequence counter).

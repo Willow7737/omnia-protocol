@@ -120,8 +120,7 @@ impl ProofBundle {
 
     /// Deserialize a bundle from bytes using bincode.
     pub fn from_bytes(data: &[u8]) -> Result<Self, ProofBundleError> {
-        bincode::deserialize(data)
-            .map_err(|e| ProofBundleError::SerializationError(e.to_string()))
+        bincode::deserialize(data).map_err(|e| ProofBundleError::SerializationError(e.to_string()))
     }
 
     /// Verify the integrity of this proof bundle.

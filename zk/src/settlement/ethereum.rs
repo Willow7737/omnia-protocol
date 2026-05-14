@@ -19,7 +19,7 @@ use async_trait::async_trait;
 pub struct EthereumAdapter {
     rpc_url: String,
     contract_address: String,
-    operator_key: [u8; 32],
+    _operator_key: [u8; 32],
 }
 
 impl EthereumAdapter {
@@ -33,7 +33,7 @@ impl EthereumAdapter {
         Self {
             rpc_url: rpc_url.to_string(),
             contract_address: contract_address.to_string(),
-            operator_key: *operator_key,
+            _operator_key: *operator_key,
         }
     }
 
@@ -110,7 +110,9 @@ impl SettlementLayer for EthereumAdapter {
         // In production, this would serialize the bundle and send it to the
         // OmniaRollup contract, which verifies the ZK proof and updates the
         // committed state root on-chain.
-        let bundle_bytes = bundle.to_bytes().map_err(|e| SettlementError::RpcError(e.to_string()))?;
+        let bundle_bytes = bundle
+            .to_bytes()
+            .map_err(|e| SettlementError::RpcError(e.to_string()))?;
         let tx_hash = format!("0x{}", hex::encode(blake3::hash(&bundle_bytes).as_bytes()));
         tracing::info!(
             "[Ethereum] Submitted proof bundle, state_root={}, tx: {}",

@@ -56,7 +56,12 @@ impl BiologicalState {
     /// Apply a biological operation, mutating state.
     pub fn apply(&mut self, op: &BiologicalOp, vc: &VectorClock) -> Result<(), ShardError> {
         match op {
-            BiologicalOp::GrantAccess { subject, consumer, scope, expires_at } => {
+            BiologicalOp::GrantAccess {
+                subject,
+                consumer,
+                scope,
+                expires_at,
+            } => {
                 let key = (*subject, *consumer);
                 self.consent_registry.insert(
                     key,
@@ -73,22 +78,27 @@ impl BiologicalState {
             }
             BiologicalOp::RevokeAccess { subject, consumer } => {
                 let key = (*subject, *consumer);
-                let record = self
-                    .consent_registry
-                    .get_mut(&key)
-                    .ok_or_else(|| ShardError::ValidationFailed("Consent record not found".into()))?;
+                let record = self.consent_registry.get_mut(&key).ok_or_else(|| {
+                    ShardError::ValidationFailed("Consent record not found".into())
+                })?;
                 record.revoked = true;
                 Ok(())
             }
-            BiologicalOp::QueryWithZkProof { subject, consumer, zk_proof, .. } => {
+            BiologicalOp::QueryWithZkProof {
+                subject,
+                consumer,
+                zk_proof,
+                ..
+            } => {
                 let key = (*subject, *consumer);
-                let record = self
-                    .consent_registry
-                    .get(&key)
-                    .ok_or_else(|| ShardError::ValidationFailed("No consent for this query".into()))?;
+                let record = self.consent_registry.get(&key).ok_or_else(|| {
+                    ShardError::ValidationFailed("No consent for this query".into())
+                })?;
 
                 if record.revoked {
-                    return Err(ShardError::ValidationFailed("Consent has been revoked".into()));
+                    return Err(ShardError::ValidationFailed(
+                        "Consent has been revoked".into(),
+                    ));
                 }
 
                 // In a real implementation, verify the ZK proof here.

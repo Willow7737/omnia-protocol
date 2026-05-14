@@ -104,12 +104,9 @@ impl IdentityState {
                 Ok(())
             }
             IdentityOp::UpdateDid { did, updates } => {
-                let doc = self
-                    .dids
-                    .get_mut(did)
-                    .ok_or_else(|| {
-                        ShardError::ValidationFailed(format!("DID not found: {}", did))
-                    })?;
+                let doc = self.dids.get_mut(did).ok_or_else(|| {
+                    ShardError::ValidationFailed(format!("DID not found: {}", did))
+                })?;
 
                 for update in updates {
                     match update {
@@ -134,10 +131,7 @@ impl IdentityState {
             }
             IdentityOp::RecoverDid { did, shares } => {
                 let config = self.recovery_registry.get(did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!(
-                        "No recovery config for DID: {}",
-                        did
-                    ))
+                    ShardError::ValidationFailed(format!("No recovery config for DID: {}", did))
                 })?;
 
                 if shares.len() < config.threshold as usize {
@@ -185,8 +179,7 @@ impl IdentityState {
                         agent.did
                     )));
                 }
-                self.agent_registry
-                    .insert(agent.did.clone(), agent.clone());
+                self.agent_registry.insert(agent.did.clone(), agent.clone());
                 Ok(())
             }
             IdentityOp::EnrollBiometric {
@@ -206,10 +199,7 @@ impl IdentityState {
             }
             IdentityOp::VerifyBiometric { did, template } => {
                 let anchor = self.biometric_registry.get(did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!(
-                        "No biometric enrolled for DID: {}",
-                        did
-                    ))
+                    ShardError::ValidationFailed(format!("No biometric enrolled for DID: {}", did))
                 })?;
                 if !anchor.verify(template) {
                     return Err(ShardError::ValidationFailed(
@@ -220,10 +210,7 @@ impl IdentityState {
             }
             IdentityOp::RevokeAgent { agent_did } => {
                 let agent = self.agent_registry.get_mut(agent_did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!(
-                        "Agent not found: {}",
-                        agent_did
-                    ))
+                    ShardError::ValidationFailed(format!("Agent not found: {}", agent_did))
                 })?;
                 agent.revoke();
                 Ok(())
@@ -281,16 +268,9 @@ impl IdentityState {
     }
 
     /// Verify a biometric template against the stored commitment.
-    pub fn verify_biometric(
-        &self,
-        did: &str,
-        fresh_template: &[u8],
-    ) -> Result<bool, ShardError> {
+    pub fn verify_biometric(&self, did: &str, fresh_template: &[u8]) -> Result<bool, ShardError> {
         let anchor = self.biometric_registry.get(did).ok_or_else(|| {
-            ShardError::ValidationFailed(format!(
-                "No biometric enrolled for DID: {}",
-                did
-            ))
+            ShardError::ValidationFailed(format!("No biometric enrolled for DID: {}", did))
         })?;
         Ok(anchor.verify(fresh_template))
     }
@@ -321,16 +301,9 @@ impl IdentityState {
     }
 
     /// Recover a DID secret using Shamir's Secret Sharing.
-    pub fn recover_did(
-        &self,
-        did: &str,
-        shares: &[RecoveryShare],
-    ) -> Result<Vec<u8>, ShardError> {
+    pub fn recover_did(&self, did: &str, shares: &[RecoveryShare]) -> Result<Vec<u8>, ShardError> {
         let config = self.recovery_registry.get(did).ok_or_else(|| {
-            ShardError::ValidationFailed(format!(
-                "No recovery config for DID: {}",
-                did
-            ))
+            ShardError::ValidationFailed(format!("No recovery config for DID: {}", did))
         })?;
         if shares.len() < config.threshold as usize {
             return Err(ShardError::ValidationFailed(format!(
@@ -339,16 +312,12 @@ impl IdentityState {
                 config.threshold
             )));
         }
-        ShamirRecovery::reconstruct(shares).ok_or_else(|| {
-            ShardError::ValidationFailed("Recovery reconstruction failed".into())
-        })
+        ShamirRecovery::reconstruct(shares)
+            .ok_or_else(|| ShardError::ValidationFailed("Recovery reconstruction failed".into()))
     }
 
     /// Register an AI agent identity.
-    pub fn register_agent(
-        &mut self,
-        agent: AgentIdentity,
-    ) -> Result<(), ShardError> {
+    pub fn register_agent(&mut self, agent: AgentIdentity) -> Result<(), ShardError> {
         if self.agent_registry.contains_key(&agent.did) {
             return Err(ShardError::StateConflict(format!(
                 "Agent already exists: {}",

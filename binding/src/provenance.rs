@@ -278,13 +278,16 @@ impl ProvenanceLog {
     /// payload. Returns an error if the version is unsupported.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         if bytes.is_empty() {
-            return Err(Box::new(bincode::ErrorKind::Custom("Empty state bytes".into())));
+            return Err(Box::new(bincode::ErrorKind::Custom(
+                "Empty state bytes".into(),
+            )));
         }
         let version = bytes[0];
         if version != Self::PROVENANCE_LOG_VERSION {
-            return Err(Box::new(bincode::ErrorKind::Custom(
-                format!("Unsupported provenance log version: {}", version),
-            )));
+            return Err(Box::new(bincode::ErrorKind::Custom(format!(
+                "Unsupported provenance log version: {}",
+                version
+            ))));
         }
         bincode::deserialize(&bytes[1..])
     }
@@ -293,8 +296,8 @@ impl ProvenanceLog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rf_fingerprint::RfFingerprint;
     use crate::quantum_commit::QuantumCommitment;
+    use crate::rf_fingerprint::RfFingerprint;
 
     fn test_rf(did: &str) -> RfFingerprint {
         RfFingerprint::stub(did, [0x55u8; 32])
@@ -362,10 +365,7 @@ mod tests {
             test_anchor(),
         );
 
-        log.verify(
-            test_rf("did:omnia:alice"),
-            test_commitment(b"verification"),
-        );
+        log.verify(test_rf("did:omnia:alice"), test_commitment(b"verification"));
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.events[1].event_type, ProvenanceEventType::Verified);
@@ -382,10 +382,7 @@ mod tests {
             test_anchor(),
         );
 
-        log.destroy(
-            test_rf("did:omnia:alice"),
-            test_commitment(b"destruction"),
-        );
+        log.destroy(test_rf("did:omnia:alice"), test_commitment(b"destruction"));
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.events[1].event_type, ProvenanceEventType::Destroyed);
