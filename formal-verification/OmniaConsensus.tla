@@ -1,122 +1,123 @@
 --------------------------- MODULE OmniaConsensus ---------------------------
-EXTENDS Naturals, Sequences, FiniteSets, TLC
+EXTENDS Naturals, Sequences, FiniteSets
 
-CONSTANTS Nodes,        \* Set of node identifiers
-          MaxByzantine, \* Maximum number of Byzantine nodes (f)
-          MaxRounds     \* Number of consensus rounds to model-check
+CONSTANTS Nodes,          \* Set of node identifiers
+          ByzantineNodes, \* Subset of Nodes that behave as Byzantine
+          MaxSeq          \* Maximum sequence number (small for model checking)
 
-ASSUME MaxByzantine * 3 + 1 <= Cardinality(Nodes)
+ASSUME ByzantineNodes \subseteq Nodes
+ASSUME Cardinality(ByzantineNodes) * 3 + 1 <= Cardinality(Nodes)
 
-\* Types
-HonestNodes == Nodes \ {n \in Nodes : FALSE}  \* We'll designate byzantine below
-\* For model checking, we'll use a small set and manually mark byzantine nodes
+Honest == Nodes \ ByzantineNodes
 
-\* An event is identified by (creator, sequence) and has a hash
-EventId == [creator: Nodes, sequence: Nat]
+\* Hash values — small finite set for model checking.
+\* Honest nodes use hash=1; Byzantine equivocation uses hash=1 and hash=2.
+Hashes == {1, 2}
 
-\* Consensus states for an event
-ConsensusState == {"pending", "acknowledged", "witness", "famous", "committed"}
+\* An event is identified by (creator, sequence, hash).
+\* Including hash in the EventId allows equivocating events
+\* (same creator + sequence, different hashes) to coexist as
+\* distinct entries in the event map.
+EventId == [creator: Nodes, sequence: 0..MaxSeq, hash: Hashes]
 
-\* The state of a single event known to a node
-EventState == [hash: Nat, status: ConsensusState]
+\* Consensus states for an event. "none" means the event slot
+\* is empty (not yet created).
+ConsensusState == {"none", "pending", "committed"}
 
-\* Per-node state: maps EventId -> EventState
-\* We represent this as a function from Nodes to functions from EventId to EventState
+\* The state of a single event known to a node.
+EventState == [status: ConsensusState]
 
-VARIABLES events,        \* events[node][event_id] = EventState or NONE
-          current_seq,   \* current_seq[node] = next sequence number for that node
-          round          \* current consensus round
+\* Per-node state: maps EventId -> EventState.
+VARIABLES events,        \* events[node][event_id] = EventState
+          current_seq    \* current_seq[node] = next sequence number for that node
 
-TypeOK == /\ events \in [Nodes -> [EventId -> EventState \cup {NONE}]]
-           /\ current_seq \in [Nodes -> Nat]
-           /\ round \in Nat
+TypeOK == /\ events \in [Nodes -> [EventId -> EventState]]
+           /\ current_seq \in [Nodes -> 0..MaxSeq]
 
-\* Designate the first MaxByzantine nodes as Byzantine
-ByzantineNodes == SubSeq(ToSeq(Nodes), 1, MaxByzantine)
-Honest == Nodes \ ToSet(ByzantineNodes)
+\* Helper: does an event exist (i.e., was it created)?
+EventExists(node, eid) == events[node][eid].status # "none"
 
-\* Initial state
-Init == /\ events = [n \in Nodes |-> [eid \in EventId |-> NONE]]
+\* Initial state: all event slots are "none"
+Init == /\ events = [n \in Nodes |-> [eid \in EventId |-> [status |-> "none"]]]
          /\ current_seq = [n \in Nodes |-> 0]
-         /\ round = 0
 
-\* An honest node creates a new event
-CreateEvent(n) == /\ n \notin ToSet(ByzantineNodes)
-                   /\ events[n]' = [events[n] EXCEPT
-                       ![[creator -> n, sequence -> current_seq[n]]] = 
-                         [hash -> current_seq[n], status -> "pending"]]
+\* An honest node creates a new event with deterministic hash=1.
+\* Honest nodes never create two events at the same (creator, sequence)
+\* with different hashes.
+CreateEvent(n) == /\ n \in Honest
+                   /\ current_seq[n] < MaxSeq
+                   /\ LET eid == [creator |-> n, sequence |-> current_seq[n], hash |-> 1]
+                       IN events' = [events EXCEPT ![n] = [events[n] EXCEPT ![eid] = [status |-> "pending"]]]
                    /\ current_seq' = [current_seq EXCEPT ![n] = current_seq[n] + 1]
-                   /\ UNCHANGED <<round>>
 
-\* A Byzantine node equivocates: creates two events with same (creator, sequence)
-\* but different hashes
-Equivocate(n) == /\ n \in ToSet(ByzantineNodes)
-                   /\ events[n]' = [events[n] EXCEPT
-                       ![[creator -> n, sequence -> current_seq[n]]] = 
-                         [hash -> current_seq[n], status -> "pending"],
-                       ![[creator -> n, sequence -> current_seq[n]]] = 
-                         [hash -> current_seq[n] + 1000, status -> "pending"]]
+\* A Byzantine node equivocates: creates TWO events with the same
+\* (creator, sequence) but different hashes (1 and 2). Because EventId
+\* includes hash, these are two distinct keys — both persist.
+Equivocate(n) == /\ n \in ByzantineNodes
+                   /\ current_seq[n] < MaxSeq
+                   /\ LET eid1 == [creator |-> n, sequence |-> current_seq[n], hash |-> 1]
+                         eid2 == [creator |-> n, sequence |-> current_seq[n], hash |-> 2]
+                     IN events' = [events EXCEPT ![n] =
+                           [events[n] EXCEPT
+                             ![eid1] = [status |-> "pending"],
+                             ![eid2] = [status |-> "pending"]]]
                    /\ current_seq' = [current_seq EXCEPT ![n] = current_seq[n] + 1]
-                   /\ UNCHANGED <<round>>
 
-\* Gossip: node n1 sends event to node n2
+\* Gossip: node n1 sends event to node n2.
 Gossip(n1, n2) == /\ n1 # n2
                    /\ \E eid \in EventId:
-                       /\ events[n1][eid] # NONE
-                       /\ events[n2][eid] = NONE
-                       /\ events[n2]' = [events[n2] EXCEPT ![eid] = events[n1][eid]]
-                   /\ UNCHANGED <<current_seq, round>>
+                       /\ EventExists(n1, eid)
+                       /\ ~EventExists(n2, eid)
+                       /\ events' = [events EXCEPT ![n2] = [events[n2] EXCEPT ![eid] = events[n1][eid]]]
+                   /\ UNCHANGED <<current_seq>>
 
-\* Advance an event to the next consensus state
-AdvanceConsensus(n, eid) == /\ events[n][eid] # NONE
-                             /\ Let es == events[n][eid]
-                             /\ Let next_status == CASE es.status = "pending" -> "acknowledged"
-                                                          [] es.status = "acknowledged" -> "witness"
-                                                          [] es.status = "witness" -> "famous"
-                                                          [] es.status = "famous" -> "committed"
-                                                          [] es.status = "committed" -> "committed"
-                             /\ events[n]' = [events[n] EXCEPT ![eid] = 
-                                 [es EXCEPT !.status = next_status]]
-                             /\ UNCHANGED <<current_seq, round>>
-
-\* Advance round
-NextRound == /\ round' = round + 1
-              /\ round < MaxRounds
-              /\ UNCHANGED <<events, current_seq>>
+\* Advance an event directly to "committed".
+\* Note: this action is permissive — any existing event can be
+\* committed without quorum. A production spec would gate
+\* commitment on supermajority witness votes.
+CommitEvent(n, eid) == /\ EventExists(n, eid)
+                        /\ events[n][eid].status = "pending"
+                        /\ events' = [events EXCEPT ![n] = [events[n] EXCEPT ![eid] = [status |-> "committed"]]]
+                        /\ UNCHANGED <<current_seq>>
 
 \* Next-state relation
-Next == \E n \in Nodes: CreateEvent(n)
-     \/ \E n \in ToSet(ByzantineNodes): Equivocate(n)
-     \/ \E n1, n2 \in Nodes: Gossip(n1, n2)
-     \/ \E n \in Nodes, eid \in EventId: AdvanceConsensus(n, eid)
-     \/ NextRound
+Next == \E nc \in Nodes: CreateEvent(nc)
+     \/ \E ne \in ByzantineNodes: Equivocate(ne)
+     \/ \E n1 \in Nodes, n2 \in Nodes: Gossip(n1, n2)
+     \/ \E na \in Nodes, eid \in EventId: CommitEvent(na, eid)
 
-Spec == Init /\ [][Next]_<<events, current_seq, round>>
+Spec == Init /\ [][Next]_<<events, current_seq>>
 
-\* SAFETY: Agreement - all honest nodes that commit an event agree on its hash
-Agreement == \A n1, n2 \in Honest:
-    \A eid \in EventId:
-        /\ events[n1][eid] # NONE
-        /\ events[n2][eid] # NONE
-        /\ events[n1][eid].status = "committed"
-        /\ events[n2][eid].status = "committed"
-        => events[n1][eid].hash = events[n2][eid].hash
+\* SAFETY: Agreement — all honest nodes that commit an event at
+\* the same (creator, sequence) agree on its hash.
+Agreement == \A n1 \in Honest, n2 \in Honest:
+    \A eid1 \in EventId, eid2 \in EventId:
+        /\ EventExists(n1, eid1)
+        /\ EventExists(n2, eid2)
+        /\ events[n1][eid1].status = "committed"
+        /\ events[n2][eid2].status = "committed"
+        /\ eid1.creator = eid2.creator
+        /\ eid1.sequence = eid2.sequence
+        => eid1.hash = eid2.hash
 
-\* SAFETY: No two committed events at the same (creator, seq) have different hashes
-\* unless the creator is Byzantine
-NoEquivocation == \A n1, n2 \in Honest:
-    \A eid \in EventId:
-        /\ events[n1][eid] # NONE
-        /\ events[n2][eid] # NONE
-        /\ events[n1][eid].status = "committed"
-        /\ events[n2][eid].status = "committed"
-        /\ events[n1][eid].hash # events[n2][eid].hash
-        => eid.creator \in ToSet(ByzantineNodes)
+\* SAFETY: NoEquivocation — if two committed events share the same
+\* (creator, sequence) but different hashes, the creator must be
+\* Byzantine.
+NoEquivocation == \A n1 \in Honest, n2 \in Honest:
+    \A eid1 \in EventId, eid2 \in EventId:
+        /\ EventExists(n1, eid1)
+        /\ EventExists(n2, eid2)
+        /\ events[n1][eid1].status = "committed"
+        /\ events[n2][eid2].status = "committed"
+        /\ eid1.creator = eid2.creator
+        /\ eid1.sequence = eid2.sequence
+        /\ eid1.hash # eid2.hash
+        => eid1.creator \in ByzantineNodes
 
-\* Validity: if an honest node commits an event, some node proposed it
+\* Validity: if an honest node commits an event, some node proposed it.
 Validity == \A n \in Honest:
     \A eid \in EventId:
-        /\ events[n][eid] # NONE
+        /\ EventExists(n, eid)
         /\ events[n][eid].status = "committed"
         => eid.sequence < current_seq[eid.creator]
 

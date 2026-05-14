@@ -47,7 +47,11 @@ chrono = { version = "0.4", features = ["serde"] }
 # UUID generation for event and proposal identifiers
 uuid = { version = "1", features = ["v4"] }
 
+utoipa = "5"             # OpenAPI spec generation — auto-documents all REST endpoints
+utoipa-swagger-ui = { version = "8", features = ["axum"] }  # Interactive API docs UI
+
 [dev-dependencies]
 # HTTP client for integration tests
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
+utoipa = "5"

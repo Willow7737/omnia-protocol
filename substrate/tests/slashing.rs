@@ -84,7 +84,7 @@ fn test_equivocation_triggers_slash_in_consensus() {
 
 #[test]
 fn test_liveness_violation_inactive_node_accumulates_slash_points() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -102,7 +102,7 @@ fn test_liveness_violation_inactive_node_accumulates_slash_points() {
 
 #[test]
 fn test_liveness_no_violation_within_threshold() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -117,7 +117,7 @@ fn test_liveness_no_violation_within_threshold() {
 
 #[test]
 fn test_accumulated_points_exceed_slash_threshold() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -176,7 +176,7 @@ fn test_slashed_node_events_rejected() {
 
 #[test]
 fn test_honest_node_never_slashed() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -197,7 +197,7 @@ fn test_honest_node_never_slashed() {
 
 #[test]
 fn test_register_validator_stake_tracked() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     let n2 = node(2);
 
@@ -225,7 +225,7 @@ fn test_register_validator_stake_tracked() {
 
 #[test]
 fn test_ejection_threshold_ejected() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -249,7 +249,7 @@ fn test_ejection_threshold_ejected() {
 
 #[test]
 fn test_ejection_through_mixed_offenses() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 10_000);
 
@@ -270,7 +270,7 @@ fn test_ejection_through_mixed_offenses() {
 
 #[test]
 fn test_slashed_amount_reflects_stake() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     engine.register_validator(n1, 42_000);
 
@@ -288,7 +288,7 @@ fn test_slashed_amount_reflects_stake() {
 
 #[test]
 fn test_custom_slash_thresholds() {
-    let mut engine = SlashingEngine::new(300, 1000);
+    let mut engine = SlashingEngine::new_in_memory(300, 1000);
     let n1 = node(1);
     engine.register_validator(n1, 5_000);
 
@@ -311,7 +311,7 @@ fn test_custom_slash_thresholds() {
 
 #[test]
 fn test_offense_on_unregistered_node() {
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
 
     // Node not registered — should still track points

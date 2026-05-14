@@ -11,11 +11,12 @@ use axum::Json;
 use omnia_substrate::{generate_keypair, Event};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 
 /// Request body for submitting a new event.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct SubmitEventRequest {
     /// Optional hex-encoded payload data.
     #[serde(default)]
@@ -34,7 +35,7 @@ fn default_event_type() -> String {
 /// This is a simplified representation suitable for API responses.
 /// The full substrate `Event` type includes vector clocks and
 /// cryptographic signatures that are not exposed to API consumers.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct StoredEvent {
     /// Hex-encoded unique event identifier.
     pub id: String,
@@ -59,6 +60,15 @@ pub struct StoredEvent {
 /// representation in the in-memory event store for later retrieval.
 ///
 /// Returns 201 on success with the event ID.
+#[utoipa::path(
+    post,
+    path = "/api/v1/events",
+    request_body = SubmitEventRequest,
+    responses(
+        (status = 201, description = "Event submitted successfully"),
+        (status = 400, description = "Invalid request"),
+    )
+)]
 pub async fn submit_event(
     State(state): State<AppState>,
     Json(body): Json<SubmitEventRequest>,
@@ -133,6 +143,17 @@ pub async fn submit_event(
 ///
 /// Looks up an event by its hex-encoded ID in the in-memory
 /// event store. Returns 404 if the event is not found.
+#[utoipa::path(
+    get,
+    path = "/api/v1/events/{id}",
+    params(
+        ("id" = String, Path, description = "Hex-encoded event ID")
+    ),
+    responses(
+        (status = 200, description = "Event found"),
+        (status = 404, description = "Event not found"),
+    )
+)]
 pub async fn get_event(
     State(state): State<AppState>,
     Path(id): Path<String>,

@@ -7,6 +7,7 @@
 use axum::extract::State;
 use axum::Json;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 
@@ -14,6 +15,13 @@ use crate::state::AppState;
 ///
 /// Returns node metadata including identity, protocol version, uptime,
 /// peer count, finalized event count, and registered shard count.
+#[utoipa::path(
+    get,
+    path = "/api/v1/node/info",
+    responses(
+        (status = 200, description = "Node information"),
+    )
+)]
 pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
     let node_id_hex = hex::encode(&state.config.node_id_bytes()[..4]);
     let uptime = state.started_at.elapsed().as_secs();
@@ -44,6 +52,13 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
 /// Returns the list of known peer addresses. In a fully operational
 /// node this would contain libp2p multiaddresses discovered via
 /// the gossip protocol.
+#[utoipa::path(
+    get,
+    path = "/api/v1/node/peers",
+    responses(
+        (status = 200, description = "Peer list"),
+    )
+)]
 pub async fn node_peers(State(state): State<AppState>) -> Json<Value> {
     let peers = state.peers.read().await;
     let peer_list: Vec<Value> = peers
@@ -64,7 +79,7 @@ pub async fn node_peers(State(state): State<AppState>) -> Json<Value> {
 }
 
 /// Simple peer information tracked by this node.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct PeerInfo {
     /// Hex-encoded peer identifier.
     pub peer_id: String,

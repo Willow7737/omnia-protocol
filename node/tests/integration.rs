@@ -40,7 +40,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
 
     let substrate_config = SubstrateConfig::new(node_id_bytes);
     let substrate = Substrate::new(substrate_config);
-    let slashing = SlashingEngine::new(500, 2000);
+    let slashing = SlashingEngine::new_in_memory(500, 2000);
 
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();
@@ -171,5 +171,50 @@ async fn test_get_event_not_found() -> Result<()> {
         assert!(body["error"].is_string());
     }
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_swagger_ui() -> Result<()> {
+    let (base_url, _handle) = start_test_server().await;
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/swagger-ui/", base_url))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 200, "Swagger UI should be accessible");
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_openapi_json() -> Result<()> {
+    let (base_url, _handle) = start_test_server().await;
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/api-docs/openapi.json", base_url))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 200, "OpenAPI JSON should be accessible");
+    let body: Value = resp.json().await?;
+    // Verify the OpenAPI spec contains our paths
+    let paths = body["paths"]
+        .as_object()
+        .expect("paths should be an object");
+    assert!(
+        paths.keys().any(|k| k.contains("events")),
+        "Should contain events path"
+    );
+    assert!(
+        paths.keys().any(|k| k.contains("governance")),
+        "Should contain governance path"
+    );
+    assert!(
+        paths.keys().any(|k| k.contains("economics")),
+        "Should contain economics path"
+    );
+    assert!(
+        paths.keys().any(|k| k.contains("node")),
+        "Should contain node path"
+    );
     Ok(())
 }

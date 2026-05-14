@@ -10,6 +10,7 @@ use omnia_shards::{EconomicsOp, ShardOp};
 use omnia_substrate::{generate_keypair, Event};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 
@@ -17,12 +18,13 @@ use crate::state::AppState;
 ///
 /// The `operation` field determines the type of operation, and `params`
 /// contains the operation-specific parameters as a JSON object.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ShardOperationRequest {
     /// Operation name (e.g., "mint", "spend", "register", "advance_epoch").
     pub operation: String,
     /// Operation-specific parameters.
     #[serde(default)]
+    #[schema(value_type = Object)]
     pub params: serde_json::Map<String, Value>,
 }
 
@@ -31,6 +33,19 @@ pub struct ShardOperationRequest {
 /// Routes the specified operation to the appropriate shard via the
 /// `ShardRouter`. Currently supports operations on the economics
 /// shard; other shards return a "not implemented" response.
+#[utoipa::path(
+    post,
+    path = "/api/v1/shards/{shard_id}/operations",
+    request_body = ShardOperationRequest,
+    params(
+        ("shard_id" = String, Path, description = "Shard identifier")
+    ),
+    responses(
+        (status = 200, description = "Operation processed"),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Unknown shard"),
+    )
+)]
 pub async fn submit_shard_operation(
     State(state): State<AppState>,
     Path(shard_id): Path<String>,

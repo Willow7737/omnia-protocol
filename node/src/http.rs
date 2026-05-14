@@ -4,6 +4,8 @@
 //! - `GET /health` — liveness/readiness probe
 //! - `GET /metrics` — Prometheus exposition format
 //! - `/api/v1/*` — the full API router from [`crate::api`]
+//! - `/swagger-ui` — interactive API documentation
+//! - `/api-docs/openapi.json` — OpenAPI specification
 
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -11,8 +13,11 @@ use axum::routing::get;
 use axum::Router;
 use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api;
+use crate::api::ApiDoc;
 use crate::state::AppState;
 
 /// Build the complete HTTP router with all routes.
@@ -21,11 +26,14 @@ use crate::state::AppState;
 /// - `/health` — health check endpoint
 /// - `/metrics` — Prometheus metrics endpoint
 /// - `/api/v1/*` — API endpoints
+/// - `/swagger-ui` — Swagger UI for API documentation
+/// - `/api-docs/openapi.json` — OpenAPI JSON specification
 pub fn build_http_router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health_handler))
         .route("/metrics", get(metrics_handler))
         .nest("/api/v1", api::build_api_router())
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
 }
 
 /// Handler for `GET /health`.

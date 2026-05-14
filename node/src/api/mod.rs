@@ -13,8 +13,38 @@ pub mod shards;
 
 use axum::routing::{get, post};
 use axum::Router;
+use utoipa::OpenApi;
 
 use crate::state::AppState;
+
+/// OpenAPI specification for the Omnia node REST API.
+///
+/// Auto-generates the OpenAPI 3.0 spec from the utoipa path and
+/// schema annotations on each handler and request/response type.
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::api::events::submit_event,
+        crate::api::events::get_event,
+        crate::api::shards::submit_shard_operation,
+        crate::api::governance::create_proposal,
+        crate::api::governance::cast_vote,
+        crate::api::economics::get_balance,
+        crate::api::economics::transfer_ubc,
+        crate::api::node::node_info,
+        crate::api::node::node_peers,
+    ),
+    components(schemas(
+        crate::api::events::SubmitEventRequest,
+        crate::api::events::StoredEvent,
+        crate::api::shards::ShardOperationRequest,
+        crate::api::governance::CreateProposalRequest,
+        crate::api::governance::CastVoteRequest,
+        crate::api::economics::TransferRequest,
+        crate::api::node::PeerInfo,
+    ))
+)]
+pub struct ApiDoc;
 
 /// Build the API v1 router with all route handlers.
 ///

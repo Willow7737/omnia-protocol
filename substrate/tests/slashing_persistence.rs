@@ -145,7 +145,7 @@ fn test_corrupted_sled_data_starts_fresh() {
 #[test]
 fn test_in_memory_store_backward_compatibility() {
     // Using new() constructor — same behavior as before
-    let mut engine = SlashingEngine::new(500, 2000);
+    let mut engine = SlashingEngine::new_in_memory(500, 2000);
     let n1 = node(1);
     let n2 = node(2);
 

@@ -30,7 +30,7 @@ use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
 };
-use omnia_substrate::{SlashingEngine, SledSlashingStore, Substrate, SubstrateConfig};
+use omnia_substrate::{SlashingEngine, Substrate, SubstrateConfig};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
@@ -73,7 +73,10 @@ async fn main() -> Result<()> {
     // Create the slashing engine with sled persistence
     let slashing_dir = config.slashing_dir();
     let slashing_engine = create_slashing_engine(&slashing_dir)?;
-    tracing::info!(path = %slashing_dir.display(), "Slashing engine initialized with sled persistence");
+    tracing::info!(
+        path = %slashing_dir.display(),
+        "Slashing engine initialized with sled persistence"
+    );
 
     // Create the shard router with standard fees
     let shard_router = create_shard_router()?;
@@ -151,24 +154,11 @@ fn init_tracing(log_level: &str) {
 /// If the sled database cannot be opened, falls back to an
 /// in-memory slashing engine so the node can still operate.
 fn create_slashing_engine(slashing_dir: &std::path::Path) -> Result<SlashingEngine> {
-    match SledSlashingStore::open(slashing_dir) {
-        Ok(store) => {
-            let engine = SlashingEngine::with_store(Box::new(store))
-                .context("Failed to load slashing state from sled store")?;
-            Ok(engine)
-        }
-        Err(e) => {
-            tracing::warn!(
-                error = %e,
-                path = %slashing_dir.display(),
-                "Failed to open sled slashing store — falling back to in-memory"
-            );
-            Ok(SlashingEngine::new(
-                omnia_substrate::DEFAULT_SLASH_THRESHOLD,
-                omnia_substrate::DEFAULT_EJECTION_THRESHOLD,
-            ))
-        }
-    }
+    Ok(SlashingEngine::new(
+        Some(slashing_dir.to_path_buf()),
+        omnia_substrate::DEFAULT_SLASH_THRESHOLD,
+        omnia_substrate::DEFAULT_EJECTION_THRESHOLD,
+    ))
 }
 
 /// Create a shard router with all six shard types registered.

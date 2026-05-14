@@ -10,11 +10,12 @@ use axum::Json;
 use omnia_economics::governance::VoteChoice;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 
 /// Request body for creating a new governance proposal.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CreateProposalRequest {
     /// Unique identifier for the proposal.
     pub id: String,
@@ -25,7 +26,7 @@ pub struct CreateProposalRequest {
 }
 
 /// Request body for casting a vote on a governance proposal.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CastVoteRequest {
     /// DID of the voter.
     pub did: String,
@@ -39,6 +40,15 @@ pub struct CastVoteRequest {
 ///
 /// Creates a new governance proposal with quadratic voting and
 /// reputation decay. Returns 201 on success.
+#[utoipa::path(
+    post,
+    path = "/api/v1/governance/proposals",
+    request_body = CreateProposalRequest,
+    responses(
+        (status = 201, description = "Proposal created"),
+        (status = 409, description = "Proposal already exists"),
+    )
+)]
 pub async fn create_proposal(
     State(state): State<AppState>,
     Json(body): Json<CreateProposalRequest>,
@@ -92,6 +102,15 @@ pub async fn create_proposal(
 /// Casts a quadratic-weighted vote on a governance proposal.
 /// The voter's effective weight is calculated based on their stake
 /// (via `isqrt`) and reputation decay for inactive epochs.
+#[utoipa::path(
+    post,
+    path = "/api/v1/governance/vote",
+    request_body = CastVoteRequest,
+    responses(
+        (status = 200, description = "Vote recorded"),
+        (status = 400, description = "Invalid vote"),
+    )
+)]
 pub async fn cast_vote(
     State(state): State<AppState>,
     Json(body): Json<CastVoteRequest>,

@@ -10,6 +10,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 
@@ -20,7 +21,7 @@ use crate::state::AppState;
 /// that consumes UBC from the sender's balance. The `to_did` field
 /// is accepted for API compatibility but UBC is not actually
 /// transferred to the recipient.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct TransferRequest {
     /// DID sending (spending) UBC.
     pub from_did: String,
@@ -34,6 +35,17 @@ pub struct TransferRequest {
 ///
 /// Returns the current UBC balance and monthly quota for the
 /// specified DID. Returns 404 if the DID is not registered.
+#[utoipa::path(
+    get,
+    path = "/api/v1/economics/balance/{did}",
+    params(
+        ("did" = String, Path, description = "Decentralized identifier")
+    ),
+    responses(
+        (status = 200, description = "Balance found"),
+        (status = 404, description = "DID not registered"),
+    )
+)]
 pub async fn get_balance(
     State(state): State<AppState>,
     Path(did): Path<String>,
@@ -68,6 +80,16 @@ pub async fn get_balance(
 /// Performs a UBC spend operation from the sender's balance.
 /// Since UBC is soulbound (non-transferable), the tokens are
 /// consumed rather than transferred to the recipient.
+#[utoipa::path(
+    post,
+    path = "/api/v1/economics/transfer",
+    request_body = TransferRequest,
+    responses(
+        (status = 200, description = "Transfer completed"),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "DID not registered"),
+    )
+)]
 pub async fn transfer_ubc(
     State(state): State<AppState>,
     Json(body): Json<TransferRequest>,

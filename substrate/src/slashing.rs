@@ -33,7 +33,7 @@ use crate::event::Event;
 use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Default slash threshold: accumulated points at which a node is slashed.
 pub const DEFAULT_SLASH_THRESHOLD: u64 = 500;
@@ -377,15 +377,16 @@ impl SlashingStore for InMemorySlashingStore {
 /// persistent store (e.g., [`SledSlashingStore`]). The engine loads state
 /// from the store on creation and saves after every mutation.
 ///
-/// For backward compatibility, [`SlashingEngine::new`] and
-/// [`SlashingEngine::default`] create an in-memory-only engine.
+/// For backward compatibility, [`SlashingEngine::default`] creates an
+/// in-memory-only engine. Production code should use [`SlashingEngine::new`]
+/// with `Some(path)` for persistent slashing state.
 ///
 /// # Example
 ///
 /// ```
 /// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
 ///
-/// let mut engine = SlashingEngine::new(500, 2000);
+/// let mut engine = SlashingEngine::new_in_memory(500, 2000);
 /// let mut node = [0u8; 32];
 /// node[0] = 42;
 ///
@@ -420,37 +421,85 @@ impl std::fmt::Debug for SlashingEngine {
 
 impl Default for SlashingEngine {
     fn default() -> Self {
-        Self::new(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD)
+        Self::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD)
     }
 }
 
 impl SlashingEngine {
-    /// Creates a new `SlashingEngine` with the given thresholds and an
-    /// in-memory store.
+    /// Create a new `SlashingEngine` with optional persistence.
     ///
-    /// This constructor is kept for backward compatibility. For production
-    /// use with persistent state, prefer [`SlashingEngine::with_store`].
+    /// - `Some(path)`: Persists slashing state to sled at the given directory.
+    ///   Falls back to in-memory if sled fails to open.
+    /// - `None`: Uses in-memory store (state lost on restart — for testing only).
     ///
     /// # Arguments
     ///
+    /// * `data_dir` — If `Some(path)`, persists slashing state to sled at that
+    ///   directory. If `None`, uses in-memory store (state lost on restart).
     /// * `slash_threshold` — Slash points at which a node is considered
     ///   *slashed* (stake forfeited). Defaults to 500.
     /// * `ejection_threshold` — Slash points at which a node is *ejected*
     ///   from the validator set. Defaults to 2000.
     ///
-    /// # Returns
+    /// # Production Usage
     ///
-    /// A new `SlashingEngine` instance with no registered validators and
-    /// an [`InMemorySlashingStore`] backend.
+    /// Always pass `Some(path)` in production. In-memory mode exists for tests
+    /// only. A Byzantine validator can clear their slash history by restarting
+    /// if in-memory mode is used.
     ///
     /// # Example
     ///
-    /// ```
-    /// use omnia_substrate::SlashingEngine;
+    /// ```no_run
+    /// use omnia_substrate::slashing::SlashingEngine;
+    /// use std::path::PathBuf;
     ///
-    /// let engine = SlashingEngine::new(500, 2000);
+    /// // Production: persistent slashing
+    /// let engine = SlashingEngine::new(Some(PathBuf::from("./data/slashing")), 500, 2000);
+    ///
+    /// // Testing: in-memory slashing
+    /// let engine = SlashingEngine::new(None, 500, 2000);
     /// ```
-    pub fn new(slash_threshold: u64, ejection_threshold: u64) -> Self {
+    pub fn new(data_dir: Option<PathBuf>, slash_threshold: u64, ejection_threshold: u64) -> Self {
+        match data_dir {
+            Some(path) => match SledSlashingStore::open(&path) {
+                Ok(store) => {
+                    tracing::info!(
+                        path = %path.display(),
+                        "Slashing engine: using persistent sled store"
+                    );
+                    Self::with_store_with_thresholds(
+                        Box::new(store),
+                        slash_threshold,
+                        ejection_threshold,
+                    )
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        path = %path.display(),
+                        "Failed to open sled store — falling back to in-memory"
+                    );
+                    Self::new_in_memory(slash_threshold, ejection_threshold)
+                }
+            },
+            None => {
+                tracing::info!("Slashing engine: using in-memory store (testing mode)");
+                Self::new_in_memory(slash_threshold, ejection_threshold)
+            }
+        }
+    }
+
+    /// Create with in-memory store. **FOR TESTING ONLY.**
+    ///
+    /// Slash state will be lost on restart. In production, always use
+    /// [`SlashingEngine::new`] with `Some(path)` to ensure slash history
+    /// persists across restarts.
+    ///
+    /// # Arguments
+    ///
+    /// * `slash_threshold` — Slash points at which a node is slashed.
+    /// * `ejection_threshold` — Slash points at which a node is ejected.
+    pub fn new_in_memory(slash_threshold: u64, ejection_threshold: u64) -> Self {
         Self {
             slash_points: HashMap::new(),
             stakes: HashMap::new(),
@@ -504,6 +553,52 @@ impl SlashingEngine {
         })
     }
 
+    /// Creates a `SlashingEngine` backed by a persistent [`SlashingStore`],
+    /// using the provided thresholds when the store is empty (first run).
+    ///
+    /// If the store already contains state, the persisted thresholds are used.
+    /// If the store is empty, the provided thresholds are applied and persisted.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` — A boxed [`SlashingStore`] implementation.
+    /// * `slash_threshold` — Default slash threshold if store is empty.
+    /// * `ejection_threshold` — Default ejection threshold if store is empty.
+    fn with_store_with_thresholds(
+        store: Box<dyn SlashingStore>,
+        slash_threshold: u64,
+        ejection_threshold: u64,
+    ) -> Self {
+        match store.load() {
+            Ok(state) => {
+                tracing::info!(
+                    slash_points_count = state.slash_points.len(),
+                    stakes_count = state.stakes.len(),
+                    slash_threshold = state.slash_threshold,
+                    ejection_threshold = state.ejection_threshold,
+                    "Loaded slashing state from persistent store"
+                );
+                Self {
+                    slash_points: state.slash_points,
+                    stakes: state.stakes,
+                    slash_threshold: state.slash_threshold,
+                    ejection_threshold: state.ejection_threshold,
+                    store,
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to load slashing state — starting fresh");
+                Self {
+                    slash_points: HashMap::new(),
+                    stakes: HashMap::new(),
+                    slash_threshold,
+                    ejection_threshold,
+                    store,
+                }
+            }
+        }
+    }
+
     /// Persists the current state to the backing store.
     ///
     /// On failure, a warning is logged but the in-memory state remains
@@ -537,7 +632,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::SlashingEngine;
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 1;
     ///
@@ -584,7 +679,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 5;
     ///
@@ -688,7 +783,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::{SlashingEngine, SlashOutcome};
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 7;
     ///
@@ -745,7 +840,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::{SlashingEngine, SlashOffense};
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 3;
     ///
@@ -778,7 +873,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::{SlashingEngine, SlashOffense};
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 9;
     ///
@@ -813,7 +908,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::SlashingEngine;
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 1;
     ///
@@ -840,7 +935,7 @@ impl SlashingEngine {
     /// ```
     /// use omnia_substrate::{SlashingEngine, SlashOffense};
     ///
-    /// let mut engine = SlashingEngine::new(500, 2000);
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
     /// node[0] = 2;
     ///
@@ -883,7 +978,7 @@ mod tests {
 
     #[test]
     fn test_register_validator() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
         assert_eq!(engine.stake_of(&n), 10_000);
@@ -892,7 +987,7 @@ mod tests {
 
     #[test]
     fn test_warned_outcome() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
         let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
@@ -907,7 +1002,7 @@ mod tests {
 
     #[test]
     fn test_slashed_outcome() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
         let outcome = engine.record_offense(n, SlashOffense::Equivocation);
@@ -924,7 +1019,7 @@ mod tests {
 
     #[test]
     fn test_ejected_outcome() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
 
@@ -946,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_accumulated_points_across_offenses() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
 
@@ -959,7 +1054,7 @@ mod tests {
 
     #[test]
     fn test_honest_node_never_slashed() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
         assert!(!engine.is_slashed(&n));
@@ -969,7 +1064,7 @@ mod tests {
 
     #[test]
     fn test_liveness_check_no_violation() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
 
@@ -979,7 +1074,7 @@ mod tests {
 
     #[test]
     fn test_liveness_check_violation() {
-        let mut engine = SlashingEngine::new(500, 2000);
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 10_000);
 
@@ -990,7 +1085,7 @@ mod tests {
 
     #[test]
     fn test_stake_of_unregistered() {
-        let engine = SlashingEngine::new(500, 2000);
+        let engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(99);
         assert_eq!(engine.stake_of(&n), 0);
         assert_eq!(engine.slash_points_of(&n), 0);
