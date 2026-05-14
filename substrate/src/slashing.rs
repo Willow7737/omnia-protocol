@@ -46,9 +46,9 @@ const INVALID_ATTESTATION_POINTS: u64 = 300;
 /// Categorizes the type of Byzantine offense committed by a validator.
 ///
 /// Each offense type carries a fixed penalty in slash points:
-/// - [`Equivocation`](SlashOffense::Equivocation): 500 points
-/// - [`LivenessViolation`](SlashOffense::LivenessViolation): 100 points
-/// - [`InvalidAttestation`](SlashOffense::InvalidAttestation): 300 points
+/// - [`SlashOffense::Equivocation`]: 500 points
+/// - [`SlashOffense::LivenessViolation`]: 100 points
+/// - [`SlashOffense::InvalidAttestation`]: 300 points
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlashOffense {
     /// A validator signed two different events with the same creator and
@@ -88,9 +88,9 @@ impl SlashOffense {
 ///
 /// The outcome depends on the node's total accumulated slash points relative
 /// to the configured thresholds:
-/// - Below slash threshold → [`Warned`](SlashOutcome::Warned)
-/// - At or above slash threshold but below ejection threshold → [`Slashed`](SlashOutcome::Slashed)
-/// - At or above ejection threshold → [`Ejected`](SlashOutcome::Ejected)
+/// - Below slash threshold → [`SlashOutcome::Warned`]
+/// - At or above slash threshold but below ejection threshold → [`SlashOutcome::Slashed`]
+/// - At or above ejection threshold → [`SlashOutcome::Ejected`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SlashOutcome {
     /// Node received slash points but is still below the slash threshold.
@@ -323,7 +323,7 @@ impl SlashingEngine {
     ///
     /// A liveness violation occurs when a node has been inactive for more
     /// than `threshold` rounds (i.e., `current_round - last_active_round > threshold`).
-    /// If a violation is detected, a [`LivenessViolation`](SlashOffense::LivenessViolation)
+    /// If a violation is detected, a [`SlashOffense::LivenessViolation`]
     /// offense is recorded and the resulting [`SlashOutcome`] is returned.
     ///
     /// # Arguments

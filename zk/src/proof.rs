@@ -2,7 +2,7 @@
 //!
 //! This module provides helper functions for working with ZK proofs
 //! in the rollup context. Production code uses Groth16 verification
-//! via the [`prover`](crate::prover) module; legacy stub functions
+//! via the [`prover`] module; legacy stub functions
 //! are retained for test compatibility only.
 
 use crate::prover::{self, Proof, ProverError, VerifyingKey};

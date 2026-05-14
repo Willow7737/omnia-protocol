@@ -3,7 +3,7 @@
 //! This module provides three core operations:
 //!
 //! - **Trusted setup** — Generate the proving key and verifying key for a
-//!   [`RollupCircuit`](crate::circuit::RollupCircuit).
+//!   [`RollupCircuit`].
 //! - **Proof creation** — Create a Groth16 proof for a given circuit instance.
 //! - **Proof verification** — Verify a Groth16 proof against a verifying key
 //!   and public inputs.

@@ -109,7 +109,7 @@ impl GovernanceState {
     ///
     /// The decay rate is specified as a [`DecayRate`] in parts-per-million.
     /// Use [`DecayRate::ten_percent()`] for the standard 10% decay per epoch,
-    /// or [`DecayRate::from_percent(n)`] for a custom rate.
+    /// or [`DecayRate::from_percent`] for a custom rate.
     ///
     /// # Examples
     ///
