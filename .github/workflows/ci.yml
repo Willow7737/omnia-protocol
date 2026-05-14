@@ -39,17 +39,21 @@ jobs:
         rust: [stable]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-      - name: Fix cargo on macOS (Homebrew rustup conflict)
+      - name: Install Rust (macOS — bypass broken Homebrew rustup)
         if: runner.os == 'macOS'
         run: |
           # The macOS runner ships a Homebrew rustup whose 'cargo' wrapper
-          # is actually rustup-init and does not proxy subcommands.  Remove
-          # it so the real Rustup proxy at ~/.cargo/bin/cargo takes over.
+          # is actually rustup-init and cannot proxy subcommands like
+          # 'cargo test'.  Remove it and install via rustup.rs instead.
           brew unlink rustup 2>/dev/null || true
+          rm -f /usr/local/bin/cargo /opt/homebrew/bin/cargo
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Install Rust (non-macOS)
+        if: runner.os != 'macOS'
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
       - name: Verify cargo works
         run: |
           cargo --version
