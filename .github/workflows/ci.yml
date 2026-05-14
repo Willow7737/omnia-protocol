@@ -61,6 +61,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-test-${{ matrix.os }}"
+      - name: Ensure cargo on PATH (macOS)
+        if: runner.os == 'macOS'
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - run: cargo test --workspace --verbose
         timeout-minutes: 15
       - run: cargo test --workspace --all-features --verbose
