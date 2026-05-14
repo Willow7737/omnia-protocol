@@ -6,7 +6,7 @@ authors = ["Omnia Protocol Contributors"]
 description = "Layer 1: The Substrate — Causal graph consensus, vector clocks, CRDTs, and gossip protocol"
 license = "CC0-1.0"
 repository = "https://github.com/Willow7737/omnia-protocol"
-rust-version = "1.75"
+rust-version = "1.85"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
