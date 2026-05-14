@@ -1,0 +1,11 @@
+[advisories]
+# hickory-proto 0.25.x DoS vulnerabilities — transitive dep via libp2p 0.56.
+# Patched in hickory-proto >=0.26.1, but libp2p 0.56 pins 0.25.x.
+# These are DNS-specific DoS issues; omnia-protocol does not expose DNS
+# resolution to untrusted input. Ignore until libp2p upgrades hickory.
+ignore = [
+    "RUSTSEC-2026-0119",  # hickory-proto: CPU exhaustion via O(n²) name compression
+    "RUSTSEC-2026-0118",  # hickory-proto: unbounded loop in NSEC3 validation
+    "RUSTSEC-2025-0141",  # bincode: unmaintained (pinned to 1.x; migration to postcard planned)
+    "RUSTSEC-2024-0436",  # paste: unmaintained (transitive dep from ed25519-dalek)
+]
