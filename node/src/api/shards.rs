@@ -64,12 +64,8 @@ async fn handle_economics_op(
     state: &AppState,
     body: &ShardOperationRequest,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let econ_op = parse_economics_op(body).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": e})),
-        )
-    })?;
+    let econ_op = parse_economics_op(body)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     let node_id = state.config.node_id_bytes();
     let keypair = generate_keypair();

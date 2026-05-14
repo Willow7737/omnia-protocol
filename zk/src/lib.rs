@@ -65,7 +65,7 @@ pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
 pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey};
 
 // Re-export expanded circuit types
-pub use circuit::{ExpandedRollupCircuit, EventWitness, MerklePathWitness};
+pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness};
 
 // Re-export merkle types
-pub use merkle::{MerkleProof, hash_to_fr, fr_to_hash, compute_root_from_proof, build_merkle_tree};
+pub use merkle::{build_merkle_tree, compute_root_from_proof, fr_to_hash, hash_to_fr, MerkleProof};

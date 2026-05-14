@@ -139,9 +139,10 @@ pub async fn get_event(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let store = state.event_store.read().await;
     match store.get(&id) {
-        Some(event) => Ok(Json(serde_json::to_value(event).unwrap_or_else(|_| {
-            json!({"error": "Serialization failed"})
-        }))),
+        Some(event) => Ok(Json(
+            serde_json::to_value(event)
+                .unwrap_or_else(|_| json!({"error": "Serialization failed"})),
+        )),
         None => Err((
             StatusCode::NOT_FOUND,
             Json(json!({"error": format!("Event not found: {}", id)})),

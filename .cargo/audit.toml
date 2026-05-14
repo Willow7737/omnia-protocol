@@ -9,4 +9,8 @@ ignore = [
     "RUSTSEC-2025-0141",  # bincode: unmaintained (pinned to 1.x; migration to postcard planned)
     "RUSTSEC-2024-0436",  # paste: unmaintained (transitive dep from ed25519-dalek)
     "RUSTSEC-2025-0055",  # tracing-subscriber 0.2.x: ANSI escape sequence injection in logs (transitive via ark-relations 0.4; pinned until arkworks 0.5)
+    "RUSTSEC-2024-0384",  # instant: unmaintained (transitive dep via sled 0.34 → parking_lot_core 0.8)
+    "RUSTSEC-2025-0057",  # fxhash: unmaintained (transitive dep via sled 0.34; no upstream fix)
+    "RUSTSEC-2024-0437",  # derivative: unmaintained (transitive dep via arkworks; no upstream fix)
+    "RUSTSEC-2024-0388",  # tracing-attributes: unmaintained placeholder (transitive via arkworks; no upstream fix)
 ]

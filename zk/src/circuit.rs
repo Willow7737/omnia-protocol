@@ -384,9 +384,8 @@ impl ExpandedRollupCircuit {
             })
             .collect();
 
-        let intermediate_roots: Vec<Option<Fr>> = (0..=num_events)
-            .map(|_| Some(Fr::zero()))
-            .collect();
+        let intermediate_roots: Vec<Option<Fr>> =
+            (0..=num_events).map(|_| Some(Fr::zero())).collect();
 
         Self {
             old_state_root: Some(Fr::zero()),
@@ -409,9 +408,15 @@ impl ExpandedRollupCircuit {
     /// Returns [`SynthesisError::AssignmentMissing`] if any public input
     /// has not been assigned.
     pub fn public_input(&self) -> Result<Vec<Fr>, SynthesisError> {
-        let old = self.old_state_root.ok_or(SynthesisError::AssignmentMissing)?;
-        let new = self.new_state_root.ok_or(SynthesisError::AssignmentMissing)?;
-        let commitment = self.event_commitment.ok_or(SynthesisError::AssignmentMissing)?;
+        let old = self
+            .old_state_root
+            .ok_or(SynthesisError::AssignmentMissing)?;
+        let new = self
+            .new_state_root
+            .ok_or(SynthesisError::AssignmentMissing)?;
+        let commitment = self
+            .event_commitment
+            .ok_or(SynthesisError::AssignmentMissing)?;
         Ok(vec![old, new, commitment])
     }
 }
@@ -421,17 +426,16 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
         let num_events = self.events.len();
 
         // Allocate public inputs
-        let old_root =
-            FpVar::<Fr>::new_input(ark_relations::ns!(cs, "old_state_root"), || {
-                self.old_state_root.ok_or(SynthesisError::AssignmentMissing)
-            })?;
-        let new_root =
-            FpVar::<Fr>::new_input(ark_relations::ns!(cs, "new_state_root"), || {
-                self.new_state_root.ok_or(SynthesisError::AssignmentMissing)
-            })?;
+        let old_root = FpVar::<Fr>::new_input(ark_relations::ns!(cs, "old_state_root"), || {
+            self.old_state_root.ok_or(SynthesisError::AssignmentMissing)
+        })?;
+        let new_root = FpVar::<Fr>::new_input(ark_relations::ns!(cs, "new_state_root"), || {
+            self.new_state_root.ok_or(SynthesisError::AssignmentMissing)
+        })?;
         let event_commitment =
             FpVar::<Fr>::new_input(ark_relations::ns!(cs, "event_commitment"), || {
-                self.event_commitment.ok_or(SynthesisError::AssignmentMissing)
+                self.event_commitment
+                    .ok_or(SynthesisError::AssignmentMissing)
             })?;
 
         // Allocate all intermediate root witnesses upfront so they are shared
@@ -454,13 +458,12 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
         // For each event: verify Merkle inclusion and state transition
         for i in 0..num_events {
             // Allocate event hash witness
-            let event_hash =
-                FpVar::<Fr>::new_witness(cs.clone(), || {
-                    self.events[i]
-                        .as_ref()
-                        .and_then(|e| e.event_hash)
-                        .ok_or(SynthesisError::AssignmentMissing)
-                })?;
+            let event_hash = FpVar::<Fr>::new_witness(cs.clone(), || {
+                self.events[i]
+                    .as_ref()
+                    .and_then(|e| e.event_hash)
+                    .ok_or(SynthesisError::AssignmentMissing)
+            })?;
 
             // Allocate Merkle path witnesses and verify inclusion
             let proof = &self.merkle_proofs[i];
@@ -468,12 +471,10 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
             if let Some(ref path_witness) = proof {
                 for j in 0..path_witness.siblings.len() {
                     let sibling = FpVar::<Fr>::new_witness(cs.clone(), || {
-                        path_witness.siblings[j]
-                            .ok_or(SynthesisError::AssignmentMissing)
+                        path_witness.siblings[j].ok_or(SynthesisError::AssignmentMissing)
                     })?;
                     let go_left = Boolean::new_witness(cs.clone(), || {
-                        path_witness.directions[j]
-                            .ok_or(SynthesisError::AssignmentMissing)
+                        path_witness.directions[j].ok_or(SynthesisError::AssignmentMissing)
                     })?;
 
                     // Conditional swap based on direction.
@@ -577,8 +578,7 @@ mod tests {
 
     #[test]
     fn test_expanded_circuit_public_input() {
-        let circuit =
-            ExpandedRollupCircuit::empty(2, 3);
+        let circuit = ExpandedRollupCircuit::empty(2, 3);
         let public_input = circuit
             .public_input()
             .expect("public input should be available");

@@ -41,14 +41,14 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
             vec![],
             vec![],
         );
-        let public_inputs = circuit.public_input().expect("public inputs should be available");
+        let public_inputs = circuit
+            .public_input()
+            .expect("public inputs should be available");
         return (circuit, public_inputs);
     }
 
     // Generate distinct event hashes (small non-zero values)
-    let event_hashes: Vec<Fr> = (0..num_events)
-        .map(|i| Fr::from((i as u64) + 10))
-        .collect();
+    let event_hashes: Vec<Fr> = (0..num_events).map(|i| Fr::from((i as u64) + 10)).collect();
 
     // Choose an event commitment value
     let event_commitment = Fr::from(9999u64);
@@ -74,7 +74,10 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
             // but we set them to alternating values for realism.
             let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
 
-            MerkleProof { siblings, directions }
+            MerkleProof {
+                siblings,
+                directions,
+            }
         })
         .collect();
 
@@ -99,7 +102,9 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
         merkle_proofs,
         intermediate_roots,
     );
-    let public_inputs = circuit.public_input().expect("public inputs should be available");
+    let public_inputs = circuit
+        .public_input()
+        .expect("public inputs should be available");
     (circuit, public_inputs)
 }
 
@@ -126,7 +131,10 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
                 siblings.push([0u8; 32]);
             }
             let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
-            MerkleProof { siblings, directions }
+            MerkleProof {
+                siblings,
+                directions,
+            }
         })
         .collect();
 
@@ -147,7 +155,9 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
         merkle_proofs,
         intermediate_roots,
     );
-    let public_inputs = circuit.public_input().expect("public inputs should be available");
+    let public_inputs = circuit
+        .public_input()
+        .expect("public inputs should be available");
     (circuit, public_inputs)
 }
 
@@ -164,8 +174,7 @@ fn test_valid_batch_proof_verifies() {
     let (circuit, public_inputs) = build_valid_batch(num_events);
     let proof = create_expanded_proof(circuit, &pk).expect("proof creation should succeed");
 
-    let valid =
-        verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
+    let valid = verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
     assert!(valid, "valid batch proof should verify successfully");
 }
 
@@ -194,8 +203,8 @@ fn test_tampered_event_proof_fails() {
     // The two batches have different new_roots and different event commitments
     // (because the Merkle paths depend on the event hashes). Verifying the
     // original proof against the tampered batch's public inputs should fail.
-    let valid = verify_proof(&vk, &public_inputs_tampered, &proof)
-        .expect("verification should not error");
+    let valid =
+        verify_proof(&vk, &public_inputs_tampered, &proof).expect("verification should not error");
     assert!(
         !valid,
         "proof for one batch should not verify against a different batch's public inputs"
@@ -225,8 +234,8 @@ fn test_wrong_intermediate_root_proof_fails() {
     let proof = create_expanded_proof(circuit, &pk).expect("proof creation should succeed");
 
     // The proof should not verify against the wrong public inputs
-    let valid = verify_proof(&vk, &wrong_public_inputs, &proof)
-        .expect("verification should not error");
+    let valid =
+        verify_proof(&vk, &wrong_public_inputs, &proof).expect("verification should not error");
     assert!(
         !valid,
         "proof should not verify against public inputs with a wrong new_root (state transition)"
@@ -261,7 +270,10 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
                 siblings.push([0u8; 32]);
             }
             let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
-            MerkleProof { siblings, directions }
+            MerkleProof {
+                siblings,
+                directions,
+            }
         })
         .collect();
 
@@ -289,8 +301,8 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
         wrong_roots,
     );
 
-    let (pk, _vk) = generate_trusted_setup_expanded(num_events, MERKLE_DEPTH)
-        .expect("setup should succeed");
+    let (pk, _vk) =
+        generate_trusted_setup_expanded(num_events, MERKLE_DEPTH).expect("setup should succeed");
 
     // The prover should panic because the constraints are not satisfied.
     // This demonstrates that the circuit enforces intermediate root consistency.
@@ -316,12 +328,8 @@ fn test_single_event_batch_proof_verifies() {
     let (circuit, public_inputs) = build_valid_batch(num_events);
     let proof = create_expanded_proof(circuit, &pk).expect("proof creation should succeed");
 
-    let valid =
-        verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
-    assert!(
-        valid,
-        "single-event batch proof should verify successfully"
-    );
+    let valid = verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
+    assert!(valid, "single-event batch proof should verify successfully");
 }
 
 // ---------------------------------------------------------------------------
@@ -337,8 +345,7 @@ fn test_empty_batch_proof_verifies() {
     let (circuit, public_inputs) = build_valid_batch(num_events);
     let proof = create_expanded_proof(circuit, &pk).expect("proof creation should succeed");
 
-    let valid =
-        verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
+    let valid = verify_proof(&vk, &public_inputs, &proof).expect("verification should not error");
     assert!(
         valid,
         "empty batch proof should verify successfully when old_root == new_root"
@@ -409,8 +416,7 @@ fn test_wrong_public_input_proof_fails() {
     let mut wrong_inputs = public_inputs.clone();
     wrong_inputs[1] = wrong_inputs[1] + Fr::from(1u64); // Corrupt new_root
 
-    let valid =
-        verify_proof(&vk, &wrong_inputs, &proof).expect("verification should not error");
+    let valid = verify_proof(&vk, &wrong_inputs, &proof).expect("verification should not error");
     assert!(
         !valid,
         "proof should not verify against wrong public inputs"
@@ -436,6 +442,7 @@ fn test_expanded_proof_serialization_roundtrip() {
         omnia_zk::prover::deserialize_proof(&bytes).expect("deserialization should succeed");
 
     // Verify the restored proof
-    let valid = verify_proof(&vk, &public_inputs, &restored).expect("verification should not error");
+    let valid =
+        verify_proof(&vk, &public_inputs, &restored).expect("verification should not error");
     assert!(valid, "restored proof should verify successfully");
 }

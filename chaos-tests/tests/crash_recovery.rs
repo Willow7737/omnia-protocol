@@ -15,14 +15,8 @@ fn test_crash_recovery() {
     let mut network = ChaosNetwork::new(4);
 
     // Verify initial liveness
-    assert!(
-        network.check_liveness(),
-        "Network should be live initially"
-    );
-    assert!(
-        network.check_safety(),
-        "Network should be safe initially"
-    );
+    assert!(network.check_liveness(), "Network should be live initially");
+    assert!(network.check_safety(), "Network should be safe initially");
 
     let initial_committed = network.committed_count();
 
@@ -32,15 +26,17 @@ fn test_crash_recovery() {
     }
 
     // Crash node 2
-    network.crash_node(2).expect("Should be able to crash node 2");
-    assert!(network.nodes[2].crashed, "Node 2 should be marked as crashed");
+    network
+        .crash_node(2)
+        .expect("Should be able to crash node 2");
+    assert!(
+        network.nodes[2].crashed,
+        "Node 2 should be marked as crashed"
+    );
 
     // Attempting to submit from crashed node should fail
     let result = network.submit_event(2, vec![99]);
-    assert!(
-        result.is_err(),
-        "Submitting from crashed node should fail"
-    );
+    assert!(result.is_err(), "Submitting from crashed node should fail");
 
     // Submit events from the remaining active nodes
     let events_during_crash = 5;
@@ -62,7 +58,10 @@ fn test_crash_recovery() {
     network
         .restart_node(2)
         .expect("Should be able to restart node 2");
-    assert!(!network.nodes[2].crashed, "Node 2 should be active after restart");
+    assert!(
+        !network.nodes[2].crashed,
+        "Node 2 should be active after restart"
+    );
 
     // Node 2 should now have events that were created while it was crashed
     // (synced during restart)
@@ -86,10 +85,7 @@ fn test_crash_recovery() {
     network.advance(2);
 
     // Final safety and liveness checks
-    assert!(
-        network.check_safety(),
-        "Safety should hold after recovery"
-    );
+    assert!(network.check_safety(), "Safety should hold after recovery");
     assert!(
         network.check_liveness(),
         "Network should be live after recovery"
@@ -132,7 +128,10 @@ fn test_multiple_crash_recovery() {
         }
     }
 
-    assert!(network.check_safety(), "Safety should hold with two crashed nodes");
+    assert!(
+        network.check_safety(),
+        "Safety should hold with two crashed nodes"
+    );
 
     // Restart one node
     network.restart_node(1).expect("Should restart node 1");

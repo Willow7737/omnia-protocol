@@ -260,8 +260,7 @@ impl SledSlashingStore {
     /// let state = store.load().unwrap();
     /// ```
     pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
-        let db =
-            sled::open(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        let db = sled::open(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
         let tree = db
             .open_tree("slashing")
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;

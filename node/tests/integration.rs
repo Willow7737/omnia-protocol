@@ -79,9 +79,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
     let app = http::build_http_router().with_state(app_state);
 
     let handle = tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .expect("Test server error");
+        axum::serve(listener, app).await.expect("Test server error");
     });
 
     // Give the server a moment to start
@@ -95,10 +93,7 @@ async fn test_health_endpoint() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{}/health", base_url))
-        .send()
-        .await?;
+    let resp = client.get(format!("{}/health", base_url)).send().await?;
 
     assert_eq!(resp.status(), 200);
 
@@ -114,10 +109,7 @@ async fn test_metrics_endpoint() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{}/metrics", base_url))
-        .send()
-        .await?;
+    let resp = client.get(format!("{}/metrics", base_url)).send().await?;
 
     assert_eq!(resp.status(), 200);
 
@@ -149,7 +141,10 @@ async fn test_submit_event() -> Result<()> {
     assert_eq!(resp.status(), 201);
 
     let body: Value = resp.json().await?;
-    assert!(body["event_id"].is_string(), "Response should contain event_id");
+    assert!(
+        body["event_id"].is_string(),
+        "Response should contain event_id"
+    );
     assert_eq!(body["status"], "submitted");
 
     Ok(())

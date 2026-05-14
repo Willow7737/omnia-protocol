@@ -48,9 +48,6 @@ pub fn build_api_router() -> Router<AppState> {
         .route("/governance/proposals", post(governance::create_proposal))
         .route("/governance/vote", post(governance::cast_vote))
         // Economics
-        .route(
-            "/economics/balance/{did}",
-            get(economics::get_balance),
-        )
+        .route("/economics/balance/{did}", get(economics::get_balance))
         .route("/economics/transfer", post(economics::transfer_ubc))
 }

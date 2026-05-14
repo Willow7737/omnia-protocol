@@ -223,7 +223,10 @@ impl ChaosNetwork {
             event.sign_with_keypair(&keypairs[i]);
 
             // Insert into the node's own graph (graph only needs &mut graph)
-            nodes[i].graph.insert(event.clone()).expect("Genesis insert should not fail");
+            nodes[i]
+                .graph
+                .insert(event.clone())
+                .expect("Genesis insert should not fail");
 
             // Track state
             nodes[i].next_sequence = 1;
@@ -357,11 +360,7 @@ impl ChaosNetwork {
                 if let Ok(events) = self.collect_missing_ancestors(source_idx, event_id, id) {
                     for event in events {
                         if let Err(e) = self.insert_event_to_node(id, event) {
-                            tracing::debug!(
-                                node = id,
-                                "Restart sync insert failed: {}",
-                                e
-                            );
+                            tracing::debug!(node = id, "Restart sync insert failed: {}", e);
                         }
                     }
                 }
@@ -439,7 +438,14 @@ impl ChaosNetwork {
             let mut event = if self_parent.is_none() {
                 Event::genesis(node.node_id, payload)
             } else {
-                Event::new(node.node_id, sequence, vc, self_parent, other_parent, payload)
+                Event::new(
+                    node.node_id,
+                    sequence,
+                    vc,
+                    self_parent,
+                    other_parent,
+                    payload,
+                )
             };
             event.sign_with_keypair(&node.keypair);
 
@@ -556,10 +562,7 @@ impl ChaosNetwork {
             for event_id in node.consensus.get_committed() {
                 if let Some(event) = node.graph.get(&event_id) {
                     let key = (event.creator, event.sequence);
-                    commits_by_key
-                        .entry(key)
-                        .or_default()
-                        .push((idx, event_id));
+                    commits_by_key.entry(key).or_default().push((idx, event_id));
                 }
             }
         }
@@ -669,9 +672,12 @@ impl ChaosNetwork {
         if observer_idx >= self.nodes.len() {
             return None;
         }
-        self.nodes[observer_idx]
-            .slashing
-            .check_liveness(node, last_active_round, current_round, threshold)
+        self.nodes[observer_idx].slashing.check_liveness(
+            node,
+            last_active_round,
+            current_round,
+            threshold,
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -839,8 +845,7 @@ impl ChaosNetwork {
         }
 
         // Get the event from the source's graph
-        let event = self
-            .nodes[source_idx]
+        let event = self.nodes[source_idx]
             .graph
             .get(&event_id)
             .ok_or_else(|| {
@@ -948,7 +953,10 @@ impl ChaosNetwork {
                 tracing::debug!(round = round, "Sync converged — no new events propagated");
                 break;
             }
-            tracing::debug!(round = round, "Sync round completed, more events to propagate");
+            tracing::debug!(
+                round = round,
+                "Sync round completed, more events to propagate"
+            );
         }
     }
 }

@@ -25,12 +25,12 @@
 
 use anyhow::{Context, Result};
 use omnia_economics::EconomicsState;
+use omnia_node::state::{AppState, NodeMetrics};
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
 };
-use omnia_substrate::{SledSlashingStore, SlashingEngine, Substrate, SubstrateConfig};
-use omnia_node::state::{AppState, NodeMetrics};
+use omnia_substrate::{SlashingEngine, SledSlashingStore, Substrate, SubstrateConfig};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
@@ -77,7 +77,10 @@ async fn main() -> Result<()> {
 
     // Create the shard router with standard fees
     let shard_router = create_shard_router()?;
-    tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
+    tracing::info!(
+        shard_count = 6,
+        "Shard router initialized with all shard types"
+    );
 
     // Create the economics state
     let economics = EconomicsState::new();
@@ -126,8 +129,7 @@ async fn main() -> Result<()> {
 /// environment variable is set; otherwise uses the standard
 /// human-readable format.
 fn init_tracing(log_level: &str) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(log_level));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
 
     let format = std::env::var("RUST_LOG_FORMAT").unwrap_or_default();
     if format == "json" {

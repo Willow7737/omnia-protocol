@@ -50,7 +50,10 @@ fn open_sled_store(dir: &PathBuf) -> SledSlashingStore {
             Err(e) => {
                 attempts += 1;
                 if attempts >= 10 {
-                    panic!("Failed to open sled store after {} attempts: {}", attempts, e);
+                    panic!(
+                        "Failed to open sled store after {} attempts: {}",
+                        attempts, e
+                    );
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
@@ -83,8 +86,7 @@ fn test_sled_slash_history_preserved_across_restart() {
     // Second engine instance with the same store path: state must survive
     {
         let store = open_sled_store(&dir);
-        let engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+        let engine = SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 300);
         assert_eq!(engine.stake_of(&n1), 10_000);
         assert!(!engine.is_slashed(&n1));
@@ -230,8 +232,7 @@ fn test_persistent_state_includes_stakes() {
     // Second engine: stakes must be preserved
     {
         let store = open_sled_store(&dir);
-        let engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+        let engine = SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
         assert_eq!(engine.stake_of(&n1), 50_000);
         assert_eq!(engine.stake_of(&n2), 75_000);

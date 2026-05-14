@@ -72,11 +72,9 @@ impl NodeMetrics {
                     "Current number of connected peers",
                 )
                 .expect("Failed to create peers_connected gauge");
-                let consensus_round = IntGauge::new(
-                    "omnia_node_consensus_round",
-                    "Current consensus round",
-                )
-                .expect("Failed to create consensus_round gauge");
+                let consensus_round =
+                    IntGauge::new("omnia_node_consensus_round", "Current consensus round")
+                        .expect("Failed to create consensus_round gauge");
                 let shard_ops_total = IntCounter::new(
                     "omnia_node_shard_operations_total",
                     "Total shard operations processed",
@@ -108,7 +106,10 @@ impl NodeMetrics {
                 }
             })
             .clone();
-        Ok(NODE_METRICS.get().expect("metrics just initialized").clone())
+        Ok(NODE_METRICS
+            .get()
+            .expect("metrics just initialized")
+            .clone())
     }
 }
 

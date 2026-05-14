@@ -122,7 +122,11 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
             let mut i = 0;
             while i < level.len() {
                 let left = level[i];
-                let right = if i + 1 < level.len() { level[i + 1] } else { [0u8; 32] };
+                let right = if i + 1 < level.len() {
+                    level[i + 1]
+                } else {
+                    [0u8; 32]
+                };
                 let mut hasher = blake3::Hasher::new();
                 hasher.update(&left);
                 hasher.update(&right);
@@ -132,7 +136,10 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
             level = next_level;
             pos /= 2;
         }
-        proofs.push(MerkleProof { siblings, directions });
+        proofs.push(MerkleProof {
+            siblings,
+            directions,
+        });
     }
 
     // Compute root
@@ -142,7 +149,11 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
         let mut i = 0;
         while i < level.len() {
             let left = level[i];
-            let right = if i + 1 < level.len() { level[i + 1] } else { [0u8; 32] };
+            let right = if i + 1 < level.len() {
+                level[i + 1]
+            } else {
+                [0u8; 32]
+            };
             let mut hasher = blake3::Hasher::new();
             hasher.update(&left);
             hasher.update(&right);
