@@ -42,6 +42,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
+      - name: Ensure cargo is on PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-test-${{ matrix.os }}"
