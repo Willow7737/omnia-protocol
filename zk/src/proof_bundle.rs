@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Current format version for [`ProofBundle`].
-const PROOF_BUNDLE_VERSION: u16 = 1;
+pub const PROOF_BUNDLE_VERSION: u16 = 1;
 
 /// EIP-155 chain ID for Ethereum mainnet.
 const ETHEREUM_CHAIN_ID: u64 = 1;
