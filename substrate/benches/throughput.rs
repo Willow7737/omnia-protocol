@@ -1,7 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use omnia_substrate::crypto::NodeKeypair;
 use omnia_substrate::*;
 use rand::rngs::OsRng;
+use std::hint::black_box;
 use std::time::Duration;
 
 fn benchmark_event_creation(c: &mut Criterion) {
@@ -28,7 +29,7 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
     let mut group = c.benchmark_group("graph_insertion");
     group.throughput(Throughput::Elements(1000));
 
-    let mut graph = CausalGraph::new();
+    let mut graph = CausalGraph::new(); // mut needed for insert
     let keypair = NodeKeypair::generate(&mut OsRng);
     let creator = [0u8; 32];
 
@@ -38,7 +39,7 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
     graph.insert(genesis.clone()).unwrap();
 
     group.bench_function("insert_chain", |b| {
-        let mut seq = 1;
+        let mut seq: u64 = 1;
         b.iter(|| {
             let mut vc = VectorClock::with_node(creator, seq + 1);
             let mut event = Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]);
