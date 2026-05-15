@@ -43,6 +43,9 @@ pub enum CausalGraphError {
     #[error("Graph integrity check failed: {0}")]
     /// Graph integrity violation
     IntegrityError(String),
+    #[error("Event {0} has been pruned")]
+    /// Event was pruned from the graph but minimal metadata is retained
+    EventPruned(String),
 }
 
 /// Statistics about the causal graph
@@ -60,6 +63,26 @@ pub struct GraphStats {
     pub finalized_events: usize,
     /// Number of pending events
     pub pending_events: usize,
+}
+
+/// Minimal metadata retained for pruned events.
+///
+/// When an event is pruned via [`CausalGraph::prune_finalized`], the full
+/// event data is removed from the graph, but this struct preserves enough
+/// information to maintain the DAG structure and respond to queries about
+/// the event's existence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrunedEventMetadata {
+    /// The event ID (hash).
+    pub event_id: EventId,
+    /// The creator of the event.
+    pub creator: NodeId,
+    /// The sequence number of the event.
+    pub sequence: u64,
+    /// The depth of the event in the graph.
+    pub depth: usize,
+    /// The round at which the event was finalized.
+    pub finalized_round: u64,
 }
 
 /// The core causal graph — a DAG of events
@@ -87,6 +110,15 @@ pub struct CausalGraph {
     finalized_count: usize,
     /// Per-event depth (computed during insert, used for pruning)
     depths: HashMap<EventId, usize>,
+    /// Metadata for events that have been pruned.
+    ///
+    /// When events are pruned via [`prune_finalized()`], the full `Event`
+    /// is removed from `events`, but a [`PrunedEventMetadata`] is stored
+    /// here so that queries can distinguish between "never existed" and
+    /// "pruned".
+    pruned_events: HashMap<EventId, PrunedEventMetadata>,
+    /// Per-event finalized round (set when `finalize_event` is called).
+    finalized_rounds: HashMap<EventId, u64>,
 }
 
 impl CausalGraph {
@@ -101,6 +133,8 @@ impl CausalGraph {
             max_depth: 0,
             finalized_count: 0,
             depths: HashMap::new(),
+            pruned_events: HashMap::new(),
+            finalized_rounds: HashMap::new(),
         }
     }
 
@@ -202,9 +236,41 @@ impl CausalGraph {
         Ok(())
     }
 
-    /// Get an event by its ID
+    /// Get an event by its ID.
+    ///
+    /// Returns `None` for both non-existent and pruned events.
+    /// Use [`get_checked()`] to distinguish between these cases.
     pub fn get(&self, event_id: &EventId) -> Option<&Event> {
         self.events.get(event_id)
+    }
+
+    /// Get an event by its ID with full error discrimination.
+    ///
+    /// Unlike [`get()`], this method returns a `Result` that distinguishes
+    /// between three cases:
+    /// - `Ok(&Event)` — the event exists and is accessible
+    /// - `Err(EventPruned)` — the event was pruned (minimal metadata retained)
+    /// - `Err(InvalidEvent)` — the event was never in the graph
+    pub fn get_checked(&self, event_id: &EventId) -> Result<&Event, CausalGraphError> {
+        if let Some(event) = self.events.get(event_id) {
+            Ok(event)
+        } else if self.pruned_events.contains_key(event_id) {
+            Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])))
+        } else {
+            Err(CausalGraphError::InvalidEvent(format!(
+                "event not found: {}",
+                hex::encode(&event_id[..8])
+            )))
+        }
+    }
+
+    /// Check whether an event has been pruned from the graph.
+    ///
+    /// Returns `true` if the event was previously in the graph but has
+    /// been pruned via [`prune_finalized()`]. Returns `false` for events
+    /// that are still present or never existed.
+    pub fn is_pruned(&self, event_id: &EventId) -> bool {
+        self.pruned_events.contains_key(event_id)
     }
 
     /// Get a mutable reference to an event
@@ -463,8 +529,55 @@ impl CausalGraph {
         }
     }
 
-    /// Mark an event as finalized
+    /// Mark an event as finalized.
+    ///
+    /// Also records the finalized round for later use by
+    /// [`prune_finalized()`].
+    ///
+    /// # Arguments
+    ///
+    /// * `event_id` — The ID of the event to finalize
+    /// * `round` — The consensus round at which the event was finalized
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CausalGraphError::InvalidEvent`] if the event is not found.
+    /// Returns [`CausalGraphError::EventPruned`] if the event has been pruned.
+    pub fn finalize_event_with_round(
+        &mut self,
+        event_id: &EventId,
+        round: u64,
+    ) -> Result<(), CausalGraphError> {
+        if self.pruned_events.contains_key(event_id) {
+            return Err(CausalGraphError::EventPruned(hex::encode(
+                &event_id[..8],
+            )));
+        }
+        if let Some(event) = self.events.get_mut(event_id) {
+            if event.status != EventStatus::Finalized {
+                event.status = EventStatus::Finalized;
+                self.finalized_count += 1;
+            }
+            self.finalized_rounds.insert(*event_id, round);
+            Ok(())
+        } else {
+            Err(CausalGraphError::InvalidEvent(format!(
+                "event not found: {}",
+                hex::encode(&event_id[..8])
+            )))
+        }
+    }
+
+    /// Mark an event as finalized (without tracking the round).
+    ///
+    /// This is the legacy version that does not record the finalized round.
+    /// For proper pruning support, use [`finalize_event_with_round()`].
     pub fn finalize_event(&mut self, event_id: &EventId) -> Result<(), CausalGraphError> {
+        if self.pruned_events.contains_key(event_id) {
+            return Err(CausalGraphError::EventPruned(hex::encode(
+                &event_id[..8],
+            )));
+        }
         if let Some(event) = self.events.get_mut(event_id) {
             if event.status != EventStatus::Finalized {
                 event.status = EventStatus::Finalized;
@@ -608,6 +721,102 @@ impl CausalGraph {
         self.tips.retain(|id| self.events.contains_key(id));
     }
 
+    /// Prune finalized events older than a given depth from the current round.
+    ///
+    /// Removes fully finalized events whose `finalized_round` is before
+    /// `current_round - depth`, keeping only minimal metadata in
+    /// [`pruned_events`](Self::pruned_events). This reduces memory usage
+    /// for long-running nodes while preserving enough information to
+    /// distinguish "pruned" from "never existed".
+    ///
+    /// # Arguments
+    ///
+    /// * `current_round` — The current consensus round number
+    /// * `depth` — Number of finalized rounds to retain. If `0`, this is
+    ///   a no-op (archive mode: nothing is ever pruned).
+    ///
+    /// # Returns
+    ///
+    /// The number of events pruned in this call.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Keep the last 1000 rounds of finalized events
+    /// let pruned = graph.prune_finalized(current_round, 1000);
+    /// tracing::info!(pruned, "pruned old finalized events");
+    /// ```
+    pub fn prune_finalized(&mut self, current_round: u64, depth: u64) -> usize {
+        // Archive mode: never prune
+        if depth == 0 {
+            return 0;
+        }
+
+        let cutoff_round = current_round.saturating_sub(depth);
+
+        // Collect events that are finalized and old enough to prune
+        let to_prune: Vec<EventId> = self
+            .finalized_rounds
+            .iter()
+            .filter(|(_, &round)| round < cutoff_round)
+            .map(|(id, _)| *id)
+            .collect();
+
+        let pruned_count = to_prune.len();
+
+        for id in &to_prune {
+            // Create minimal metadata from the event before removing it
+            if let Some(event) = self.events.remove(id) {
+                let finalized_round = self
+                    .finalized_rounds
+                    .remove(id)
+                    .expect("finalized_rounds entry exists for event in to_prune");
+                let depth_val = self.depths.remove(id).unwrap_or(0);
+
+                let metadata = PrunedEventMetadata {
+                    event_id: *id,
+                    creator: event.creator,
+                    sequence: event.sequence,
+                    depth: depth_val,
+                    finalized_round,
+                };
+                self.pruned_events.insert(*id, metadata);
+
+                // Remove from tips if present
+                self.tips.remove(id);
+            }
+        }
+
+        // Remove pruned event IDs from by_creator index
+        for id in &to_prune {
+            let creator = if let Some(meta) = self.pruned_events.get(id) {
+                meta.creator
+            } else {
+                continue;
+            };
+            if let Some(ids) = self.by_creator.get_mut(&creator) {
+                ids.retain(|x| x != id);
+            }
+        }
+
+        // Clean up empty by_creator entries
+        self.by_creator.retain(|_, ids| !ids.is_empty());
+
+        // Adjust finalized_count
+        self.finalized_count = self.finalized_count.saturating_sub(pruned_count);
+
+        if pruned_count > 0 {
+            tracing::debug!(
+                pruned_count,
+                current_round,
+                cutoff_round,
+                "pruned finalized events"
+            );
+        }
+
+        pruned_count
+    }
+
     /// Get the total size of all payloads in bytes.
     pub fn payload_size(&self) -> usize {
         self.events.values().map(|e| e.payload.len()).sum()
@@ -699,7 +908,7 @@ impl Default for CausalGraph {
 }
 
 /// A read-only snapshot of the causal graph
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GraphSnapshot {
     /// All events in the snapshot
     pub events: HashMap<EventId, Event>,
@@ -731,13 +940,14 @@ mod tests {
         node
     }
 
+    #[allow(dead_code)]
     fn create_test_event(
         creator: NodeId,
         sequence: u64,
         self_parent: Option<EventId>,
         other_parent: Option<EventId>,
     ) -> Event {
-        let mut vc = VectorClock::with_node(creator, sequence + 1);
+        let vc = VectorClock::with_node(creator, sequence + 1);
         Event::new(creator, sequence, vc, self_parent, other_parent, vec![])
     }
 
@@ -1131,7 +1341,7 @@ mod tests {
         );
 
         // Verify some payloads were actually cleared
-        let size_before_prune: usize = ids
+        let _size_before_prune: usize = ids
             .iter()
             .map(|id| graph.get(id).unwrap().payload.len())
             .sum();
@@ -1229,5 +1439,166 @@ mod tests {
                 "Merkle proof failed for pruned event — existence must still be provable"
             );
         }
+    }
+
+    // ── Event Pruning Tests (Sprint 4, Task B4) ──────────────────────
+
+    /// Test that prune_finalized returns 0 when depth is 0 (archive mode).
+    #[test]
+    fn test_prune_finalized_archive_mode() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let mut e = Event::genesis(n1, vec![1, 2, 3]);
+        e.sign(vec![1]);
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+        graph.finalize_event_with_round(&e_id, 1).unwrap();
+
+        // depth=0 means archive mode — nothing should be pruned
+        let pruned = graph.prune_finalized(100, 0);
+        assert_eq!(pruned, 0);
+        assert!(graph.contains(&e_id));
+        assert!(!graph.is_pruned(&e_id));
+    }
+
+    /// Test that prune_finalized removes old finalized events.
+    #[test]
+    fn test_prune_finalized_basic() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        // Create two events
+        let mut e1 = Event::genesis(n1, vec![1]);
+        e1.sign(vec![1]);
+        let e1_id = e1.id;
+        graph.insert(e1).unwrap();
+
+        let mut e2 = Event::new(
+            n1,
+            1,
+            VectorClock::with_node(n1, 2),
+            Some(e1_id),
+            None,
+            vec![2],
+        );
+        e2.sign(vec![1]);
+        let e2_id = e2.id;
+        graph.insert(e2).unwrap();
+
+        // Finalize both at different rounds
+        graph.finalize_event_with_round(&e1_id, 1).unwrap();
+        graph.finalize_event_with_round(&e2_id, 5).unwrap();
+
+        // Prune with depth=3 from round 5: cutoff = 5-3 = 2
+        // e1 was finalized at round 1 < 2, so it should be pruned
+        // e2 was finalized at round 5 >= 2, so it should remain
+        let pruned = graph.prune_finalized(5, 3);
+        assert_eq!(pruned, 1);
+        assert!(!graph.contains(&e1_id));
+        assert!(graph.is_pruned(&e1_id));
+        assert!(graph.contains(&e2_id));
+        assert!(!graph.is_pruned(&e2_id));
+    }
+
+    /// Test that get_checked distinguishes pruned vs non-existent events.
+    #[test]
+    fn test_get_checked_pruned_vs_not_found() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let mut e = Event::genesis(n1, vec![1]);
+        e.sign(vec![1]);
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+        graph.finalize_event_with_round(&e_id, 1).unwrap();
+
+        // Before pruning: event is accessible
+        assert!(graph.get_checked(&e_id).is_ok());
+
+        // Prune the event
+        graph.prune_finalized(10, 5);
+
+        // After pruning: get_checked returns EventPruned error
+        let result = graph.get_checked(&e_id);
+        assert!(matches!(result, Err(CausalGraphError::EventPruned(_))));
+
+        // A never-existent event returns InvalidEvent
+        let fake_id = [99u8; 32];
+        let result = graph.get_checked(&fake_id);
+        assert!(matches!(result, Err(CausalGraphError::InvalidEvent(_))));
+    }
+
+    /// Test that finalize_event_with_round rejects pruned events.
+    #[test]
+    fn test_finalize_rejects_pruned() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let mut e = Event::genesis(n1, vec![1]);
+        e.sign(vec![1]);
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+        graph.finalize_event_with_round(&e_id, 1).unwrap();
+
+        // Prune the event
+        graph.prune_finalized(10, 5);
+
+        // Attempting to finalize a pruned event should fail
+        let result = graph.finalize_event_with_round(&e_id, 99);
+        assert!(matches!(result, Err(CausalGraphError::EventPruned(_))));
+    }
+
+    /// Test that pruned event metadata is preserved correctly.
+    #[test]
+    fn test_pruned_metadata_preserved() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let mut e = Event::genesis(n1, vec![42]);
+        e.sign(vec![1]);
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+        graph.finalize_event_with_round(&e_id, 7).unwrap();
+
+        // Prune the event
+        let pruned = graph.prune_finalized(20, 10);
+        assert_eq!(pruned, 1);
+
+        // Verify metadata is in pruned_events (we can't access the field directly,
+        // but is_pruned should return true)
+        assert!(graph.is_pruned(&e_id));
+        assert!(!graph.contains(&e_id));
+
+        // The event should no longer be in by_creator
+        let by_creator = graph.by_creator(&n1);
+        assert!(by_creator.is_empty());
+    }
+
+    /// Test that prune_finalized with no qualifying events returns 0.
+    #[test]
+    fn test_prune_finalized_nothing_to_prune() {
+        let mut graph = CausalGraph::new();
+        let n1 = test_node(1);
+
+        let mut e = Event::genesis(n1, vec![1]);
+        e.sign(vec![1]);
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+        graph.finalize_event_with_round(&e_id, 10).unwrap();
+
+        // Prune with a cutoff that doesn't qualify any events
+        // current_round=5, depth=3 -> cutoff=2. Event at round 10 is NOT pruned.
+        let pruned = graph.prune_finalized(5, 3);
+        assert_eq!(pruned, 0);
+        assert!(graph.contains(&e_id));
+    }
+
+    /// Test that SubstrateConfig defaults to archive mode (pruning_depth=0).
+    #[test]
+    fn test_substrate_config_default_pruning_depth() {
+        use crate::SubstrateConfig;
+        let config = SubstrateConfig::new(test_node(1));
+        assert_eq!(config.pruning_depth, 0, "Default pruning_depth should be 0 (archive mode)");
     }
 }

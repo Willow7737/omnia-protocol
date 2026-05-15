@@ -21,41 +21,69 @@
 #![warn(unused_qualifications)]
 
 pub mod causal_graph;
+pub mod bls;
 pub mod consensus;
 pub mod crdt;
 pub mod crypto;
 pub mod event;
 pub mod gossip;
+pub mod keystore;
 pub mod network;
+pub mod rate_limiter;
 pub mod slashing;
+pub mod snapshot;
 pub mod vector_clock;
+pub mod vrf;
 
 // Re-export commonly used types
-pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats};
+pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState};
 pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
-    MAX_EVENT_AGE_MS, MAX_TIMESTAMP_DRIFT_MS,
+    MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
 pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
     GossipStats,
 };
-pub use network::{NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork};
+pub use network::{check_version_compatibility, NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork, VersionCompatibility, VersionHandshake};
+pub use rate_limiter::RateLimiter;
+pub use keystore::{EncryptedKeyStore, KeyRotationProof, KeyStoreError};
 pub use slashing::{
     InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
     SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
+pub use snapshot::{SnapshotError, StateSnapshot};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
+pub use vrf::{vrf_compute, vrf_verify, select_leader, VrfError, VrfOutput};
+pub use bls::{
+    aggregate_public_keys, aggregate_signatures, verify_aggregate, BlsError, BlsKeypair,
+    BlsPublicKey, BlsSignature,
+};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Protocol version identifier
-pub const PROTOCOL_VERSION: u32 = 1;
+/// Protocol version identifier — used for network compatibility negotiation.
+///
+/// Nodes with incompatible protocol versions will refuse to establish
+/// P2P connections. This version is incremented when wire-format changes,
+/// consensus rule changes, or other breaking protocol changes are made.
+///
+/// The string format follows semver: "major.minor.patch".
+/// - Major version changes: breaking wire/consensus changes
+/// - Minor version changes: new optional features (backward-compatible)
+/// - Patch version changes: bug fixes (fully compatible)
+pub const PROTOCOL_VERSION: &str = "4.0.0";
+
+/// libp2p protocol identifier for the Omnia request-response protocol.
+///
+/// Used by the request-response behaviour for sync and state exchange.
+/// The version suffix ensures peers speak the same protocol dialect.
+pub const PROTOCOL_IDENTIFIER: &str = "/omnia/1.0.0";
 
 /// Target throughput (transactions per second)
 pub const TARGET_TPS: u32 = 10_000;
@@ -139,6 +167,34 @@ pub struct SubstrateConfig {
     pub slash_threshold: u64,
     /// Slash points threshold at which a validator is *ejected* from the validator set.
     pub ejection_threshold: u64,
+    /// Maximum allowed event payload size in bytes.
+    ///
+    /// Events exceeding this size are rejected before processing,
+    /// preventing DoS via oversized payloads. Defaults to 1 MiB
+    /// (`MAX_PAYLOAD_SIZE`).
+    pub max_payload_size: usize,
+    /// Directory for persistent nonce state (sled).
+    ///
+    /// If `None`, nonce state is kept in memory only (for tests).
+    /// Production nodes should set this to ensure nonce tracking
+    /// survives restarts, preventing replay attacks after a crash.
+    pub nonce_data_dir: Option<PathBuf>,
+    /// Interval (in event count) between automatic snapshots.
+    ///
+    /// When set to a non-zero value, the node will automatically take
+    /// a state snapshot every `snapshot_interval` events. A value of
+    /// `0` disables automatic snapshots (archive mode).
+    ///
+    /// Default: `10000`.
+    pub snapshot_interval: u64,
+    /// Number of finalized rounds to retain before pruning.
+    ///
+    /// When set to a non-zero value, events finalized more than
+    /// `pruning_depth` rounds ago are pruned (metadata only).
+    /// A value of `0` means no pruning (archive mode).
+    ///
+    /// Default: `0` (archive).
+    pub pruning_depth: u64,
 }
 
 impl SubstrateConfig {
@@ -161,6 +217,10 @@ impl SubstrateConfig {
             slashing_data_dir: None,
             slash_threshold: DEFAULT_SLASH_THRESHOLD,
             ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
+            max_payload_size: MAX_PAYLOAD_SIZE,
+            nonce_data_dir: None,
+            snapshot_interval: 10_000,
+            pruning_depth: 0,
         }
     }
 
@@ -179,6 +239,10 @@ impl SubstrateConfig {
             slashing_data_dir: None,
             slash_threshold: DEFAULT_SLASH_THRESHOLD,
             ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
+            max_payload_size: MAX_PAYLOAD_SIZE,
+            nonce_data_dir: None,
+            snapshot_interval: 10_000,
+            pruning_depth: 0,
         }
     }
 }
@@ -456,7 +520,6 @@ mod tests {
     use super::*;
     use crate::crypto::generate_keypair;
     use crate::event::Event;
-    use crate::vector_clock::VectorClock;
 
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
@@ -516,7 +579,8 @@ mod tests {
 
     #[test]
     fn test_constants() {
-        assert_eq!(PROTOCOL_VERSION, 1);
+        assert_eq!(PROTOCOL_VERSION, "4.0.0");
+        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/1.0.0");
         assert_eq!(TARGET_TPS, 10_000);
         assert_eq!(TARGET_FINALITY_MS, 5_000);
     }

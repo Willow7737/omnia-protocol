@@ -3,18 +3,103 @@
 //! Provides QUIC transport, GossipSub for event propagation, mDNS for peer discovery,
 //! and request-response for sync operations. Uses tokio::sync primitives exclusively
 //! — never std::sync::Mutex across await points.
+//!
+//! # Protocol Version Negotiation
+//!
+//! When two Omnia nodes connect, they exchange protocol versions via the
+//! request-response protocol. If the major versions differ, the connection
+//! is rejected to prevent consensus divergence. Minor and patch version
+//! differences are allowed (backward-compatible).
 
 // The libp2p NetworkBehaviour derive macro generates an event enum without
 // doc comments on its variants, which triggers missing_docs. Allow it here
 // since we cannot annotate the derived code directly.
 #![allow(missing_docs)]
 
+use crate::PROTOCOL_IDENTIFIER;
+#[allow(unused_imports)] // PROTOCOL_VERSION used in tests
+use crate::PROTOCOL_VERSION;
 use libp2p::{
     gossipsub::{self, IdentTopic, MessageAuthenticity, ValidationMode},
     identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
 use std::collections::HashMap;
 use tokio::sync::mpsc;
+
+/// Handshake message exchanged during protocol version negotiation.
+///
+/// When two peers first connect, each sends a `VersionHandshake` message
+/// containing their protocol version. If the versions are incompatible,
+/// the connection is gracefully terminated.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VersionHandshake {
+    /// The protocol version of the sending node (semver string).
+    pub protocol_version: String,
+    /// The protocol identifier (e.g., "/omnia/1.0.0").
+    pub protocol_identifier: String,
+    /// The node's identifier in the network.
+    pub node_id: [u8; 32],
+}
+
+/// Result of a version compatibility check between two nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VersionCompatibility {
+    /// The versions are fully compatible.
+    Compatible,
+    /// The versions are compatible with a minor difference (newer peer has features).
+    MinorDifference {
+        /// The local protocol version.
+        local: String,
+        /// The remote protocol version.
+        remote: String,
+    },
+    /// The versions are incompatible (different major versions).
+    Incompatible {
+        /// The local protocol version.
+        local: String,
+        /// The remote protocol version.
+        remote: String,
+    },
+}
+
+/// Check version compatibility between two protocol version strings.
+///
+/// Parses both versions as semver and compares major versions.
+/// - Same major version: `Compatible` or `MinorDifference`
+/// - Different major version: `Incompatible`
+///
+/// # Example
+///
+/// ```
+/// use omnia_substrate::network::check_version_compatibility;
+///
+/// let result = check_version_compatibility("4.0.0", "4.1.0");
+/// assert!(matches!(result, _compatible if !matches!(result, omnia_substrate::network::VersionCompatibility::Incompatible { .. })));
+///
+/// let result = check_version_compatibility("4.0.0", "3.0.0");
+/// assert!(matches!(result, omnia_substrate::network::VersionCompatibility::Incompatible { .. }));
+/// ```
+pub fn check_version_compatibility(local: &str, remote: &str) -> VersionCompatibility {
+    let local_parts: Vec<&str> = local.split('.').collect();
+    let remote_parts: Vec<&str> = remote.split('.').collect();
+
+    let local_major = local_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let remote_major = remote_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+
+    if local_major != remote_major {
+        VersionCompatibility::Incompatible {
+            local: local.to_string(),
+            remote: remote.to_string(),
+        }
+    } else if local == remote {
+        VersionCompatibility::Compatible
+    } else {
+        VersionCompatibility::MinorDifference {
+            local: local.to_string(),
+            remote: remote.to_string(),
+        }
+    }
+}
 
 /// Events emitted by the network layer.
 #[derive(Debug)]
@@ -110,7 +195,7 @@ impl OmniaNetwork {
 
         let req_res = libp2p::request_response::cbor::Behaviour::new(
             [(
-                StreamProtocol::new("/omnia/1.0.0"),
+                StreamProtocol::new(PROTOCOL_IDENTIFIER),
                 libp2p::request_response::ProtocolSupport::Full,
             )],
             libp2p::request_response::Config::default(),
@@ -261,5 +346,106 @@ impl OmniaNetwork {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version_compatibility_same_version() {
+        let result = check_version_compatibility("4.0.0", "4.0.0");
+        assert_eq!(result, VersionCompatibility::Compatible);
+    }
+
+    #[test]
+    fn test_version_compatibility_minor_difference() {
+        let result = check_version_compatibility("4.0.0", "4.1.0");
+        assert_eq!(
+            result,
+            VersionCompatibility::MinorDifference {
+                local: "4.0.0".to_string(),
+                remote: "4.1.0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_version_compatibility_patch_difference() {
+        let result = check_version_compatibility("4.0.0", "4.0.1");
+        assert_eq!(
+            result,
+            VersionCompatibility::MinorDifference {
+                local: "4.0.0".to_string(),
+                remote: "4.0.1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_version_compatibility_major_incompatible() {
+        let result = check_version_compatibility("4.0.0", "3.0.0");
+        assert_eq!(
+            result,
+            VersionCompatibility::Incompatible {
+                local: "4.0.0".to_string(),
+                remote: "3.0.0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_version_compatibility_major_5_vs_4() {
+        let result = check_version_compatibility("5.0.0", "4.0.0");
+        assert!(matches!(result, VersionCompatibility::Incompatible { .. }));
+    }
+
+    #[test]
+    fn test_version_compatibility_malformed_local() {
+        let result = check_version_compatibility("not-a-version", "4.0.0");
+        // Malformed version has major = 0 (from parse failure)
+        assert!(matches!(result, VersionCompatibility::Incompatible { .. }));
+    }
+
+    #[test]
+    fn test_version_compatibility_malformed_remote() {
+        let result = check_version_compatibility("4.0.0", "bad");
+        assert!(matches!(result, VersionCompatibility::Incompatible { .. }));
+    }
+
+    #[test]
+    fn test_version_handshake_creation() {
+        let handshake = VersionHandshake {
+            protocol_version: PROTOCOL_VERSION.to_string(),
+            protocol_identifier: PROTOCOL_IDENTIFIER.to_string(),
+            node_id: [0u8; 32],
+        };
+        assert_eq!(handshake.protocol_version, "4.0.0");
+        assert_eq!(handshake.protocol_identifier, "/omnia/1.0.0");
+    }
+
+    #[test]
+    fn test_version_handshake_serialization() {
+        let handshake = VersionHandshake {
+            protocol_version: "4.0.0".to_string(),
+            protocol_identifier: "/omnia/1.0.0".to_string(),
+            node_id: [42u8; 32],
+        };
+        let json = serde_json::to_string(&handshake).expect("serialize");
+        let restored: VersionHandshake = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.protocol_version, "4.0.0");
+        assert_eq!(restored.protocol_identifier, "/omnia/1.0.0");
+        assert_eq!(restored.node_id, [42u8; 32]);
+    }
+
+    #[test]
+    fn test_protocol_identifier_constant() {
+        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/1.0.0");
+    }
+
+    #[test]
+    fn test_protocol_version_constant() {
+        assert_eq!(PROTOCOL_VERSION, "4.0.0");
     }
 }

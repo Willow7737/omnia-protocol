@@ -35,6 +35,16 @@ serde_json = "1.0"
 # Embedded key-value store for persistent slashing state
 sled = "0.34"
 
+# BLS12-381 signature aggregation — reduces N signature verifications to 1
+# Spec: Boneh-Lynn-Shacham (BLS) signatures
+blst = "0.3"
+
+# Efficient serialization of byte arrays in serde — needed for BLS key/sig binary fields
+serde_bytes = "0.11"
+
+# Constant-time comparisons for cryptographic operations — prevents timing side-channels
+subtle = "2"
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"

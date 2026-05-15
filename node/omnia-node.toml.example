@@ -1,0 +1,37 @@
+# Omnia Node Configuration Example
+#
+# This file shows all available configuration options with their defaults.
+# Copy this file to `omnia-node.toml` and modify as needed.
+#
+# Configuration precedence: CLI flags > env vars > config file > defaults
+
+# Unique node identifier in the network (required)
+node_id = 1
+
+# HTTP API server port
+http_port = 8080
+
+# P2P network listen address
+listen_addr = "0.0.0.0:4001"
+
+# Directory for persistent data storage (sled DB, slashing state, etc.)
+data_dir = "./data"
+
+# Log level filter (trace, debug, info, warn, error)
+log_level = "info"
+
+# Bootstrap peer multiaddresses for P2P discovery
+# Separate multiple addresses with commas or use TOML array syntax
+# bootstrap_nodes = ["/ip4/1.2.3.4/udp/4001/quic/p2p/12D3KooWExample"]
+
+# Maximum allowed event payload size in bytes (default: 1 MiB)
+# max_payload_size = 1048576
+
+# Number of finalized rounds to retain before pruning (0 = archive mode, no pruning)
+# pruning_depth = 0
+
+# Interval (in event count) between automatic snapshots
+# snapshot_interval = 10000
+
+# Directory for persistent slashing state (default: <data_dir>/slashing)
+# slashing_data_dir = "/var/lib/omnia/slashing"

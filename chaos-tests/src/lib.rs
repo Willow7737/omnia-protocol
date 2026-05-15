@@ -95,10 +95,12 @@ impl ChaosNode {
     /// # Arguments
     ///
     /// * `index` — 0-based index of this node in the network.
-    /// * `node_id` — The protocol-level node identity.
-    /// * `keypair` — Ed25519 signing keypair for this node.
+    /// * `keypair` — Ed25519 signing keypair for this node (node_id is derived as blake3(pubkey)).
     /// * `total_nodes` — Total number of validators (used for consensus thresholds).
-    pub fn new(index: usize, node_id: NodeId, keypair: NodeKeypair, total_nodes: usize) -> Self {
+    pub fn new(index: usize, keypair: NodeKeypair, total_nodes: usize) -> Self {
+        // Derive node_id from the keypair: node_id = blake3(creator_pubkey)
+        // This matches Event::sign_with_keypair() which sets creator = blake3(pubkey)
+        let node_id: NodeId = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
         let config = ConsensusConfig {
             total_nodes,
             ..Default::default()
@@ -171,20 +173,24 @@ impl ChaosNetwork {
 
     /// Create a new chaos network with `n` nodes.
     ///
-    /// Each node gets a unique `NodeId` (byte 0 is `i+1`), an Ed25519 keypair,
+    /// Each node gets a unique `NodeId` derived from BLAKE3(pubkey), an Ed25519 keypair,
     /// and is registered as a validator on all nodes' consensus engines.
     /// Genesis events are created for each node and synced across the network.
     pub fn new(n: usize) -> Self {
-        let mut node_ids: Vec<NodeId> = Vec::with_capacity(n);
+        // Generate keypairs first, then derive node IDs from BLAKE3(pubkey).
+        // After Sprint 4 Task A1, Event::sign_with_keypair() sets
+        // creator = blake3(creator_pubkey), so node IDs must match this
+        // derivation for equivocation detection and slashing to work correctly.
         let mut keypairs: Vec<NodeKeypair> = Vec::with_capacity(n);
-
-        // Generate unique node IDs and keypairs
-        for i in 0..n {
-            let mut node_id = [0u8; 32];
-            node_id[0] = (i + 1) as u8;
-            node_ids.push(node_id);
+        for _ in 0..n {
             keypairs.push(generate_keypair());
         }
+
+        // Derive node IDs from the BLAKE3 hash of each keypair's public key
+        let node_ids: Vec<NodeId> = keypairs
+            .iter()
+            .map(|kp| *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes())
+            .collect();
 
         // Create nodes, each with all validators registered
         let mut nodes = Vec::with_capacity(n);
@@ -235,9 +241,9 @@ impl ChaosNetwork {
                 .insert(event.clone())
                 .expect("Genesis insert should not fail");
 
-            // Track state
+            // Track state — use event.creator (which is blake3(pubkey) after signing)
             nodes[i].next_sequence = 1;
-            nodes[i].latest_events.insert(node_ids[i], event.id);
+            nodes[i].latest_events.insert(event.creator, event.id);
             nodes[i].vector_clock = event.vector_clock.clone();
 
             genesis_events.push((i, event));

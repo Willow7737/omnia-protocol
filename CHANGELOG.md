@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Sprint 4] - 2026-03-05
+
+### Added
+
+- zk: Poseidon SNARK-friendly hash function (BN254, t=3, R_F=8, R_P=57)
+- zk: Replaced field-addition hash with Poseidon in ExpandedRollupCircuit (Merkle path + state transition)
+- zk: `poseidon_hash_to_fr()` for off-circuit Merkle tree construction matching on-circuit Poseidon
+- substrate: State snapshot system (`StateSnapshot::take/verify/to_bytes/from_bytes/write_to_file/read_from_file`)
+- substrate: Event pruning by finalized round (`CausalGraph::prune_finalized()`)
+- substrate: `PrunedEventMetadata` struct and `pruned_events` field on CausalGraph
+- substrate: `finalize_event_with_round()` for tracking round at which events were finalized
+- substrate: VRF for deterministic leader selection (`vrf_compute`, `vrf_verify`, `select_leader`)
+- substrate: BLS12-381 signature aggregation (`BlsKeypair`, `aggregate_signatures`, `aggregate_public_keys`, `verify_aggregate`)
+- substrate: Encrypted key store with rotation proofs (`EncryptedKeyStore`, `KeyRotationProof`)
+- substrate: Protocol version negotiation in P2P layer (`VersionHandshake`, `check_version_compatibility`)
+- substrate: `SubstrateConfig.snapshot_interval` (default: 10000) and `SubstrateConfig.pruning_depth` (default: 0)
+- zk: Trusted setup ceremony orchestration (`SetupCeremony`, Powers of Tau, circuit-specific key derivation)
+- node: TOML configuration file support (`NodeConfigFile`, `--config` CLI flag)
+- node: `--protocol-version` CLI flag for advertising protocol version on the network
+- node: `snapshot` and `restore` CLI subcommands for state snapshot management
+- node: `keygen` CLI subcommand for validator keypair generation
+- node: `setup-contribute` and `setup-verify` CLI subcommands for trusted setup ceremony
+- monitoring: Grafana dashboard with 9 panels (finalized events, peer count, latency, gossip, slashing, fees, graph size, memory, submitted vs finalized)
+- monitoring: Alert rules for FinalityStalled, PeerCountDrop, HighSlashingRate, MemoryGrowth
+- monitoring: Grafana service in docker-compose with pre-provisioned dashboards
+- formal-verification: `OmniaCRDT.tla` with GCounter, OrSet, and LWWRegister convergence proofs
+- formal-verification: `OmniaCRDT.cfg` model checker configuration
+- node: `omnia-node.toml.example` configuration template
+- ops: Operations runbook with 7 sections (startup, key rotation, slashing, partition recovery, upgrade, snapshot/restore, monitoring)
+- docs: Side-channel resistance audit (subtle::ConstantTimeEq for creator binding, hash verification, equivocation detection)
+
+### Changed
+
+- PROTOCOL_VERSION bumped to "4.0.0"
+- ExpandedRollupCircuit now uses Poseidon hash instead of field addition for Merkle path verification and state transitions
+- Event hash verification and creator binding use constant-time comparisons (`subtle::ConstantTimeEq`)
+
+### ⚠️ Known Limitations
+
+- Poseidon parameters use a Cauchy MDS matrix and BLAKE3-derived round constants (not the Grain LFSR from the paper)
+- TLA+ CRDT model uses finite state spaces (3 nodes, MaxVal=3) — not exhaustive
+- BLS key generation uses zero seed by default in tests — production must provide entropy
+- EncryptedKeyStore uses XOR-based encryption (not AES-256-GCM) — production must upgrade
+
 ## [Sprint 3] - 2026-05-15
 
 ### Added

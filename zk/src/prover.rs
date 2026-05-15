@@ -9,6 +9,14 @@
 //!
 //! All operations use the Bn254 pairing-friendly curve and the
 //! [`ark_groth16`] implementation.
+//!
+//! ## Hash Function
+//!
+//! The expanded circuit uses Poseidon (Grassi et al. 2019) as its hash
+//! function for both Merkle path verification and state transition
+//! constraints. When constructing off-circuit Merkle trees for witness
+//! data, use [`crate::merkle::poseidon_hash_to_fr`] to ensure the
+//! off-circuit and on-circuit hash computations match.
 
 use ark_bn254::Bn254;
 use ark_crypto_primitives::snark::CircuitSpecificSetupSNARK;

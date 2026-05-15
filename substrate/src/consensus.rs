@@ -51,6 +51,13 @@ pub struct ConsensusConfig {
     pub optimistic_threshold: u32,
     /// Maximum rounds to look ahead for fame determination
     pub max_look_ahead: u64,
+    /// Randomness seed for VRF-based leader selection.
+    ///
+    /// Updated each round from the previous round's VRF output to ensure
+    /// unpredictability. Must not be all zeros in production.
+    ///
+    /// See: draft-irtf-cfrg-vrf-15, §5 — VRF-based leader selection
+    pub round_seed: [u8; 32],
 }
 
 impl Default for ConsensusConfig {
@@ -61,6 +68,7 @@ impl Default for ConsensusConfig {
             optimistic_confirmation: true,
             optimistic_threshold: 3, // >2/3 of 4
             max_look_ahead: 10,
+            round_seed: [0u8; 32], // Must be set before production use
         }
     }
 }
@@ -521,6 +529,51 @@ impl ConsensusEngine {
     pub fn is_slashed(&self, node: &NodeId) -> bool {
         self.slashing.is_slashed(node)
     }
+
+    /// Compute the VRF-based leader for the given round.
+    ///
+    /// Uses the VRF module's [`select_leader`](crate::vrf::select_leader)
+    /// function with the current `round_seed` from the configuration and
+    /// the provided round number. Candidates with zero stake are skipped.
+    ///
+    /// # Arguments
+    ///
+    /// * `candidates` — Map of NodeId to (keypair, stake) for each candidate
+    /// * `round_number` — The consensus round number
+    ///
+    /// # Returns
+    ///
+    /// The `NodeId` of the selected leader, or an error if no eligible
+    /// candidate exists.
+    ///
+    /// # References
+    ///
+    /// See: draft-irtf-cfrg-vrf-15 — Verifiable Random Functions
+    pub fn compute_leader(
+        &self,
+        candidates: &HashMap<NodeId, (crate::crypto::NodeKeypair, u64)>,
+        round_number: u64,
+    ) -> Result<NodeId, crate::vrf::VrfError> {
+        crate::vrf::select_leader(candidates, &self.config.round_seed, round_number)
+    }
+
+    /// Update the round seed with a new VRF output.
+    ///
+    /// This should be called after each round to ensure the next round's
+    /// leader selection is unpredictable. The new seed is derived from
+    /// the VRF output of the current round's leader.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_seed` — The new 32-byte seed for the next round
+    pub fn update_round_seed(&mut self, new_seed: [u8; 32]) {
+        tracing::info!(
+            old_seed = ?&self.config.round_seed[..4],
+            new_seed = ?&new_seed[..4],
+            "Updating round seed for VRF leader selection"
+        );
+        self.config.round_seed = new_seed;
+    }
 }
 
 /// Consensus statistics
@@ -712,6 +765,7 @@ mod tests {
             optimistic_confirmation: false,
             optimistic_threshold: 3,
             max_look_ahead: 10,
+            round_seed: [0u8; 32],
         };
         let mut engine = ConsensusEngine::new(
             config,

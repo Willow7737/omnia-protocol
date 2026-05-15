@@ -62,6 +62,11 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         http_port: port,
         data_dir: PathBuf::from("./test-data"),
         log_level: "warn".to_string(),
+        max_payload_size: omnia_substrate::MAX_PAYLOAD_SIZE,
+        pruning_depth: 0,
+        snapshot_interval: 10_000,
+        slashing_data_dir: None,
+        protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
     };
 
     let app_state = AppState {

@@ -1,6 +1,6 @@
 # Omnia Protocol — Formal Verification
 
-This directory contains a TLA+ specification that models the Omnia consensus protocol and verifies its safety properties through exhaustive state-space exploration using the TLC model checker.
+This directory contains TLA+ specifications that model the Omnia consensus protocol and its CRDT convergence properties, verifying safety and liveness through exhaustive state-space exploration using the TLC model checker.
 
 ## Protocol Model
 
@@ -10,7 +10,7 @@ The Omnia consensus is modeled as a hybrid of three established approaches:
 - **AlephBFT-style BFT finality** — a 3f+1 voting threshold ensures safety as long as fewer than one-third of nodes are Byzantine.
 - **CRDT-based state convergence** — the gossip substrate ensures all honest nodes eventually converge on the same event graph.
 
-The TLA+ spec captures the core state machine: event creation, gossip propagation, equivocation by Byzantine nodes, and the consensus lifecycle from pending through to committed.
+The TLA+ spec captures the core state machine: event creation, gossip propagation, equivocation by Byzantine nodes, fame decisions, and the consensus lifecycle from pending through to committed.
 
 ## Spec Design
 
@@ -18,9 +18,28 @@ The TLA+ spec captures the core state machine: event creation, gossip propagatio
 
 Unlike the original spec (which used `(creator, sequence)` as the event key), this spec uses `(creator, sequence, hash)` as the `EventId`. This is critical for modeling equivocation correctly: when a Byzantine node creates two events at the same `(creator, sequence)` with different hashes, both events must coexist in the event map. Including hash in the key ensures two distinct entries are created rather than the second overwriting the first.
 
-### Simplified consensus
+### Quorum-based commitment (B1 fix)
 
-The `CommitEvent` action advances any pending event directly to "committed" without quorum requirements. A production spec would gate commitment on supermajority witness votes. This simplification means the spec can find Agreement violations that would not occur in the real protocol with proper BFT quorum enforcement.
+The original `CommitEvent` action was permissive — any pending event could be committed without quorum requirements. This caused the Agreement invariant to be violated: a Byzantine node could equivocate, both events could be gossiped to honest nodes, and both could be committed.
+
+The fix introduces two new mechanisms:
+
+1. **`Quorum`** — defined as `Cardinality(Nodes) * 2 / 3 + 1`, the standard BFT supermajority threshold.
+2. **`IsReady(eid)`** — a predicate that checks whether a quorum of nodes have the event.
+3. **`famous_events`** — a set of EventIds that have been decided "famous" via the `DecideFamous` action.
+4. **`CommitEvent`** — now requires both `IsReady(eid)` AND `eid ∈ famous_events`.
+
+The key invariant is that at most one event per `(creator, sequence)` can become famous, because `DecideFamous` requires `NoConflictingFamous(eid)` — no other event at the same logical position with a different hash is already famous. This ensures that equivocating events cannot both be committed by honest nodes, restoring the Agreement property.
+
+### Liveness
+
+The `FairSpec` adds weak fairness assumptions on honest actions:
+- `WF_vars(CreateEvent(n))` for honest nodes — events are eventually created
+- `WF_vars(Gossip(n1, n2))` for all node pairs — events are eventually propagated
+- `WF_vars(DecideFamous(eid))` for all events — fame is eventually decided
+- `WF_vars(CommitEvent(n, eid))` for honest nodes — famous events are eventually committed
+
+The `Liveness` property states: every event created by an honest node is eventually committed at the creating node.
 
 ## Installing TLA+
 
@@ -68,7 +87,7 @@ The model is configured in `OmniaConsensus.cfg`:
 
 ## Properties Verified
 
-### 1. Agreement (Safety) — **VIOLATED**
+### 1. Agreement (Safety) — **HOLDS** ✓
 
 ```tla
 Agreement == \A n1 \in Honest, n2 \in Honest:
@@ -82,13 +101,13 @@ Agreement == \A n1 \in Honest, n2 \in Honest:
         => eid1.hash = eid2.hash
 ```
 
-All honest nodes that commit an event at the same `(creator, sequence)` should agree on its hash. **This invariant is VIOLATED** by the current spec.
+All honest nodes that commit an event at the same `(creator, sequence)` agree on its hash. **This invariant now HOLDS** after the B1 fix.
 
-**Counterexample**: A Byzantine node equivocates (creates two events with same `(creator, sequence)` but different hashes). Both events are gossiped to honest nodes, and both are committed via the `CommitEvent` action. This results in two honest nodes committing different hashes for the same logical event position.
+**Previous violation**: A Byzantine node equivocated (created two events with same `(creator, sequence)` but different hashes). Both events were gossiped to honest nodes, and both were committed via the permissive `CommitEvent` action.
 
-**Root cause**: The `CommitEvent` action is permissive — any pending event can be committed without quorum requirements. In the real protocol, commitment requires supermajority (>2/3) witness votes, which would prevent honest nodes from committing both equivocating events. This violation is a modeling artifact, not a protocol flaw.
+**Fix**: `CommitEvent` now requires `IsReady(eid)` (quorum visibility) AND `eid ∈ famous_events`. The `DecideFamous` action ensures at most one event per `(creator, sequence)` becomes famous, preventing equivocating events from both being committed.
 
-### 2. NoEquivocation (Integrity) — **HOLDS**
+### 2. NoEquivocation (Integrity) — **HOLDS** ✓
 
 ```tla
 NoEquivocation == \A n1 \in Honest, n2 \in Honest:
@@ -103,9 +122,9 @@ NoEquivocation == \A n1 \in Honest, n2 \in Honest:
         => eid1.creator \in ByzantineNodes
 ```
 
-If two committed events share the same `(creator, sequence)` but have different hashes, the creator must be Byzantine. This invariant holds because only `Equivocate` (which requires `n \in ByzantineNodes`) creates two events at the same `(creator, sequence)` with different hashes. Honest nodes use `CreateEvent`, which always uses hash=1 deterministically.
+If two committed events share the same `(creator, sequence)` but have different hashes, the creator must be Byzantine. This invariant holds because only `Equivocate` (which requires `n ∈ ByzantineNodes`) creates two events at the same `(creator, sequence)` with different hashes.
 
-### 3. Validity (Liveness-related Safety) — **HOLDS**
+### 3. Validity (Liveness-related Safety) — **HOLDS** ✓
 
 ```tla
 Validity == \A n \in Honest:
@@ -115,11 +134,24 @@ Validity == \A n \in Honest:
         => eid.sequence < current_seq[eid.creator]
 ```
 
-If an honest node commits an event, some node actually proposed it. No committed event is fabricated. This holds because `CreateEvent` and `Equivocate` both advance `current_seq` when creating events, so any event with `sequence < current_seq[creator]` was genuinely proposed.
+If an honest node commits an event, some node actually proposed it. No committed event is fabricated.
 
-### 4. TypeOK (State Invariant) — **HOLDS**
+### 4. Liveness — **HOLDS** ✓ (under FairSpec)
 
-Basic well-typedness invariant ensuring all state variables remain within their intended domains.
+```tla
+Liveness == \A n \in Honest:
+    \A eid \in EventId:
+        /\ eid.creator = n
+        /\ eid.hash = 1
+        /\ EventExists(n, eid)
+        => <>(events[n][eid].status = "committed")
+```
+
+Every event created by an honest node is eventually committed. This holds under the fairness assumptions in `FairSpec`, which ensure progress through the CreateEvent → Gossip → DecideFamous → CommitEvent pipeline.
+
+### 5. TypeOK (State Invariant) — **HOLDS** ✓
+
+Basic well-typedness invariant ensuring all state variables remain within their intended domains, including the new `famous_events` variable.
 
 ## TLC Results
 
@@ -128,27 +160,25 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 | Property | Status | Notes |
 |---|---|---|
 | TypeOK | ✅ Holds | Well-typedness invariant verified |
-| Agreement | ❌ Violated | Honest nodes can commit equivocating events; see root cause analysis above |
+| Agreement | ✅ Holds | Restored by quorum + fame requirement |
 | NoEquivocation | ✅ Holds | Equivocation is confined to Byzantine creators |
 | Validity | ✅ Holds | Committed events were proposed by some node |
+| Liveness | ✅ Holds | Honest events eventually committed (under fairness) |
 
-**Execution:** TLC v1.8.0, ~608 distinct states found at depth 6 before Agreement violation detected. Runtime < 2 seconds.
+## CRDT Convergence Verification (B5)
 
-## Fixing the Agreement Violation
+The `OmniaCRDT.tla` spec formally verifies the convergence properties of the three CRDT types used in the Omnia substrate:
 
-The Agreement violation can be resolved by adding a quorum requirement to the `CommitEvent` action. For example:
+- **GCounter**: Commutativity, associativity, and idempotence of merge
+- **OrSet**: Commutativity and idempotence of merge (add-wins semantics)
+- **LWWRegister**: Commutativity and idempotence of merge (last-write-wins semantics)
 
-1. Track how many nodes have acknowledged each event via gossip
-2. Only allow commitment when >2/3 of nodes have the event in "acknowledged" or higher state
-3. This prevents equivocating events from both reaching the committed state at honest nodes
-
-This is left as future work — the current spec correctly identifies the modeling gap.
+See `OmniaCRDT.cfg` for the model checker configuration.
 
 ## Known Limitations
 
 | Limitation | Details |
 |---|---|
-| **Permissive commitment** | `CommitEvent` has no quorum requirement. This causes Agreement violations that would not occur with proper BFT voting. |
 | **Bounded state space** | Model checking is over a finite set of 4 nodes with MaxSeq=1. Scaling beyond this is limited by state explosion. |
 | **Simplified gossip** | Gossip is modeled as atomic one-step transfer, not the multi-round epidemic protocol used in production. |
 | **No network partitions** | The model assumes reliable delivery. Partition tolerance is not modeled. |
@@ -157,6 +187,7 @@ This is left as future work — the current spec correctly identifies the modeli
 | **Byzantine set is static** | The set of Byzantine nodes is fixed. Adaptive corruptions are not modeled. |
 | **Equivocation only** | Byzantine behavior is limited to equivocation. More complex attacks (selective forwarding, Sybil) are not captured. |
 | **No parent references** | The two-parent DAG structure is abstracted away; only the creator+sequence+hash identification is modeled. |
+| **Abstract fame decision** | The `DecideFamous` action abstracts the multi-round witness voting process into a single step. |
 
 ## How to Interpret Results
 
@@ -185,6 +216,8 @@ The model exceeds available memory. Remediation:
 
 | File | Description |
 |---|---|
-| `OmniaConsensus.tla` | TLA+ specification of the consensus protocol |
-| `OmniaConsensus.cfg` | TLC model checker configuration |
+| `OmniaConsensus.tla` | TLA+ specification of the consensus protocol (with B1 fix) |
+| `OmniaConsensus.cfg` | TLC model checker configuration for consensus |
+| `OmniaCRDT.tla` | TLA+ specification of CRDT convergence properties |
+| `OmniaCRDT.cfg` | TLC model checker configuration for CRDT |
 | `README.md` | This documentation |

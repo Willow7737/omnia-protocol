@@ -17,6 +17,12 @@ fn node(id: u8) -> [u8; 32] {
     n
 }
 
+/// Helper: derive the creator NodeId from a keypair.
+/// After Sprint 4 Task A1, `creator = blake3(creator_pubkey)`.
+fn creator_from_keypair(kp: &omnia_substrate::NodeKeypair) -> [u8; 32] {
+    *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes()
+}
+
 // ── Equivocation detection ─────────────────────────────────────────
 
 #[test]
@@ -40,8 +46,8 @@ fn test_equivocation_detection_two_events_same_creator_sequence_different_hash()
 
 #[test]
 fn test_equivocation_triggers_slash_in_consensus() {
-    let n1 = node(1);
     let kp = generate_keypair();
+    let n1 = creator_from_keypair(&kp); // creator = blake3(creator_pubkey)
 
     let mut graph = CausalGraph::new();
     let config = ConsensusConfig::default();
@@ -142,8 +148,8 @@ fn test_accumulated_points_exceed_slash_threshold() {
 
 #[test]
 fn test_slashed_node_events_rejected() {
-    let n1 = node(1);
     let kp = generate_keypair();
+    let n1 = creator_from_keypair(&kp); // creator = blake3(creator_pubkey)
 
     let mut graph = CausalGraph::new();
     let config = ConsensusConfig::default();

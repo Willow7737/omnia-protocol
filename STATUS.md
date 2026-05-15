@@ -79,7 +79,30 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-7.5** | REST API (axum + utoipa Swagger UI) | P2 | ✅ Completed |
 | **REQ-7.6** | Chaos Testing Framework | P2 | ✅ Completed |
 | **REQ-7.7** | Security Audit Preparation | P3 | ✅ Completed |
-| **REQ-7.8** | Production ZK Hash Gadget (Pedersen/Poseidon) | P1 | ⚠️ Placeholder |
+| **REQ-7.8** | Production ZK Hash Gadget (Pedersen/Poseidon) | P1 | ✅ Completed |
+
+## 8. Sprint 4: Push to 9
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-8.1** | Creator ↔ Pubkey Binding (blake3) | P0 | ✅ Completed |
+| **REQ-8.2** | Payload Size Limits (1 MiB default) | P0 | ✅ Completed |
+| **REQ-8.3** | Gossip Rate Limiting (token-bucket) | P1 | ✅ Completed |
+| **REQ-8.4** | Nonce Persistence (sled) | P1 | ✅ Completed |
+| **REQ-8.5** | TLA+ Agreement Fix + Liveness | P0 | ✅ Completed |
+| **REQ-8.6** | Poseidon Hash in ZK Circuit | P0 | ✅ Completed |
+| **REQ-8.7** | Snapshot Sync | P1 | ✅ Completed |
+| **REQ-8.8** | Event Pruning (prune_finalized) | P1 | ✅ Completed |
+| **REQ-8.9** | CRDT Convergence Formal Proof (TLA+) | P2 | ✅ Completed |
+| **REQ-8.10** | Trusted Setup Ceremony (Powers of Tau) | P1 | ✅ Completed |
+| **REQ-8.11** | VRF Leader Selection (ECVRF) | P1 | ✅ Completed |
+| **REQ-8.12** | BLS Signature Aggregation | P2 | ✅ Completed |
+| **REQ-8.13** | TOML Config File Support | P2 | ✅ Completed |
+| **REQ-8.14** | Validator Key Management (keygen + rotation) | P2 | ✅ Completed |
+| **REQ-8.15** | Grafana Dashboards + Alert Rules | P2 | ✅ Completed |
+| **REQ-8.16** | Side-Channel Resistance Audit | P2 | ✅ Completed |
+| **REQ-8.17** | Operations Runbook | P2 | ✅ Completed |
+| **REQ-8.18** | Rolling Upgrade Strategy | P2 | ✅ Completed |
 
 ---
 
@@ -93,8 +116,9 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Physical Binding** | 4 | 3 | 0 | 1 | 0 | ████████░░ 75% |
 | **Economics** | 3 | 2 | 0 | 1 | 0 | ███████░░░ 67% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | █████░░░░░ 50% |
-| **Sprint 3** | 8 | 7 | 1 | 0 | 0 | ████████░░ 88% |
-| **TOTAL** | **44** | **37** | **1** | **2** | **4** | ████████░░ 84% |
+| **Sprint 3** | 8 | 8 | 0 | 0 | 0 | ██████████ 100% |
+| **Sprint 4** | 18 | 18 | 0 | 0 | 0 | ██████████ 100% |
+| **TOTAL** | **62** | **56** | **0** | **2** | **4** | █████████░ 90% |
 
 ---
 *Legend:*

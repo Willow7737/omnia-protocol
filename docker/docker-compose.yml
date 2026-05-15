@@ -137,12 +137,18 @@ services:
     container_name: omnia-grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=omnia-admin
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/omnia-node.json
     volumes:
       - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../monitoring/grafana/alerts:/etc/grafana/provisioning/alerting:ro
+      - grafana-dashboards-provisioning:/etc/grafana/provisioning/dashboards
     ports:
       - "3000:3000"
     networks:
       - omnia-testnet
+    depends_on:
+      - prometheus
     profiles:
       - monitoring
 
@@ -161,3 +167,4 @@ volumes:
   node4-data:
   prometheus-data:
   grafana-data:
+  grafana-dashboards-provisioning:

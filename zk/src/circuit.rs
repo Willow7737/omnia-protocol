@@ -14,6 +14,14 @@
 //!   - The first intermediate root equals the old state root
 //!   - The last intermediate root equals the new state root
 //!
+//! ## Hash Function
+//!
+//! Both Merkle path verification and state transition constraints use the
+//! **Poseidon** SNARK-friendly hash function (Grassi et al. 2019,
+//! <https://eprint.iacr.org/2019/458>). This replaces the previous field-addition
+//! placeholder with a cryptographically sound hash that is efficient inside
+//! R1CS (~243 multiplication constraints per hash).
+//!
 //! ## Public Inputs (ExpandedRollupCircuit)
 //!
 //! - `old_state_root` — The state root before the batch
@@ -487,9 +495,16 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
                         &go_left, &current, &sibling,
                     )?;
 
-                    // Simplified hash: use field addition as a commitment.
-                    // A real implementation would use a Pedersen or Poseidon hash gadget.
-                    current = left + right;
+                    // Poseidon SNARK-friendly hash: replaces the previous field-addition
+                    // placeholder with a cryptographically sound hash function.
+                    //
+                    // Reference: Grassi et al. (2019), "Poseidon: A New Hash Function
+                    // for Zero-Knowledge Proof Systems", https://eprint.iacr.org/2019/458
+                    current = crate::poseidon::poseidon_hash(
+                        cs.clone(),
+                        &left,
+                        &right,
+                    )?;
                 }
             }
 
@@ -497,12 +512,19 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
             current.enforce_equal(&event_commitment)?;
 
             // State transition constraint:
-            // intermediate_root[i+1] = intermediate_root[i] + event_hash[i]
+            // intermediate_root[i+1] = Poseidon(intermediate_root[i], event_hash[i])
             //
-            // This is a simplified state transition function. A real
-            // implementation would use a proper state transition function
-            // (e.g., sparse Merkle tree update).
-            let expected_next = intermediate_root_vars[i].clone() + event_hash.clone();
+            // Uses Poseidon hash for the state transition function, ensuring
+            // the same hash function is used throughout the circuit (both for
+            // Merkle path verification and state updates).
+            //
+            // Reference: Grassi et al. (2019), "Poseidon: A New Hash Function
+            // for Zero-Knowledge Proof Systems", https://eprint.iacr.org/2019/458
+            let expected_next = crate::poseidon::poseidon_hash(
+                cs.clone(),
+                &intermediate_root_vars[i],
+                &event_hash,
+            )?;
             intermediate_root_vars[i + 1].enforce_equal(&expected_next)?;
         }
 

@@ -448,7 +448,7 @@ mod tests {
     fn test_causal_order_deterministic_post_merge() {
         let n1 = nid(1);
         let n2 = nid(2);
-        let n3 = nid(3);
+        let _n3 = nid(3);
 
         // Two replicas start from the same initial state
         let mut replica_a = VectorClock::new();

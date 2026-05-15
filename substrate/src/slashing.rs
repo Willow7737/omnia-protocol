@@ -779,9 +779,14 @@ impl SlashingEngine {
     /// assert!(SlashingEngine::check_equivocation(&event_a, &event_b));
     /// ```
     pub fn check_equivocation(event_a: &Event, event_b: &Event) -> bool {
-        event_a.creator == event_b.creator
-            && event_a.sequence == event_b.sequence
-            && event_a.id != event_b.id
+        use subtle::ConstantTimeEq;
+        // Use constant-time comparisons on creator and ID fields to prevent
+        // timing side-channels. The creator field is derived from a public key
+        // and the ID is a hash — both should be compared in constant time.
+        let creators_match: bool = event_a.creator.ct_eq(&event_b.creator).into();
+        let sequences_match = event_a.sequence == event_b.sequence;
+        let ids_differ: bool = event_a.id.ct_ne(&event_b.id).into();
+        creators_match && sequences_match && ids_differ
     }
 
     /// Checks for a liveness violation and records it if detected.

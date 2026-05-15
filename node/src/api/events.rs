@@ -85,6 +85,20 @@ pub async fn submit_event(
         })?
     };
 
+    // Reject oversized payloads at the HTTP layer before creating an event
+    if payload_bytes.len() > omnia_substrate::MAX_PAYLOAD_SIZE {
+        return Err((
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(json!({
+                "error": format!(
+                    "Payload too large: {} bytes (max {})",
+                    payload_bytes.len(),
+                    omnia_substrate::MAX_PAYLOAD_SIZE
+                )
+            })),
+        ));
+    }
+
     let node_id = state.config.node_id_bytes();
 
     // Create and sign a substrate event

@@ -253,7 +253,7 @@ mod tests {
         // If node A removes element while node B adds it concurrently,
         // the add wins (element remains in set)
         let n1 = node(1);
-        let n2 = node(2);
+        let _n2 = node(2);
 
         let mut set_a = OrSet::new();
         set_a.add(n1, "item");
@@ -401,8 +401,8 @@ mod tests {
 
             let mut node_a = [0u8; 32];
             node_a[0] = node_a_byte;
-            let mut node_b = [0u8; 32];
-            node_b[0] = node_b_byte;
+            let mut _node_b = [0u8; 32];
+            _node_b[0] = node_b_byte;
 
             // Node A adds the element
             let mut set_a: OrSet<u32> = OrSet::new();

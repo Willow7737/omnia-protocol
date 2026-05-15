@@ -10,11 +10,16 @@
 //! and an inclusion proof using BLAKE3 hashing. This is used during proof
 //! generation to verify the witness data before submitting it to the circuit.
 //!
+//! For Poseidon-based Merkle trees (used when the on-circuit hash function
+//! is Poseidon), use [`poseidon_hash_to_fr`] to hash field elements off-circuit.
+//!
 //! ## On-circuit verification
 //!
-//! The on-circuit verification uses a simplified commitment (field addition)
-//! instead of BLAKE3 hashing. This is a placeholder that will be replaced
-//! with a proper hash gadget in a future iteration.
+//! The on-circuit verification uses Poseidon hash (via
+//! [`crate::poseidon::poseidon_hash`]) for both Merkle path verification and
+//! state transition constraints. This ensures on-circuit and off-circuit
+//! computations match when using [`poseidon_hash_to_fr`] for off-circuit
+//! tree construction.
 
 use ark_bn254::Fr;
 use ark_ff::{BigInteger, PrimeField};
@@ -183,6 +188,43 @@ pub fn hash_to_fr(hash: &[u8; 32]) -> Fr {
     Fr::from_be_bytes_mod_order(hash)
 }
 
+/// Convert two field elements to a single field element using Poseidon hash.
+///
+/// This is the **recommended** method for off-circuit Merkle tree construction
+/// when the tree will be verified inside a ZK circuit that uses Poseidon as
+/// its hash function. Using [`hash_to_fr`] (which is BLAKE3-based) would
+/// create a mismatch between off-circuit and on-circuit hash computations.
+///
+/// # Arguments
+///
+/// * `left` — The left child field element
+/// * `right` — The right child field element
+///
+/// # Returns
+///
+/// The Poseidon hash: `Poseidon_permutation([0, left, right])[0]`
+///
+/// # Example
+///
+/// ```
+/// use ark_bn254::Fr;
+/// use ark_ff::Zero;
+/// use omnia_zk::merkle::poseidon_hash_to_fr;
+///
+/// let a = Fr::from(42u64);
+/// let b = Fr::from(123u64);
+/// let hash = poseidon_hash_to_fr(a, b);
+/// assert_ne!(hash, Fr::zero()); // non-trivial output
+/// ```
+///
+/// # Reference
+///
+/// Grassi et al. (2019), "Poseidon: A New Hash Function for
+/// Zero-Knowledge Proof Systems", <https://eprint.iacr.org/2019/458>
+pub fn poseidon_hash_to_fr(left: Fr, right: Fr) -> Fr {
+    crate::poseidon::poseidon_hash_offchain(left, right)
+}
+
 /// Convert a field element (`Fr`) to a 32-byte big-endian representation.
 ///
 /// This is the inverse of [`hash_to_fr`] for field elements whose value
@@ -208,6 +250,7 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_ff::Zero;
 
     #[test]
     fn test_compute_root_from_proof_single_item() {
@@ -255,5 +298,32 @@ mod tests {
         let bytes = [0u8; 32];
         let val = hash_to_fr(&bytes);
         assert_eq!(val, Fr::from(0u64));
+    }
+
+    #[test]
+    fn test_poseidon_hash_to_fr_matches_poseidon_offchain() {
+        let a = Fr::from(42u64);
+        let b = Fr::from(123u64);
+        let hash = poseidon_hash_to_fr(a, b);
+        // Must match the direct call to poseidon_hash_offchain
+        let expected = crate::poseidon::poseidon_hash_offchain(a, b);
+        assert_eq!(hash, expected);
+    }
+
+    #[test]
+    fn test_poseidon_hash_to_fr_non_zero() {
+        let a = Fr::from(1u64);
+        let b = Fr::from(2u64);
+        let hash = poseidon_hash_to_fr(a, b);
+        assert_ne!(hash, Fr::zero(), "Poseidon hash of non-zero inputs should be non-zero");
+    }
+
+    #[test]
+    fn test_poseidon_hash_to_fr_non_commutative() {
+        let a = Fr::from(42u64);
+        let b = Fr::from(123u64);
+        let hash_ab = poseidon_hash_to_fr(a, b);
+        let hash_ba = poseidon_hash_to_fr(b, a);
+        assert_ne!(hash_ab, hash_ba, "poseidon_hash_to_fr should not be commutative");
     }
 }

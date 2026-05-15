@@ -19,5 +19,11 @@ tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
 rand = "0.8"
 blake3 = "1.5"
 
+# Persistent nonce storage — needed for replay protection that survives restarts.
+# Sled is chosen for its simplicity, embedded nature (no external DB server),
+# and cross-platform compatibility (pure Rust, works on Linux/macOS/Windows).
+sled = "0.34"
+
 [dev-dependencies]
 tokio-test = "0.4"
+tempfile = "3"

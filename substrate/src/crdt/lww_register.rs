@@ -231,7 +231,7 @@ mod tests {
         let mut reg_a = LwwRegister::with_value(n1, "old");
         // Simulate time passing
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let mut reg_b = LwwRegister::with_value(n1, "new");
+        let reg_b = LwwRegister::with_value(n1, "new");
 
         reg_a.merge(&reg_b);
         assert_eq!(reg_a.get(), Some(&"new"));

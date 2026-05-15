@@ -11,6 +11,8 @@ repository = "https://github.com/Willow7737/omnia-protocol"
 omnia-substrate = { path = "../substrate" }
 omnia-shards = { path = "../shards" }
 omnia-economics = { path = "../economics" }
+# BLAKE3 hash for deriving node IDs from public keys (matches Event::sign_with_keypair)
+blake3 = "1"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 rand = "0.8"

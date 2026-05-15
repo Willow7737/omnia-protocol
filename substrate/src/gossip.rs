@@ -6,6 +6,7 @@
 use crate::causal_graph::{CausalGraph, CausalGraphError};
 use crate::event::{Event, EventBatch, EventId, EventRequest};
 use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
+use crate::rate_limiter::RateLimiter;
 use crate::vector_clock::{NodeId, VectorClock};
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
@@ -47,10 +48,24 @@ pub struct GossipConfig {
     /// partitioned. Default: 3000 ms.
     #[serde(default = "default_partition_threshold")]
     pub partition_threshold_ms: u64,
+    /// Maximum events per peer per second (refill rate).
+    #[serde(default = "default_max_events_per_second")]
+    pub max_events_per_second: u32,
+    /// Burst capacity (max tokens) per peer.
+    #[serde(default = "default_burst_capacity")]
+    pub burst_capacity: u32,
 }
 
 fn default_partition_threshold() -> u64 {
     DEFAULT_PARTITION_THRESHOLD_MS
+}
+
+fn default_max_events_per_second() -> u32 {
+    100
+}
+
+fn default_burst_capacity() -> u32 {
+    200
 }
 
 impl Default for GossipConfig {
@@ -65,6 +80,8 @@ impl Default for GossipConfig {
             seed: 0,
             bootstrap_peers: Vec::new(),
             partition_threshold_ms: DEFAULT_PARTITION_THRESHOLD_MS,
+            max_events_per_second: 100,
+            burst_capacity: 200,
         }
     }
 }
@@ -159,11 +176,14 @@ pub struct GossipProtocol {
     last_seen: HashMap<PeerId, Instant>,
     /// Whether a partition is currently detected (to avoid duplicate events).
     partition_active: bool,
+    /// Per-peer rate limiter (token bucket).
+    rate_limiter: RateLimiter,
 }
 
 impl GossipProtocol {
     /// Create a new gossip protocol instance
     pub fn new(node_id: NodeId, config: GossipConfig, graph: Arc<RwLock<CausalGraph>>) -> Self {
+        let rate_limiter = RateLimiter::new(config.burst_capacity, config.max_events_per_second);
         Self {
             node_id,
             config,
@@ -178,6 +198,7 @@ impl GossipProtocol {
             seen_events: HashSet::new(),
             last_seen: HashMap::new(),
             partition_active: false,
+            rate_limiter,
         }
     }
 
@@ -461,6 +482,14 @@ impl GossipProtocol {
                     // Update last_seen for partition detection
                     self.last_seen.insert(source, Instant::now());
 
+                    // Rate limit check: hash PeerId bytes to [u8; 32] for the rate limiter
+                    let peer_id_bytes = blake3::hash(&source.to_bytes());
+                    if !self.rate_limiter.allow(peer_id_bytes.as_bytes()) {
+                        warn!(peer = ?source, "Rate limiting peer — dropping event");
+                        self.stats.events_rejected += 1;
+                        continue;
+                    }
+
                     // Task 3.1: Validate event BEFORE adding to pending queue
                     if let Err(e) = self.validate_event(&event) {
                         warn!("Gossip event rejected (validation): {:?}", e);
@@ -558,7 +587,6 @@ mod tests {
     use super::*;
     use crate::crypto::generate_keypair;
     use crate::event::Event;
-    use crate::vector_clock::VectorClock;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];

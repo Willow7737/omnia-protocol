@@ -11,12 +11,14 @@
 //! `ShardError::InsufficientFee`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use omnia_economics::QuotaSystem;
 use omnia_substrate::Event;
 
 use crate::cross_shard::CrossShardMessage;
 use crate::fee_schedule::FeeSchedule;
+use crate::nonce_store::{InMemoryNonceStore, NonceStore};
 use crate::payload::{ShardOp, ShardPayload};
 use crate::shard::{Shard, ShardError, ShardId};
 
@@ -43,6 +45,8 @@ pub struct ShardRouter {
     fee_schedule: FeeSchedule,
     /// UBC quota system for fee deduction.
     quota: QuotaSystem,
+    /// Persistent nonce store — survives restarts for replay protection.
+    nonce_store: Arc<dyn NonceStore>,
 }
 
 impl ShardRouter {
@@ -57,6 +61,7 @@ impl ShardRouter {
             last_nonces: HashMap::new(),
             fee_schedule,
             quota,
+            nonce_store: Arc::new(InMemoryNonceStore::new()),
         }
     }
 
@@ -71,6 +76,35 @@ impl ShardRouter {
             last_nonces: HashMap::new(),
             fee_schedule: FeeSchedule::zero(),
             quota: QuotaSystem::default_system(),
+            nonce_store: Arc::new(InMemoryNonceStore::new()),
+        }
+    }
+
+    /// Create a shard router with a custom nonce store.
+    ///
+    /// Use this constructor when you need persistent nonce storage
+    /// (e.g., `SledNonceStore`) for replay protection across restarts.
+    ///
+    /// # Arguments
+    /// * `fee_schedule` - Per-operation-type fee schedule (UBC units)
+    /// * `quota` - UBC quota system for fee deduction
+    /// * `nonce_store` - Persistent nonce store implementation
+    pub fn with_nonce_store(
+        fee_schedule: FeeSchedule,
+        quota: QuotaSystem,
+        nonce_store: Arc<dyn NonceStore>,
+    ) -> Self {
+        // Load existing nonces from the store
+        let last_nonces = nonce_store.load().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load nonces from store: {}", e);
+            HashMap::new()
+        });
+        Self {
+            shards: HashMap::new(),
+            last_nonces,
+            fee_schedule,
+            quota,
+            nonce_store,
         }
     }
 
@@ -136,6 +170,16 @@ impl ShardRouter {
             return Ok(());
         }
 
+        // Reject oversized payloads early, before any deserialization work
+        if event.payload.len() > omnia_substrate::event::MAX_PAYLOAD_SIZE {
+            return Err(ShardError::ValidationFailed(
+                format!("Payload too large: {} bytes (max {})",
+                    event.payload.len(),
+                    omnia_substrate::event::MAX_PAYLOAD_SIZE
+                )
+            ));
+        }
+
         let payload = ShardPayload::from_bytes(&event.payload)
             .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {}", e)))?;
 
@@ -149,6 +193,11 @@ impl ShardRouter {
             )));
         }
         self.last_nonces.insert(creator, payload.nonce);
+
+        // Persist nonce state (best-effort, log on failure)
+        if let Err(e) = self.nonce_store.save(&self.last_nonces) {
+            tracing::warn!("Failed to persist nonce state: {}", e);
+        }
 
         // Fee enforcement — deduct before routing
         let fee = self.fee_schedule.fee_for_op(&payload.operation);

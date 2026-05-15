@@ -41,6 +41,9 @@ anyhow = "1"
 # Hex encoding for event IDs and node identifiers in JSON responses
 hex = "0.4"
 
+# TOML configuration file parsing — industry-standard format for node configuration
+toml = "0.8"
+
 # Timestamp handling for API responses
 chrono = { version = "0.4", features = ["serde"] }
 

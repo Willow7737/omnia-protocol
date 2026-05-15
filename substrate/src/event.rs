@@ -14,6 +14,7 @@ use crate::crypto::{NodeKeypair, NodePublicKey, Signature as EdSignature, Signer
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -206,16 +207,39 @@ impl Event {
         hasher.finalize().into()
     }
 
-    /// Verify that the event ID matches its content (integrity check)
+    /// Verify that the event ID matches its content (integrity check).
+    ///
+    /// Uses constant-time comparison to prevent timing side-channels
+    /// that could leak information about the expected hash.
     pub fn verify_hash(&self) -> bool {
-        self.id == self.compute_hash()
+        let computed = self.compute_hash();
+        self.id.ct_eq(&computed).into()
     }
 
     /// Sign this event with an Ed25519 keypair.
-    /// Stores the public key and signature in the event.
+    ///
+    /// Stores the public key in `creator_pubkey`, derives the `creator` field
+    /// as `blake3(creator_pubkey)` to bind identity to the signing key, recomputes
+    /// the event hash, and then signs the hash with the private key.
+    ///
+    /// # Arguments
+    ///
+    /// * `keypair` — The Ed25519 keypair to sign with.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use omnia_substrate::{Event, generate_keypair};
+    /// let keypair = generate_keypair();
+    /// let mut event = Event::genesis([0u8; 32], vec![]);
+    /// event.sign_with_keypair(&keypair);
+    /// assert!(event.validate().is_ok());
+    /// ```
     pub fn sign_with_keypair(&mut self, keypair: &NodeKeypair) {
         self.creator_pubkey = keypair.verifying_key().to_bytes();
-        // Recompute hash now that pubkey is set
+        // Derive creator from pubkey: creator = blake3(creator_pubkey)
+        self.creator = *blake3::hash(&self.creator_pubkey).as_bytes();
+        // Recompute hash now that pubkey and creator are set
         self.id = self.compute_hash();
         let sig = keypair.sign(&self.id);
         self.signature = sig.to_bytes();
@@ -253,19 +277,63 @@ impl Event {
         }
     }
 
-    /// Full validation: unsigned check, hash integrity, signature, timestamp sanity, and rejection status.
+    /// Validate the creator-identity binding.
+    ///
+    /// The `creator` field MUST be the BLAKE3 hash of `creator_pubkey`.
+    /// This prevents impersonation: a malicious actor cannot claim a different
+    /// creator identity while signing with their own key.
+    ///
+    /// Uses constant-time comparison via `subtle::ConstantTimeEq` to prevent
+    /// timing side-channel attacks that could leak information about the
+    /// expected creator identity.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if `creator == blake3(creator_pubkey)` (constant-time)
+    /// * `Err(EventValidationError::CreatorPubkeyMismatch)` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let result = event.validate_creator_binding();
+    /// assert!(result.is_ok());
+    /// ```
+    fn validate_creator_binding(&self) -> Result<(), EventValidationError> {
+        let expected_creator = blake3::hash(&self.creator_pubkey);
+        if self.creator.ct_ne(expected_creator.as_bytes()).into() {
+            return Err(EventValidationError::CreatorPubkeyMismatch {
+                claimed: hex::encode(&self.creator),
+                derived: hex::encode(expected_creator.as_bytes()),
+            });
+        }
+        Ok(())
+    }
+
+    /// Full validation: unsigned check, creator binding, payload size, hash integrity,
+    /// signature, timestamp sanity, and rejection status.
     ///
     /// Checks are performed in order of increasing cost:
     /// 1. Unsigned event (zero signature or pubkey)
-    /// 2. Hash integrity
-    /// 3. Cryptographic signature
-    /// 4. Future timestamp (beyond MAX_TIMESTAMP_DRIFT_MS)
-    /// 5. Ancient timestamp (older than MAX_EVENT_AGE_MS)
-    /// 6. Rejected status
+    /// 2. Creator-pubkey binding (identity integrity)
+    /// 3. Payload size limit
+    /// 4. Hash integrity
+    /// 5. Cryptographic signature
+    /// 6. Future timestamp (beyond MAX_TIMESTAMP_DRIFT_MS)
+    /// 7. Ancient timestamp (older than MAX_EVENT_AGE_MS)
+    /// 8. Rejected status
     pub fn validate(&self) -> Result<(), EventValidationError> {
         // Check for unsigned events: all-zero signature or pubkey means never signed
         if self.signature == [0u8; 64] || self.creator_pubkey == [0u8; 32] {
             return Err(EventValidationError::UnsignedEvent);
+        }
+        // Verify creator-pubkey binding before expensive crypto checks
+        self.validate_creator_binding()?;
+        // Reject oversized payloads before hash/signature verification
+        if self.payload.len() > MAX_PAYLOAD_SIZE {
+            return Err(EventValidationError::PayloadTooLarge {
+                size: self.payload.len(),
+                max: MAX_PAYLOAD_SIZE,
+            });
         }
         if !self.verify_hash() {
             return Err(EventValidationError::InvalidHash);
@@ -342,6 +410,11 @@ impl EventHeader {
     }
 }
 
+/// Maximum payload size: 1 MiB.
+/// Events exceeding this size are rejected before processing.
+/// This prevents DoS via oversized payloads.
+pub const MAX_PAYLOAD_SIZE: usize = 1024 * 1024;
+
 /// Errors during event validation
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EventValidationError {
@@ -375,6 +448,22 @@ pub enum EventValidationError {
     #[error("Event has obviously invalid data (zero amount)")]
     /// Obviously invalid data detected
     ZeroAmount,
+    /// Creator identity does not match pubkey binding
+    #[error("Creator identity does not match pubkey: claimed {claimed}, derived {derived}")]
+    CreatorPubkeyMismatch {
+        /// The claimed creator identity from the event
+        claimed: String,
+        /// The derived identity from blake3(creator_pubkey)
+        derived: String,
+    },
+    /// Payload exceeds the maximum allowed size
+    #[error("Payload too large: {size} bytes (max {max})")]
+    PayloadTooLarge {
+        /// Actual payload size in bytes
+        size: usize,
+        /// Maximum allowed payload size in bytes
+        max: usize,
+    },
 }
 
 impl fmt::Display for Event {
@@ -753,5 +842,149 @@ mod tests {
         tampered.payload[50] ^= 0x01;
         let result = tampered.validate();
         assert_eq!(result, Err(EventValidationError::InvalidHash));
+    }
+
+    // ── Creator-binding tests (Sprint 4, Task A1) ─────────────────────
+
+    /// Test that a valid event (creator == blake3(creator_pubkey)) validates successfully.
+    /// This would have passed before A1 too, but now it explicitly checks the binding.
+    #[test]
+    fn test_validate_creator_binding_valid() {
+        let keypair = test_keypair();
+        let creator_from_new = test_node(1); // arbitrary, will be overwritten
+        let vc = VectorClock::with_node(creator_from_new, 1);
+        let mut event = Event::new(creator_from_new, 0, vc, None, None, vec![1, 2, 3]);
+        event.sign_with_keypair(&keypair);
+
+        // After sign_with_keypair, creator == blake3(creator_pubkey)
+        let expected = *blake3::hash(&event.creator_pubkey).as_bytes();
+        assert_eq!(event.creator, expected);
+
+        let result = event.validate();
+        assert!(result.is_ok());
+    }
+
+    /// Test that a mismatched creator (creator != blake3(creator_pubkey)) is rejected
+    /// with CreatorPubkeyMismatch. This test would have FAILED before A1 was implemented.
+    #[test]
+    fn test_validate_creator_binding_mismatch() {
+        let keypair = test_keypair();
+        let fake_creator = test_node(99); // not derived from the keypair
+        let vc = VectorClock::with_node(fake_creator, 1);
+        let mut event = Event::new(fake_creator, 0, vc, None, None, vec![1, 2, 3]);
+        event.sign_with_keypair(&keypair);
+
+        // sign_with_keypair now sets creator = blake3(creator_pubkey), so we
+        // must manually tamper the creator field to simulate the old vulnerability.
+        let mut tampered = event.clone();
+        tampered.creator = fake_creator; // override with a non-derived identity
+        // Recompute hash so the tampered event passes hash integrity
+        tampered.id = tampered.compute_hash();
+        // Re-sign with the keypair to fix the signature
+        let sig = keypair.sign(&tampered.id);
+        tampered.signature = sig.to_bytes();
+
+        let result = tampered.validate();
+        assert!(
+            matches!(result, Err(EventValidationError::CreatorPubkeyMismatch { .. })),
+            "Expected CreatorPubkeyMismatch, got {:?}",
+            result
+        );
+    }
+
+    /// Test that an event created through sign_with_keypair automatically has
+    /// the correct creator binding (creator == blake3(creator_pubkey)).
+    #[test]
+    fn test_sign_with_keypair_sets_correct_creator_binding() {
+        let keypair = test_keypair();
+        let arbitrary_creator = test_node(42);
+        let vc = VectorClock::with_node(arbitrary_creator, 1);
+        let mut event = Event::new(arbitrary_creator, 0, vc, None, None, vec![]);
+
+        // Before signing, creator is whatever was passed to Event::new
+        assert_eq!(event.creator, arbitrary_creator);
+
+        event.sign_with_keypair(&keypair);
+
+        // After signing, creator MUST be blake3(creator_pubkey), not the original value
+        let expected_creator = *blake3::hash(&event.creator_pubkey).as_bytes();
+        assert_eq!(event.creator, expected_creator);
+        assert_ne!(event.creator, arbitrary_creator); // ensure it was actually changed
+    }
+
+    /// Test that manually tampering the creator field after signing causes validation to fail.
+    /// This is the core impersonation scenario that A1 prevents.
+    #[test]
+    fn test_tampered_creator_fails_validation() {
+        let keypair = test_keypair();
+        let vc = VectorClock::with_node(test_node(1), 1);
+        let mut event = Event::new(test_node(1), 0, vc, None, None, vec![]);
+        event.sign_with_keypair(&keypair);
+
+        // Tamper: change creator to something else
+        let mut tampered = event.clone();
+        tampered.creator = test_node(7);
+        // Don't recompute hash or resign — just check that the binding is broken
+        let result = tampered.validate();
+        // Should fail on either creator binding or hash integrity
+        assert!(result.is_err(), "Tampered creator should fail validation");
+    }
+
+    // ── Payload size limit tests (Sprint 4, Task A2) ──────────────────
+
+    /// Test that an event with payload at exactly MAX_PAYLOAD_SIZE accepts.
+    #[test]
+    fn test_payload_at_max_size_accepts() {
+        let keypair = test_keypair();
+        let creator = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        let vc = VectorClock::with_node(creator, 1);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]);
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert!(result.is_ok(), "Payload at exactly MAX_PAYLOAD_SIZE should accept, got {:?}", result);
+    }
+
+    /// Test that an event with payload = MAX_PAYLOAD_SIZE + 1 is rejected with PayloadTooLarge.
+    /// This test would have FAILED before A2 was implemented.
+    #[test]
+    fn test_payload_exceeds_max_size_rejects() {
+        let keypair = test_keypair();
+        let creator = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        let vc = VectorClock::with_node(creator, 1);
+        let oversized = vec![0u8; MAX_PAYLOAD_SIZE + 1];
+        let mut event = Event::new(creator, 0, vc, None, None, oversized);
+        event.sign_with_keypair(&keypair);
+
+        let result = event.validate();
+        assert!(
+            matches!(result, Err(EventValidationError::PayloadTooLarge { size, max }) if size == MAX_PAYLOAD_SIZE + 1 && max == MAX_PAYLOAD_SIZE),
+            "Expected PayloadTooLarge, got {:?}",
+            result
+        );
+    }
+
+    /// Test that the CreatorPubkeyMismatch error variant has the correct display message.
+    #[test]
+    fn test_creator_pubkey_mismatch_error_variant() {
+        let err = EventValidationError::CreatorPubkeyMismatch {
+            claimed: "aa".to_string(),
+            derived: "bb".to_string(),
+        };
+        let msg = format!("{}", err);
+        assert!(msg.contains("aa"), "Error message should contain claimed value");
+        assert!(msg.contains("bb"), "Error message should contain derived value");
+    }
+
+    /// Test that the PayloadTooLarge error variant has the correct display message.
+    #[test]
+    fn test_payload_too_large_error_variant() {
+        let err = EventValidationError::PayloadTooLarge {
+            size: 2_000_000,
+            max: MAX_PAYLOAD_SIZE,
+        };
+        let msg = format!("{}", err);
+        assert!(msg.contains("2000000"), "Error message should contain size");
+        assert!(msg.contains(&MAX_PAYLOAD_SIZE.to_string()), "Error message should contain max");
     }
 }
