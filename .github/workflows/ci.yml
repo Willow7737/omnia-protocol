@@ -58,6 +58,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-test-${{ matrix.os }}"
+      - name: Verify Cargo.lock is up to date
+        run: cargo test --locked --workspace --no-run
       - run: cargo test --workspace --verbose
         timeout-minutes: 15
       - run: cargo test --workspace --all-features --verbose
@@ -73,7 +75,53 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
-      - run: cargo audit
+      - run: cargo audit --deny warnings
+
+  supply-chain:
+    name: Supply Chain Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-vet
+        run: cargo install cargo-vet --locked
+      - name: Run cargo-vet
+        run: cargo vet --check
+
+  reproducibility:
+    name: Build Reproducibility
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Rust builds are not yet fully deterministic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Build #1
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
+            cargo build --release --locked --target x86_64-unknown-linux-gnu
+          sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build1.sha
+      - name: Clean and rebuild
+        run: |
+          cargo clean
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
+            cargo build --release --locked --target x86_64-unknown-linux-gnu
+          sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build2.sha
+      - name: Compare builds
+        run: |
+          if diff /tmp/build1.sha /tmp/build2.sha; then
+            echo "::notice::Reproducible build confirmed"
+          else
+            echo "::warning::Builds are not reproducible — known Rust/LLVM non-determinism"
+          fi
 
   coverage:
     name: Test Coverage

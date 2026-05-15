@@ -1,37 +1,43 @@
 [package]
 name = "omnia-fuzz"
-version = "0.0.0"
-publish = false
+version = "0.1.0"
 edition = "2021"
-
-[package.metadata]
-cargo-fuzz = true
+publish = false
 
 [dependencies]
 libfuzzer-sys = "0.4"
 omnia-substrate = { path = "../substrate" }
 omnia-shards = { path = "../shards" }
+omnia-binding = { path = "../binding" }
+omnia-zk = { path = "../zk" }
+omnia-economics = { path = "../economics"
+ }
+bincode = "1"
 
 [[bin]]
-name = "causal_graph_insert"
-path = "fuzz_targets/causal_graph_insert.rs"
-test = false
-doc = false
+name = "fuzz_event_deserialization"
+path = "fuzz_targets/fuzz_event_deserialization.rs"
 
 [[bin]]
-name = "event_validate"
-path = "fuzz_targets/event_validate.rs"
-test = false
-doc = false
+name = "fuzz_gossip_message"
+path = "fuzz_targets/fuzz_gossip_message.rs"
 
 [[bin]]
-name = "shard_route"
-path = "fuzz_targets/shard_route.rs"
-test = false
-doc = false
+name = "fuzz_zk_proof_deserialization"
+path = "fuzz_targets/fuzz_zk_proof_deserialization.rs"
 
 [[bin]]
-name = "vector_clock_merge"
-path = "fuzz_targets/vector_clock_merge.rs"
-test = false
-doc = false
+name = "fuzz_consensus_state_transition"
+path = "fuzz_targets/fuzz_consensus_state_transition.rs"
+
+[[bin]]
+name = "fuzz_vector_clock_merge"
+path = "fuzz_targets/fuzz_vector_clock_merge.rs"
+
+[[bin]]
+name = "fuzz_rate_limiter"
+path = "fuzz_targets/fuzz_rate_limiter.rs"
+
+[[bin]]
+name = "fuzz_snapshot_deserialization"
+path = "fuzz_targets/fuzz_snapshot_deserialization.rs"

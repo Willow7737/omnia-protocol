@@ -700,6 +700,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
 dependencies = [
  "find-msvc-tools",
+ "jobserver",
+ "libc",
  "shlex",
 ]
 
@@ -2113,6 +2115,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jobserver"
+version = "0.1.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afb3de4395d6b3e67a780b6de64b51c978ecf11cb9a462c66be7d4ca9039d33"
+dependencies = [
+ "getrandom 0.3.4",
+ "libc",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2141,6 +2153,16 @@ name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
+
+[[package]]
+name = "libfuzzer-sys"
+version = "0.4.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f12a681b7dd8ce12bff52488013ba614b869148d54dd79836ab85aafdd53f08d"
+dependencies = [
+ "arbitrary",
+ "cc",
+]
 
 [[package]]
 name = "libp2p"
@@ -2886,10 +2908,24 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "omnia-substrate",
+ "proptest",
  "serde",
  "thiserror 2.0.18",
  "tokio-test",
  "tracing",
+]
+
+[[package]]
+name = "omnia-fuzz"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "libfuzzer-sys",
+ "omnia-binding",
+ "omnia-economics",
+ "omnia-shards",
+ "omnia-substrate",
+ "omnia-zk",
 ]
 
 [[package]]
@@ -2929,6 +2965,7 @@ dependencies = [
  "hex",
  "omnia-economics",
  "omnia-substrate",
+ "proptest",
  "rand 0.8.6",
  "serde",
  "sled",
@@ -2987,6 +3024,7 @@ dependencies = [
  "blake3",
  "hex",
  "omnia-substrate",
+ "proptest",
  "rand 0.8.6",
  "rand_chacha 0.3.1",
  "serde",

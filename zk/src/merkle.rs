@@ -334,3 +334,53 @@ mod tests {
         );
     }
 }
+
+/// Property-based tests for Merkle tree and hash invariants.
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property: compute_root_from_proof is deterministic —
+        /// the same leaf and proof always produce the same root.
+        #[test]
+        fn proptest_merkle_root_deterministic(
+            items in prop::collection::vec(any::<[u8; 32]>(), 1..8)
+        ) {
+            let (root1, proofs) = build_merkle_tree(&items);
+            let root2 = build_merkle_tree(&items).0;
+            assert_eq!(root1, root2, "Merkle root not deterministic for same inputs!");
+
+            // Verify each proof also produces the same root
+            for (i, item) in items.iter().enumerate() {
+                let leaf = blake3::hash(item).as_bytes().clone();
+                let computed1 = compute_root_from_proof(&leaf, &proofs[i]);
+                let computed2 = compute_root_from_proof(&leaf, &proofs[i]);
+                assert_eq!(computed1, computed2, "Proof verification not deterministic!");
+            }
+        }
+
+        /// Property: hash_to_fr is deterministic — same input always
+        /// produces the same field element.
+        #[test]
+        fn proptest_hash_to_fr_deterministic(bytes in any::<[u8; 32]>()) {
+            let fr1 = hash_to_fr(&bytes);
+            let fr2 = hash_to_fr(&bytes);
+            assert_eq!(fr1, fr2, "hash_to_fr not deterministic!");
+        }
+
+        /// Property: poseidon_hash_to_fr is deterministic.
+        #[test]
+        fn proptest_poseidon_hash_deterministic(
+            a in any::<u64>(),
+            b in any::<u64>()
+        ) {
+            let fr_a = Fr::from(a);
+            let fr_b = Fr::from(b);
+            let h1 = poseidon_hash_to_fr(fr_a, fr_b);
+            let h2 = poseidon_hash_to_fr(fr_a, fr_b);
+            assert_eq!(h1, h2, "poseidon_hash_to_fr not deterministic!");
+        }
+    }
+}

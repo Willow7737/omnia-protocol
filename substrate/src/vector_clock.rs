@@ -567,3 +567,87 @@ mod tests {
         assert_eq!(vc1, vc2);
     }
 }
+
+/// Property-based tests for VectorClock CRDT properties.
+///
+/// These tests verify the mathematical invariants that a CRDT must satisfy:
+/// idempotency, commutativity, associativity, and monotonicity.
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Strategy: generate a vector clock with a small number of nodes and
+    /// random clock values. This produces realistic clocks without blowing
+    /// up test time.
+    fn arb_vector_clock() -> impl Strategy<Value = VectorClock> {
+        prop::collection::hash_map(any::<u8>(), 0u64..1000u64, 0..5).prop_map(|entries| {
+            let mut vc = VectorClock::new();
+            for (id_byte, clock) in entries {
+                let mut node_id = [0u8; 32];
+                node_id[0] = id_byte;
+                vc.set(node_id, clock);
+            }
+            vc
+        })
+    }
+
+    proptest! {
+        /// Idempotency: merge(a, a) == a
+        #[test]
+        fn proptest_vc_idempotent(a in arb_vector_clock()) {
+            let merged = a.merged(&a);
+            assert_eq!(merged, a, "VectorClock merge is not idempotent!");
+        }
+
+        /// Commutativity: merge(a, b) == merge(b, a)
+        #[test]
+        fn proptest_vc_commutative(
+            a in arb_vector_clock(),
+            b in arb_vector_clock()
+        ) {
+            let ab = a.merged(&b);
+            let ba = b.merged(&a);
+            assert_eq!(ab, ba, "VectorClock merge is not commutative!");
+        }
+
+        /// Associativity: merge(merge(a, b), c) == merge(a, merge(b, c))
+        #[test]
+        fn proptest_vc_associative(
+            a in arb_vector_clock(),
+            b in arb_vector_clock(),
+            c in arb_vector_clock()
+        ) {
+            let ab_c = a.merged(&b).merged(&c);
+            let a_bc = a.merged(&b.merged(&c));
+            assert_eq!(ab_c, a_bc, "VectorClock merge is not associative!");
+        }
+
+        /// Monotonicity: merge(a, b) >= a (element-wise)
+        #[test]
+        fn proptest_vc_monotonic(
+            a in arb_vector_clock(),
+            b in arb_vector_clock()
+        ) {
+            let merged = a.merged(&b);
+            // Every counter in merged should be >= the corresponding counter in a
+            for node in a.nodes() {
+                let a_count = a.get(node);
+                let merged_count = merged.get(node);
+                assert!(
+                    merged_count >= a_count,
+                    "VectorClock merge is not monotonic: {} < {} for node {:?}",
+                    merged_count, a_count, &node[..4]
+                );
+            }
+        }
+
+        /// Serialization roundtrip: from_bytes(to_bytes(vc)) == vc
+        #[test]
+        fn proptest_vc_serialization_roundtrip(vc in arb_vector_clock()) {
+            let bytes = vc.to_bytes();
+            let restored = VectorClock::from_bytes(&bytes).unwrap();
+            assert_eq!(restored, vc, "VectorClock serialization roundtrip failed!");
+        }
+    }
+}

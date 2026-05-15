@@ -7,5 +7,6 @@ members = [
     "zk",
     "node",
     "chaos-tests",
+    "fuzz",
 ]
 resolver = "2"

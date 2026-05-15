@@ -1,0 +1,20 @@
+# cargo-vet configuration for Omnia Protocol
+#
+# cargo vet audits dependency crates for correctness, unsafety, and
+# malicious behavior. This configuration imports audits from trusted
+# sources and lists exemptions for crates that haven't been fully
+# audited yet.
+
+[policy]
+# All crates in the workspace are our own code
+criteria = "safe-to-deploy"
+
+# Imports from trusted third-party audit sources.
+# These organizations publish their own audit records which cargo-vet
+# can use to satisfy audit requirements without us auditing every
+# dependency ourselves.
+[imports.mozilla]
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
+[imports.google]
+url = "https://raw.githubusercontent.com/nicowilliams/nicowilliams/main/audits.toml"

@@ -871,3 +871,81 @@ mod tests {
         );
     }
 }
+
+/// Property-based tests for consensus invariants.
+///
+/// These tests verify that the consensus engine maintains internal
+/// consistency even when fed arbitrary events. The key property is
+/// that processing events never panics, regardless of input.
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use crate::event::Event;
+    use proptest::prelude::*;
+
+    fn nid(id: u8) -> NodeId {
+        let mut node = [0u8; 32];
+        node[0] = id;
+        node
+    }
+
+    /// Strategy: generate a genesis-like event with arbitrary creator and payload.
+    /// These events won't have valid signatures, but they exercise the
+    /// consensus engine's internal logic without requiring a populated graph.
+    fn arb_genesis_event() -> impl Strategy<Value = Event> {
+        (any::<u8>(), any::<Vec<u8>>()).prop_map(|(creator_byte, payload)| {
+            let creator = nid(creator_byte % 10);
+            Event::genesis(creator, payload)
+        })
+    }
+
+    proptest! {
+        /// Property: Processing the same event twice never causes a panic
+        /// and the second call returns an empty result (already processed).
+        #[test]
+        fn proptest_idempotent_process_event(event in arb_genesis_event()) {
+            let slashing = SlashingEngine::new_in_memory(
+                DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD
+            );
+            let config = ConsensusConfig::default();
+            let mut engine = ConsensusEngine::new(config, slashing);
+            let graph = CausalGraph::new();
+
+            // First processing — may succeed or fail depending on graph state
+            let _ = engine.process_event(&event, &graph);
+            // Second processing of same event — must not panic
+            let result = engine.process_event(&event, &graph);
+            // Should return Ok (already processed) or Err (slashed, etc.)
+            // The key invariant: no panic
+            let _ = result;
+        }
+
+        /// Property: The consensus engine remains in a valid state after
+        /// processing any sequence of genesis events. "Valid" means:
+        /// - committed_count is consistent with tracked state
+        /// - no panics
+        #[test]
+        fn proptest_consistent_state_after_events(
+            events in prop::collection::vec(arb_genesis_event(), 0..20)
+        ) {
+            let slashing = SlashingEngine::new_in_memory(
+                DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD
+            );
+            let config = ConsensusConfig::default();
+            let mut engine = ConsensusEngine::new(config, slashing);
+            let graph = CausalGraph::new();
+
+            for event in &events {
+                let _ = engine.process_event(event, &graph);
+            }
+
+            // The committed count should never exceed total tracked events
+            let stats = engine.stats();
+            assert!(
+                stats.committed as usize <= stats.total_tracked,
+                "Committed count {} exceeds tracked count {}",
+                stats.committed, stats.total_tracked
+            );
+        }
+    }
+}

@@ -16,3 +16,4 @@ tracing = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"
+proptest = "1"

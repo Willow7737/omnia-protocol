@@ -376,3 +376,86 @@ mod tests {
         // via grep in the final checklist.
     }
 }
+
+/// Property-based tests for governance invariants.
+///
+/// These tests verify that quadratic voting weight is monotonically
+/// increasing with stake, and that decay rate computations never panic.
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use crate::fixed_point::{DecayRate, BASIS_PPM};
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Property: Quadratic voting weight (isqrt) is monotonically
+        /// increasing with stake. More stake should never result in less
+        /// voting weight.
+        #[test]
+        fn proptest_quadratic_weight_monotonic(stake in 0u64..1_000_000u64) {
+            let mut gov = GovernanceState::new(DecayRate::ten_percent());
+            let weight_n = {
+                gov.set_weight("node_n", stake);
+                gov.voting_weights.get("node_n").copied().unwrap_or(0)
+            };
+            let weight_n1 = {
+                gov.set_weight("node_n1", stake + 1);
+                gov.voting_weights.get("node_n1").copied().unwrap_or(0)
+            };
+            assert!(
+                weight_n <= weight_n1,
+                "Quadratic weight not monotonic: weight({}) = {} > weight({}) = {}",
+                stake, weight_n, stake + 1, weight_n1
+            );
+        }
+
+        /// Property: Quadratic weight grows sub-linearly (approximately
+        /// as sqrt). Doubling the stake should less than double the weight.
+        #[test]
+        fn proptest_quadratic_sublinear_growth(stake in 10u64..100_000u64) {
+            let mut gov = GovernanceState::new(DecayRate::ten_percent());
+            gov.set_weight("a", stake);
+            gov.set_weight("b", 2 * stake);
+            let weight_a = gov.voting_weights.get("a").copied().unwrap_or(0);
+            let weight_b = gov.voting_weights.get("b").copied().unwrap_or(0);
+            // sqrt(2n) < 2 * sqrt(n) for n > 0
+            assert!(
+                weight_b < 2 * weight_a || weight_a == 0,
+                "Quadratic weight not sub-linear: weight({}) = {}, weight({}) = {}",
+                2 * stake, weight_b, stake, weight_a
+            );
+        }
+
+        /// Property: Decay rate computation never panics for valid PPM values.
+        #[test]
+        fn proptest_decay_rate_valid(ppm in 0u64..1_000_000u64) {
+            let rate = DecayRate::new(ppm);
+            assert_eq!(rate.ppm(), ppm);
+        }
+
+        /// Property: Decay rate clamps values above BASIS_PPM.
+        #[test]
+        fn proptest_decay_rate_clamps(ppm in 1_000_001u64..u64::MAX) {
+            let rate = DecayRate::new(ppm);
+            assert_eq!(rate.ppm(), BASIS_PPM);
+        }
+
+        /// Property: Effective weight is always <= base weight
+        /// (decay never increases weight).
+        #[test]
+        fn proptest_effective_weight_never_exceeds_base(
+            stake in 1u64..1_000_000u64,
+            epoch in 0u64..100u64
+        ) {
+            let mut gov = GovernanceState::new(DecayRate::ten_percent());
+            gov.set_weight("test", stake);
+            let base_weight = gov.voting_weights.get("test").copied().unwrap_or(0);
+            let effective = gov.effective_weight("test", epoch);
+            assert!(
+                effective <= base_weight,
+                "Effective weight {} exceeds base weight {} at epoch {}",
+                effective, base_weight, epoch
+            );
+        }
+    }
+}
