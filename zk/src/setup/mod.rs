@@ -64,7 +64,7 @@ use thiserror::Error;
 pub use circuit_setup::{
     derive_keys, derive_keys_expanded, verify_key_consistency, CircuitKeyPair,
 };
-pub use contribution::{contribute, verify_contribution, Contribution};
+pub use contribution::{contribute, verify_contribution, Contribution, ContributionProof};
 pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
 
 /// Errors that can occur during the trusted setup ceremony.

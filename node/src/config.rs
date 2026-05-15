@@ -45,6 +45,9 @@ pub struct NodeConfig {
     pub snapshot_interval: u64,
     /// Directory for persistent slashing state.
     pub slashing_data_dir: Option<PathBuf>,
+    /// Directory for persistent nonce state (sled). If None, nonce state is in-memory only.
+    /// Production nodes MUST set this for replay protection across restarts.
+    pub nonce_data_dir: Option<PathBuf>,
     /// Protocol version to advertise on the network.
     pub protocol_version: String,
 }
@@ -91,6 +94,8 @@ pub struct NodeConfigFile {
     pub snapshot_interval: Option<u64>,
     /// Directory for persistent slashing state.
     pub slashing_data_dir: Option<String>,
+    /// Directory for persistent nonce state (sled). If None, nonce state is in-memory only.
+    pub nonce_data_dir: Option<String>,
 }
 
 impl NodeConfigFile {
@@ -176,6 +181,15 @@ impl NodeConfig {
             .unwrap_or_else(|| self.data_dir.join("slashing"))
     }
 
+    /// Get the nonce store subdirectory path.
+    ///
+    /// Defaults to `<data_dir>/nonces` if not explicitly configured.
+    pub fn nonce_dir(&self) -> PathBuf {
+        self.nonce_data_dir
+            .clone()
+            .unwrap_or_else(|| self.data_dir.join("nonces"))
+    }
+
     /// Build the config from CLI arguments parsed by clap.
     ///
     /// If a `--config` flag is provided, the TOML file is loaded first
@@ -233,6 +247,11 @@ impl NodeConfig {
             .and_then(|fc| fc.slashing_data_dir.clone())
             .map(PathBuf::from);
 
+        let nonce_data_dir = file_config
+            .as_ref()
+            .and_then(|fc| fc.nonce_data_dir.clone())
+            .map(PathBuf::from);
+
         Self {
             node_id,
             listen_addr,
@@ -244,6 +263,7 @@ impl NodeConfig {
             pruning_depth,
             snapshot_interval,
             slashing_data_dir,
+            nonce_data_dir,
             protocol_version,
         }
     }
@@ -448,6 +468,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: None,
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert!(config.validate().is_ok());
@@ -466,6 +487,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: None,
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -486,6 +508,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: None,
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -506,6 +529,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: None,
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -526,6 +550,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: None,
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("./data/slashing"));
@@ -544,6 +569,7 @@ mod tests {
             pruning_depth: 0,
             snapshot_interval: 10_000,
             slashing_data_dir: Some(PathBuf::from("/custom/slashing")),
+            nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("/custom/slashing"));

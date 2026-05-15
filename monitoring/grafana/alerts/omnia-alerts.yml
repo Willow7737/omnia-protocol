@@ -13,12 +13,8 @@ groups:
           severity: critical
           component: consensus
         annotations:
-          summary: "Finality has stalled on {{ $labels.instance }}"
-          description: >
-            No events have been finalized in the last 5 minutes.
-            This may indicate a consensus failure, network partition,
-            or insufficient validator participation.
-            Check: omnia-node logs, peer connectivity, and slashing events.
+          summary: "No events being finalized"
+          description: "The rate of finalized events has been zero for 5 minutes."
 
       - alert: PeerCountDrop
         expr: omnia_node_peers_connected < 2
@@ -27,37 +23,25 @@ groups:
           severity: warning
           component: network
         annotations:
-          summary: "Peer count critically low on {{ $labels.instance }}"
-          description: >
-            The node has fewer than 2 connected peers. Consensus requires
-            >2/3 of validators to be reachable. A low peer count may
-            indicate network issues or misconfigured bootstrap nodes.
-            Check: firewall rules, bootstrap node addresses, mDNS discovery.
+          summary: "Low peer count"
+          description: "Connected peers dropped below 2."
 
       - alert: HighSlashingRate
-        expr: rate(omnia_slashing_events_total[1h]) > 0.1
+        expr: rate(omnia_slashing_events_total[10m]) > 0.1
         for: 10m
         labels:
           severity: warning
           component: slashing
         annotations:
-          summary: "Elevated slashing rate on {{ $labels.instance }}"
-          description: >
-            More than 0.1 slashing events per hour have been detected.
-            This may indicate a misbehaving validator, a software bug,
-            or a network partition causing equivocation.
-            Check: validator logs, network connectivity, software version.
+          summary: "High slashing rate detected"
+          description: "Slashing event rate exceeds 0.1 per second."
 
       - alert: MemoryGrowth
-        expr: deriv(process_resident_memory_bytes[1h]) > 10485760
+        expr: deriv(process_resident_memory_bytes[30m]) > 10485760
         for: 30m
         labels:
           severity: warning
           component: system
         annotations:
-          summary: "Sustained memory growth on {{ $labels.instance }}"
-          description: >
-            Memory usage is growing by more than 10 MiB/hour sustained
-            over 30 minutes. This may indicate a memory leak in the
-            causal graph, gossip protocol, or sled database.
-            Check: causal graph size, event backlog, sled compaction.
+          summary: "Sustained memory growth"
+          description: "Memory growing faster than 10MB/min over 30 minutes."

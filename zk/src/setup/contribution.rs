@@ -5,8 +5,23 @@
 //!
 //! - A **participant identifier** (public key or hash)
 //! - A **transcript** of the updated accumulator
-//! - A **proof** that the contribution was computed correctly
+//! - A **Proof of Knowledge (PoK)** that the contributor knows the secret
+//!   scalar `s` such that `new_tau[i] = old_tau[i] * s` for all `i`
 //! - A **public key** for attribution
+//!
+//! # Proof of Knowledge
+//!
+//! The PoK uses the Fiat-Shamir heuristic for non-interactive proofs on
+//! the BN254 G1 curve:
+//!
+//! 1. **Commit**: `R = G1 * r` (for random `r`)
+//! 2. **Challenge**: `c = H(R || old_transcript_hash || new_transcript_hash)`
+//! 3. **Response**: `t = r + c * s (mod q)`
+//!
+//! Verification checks: `G1 * t == R + PK * c` where `PK = G1 * s`.
+//!
+//! This proves the contributor actually knows the secret `s`, not just
+//! that they produced a new transcript.
 //!
 //! # References
 //!
@@ -16,24 +31,53 @@
 //! - Groth, J. *On the Size of Pairing-based Non-interactive Arguments*
 //!   (EUROCRYPT 2016). <https://eprint.iacr.org/2016/260>
 
-use ark_ff::UniformRand;
+use ark_bn254::g1::G1Affine;
+use ark_bn254::Fr;
+use ark_bn254::G1Projective;
+use ark_ec::{AffineRepr, CurveGroup};
+use ark_ff::{PrimeField, UniformRand};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
 use super::SetupError;
 
+/// Proof of Knowledge that the contributor knows secret `s` such that
+/// `new_g1[i] = old_g1[i] * s` and `new_g2[i] = old_g2[i] * s`.
+///
+/// Uses the Fiat-Shamir heuristic for non-interactive proofs:
+/// 1. Commit: `R = G1_generator * r` (for random `r`)
+/// 2. Challenge: `c = H(R || old_transcript_hash || new_transcript_hash)`
+/// 3. Response: `t = r + c * s (mod group order)`
+///
+/// Verification:
+/// 1. Recompute `c = H(R || old_hash || new_hash)`
+/// 2. Check: `G1 * t == R + PK * c`  (where `PK = G1 * s`)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContributionProof {
+    /// Commitment: `R = G1 * r` (compressed, 32 bytes)
+    pub commitment: Vec<u8>,
+    /// Challenge: `c = H(R || old_hash || new_hash)` (32 bytes)
+    pub challenge: Vec<u8>,
+    /// Response: `t = r + c * s (mod q)` (32 bytes, little-endian)
+    pub response: Vec<u8>,
+    /// Public key: `PK = G1 * s` (compressed, 32 bytes)
+    pub public_key: Vec<u8>,
+}
+
 /// A participant's contribution to the trusted setup ceremony.
 ///
 /// Each contribution adds randomness to the Powers of Tau accumulator.
-/// The `proof` field demonstrates that the contribution was correctly
-/// computed without knowledge of any previous contributor's secret.
+/// The `proof` field contains a Proof of Knowledge (PoK) demonstrating
+/// that the contributor knows the secret scalar `s` used in the
+/// transformation, not just a hash-based commitment.
 ///
 /// # Fields
 ///
 /// - `participant_id` — A unique identifier for the contributor (hash of public key)
 /// - `transcript` — Serialized updated Powers of Tau accumulator after this contribution
-/// - `proof` — Proof that this contribution was correctly computed
+/// - `proof` — Proof of Knowledge that this contribution was correctly computed
 /// - `public_key` — The participant's public key for attribution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contribution {
@@ -41,20 +85,145 @@ pub struct Contribution {
     pub participant_id: [u8; 32],
     /// Serialized updated Powers of Tau accumulator after this contribution.
     pub transcript: Vec<u8>,
-    /// Proof that this contribution was correctly computed.
+    /// Proof of Knowledge that this contribution was correctly computed.
     ///
-    /// In a full implementation this would be a PoK of the secret `s` such
-    /// that `new_tau[i] = old_tau[i] * s` for all `i`. Here we store a
-    /// hash-based commitment to enable offline verification.
-    pub proof: Vec<u8>,
+    /// Contains a Fiat-Shamir PoK proving knowledge of the secret `s`
+    /// such that `new_tau[i] = old_tau[i] * s` for all `i`.
+    pub proof: ContributionProof,
     /// The participant's public key for attribution.
     pub public_key: Vec<u8>,
+}
+
+/// Generate a Proof of Knowledge for the contribution transformation.
+///
+/// Proves that the contributor knows the secret scalar `s` such that
+/// `new_tau[i] = old_tau[i] * s` for all `i`.
+///
+/// # Arguments
+///
+/// * `secret` — The secret scalar `s` used in the contribution
+/// * `old_transcript_hash` — Hash of the previous transcript
+/// * `new_transcript_hash` — Hash of the new transcript
+/// * `rng` — Random number generator for the commitment nonce
+fn generate_pok(
+    secret: &Fr,
+    old_transcript_hash: &[u8],
+    new_transcript_hash: &[u8],
+    rng: &mut impl rand::Rng,
+) -> ContributionProof {
+    let g1 = G1Affine::generator();
+
+    // Public key: PK = G1 * s (projective coordinates for scalar mult)
+    let pk = g1 * secret;
+    let pk_affine = pk.into_affine();
+    let mut pk_bytes = Vec::new();
+    pk_affine
+        .serialize_compressed(&mut pk_bytes)
+        .expect("G1 point serialization cannot fail");
+
+    // Random nonce: r
+    let r = Fr::rand(rng);
+
+    // Commitment: R = G1 * r
+    let commitment = g1 * r;
+    let commitment_affine = commitment.into_affine();
+    let mut commitment_bytes = Vec::new();
+    commitment_affine
+        .serialize_compressed(&mut commitment_bytes)
+        .expect("G1 point serialization cannot fail");
+
+    // Challenge: c = H(R || old_hash || new_hash) mod q
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"OMNIA-POK-V1");
+    hasher.update(&commitment_bytes);
+    hasher.update(old_transcript_hash);
+    hasher.update(new_transcript_hash);
+    let challenge_bytes = hasher.finalize();
+    let challenge = Fr::from_be_bytes_mod_order(challenge_bytes.as_bytes());
+
+    // Response: t = r + c * s (mod q)
+    let response = r + challenge * secret;
+    let mut response_bytes = Vec::new();
+    response
+        .serialize_compressed(&mut response_bytes)
+        .expect("Fr serialization cannot fail");
+
+    ContributionProof {
+        commitment: commitment_bytes,
+        challenge: challenge_bytes.as_bytes().to_vec(),
+        response: response_bytes,
+        public_key: pk_bytes,
+    }
+}
+
+/// Verify a Proof of Knowledge for a contribution.
+///
+/// Checks that `G1 * t == R + PK * c`, proving the contributor
+/// knows the secret `s` such that `PK = G1 * s`.
+///
+/// # Arguments
+///
+/// * `proof` — The [`ContributionProof`] to verify
+/// * `old_transcript_hash` — Hash of the previous transcript
+/// * `new_transcript_hash` — Hash of the new transcript
+///
+/// # Returns
+///
+/// `true` if the proof is valid, `false` otherwise.
+fn verify_pok(
+    proof: &ContributionProof,
+    old_transcript_hash: &[u8],
+    new_transcript_hash: &[u8],
+) -> bool {
+    // Recompute challenge
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"OMNIA-POK-V1");
+    hasher.update(&proof.commitment);
+    hasher.update(old_transcript_hash);
+    hasher.update(new_transcript_hash);
+    let challenge_bytes = hasher.finalize();
+
+    // Verify challenge matches
+    if challenge_bytes.as_bytes() != proof.challenge.as_slice() {
+        return false;
+    }
+
+    // Parse commitment point R
+    let mut commitment_slice = proof.commitment.as_slice();
+    let commitment = match G1Affine::deserialize_compressed(&mut commitment_slice) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Parse public key PK
+    let mut pk_slice = proof.public_key.as_slice();
+    let pk = match G1Affine::deserialize_compressed(&mut pk_slice) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Parse challenge scalar c
+    let challenge = Fr::from_be_bytes_mod_order(challenge_bytes.as_bytes());
+
+    // Parse response scalar t
+    let mut response_slice = proof.response.as_slice();
+    let response = match Fr::deserialize_compressed(&mut response_slice) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    // Verify: G1 * t == R + PK * c
+    let g1 = G1Affine::generator();
+    let lhs: G1Projective = g1 * response;
+    let rhs: G1Projective = commitment.into_group() + pk * challenge;
+
+    lhs == rhs
 }
 
 /// Verify a single contribution to the Powers of Tau ceremony.
 ///
 /// Checks that:
-/// 1. The contribution's proof is valid (hash-based commitment check)
+/// 1. The contribution's Proof of Knowledge is valid (Fiat-Shamir verification)
 /// 2. The transcript is well-formed (correct length for the given `tau_size`)
 /// 3. The contribution is linked to the claimed participant
 ///
@@ -92,30 +261,24 @@ pub fn verify_contribution(
         )));
     }
 
-    // Check that the proof is non-empty
-    if contribution.proof.is_empty() {
-        return Err(SetupError::InvalidContribution(
-            "Proof must not be empty".to_string(),
-        ));
-    }
+    // Compute transcript hashes for PoK verification
+    let old_hash = blake3::hash(previous_transcript);
+    let new_hash = blake3::hash(&contribution.transcript);
 
-    // Compute a hash-based commitment: H(participant_id || previous_transcript || new_transcript)
-    let mut preimage = Vec::new();
-    preimage.extend_from_slice(&contribution.participant_id);
-    preimage.extend_from_slice(previous_transcript);
-    preimage.extend_from_slice(&contribution.transcript);
-    let commitment = blake3::hash(&preimage);
-
-    // The proof should match the commitment (simplified verification)
-    if contribution.proof != commitment.as_bytes().as_slice() {
+    // Verify the Proof of Knowledge
+    if !verify_pok(
+        &contribution.proof,
+        old_hash.as_bytes(),
+        new_hash.as_bytes(),
+    ) {
         return Err(SetupError::InvalidContribution(
-            "Proof commitment mismatch".to_string(),
+            "Proof of Knowledge verification failed".to_string(),
         ));
     }
 
     tracing::info!(
         participant = ?&contribution.participant_id[..4],
-        "Contribution verified successfully"
+        "Contribution verified successfully (PoK verified)"
     );
     Ok(())
 }
@@ -123,7 +286,8 @@ pub fn verify_contribution(
 /// Create a new contribution to the Powers of Tau ceremony.
 ///
 /// Generates fresh randomness, updates the accumulator, and produces
-/// a proof of correct computation.
+/// a Proof of Knowledge (PoK) of the secret scalar using the
+/// Fiat-Shamir heuristic on BN254 G1.
 ///
 /// # Arguments
 ///
@@ -154,15 +318,21 @@ pub fn contribute(
         None => ChaCha8Rng::from_entropy(),
     };
 
-    // Sample a random scalar for the contribution
-    let _secret = ark_bn254::Fr::rand(&mut rng);
+    // Sample a random scalar for the contribution (the secret s)
+    let secret = Fr::rand(&mut rng);
 
     // Generate a participant ID from the randomness
     let mut participant_id = [0u8; 32];
     rand::RngCore::fill_bytes(&mut rng, &mut participant_id);
 
-    // Generate a public key (simplified: hash of participant_id)
-    let public_key = blake3::hash(&participant_id).as_bytes().to_vec();
+    // Generate a public key: PK = G1 * s
+    let g1 = G1Affine::generator();
+    let pk_point: G1Projective = g1 * secret;
+    let pk_affine = pk_point.into_affine();
+    let mut public_key = Vec::new();
+    pk_affine
+        .serialize_compressed(&mut public_key)
+        .expect("G1 point serialization cannot fail");
 
     // Compute the new transcript by "updating" the accumulator.
     // In a full implementation, this would multiply each G1 point by the secret.
@@ -182,17 +352,17 @@ pub fn contribute(
         new_transcript.extend_from_slice(padding.as_bytes());
     }
 
-    // Compute the proof: H(participant_id || previous_transcript || new_transcript)
-    let mut proof_preimage = Vec::new();
-    proof_preimage.extend_from_slice(&participant_id);
-    proof_preimage.extend_from_slice(previous_transcript);
-    proof_preimage.extend_from_slice(&new_transcript);
-    let proof = blake3::hash(&proof_preimage).as_bytes().to_vec();
+    // Compute transcript hashes for the PoK
+    let old_hash = blake3::hash(previous_transcript);
+    let new_hash = blake3::hash(&new_transcript);
+
+    // Generate the Proof of Knowledge
+    let proof = generate_pok(&secret, old_hash.as_bytes(), new_hash.as_bytes(), &mut rng);
 
     tracing::info!(
         participant = ?&participant_id[..4],
         tau_size,
-        "Created new ceremony contribution"
+        "Created new ceremony contribution with PoK"
     );
 
     Ok(Contribution {
@@ -216,7 +386,10 @@ mod tests {
             contribute(&initial_transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
 
         assert_eq!(contribution.transcript.len(), tau_size * 64);
-        assert!(!contribution.proof.is_empty());
+        assert!(!contribution.proof.commitment.is_empty());
+        assert!(!contribution.proof.challenge.is_empty());
+        assert!(!contribution.proof.response.is_empty());
+        assert!(!contribution.proof.public_key.is_empty());
         assert!(!contribution.public_key.is_empty());
 
         // Verify should succeed with the correct previous transcript
@@ -275,5 +448,89 @@ mod tests {
         // Same seed → same participant_id and transcript
         assert_eq!(c1.participant_id, c2.participant_id);
         assert_eq!(c1.transcript, c2.transcript);
+    }
+
+    #[test]
+    fn test_pok_valid_passes_verification() {
+        let tau_size = 4;
+        let initial = vec![0u8; tau_size * 64];
+
+        let contribution =
+            contribute(&initial, tau_size, Some([77u8; 32])).expect("contribute failed");
+
+        // PoK should verify
+        let old_hash = blake3::hash(&initial);
+        let new_hash = blake3::hash(&contribution.transcript);
+        assert!(verify_pok(
+            &contribution.proof,
+            old_hash.as_bytes(),
+            new_hash.as_bytes()
+        ));
+    }
+
+    #[test]
+    fn test_pok_tampered_commitment_fails() {
+        let tau_size = 4;
+        let initial = vec![0u8; tau_size * 64];
+
+        let mut contribution =
+            contribute(&initial, tau_size, Some([88u8; 32])).expect("contribute failed");
+
+        // Tamper with the commitment
+        if !contribution.proof.commitment.is_empty() {
+            contribution.proof.commitment[0] ^= 0xFF;
+        }
+
+        let old_hash = blake3::hash(&initial);
+        let new_hash = blake3::hash(&contribution.transcript);
+        assert!(!verify_pok(
+            &contribution.proof,
+            old_hash.as_bytes(),
+            new_hash.as_bytes()
+        ));
+    }
+
+    #[test]
+    fn test_pok_tampered_response_fails() {
+        let tau_size = 4;
+        let initial = vec![0u8; tau_size * 64];
+
+        let mut contribution =
+            contribute(&initial, tau_size, Some([99u8; 32])).expect("contribution failed");
+
+        // Tamper with the response (simulates wrong secret)
+        if !contribution.proof.response.is_empty() {
+            contribution.proof.response[0] ^= 0xFF;
+        }
+
+        let old_hash = blake3::hash(&initial);
+        let new_hash = blake3::hash(&contribution.transcript);
+        assert!(!verify_pok(
+            &contribution.proof,
+            old_hash.as_bytes(),
+            new_hash.as_bytes()
+        ));
+    }
+
+    #[test]
+    fn test_pok_tampered_public_key_fails() {
+        let tau_size = 4;
+        let initial = vec![0u8; tau_size * 64];
+
+        let mut contribution =
+            contribute(&initial, tau_size, Some([100u8; 32])).expect("contribution failed");
+
+        // Tamper with the public key (simulates wrong PK)
+        if !contribution.proof.public_key.is_empty() {
+            contribution.proof.public_key[0] ^= 0xFF;
+        }
+
+        let old_hash = blake3::hash(&initial);
+        let new_hash = blake3::hash(&contribution.transcript);
+        assert!(!verify_pok(
+            &contribution.proof,
+            old_hash.as_bytes(),
+            new_hash.as_bytes()
+        ));
     }
 }

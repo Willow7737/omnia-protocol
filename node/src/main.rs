@@ -103,14 +103,15 @@ async fn main() -> Result<()> {
     substrate_config.max_payload_size = config.max_payload_size;
     substrate_config.pruning_depth = config.pruning_depth;
     substrate_config.snapshot_interval = config.snapshot_interval;
+    substrate_config.nonce_data_dir = Some(config.nonce_dir());
     let substrate = Substrate::new(substrate_config);
     tracing::info!(
         path = %slashing_dir.display(),
         "Substrate runtime initialized with persistent slashing engine"
     );
 
-    // Create the shard router with standard fees
-    let shard_router = create_shard_router()?;
+    // Create the shard router with standard fees and nonce persistence
+    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
     tracing::info!(
         shard_count = 6,
         "Shard router initialized with all shard types"
@@ -185,12 +186,32 @@ fn init_tracing(log_level: &str) {
 
 /// Create a shard router with all six shard types registered.
 ///
-/// Uses the standard fee schedule for operation pricing.
-fn create_shard_router() -> Result<ShardRouter> {
+/// Uses the standard fee schedule for operation pricing. When `nonce_data_dir`
+/// is `Some`, creates a `SledNonceStore` for persistent replay protection;
+/// otherwise falls back to in-memory nonce tracking.
+fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<ShardRouter> {
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();
 
-    let mut router = ShardRouter::new(fee_schedule, quota);
+    let mut router = match nonce_data_dir {
+        Some(dir) => {
+            // Ensure the nonce directory exists
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("Failed to create nonce directory: {}", dir.display()))?;
+            let db = sled::open(dir)
+                .with_context(|| format!("Failed to open nonce database at {}", dir.display()))?;
+            let nonce_store: Arc<dyn omnia_shards::NonceStore> = Arc::new(
+                omnia_shards::SledNonceStore::open(&db, "nonces")
+                    .with_context(|| "Failed to open nonce tree in sled database")?,
+            );
+            tracing::info!(path = %dir.display(), "Shard router using persistent nonce store");
+            ShardRouter::with_nonce_store(fee_schedule, quota, nonce_store)
+        }
+        None => {
+            tracing::info!("Shard router using in-memory nonce store (no persistence)");
+            ShardRouter::new(fee_schedule, quota)
+        }
+    };
 
     // Register all six domain shards
     router.register(Box::new(FinancialShard::new()));

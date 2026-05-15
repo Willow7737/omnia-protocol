@@ -5,9 +5,11 @@
 
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsOp, EconomicsShard, FinancialOp, FinancialShard,
-    IdentityShard, PhysicalShard, ShardId, ShardOp, ShardPayload, ShardRouter,
+    IdentityShard, NonceStore, PhysicalShard, ShardId, ShardOp, ShardPayload, ShardRouter,
+    SledNonceStore,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, NodeKeypair, VectorClock};
+use std::sync::Arc;
 
 fn test_node(id: u8) -> NodeId {
     let mut node = [0u8; 32];
@@ -146,4 +148,82 @@ fn test_all_six_shards_registered() {
     assert!(router.has_shard(&ShardId::physical()));
     assert!(router.has_shard(&ShardId::biological()));
     assert!(router.has_shard(&ShardId::economics()));
+}
+
+/// Test that nonce persistence survives a simulated restart with sled backend.
+///
+/// This test creates a ShardRouter with a SledNonceStore, routes an event
+/// with nonce 1, then drops the router and creates a new one with the same
+/// store. The replayed nonce 1 should be rejected.
+#[test]
+fn test_nonce_persistence_across_router_restart() {
+    let dir = tempfile::tempdir().expect("tempdir should succeed");
+    let db = sled::open(dir.path()).expect("db open should succeed");
+    let store: Arc<dyn NonceStore> =
+        Arc::new(SledNonceStore::open(&db, "nonces").expect("nonce store open should succeed"));
+
+    let keypair = generate_keypair();
+    let creator = keypair.verifying_key().to_bytes();
+
+    // Router 1: route event with nonce 1
+    {
+        let mut router1 = ShardRouter::with_nonce_store(
+            omnia_shards::FeeSchedule::zero(),
+            omnia_economics::QuotaSystem::default_system(),
+            store.clone(),
+        );
+        router1.register(Box::new(FinancialShard::new()));
+
+        let payload = ShardPayload {
+            shard_id: ShardId::financial(),
+            operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
+            nonce: 1,
+        };
+        let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+        assert!(
+            router1.route_event(&event).is_ok(),
+            "First event should succeed"
+        );
+    }
+
+    // Router 2: create with same store — replay nonce 1 should be rejected
+    {
+        let mut router2 = ShardRouter::with_nonce_store(
+            omnia_shards::FeeSchedule::zero(),
+            omnia_economics::QuotaSystem::default_system(),
+            store,
+        );
+        router2.register(Box::new(FinancialShard::new()));
+
+        // Replay nonce 1 → should be rejected
+        let replay_payload = ShardPayload {
+            shard_id: ShardId::financial(),
+            operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
+            nonce: 1,
+        };
+        let replay_event =
+            create_test_event_with_keypair(test_node(1), replay_payload.to_bytes(), &keypair);
+        let result = router2.route_event(&replay_event);
+        assert!(
+            result.is_err(),
+            "Replayed nonce should be rejected after restart"
+        );
+        assert!(
+            result.unwrap_err().to_string().contains("Replay detected"),
+            "Expected replay detection error after restart"
+        );
+
+        // New nonce 2 → should succeed
+        let new_payload = ShardPayload {
+            shard_id: ShardId::financial(),
+            operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
+            nonce: 2,
+        };
+        let new_event =
+            create_test_event_with_keypair(test_node(1), new_payload.to_bytes(), &keypair);
+        assert!(
+            router2.route_event(&new_event).is_ok(),
+            "New nonce should succeed after restart"
+        );
+    }
 }

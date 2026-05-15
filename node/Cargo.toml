@@ -38,6 +38,11 @@ prometheus = "0.13"
 # Ergonomic error handling — anyhow::Result with context chaining
 anyhow = "1"
 
+# Embedded database for persistent nonce and slashing state — sled provides
+# fast key-value storage used by SledNonceStore and SledSlashingStore
+# https://docs.rs/sled
+sled = "0.34"
+
 # Hex encoding for event IDs and node identifiers in JSON responses
 hex = "0.4"
 
