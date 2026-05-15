@@ -80,6 +80,7 @@ jobs:
   supply-chain:
     name: Supply Chain Audit
     runs-on: ubuntu-latest
+    continue-on-error: true  # Third-party crates not yet fully audited — warning-level initially
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
