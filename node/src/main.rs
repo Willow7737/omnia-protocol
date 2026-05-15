@@ -30,7 +30,7 @@ use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
 };
-use omnia_substrate::{SlashingEngine, Substrate, SubstrateConfig};
+use omnia_substrate::{Substrate, SubstrateConfig};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
@@ -64,18 +64,15 @@ async fn main() -> Result<()> {
 
     // 4. Initialize substrate components
     let node_id_bytes = config.node_id_bytes();
-
-    // Create the substrate runtime
-    let substrate_config = SubstrateConfig::new(node_id_bytes);
-    let substrate = Substrate::new(substrate_config);
-    tracing::info!("Substrate runtime initialized");
-
-    // Create the slashing engine with sled persistence
     let slashing_dir = config.slashing_dir();
-    let slashing_engine = create_slashing_engine(&slashing_dir)?;
+
+    // Create the substrate runtime with slashing persistence configured
+    let mut substrate_config = SubstrateConfig::new(node_id_bytes);
+    substrate_config.slashing_data_dir = Some(slashing_dir.to_path_buf());
+    let substrate = Substrate::new(substrate_config);
     tracing::info!(
         path = %slashing_dir.display(),
-        "Slashing engine initialized with sled persistence"
+        "Substrate runtime initialized with persistent slashing engine"
     );
 
     // Create the shard router with standard fees
@@ -94,6 +91,9 @@ async fn main() -> Result<()> {
     tracing::info!("Prometheus metrics initialized");
 
     // 5. Build shared application state
+    // Clone the slashing engine BEFORE moving substrate into the Arc,
+    // so both the substrate and the API share the same Arc<dyn SlashingStore>.
+    let slashing_engine = substrate.slashing.clone();
     let app_state = AppState {
         config: config.clone(),
         substrate: Arc::new(RwLock::new(substrate)),
@@ -147,18 +147,6 @@ fn init_tracing(log_level: &str) {
             .with_thread_ids(false)
             .init();
     }
-}
-
-/// Create a slashing engine backed by sled for persistent storage.
-///
-/// If the sled database cannot be opened, falls back to an
-/// in-memory slashing engine so the node can still operate.
-fn create_slashing_engine(slashing_dir: &std::path::Path) -> Result<SlashingEngine> {
-    Ok(SlashingEngine::new(
-        Some(slashing_dir.to_path_buf()),
-        omnia_substrate::DEFAULT_SLASH_THRESHOLD,
-        omnia_substrate::DEFAULT_EJECTION_THRESHOLD,
-    ))
 }
 
 /// Create a shard router with all six shard types registered.

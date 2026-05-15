@@ -6,10 +6,12 @@
 
 use omnia_substrate::{
     InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
-    SlashingStore, SlashingStoreError, SledSlashingStore,
+    SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Helper: create a `NodeId` from a single byte.
@@ -72,7 +74,7 @@ fn test_sled_slash_history_preserved_across_restart() {
     {
         let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
         let mut engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 10_000);
         engine.record_offense(n1, SlashOffense::InvalidAttestation); // 300 points
         assert_eq!(engine.slash_points_of(&n1), 300);
@@ -86,7 +88,7 @@ fn test_sled_slash_history_preserved_across_restart() {
     // Second engine instance with the same store path: state must survive
     {
         let store = open_sled_store(&dir);
-        let engine = SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+        let engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 300);
         assert_eq!(engine.stake_of(&n1), 10_000);
         assert!(!engine.is_slashed(&n1));
@@ -104,7 +106,7 @@ fn test_corrupted_sled_data_starts_fresh() {
     {
         let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
         let mut engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 5_000);
         engine.record_offense(n1, SlashOffense::Equivocation); // 500 points
     }
@@ -126,7 +128,7 @@ fn test_corrupted_sled_data_starts_fresh() {
     // Creating engine with corrupted data should fail with a serialization error
     {
         let store = open_sled_store(&dir);
-        let result = SlashingEngine::with_store(Box::new(store));
+        let result = SlashingEngine::with_store(Arc::new(store));
         assert!(result.is_err());
         match result.unwrap_err() {
             SlashingStoreError::Serialization(msg) => {
@@ -171,8 +173,8 @@ fn test_in_memory_store_backward_compatibility() {
 
 #[test]
 fn test_in_memory_store_default_engine() {
-    // Using default() constructor — same behavior as before
-    let engine = SlashingEngine::default();
+    // Using new_in_memory() constructor — same behavior as before
+    let engine = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
     let n = node(1);
     assert!(!engine.is_slashed(&n));
     assert!(!engine.is_ejected(&n));
@@ -217,7 +219,7 @@ fn test_persistent_state_includes_stakes() {
     {
         let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
         let mut engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 50_000);
         engine.register_validator(n2, 75_000);
         engine.record_offense(n1, SlashOffense::Equivocation); // 500 points
@@ -232,7 +234,7 @@ fn test_persistent_state_includes_stakes() {
     // Second engine: stakes must be preserved
     {
         let store = open_sled_store(&dir);
-        let engine = SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+        let engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
         assert_eq!(engine.stake_of(&n1), 50_000);
         assert_eq!(engine.stake_of(&n2), 75_000);
@@ -252,7 +254,7 @@ fn test_multiple_offenses_persisted_across_restart() {
     {
         let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
         let mut engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 20_000);
         engine.record_offense(n1, SlashOffense::LivenessViolation); // 100
         engine.record_offense(n1, SlashOffense::InvalidAttestation); // 400
@@ -268,7 +270,7 @@ fn test_multiple_offenses_persisted_across_restart() {
     {
         let store = open_sled_store(&dir);
         let mut engine =
-            SlashingEngine::with_store(Box::new(store)).expect("failed to create engine");
+            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
         assert_eq!(engine.stake_of(&n1), 20_000);
         assert!(engine.is_slashed(&n1));

@@ -12,7 +12,7 @@ use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
 };
-use omnia_substrate::{SlashingEngine, Substrate, SubstrateConfig};
+use omnia_substrate::{Substrate, SubstrateConfig};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -40,7 +40,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
 
     let substrate_config = SubstrateConfig::new(node_id_bytes);
     let substrate = Substrate::new(substrate_config);
-    let slashing = SlashingEngine::new_in_memory(500, 2000);
+    let slashing = substrate.slashing.clone();
 
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();

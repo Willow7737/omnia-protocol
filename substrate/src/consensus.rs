@@ -20,6 +20,8 @@
 use crate::causal_graph::CausalGraph;
 use crate::event::{Event, EventId};
 use crate::slashing::{SlashOffense, SlashingEngine};
+#[cfg(test)]
+use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -121,8 +123,21 @@ pub struct ConsensusEngine {
 }
 
 impl ConsensusEngine {
-    /// Create a new consensus engine
-    pub fn new(config: ConsensusConfig) -> Self {
+    /// Create a new consensus engine with the given configuration and
+    /// slashing engine.
+    ///
+    /// The slashing engine is injected from outside so that the same
+    /// instance (sharing the same `Arc<dyn SlashingStore>`) can be used
+    /// by both consensus and the API layer. This eliminates the
+    /// dual-engine gap where consensus-detected equivocations were
+    /// invisible to the REST API.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` — Consensus configuration (node count, thresholds, etc.).
+    /// * `slashing` — A [`SlashingEngine`] instance, typically cloned from
+    ///   the one created in [`Substrate::new`](crate::Substrate::new).
+    pub fn new(config: ConsensusConfig, slashing: SlashingEngine) -> Self {
         Self {
             config,
             event_states: HashMap::new(),
@@ -132,7 +147,7 @@ impl ConsensusEngine {
             node_info: HashMap::new(),
             committed_count: 0,
             _last_finalized: VectorClock::new(),
-            slashing: SlashingEngine::default(),
+            slashing,
         }
     }
 
@@ -482,8 +497,9 @@ impl ConsensusEngine {
     /// # Example
     ///
     /// ```ignore
-    /// use omnia_substrate::ConsensusEngine;
-    /// let mut engine = ConsensusEngine::new(config);
+    /// use omnia_substrate::{ConsensusEngine, SlashingEngine};
+    /// let slashing = SlashingEngine::new_in_memory(500, 2000);
+    /// let mut engine = ConsensusEngine::new(config, slashing);
     /// engine.register_validator(node_id, 10_000);
     /// ```
     pub fn register_validator(&mut self, node: NodeId, stake: u64) {
@@ -599,7 +615,9 @@ mod tests {
     #[test]
     fn test_consensus_engine_creation() {
         let config = ConsensusConfig::default();
-        let engine = ConsensusEngine::new(config);
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let engine = ConsensusEngine::new(config, slashing);
 
         assert_eq!(engine.committed_count(), 0);
         assert_eq!(engine.stats().total_nodes, 4);
@@ -609,7 +627,10 @@ mod tests {
     #[test]
     fn test_process_event() {
         let config = ConsensusConfig::default();
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         let (graph, events) = setup_graph_with_events();
 
         for event_id in &events {
@@ -641,7 +662,10 @@ mod tests {
     #[test]
     fn test_node_consensus_info() {
         let config = ConsensusConfig::default();
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         let (graph, events) = setup_graph_with_events();
 
         for event_id in &events {
@@ -658,14 +682,20 @@ mod tests {
         let mut config = ConsensusConfig::default();
         config.total_nodes = 3;
 
-        let engine = ConsensusEngine::new(config);
+        let engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         assert_eq!(engine.stats().threshold, 3);
     }
 
     #[test]
     fn test_get_round() {
         let config = ConsensusConfig::default();
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         let (graph, events) = setup_graph_with_events();
 
         let event = graph.get(&events[0]).unwrap();
@@ -683,7 +713,10 @@ mod tests {
             optimistic_threshold: 3,
             max_look_ahead: 10,
         };
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
 
         let (graph, events) = setup_graph_with_events();
         for event_id in &events {
@@ -697,7 +730,10 @@ mod tests {
     #[test]
     fn test_record_acknowledgment() {
         let config = ConsensusConfig::default();
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         let (graph, events) = setup_graph_with_events();
 
         let event = graph.get(&events[0]).unwrap();
@@ -716,7 +752,10 @@ mod tests {
     #[test]
     fn test_consensus_stats() {
         let config = ConsensusConfig::default();
-        let engine = ConsensusEngine::new(config);
+        let engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
 
         let stats = engine.stats();
         assert_eq!(stats.total_tracked, 0);
@@ -732,7 +771,10 @@ mod tests {
         config.total_nodes = 4;
         config.commit_delay_rounds = 1; // Reduced for small network
 
-        let mut engine = ConsensusEngine::new(config);
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
         let mut graph = CausalGraph::new();
 
         // Create 4 nodes with real keypairs

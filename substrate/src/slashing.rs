@@ -34,6 +34,7 @@ use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Default slash threshold: accumulated points at which a node is slashed.
 pub const DEFAULT_SLASH_THRESHOLD: u64 = 500;
@@ -371,15 +372,18 @@ impl SlashingStore for InMemorySlashingStore {
 /// - Detecting equivocation and liveness violations
 /// - Persisting state to a [`SlashingStore`] backend on every mutation
 ///
+/// # Shared ownership
+///
+/// `SlashingEngine` is clonable — cloning produces a new handle that shares
+/// the **same** underlying store via `Arc`. This allows the same engine
+/// instance to be used by both consensus and the API layer without
+/// duplicating state. All clones share a single persisted slashing history.
+///
 /// # Persistence
 ///
-/// Use [`SlashingEngine::with_store`] to create an engine backed by a
-/// persistent store (e.g., [`SledSlashingStore`]). The engine loads state
-/// from the store on creation and saves after every mutation.
-///
-/// For backward compatibility, [`SlashingEngine::default`] creates an
-/// in-memory-only engine. Production code should use [`SlashingEngine::new`]
-/// with `Some(path)` for persistent slashing state.
+/// Use [`SlashingEngine::new`] with `Some(path)` for production nodes to
+/// persist slashing state to sled. Use [`SlashingEngine::new_in_memory`]
+/// for tests only — in-memory state is lost on restart.
 ///
 /// # Example
 ///
@@ -403,8 +407,8 @@ pub struct SlashingEngine {
     slash_threshold: u64,
     /// Points threshold at which a node is ejected.
     ejection_threshold: u64,
-    /// Persistence backend for slashing state.
-    store: Box<dyn SlashingStore>,
+    /// Persistence backend for slashing state, shared via `Arc`.
+    store: Arc<dyn SlashingStore>,
 }
 
 impl std::fmt::Debug for SlashingEngine {
@@ -414,16 +418,35 @@ impl std::fmt::Debug for SlashingEngine {
             .field("stakes", &self.stakes)
             .field("slash_threshold", &self.slash_threshold)
             .field("ejection_threshold", &self.ejection_threshold)
-            .field("store", &"Box<dyn SlashingStore>")
+            .field("store", &"Arc<dyn SlashingStore>")
             .finish()
     }
 }
 
-impl Default for SlashingEngine {
-    fn default() -> Self {
-        Self::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD)
+impl Clone for SlashingEngine {
+    /// Clone the engine, sharing the same `Arc<dyn SlashingStore>`.
+    ///
+    /// The clone receives a snapshot of the current in-memory state
+    /// (slash points, stakes, thresholds) but shares the underlying
+    /// persistence store. This is the key mechanism for the single-engine
+    /// architecture: both consensus and the API layer hold clones that
+    /// write to the same sled database.
+    fn clone(&self) -> Self {
+        Self {
+            slash_points: self.slash_points.clone(),
+            stakes: self.stakes.clone(),
+            slash_threshold: self.slash_threshold,
+            ejection_threshold: self.ejection_threshold,
+            store: Arc::clone(&self.store),
+        }
     }
 }
+
+// NOTE: `Default` is intentionally NOT implemented for `SlashingEngine`.
+// Using `::default()` silently creates an in-memory-only engine, which is
+// a footgun in production — slash history would be lost on restart.
+// Always use `SlashingEngine::new(data_dir, ...)` or `new_in_memory(...)`
+// explicitly.
 
 impl SlashingEngine {
     /// Create a new `SlashingEngine` with optional persistence.
@@ -468,7 +491,7 @@ impl SlashingEngine {
                         "Slashing engine: using persistent sled store"
                     );
                     Self::with_store_with_thresholds(
-                        Box::new(store),
+                        Arc::new(store),
                         slash_threshold,
                         ejection_threshold,
                     )
@@ -505,7 +528,7 @@ impl SlashingEngine {
             stakes: HashMap::new(),
             slash_threshold,
             ejection_threshold,
-            store: Box::new(InMemorySlashingStore::new()),
+            store: Arc::new(InMemorySlashingStore::new()),
         }
     }
 
@@ -518,8 +541,9 @@ impl SlashingEngine {
     ///
     /// # Arguments
     ///
-    /// * `store` — A boxed [`SlashingStore`] implementation (e.g.,
-    ///   [`SledSlashingStore`]).
+    /// * `store` — An `Arc`-wrapped [`SlashingStore`] implementation (e.g.,
+    ///   [`SledSlashingStore`]). Using `Arc` allows the same store to be
+    ///   shared across multiple `SlashingEngine` clones.
     ///
     /// # Returns
     ///
@@ -531,11 +555,12 @@ impl SlashingEngine {
     /// ```no_run
     /// use omnia_substrate::slashing::{SledSlashingStore, SlashingEngine};
     /// use std::path::Path;
+    /// use std::sync::Arc;
     ///
     /// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
-    /// let engine = SlashingEngine::with_store(Box::new(store)).unwrap();
+    /// let engine = SlashingEngine::with_store(Arc::new(store)).unwrap();
     /// ```
-    pub fn with_store(store: Box<dyn SlashingStore>) -> Result<Self, SlashingStoreError> {
+    pub fn with_store(store: Arc<dyn SlashingStore>) -> Result<Self, SlashingStoreError> {
         let state = store.load()?;
         tracing::info!(
             slash_points_count = state.slash_points.len(),
@@ -561,11 +586,11 @@ impl SlashingEngine {
     ///
     /// # Arguments
     ///
-    /// * `store` — A boxed [`SlashingStore`] implementation.
+    /// * `store` — An `Arc`-wrapped [`SlashingStore`] implementation.
     /// * `slash_threshold` — Default slash threshold if store is empty.
     /// * `ejection_threshold` — Default ejection threshold if store is empty.
     fn with_store_with_thresholds(
-        store: Box<dyn SlashingStore>,
+        store: Arc<dyn SlashingStore>,
         slash_threshold: u64,
         ejection_threshold: u64,
     ) -> Self {
@@ -967,8 +992,9 @@ mod tests {
     }
 
     #[test]
-    fn test_default_slashing_engine() {
-        let engine = SlashingEngine::default();
+    fn test_new_in_memory_slashing_engine() {
+        let engine =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let n = node(1);
         assert!(!engine.is_slashed(&n));
         assert!(!engine.is_ejected(&n));
@@ -1153,7 +1179,7 @@ mod tests {
 
     #[test]
     fn test_with_store_loads_empty_state() {
-        let store = Box::new(InMemorySlashingStore::new());
+        let store = Arc::new(InMemorySlashingStore::new());
         let engine = SlashingEngine::with_store(store).unwrap();
         let n = node(1);
         assert_eq!(engine.slash_points_of(&n), 0);
@@ -1164,7 +1190,7 @@ mod tests {
     fn test_with_store_preserves_state_via_sled() {
         // This test is covered more thoroughly in tests/slashing_persistence.rs
         // Here we just verify with_store loads empty state correctly.
-        let store = Box::new(InMemorySlashingStore::new());
+        let store = Arc::new(InMemorySlashingStore::new());
         let engine = SlashingEngine::with_store(store).unwrap();
         let n = node(1);
         assert_eq!(engine.slash_points_of(&n), 0);

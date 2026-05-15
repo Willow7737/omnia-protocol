@@ -34,7 +34,8 @@
 
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId,
-    NodeKeypair, SlashOutcome, SlashingEngine, VectorClock,
+    NodeKeypair, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
@@ -102,11 +103,14 @@ impl ChaosNode {
             total_nodes,
             ..Default::default()
         };
-        let mut consensus = ConsensusEngine::new(config);
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut consensus = ConsensusEngine::new(config, slashing.clone());
         consensus.register_validator(node_id, 10_000);
 
-        let mut slashing = SlashingEngine::default();
-        slashing.register_validator(node_id, 10_000);
+        let mut slashing_separate =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        slashing_separate.register_validator(node_id, 10_000);
 
         Self {
             index,
@@ -114,7 +118,7 @@ impl ChaosNode {
             keypair,
             graph: CausalGraph::new(),
             consensus,
-            slashing,
+            slashing: slashing_separate,
             crashed: false,
             drop_rate: 0.0,
             next_sequence: 0,
@@ -189,13 +193,16 @@ impl ChaosNetwork {
                 total_nodes: n,
                 ..Default::default()
             };
-            let mut consensus = ConsensusEngine::new(config);
-            let mut slashing = SlashingEngine::default();
+            let slashing =
+                SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+            let mut consensus = ConsensusEngine::new(config, slashing.clone());
+            let mut slashing_separate =
+                SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
 
             // Register all nodes as validators on this node's engines
             for &nid in &node_ids {
                 consensus.register_validator(nid, 10_000);
-                slashing.register_validator(nid, 10_000);
+                slashing_separate.register_validator(nid, 10_000);
             }
 
             nodes.push(ChaosNode {
@@ -204,7 +211,7 @@ impl ChaosNetwork {
                 keypair: keypairs[i].clone(),
                 graph: CausalGraph::new(),
                 consensus,
-                slashing,
+                slashing: slashing_separate,
                 crashed: false,
                 drop_rate: 0.0,
                 next_sequence: 0,

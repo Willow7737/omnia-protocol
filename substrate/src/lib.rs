@@ -63,6 +63,7 @@ pub const TARGET_TPS: u32 = 10_000;
 /// Target latency for finality (milliseconds)
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
+use std::path::PathBuf;
 use thiserror::Error;
 
 /// Trait for Layer 2 event processors (e.g., domain shards).
@@ -128,10 +129,25 @@ pub struct SubstrateConfig {
     pub consensus: ConsensusConfig,
     /// Total number of nodes in the network
     pub total_nodes: usize,
+    /// Directory for persistent slashing state (sled).
+    ///
+    /// If `None`, slashing state is kept in memory only (for tests).
+    /// Production nodes should always set this to ensure slash history
+    /// survives restarts.
+    pub slashing_data_dir: Option<PathBuf>,
+    /// Slash points threshold at which a validator is *slashed* (stake forfeited).
+    pub slash_threshold: u64,
+    /// Slash points threshold at which a validator is *ejected* from the validator set.
+    pub ejection_threshold: u64,
 }
 
 impl SubstrateConfig {
-    /// Create a new substrate configuration with default settings
+    /// Create a new substrate configuration with default settings.
+    ///
+    /// Slashing defaults to in-memory mode (`slashing_data_dir = None`)
+    /// with standard thresholds (slash at 500, eject at 2000).
+    /// Production callers should set `slashing_data_dir` before
+    /// constructing the substrate.
     pub fn new(node_id: NodeId) -> Self {
         let total_nodes = 4;
         Self {
@@ -142,10 +158,15 @@ impl SubstrateConfig {
                 ..Default::default()
             },
             total_nodes,
+            slashing_data_dir: None,
+            slash_threshold: DEFAULT_SLASH_THRESHOLD,
+            ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
         }
     }
 
-    /// Create a substrate configuration with a custom network size
+    /// Create a substrate configuration with a custom network size.
+    ///
+    /// Slashing defaults to in-memory mode with standard thresholds.
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
         Self {
             node_id,
@@ -155,6 +176,9 @@ impl SubstrateConfig {
                 ..Default::default()
             },
             total_nodes,
+            slashing_data_dir: None,
+            slash_threshold: DEFAULT_SLASH_THRESHOLD,
+            ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
         }
     }
 }
@@ -166,6 +190,12 @@ pub struct Substrate {
     gossip: Option<GossipProtocol>,
     consensus: ConsensusEngine,
     running: bool,
+    /// The single slashing engine shared between consensus and the API layer.
+    ///
+    /// Cloning this field yields a new `SlashingEngine` that shares the
+    /// same `Arc<dyn SlashingStore>`, so slash events recorded by consensus
+    /// are visible to the API and persisted to the same sled database.
+    pub slashing: SlashingEngine,
     /// Optional Layer 2 shard processor (e.g., domain shard router).
     ///
     /// When set, the `run()` loop will feed every newly-committed event
@@ -180,16 +210,28 @@ pub struct Substrate {
 }
 
 impl Substrate {
-    /// Create a new Substrate runtime with the given configuration
+    /// Create a new Substrate runtime with the given configuration.
+    ///
+    /// ONE `SlashingEngine` is created from the config's `slashing_data_dir`,
+    /// `slash_threshold`, and `ejection_threshold`. A clone is passed to
+    /// `ConsensusEngine::new`, and the original is stored in `self.slashing`
+    /// for the API layer to use. Both share the same `Arc<dyn SlashingStore>`,
+    /// eliminating the dual-engine gap.
     pub fn new(config: SubstrateConfig) -> Self {
+        let slashing = SlashingEngine::new(
+            config.slashing_data_dir.clone(),
+            config.slash_threshold,
+            config.ejection_threshold,
+        );
+        let consensus = ConsensusEngine::new(config.consensus.clone(), slashing.clone());
         let graph = std::sync::Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
-        let consensus = ConsensusEngine::new(config.consensus.clone());
 
         Self {
             config,
             graph,
             gossip: None,
             consensus,
+            slashing,
             running: false,
             shard_processor: None,
             unprocessed_events: Vec::new(),

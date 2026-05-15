@@ -6,7 +6,8 @@
 
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, ConsensusError, Event,
-    SlashOffense, SlashOutcome, SlashingEngine, VectorClock,
+    SlashOffense, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 
 /// Helper: create a `NodeId` from a single byte.
@@ -44,7 +45,10 @@ fn test_equivocation_triggers_slash_in_consensus() {
 
     let mut graph = CausalGraph::new();
     let config = ConsensusConfig::default();
-    let mut engine = ConsensusEngine::new(config);
+    let mut engine = ConsensusEngine::new(
+        config,
+        SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+    );
     engine.register_validator(n1, 10_000);
 
     // Insert and process the first event (sequence 0)
@@ -143,7 +147,10 @@ fn test_slashed_node_events_rejected() {
 
     let mut graph = CausalGraph::new();
     let config = ConsensusConfig::default();
-    let mut engine = ConsensusEngine::new(config);
+    let mut engine = ConsensusEngine::new(
+        config,
+        SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+    );
     engine.register_validator(n1, 10_000);
 
     // First, process a valid event
