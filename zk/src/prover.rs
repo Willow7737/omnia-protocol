@@ -1,7 +1,7 @@
 //! Groth16 prover and verifier for the Omnia rollup circuit.
 //!
 //! This module provides core operations for both the original [`RollupCircuit`]
-//! and the [`ExpandedRollupCircuit`]:
+//! and the [`crate::circuit::ExpandedRollupCircuit`]:
 //!
 //! - **Trusted setup** — Generate proving and verifying keys
 //! - **Proof creation** — Create a Groth16 proof for a given circuit instance

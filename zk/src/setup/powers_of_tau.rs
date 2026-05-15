@@ -48,9 +48,9 @@ pub const DEFAULT_TAU_DEGREE: usize = 1 << 16;
 /// along with metadata about the ceremony.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PowersOfTau {
-    /// G1 powers: [1]₁, [τ]₁, [τ²]₁, ..., [τⁿ⁻¹]₁ (serialized)
+    /// G1 powers: \[1\]₁, \[τ\]₁, \[τ²\]₁, ..., \[τⁿ⁻¹\]₁ (serialized)
     pub g1_powers: Vec<Vec<u8>>,
-    /// G2 powers: [1]₂, [τ]₂ (serialized)
+    /// G2 powers: \[1\]₂, \[τ\]₂ (serialized)
     pub g2_powers: Vec<Vec<u8>>,
     /// Number of contributions applied so far
     pub contribution_count: usize,

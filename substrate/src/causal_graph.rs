@@ -112,7 +112,7 @@ pub struct CausalGraph {
     depths: HashMap<EventId, usize>,
     /// Metadata for events that have been pruned.
     ///
-    /// When events are pruned via [`prune_finalized()`], the full `Event`
+    /// When events are pruned via [`CausalGraph::prune_finalized()`], the full `Event`
     /// is removed from `events`, but a [`PrunedEventMetadata`] is stored
     /// here so that queries can distinguish between "never existed" and
     /// "pruned".
@@ -239,14 +239,14 @@ impl CausalGraph {
     /// Get an event by its ID.
     ///
     /// Returns `None` for both non-existent and pruned events.
-    /// Use [`get_checked()`] to distinguish between these cases.
+    /// Use [`Self::get_checked()`] to distinguish between these cases.
     pub fn get(&self, event_id: &EventId) -> Option<&Event> {
         self.events.get(event_id)
     }
 
     /// Get an event by its ID with full error discrimination.
     ///
-    /// Unlike [`get()`], this method returns a `Result` that distinguishes
+    /// Unlike [`Self::get()`], this method returns a `Result` that distinguishes
     /// between three cases:
     /// - `Ok(&Event)` — the event exists and is accessible
     /// - `Err(EventPruned)` — the event was pruned (minimal metadata retained)
@@ -267,7 +267,7 @@ impl CausalGraph {
     /// Check whether an event has been pruned from the graph.
     ///
     /// Returns `true` if the event was previously in the graph but has
-    /// been pruned via [`prune_finalized()`]. Returns `false` for events
+    /// been pruned via [`Self::prune_finalized()`]. Returns `false` for events
     /// that are still present or never existed.
     pub fn is_pruned(&self, event_id: &EventId) -> bool {
         self.pruned_events.contains_key(event_id)
@@ -532,7 +532,7 @@ impl CausalGraph {
     /// Mark an event as finalized.
     ///
     /// Also records the finalized round for later use by
-    /// [`prune_finalized()`].
+    /// [`Self::prune_finalized()`].
     ///
     /// # Arguments
     ///
@@ -569,7 +569,7 @@ impl CausalGraph {
     /// Mark an event as finalized (without tracking the round).
     ///
     /// This is the legacy version that does not record the finalized round.
-    /// For proper pruning support, use [`finalize_event_with_round()`].
+    /// For proper pruning support, use [`Self::finalize_event_with_round()`].
     pub fn finalize_event(&mut self, event_id: &EventId) -> Result<(), CausalGraphError> {
         if self.pruned_events.contains_key(event_id) {
             return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
@@ -721,7 +721,7 @@ impl CausalGraph {
     ///
     /// Removes fully finalized events whose `finalized_round` is before
     /// `current_round - depth`, keeping only minimal metadata in
-    /// [`pruned_events`](Self::pruned_events). This reduces memory usage
+    /// the pruned-events index. This reduces memory usage
     /// for long-running nodes while preserving enough information to
     /// distinguish "pruned" from "never existed".
     ///

@@ -112,7 +112,7 @@ pub fn derive_keys(
     })
 }
 
-/// Derive circuit-specific keys for the [`ExpandedRollupCircuit`].
+/// Derive circuit-specific keys for the [`ExpandedRollupCircuit`](crate::circuit::ExpandedRollupCircuit).
 ///
 /// Similar to [`derive_keys`] but for the expanded circuit which
 /// supports Merkle path verification and per-event state transitions.
