@@ -39,46 +39,28 @@ jobs:
         rust: [stable]
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust (macOS — bypass broken Homebrew rustup)
+      - name: Remove conflicting Homebrew rustup (macOS)
         if: runner.os == 'macOS'
         run: |
           # The macOS runner ships a Homebrew rustup whose 'cargo' wrapper
           # is actually rustup-init and cannot proxy subcommands like
-          # 'cargo test'.  Remove it and install via rustup.rs instead.
+          # 'cargo test'.  Remove it so dtolnay/rust-toolchain can install
+          # its own working rustup without conflicts.
           brew unlink rustup 2>/dev/null || true
           rm -f /usr/local/bin/cargo /opt/homebrew/bin/cargo
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - name: Install Rust (non-macOS)
-        if: runner.os != 'macOS'
-        uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
       - name: Verify cargo works
         run: |
-          source "$HOME/.cargo/env" 2>/dev/null || true
           cargo --version
           rustc --version
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-test-${{ matrix.os }}"
-      - name: Ensure cargo on PATH (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          # Source the cargo env to guarantee PATH is set for this step's
-          # shell, and also persist it via GITHUB_PATH for subsequent steps.
-          source "$HOME/.cargo/env" 2>/dev/null || true
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          cargo --version
-      - name: Test workspace
-        run: |
-          source "$HOME/.cargo/env" 2>/dev/null || true
-          cargo test --workspace --verbose
+      - run: cargo test --workspace --verbose
         timeout-minutes: 15
-      - name: Test workspace (all features)
-        run: |
-          source "$HOME/.cargo/env" 2>/dev/null || true
-          cargo test --workspace --all-features --verbose
+      - run: cargo test --workspace --all-features --verbose
         timeout-minutes: 15
 
   audit:
