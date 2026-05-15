@@ -56,6 +56,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - name: Verify cargo works
         run: |
+          source "$HOME/.cargo/env" 2>/dev/null || true
           cargo --version
           rustc --version
       - uses: Swatinem/rust-cache@v2
@@ -63,10 +64,21 @@ jobs:
           shared-key: "omnia-test-${{ matrix.os }}"
       - name: Ensure cargo on PATH (macOS)
         if: runner.os == 'macOS'
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: cargo test --workspace --verbose
+        run: |
+          # Source the cargo env to guarantee PATH is set for this step's
+          # shell, and also persist it via GITHUB_PATH for subsequent steps.
+          source "$HOME/.cargo/env" 2>/dev/null || true
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          cargo --version
+      - name: Test workspace
+        run: |
+          source "$HOME/.cargo/env" 2>/dev/null || true
+          cargo test --workspace --verbose
         timeout-minutes: 15
-      - run: cargo test --workspace --all-features --verbose
+      - name: Test workspace (all features)
+        run: |
+          source "$HOME/.cargo/env" 2>/dev/null || true
+          cargo test --workspace --all-features --verbose
         timeout-minutes: 15
 
   audit:
