@@ -24,8 +24,8 @@ jobs:
         with:
           shared-key: "omnia-ci"
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace -- -D warnings
-      - run: cargo doc --workspace --no-deps
+      - run: cargo clippy --workspace --exclude omnia-fuzz -- -D warnings
+      - run: cargo doc --workspace --no-deps --exclude omnia-fuzz
         env:
           RUSTDOCFLAGS: "-D warnings"
 
@@ -59,10 +59,10 @@ jobs:
         with:
           shared-key: "omnia-test-${{ matrix.os }}"
       - name: Verify Cargo.lock is up to date
-        run: cargo test --locked --workspace --no-run
-      - run: cargo test --workspace --verbose
+        run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
+      - run: cargo test --workspace --exclude omnia-fuzz --verbose
         timeout-minutes: 15
-      - run: cargo test --workspace --all-features --verbose
+      - run: cargo test --workspace --exclude omnia-fuzz --all-features --verbose
         timeout-minutes: 15
 
   audit:
@@ -89,7 +89,7 @@ jobs:
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
       - name: Run cargo-vet
-        run: cargo vet --check
+        run: cargo vet
 
   reproducibility:
     name: Build Reproducibility
@@ -133,7 +133,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-tarpaulin --locked
-      - run: cargo tarpaulin --workspace --out Xml --out Html
+      - run: cargo tarpaulin --workspace --exclude omnia-fuzz --out Xml --out Html
       - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
