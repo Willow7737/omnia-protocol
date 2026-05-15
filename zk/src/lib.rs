@@ -70,4 +70,7 @@ pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey};
 pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness};
 
 // Re-export merkle types
-pub use merkle::{build_merkle_tree, compute_root_from_proof, fr_to_hash, hash_to_fr, poseidon_hash_to_fr, MerkleProof};
+pub use merkle::{
+    build_merkle_tree, compute_root_from_proof, fr_to_hash, hash_to_fr, poseidon_hash_to_fr,
+    MerkleProof,
+};

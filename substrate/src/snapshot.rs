@@ -116,8 +116,8 @@ impl StateSnapshot {
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         let slashing_state_bytes = bincode::serialize(slashing)
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
-        let nonce_state_bytes = bincode::serialize(nonces)
-            .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
+        let nonce_state_bytes =
+            bincode::serialize(nonces).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -186,8 +186,8 @@ impl StateSnapshot {
     /// Returns [`SnapshotError::Serialization`] if deserialization fails,
     /// or [`SnapshotError::UnsupportedVersion`] if the version is not `1`.
     pub fn from_bytes(data: &[u8]) -> Result<Self, SnapshotError> {
-        let snapshot: Self = bincode::deserialize(data)
-            .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
+        let snapshot: Self =
+            bincode::deserialize(data).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         if snapshot.version != SNAPSHOT_VERSION {
             return Err(SnapshotError::UnsupportedVersion(snapshot.version));
         }
@@ -249,14 +249,16 @@ mod tests {
         let slashing = SlashingState::default();
         let nonces = HashMap::new();
 
-        let snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 1)
-            .expect("take should succeed");
+        let snapshot =
+            StateSnapshot::take(&graph, &slashing, &nonces, 1).expect("take should succeed");
 
         assert_eq!(snapshot.version, 1);
         assert_eq!(snapshot.height, 1);
         assert_eq!(snapshot.event_count, 1);
 
-        snapshot.verify().expect("verify should succeed for unmodified snapshot");
+        snapshot
+            .verify()
+            .expect("verify should succeed for unmodified snapshot");
     }
 
     #[test]
@@ -265,8 +267,8 @@ mod tests {
         let slashing = SlashingState::default();
         let nonces = HashMap::new();
 
-        let mut snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 0)
-            .expect("take should succeed");
+        let mut snapshot =
+            StateSnapshot::take(&graph, &slashing, &nonces, 0).expect("take should succeed");
 
         // Tamper with the serialized data
         if !snapshot.causal_graph_bytes.is_empty() {
@@ -276,10 +278,7 @@ mod tests {
         }
 
         let result = snapshot.verify();
-        assert!(
-            result.is_err(),
-            "verify should fail for modified snapshot"
-        );
+        assert!(result.is_err(), "verify should fail for modified snapshot");
         if let Err(SnapshotError::IntegrityCheckFailed { .. }) = result {
             // expected
         } else {
@@ -297,8 +296,8 @@ mod tests {
         let mut nonces = HashMap::new();
         nonces.insert(test_node(1), 42);
 
-        let snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 1)
-            .expect("take should succeed");
+        let snapshot =
+            StateSnapshot::take(&graph, &slashing, &nonces, 1).expect("take should succeed");
 
         let bytes = snapshot.to_bytes().expect("to_bytes should succeed");
         let restored = StateSnapshot::from_bytes(&bytes).expect("from_bytes should succeed");
@@ -317,8 +316,8 @@ mod tests {
         let slashing = SlashingState::default();
         let nonces = HashMap::new();
 
-        let mut snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 0)
-            .expect("take should succeed");
+        let mut snapshot =
+            StateSnapshot::take(&graph, &slashing, &nonces, 0).expect("take should succeed");
 
         // Manually corrupt the version
         snapshot.version = 999;

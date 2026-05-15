@@ -259,8 +259,7 @@ mod tests {
             seed[0] = i;
             let contribution =
                 contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            verify_contribution(&contribution, &transcript, tau_size)
-                .expect("verification failed");
+            verify_contribution(&contribution, &transcript, tau_size).expect("verification failed");
             transcript = contribution.transcript;
         }
     }

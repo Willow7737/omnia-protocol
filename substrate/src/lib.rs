@@ -20,8 +20,8 @@
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
 
-pub mod causal_graph;
 pub mod bls;
+pub mod causal_graph;
 pub mod consensus;
 pub mod crdt;
 pub mod crypto;
@@ -36,7 +36,13 @@ pub mod vector_clock;
 pub mod vrf;
 
 // Re-export commonly used types
-pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
+pub use bls::{
+    aggregate_public_keys, aggregate_signatures, verify_aggregate, BlsError, BlsKeypair,
+    BlsPublicKey, BlsSignature,
+};
+pub use causal_graph::{
+    CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
+};
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState};
 pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
@@ -48,9 +54,12 @@ pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
     GossipStats,
 };
-pub use network::{check_version_compatibility, NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork, VersionCompatibility, VersionHandshake};
-pub use rate_limiter::RateLimiter;
 pub use keystore::{EncryptedKeyStore, KeyRotationProof, KeyStoreError};
+pub use network::{
+    check_version_compatibility, NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork,
+    VersionCompatibility, VersionHandshake,
+};
+pub use rate_limiter::RateLimiter;
 pub use slashing::{
     InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
     SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
@@ -58,11 +67,7 @@ pub use slashing::{
 };
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
-pub use vrf::{vrf_compute, vrf_verify, select_leader, VrfError, VrfOutput};
-pub use bls::{
-    aggregate_public_keys, aggregate_signatures, verify_aggregate, BlsError, BlsKeypair,
-    BlsPublicKey, BlsSignature,
-};
+pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -241,7 +241,10 @@ fn run_keygen(output_dir: &str) -> Result<()> {
 
     println!("Validator keypair generated in {}", dir.display());
     println!("  Public key: {}", hex::encode(pubkey_bytes));
-    println!("  WARNING: Protect the private key file at {:?}", privkey_path);
+    println!(
+        "  WARNING: Protect the private key file at {:?}",
+        privkey_path
+    );
 
     Ok(())
 }
@@ -274,15 +277,20 @@ fn run_setup_contribute(
     println!("Powers of Tau ceremony initialized (degree={})", degree);
 
     // Parse optional seed
-    let seed: Option<[u8; 32]> = seed_hex.map(|hex_str| {
-        let bytes = hex::decode(hex_str).context("Failed to decode hex seed")?;
-        let mut seed = [0u8; 32];
-        if bytes.len() != 32 {
-            anyhow::bail!("Seed must be exactly 32 bytes (64 hex chars), got {} bytes", bytes.len());
-        }
-        seed.copy_from_slice(&bytes);
-        Ok(seed)
-    }).transpose()?;
+    let seed: Option<[u8; 32]> = seed_hex
+        .map(|hex_str| {
+            let bytes = hex::decode(hex_str).context("Failed to decode hex seed")?;
+            let mut seed = [0u8; 32];
+            if bytes.len() != 32 {
+                anyhow::bail!(
+                    "Seed must be exactly 32 bytes (64 hex chars), got {} bytes",
+                    bytes.len()
+                );
+            }
+            seed.copy_from_slice(&bytes);
+            Ok(seed)
+        })
+        .transpose()?;
 
     // Make the contribution
     let transcript = srs.to_transcript();
@@ -294,9 +302,15 @@ fn run_setup_contribute(
         .map_err(|e| anyhow::anyhow!("Failed to apply contribution: {}", e))?;
 
     println!("Contribution accepted!");
-    println!("  Participant ID: {}", hex::encode(&contribution.participant_id[..4]));
+    println!(
+        "  Participant ID: {}",
+        hex::encode(&contribution.participant_id[..4])
+    );
     println!("  Contribution count: {}", srs.contribution_count);
-    println!("  Transcript hash: {}", hex::encode(&srs.transcript_hash[..8]));
+    println!(
+        "  Transcript hash: {}",
+        hex::encode(&srs.transcript_hash[..8])
+    );
 
     if srs.contribution_count >= min_participants {
         println!("  Ceremony has enough participants to proceed to Phase 2.");
@@ -339,7 +353,10 @@ fn run_setup_verify(degree: usize, num_contributions: usize) -> Result<()> {
 
     println!("Ceremony verification successful!");
     println!("  Total contributions: {}", srs.contribution_count);
-    println!("  Transcript hash: {}", hex::encode(&srs.transcript_hash[..8]));
+    println!(
+        "  Transcript hash: {}",
+        hex::encode(&srs.transcript_hash[..8])
+    );
     println!("  G1 powers: {}", srs.g1_powers.len());
     println!("  G2 powers: {}", srs.g2_powers.len());
 

@@ -151,8 +151,7 @@ pub fn vrf_verify(
         .try_into()
         .map_err(|_| VrfError::VerificationFailed("Proof must be 64 bytes".to_string()))?;
 
-    let signature =
-        Signature::from_bytes(&proof_bytes);
+    let signature = Signature::from_bytes(&proof_bytes);
     // ed25519-dalek 2.x Signature::from_bytes is infallible for [u8; 64]
 
     // Verify the signature against the input
@@ -258,7 +257,7 @@ pub fn select_leader(
         }
     }
 
-    best_leader.ok_or_else(|| VrfError::NoEligibleLeader(round_number))
+    best_leader.ok_or(VrfError::NoEligibleLeader(round_number))
 }
 
 #[cfg(test)]

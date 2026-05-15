@@ -500,11 +500,7 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
                     //
                     // Reference: Grassi et al. (2019), "Poseidon: A New Hash Function
                     // for Zero-Knowledge Proof Systems", https://eprint.iacr.org/2019/458
-                    current = crate::poseidon::poseidon_hash(
-                        cs.clone(),
-                        &left,
-                        &right,
-                    )?;
+                    current = crate::poseidon::poseidon_hash(cs.clone(), &left, &right)?;
                 }
             }
 

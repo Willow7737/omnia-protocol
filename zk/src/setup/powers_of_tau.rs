@@ -182,17 +182,10 @@ impl PowersOfTau {
 /// let srs = run_ceremony(1024, 3)?;
 /// assert_eq!(srs.contribution_count, 3);
 /// ```
-pub fn run_ceremony(
-    degree: usize,
-    num_participants: usize,
-) -> Result<PowersOfTau, SetupError> {
+pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTau, SetupError> {
     let mut accumulator = PowersOfTau::new(degree);
 
-    tracing::info!(
-        degree,
-        num_participants,
-        "Starting Powers of Tau ceremony"
-    );
+    tracing::info!(degree, num_participants, "Starting Powers of Tau ceremony");
 
     for i in 0..num_participants {
         let mut seed = [0u8; 32];

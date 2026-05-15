@@ -172,12 +172,11 @@ impl ShardRouter {
 
         // Reject oversized payloads early, before any deserialization work
         if event.payload.len() > omnia_substrate::event::MAX_PAYLOAD_SIZE {
-            return Err(ShardError::ValidationFailed(
-                format!("Payload too large: {} bytes (max {})",
-                    event.payload.len(),
-                    omnia_substrate::event::MAX_PAYLOAD_SIZE
-                )
-            ));
+            return Err(ShardError::ValidationFailed(format!(
+                "Payload too large: {} bytes (max {})",
+                event.payload.len(),
+                omnia_substrate::event::MAX_PAYLOAD_SIZE
+            )));
         }
 
         let payload = ShardPayload::from_bytes(&event.payload)

@@ -61,7 +61,9 @@ pub mod powers_of_tau;
 use thiserror::Error;
 
 // Re-export key types for convenience
-pub use circuit_setup::{derive_keys, derive_keys_expanded, CircuitKeyPair, verify_key_consistency};
+pub use circuit_setup::{
+    derive_keys, derive_keys_expanded, verify_key_consistency, CircuitKeyPair,
+};
 pub use contribution::{contribute, verify_contribution, Contribution};
 pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
 

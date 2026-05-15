@@ -52,22 +52,18 @@ impl Default for InMemoryNonceStore {
 
 impl NonceStore for InMemoryNonceStore {
     fn load(&self) -> Result<HashMap<[u8; 32], u64>, NonceStoreError> {
-        let nonces = self.nonces.lock().map_err(|e| {
-            NonceStoreError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
+        let nonces = self
+            .nonces
+            .lock()
+            .map_err(|e| NonceStoreError::Io(std::io::Error::other(e.to_string())))?;
         Ok(nonces.clone())
     }
 
     fn save(&self, nonces: &HashMap<[u8; 32], u64>) -> Result<(), NonceStoreError> {
-        let mut stored = self.nonces.lock().map_err(|e| {
-            NonceStoreError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
+        let mut stored = self
+            .nonces
+            .lock()
+            .map_err(|e| NonceStoreError::Io(std::io::Error::other(e.to_string())))?;
         *stored = nonces.clone();
         Ok(())
     }

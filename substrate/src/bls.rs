@@ -40,8 +40,8 @@
 //!   <https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#bls-signatures>
 
 use blst::min_sig::{
-    AggregatePublicKey, AggregateSignature, PublicKey as BlstPublicKey,
-    SecretKey as BlstSecretKey, Signature as BlstSignature,
+    AggregatePublicKey, AggregateSignature, PublicKey as BlstPublicKey, SecretKey as BlstSecretKey,
+    Signature as BlstSignature,
 };
 use blst::BLST_ERROR;
 use serde::{Deserialize, Serialize};
@@ -572,20 +572,22 @@ mod tests {
         let sig2 = kp2.sign(msg);
         let sig3 = kp3.sign(msg);
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2, sig3])
-            .expect("sig aggregation should succeed");
+        let agg_sig =
+            aggregate_signatures(&[sig1, sig2, sig3]).expect("sig aggregation should succeed");
         let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key(), kp3.public_key()])
             .expect("pk aggregation should succeed");
 
-        verify_aggregate(msg, &agg_pk, &agg_sig)
-            .expect("aggregate verification should succeed");
+        verify_aggregate(msg, &agg_pk, &agg_sig).expect("aggregate verification should succeed");
     }
 
     #[test]
     fn test_bls_aggregate_empty_fails() {
         let result = aggregate_signatures(&[]);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), BlsError::AggregationFailed(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            BlsError::AggregationFailed(_)
+        ));
 
         let result = aggregate_public_keys(&[]);
         assert!(result.is_err());
@@ -598,8 +600,7 @@ mod tests {
         let sig = kp.sign(msg);
 
         let agg_sig = aggregate_signatures(&[sig.clone()]).expect("single sig aggregation");
-        let agg_pk =
-            aggregate_public_keys(&[kp.public_key()]).expect("single pk aggregation");
+        let agg_pk = aggregate_public_keys(&[kp.public_key()]).expect("single pk aggregation");
 
         verify_aggregate(msg, &agg_pk, &agg_sig).expect("single aggregate should verify");
     }

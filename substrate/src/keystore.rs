@@ -138,9 +138,7 @@ impl EncryptedKeyStore {
         let seckey_path = dir.join("seckey.enc");
 
         if pubkey_path.exists() || seckey_path.exists() {
-            return Err(KeyStoreError::AlreadyExists(
-                dir.display().to_string(),
-            ));
+            return Err(KeyStoreError::AlreadyExists(dir.display().to_string()));
         }
 
         let keypair = generate_keypair();
@@ -194,8 +192,8 @@ impl EncryptedKeyStore {
         }
         let mut pk_arr = [0u8; 32];
         pk_arr.copy_from_slice(&pubkey_bytes);
-        let public_key =
-            NodePublicKey::from_bytes(&pk_arr).map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
+        let public_key = NodePublicKey::from_bytes(&pk_arr)
+            .map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
 
         // Read and decrypt secret key
         let encrypted_seckey = std::fs::read(&seckey_path)?;
@@ -245,7 +243,11 @@ impl EncryptedKeyStore {
     ///
     /// - [`KeyStoreError::IncorrectPassphrase`] if the old passphrase is wrong.
     /// - [`KeyStoreError::Io`] if key files cannot be written.
-    pub fn rotate(&self, old_passphrase: &str, new_passphrase: &str) -> KeyStoreResult<KeyRotationProof> {
+    pub fn rotate(
+        &self,
+        old_passphrase: &str,
+        new_passphrase: &str,
+    ) -> KeyStoreResult<KeyRotationProof> {
         // Ensure we have the keypair loaded
         let old_keypair = self
             .keypair
@@ -260,7 +262,9 @@ impl EncryptedKeyStore {
         let new_pubkey = new_keypair.verifying_key();
 
         // Sign the new public key with the old private key
-        let signature = loaded.keypair.as_ref()
+        let signature = loaded
+            .keypair
+            .as_ref()
             .ok_or_else(|| KeyStoreError::Crypto("Loaded keypair missing".to_string()))?
             .sign(&new_pubkey.to_bytes());
 
@@ -358,8 +362,8 @@ mod tests {
     #[test]
     fn test_create_key_store() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "test-passphrase")
-            .expect("create key store");
+        let store =
+            EncryptedKeyStore::create(dir.path(), "test-passphrase").expect("create key store");
         assert!(dir.path().join("pubkey").exists());
         assert!(dir.path().join("seckey.enc").exists());
         assert!(store.keypair.is_some());
@@ -386,10 +390,7 @@ mod tests {
         EncryptedKeyStore::create(dir.path(), "correct-passphrase").expect("create");
 
         let result = EncryptedKeyStore::load(dir.path(), "wrong-passphrase");
-        assert!(
-            result.is_err(),
-            "Wrong passphrase should fail to load"
-        );
+        assert!(result.is_err(), "Wrong passphrase should fail to load");
     }
 
     #[test]
@@ -418,7 +419,8 @@ mod tests {
         assert!(proof.verify(), "Rotation proof should be valid");
 
         // Load with new passphrase should work
-        let loaded = EncryptedKeyStore::load(dir.path(), "new-pass").expect("load with new passphrase");
+        let loaded =
+            EncryptedKeyStore::load(dir.path(), "new-pass").expect("load with new passphrase");
         assert_eq!(loaded.public_key.to_bytes(), proof.new_pubkey);
 
         // Load with old passphrase should fail

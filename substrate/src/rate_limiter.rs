@@ -128,7 +128,10 @@ mod tests {
 
         // Should allow up to 200 events (burst capacity)
         for _ in 0..200 {
-            assert!(limiter.allow(&peer_id), "Should allow within burst capacity");
+            assert!(
+                limiter.allow(&peer_id),
+                "Should allow within burst capacity"
+            );
         }
     }
 
@@ -140,7 +143,10 @@ mod tests {
 
         // Exhaust the 5 tokens
         for _ in 0..5 {
-            assert!(limiter.allow(&peer_id), "Should allow within burst capacity");
+            assert!(
+                limiter.allow(&peer_id),
+                "Should allow within burst capacity"
+            );
         }
 
         // 6th event should be dropped
@@ -207,10 +213,7 @@ mod tests {
         limiter.reset(&peer_id);
 
         // Should now allow events again (fresh bucket with full tokens)
-        assert!(
-            limiter.allow(&peer_id),
-            "Should allow after reset"
-        );
+        assert!(limiter.allow(&peer_id), "Should allow after reset");
     }
 
     /// Test: peer_count tracks the number of peers.

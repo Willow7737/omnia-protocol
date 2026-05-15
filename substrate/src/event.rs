@@ -14,9 +14,9 @@ use crate::crypto::{NodeKeypair, NodePublicKey, Signature as EdSignature, Signer
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use subtle::ConstantTimeEq;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 /// Maximum allowed clock drift for event timestamps (5 minutes in milliseconds).
 /// Events with timestamps more than this far in the future are rejected.
@@ -302,7 +302,7 @@ impl Event {
         let expected_creator = blake3::hash(&self.creator_pubkey);
         if self.creator.ct_ne(expected_creator.as_bytes()).into() {
             return Err(EventValidationError::CreatorPubkeyMismatch {
-                claimed: hex::encode(&self.creator),
+                claimed: hex::encode(self.creator),
                 derived: hex::encode(expected_creator.as_bytes()),
             });
         }
@@ -878,7 +878,7 @@ mod tests {
         // must manually tamper the creator field to simulate the old vulnerability.
         let mut tampered = event.clone();
         tampered.creator = fake_creator; // override with a non-derived identity
-        // Recompute hash so the tampered event passes hash integrity
+                                         // Recompute hash so the tampered event passes hash integrity
         tampered.id = tampered.compute_hash();
         // Re-sign with the keypair to fix the signature
         let sig = keypair.sign(&tampered.id);
@@ -886,7 +886,10 @@ mod tests {
 
         let result = tampered.validate();
         assert!(
-            matches!(result, Err(EventValidationError::CreatorPubkeyMismatch { .. })),
+            matches!(
+                result,
+                Err(EventValidationError::CreatorPubkeyMismatch { .. })
+            ),
             "Expected CreatorPubkeyMismatch, got {:?}",
             result
         );
@@ -942,7 +945,11 @@ mod tests {
         event.sign_with_keypair(&keypair);
 
         let result = event.validate();
-        assert!(result.is_ok(), "Payload at exactly MAX_PAYLOAD_SIZE should accept, got {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Payload at exactly MAX_PAYLOAD_SIZE should accept, got {:?}",
+            result
+        );
     }
 
     /// Test that an event with payload = MAX_PAYLOAD_SIZE + 1 is rejected with PayloadTooLarge.
@@ -972,8 +979,14 @@ mod tests {
             derived: "bb".to_string(),
         };
         let msg = format!("{}", err);
-        assert!(msg.contains("aa"), "Error message should contain claimed value");
-        assert!(msg.contains("bb"), "Error message should contain derived value");
+        assert!(
+            msg.contains("aa"),
+            "Error message should contain claimed value"
+        );
+        assert!(
+            msg.contains("bb"),
+            "Error message should contain derived value"
+        );
     }
 
     /// Test that the PayloadTooLarge error variant has the correct display message.
@@ -985,6 +998,9 @@ mod tests {
         };
         let msg = format!("{}", err);
         assert!(msg.contains("2000000"), "Error message should contain size");
-        assert!(msg.contains(&MAX_PAYLOAD_SIZE.to_string()), "Error message should contain max");
+        assert!(
+            msg.contains(&MAX_PAYLOAD_SIZE.to_string()),
+            "Error message should contain max"
+        );
     }
 }

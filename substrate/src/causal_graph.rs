@@ -549,9 +549,7 @@ impl CausalGraph {
         round: u64,
     ) -> Result<(), CausalGraphError> {
         if self.pruned_events.contains_key(event_id) {
-            return Err(CausalGraphError::EventPruned(hex::encode(
-                &event_id[..8],
-            )));
+            return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
         }
         if let Some(event) = self.events.get_mut(event_id) {
             if event.status != EventStatus::Finalized {
@@ -574,9 +572,7 @@ impl CausalGraph {
     /// For proper pruning support, use [`finalize_event_with_round()`].
     pub fn finalize_event(&mut self, event_id: &EventId) -> Result<(), CausalGraphError> {
         if self.pruned_events.contains_key(event_id) {
-            return Err(CausalGraphError::EventPruned(hex::encode(
-                &event_id[..8],
-            )));
+            return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
         }
         if let Some(event) = self.events.get_mut(event_id) {
             if event.status != EventStatus::Finalized {
@@ -1599,6 +1595,9 @@ mod tests {
     fn test_substrate_config_default_pruning_depth() {
         use crate::SubstrateConfig;
         let config = SubstrateConfig::new(test_node(1));
-        assert_eq!(config.pruning_depth, 0, "Default pruning_depth should be 0 (archive mode)");
+        assert_eq!(
+            config.pruning_depth, 0,
+            "Default pruning_depth should be 0 (archive mode)"
+        );
     }
 }

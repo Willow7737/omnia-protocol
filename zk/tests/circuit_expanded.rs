@@ -1,14 +1,14 @@
 //! Integration tests for the expanded Groth16 ZK circuit.
 //!
 //! These tests verify the full lifecycle of the expanded rollup circuit:
-//! trusted setup → proof creation → proof verification, including
+//! trusted setup -> proof creation -> proof verification, including
 //! edge cases like tampered events, wrong intermediate roots,
 //! single-event batches, empty batches, and proof size consistency.
 
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use omnia_zk::circuit::ExpandedRollupCircuit;
-use omnia_zk::merkle::{fr_to_hash, MerkleProof};
+use omnia_zk::merkle::{fr_to_hash, poseidon_hash_to_fr, MerkleProof};
 use omnia_zk::prover::{
     create_expanded_proof, generate_trusted_setup_expanded, serialize_proof, verify_proof,
 };
@@ -16,13 +16,74 @@ use omnia_zk::prover::{
 /// Fixed Merkle proof depth used in tests.
 const MERKLE_DEPTH: usize = 3;
 
+/// Build a Poseidon-based Merkle tree from event hashes.
+///
+/// Constructs a binary Merkle tree where each internal node is computed as
+/// `Poseidon(left_child, right_child)` using [`poseidon_hash_to_fr`]. Leaves
+/// are padded with `Fr::zero()` to fill `2^depth` slots.
+///
+/// # Returns
+///
+/// A tuple of `(root, proofs)` where `root` is the Merkle root as an `Fr`
+/// element, and `proofs` contains an inclusion proof for each event hash.
+fn build_poseidon_merkle_tree(event_hashes: &[Fr], depth: usize) -> (Fr, Vec<MerkleProof>) {
+    let num_leaves = 1usize << depth;
+    assert!(
+        event_hashes.len() <= num_leaves,
+        "too many events for merkle depth"
+    );
+
+    // Initialize leaves, padding with zeros
+    let mut current_level: Vec<Fr> = event_hashes.to_vec();
+    current_level.resize(num_leaves, Fr::zero());
+
+    // Build the tree bottom-up, storing each level for proof generation
+    let mut levels: Vec<Vec<Fr>> = vec![current_level.clone()];
+    while current_level.len() > 1 {
+        let mut next_level = Vec::new();
+        for i in (0..current_level.len()).step_by(2) {
+            let left = current_level[i];
+            let right = current_level[i + 1];
+            next_level.push(poseidon_hash_to_fr(left, right));
+        }
+        current_level = next_level.clone();
+        levels.push(next_level);
+    }
+
+    let root = current_level[0];
+
+    // Generate proofs for each event
+    let mut proofs = Vec::new();
+    for (idx, _) in event_hashes.iter().enumerate() {
+        let mut siblings = Vec::new();
+        let mut directions = Vec::new();
+        let mut pos = idx;
+
+        for level in 0..depth {
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling = levels[level][sibling_pos];
+            siblings.push(fr_to_hash(&sibling));
+            // go_left = true means "sibling is on the left".
+            // If current position is odd (right child), sibling is on the left.
+            directions.push(pos % 2 == 1);
+            pos /= 2;
+        }
+
+        proofs.push(MerkleProof {
+            siblings,
+            directions,
+        });
+    }
+
+    (root, proofs)
+}
+
 /// Helper: build a consistent test batch for `num_events` events.
 ///
 /// Creates event hashes, Merkle proofs, intermediate roots, and a commitment
 /// such that all circuit constraints are satisfied. The Merkle proofs are
-/// constructed so that each event's path verification produces the same
-/// `event_commitment` value when using the circuit's simplified hash
-/// (field addition).
+/// constructed using Poseidon hash (matching the on-circuit hash function),
+/// and intermediate roots are computed using Poseidon state transitions.
 ///
 /// # Returns
 ///
@@ -50,46 +111,18 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
     // Generate distinct event hashes (small non-zero values)
     let event_hashes: Vec<Fr> = (0..num_events).map(|i| Fr::from((i as u64) + 10)).collect();
 
-    // Choose an event commitment value
-    let event_commitment = Fr::from(9999u64);
+    // Build Poseidon-based Merkle tree — the root is the event_commitment
+    let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
 
-    // For each event, construct a Merkle proof such that:
-    //   event_hash + sum(siblings) == event_commitment
-    //
-    // We set the first sibling to (event_commitment - event_hash) and the
-    // rest to zero. With the circuit's simplified hash (addition), this
-    // ensures all paths converge to the same commitment.
-    let merkle_proofs: Vec<MerkleProof> = event_hashes
-        .iter()
-        .map(|event_hash| {
-            let first_sibling = event_commitment - event_hash;
-            let first_sibling_bytes = fr_to_hash(&first_sibling);
-
-            let mut siblings = vec![first_sibling_bytes];
-            for _ in 1..MERKLE_DEPTH {
-                siblings.push([0u8; 32]);
-            }
-
-            // Directions don't affect the result with addition (commutative),
-            // but we set them to alternating values for realism.
-            let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
-
-            MerkleProof {
-                siblings,
-                directions,
-            }
-        })
-        .collect();
-
-    // Compute intermediate roots:
+    // Compute intermediate roots using Poseidon hash:
     //   intermediate_roots[0] = old_root
-    //   intermediate_roots[i+1] = intermediate_roots[i] + event_hash[i]
+    //   intermediate_roots[i+1] = Poseidon(intermediate_roots[i], event_hash[i])
     //   new_root = intermediate_roots[num_events]
     let old_root = Fr::from(42u64);
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = current_root + event_hash;
+        current_root = poseidon_hash_to_fr(current_root, *event_hash);
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];
@@ -119,30 +152,13 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
         return build_valid_batch(0);
     }
 
-    let event_commitment = Fr::from(9999u64);
-
-    let merkle_proofs: Vec<MerkleProof> = event_hashes
-        .iter()
-        .map(|event_hash| {
-            let first_sibling = event_commitment - event_hash;
-            let first_sibling_bytes = fr_to_hash(&first_sibling);
-            let mut siblings = vec![first_sibling_bytes];
-            for _ in 1..MERKLE_DEPTH {
-                siblings.push([0u8; 32]);
-            }
-            let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
-            MerkleProof {
-                siblings,
-                directions,
-            }
-        })
-        .collect();
+    let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
 
     let old_root = Fr::from(42u64);
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = current_root + event_hash;
+        current_root = poseidon_hash_to_fr(current_root, *event_hash);
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];
@@ -162,7 +178,7 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: Valid batch → proof verifies
+// Test 1: Valid batch -> proof verifies
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -179,7 +195,7 @@ fn test_valid_batch_proof_verifies() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2: Tampered event → proof fails (different event hash)
+// Test 2: Tampered event -> proof fails (different event hash)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -212,7 +228,7 @@ fn test_tampered_event_proof_fails() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 3: Wrong intermediate root → proof fails
+// Test 3: Wrong intermediate root -> proof fails
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -258,32 +274,17 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
     let num_events = 2;
 
     let event_hashes: Vec<Fr> = vec![Fr::from(10u64), Fr::from(11u64)];
-    let event_commitment = Fr::from(9999u64);
 
-    let merkle_proofs: Vec<MerkleProof> = event_hashes
-        .iter()
-        .map(|event_hash| {
-            let first_sibling = event_commitment - event_hash;
-            let first_sibling_bytes = fr_to_hash(&first_sibling);
-            let mut siblings = vec![first_sibling_bytes];
-            for _ in 1..MERKLE_DEPTH {
-                siblings.push([0u8; 32]);
-            }
-            let directions: Vec<bool> = (0..MERKLE_DEPTH).map(|j| j % 2 == 0).collect();
-            MerkleProof {
-                siblings,
-                directions,
-            }
-        })
-        .collect();
+    // Build proper Poseidon-based Merkle proofs
+    let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
 
     let old_root = Fr::from(42u64);
 
-    // Compute CORRECT intermediate roots
+    // Compute CORRECT intermediate roots using Poseidon hash
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = current_root + event_hash;
+        current_root = poseidon_hash_to_fr(current_root, *event_hash);
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];
@@ -316,7 +317,7 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 4: Single-event batch → proof verifies
+// Test 4: Single-event batch -> proof verifies
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -333,7 +334,7 @@ fn test_single_event_batch_proof_verifies() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 5: Empty batch → old_root == new_root → proof verifies
+// Test 5: Empty batch -> old_root == new_root -> proof verifies
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -389,7 +390,7 @@ fn test_proof_size_is_constant_regardless_of_event_count() {
 
     // Verify that the proof size is reasonable for a Groth16 proof on Bn254
     // A Groth16 proof has 2 G1 points + 1 G2 point on Bn254:
-    // - G1 uncompressed: 64 bytes each → 128 bytes
+    // - G1 uncompressed: 64 bytes each -> 128 bytes
     // - G2 uncompressed: 128 bytes
     // Total: 256 bytes (uncompressed)
     assert!(
@@ -400,7 +401,7 @@ fn test_proof_size_is_constant_regardless_of_event_count() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 7: Wrong public input (different new_root) → proof fails
+// Test 7: Wrong public input (different new_root) -> proof fails
 // ---------------------------------------------------------------------------
 
 #[test]

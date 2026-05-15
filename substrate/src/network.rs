@@ -83,8 +83,14 @@ pub fn check_version_compatibility(local: &str, remote: &str) -> VersionCompatib
     let local_parts: Vec<&str> = local.split('.').collect();
     let remote_parts: Vec<&str> = remote.split('.').collect();
 
-    let local_major = local_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-    let remote_major = remote_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let local_major = local_parts
+        .first()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let remote_major = remote_parts
+        .first()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
 
     if local_major != remote_major {
         VersionCompatibility::Incompatible {

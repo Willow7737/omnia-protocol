@@ -85,8 +85,8 @@ pub fn derive_keys(
     );
 
     // Generate the trusted setup for this specific circuit
-    let (pk, vk) =
-        generate_trusted_setup(circuit).map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
+    let (pk, vk) = generate_trusted_setup(circuit)
+        .map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
 
     // Serialize the proving key
     let mut pk_bytes = Vec::new();

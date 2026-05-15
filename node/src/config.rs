@@ -119,8 +119,7 @@ impl NodeConfigFile {
     /// - `anyhow::Error` if the TOML is syntactically invalid or does not
     ///   match the `NodeConfigFile` schema.
     pub fn from_toml(toml_str: &str) -> Result<Self> {
-        toml::from_str(toml_str)
-            .with_context(|| "Failed to parse TOML configuration".to_string())
+        toml::from_str(toml_str).with_context(|| "Failed to parse TOML configuration".to_string())
     }
 }
 
@@ -427,10 +426,7 @@ mod tests {
             unknown_field = "should fail"
         "#;
         let result = NodeConfigFile::from_toml(toml);
-        assert!(
-            result.is_err(),
-            "Unknown fields should cause a parse error"
-        );
+        assert!(result.is_err(), "Unknown fields should cause a parse error");
     }
 
     #[test]

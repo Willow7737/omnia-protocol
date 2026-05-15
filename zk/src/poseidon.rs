@@ -199,6 +199,7 @@ fn mds_multiply_gadget(mds: &[[Fr; T]; T], state: &[FpVar<Fr>; T]) -> [FpVar<Fr>
 /// - **Partial round**: S-box applied to the first element only, then MDS, then ARK
 ///
 /// The round structure is: [R_F/2 full] [R_P partial] [R_F/2 full]
+#[allow(clippy::needless_range_loop)]
 fn poseidon_permutation(state: &mut [Fr; T]) {
     let mds = generate_mds_matrix();
     let rc = generate_round_constants();
@@ -267,6 +268,7 @@ fn poseidon_permutation(state: &mut [Fr; T]) {
 /// # Constraints
 ///
 /// Uses approximately 243 multiplication constraints (see module-level docs).
+#[allow(clippy::needless_range_loop)]
 fn poseidon_permutation_gadget(
     _cs: ConstraintSystemRef<Fr>,
     state: &mut [FpVar<Fr>; T],
@@ -411,11 +413,7 @@ pub fn poseidon_hash(
     left: &FpVar<Fr>,
     right: &FpVar<Fr>,
 ) -> Result<FpVar<Fr>, SynthesisError> {
-    let mut state: [FpVar<Fr>; T] = [
-        FpVar::constant(Fr::zero()),
-        left.clone(),
-        right.clone(),
-    ];
+    let mut state: [FpVar<Fr>; T] = [FpVar::constant(Fr::zero()), left.clone(), right.clone()];
 
     poseidon_permutation_gadget(cs, &mut state)?;
 
@@ -438,7 +436,11 @@ mod tests {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
         let hash = poseidon_hash_offchain(a, b);
-        assert_ne!(hash, Fr::zero(), "Poseidon hash of non-zero inputs should be non-zero");
+        assert_ne!(
+            hash,
+            Fr::zero(),
+            "Poseidon hash of non-zero inputs should be non-zero"
+        );
     }
 
     #[test]

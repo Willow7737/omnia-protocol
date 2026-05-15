@@ -315,7 +315,11 @@ mod tests {
         let a = Fr::from(1u64);
         let b = Fr::from(2u64);
         let hash = poseidon_hash_to_fr(a, b);
-        assert_ne!(hash, Fr::zero(), "Poseidon hash of non-zero inputs should be non-zero");
+        assert_ne!(
+            hash,
+            Fr::zero(),
+            "Poseidon hash of non-zero inputs should be non-zero"
+        );
     }
 
     #[test]
@@ -324,6 +328,9 @@ mod tests {
         let b = Fr::from(123u64);
         let hash_ab = poseidon_hash_to_fr(a, b);
         let hash_ba = poseidon_hash_to_fr(b, a);
-        assert_ne!(hash_ab, hash_ba, "poseidon_hash_to_fr should not be commutative");
+        assert_ne!(
+            hash_ab, hash_ba,
+            "poseidon_hash_to_fr should not be commutative"
+        );
     }
 }
