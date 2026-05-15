@@ -1,41 +1,5 @@
-# cargo-vet audits for Omnia Protocol
-#
-# This file records our own audit results for dependency crates.
-# Each audit certifies that a specific version of a crate meets
-# the specified criteria (safe-to-deploy, safe-to-run, etc.).
-#
-# Audits should be added after manually reviewing the crate's source
-# code for:
-# - Unsafe code usage and correctness
-# - File system or network access
-# - Use of environment variables or process spawning
-# - Obfuscation or anti-analysis techniques
-#
-# For more information: https://mozilla.github.io/cargo-vet/
 
-[[audits.omnia-substrate]]
-who = "Omnia Protocol Contributors"
-criteria = "safe-to-deploy"
-version = "0.1.0"
-notes = "Core substrate layer — our own code."
-
-[[audits.omnia-shards]]
-who = "Omnia Protocol Contributors"
-criteria = "safe-to-deploy"
-version = "0.1.0"
-notes = "Layer 2 shard router — our own code."
-
-[[audits.omnia-zk]]
-who = "Omnia Protocol Contributors"
-criteria = "safe-to-deploy"
-version = "0.1.0"
-notes = "ZK rollup module — our own code."
-
-[[audits.omnia-economics]]
-who = "Omnia Protocol Contributors"
-criteria = "safe-to-deploy"
-version = "0.1.0"
-notes = "Economics module — our own code."
+# cargo-vet audits file
 
 [[audits.omnia-binding]]
 who = "Omnia Protocol Contributors"
@@ -43,8 +7,44 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "Physical world binding — our own code."
 
+[[audits.omnia-chaos-tests]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-run"
+version = "0.1.0"
+notes = "Chaos testing suite — our own code, test-only."
+
+[[audits.omnia-economics]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "Economics module — our own code."
+
+[[audits.omnia-fuzz]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-run"
+version = "0.1.0"
+notes = "Fuzz testing crate — our own code, test-only."
+
 [[audits.omnia-node]]
 who = "Omnia Protocol Contributors"
 criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "Node binary — our own code."
+
+[[audits.omnia-shards]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "Layer 2 shard router — our own code."
+
+[[audits.omnia-substrate]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "Core substrate layer — our own code."
+
+[[audits.omnia-zk]]
+who = "Omnia Protocol Contributors"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "ZK rollup module — our own code."
