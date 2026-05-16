@@ -169,7 +169,10 @@ impl BlsKeypair {
         let sk = BlstSecretKey::key_gen(ikm, &[])
             .expect("BLS key generation should not fail with valid input");
         let pk = sk.sk_to_pk();
-        Self { secret_key: sk, public_key: pk }
+        Self {
+            secret_key: sk,
+            public_key: pk,
+        }
     }
 
     /// Generate a BLS keypair with cryptographically random entropy.
@@ -179,7 +182,10 @@ impl BlsKeypair {
         let sk = BlstSecretKey::key_gen(&ikm, &[])
             .expect("BLS key generation should not fail with valid input");
         let pk = sk.sk_to_pk();
-        Self { secret_key: sk, public_key: pk }
+        Self {
+            secret_key: sk,
+            public_key: pk,
+        }
     }
 
     /// Get the serializable public key.

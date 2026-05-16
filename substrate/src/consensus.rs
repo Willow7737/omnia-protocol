@@ -82,7 +82,7 @@ impl Default for ConsensusConfig {
     }
 
     /// Create a config with a cryptographically random round seed.
-    pub fn with_random_seed(total_nodes: usize) -> Self {
+    fn with_random_seed(total_nodes: usize) -> Self {
         let mut seed = [0u8; 32];
         getrandom::getrandom(&mut seed).expect("Failed to generate random seed");
         Self {
@@ -1106,11 +1106,14 @@ mod tests {
         let mut graph = CausalGraph::new();
 
         // Create and process genesis events for round 0
-        let nodes: Vec<_> = (0..4).map(|i| {
-            let mut n = [0u8; 32]; n[0] = i;
-            let kp = generate_keypair();
-            (n, kp)
-        }).collect();
+        let nodes: Vec<_> = (0..4)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                let kp = generate_keypair();
+                (n, kp)
+            })
+            .collect();
 
         let mut genesis_ids = Vec::new();
         for (node_id, keypair) in &nodes {
@@ -1131,7 +1134,10 @@ mod tests {
         // (except possibly genesis via the supermajority path)
         // The key invariant: effective_delay must NEVER be 0 when commit_delay_rounds > 0
         // except for the explicit genesis supermajority path
-        assert!(engine.committed_count() <= 4, "Only genesis should be committable at round 0");
+        assert!(
+            engine.committed_count() <= 4,
+            "Only genesis should be committable at round 0"
+        );
     }
 }
 

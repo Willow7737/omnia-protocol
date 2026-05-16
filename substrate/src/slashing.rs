@@ -228,7 +228,11 @@ pub trait SlashingStore: Send + Sync {
     ///
     /// Returns [`SlashingStoreError`] if the state cannot be loaded or saved,
     /// or if the validator has no slash count to decrement.
-    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError>;
+    fn decrement_slash_count_by(
+        &self,
+        validator: &[u8; 32],
+        amount: u64,
+    ) -> Result<(), SlashingStoreError>;
 
     /// Decrement the slash count for a specific validator by the minimum offense amount.
     ///
@@ -334,7 +338,11 @@ impl SlashingStore for SledSlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(
+        &self,
+        validator: &[u8; 32],
+        amount: u64,
+    ) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
@@ -419,7 +427,11 @@ impl SlashingStore for InMemorySlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(
+        &self,
+        validator: &[u8; 32],
+        amount: u64,
+    ) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
