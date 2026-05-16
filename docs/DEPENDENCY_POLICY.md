@@ -1,5 +1,8 @@
 # Dependency Policy
 
+**Version:** v4.0.0
+**Last Updated:** 2026-03-05
+
 ## Pinning
 
 - All dependencies MUST be pinned via `Cargo.lock`
@@ -38,6 +41,26 @@ New dependencies MUST be reviewed for:
 - Crates with obfuscated or minified source code
 - Crates that download code at build time (supply chain attack risk)
 
+## Alpha-Quality Dependencies
+
+The following dependencies are known to be alpha-quality and require special attention:
+
+### sled 0.34
+
+**Used by:** `omnia-node` (via `omnia-substrate` and `omnia-shards`)
+
+**Purpose:** Embedded key-value database for persistent slashing state (`SledSlashingStore`) and nonce tracking (`SledNonceStore`).
+
+**Risk:** The `node/Cargo.toml` explicitly warns: "sled 0.34 is alpha-quality. Production deployments should migrate to rocksdb or redb." Known issues include:
+- Crash consistency problems (data loss on power failure)
+- No ongoing maintenance by the original author
+- Not recommended for production by its own author
+- No forward compatibility guarantee for on-disk format
+
+**Mitigation:** The `omnia-node` binary configures sled with explicit data directories and handles open failures gracefully. A migration to rocksdb or redb is planned (see `docs/OPERATIONS.md`).
+
+**Action required:** Before mainnet, sled MUST be replaced with a production-quality database backend (rocksdb, redb, or similar). The `SlashingStore` and `NonceStore` traits provide the abstraction layer for this migration.
+
 ## Supply Chain Auditing
 
 We use two tools for supply chain security:
@@ -60,6 +83,32 @@ in `supply-chain/audits.toml`.
 ```bash
 cargo vet --check
 ```
+
+### CycloneDX SBOM
+
+Generate a Software Bill of Materials for supply chain transparency:
+
+```bash
+./scripts/generate-sbom.sh
+```
+
+This produces CycloneDX JSON and XML files in the `sbom/` directory.
+
+## Node Crate Specific Dependencies
+
+The `omnia-node` crate (`node/Cargo.toml`) has these notable dependencies:
+
+| Dependency | Version | Purpose | Security Note |
+|---|---|---|---|
+| `axum` | "0.7" | HTTP framework | Well-maintained; no auth/rate-limiting built in (application's responsibility) |
+| `clap` | "4" (derive, env) | CLI parsing | Well-maintained; env var override support is a feature, not a risk |
+| `utoipa` | "5" | OpenAPI spec generation | No security implications; auto-docs only |
+| `utoipa-swagger-ui` | "8" (axum feature) | Swagger UI | Serves static assets; no dynamic code execution |
+| `sled` | "0.34" | Embedded database | **⚠️ Alpha-quality** — see above |
+| `toml` | "0.8" | Config file parsing | Well-maintained; `deny_unknown_fields` prevents config injection |
+| `chrono` | "0.4" (serde feature) | Timestamp handling | No known issues |
+| `uuid` | "1" (v4 feature) | ID generation | Cryptographically random v4 UUIDs |
+| `hex` | "0.4" | Hex encoding | No security implications |
 
 ## Exemptions
 

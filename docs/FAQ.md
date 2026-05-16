@@ -1,6 +1,8 @@
-# ❓ Omnia Protocol: Frequently Asked Questions
+# Omnia Protocol: Frequently Asked Questions
 
-## 🌌 General Questions
+**Version:** 4.0.0
+
+## General Questions
 
 ### Q: What is Omnia?
 
@@ -12,11 +14,11 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 **A:** No. Omnia is a protocol, not a coin. While Omnia has a token model (UBC — Universal Basic Compute), the protocol itself is much broader. It's a framework for:
 
-- 🆔 Identity management
-- 📦 Supply chain tracking
-- 🤖 AI agent governance
-- 💰 Economic coordination
-- 🔗 Physical-digital binding
+- Identity management (DIDs, social recovery, biometric anchors, AI agents)
+- Supply chain tracking (append-only provenance logs)
+- AI agent governance (5 capability types with bounded permissions)
+- Economic coordination (quadratic voting, time-locked voting, useful-work rewards)
+- Physical-digital binding (RF fingerprints, quantum commitments)
 
 ### Q: Who controls Omnia?
 
@@ -26,11 +28,11 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 **A:** Yes. All code is open source and available on GitHub. The protocol is public domain (CC0), meaning anyone can use, modify, or build on it.
 
-### Q: What is the current state of the project? 📊
+### Q: What is the current state of the project?
 
-**A:** All 5 core layers are implemented and tested (278+ tests passing). The protocol has causal graph consensus, domain shards, a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (sled), chaos testing, and TLA+ formal verification. Some features like real RF fingerprinting remain ⚠️ stubs awaiting hardware. There is 🌑 no mobile wallet and 🌑 no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
+**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (sled), chaos testing, and TLA+ formal verification. Fee enforcement is implemented via `FeeSchedule` and `ShardRouter` integration. Some features like real RF fingerprinting remain stubs awaiting hardware. There is no mobile wallet and no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
 
-### Q: How do I run the tests? 🧪
+### Q: How do I run the tests?
 
 **A:** Clone the repository and run:
 
@@ -44,9 +46,9 @@ You should see 200+ tests passing.
 
 ---
 
-## ⚙️ Technical Questions
+## Technical Questions
 
-### Q: How does causal graph consensus work? 🧠
+### Q: How does causal graph consensus work?
 
 **A:** Instead of organizing events into sequential blocks, Omnia maintains a directed acyclic graph (DAG) where:
 
@@ -65,7 +67,7 @@ If Alice pays Bob, and Carol pays Dave:
 
 This is much faster than traditional blockchains where every transaction waits in a single queue.
 
-### Q: What are zero-knowledge proofs? 🔐
+### Q: What are zero-knowledge proofs?
 
 **A:** Zero-knowledge proofs let you prove something is true without revealing the underlying information.
 
@@ -78,21 +80,28 @@ You take a massive piece of paper with a small hole in it. You place it over the
 - Prove you have enough money without revealing your balance
 - Prove a medicine is authentic without revealing supply chain details
 
-**Current status:** ⚠️ The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target.
+**Current status:** The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target. The Biological shard's `QueryWithZkProof` operation also uses a stub verifier that checks consent but does not perform real ZK proof verification.
 
-### Q: How does physical anchoring work? 🔗
+### Q: How does physical anchoring work?
 
-**A:** The provenance log is ✅ fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify, destroy). This gives every tracked item a cryptographic birth certificate and ownership history.
+**A:** The provenance log is fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify). This gives every tracked item a cryptographic birth certificate and ownership history. The `PhysicalState` (in `shards/src/physical/state.rs`) maintains a `HashMap<ItemId, Vec<ProvenanceEvent>>` where each entry records the owner, event type, vector clock, and optional metadata.
 
-⚠️ RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
+RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
 
-🌑 Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
+Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
 
-### Q: What's a Decentralized Identifier (DID)? 🆔
+### Q: What's a Decentralized Identifier (DID)?
 
 **A:** A DID is a permanent, self-created digital address that you own forever.
 
-**Format:** `did:omnia:z6MkhaXgBZDvotDkL5257faWxcqACaGVJRPn92ND5CHXvP`
+**Format:** `did:omnia:<hex_public_key>` where `<hex_public_key>` is a 64-character hex string representing a 32-byte Ed25519 public key.
+
+**Example:** `did:omnia:ab01cdef0123456789abcdef0123456789abcdef0123456789abcdef01234567`
+
+The validation rules (implemented in `shards/src/identity/did.rs`) are:
+- Must start with `did:omnia:` (the `DID_PREFIX` constant)
+- The method-specific identifier must be exactly 64 hex characters (32 bytes)
+- The hex must be valid (no non-hex characters)
 
 **Properties:**
 - You create it yourself (no authority issues it)
@@ -100,56 +109,106 @@ You take a massive piece of paper with a small hole in it. You place it over the
 - It cannot be revoked or censored
 - It's portable across platforms
 
-The `did:omnia:` method is ✅ fully implemented with validation.
+The `format_did()` function constructs DIDs from 32-byte public keys:
+```rust
+// shards/src/identity/did.rs
+pub fn format_did(public_key: &[u8; 32]) -> String {
+    format!("{}{}", DID_PREFIX, hex::encode(public_key))
+}
+```
 
-### Q: How does social recovery work? 🛡️
+### Q: How does social recovery work?
 
-**A:** Social recovery uses **Shamir's Secret Sharing over GF(256)**. Your private key is split into shares using threshold cryptography, and each share is given to a trusted guardian.
+**A:** Social recovery uses **Shamir's Secret Sharing over GF(256)** (implemented in `shards/src/identity/recovery.rs`). Your private key is split into shares using threshold cryptography, and each share is given to a trusted guardian.
 
-1. Your key is split into N shares using Shamir's Secret Sharing
-2. Any threshold number of shares (e.g., 3 of 5) can reconstruct the key
+1. Your key is split into N shares using `ShamirRecovery::split(secret, threshold, total)`
+2. Any threshold number of shares (e.g., 3 of 5) can reconstruct the key via `ShamirRecovery::reconstruct(shares)`
 3. If you lose your key, guardians provide their shares
-4. The key is reconstructed from the threshold number of shares
-5. No single guardian has your full key
+4. The key is reconstructed from the threshold number of shares using Lagrange interpolation
+5. No single guardian has your full key (K-1 shares reveal nothing)
 
-### Q: What's Universal Basic Compute (UBC)? 💻
+The GF(256) arithmetic uses the AES irreducible polynomial (0x11B) for reduction, ensuring byte-level operations without big-integer arithmetic. The threshold must be at least 2.
 
-**A:** Every identity on Omnia receives a free monthly quota via the UBC token. The UBC token is soulbound (non-transferable) and provides a baseline of compute and transaction capacity. This ensures participation doesn't require money.
+### Q: What's Universal Basic Compute (UBC)?
 
-The quota system operates on epochs with automatic advancement. The specific quota amounts are configurable parameters in the economics layer.
+**A:** Every identity on Omnia receives a free monthly quota via the UBC token (implemented in `economics/src/ubc.rs`). The UBC token is soulbound (non-transferable) and provides a baseline of compute and transaction capacity. This ensures participation doesn't require money.
 
-### Q: How does governance work? 🗳️
+Key parameters (from `economics/src/quota.rs`):
+- **Default quota**: 1,000 UBC/month (`DEFAULT_UBC_QUOTA`)
+- **Epoch duration**: 30 days (2,592,000,000 ms, `DEFAULT_EPOCH_DURATION_MS`)
+- **Monthly reset**: Balances are reset to the monthly quota at each epoch boundary; unspent balance is forfeited (anti-hoarding)
+- **Useful-work rewards**: Extra UBC can be earned via `UbcToken::reward()` (additive, not reset)
 
-**A:** ✅ **Quadratic voting with exponential reputation decay is currently implemented.** This means:
+### Q: How does governance work?
 
-- Voting power scales as the square root of stake (preventing whale dominance)
-- Reputation decays exponentially over time (preventing permanent power concentration)
+**A:** Quadratic voting with multiplicative reputation decay is currently implemented in `economics/src/governance.rs` and `economics/src/fixed_point.rs`. This means:
 
-📋 **Planned for Phase 1 (not yet implemented):**
-- Conviction voting (locking tokens for longer periods to increase voting power)
+- Voting power scales as the integer square root of stake (preventing whale dominance)
+- Reputation decays per epoch of inactivity using fixed-point PPM arithmetic (no floating-point)
+- Default decay rate: 10% per epoch (`DecayRate::ten_percent()` = 100,000 PPM)
+- All decay calculations are bit-for-bit identical across platforms (x86, ARM, etc.)
+- After voting, the voter's `last_active` is updated, resetting the decay clock
+
+**Time-locked voting** is also implemented (in `economics/src/time_lock.rs`), preventing flash loan attacks:
+- Stake must be locked for a minimum duration (default: 100 blocks) before it grants voting power
+- Freshly-locked stake has zero voting power until the lock matures
+- Supports multiple concurrent locks per node
+
+**Planned for Phase 1 (not yet implemented):**
+- Conviction voting (graduated multipliers based on lock duration)
 - Delegation (delegating your vote to a trusted representative)
+
+**AI agent governance:** AI agents with `AgentCapability::GovernanceVote { max_weight }` can participate in governance with a bounded maximum voting weight.
 
 ---
 
-## 💰 Economic Questions
+## Economic Questions
 
 ### Q: How is Omnia currency created?
 
-**A:** Omnia uses the UBC (Universal Basic Compute) token model. UBC tokens are soulbound — they are issued monthly to each identity and cannot be transferred. The token provides quota for transactions and compute.
+**A:** Omnia uses the UBC (Universal Basic Compute) token model. UBC tokens are soulbound — they are issued monthly to each identity and cannot be transferred. The `UbcToken::mint_monthly()` method resets the balance to the monthly quota at epoch boundaries. The `UbcToken::spend()` method consumes UBC for transactions (destroyed, not transferred). The `UbcToken::reward()` method adds UBC for useful-work contributions (additive, not reset at epoch boundaries).
 
-⚠️ Proof-of-useful-work stubs exist (3 work types defined) but are not production-ready. 🌑 There is no validator reward mechanism or staking system yet. 🌑 Slashing is not implemented.
+Proof-of-useful-work is implemented with 3 work types defined in `economics/src/useful_work.rs`:
+- `AiTraining { model_hash, training_data_hash }` — AI model training
+- `ScientificSimulation { simulation_id, params_hash }` — Distributed computation
+- `DistributedStorage { data_hash, storage_duration }` — Data hosting
+
+Verification is currently a stub (`UsefulWorkProof::verify_stub()`) that checks for non-zero result hash and positive compute units. Reward amount equals compute units consumed (1:1 ratio).
+
+There is no validator reward mechanism or staking system yet. Slashing is not implemented.
 
 ### Q: What's the fee structure?
 
-**A:** 🌑 There is no fee mechanism implemented yet. The UBC quota system covers transaction costs for all participants. A fee mechanism for high-frequency or commercial use is planned but not yet started.
+**A:** Fee enforcement is **implemented** via the `FeeSchedule` struct (in `shards/src/fee_schedule.rs`) and the `ShardRouter` (in `shards/src/router.rs`). The standard fee schedule has flat per-operation-type fees:
+
+| Domain | Fee (UBC) |
+|--------|-----------|
+| Financial | 10 |
+| Computational | 5 |
+| Physical | 3 |
+| Identity | 2 |
+| Biological | 3 |
+| Cross-Shard | 15 |
+| Economics/Default | 3 |
+
+When `ShardRouter::route_event()` processes an event, it:
+1. Deserializes the payload into a `ShardPayload`
+2. Checks the nonce for replay protection
+3. Looks up the fee via `FeeSchedule::fee_for_op()`
+4. Deducts the fee from the caller's UBC quota via `QuotaSystem::spend()`
+5. Routes the operation to the target shard
+
+If the caller has insufficient UBC, the operation is rejected with `ShardError::InsufficientFee`.
+
+A `ShardRouter::new_without_fees()` constructor is available for testing.
 
 ### Q: Can I convert Omnia to other currencies?
 
-**A:** 🌑 No DEX integration exists yet. There is currently no way to exchange Omnia tokens for other currencies.
+**A:** No DEX integration exists yet. There is currently no way to exchange Omnia tokens for other currencies.
 
 ---
 
-## 🛡️ Security Questions
+## Security Questions
 
 ### Q: Is Omnia secure?
 
@@ -157,71 +216,85 @@ The quota system operates on epochs with automatic advancement. The specific quo
 
 | Security Layer | Status |
 |---------------|--------|
-| ✅ Ed25519 signatures | Implemented |
-| ✅ BLAKE3 hashing | Implemented |
-| ✅ BFT consensus (<1/3 faulty nodes) | Implemented |
-| ✅ Replay protection (nonce tracking) | Implemented |
-| ✅ State commitments (Merkle root) | Implemented |
-| ✅ Event pruning (sustainability) | Implemented |
-| 🔄 Post-quantum cryptography (Dilithium) | Stub |
-| 🌑 Economic security (slashing, staking) | Not started |
-| 🌑 Real ZK proofs | Stub (hash chain) |
+| Ed25519 signatures | Implemented |
+| BLAKE3 hashing | Implemented |
+| BFT consensus (<1/3 faulty nodes) | Implemented |
+| Replay protection (nonce tracking with sled persistence) | Implemented |
+| State commitments (Merkle root) | Implemented |
+| Event pruning (sustainability) | Implemented |
+| Fee enforcement (FeeSchedule + QuotaSystem) | Implemented |
+| Time-locked voting (flash loan prevention) | Implemented |
+| Shamir's Secret Sharing social recovery (GF(256)) | Implemented |
+| Biometric anchors (BLAKE3 salted commitments) | Implemented |
+| Post-quantum cryptography (Dilithium) | Stub |
+| Economic security (slashing, staking) | Not started |
+| Real ZK proofs | Stub (hash chain) |
 
 ### Q: What if my private key is compromised?
 
-**A:** You can use social recovery via Shamir's Secret Sharing to reconstruct your key from guardian shares. The implementation supports configurable thresholds (e.g., 3 of 5 guardians).
+**A:** You can use social recovery via Shamir's Secret Sharing to reconstruct your key from guardian shares. The implementation (in `shards/src/identity/recovery.rs`) supports configurable thresholds (minimum K=2, with configurable N total shares). The `IdentityOp::ConfigureRecovery` operation splits the secret and stores the threshold/total configuration. The `IdentityOp::RecoverDid` operation reconstructs the secret from K+ shares.
+
+Note: The reconstructed secret should be used to rotate the DID's public key and authentication methods. This key rotation is currently a TODO in `IdentityState::apply()`.
 
 ---
 
-## 🛠️ Practical Questions
+## Practical Questions
 
-### Q: How do I get started? 🚀
+### Q: How do I get started?
 
-**A:** You can interact with Omnia via the Rust library or the `omnia-node` binary with REST API (Sprint 3). There is 🌑 no wallet and 🌑 no mobile app yet. To experiment:
+**A:** You can interact with Omnia via the Rust library or the `omnia-node` binary with REST API (Sprint 3). There is no wallet and no mobile app yet. To experiment:
 
 1. Clone the repository
 2. Run `cargo test --workspace` to see all tests passing
 3. Run `cargo run -p omnia-node` to start a node with HTTP health/metrics/Swagger UI
 4. Explore the crate APIs in `substrate/`, `shards/`, `binding/`, `economics/`, `zk/`
 
-### Q: Which wallet should I use? 👛
+### Q: Which wallet should I use?
 
-**A:** 🌑 No wallet exists yet. All interaction is via the Rust library API. A mobile wallet is planned for Phase 1.
+**A:** No wallet exists yet. All interaction is via the Rust library API. A mobile wallet is planned for Phase 1.
 
-### Q: Can I use Omnia on my phone? 📱
+### Q: Can I use Omnia on my phone?
 
-**A:** 🌑 No mobile app exists yet. A mobile wallet is planned for Phase 1.
+**A:** No mobile app exists yet. A mobile wallet is planned for Phase 1.
 
-### Q: How long does a transaction take? ⏱️
+### Q: How long does a transaction take?
 
-**A:** ⚠️ Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
+**A:** Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
 
 ---
 
-## 🔮 Long-Term Vision
+## Long-Term Vision
 
 *The following describes the long-term vision for Omnia. These are aspirational goals, not current capabilities.*
 
-### Q: Will Omnia work on Mars? 🚀
+### Q: Will Omnia work on Mars?
 
-**A:** This is a long-term vision 🔮. Omnia's causal graph consensus is designed to support partitioned operation (local finality with eventual global consistency), which could in principle work across interplanetary distances. However, no testing or implementation for interplanetary scenarios has been done.
+**A:** This is a long-term vision. Omnia's causal graph consensus is designed to support partitioned operation (local finality with eventual global consistency via `VectorClock::happened_before()` and `CrossShardMessage`), which could in principle work across interplanetary distances. However, no testing or implementation for interplanetary scenarios has been done.
 
-### Q: Will AI agents run Omnia? 🤖
+### Q: Will AI agents run Omnia?
 
-**A:** ✅ AI agent identity is implemented (5 capability types). AI agents can currently have identities on the network. 🔮 Full governance rights for AI agents and AI-driven decision-making are aspirational goals for Phase 3 (Years 5-10).
+**A:** AI agent identity is implemented with 5 capability types (in `shards/src/identity/agent.rs`):
+- `FinancialTransfer { max_amount, currency }` — Bounded financial operations
+- `DataProcessing { domains, max_records }` — Scoped data access
+- `ContractExecution { contract_types }` — Limited contract interaction
+- `ComputeProof { max_compute_units }` — Bounded compute submission
+- `GovernanceVote { max_weight }` — Bounded governance participation
+
+AI agents can currently have identities on the network with these capabilities. Full governance rights for AI agents and AI-driven decision-making are aspirational goals for Phase 3 (Years 5-10).
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Q: I have a question not answered here ❓
+### Q: I have a question not answered here
 
 **A:**
-- 📖 Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
-- 💬 Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
-- 🐛 Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
-- 💡 Start a discussion: [GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)
+- Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
+- Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
+- Start a discussion: [GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)
 
 ---
 
 **Last Updated:** May 2026
+**Version:** 4.0.0

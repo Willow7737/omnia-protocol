@@ -1,8 +1,8 @@
 # Omnia Protocol — Attack Surface Map
 
-**Commit:** `SPRINT_3_COMMIT`
+**Version:** v4.0.0
 **Date:** 2026-03-05
-**Document version:** 1.0
+**Document version:** 2.0
 
 ---
 
@@ -74,9 +74,36 @@ All data arriving over the network is untrusted. The libp2p gossip layer is the 
 
 ## 3. User Inputs
 
-User-submitted data enters the protocol through event payloads and shard operations. These inputs are deserialized, validated, and routed to shard handlers.
+User-submitted data enters the protocol through event payloads, shard operations, and the REST API. These inputs are deserialized, validated, and routed to shard handlers.
 
-### 3.1 Event Payloads
+### 3.1 HTTP REST API (NEW)
+
+**Description:** The `omnia-node` binary exposes a REST API via axum with 9+ endpoints under `/api/v1/`. There is no authentication, no rate limiting, no CORS configuration, and no authorization on any endpoint. Any network client can submit events, mint UBC, create governance proposals, cast votes, transfer tokens, and submit shard operations.
+
+**Severity:** Critical
+
+**Impact:** An attacker with network access to the HTTP port can:
+- Submit unlimited events (no rate limiting, no auth)
+- Mint UBC to any DID via `POST /api/v1/shards/economics/operations` with `{"operation": "mint"}`
+- Spend any registered DID's UBC via `POST /api/v1/economics/transfer`
+- Create governance proposals and cast votes with arbitrary DIDs
+- Submit shard operations for any shard
+
+**Current mitigation:**
+- Payload size check against `omnia_substrate::MAX_PAYLOAD_SIZE` (413 response if exceeded)
+- Invalid hex payload returns 400
+- Economics operations return errors for unregistered DIDs or insufficient balance
+- Governance votes require registered stake
+
+**Remaining gaps:**
+- **No authentication** — no API keys, no JWT, no TLS client certs
+- **No rate limiting** — no per-IP or per-endpoint request throttling
+- **No authorization** — any client can perform any operation (including minting)
+- **No CORS headers** — browser-based attacks are possible
+- **No HTTPS** — all API traffic is plaintext (no TLS on the axum server)
+- **Mint is permissionless** — the `mint` economics operation can be called by any API client
+
+### 3.2 Event Payloads
 
 **Description:** The `Event.payload` field contains an opaque byte vector that is deserialized as a `ShardPayload` by the `ShardRouter`. The payload includes a `ShardOp` enum variant with domain-specific data. Malformed or malicious payloads could exploit deserialization logic or bypass validation.
 
@@ -90,11 +117,11 @@ User-submitted data enters the protocol through event payloads and shard operati
 - Each shard's `validate()` method checks operation-specific constraints before `process_event()`
 
 **Remaining gaps:**
-- No payload size limit at the `Event` level — an attacker could submit an event with an arbitrarily large payload
+- `MAX_PAYLOAD_SIZE` is enforced at the HTTP layer but not at the gossip/event level
 - No authorization checks on shard operations (e.g., only the treasury should be able to mint)
-- `bincode::deserialize()` on cross-shard message payloads (`router.rs:118`) processes unvalidated data
+- `bincode::deserialize()` on cross-shard message payloads processes unvalidated data
 
-### 3.2 Shard Operations
+### 3.3 Shard Operations
 
 **Description:** Each shard domain (Financial, Computational, Physical, Identity, Biological) defines its own operation types. Operations like `FinancialOp::Mint`, `IdentityOp::CreateDid`, and `ComputationalOp::SubmitTask` carry domain-specific parameters.
 
@@ -110,9 +137,9 @@ User-submitted data enters the protocol through event payloads and shard operati
 **Remaining gaps:**
 - No access control list (ACL) for privileged operations (mint, burn, governance)
 - No per-operation gas or computational limit
-- `FinancialOp::Mint` has no authorization check — any event creator can trigger a mint
+- `EconomicsOp::MintUbc` has no authorization check — any event creator can trigger a mint
 
-### 3.3 Governance Proposals
+### 3.4 Governance Proposals
 
 **Description:** The governance system (`economics/src/governance.rs`) accepts proposals and votes. Quadratic voting is used to reduce the influence of large token holders.
 
@@ -121,8 +148,9 @@ User-submitted data enters the protocol through event payloads and shard operati
 **Impact:** A governance attack could pass malicious proposals (e.g., modifying consensus parameters, inflating token supply) by acquiring sufficient voting power.
 
 **Current mitigation:**
-- Quadratic voting reduces influence of large holders (voting power = √tokens)
+- Quadratic voting reduces influence of large holders (voting power = √stake via `isqrt`)
 - Governance decay reduces the weight of old votes over time
+- Votes require registered stake in `voting_weights`
 
 **Remaining gaps:**
 - No minimum quorum for proposals to pass
@@ -130,7 +158,7 @@ User-submitted data enters the protocol through event payloads and shard operati
 - No delegation mechanism
 - No proposal execution delay (time lock)
 
-### 3.4 Fee Payments
+### 3.5 Fee Payments
 
 **Description:** The `ShardRouter` deducts UBC fees from the caller's quota before processing operations. The fee amount is determined by the `FeeSchedule`.
 
@@ -202,9 +230,11 @@ Cryptographic verification points are where asserted data becomes trusted data. 
 - arkworks is a well-audited cryptographic library used in production by multiple protocols
 - The `RollupCircuit` follows the standard R1CS + Groth16 pattern
 - Proof verification is delegated to `ark_groth16::verify_proof()` with the verifying key and public inputs
+- The `ExpandedRollupCircuit` adds Merkle path inclusion and per-event state transition constraints
 
 **Remaining gaps:**
-- The circuit has only one meaningful constraint (`enforce_equal` on state roots) — it does not verify the *correctness* of the state transition, only that the prover knows a new state root that matches the expected one. A malicious prover can prove any state transition.
+- The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding.
+- The basic `RollupCircuit` has only one meaningful constraint (`enforce_equal` on state roots) — it does not verify the *correctness* of the state transition
 - The trusted setup is circuit-specific (not universal) — a new setup is required for every circuit change
 - No proof aggregation or recursion (batch proofs are not nested)
 
@@ -262,9 +292,10 @@ State transitions are where the protocol's invariants must hold. Incorrect trans
 - Supermajority threshold (>2/3) is enforced for fame decisions
 - The TLA+ model checker verifies `Agreement`, `NoEquivocation`, and `Validity` invariants for N=4, f=1
 - Property-based tests in `substrate/tests/property_tests.rs` test consensus behavior
+- The chaos testing framework (`omnia-chaos-tests`) validates safety and liveness under network partitions, node crashes, and message loss
 
 **Remaining gaps:**
-- TLA+ model is bounded (4 nodes, 3 rounds) — does not cover all production configurations
+- TLA+ model is bounded (4 nodes, MaxSeq=1) — does not cover all production configurations
 - No view change or leader rotation mechanism — consensus can stall if >1/3 of nodes are offline
 - No formal verification of the Rust implementation against the TLA+ spec
 
@@ -280,9 +311,11 @@ State transitions are where the protocol's invariants must hold. Incorrect trans
 - Points are accumulated using `saturating_add` (no overflow)
 - Thresholds are configurable and use `u64` integers (no floating-point)
 - Equivocation detection compares `creator + sequence + event_id` (three-field check)
+- Persistent storage via `SledSlashingStore` (configured automatically in `omnia-node`)
 
 **Remaining gaps:**
-- **Slashing persistence is opt-in** — the default `SlashingEngine::new()` uses `InMemorySlashingStore`, losing all slash points on restart. Production nodes must use `with_store(SledSlashingStore::open(...))` for persistence. A misconfigured node loses all slashing state on restart.
+- **Slashing persistence is opt-in in the library API** — `SlashingEngine::new()` uses `InMemorySlashingStore`, but the `omnia-node` binary always configures sled persistence. A library user who forgets `with_store()` loses slashing state on restart.
+- `persist_state()` is called after every mutation but only logs a warning on failure (does not rollback)
 - No slashing event emission — other nodes are not notified when a validator is slashed
 - No stake locking — the `SlashingEngine` tracks stakes but does not actually lock or confiscate them
 
@@ -312,37 +345,37 @@ Economic state transitions involve tokens, fees, and staking. Errors here have d
 
 ### 6.1 Fee Deduction
 
-**Severity:** Medium  
-**Description:** `ShardRouter::route_event()` deducts UBC fees from the caller's quota before routing.  
-**Current mitigation:** Atomic `QuotaSystem::spend()` with error on insufficient balance; fee deducted before dispatch.  
+**Severity:** Medium
+**Description:** `ShardRouter::route_event()` deducts UBC fees from the caller's quota before routing.
+**Current mitigation:** Atomic `QuotaSystem::spend()` with error on insufficient balance; fee deducted before dispatch.
 **Remaining gaps:** No fee refund on operation failure; no dynamic fee adjustment.
 
 ### 6.2 UBC Minting
 
-**Severity:** High  
-**Description:** `UbcToken::mint_monthly()` is called during epoch transitions to reset all balances to the monthly quota.  
-**Current mitigation:** Minting only occurs in `QuotaSystem::advance_epoch()`, which is an explicit operation.  
+**Severity:** High
+**Description:** `UbcToken::mint_monthly()` is called during epoch transitions to reset all balances to the monthly quota.
+**Current mitigation:** Minting only occurs in `QuotaSystem::advance_epoch()`, which is an explicit operation.
 **Remaining gaps:** No cap on total UBC supply; no governance vote required for epoch advancement; `advance_epoch()` is permissionless — any caller can trigger it.
 
 ### 6.3 Quota Spending
 
-**Severity:** Medium  
-**Description:** `QuotaSystem::spend()` deducts from a DID's UBC balance.  
-**Current mitigation:** Returns `EconomicsError` on insufficient balance; no negative balances possible.  
+**Severity:** Medium
+**Description:** `QuotaSystem::spend()` deducts from a DID's UBC balance.
+**Current mitigation:** Returns `EconomicsError` on insufficient balance; no negative balances possible.
 **Remaining gaps:** No double-spend protection across concurrent calls (single-threaded assumption).
 
 ### 6.4 Slashing Confiscation
 
-**Severity:** High  
-**Description:** When a validator is slashed, their stake should be confiscated. Currently, `SlashOutcome::Slashed { amount }` reports the stake amount but does not actually transfer or lock it.  
-**Current mitigation:** The `SlashingEngine` tracks stakes in-memory, but confiscation is advisory only.  
+**Severity:** High
+**Description:** When a validator is slashed, their stake should be confiscated. Currently, `SlashOutcome::Slashed { amount }` reports the stake amount but does not actually transfer or lock it.
+**Current mitigation:** The `SlashingEngine` tracks stakes in-memory, but confiscation is advisory only.
 **Remaining gaps:** No actual fund transfer on slashing; no slashing event propagated to other nodes; no re-staking cooldown.
 
 ### 6.5 Governance Decay
 
-**Severity:** Low  
-**Description:** The governance system applies decay to reduce the weight of old votes over time.  
-**Current mitigation:** `governance.rs` implements quadratic voting with time-based decay.  
+**Severity:** Low
+**Description:** The governance system applies decay to reduce the weight of old votes over time.
+**Current mitigation:** `governance.rs` implements quadratic voting with time-based decay.
 **Remaining gaps:** Decay parameters are not governance-controlled; no minimum quorum; no execution time lock.
 
 ---
@@ -352,7 +385,8 @@ Economic state transitions involve tokens, fees, and staking. Errors here have d
 The primary data flow through the protocol is:
 
 ```
-Event (user input)
+Event (user input / API)
+  → HTTP API (no auth, no rate limit)        [NEW]
   → Gossip (network broadcast)
     → CausalGraph::insert() (graph storage + hash/signature verification)
       → ConsensusEngine (fame decision + finality)
@@ -371,33 +405,80 @@ Each arrow represents a trust boundary crossing. Data flows from untrusted (left
 
 ### 8.1 Validator → Consensus Manipulation
 
-**Severity:** Critical  
-**Description:** A validator who controls >1/3 of the voting power can prevent consensus from reaching finality (liveness attack). A validator who controls >2/3 can finalize arbitrary events (safety attack).  
-**Current mitigation:** BFT model requires 3f+1 nodes to tolerate f Byzantine; supermajority threshold (>2/3) for finality.  
+**Severity:** Critical
+**Description:** A validator who controls >1/3 of the voting power can prevent consensus from reaching finality (liveness attack). A validator who controls >2/3 can finalize arbitrary events (safety attack).
+**Current mitigation:** BFT model requires 3f+1 nodes to tolerate f Byzantine; supermajority threshold (>2/3) for finality.
 **Remaining gaps:** No Sybil resistance — an attacker can create many validator identities. No stake-weighted validation. No validator rotation.
 
 ### 8.2 Shard Operator → State Corruption
 
-**Severity:** High  
-**Description:** A shard operator (or any event creator) can submit operations that mutate shard state. Without authorization checks, a malicious operator can mint tokens, modify balances, or corrupt identity state.  
-**Current mitigation:** Business rule validation in each shard's `validate()` method; signature verification on parent events.  
-**Remaining gaps:** No ACL for privileged operations; no admin/superuser role separation; `FinancialOp::Mint` can be triggered by any event creator.
+**Severity:** High
+**Description:** A shard operator (or any event creator) can submit operations that mutate shard state. Without authorization checks, a malicious operator can mint tokens, modify balances, or corrupt identity state.
+**Current mitigation:** Business rule validation in each shard's `validate()` method; signature verification on parent events.
+**Remaining gaps:** No ACL for privileged operations; no admin/superuser role separation; `EconomicsOp::MintUbc` can be triggered by any event creator.
+
+### 8.3 API Client → Arbitrary Operations (NEW)
+
+**Severity:** Critical
+**Description:** Any network client that can reach the HTTP API can submit arbitrary events, mint UBC, create governance proposals, and perform shard operations. There is no authentication or authorization on any endpoint.
+**Current mitigation:** Business rule validation (e.g., insufficient balance returns error, unregistered DID returns 404).
+**Remaining gaps:** No API authentication; no rate limiting; no authorization; no TLS.
 
 ---
 
-## 9. Summary
+## 9. Key Management (NEW)
+
+### 9.1 Unencrypted Private Keys
+
+**Severity:** High
+**Description:** The `keygen` CLI subcommand (`node/src/main.rs::run_keygen()`) writes the Ed25519 private key as raw binary to `validator_key.bin` without encryption. The code comment states: "in production, this would be encrypted."
+**Current mitigation:** The output directory can be set via `--output-dir`.
+**Remaining gaps:** No encryption of the private key file; no passphrase protection; no hardware security module (HSM) integration; file permissions are not set by the tool.
+
+### 9.2 Trusted Setup Ceremony
+
+**Severity:** High
+**Description:** The `setup-contribute` and `setup-verify` CLI subcommands manage the Powers of Tau trusted setup ceremony for Groth16 ZK proofs. A compromised ceremony allows forging proofs.
+**Current mitigation:** The ceremony supports multiple participants and transcript verification.
+**Remaining gaps:** No multi-party network coordination (ceremony is local simulation only); no audit trail for ceremony participants; deterministic seed option (`--seed`) could be misused to compromise the ceremony.
+
+---
+
+## 10. Data Persistence (NEW)
+
+### 10.1 Sled Database Alpha Quality
+
+**Severity:** Medium
+**Description:** Both `SledSlashingStore` and `SledNonceStore` use sled 0.34, which is alpha-quality software. The Cargo.toml explicitly warns: "sled 0.34 is alpha-quality. Production deployments should migrate to rocksdb or redb."
+**Current mitigation:** Both stores are configured with explicit data directories for persistence.
+**Remaining gaps:** No crash consistency guarantee; no forward compatibility guarantee for on-disk format; no migration tool to rocksdb/redb; data loss on power failure is possible.
+
+### 10.2 Nonce Store Persistence
+
+**Severity:** Medium
+**Description:** `SledNonceStore` provides persistent replay protection across restarts. If the nonce database is corrupted or deleted, replay protection is lost.
+**Current mitigation:** `create_shard_router()` in `main.rs` creates a `SledNonceStore` when `nonce_data_dir` is provided (the default in `omnia-node`).
+**Remaining gaps:** No integrity check on nonce database startup; no backup mechanism; no recovery procedure if nonce database is corrupted.
+
+---
+
+## 11. Summary
 
 | Attack Surface | Severity | Critical Gaps |
 |---|---|---|
 | Gossip message injection | Critical | No rate limiting, no payload size limit |
 | Bootstrap peer eclipse | High | No peer diversity checks |
+| **HTTP REST API** | **Critical** | **No authentication, no rate limiting, no authorization** |
 | Event payload deserialization | Critical | No authorization ACL for shard ops |
 | Ed25519 signature bypass | Critical | `creator` ≠ `creator_pubkey` binding gap |
 | Dilithium verification | Critical | No constant-time guarantee |
-| Groth16 proof soundness | High | Circuit has only one trivial constraint |
+| Groth16 proof soundness | High | Circuit uses simplified hash placeholder |
 | Causal graph insertion | Critical | No graph size limit, no GC |
 | Consensus state machine | Critical | No view change, bounded TLA+ model |
-| Slashing enforcement | High | Persistence opt-in (default in-memory), no fund confiscation |
-| UBC minting | High | Permissionless epoch advancement |
+| Slashing enforcement | High | No fund confiscation, persistence warning on failure |
+| UBC minting | High | Permissionless epoch advancement, permissionless mint API |
 | Shard state mutation | High | No atomicity, no rollback |
 | Validator Sybil attack | Critical | No Sybil resistance, no staking |
+| **Unencrypted key files** | **High** | **No encryption, no passphrase, no HSM** |
+| **Trusted setup ceremony** | **High** | **No multi-party coordination, deterministic seed risk** |
+| **Sled alpha quality** | **Medium** | **No crash consistency, no migration path** |

@@ -1,9 +1,14 @@
 # Omnia Protocol — Threat Model
 
+**Version**: 4.0.0
+**Date**: 2026-05-16
+**Classification**: Public
+**Review Cadence**: Quarterly
+
 ## Document Control
 | Field | Value |
 |-------|-------|
-| Version | 1.0 |
+| Version | 4.0.0 |
 | Date | 2026-05-16 |
 | Classification | Public |
 | Review Cadence | Quarterly |
@@ -18,16 +23,19 @@ architectures. The system comprises:
 
 - **Substrate layer**: Consensus engine, causal graph, gossip protocol, slashing
 - **Shard layer**: Event routing, fee enforcement, nonce replay protection
-- **Binding layer**: Quantum-resistant commitments (Ed25519 + Dilithium)
+- **Binding layer**: Quantum-resistant commitments (Ed25519 + Dilithium), RF
+  fingerprinting, append-only provenance logs, PQC key rotation
 - **Economics layer**: Governance with quadratic voting, fee scheduling
-- **ZK layer**: Groth16 rollup proofs with Poseidon hash on BN254
+- **ZK layer**: Groth16 rollup proofs with Poseidon hash on BN254, Powers of Tau
+  trusted setup ceremony, expanded circuit with Merkle path verification
 - **Node layer**: REST API (axum), networking (libp2p QUIC), storage (sled)
 
 ### Trust Assumptions
 - At most f Byzantine nodes out of N >= 3f + 1
 - Network is partially synchronous (messages eventually delivered)
-- Cryptographic assumptions: discrete log in BN254/BLS12-381 groups, collision
-  resistance of BLAKE3, EUF-CMA of Ed25519/Dilithium
+- Cryptographic assumptions: discrete log in BN254 groups, collision
+  resistance of BLAKE3, EUF-CMA of Ed25519/Dilithium, binding property of
+  Poseidon hash
 
 ---
 
@@ -66,14 +74,39 @@ architectures. The system comprises:
 |--------|----------|------------|--------|
 | Side-channel (timing) | High | subtle::ct_eq/ct_ne on all secret comparisons | Implemented |
 | Quantum computer (future) | Critical | Hybrid Ed25519+Dilithium commitments | Partial - Default is ClassicalOnly |
-| BN254 curve break | Critical | ZkScheme versioning with BLS12-381 fallback | Planned (crypto_schemes.rs) |
-| BLAKE3 collision | Critical | HashScheme versioning with SHA3-256 fallback | Planned (crypto_schemes.rs) |
-| Dilithium key compromise | High | PQC key rotation (binding/src/key_rotation.rs) | Planned (Sprint 6) |
-| Groth16 trusted setup subversion | High | PoK-verified ceremony | Implemented |
+| BN254 curve break | Critical | Migration playbook (CRYPTO_MIGRATION.md) with BLS12-381 fallback | Planned |
+| BLAKE3 collision | Critical | Migration playbook with SHA3-256 fallback | Planned |
+| Dilithium key compromise | High | PQC key rotation (binding/src/key_rotation.rs) | Implemented |
+| Groth16 trusted setup subversion | High | PoK-verified ceremony (zk/src/setup/contribution.rs) | Implemented |
+| Poseidon hash collision | High | Cauchy MDS + BLAKE3-derived RC (non-standard) | Risk - differs from reference constants |
 | VRF output manipulation | High | Stake-weighted modular selection | Implemented |
 | BLS rogue-key attack | Medium | Proof-of-possession required for aggregation | Implemented (Sprint 6) |
 
-### 2.4 Economic Attack Surface
+### 2.4 ZK Proof System Attack Surface
+
+| Attack | Severity | Mitigation | Status |
+|--------|----------|------------|--------|
+| Malicious trusted setup | Critical | Multi-party ceremony with PoK (zk/src/setup/) | Implemented |
+| Proof replay across chains | High | L1Anchor with chain_id + block_height + timestamp in ProofBundle | Implemented |
+| Invalid state root in bundle | High | verify_integrity() checks version, proof non-empty, root differ | Implemented |
+| Poseidon parameter manipulation | High | Cauchy MDS determinism + BLAKE3-derived RC | Implemented but non-standard |
+| ExpandedRollupCircuit witness manipulation | High | Merkle path + event commitment constraints | Implemented |
+| Empty batch proof acceptance | Medium | Empty batch constraint: old_root == new_root | Implemented |
+| Proof deserialization attack | High | Canonical deserialization with error handling | Implemented |
+
+### 2.5 Binding Layer Attack Surface
+
+| Attack | Severity | Mitigation | Status |
+|--------|----------|------------|--------|
+| RF fingerprint forgery | High | Hamming distance threshold + confidence scoring | Stub - needs real hardware |
+| Quantum commitment forgery (classical) | High | Ed25519 signature verification | Implemented |
+| Quantum commitment forgery (PQC) | High | Dilithium signature verification | Implemented |
+| PQC key rotation downgrade | Medium | Phase downgrade rejected by PqcKeyRotationManager | Implemented |
+| Provenance chain tampering | High | Append-only log with commitment links_to() verification | Implemented |
+| Provenance log version downgrade | Medium | Version byte check in from_bytes() | Implemented |
+| Authorization signature bypass | Medium | Empty authorization sig rejected in key rotation | Implemented |
+
+### 2.6 Economic Attack Surface
 
 | Attack | Severity | Mitigation | Status |
 |--------|----------|------------|--------|
@@ -84,7 +117,7 @@ architectures. The system comprises:
 | Stake grinding | Medium | VRF-based leader selection | Implemented |
 | Nothing-at-stake (economic) | Medium | Slashing + slashing threshold | Implemented |
 
-### 2.5 Data Integrity Attack Surface
+### 2.7 Data Integrity Attack Surface
 
 | Attack | Severity | Mitigation | Status |
 |--------|----------|------------|--------|
@@ -93,8 +126,9 @@ architectures. The system comprises:
 | CRDT divergence | High | TLA+-proven convergence | Proven |
 | Nonce reset (disk corruption) | Medium | sled durability guarantees | Partial - No nonce backup |
 | Pruning data loss | Medium | Archive mode default + PrunedEventMetadata | Implemented |
+| ProofBundle tampering | High | bincode serialization + verify_integrity() | Implemented |
 
-### 2.6 Supply Chain Attack Surface
+### 2.8 Supply Chain Attack Surface
 
 | Attack | Severity | Mitigation | Status |
 |--------|----------|------------|--------|
@@ -111,14 +145,12 @@ The following risks have NO mitigation and should be prioritized:
 
 | # | Risk | Impact | Likelihood | Priority |
 |---|------|--------|------------|----------|
-| R1 | Consensus round stall (no timeout) | Network halts | Medium | P0 |
-| R2 | BN254 curve compromise (no alternative) | All ZK invalid | Low | P1 |
-| R3 | BLS rogue-key attack | Invalid aggregate sigs | Medium | P1 |
-| R4 | Leader DOS (VRF predicts leader) | Round stalls | Medium | P1 |
-| R5 | Long-range attack (no checkpoints) | History rewrite | Low | P2 |
-| R6 | Censorship by supermajority | Transaction exclusion | Low | P2 |
-| R7 | Flash loan governance attack | Governance manipulation | Medium | P2 |
-| R8 | No release multi-signature | Supply chain compromise | Low | P3 |
+| R1 | BN254 curve compromise (no alternative) | All ZK invalid | Low | P1 |
+| R2 | Poseidon non-standard parameters | Hash divergence from reference | Medium | P2 |
+| R3 | Long-range attack (no checkpoints) | History rewrite | Low | P2 |
+| R4 | Censorship by supermajority | Transaction exclusion | Low | P2 |
+| R5 | No release multi-signature | Supply chain compromise | Low | P3 |
+| R6 | RF fingerprint forgery (stub implementation) | Physical identity bypass | High | P1 |
 
 ---
 
@@ -130,10 +162,11 @@ The following risks have NO mitigation and should be prioritized:
 | Colluding minority (< 1/3) | Coordinated voting | Censorship, equivocation | Slashing + BFT |
 | Colluding supermajority (>= 2/3) | Full consensus control | Censorship, history rewrite | Social layer only |
 | Network adversary | Packet manipulation | DOS, eclipse, partition | QUIC + rate limiting |
-| Cryptanalytic researcher | Math breakthroughs | Curve/hash breaks | Crypto agility (Phase D) |
+| Cryptanalytic researcher | Math breakthroughs | Curve/hash breaks | Crypto agility (CRYPTO_MIGRATION.md) |
 | Quantum computer | Break Ed25519/ECDSA | Key compromise | Hybrid PQC mode |
 | Nation-state | All of the above | Targeted takedown | Geographic distribution |
 | Malicious dependency maintainer | Supply chain | Backdoor in node binary | cargo-vet + reproducible builds |
+| ZK operator | Submit fraudulent proofs | State root manipulation | Groth16 proof verification on L1 |
 
 ---
 
@@ -145,7 +178,7 @@ The following risks have NO mitigation and should be prioritized:
 Network Halts
 +-- Consensus stalls
 |   +-- Leader goes offline [P1 - no fallback]
-|   +-- Round never advances [P0 - no timeout]
+|   +-- Round never advances [Mitigated - timeout/view-change implemented]
 |   +-- >1/3 validators offline [By design - BFT bound]
 +-- Gossip flood
 |   +-- New peer sends 10k msgs/sec [Mitigated - rate limiter]
@@ -167,11 +200,46 @@ Validator Key Compromised
 |   +-- Side-channel [Mitigated - subtle crate]
 +-- Dilithium key stolen
 |   +-- Same as Ed25519
-|   +-- No rotation mechanism [UNMITIGATED - R9]
+|   +-- Key rotation available [Mitigated - PqcKeyRotationManager]
 +-- BLS key stolen
 |   +-- Can forge aggregate signatures
-|   +-- No proof-of-possession [UNMITIGATED - R3]
+|   +-- Proof-of-possession required [Mitigated - Sprint 6]
 +-- Social recovery not available [UNMITIGATED - no threshold scheme]
+```
+
+### 5.3 ZK Proof System Attack Tree
+
+```
+Fraudulent ZK Proof Accepted
++-- Trusted setup compromised
+|   +-- All ceremony participants collude [Unlikely - multi-party PoK]
+|   +-- PoK verification bypassed [Not possible - verify_contribution() enforced]
++-- Proof for wrong state root
+|   +-- Circuit constraint bypassed [Not possible - R1CS enforcement]
+|   +-- Public input mismatch [Mitigated - verify_proof checks inputs]
++-- Replay attack
+|   +-- Same proof on different chain [Mitigated - L1Anchor chain_id]
+|   +-- Same proof at different block [Mitigated - L1Anchor block_height]
++-- Prover key stolen
+    +-- Can create valid proofs for arbitrary transitions [UNMITIGATED - no key encryption]
+```
+
+### 5.4 Binding Layer Attack Tree
+
+```
+Physical Identity Forged
++-- RF fingerprint bypassed
+|   +-- Clone RF emission [Stub - no real hardware verification]
+|   +-- Replay old measurement [Partial - VectorClock timestamp]
+|   +-- Brute-force spectral hash [Mitigated - 256-bit hash space]
++-- Quantum commitment forged
+|   +-- Break Ed25519 [ClassicalOnly phase - verify_ed25519()]
+|   +-- Break Dilithium [Hybrid/PostQuantum phase - verify_dilithium()]
+|   +-- Key rotation downgrade [Mitigated - PqcKeyRotationManager rejects]
++-- Provenance chain broken
+    +-- Modify past event [Mitigated - links_to() chain verification]
+    +-- Remove event [Mitigated - append-only CRDT]
+    +-- Version downgrade [Mitigated - from_bytes() version check]
 ```
 
 ---
@@ -186,5 +254,8 @@ Validator Key Compromised
 | 4 | Add genesis replay tool | Sprint 6 (Phase E) | Implemented |
 | 5 | Add slashing appeals/undo process | Sprint 6 (Phase E) | Implemented |
 | 6 | Add time-locked voting | Sprint 6 (Phase F) | Implemented |
-| 7 | Schedule external security audit | Post-Sprint 6 | Pending |
-| 8 | Implement leader privacy (threshold encryption) | Future | Not planned |
+| 7 | Migrate Poseidon to reference constants | Future | Planned |
+| 8 | Side-channel audit for ZK and binding crates | Future | Not started |
+| 9 | Schedule external security audit | Post-Sprint 6 | Pending |
+| 10 | Implement leader privacy (threshold encryption) | Future | Not planned |
+| 11 | Real RF fingerprint hardware integration | Future | Stub only |

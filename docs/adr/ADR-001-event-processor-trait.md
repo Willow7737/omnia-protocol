@@ -1,7 +1,7 @@
 # ADR-001: EventProcessor Trait Contract
 
-**Status**: Proposed
-**Date**: 2026-05-14
+**Status**: Accepted
+**Date:** 2026-05-14
 **Decision**: Define a minimal, synchronous `EventProcessor` trait as the interface between the substrate's committed event stream and Layer 2 shard processors.
 
 ## Context
@@ -54,6 +54,10 @@ The `Substrate::run()` method (defined in `substrate/src/lib.rs`) follows this l
    ```
 
 This ordering guarantees that shards only ever see finalized events, never pending or gossiped ones.
+
+### Usage in the Node Binary
+
+The `omnia-node` binary does not use the `EventProcessor` trait directly for its REST API. Instead, the API handlers in `node/src/api/` interact with the substrate, shard router, and economics state through the shared `AppState`. The `ShardRouter` in `omnia-shards` acts as the primary event processor in the substrate's `run()` loop, routing events to individual shard implementations.
 
 ## Consequences
 

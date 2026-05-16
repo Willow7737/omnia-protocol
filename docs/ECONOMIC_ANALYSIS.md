@@ -1,13 +1,16 @@
 # Omnia Protocol — Economic Parameter Analysis
 
-**Phase F2 Deliverable**  
+**Phase F2 Deliverable**
 **Sprint 6 — Security Hardening**
+**Version:** 4.0.0
 
 ---
 
 ## 1. Overview
 
-This document provides a comprehensive analysis of the economic parameters in the Omnia Protocol. It examines the fee schedule, spam resistance mechanisms, quota system, governance parameters, and slashing economics. The goal is to validate that the current parameters provide adequate security and economic incentives for mainnet deployment.
+This document provides a comprehensive analysis of the economic parameters in the Omnia Protocol. It examines the fee schedule, spam resistance mechanisms, quota system, governance parameters, time-locked voting, and slashing economics. The goal is to validate that the current parameters provide adequate security and economic incentives for mainnet deployment.
+
+All parameter values referenced herein are sourced from the actual codebase: the `omnia-shards` crate (`shards/src/`) and the `omnia-economics` crate (`economics/src/`). Where the code implements a feature, the document describes the implementation precisely; where features are planned but not yet coded, they are clearly marked as recommendations or future work.
 
 ---
 
@@ -15,17 +18,35 @@ This document provides a comprehensive analysis of the economic parameters in th
 
 ### 2.1 Current Fee Schedule
 
-The `FeeSchedule` (defined in `shards/src/fee_schedule.rs`) specifies per-operation fees in UBC (Universal Basic Compute) units:
+The `FeeSchedule` (defined in `shards/src/fee_schedule.rs`) specifies per-operation fees in UBC (Universal Basic Compute) units. The struct has seven flat-fee fields, one per domain plus a cross-shard fee and a default fallback:
 
-| Domain | Operation Examples | Fee (UBC) | Relative Cost |
-|--------|-------------------|-----------|---------------|
-| Financial | Transfer, Mint, Burn, BalanceQuery | 10 | 5× baseline |
-| Computational | Task Submit, Proof Verify | 5 | 2.5× baseline |
-| Physical | Asset Anchor, Ownership Transfer | 3 | 1.5× baseline |
-| Identity | DID Create, Update, Social Recovery | 2 | 1× baseline |
-| Biological | Consent Manage, ZK Query | 3 | 1.5× baseline |
-| Cross-Shard | Any cross-shard message | 15 | 7.5× baseline |
-| Default | Unrecognized operation types | 3 | 1.5× baseline |
+```rust
+// shards/src/fee_schedule.rs
+pub struct FeeSchedule {
+    pub financial_op_fee: u64,
+    pub computational_op_fee: u64,
+    pub physical_op_fee: u64,
+    pub identity_op_fee: u64,
+    pub biological_op_fee: u64,
+    pub cross_shard_fee: u64,
+    pub default_fee: u64,
+}
+```
+
+The `FeeSchedule::standard()` constructor provides the production defaults:
+
+| Domain | Fee Field | Fee (UBC) | Relative Cost |
+|--------|-----------|-----------|---------------|
+| Financial | `financial_op_fee` | 10 | 5× baseline |
+| Computational | `computational_op_fee` | 5 | 2.5× baseline |
+| Physical | `physical_op_fee` | 3 | 1.5× baseline |
+| Identity | `identity_op_fee` | 2 | 1× baseline |
+| Biological | `biological_op_fee` | 3 | 1.5× baseline |
+| Cross-Shard | `cross_shard_fee` | 15 | 7.5× baseline |
+| Economics | `default_fee` | 3 | 1.5× baseline |
+| Default (unrecognized) | `default_fee` | 3 | 1.5× baseline |
+
+The `Economics` variant of `ShardOp` falls back to `default_fee` (see `FeeSchedule::fee_for_op()`). A `FeeSchedule::zero()` constructor is also available for testing.
 
 ### 2.2 Fee Rationale
 
@@ -51,27 +72,19 @@ The `FeeSchedule` (defined in `shards/src/fee_schedule.rs`) specifies per-operat
 
 ---
 
-### 2.3 Low-Level Fee Schedule Parameters
+### 2.3 Fee Enforcement in the ShardRouter
 
-In addition to the domain-based fee schedule above, the protocol uses the following low-level parameters for fee calculation:
+The `ShardRouter` (`shards/src/router.rs`) enforces fees through the `route_event()` method. The flow is:
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Base event fee | 2 UBC | Minimum fee for any event (covers validation + DAG insertion) |
-| Per-byte fee | 0.01 UBC/byte | Additional fee per byte of event payload |
-| Cross-shard multiplier | 3× | Multiplier applied to events that cross shard boundaries |
-| Quota burst | 50 UBC | Maximum UBC that can be consumed in a single block (burst allowance) |
-| Quota refill rate | 10 UBC/block | Rate at which burst allowance refills per block |
+1. **Payload deserialization**: The event's byte payload is deserialized into a `ShardPayload`.
+2. **Replay protection**: The nonce is checked against `last_nonces` (and persisted via a `NonceStore`).
+3. **Fee lookup**: `fee_schedule.fee_for_op(&payload.operation)` returns the UBC cost.
+4. **Quota deduction**: If `fee > 0`, the router calls `self.quota.spend(&did, fee)`, converting the creator's Ed25519 public key to a DID via `ShardRouter::pubkey_to_did()`.
+5. **Dispatch**: If the fee deduction succeeds, the operation is routed to the target shard.
 
-**Formula**:
+If the caller has insufficient UBC, the operation is rejected with `ShardError::InsufficientFee`.
 
-```
-event_fee = max(base_event_fee, domain_fee) + (payload_size * per_byte_fee)
-cross_shard_fee = event_fee * cross_shard_multiplier
-```
-
-
-**Quota enforcement**: Each identity has a burst budget of 50 UBC per block. After exhaustion, the identity must wait for the refill rate (10 UBC/block) to replenish. This prevents a single identity from consuming all block capacity in a burst while allowing legitimate bursts.
+There is no formula-based fee calculation (no base fee + per-byte fee). The fee schedule is purely a flat per-operation-type lookup. A `ShardRouter::new_without_fees()` constructor creates a router with `FeeSchedule::zero()` for testing scenarios.
 
 ---
 
@@ -93,11 +106,11 @@ Assuming 1 UBC = $0.001 (tentative mainnet pricing), the cost of a sustained spa
 
 The UBC system provides a monthly quota that limits the total compute any single identity can consume:
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Default UBC quota | 1,000 UBC/month | `DEFAULT_UBC_QUOTA` in economics/src/quota.rs |
-| Epoch duration | 86,400,000 ms (24 hours) | `DEFAULT_EPOCH_DURATION_MS` |
-| Monthly epochs | ~30 | 30-day reset cycle |
+| Parameter | Value | Code Reference |
+|-----------|-------|----------------|
+| Default UBC quota | 1,000 UBC/month | `DEFAULT_UBC_QUOTA` in `economics/src/quota.rs` |
+| Epoch duration | 2,592,000,000 ms (30 days) | `DEFAULT_EPOCH_DURATION_MS` in `economics/src/quota.rs` |
+| Monthly epochs | 1 | Single 30-day epoch per month |
 
 **Quota exhaustion analysis:**
 
@@ -160,18 +173,16 @@ For a typical user performing normal operations:
 | **Total** | | | **3,446** |
 
 **Result**: A power user needs 3,446 UBC/month — 3.4× the default quota. This is achievable through:
-- Proof-of-Useful-Work rewards (earning extra UBC)
-- UBC purchase (if implemented)
-- Higher-tier identity verification (increased quota)
+- Proof-of-Useful-Work rewards (earning extra UBC via `UbcToken::reward()`)
+- Higher-tier identity verification (increased quota, future feature)
 
 ### 4.3 Recommendations for Quota Parameters
 
-| Parameter | Current Value | Recommended Value | Rationale |
-|-----------|--------------|-------------------|-----------|
-| Default UBC quota | 1,000 | 2,000 | Provides adequate buffer for normal users |
-| Epoch duration | 24 hours | 24 hours | Keep — daily epochs provide granularity |
-| Monthly reset | ~30 epochs | ~30 epochs | Keep — monthly cycle is user-friendly |
-| Power user quota | N/A | 10,000 | For verified high-volume identities |
+| Parameter | Current Value | Code Location | Recommended Value | Rationale |
+|-----------|--------------|---------------|-------------------|-----------|
+| Default UBC quota | 1,000 | `economics/src/quota.rs` `DEFAULT_UBC_QUOTA` | 2,000 | Provides adequate buffer for normal users |
+| Epoch duration | 30 days (2,592,000,000 ms) | `economics/src/quota.rs` `DEFAULT_EPOCH_DURATION_MS` | 30 days | Keep — monthly cycle is user-friendly |
+| Power user quota | N/A | Not implemented | 10,000 | For verified high-volume identities |
 
 ---
 
@@ -193,7 +204,7 @@ Based on the spam resistance analysis, we recommend the following mainnet fee sc
 
 ### 5.2 Dynamic Fee Adjustment (Future)
 
-The current fee schedule is static. For long-term sustainability, we recommend implementing dynamic fee adjustment similar to EIP-1559:
+The current fee schedule is static — `FeeSchedule::fee_for_op()` returns a constant per variant. For long-term sustainability, we recommend implementing dynamic fee adjustment similar to EIP-1559:
 
 - **Base fee**: Algorithmically adjusted based on network congestion
 - **Priority fee**: Optional tip for faster inclusion
@@ -217,9 +228,18 @@ At recommended mainnet fees, a 24-hour sustained spam attack costs $1.3M–$2.2M
 
 ### 6.1 Quadratic Voting Analysis
 
-The governance module (`economics/src/governance.rs`) implements quadratic voting with exponential reputation decay:
+The governance module (`economics/src/governance.rs`) implements quadratic voting with multiplicative reputation decay using fixed-point arithmetic:
 
-**Formula**: `voting_weight = isqrt(stake)` where `isqrt` is integer square root via Newton's method.
+**Formula**: `voting_weight = isqrt(stake)` where `isqrt` is integer square root via Newton's method (defined in `economics/src/fixed_point.rs`).
+
+```rust
+// economics/src/governance.rs
+pub fn set_weight(&mut self, did: &str, stake: u64) {
+    let weight = isqrt(stake).max(1);
+    self.voting_weights.insert(did.to_string(), weight);
+    self.last_active.insert(did.to_string(), 0);
+}
+```
 
 | Stake (tokens) | Voting Weight | Weight/Stake Ratio | Power Advantage vs. 1-token holder |
 |---------------|---------------|-------------------|-------------------------------------|
@@ -243,11 +263,31 @@ The governance module (`economics/src/governance.rs`) implements quadratic votin
 
 ### 6.2 Reputation Decay
 
-The decay rate is configured as parts-per-million (PPM) per epoch:
+The decay rate is configured as parts-per-million (PPM) per epoch, implemented in `economics/src/fixed_point.rs`:
 
-- **Default**: 100,000 PPM = 10% decay per epoch
+- **Default**: `DecayRate::ten_percent()` = 100,000 PPM = 10% decay per epoch
 - **Mechanism**: `effective_weight = base_weight * remaining_ppm / BASIS_PPM`
-- **Basis**: 1,000,000 PPM (fixed-point arithmetic, no f64)
+- **Basis**: `BASIS_PPM = 1_000_000` (fixed-point arithmetic, no f64 anywhere in the economics crate)
+- **All results are bit-for-bit identical across platforms** (x86, ARM, etc.)
+
+The decay formula is computed iteratively via `DecayRate::remaining_ppm_after(epochs)`, which multiplies by `(BASIS_PPM - rate)` and divides by `BASIS_PPM` per epoch, avoiding overflow through checked arithmetic:
+
+```rust
+// economics/src/fixed_point.rs
+pub fn remaining_ppm_after(&self, epochs: u64) -> u64 {
+    // ... see code for full implementation
+    let remaining_per_epoch = BASIS_PPM - self.ppm;
+    let mut result: u64 = BASIS_PPM;
+    for _ in 0..epochs {
+        result = result
+            .checked_mul(remaining_per_epoch)
+            .and_then(|v| v.checked_div(BASIS_PPM))
+            .unwrap_or(0);
+        if result == 0 { break; }
+    }
+    result
+}
+```
 
 **Decay trajectory** (10% per epoch, base weight = 100):
 
@@ -262,7 +302,7 @@ The decay rate is configured as parts-per-million (PPM) per epoch:
 | 30 | 42,391 | 4 |
 | 50 | 5,153 | 0 (rounds down) |
 
-**Result**: After 50 epochs (~50 days) of inactivity, a voter's weight drops to effectively zero. This ensures that only active participants have governance influence.
+**Result**: After 50 epochs of inactivity, a voter's weight drops to effectively zero. This ensures that only active participants have governance influence.
 
 ### 6.3 Governance Attack Analysis
 
@@ -270,19 +310,38 @@ The decay rate is configured as parts-per-million (PPM) per epoch:
 
 **Sybil governance attack**: Creating 1,000 identities with 1 token each gives 1,000 × 1 = 1,000 voting weight — equivalent to 1 identity with 1,000,000 tokens. This means quadratic voting alone does not prevent Sybil governance attacks. Mitigation: identity verification requirements for governance participation.
 
-### 6.4 Time-Locked Voting (Recommended Addition)
+### 6.4 Time-Locked Voting — Implemented
 
-We recommend implementing time-locked voting (conviction voting) as an additional governance mechanism:
+Time-locked voting is **implemented** in `economics/src/time_lock.rs`. It prevents flash loan attacks by requiring stake to be locked for a minimum duration before it grants voting power.
 
-| Lock Period | Voting Multiplier | Rationale |
-|-------------|------------------|-----------|
-| 0 (no lock) | 1× | Immediate vote, minimum weight |
-| 1 month | 1.5× | Short-term conviction |
-| 3 months | 2× | Medium-term conviction |
-| 6 months | 3× | Long-term conviction |
-| 12 months | 4× | Maximum conviction |
+The `TimeLockConfig` struct defines the parameters:
 
-**Implementation**: Voters lock tokens for a specified period. Locked tokens cannot be transferred but earn voting multiplier. This aligns voter incentives with long-term protocol health.
+| Parameter | Default Value | Code Field |
+|-----------|--------------|------------|
+| Minimum lock duration | 100 blocks (~8 min at 5s finality) | `min_lock_duration` |
+| Maximum lock duration | 100,000 blocks (~6 days at 5s finality) | `max_lock_duration` |
+| Strict enforcement | true | `strict_enforcement` |
+
+The `LockedStake` struct tracks individual locks:
+
+```rust
+// economics/src/time_lock.rs
+pub struct LockedStake {
+    pub owner: NodeId,
+    pub amount: u64,
+    pub lock_start: u64,
+    pub lock_end: u64,
+    pub released: bool,
+}
+```
+
+**Flash loan prevention**: A freshly-locked stake has zero voting power until `current_height >= lock_end`. This means borrowed funds cannot be used for voting, because the lock must mature before any power is granted.
+
+The `TimeLockVoting` struct provides:
+- `lock()` — Lock stake for a duration (enforces min/max bounds)
+- `voting_power()` — Sum of mature, non-released stakes
+- `release_expired()` — Release mature stakes
+- `can_vote()` — Check if a node has any voting power
 
 ---
 
@@ -383,15 +442,14 @@ To incentivize the detection and reporting of Byzantine behavior, we recommend a
 | 7 | Ejection threshold | 2,000 | 1,500 | Medium |
 | 8 | Slash percentage | 100% (binary) | Proportional | High (mainnet) |
 | 9 | Slashing reporter reward | 0% | 10% | High (mainnet) |
-| 10 | Time-locked voting | Not implemented | Implement (4× max multiplier) | Medium |
-| 11 | Sybil-resistant DID creation | Not implemented | Implement (biometric or stake-based) | High |
-| 12 | Dynamic fee adjustment | Not implemented | Implement (EIP-1559-style) | Low (Phase 2) |
+| 10 | Sybil-resistant DID creation | Not implemented | Implement (biometric or stake-based) | High |
+| 11 | Dynamic fee adjustment | Not implemented | Implement (EIP-1559-style) | Low (Phase 2) |
 
 ### Implementation Priority
 
-1. **Before mainnet**: Items #2, #3, #8, #9, #11 — these are critical for economic security
-2. **Phase 1**: Items #1, #5, #6, #7, #10 — these improve the system but are not blocking
-3. **Phase 2**: Items #4, #12 — these are optimizations for the mature protocol
+1. **Before mainnet**: Items #2, #3, #8, #9, #10 — these are critical for economic security
+2. **Phase 1**: Items #1, #5, #6, #7 — these improve the system but are not blocking
+3. **Phase 2**: Items #4, #11 — these are optimizations for the mature protocol
 
 ---
 

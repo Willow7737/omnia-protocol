@@ -2,6 +2,9 @@
 
 This directory contains TLA+ specifications that model the Omnia consensus protocol and its CRDT convergence properties, verifying safety and liveness through exhaustive state-space exploration using the TLC model checker.
 
+**Version:** v4.0.0
+**Last Updated:** 2026-03-05
+
 ## Protocol Model
 
 The Omnia consensus is modeled as a hybrid of three established approaches:
@@ -82,8 +85,10 @@ The model is configured in `OmniaConsensus.cfg`:
 | Parameter | Value | Meaning |
 |---|---|---|
 | `Nodes` | `{n1, n2, n3, n4}` | 4-node network |
-| `ByzantineNodes` | `{n1}` | 1 Byzantine node (BFT threshold: f=1 requires 4 nodes) |
-| `MaxSeq` | `1` | Each node creates at most 1 event (sequence 0) |
+| `ByzantineNodes` | `{n1}` | 1 Byzantine node (as a set, not a count — BFT threshold: f=1 requires 4 nodes) |
+| `MaxSeq` | `1` | Each node creates at most 1 event (sequence 0). This is the maximum sequence number, not a round count. |
+
+**Important:** The configuration uses `ByzantineNodes` (a subset of `Nodes`) and `MaxSeq` (maximum sequence number), not `MaxByzantine` and `MaxRounds` as earlier docs stated. The TLA+ `CONSTANTS` are exactly as defined in the spec header.
 
 ## Properties Verified
 
@@ -151,7 +156,7 @@ Every event created by an honest node is eventually committed. This holds under 
 
 ### 5. TypeOK (State Invariant) — **HOLDS** ✓
 
-Basic well-typedness invariant ensuring all state variables remain within their intended domains, including the new `famous_events` variable.
+Basic well-typedness invariant ensuring all state variables remain within their intended domains, including the `famous_events` variable.
 
 ## TLC Results
 
@@ -167,13 +172,37 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 
 ## CRDT Convergence Verification (B5)
 
-The `OmniaCRDT.tla` spec formally verifies the convergence properties of the three CRDT types used in the Omnia substrate:
+The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence properties of three CRDT types used in the Omnia substrate:
 
-- **GCounter**: Commutativity, associativity, and idempotence of merge
-- **OrSet**: Commutativity and idempotence of merge (add-wins semantics)
-- **LWWRegister**: Commutativity and idempotence of merge (last-write-wins semantics)
+### GCounter: Grow-only Counter
 
-See `OmniaCRDT.cfg` for the model checker configuration.
+- **State:** Function from Nodes to Nat
+- **Merge:** Element-wise max: `GCounterMerge(a, b) == [n \in Nodes |-> IF a[n] > b[n] THEN a[n] ELSE b[n]]`
+- **Properties verified:**
+  - Commutativity: `GCounterMerge(a, b) = GCounterMerge(b, a)`
+  - Associativity: `GCounterMerge(GCounterMerge(a, b), c) = GCounterMerge(a, GCounterMerge(b, c))`
+  - Idempotence: `GCounterMerge(a, a) = a`
+  - Convergence: Two replicas that merge converge to the same state
+
+### OrSet: Observed-Remove Set
+
+- **State:** Set of (element, tag) pairs + tombstone set
+- **Merge:** Union minus tombstoned pairs
+- **Properties verified:**
+  - Commutativity: `OrSetMerge(a, b) = OrSetMerge(b, a)`
+  - Idempotence: `OrSetMerge(a, a) = <<a_adds, a_tomb>>`
+  - Add-wins semantics: concurrent add and remove of the same element, the add wins
+
+### LWWRegister: Last-Writer-Wins Register
+
+- **State:** Value + timestamp
+- **Merge:** Pick the value with the higher timestamp; deterministic tie-breaking
+- **Properties verified:**
+  - Commutativity (when timestamps differ)
+  - Idempotence: `LWWMerge(val, ts, val, ts) = <<val, ts>>`
+  - Convergence: Values converge regardless of merge order
+
+**Note:** A dedicated `OmniaCRDT.cfg` model checker configuration file may not yet exist. The CRDT properties can be verified by creating a TLC configuration that instantiates the constants `Nodes`, `MaxVal`, `Elements`, and `MaxTags` with small finite values suitable for bounded model checking.
 
 ## Known Limitations
 
@@ -181,7 +210,7 @@ See `OmniaCRDT.cfg` for the model checker configuration.
 |---|---|
 | **Bounded state space** | Model checking is over a finite set of 4 nodes with MaxSeq=1. Scaling beyond this is limited by state explosion. |
 | **Simplified gossip** | Gossip is modeled as atomic one-step transfer, not the multi-round epidemic protocol used in production. |
-| **No network partitions** | The model assumes reliable delivery. Partition tolerance is not modeled. |
+| **No network partitions** | The model assumes reliable delivery. Partition tolerance is not modeled (but is tested via `omnia-chaos-tests`). |
 | **Abstract hashes** | Honest nodes use hash=1 deterministically; Byzantine nodes use hash=1 and hash=2. Collision resistance is assumed, not proved. |
 | **No timing** | The model is untimed; partial synchrony assumptions are not captured. |
 | **Byzantine set is static** | The set of Byzantine nodes is fixed. Adaptive corruptions are not modeled. |
@@ -214,10 +243,18 @@ The model exceeds available memory. Remediation:
 
 ## File Index
 
-| File | Description |
-|---|---|
-| `OmniaConsensus.tla` | TLA+ specification of the consensus protocol (with B1 fix) |
-| `OmniaConsensus.cfg` | TLC model checker configuration for consensus |
-| `OmniaCRDT.tla` | TLA+ specification of CRDT convergence properties |
-| `OmniaCRDT.cfg` | TLC model checker configuration for CRDT |
-| `README.md` | This documentation |
+| File | Lines | Description |
+|---|---|---|
+| `OmniaConsensus.tla` | 191 | TLA+ specification of the consensus protocol (with B1 fix), including CreateEvent, Equivocate, Gossip, DecideFamous, and CommitEvent actions |
+| `OmniaConsensus.cfg` | — | TLC model checker configuration for consensus |
+| `OmniaCRDT.tla` | 213 | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister) |
+| `README.md` | — | This documentation |
+
+## Cross-Reference with Code
+
+The chaos testing framework (`omnia-chaos-tests`) provides executable validation of the same invariants modeled in TLA+:
+
+- **Safety** (`ChaosNetwork::check_safety()`) verifies no conflicting commits — corresponds to the TLA+ `Agreement` invariant
+- **Liveness** (`ChaosNetwork::check_liveness()`) verifies at least some events are committed — corresponds to the TLA+ `Liveness` property
+- **Slashing** (`ChaosNetwork::is_node_slashed()`) verifies equivocation detection — corresponds to the TLA+ `NoEquivocation` invariant
+- **Network partitions** (`ChaosNetwork::partition()` / `heal()`) test scenarios not modeled in TLA+

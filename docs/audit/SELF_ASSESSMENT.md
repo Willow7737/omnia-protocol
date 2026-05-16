@@ -1,20 +1,20 @@
 # Omnia Protocol — Security Self-Assessment
 
-**Commit:** `SPRINT_3_COMMIT`
+**Version:** v4.0.0
 **Date:** 2026-03-05
-**Document version:** 1.0
+**Document version:** 2.0
 
 ---
 
 ## 1. Purpose
 
-This document provides an honest and transparent assessment of the Omnia Protocol's current security posture as of Sprint 3. It catalogs known issues that have been fixed, remaining risks that have not yet been addressed, test coverage status, fuzzing efforts, and dependency audit results. The intent is to give auditors a complete picture of where the protocol stands — both strengths and weaknesses — so they can focus their efforts on the areas that need the most attention.
+This document provides an honest and transparent assessment of the Omnia Protocol's current security posture as of v4.0.0. It catalogs known issues that have been fixed, remaining risks that have not yet been addressed, test coverage status, fuzzing efforts, and dependency audit results. The intent is to give auditors a complete picture of where the protocol stands — both strengths and weaknesses — so they can focus their efforts on the areas that need the most attention.
 
 ---
 
 ## 2. Known Issues and Mitigations Applied
 
-The following issues were identified during Sprint 1 and Sprint 2 and have been resolved. Each entry describes the original vulnerability, the mitigation applied, and the residual risk (if any).
+The following issues were identified during earlier sprints and have been resolved. Each entry describes the original vulnerability, the mitigation applied, and the residual risk (if any).
 
 ### 2.1 f64 → Fixed-Point (Sprint 2)
 
@@ -22,7 +22,7 @@ The following issues were identified during Sprint 1 and Sprint 2 and have been 
 
 **Mitigation:** All consensus-related arithmetic was migrated to fixed-point integers (`u64` with explicit scaling factors). The `economics/src/fixed_point.rs` module (486 lines) implements a `FixedPoint<U>` type with deterministic multiplication, division, and square root operations. All fee calculations, governance voting power, and UBC token operations now use integer arithmetic exclusively.
 
-**Residual risk:** The RF fingerprinting module (`binding/src/rf_fingerprint.rs`) still uses `f64` for Hamming distance similarity calculation. This is acceptable because RF fingerprinting is a stub module that does not participate in consensus — it is explicitly out of scope for production use and documented as such.
+**Residual risk:** The RF fingerprinting module (`binding/src/rf_fingerprint.rs`) still uses `f64` for Hamming distance similarity calculation. This is acceptable because RF fingerprinting is a stub module that does not participate in consensus — it is explicitly out of scope for production use and documented as such. The chaos test framework uses `f64` for `drop_rate` but this is test-only.
 
 ### 2.2 PQC verify() Returning True Unconditionally (Sprint 2)
 
@@ -37,7 +37,7 @@ The following issues were identified during Sprint 1 and Sprint 2 and have been 
 
 ### 2.3 No Fee Enforcement (Sprint 2)
 
-**Original issue:** The `ShardRouter` did not enforce fees before processing shard operations. Any event with a valid signature and nonce could trigger arbitrary shard operations without paying UBC tokens. This allowed spam attacks at zero cost — an attacker could flood the network with shard operations, consuming CPU and storage without any economic penalty.
+**Original issue:** The `ShardRouter` did not enforce fees before processing shard operations. Any event with a valid signature and nonce could trigger arbitrary shard operations without paying UBC tokens. This allowed spam attacks at zero cost.
 
 **Mitigation:** A two-layer fee enforcement system was added:
 1. **FeeSchedule** (`shards/src/fee_schedule.rs`, 187 lines): Maps each `ShardOp` variant to a fixed `u64` fee in UBC units. Standard fees range from 2 UBC (identity operations) to 15 UBC (cross-shard operations).
@@ -49,7 +49,7 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 
 ### 2.4 No Slashing (Sprint 2)
 
-**Original issue:** The protocol had no mechanism to penalize Byzantine validators. A validator could equivocate, go offline, or attest to invalid data with no economic consequences. This violated the BFT security model's requirement that misbehavior be economically disincentivized.
+**Original issue:** The protocol had no mechanism to penalize Byzantine validators. A validator could equivocate, go offline, or attest to invalid data with no economic consequences.
 
 **Mitigation:** A `SlashingEngine` (`substrate/src/slashing.rs`, 1,079 lines) was implemented with:
 - Three offense types: Equivocation (500 points), LivenessViolation (100 points), InvalidAttestation (300 points)
@@ -57,28 +57,33 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 - Equivocation detection via `check_equivocation()` — compares `creator + sequence + event_id`
 - Liveness monitoring via `check_liveness()` — compares inactive rounds against a threshold
 - Point accumulation uses `saturating_add` to prevent overflow
-- Persistent storage via `SlashingStore` trait with `SledSlashingStore` backend (added in Sprint 3)
+- Persistent storage via `SlashingStore` trait with `SledSlashingStore` backend (configured automatically in `omnia-node`)
 
-**Residual risk:** The `SlashingEngine` now supports persistent storage via the `SlashingStore` trait with a `SledSlashingStore` backend (added in Sprint 3). However, the default `new()` constructor still uses `InMemorySlashingStore` — production nodes must explicitly use `with_store(SledSlashingStore::open(...))` to get persistence. Additionally, `persist_state()` logs a warning on failure but does not rollback the in-memory state. Finally, `record_offense()` returns a `SlashOutcome` but does not actually confiscate stake or emit a slashing event to the network.
+**Residual risk:** `persist_state()` logs a warning on failure but does not rollback the in-memory state. `record_offense()` returns a `SlashOutcome` but does not actually confiscate stake or emit a slashing event to the network.
 
 ### 2.5 ZK Hash-Chain Stub (Sprint 2)
 
-**Original issue:** The ZK proof system used a hash-chain stub (`RollupCircuitLegacy`) that computed a BLAKE3 hash chain over the old state root, events, and new state root. This is not a zero-knowledge proof — it provides no privacy, no soundness, and no succinctness. Anyone can forge a "proof" by computing the hash chain with arbitrary data.
+**Original issue:** The ZK proof system used a hash-chain stub (`RollupCircuitLegacy`) that computed a BLAKE3 hash chain. This is not a zero-knowledge proof — it provides no privacy, no soundness, and no succinctness.
 
-**Mitigation:** A real R1CS circuit (`RollupCircuit` in `zk/src/circuit.rs`, 242 lines) was implemented using arkworks on the BN254 curve with Groth16 proving and verification. The circuit:
-- Takes old state root, new state root, and event count as witnesses (private inputs)
-- Takes expected new state root as a public input
-- Enforces `new_state_root == expected_new_state_root`
-- Supports `from_state_roots()` for creating circuits from byte-level state roots
-- Supports `empty()` for trusted setup key generation
+**Mitigation:** A real R1CS circuit (`RollupCircuit`) was implemented using arkworks on the BN254 curve with Groth16 proving and verification. The `ExpandedRollupCircuit` adds Merkle path verification and per-event state transition constraints.
 
-**Residual risk:** The circuit is **minimal** — it enforces only one constraint (equality check on state roots). It does NOT verify:
-- That the old state root corresponds to the actual previous state
-- That the state transition is valid (correct event application)
-- Merkle path inclusion proofs
-- Event count correctness
+**Residual risk:** The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding. The legacy stub circuit is retained under `#[cfg(test)]`.
 
-A malicious prover can generate a valid proof for ANY state transition, as long as they know the new state root. The old state root and event count are unconstrained witnesses. The legacy stub circuit is retained under `#[cfg(test)]` for backward-compatible testing.
+### 2.6 No Binary Entrypoint (Sprint 3) → ✅ Resolved
+
+**Original issue:** There was no way to run the protocol as a standalone node.
+
+**Mitigation:** The `omnia-node` binary provides:
+- CLI with clap (configurable via args + env vars with `OMNIA_` prefix)
+- HTTP health endpoint (`/health`) and Prometheus metrics (`/metrics`)
+- REST API with 9 endpoints under `/api/v1/` + Swagger UI at `/swagger-ui`
+- Graceful shutdown on SIGINT/SIGTERM
+- 6 CLI subcommands: `run`, `keygen`, `setup-contribute`, `setup-verify`, `snapshot`, `restore`
+- Persistent slashing (sled) and nonce (sled) state
+- TOML config file support via `--config`
+- Structured logging with JSON output support (`RUST_LOG_FORMAT=json`)
+
+**Residual risk:** The REST API has **no authentication, no rate limiting, and no authorization**. Any network client can perform any operation. The `keygen` subcommand writes unencrypted private keys.
 
 ---
 
@@ -86,58 +91,64 @@ A malicious prover can generate a valid proof for ANY state transition, as long 
 
 These risks are known but not yet mitigated. They are listed in approximate order of severity.
 
-### 3.1 ZK Circuit Is Minimal (Critical) → 🟡 Partially Addressed (Sprint 3)
+### 3.1 REST API Has No Security Controls (Critical)
 
-The original `RollupCircuit` enforced only `new_state_root == expected_new_state_root`. Sprint 3 added the `ExpandedRollupCircuit` which includes:
-- Merkle path inclusion verification (proving specific events were applied to produce the new state root)
-- Per-event state transition constraints (proving each event's application is valid)
-- Old state root binding (proving the transition starts from the correct previous state)
+The `omnia-node` HTTP API (`node/src/api/`) exposes 9 endpoints with no security:
+- **No authentication** — no API keys, JWT, TLS client certs, or basic auth
+- **No rate limiting** — no per-IP or per-endpoint request throttling
+- **No authorization** — any client can mint UBC, create proposals, transfer tokens, submit events
+- **No CORS** — browser-based attacks are possible
+- **No TLS** — all traffic is plaintext on the axum server
 
-**Remaining gap:** The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding — a real hash gadget is needed for production soundness. The circuit structure (3 public inputs: old_root, new_root, event_commitment) is correct and ready for a production hash upgrade.
+An attacker with network access can:
+- Mint unlimited UBC via `POST /api/v1/shards/economics/operations` with `{"operation": "mint"}`
+- Drain any registered DID's balance via `POST /api/v1/economics/transfer`
+- Flood the network with events via `POST /api/v1/events`
+- Manipulate governance via `POST /api/v1/governance/proposals` and `POST /api/v1/governance/vote`
 
-### 3.2 No Formal Verification Beyond TLA+ Model Checking (High)
+**Planned mitigation:** Add API authentication (JWT or API keys), rate limiting (tower-governor or similar), HTTPS via reverse proxy, and authorization checks on privileged operations.
 
-The protocol has a TLA+ specification (`formal-verification/OmniaConsensus.tla`, 123 lines) that verifies the `Agreement`, `NoEquivocation`, and `Validity` invariants for N=4 nodes, f=1 Byzantine, and 3 rounds. This is bounded model checking — it does not constitute a proof for arbitrary configurations.
+### 3.2 ZK Circuit Is Minimal (Critical) → 🟡 Partially Addressed
 
-There is no formal verification of the Rust implementation against the TLA+ spec. The property-based tests in `substrate/tests/property_tests.rs` provide some coverage, but they are not exhaustive.
+The original `RollupCircuit` enforced only `new_state_root == expected_new_state_root`. The `ExpandedRollupCircuit` adds Merkle path inclusion verification, per-event state transition constraints, and old state root binding.
 
-**Planned mitigation:** Consider using tools like `hax` (Rust → F* extraction) or `Prusti` (Rust verification) for formal verification of critical invariants. This is a long-term goal, not a Sprint 3 deliverable.
+**Remaining gap:** The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding — a real hash gadget is needed for production soundness.
 
-### 3.3 Single Primary Developer (High)
+### 3.3 Unencrypted Private Key Storage (High)
 
-The Omnia Protocol has been primarily developed by a single engineer. This increases the risk of:
-- Blind spots — one person's assumptions go unchallenged
-- Implicit mental models that are not documented
-- Consistent coding patterns (both good and bad) that a second reviewer would question
-- Bus factor of 1 — the project is vulnerable to the developer becoming unavailable
+The `keygen` CLI subcommand (`node/src/main.rs::run_keygen()`) writes the Ed25519 private key as raw binary to `validator_key.bin` without encryption. The code comment says: "in production, this would be encrypted."
 
-**Mitigation:** The external audit is a step toward independent review. Ongoing code review from additional contributors is planned for Sprint 4+.
+**Remaining gap:** No encryption of the private key file; no passphrase protection; no HSM integration; file permissions are not set by the tool.
 
-### 3.4 Groth16 Trusted Setup (Medium)
+### 3.4 No Formal Verification Beyond TLA+ Model Checking (High)
 
-Groth16 requires a circuit-specific trusted setup (phase 2). If the setup ceremony is compromised, a participant can generate false proofs. Unlike universal-setup systems (e.g., PLONK with Kate commitments), Groth16's setup must be repeated for every circuit change.
+The protocol has a TLA+ specification (`formal-verification/OmniaConsensus.tla`, 191 lines) that verifies the `Agreement`, `NoEquivocation`, `Validity`, `Liveness`, and `TypeOK` invariants for N=4 nodes, f=1 Byzantine, and MaxSeq=1. This is bounded model checking — it does not constitute a proof for arbitrary configurations.
 
-**Current status:** The trusted setup is assumed honest (see AUDIT_SCOPE.md §4). In production, a multi-party computation (MPC) ceremony will be required. No such ceremony has been conducted yet.
+There is no formal verification of the Rust implementation against the TLA+ spec. The property-based tests in `substrate/tests/property_tests.rs` provide some coverage, but they are not exhaustive. The chaos testing framework (`omnia-chaos-tests`) provides additional executable validation but is not formal verification.
 
-**Planned mitigation:** When the circuit is finalized (post-Sprint 4), a public MPC ceremony will be organized. Consider migrating to a universal-setup proving system (e.g., PLONK, Halo2) in a future sprint to eliminate the trusted setup requirement.
+### 3.5 Single Primary Developer (High)
 
-### 3.5 Slashing Persistence Default Is In-Memory (Medium)
+The Omnia Protocol has been primarily developed by a single engineer. This increases the risk of blind spots, implicit mental models, consistent coding patterns that a second reviewer would question, and a bus factor of 1.
 
-The `SlashingEngine` now supports persistent storage via the `SlashingStore` trait with `SledSlashingStore` (Sprint 3). However, the default `new()` constructor still uses `InMemorySlashingStore`. If a production node forgets to call `with_store(SledSlashingStore::open(...))`, all slashing state is lost on restart. This means:
-- A malicious validator can reset their slash points by restarting their node (if the node operator uses the default constructor)
-- `persist_state()` logs a warning on failure but does not rollback — a persistence failure leaves the in-memory and on-disk states inconsistent
-- There is still no on-chain record of slashing events for other nodes to verify
+### 3.6 Groth16 Trusted Setup (Medium)
 
-**Current mitigation:** The `with_store()` constructor is available and documented. The `SledSlashingStore` backend persists state to a sled embedded database. The persistence gap is now a deployment/configuration issue rather than a code issue.
+Groth16 requires a circuit-specific trusted setup (phase 2). If the setup ceremony is compromised, a participant can generate false proofs.
 
-### 3.6 No Binary Entrypoint (Medium) → ✅ Resolved (Sprint 3)
+**Current status:** The `omnia-node` binary includes `setup-contribute` and `setup-verify` subcommands for managing the Powers of Tau ceremony. These support local simulation only — no multi-party network coordination.
 
-The `omnia-node` binary target has been added in Sprint 3. It provides:
-- CLI with clap (configurable via args + env vars)
-- HTTP health endpoint (`/health`) and Prometheus metrics (`/metrics`)
-- REST API with Swagger UI for events, shards, governance, economics, and node endpoints
-- Graceful shutdown on SIGINT/SIGTERM
-- Full node lifecycle (substrate init, slashing init with sled fallback, shard router, economics)
+### 3.7 Slashing Persistence Failure Handling (Medium)
+
+`SledSlashingStore::persist_state()` logs a warning on failure but does not rollback the in-memory state. A persistence failure leaves the in-memory and on-disk states inconsistent. Additionally, there is no on-chain record of slashing events for other nodes to verify.
+
+### 3.8 Sled Database Alpha Quality (Medium)
+
+Both `SledSlashingStore` and `SledNonceStore` use sled 0.34, which is alpha-quality software. The `node/Cargo.toml` explicitly warns: "sled 0.34 is alpha-quality. Production deployments should migrate to rocksdb or redb."
+
+**Risks:** Crash consistency issues (data loss on power failure), no ongoing maintenance, no forward compatibility guarantee for on-disk format, no migration tool exists.
+
+### 3.9 TOML Config node_id Type Mismatch (Low)
+
+`NodeConfigFile::node_id` is `Option<u16>` but `NodeConfig::node_id` is `u64`. TOML config files cannot specify node IDs above 65535, while CLI flags accept any u64 value. This inconsistency could cause confusion for operators.
 
 ---
 
@@ -145,19 +156,21 @@ The `omnia-node` binary target has been added in Sprint 3. It provides:
 
 ### 4.1 Unit and Integration Tests
 
-The protocol has 278+ tests across 5 crates (substrate, shards, economics, zk, binding). These cover:
+The protocol has 278+ tests across 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
 
 | Crate | Test categories |
 |---|---|
-| `substrate` | Event creation/signing/verification, causal graph insertion/traversal, consensus finality, gossip simulation, slashing offense detection, vector clock merge, CRDT convergence, property-based tests |
+| `substrate` | Event creation/signing/verification, causal graph insertion/traversal, consensus finality, gossip simulation, slashing offense detection, vector clock merge, CRDT convergence, property-based tests, snapshot serialization |
 | `shards` | Fee enforcement, replay protection, cross-shard routing, financial adversarial tests, identity hardening, layer 2 integration |
 | `economics` | UBC lifecycle (mint/spend/reward), governance determinism, fixed-point arithmetic, quota management |
 | `zk` | Circuit construction, Groth16 proof generation and verification, settlement layer abstraction |
 | `binding` | Quantum commitment (Ed25519 + Dilithium hybrid), provenance chain construction, physical shard binding |
+| `node` | CLI config validation (zero node_id, zero http_port, invalid log_level), TOML config parsing, slashing/nonce dir defaults |
+| `chaos-tests` | Network partition safety/liveness, node crash recovery, message drop rates, equivocation detection |
 
 ### 4.2 Property-Based Tests
 
-The `substrate/tests/property_tests.rs` file contains property-based tests (using `proptest` or manual property definitions) that test:
+The `substrate/tests/property_tests.rs` file contains property-based tests that test:
 - Causal graph invariants under random insertion sequences
 - Consensus behavior under Byzantine conditions
 - Vector clock merge associativity and commutativity
@@ -169,42 +182,56 @@ The `substrate/tests/property_tests.rs` file contains property-based tests (usin
 - `shards/tests/identity_hardening.rs` — Tests identity operations against forgery and replay attacks
 - `shards/tests/replay_protection.rs` — Tests the nonce-based replay protection in the shard router
 
-### 4.4 Coverage Limitations
+### 4.4 Chaos Tests
+
+The `omnia-chaos-tests` crate provides a comprehensive simulation framework (`ChaosNetwork`, 982 lines):
+
+- **Network partitions**: `partition()` / `heal()` — isolates and reconnects node groups
+- **Node crashes**: `crash_node()` / `restart_node()` — simulates process failure and recovery
+- **Message drop rates**: `set_drop_rate()` — simulates unreliable links (0.0 to 1.0)
+- **Safety verification**: `check_safety()` — verifies no conflicting commits across nodes
+- **Liveness verification**: `check_liveness()` — verifies at least some events are committed
+- **Slashing detection**: `is_node_slashed()` — checks slash status from an observer's perspective
+- **Byzantine equivocation**: Events can be injected with duplicate `(creator, sequence)` pairs
+
+### 4.5 Coverage Limitations
 
 - No code coverage measurement (no `cargo tarpaulin` or `cargo llvm-cov` integration)
 - No mutation testing
 - Integration tests do not cover the full gossip → consensus → shard pipeline end-to-end
-- No chaos testing framework (planned for Sprint 3+)
+- No end-to-end tests for the REST API
+- Chaos tests use API-level calls, not real network I/O
 
 ---
 
 ## 5. Fuzzing
 
-The protocol has 4 fuzz targets in the `fuzz/` directory, using `cargo-fuzz` / `libFuzzer`:
+The protocol has 7 fuzz targets, managed via `scripts/fuzz.sh`:
 
-| Fuzz Target | File | What it fuzzes |
-|---|---|---|
-| `causal_graph_insert` | `fuzz/fuzz_targets/causal_graph_insert.rs` | Random event insertion into the causal graph — tests for panics, hash collisions, and graph invariant violations |
-| `event_validate` | `fuzz/fuzz_targets/event_validate.rs` | Random byte sequences fed to `Event::from_bytes()` and `Event::validate()` — tests for deserialization panics and verification bypass |
-| `shard_route` | `fuzz/fuzz_targets/shard_route.rs` | Random event payloads fed to `ShardRouter::route_event()` — tests for deserialization panics, fee enforcement bypass, and shard state corruption |
-| `vector_clock_merge` | `fuzz/fuzz_targets/vector_clock_merge.rs` | Random vector clock states merged together — tests for partial order violations and merge non-commutativity |
+| Fuzz Target | What it fuzzes |
+|---|---|
+| `fuzz_event_deserialization` | Random bytes fed to `Event::from_bytes()` — tests for deserialization panics |
+| `fuzz_gossip_message` | Random gossip message structures — tests for malformed gossip data |
+| `fuzz_zk_proof_deserialization` | Random ZK proof data — tests for proof deserialization robustness |
+| `fuzz_consensus_state_transition` | Random consensus state transitions — tests for state machine panics |
+| `fuzz_vector_clock_merge` | Random vector clock merge operations — tests for partial order violations |
+| `fuzz_rate_limiter` | Random rate limiter inputs — tests for rate limiter edge cases |
+| `fuzz_snapshot_deserialization` | Random snapshot data — tests for snapshot deserialization robustness |
+
+Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 
 ### Fuzzing Limitations
 
-- Fuzz targets are defined but there is no evidence of sustained fuzzing campaigns (no corpus directory, no coverage reports)
-- No fuzzing of the ZK circuit (random witness generation could uncover constraint satisfaction bugs)
-- No fuzzing of the `QuantumCommitment::verify()` method (malformed signatures, oversized keys)
-- No fuzzing of the gossip protocol (malformed gossip messages, oversized event batches)
+- Fuzz targets are defined but there is no evidence of sustained fuzzing campaigns (no coverage reports)
+- No fuzzing of the REST API endpoints
+- No fuzzing of the `QuantumCommitment::verify()` method
+- No fuzzing of the TOML config parsing
 
 ---
 
 ## 6. Dependency Audit
 
-### 6.1 cargo-audit Configuration
-
-The `cargo-audit` tool is configured for the workspace. The audit configuration (referenced in `.cargo/audit.toml` or similar) contains 5 ignored advisories, each documented with a justification for why the advisory does not affect the Omnia Protocol.
-
-### 6.2 Key Dependencies
+### 6.1 Key Dependencies
 
 | Dependency | Version | Purpose | Notes |
 |---|---|---|---|
@@ -213,17 +240,25 @@ The `cargo-audit` tool is configured for the workspace. The audit configuration 
 | `ark-bn254` | Latest | BN254 elliptic curve for ZK | Used by major protocols (Celo, Polygon zkEVM) |
 | `ark-groth16` | Latest | Groth16 ZK proof system | Well-audited; reference implementation |
 | `ark-r1cs-std` | Latest | R1CS constraint standard library | Part of arkworks ecosystem |
-| `blake3` | Latest | Hashing (state roots, commitments) | Very fast; no known vulnerabilities |
+| `blake3` | Latest | Hashing (state roots, commitments, node IDs) | Very fast; no known vulnerabilities |
 | `bincode` | Latest | Serialization (events, payloads) | Not cryptographic; deserialization of untrusted data is a risk |
 | `libp2p` | Latest | P2P networking | Large dependency surface; many sub-crates |
 | `serde` | Latest | Serialization framework | No known issues |
 | `thiserror` | Latest | Error derivation | No security implications |
+| `axum` | "0.7" | HTTP framework | Well-maintained; no known security issues |
+| `clap` | "4" | CLI argument parsing | Well-maintained; no known security issues |
+| `sled` | "0.34" | Embedded database | **⚠️ Alpha-quality; not recommended for production** |
+| `utoipa` | "5" | OpenAPI spec generation | No security implications |
+| `utoipa-swagger-ui` | "8" | Swagger UI | No security implications; serves static assets |
+| `prometheus` | "0.13" | Metrics exposition | Standard monitoring library |
+| `tokio` | "1" | Async runtime | Well-maintained; industry standard |
 
-### 6.3 Dependency Risks
+### 6.2 Dependency Risks
 
+- **`sled` 0.34**: Alpha-quality, not recommended for production by its own author. Used for `SledSlashingStore` and `SledNonceStore`. Crash consistency issues, no ongoing maintenance, no forward compatibility guarantee. The Cargo.toml explicitly warns about this.
 - **`pqc-dilithium`**: This crate has not undergone a formal third-party security audit. It is a Rust port of the C reference implementation. Constant-time guarantees are not documented.
-- **`bincode`**: Deserialization of untrusted data can be a vector for denial-of-service attacks (e.g., deeply nested structures causing stack overflow). The protocol uses `bincode` for event deserialization (`Event::from_bytes()`) and cross-shard message deserialization.
-- **`libp2p`**: The libp2p dependency tree is large (20+ sub-crates). Any vulnerability in a sub-crate affects the protocol. Regular `cargo-audit` runs are essential.
+- **`bincode`**: Deserialization of untrusted data can be a vector for denial-of-service attacks (e.g., deeply nested structures causing stack overflow). The protocol uses `bincode` for event deserialization and cross-shard message deserialization.
+- **`libp2p`**: The libp2p dependency tree is large (20+ sub-crates). Any vulnerability in a sub-crate affects the protocol.
 - **5 ignored advisories**: Each ignored advisory in the audit configuration should be reviewed by the auditor to confirm the justification is valid.
 
 ---
@@ -232,15 +267,17 @@ The `cargo-audit` tool is configured for the workspace. The audit configuration 
 
 | Category | Status | Trend |
 |---|---|---|
-| Consensus safety | Partially verified (TLA+ bounded, property tests) | Improving |
+| Consensus safety | Partially verified (TLA+ bounded, property tests, chaos tests) | Improving |
 | Cryptographic correctness | Real implementations (not stubs), minimal ZK circuit | Needs work (circuit soundness) |
-| Economic security | Fee enforcement + slashing added, persistence available | Improving |
+| Economic security | Fee enforcement + slashing + persistence available | Improving |
 | Network security | Gossip bounds exist, no rate limiting | Needs work |
+| **API security** | **No authentication, no rate limiting, no authorization** | **Needs urgent work** |
 | Input validation | Hash + signature checks, nonce replay protection | Good |
 | Authorization | No ACL for privileged operations | Needs work |
-| Persistence | SlashingStore trait + SledSlashingStore added; default still in-memory | Sprint 3 (done) |
-| Test coverage | 278+ tests, 4 fuzz targets, no coverage metrics | Adequate |
-| Dependency health | cargo-audit configured, 5 ignored advisories | Monitoring |
+| Persistence | SledSlashingStore + SledNonceStore; sled is alpha | Needs migration |
+| Key management | Unencrypted private key files | Needs work |
+| Test coverage | 278+ tests, 7 fuzz targets, chaos test framework | Adequate |
+| Dependency health | cargo-audit configured, 5 ignored advisories, sled alpha | Monitoring |
 
 ---
 
@@ -248,9 +285,13 @@ The `cargo-audit` tool is configured for the workspace. The audit configuration 
 
 Based on our self-assessment, we believe the following areas would benefit most from external scrutiny:
 
-1. **ZK circuit soundness** — Is the single-constraint circuit a fundamental design flaw or an acceptable starting point? What constraints are minimally required for rollup soundness?
-2. **Causal graph insertion invariants** — Are there edge cases where `CausalGraph::insert()` could violate the DAG invariant (e.g., orphan events, cycles, hash collisions)?
-3. **Slashing engine correctness** — Are there scenarios where slash points can be avoided, reset, or exploited (beyond the known in-memory issue)?
-4. **Fee enforcement bypass** — Can the fee/nonce/replay protection in `ShardRouter` be circumvented through crafted events or cross-shard messages?
-5. **Hybrid PQC verification** — Is the `ClassicalOnly`/`Hybrid`/`PostQuantum` phase transition logic correct? Can a commitment that should fail in one phase be accepted in another?
-6. **Consensus engine edge cases** — What happens at threshold boundaries (exactly 2/3 of nodes, exactly f Byzantine nodes)? Are there off-by-one errors?
+1. **REST API security** — The HTTP API has no auth, no rate limiting, and no authorization. Is this acceptable for a development/testnet environment? What is the minimum viable security for mainnet?
+2. **ZK circuit soundness** — Is the simplified field-addition hash placeholder a fundamental design flaw or an acceptable starting point? What constraints are minimally required for rollup soundness?
+3. **Causal graph insertion invariants** — Are there edge cases where `CausalGraph::insert()` could violate the DAG invariant (e.g., orphan events, cycles, hash collisions)?
+4. **Slashing engine correctness** — Are there scenarios where slash points can be avoided, reset, or exploited (beyond the known persistence failure handling)?
+5. **Fee enforcement bypass** — Can the fee/nonce/replay protection in `ShardRouter` be circumvented through crafted events or cross-shard messages?
+6. **Hybrid PQC verification** — Is the `ClassicalOnly`/`Hybrid`/`PostQuantum` phase transition logic correct? Can a commitment that should fail in one phase be accepted in another?
+7. **Consensus engine edge cases** — What happens at threshold boundaries (exactly 2/3 of nodes, exactly f Byzantine nodes)? Are there off-by-one errors?
+8. **Sled persistence reliability** — What happens when sled databases are corrupted, disk is full, or power fails during a write? What is the blast radius?
+9. **Key management** — Is the unencrypted keygen output acceptable for Phase 0? What key management solution is needed for production?
+10. **Node ID derivation** — The chaos tests use `blake3(pubkey)` for node IDs, matching `Event::sign_with_keypair()`. But `NodeConfig::node_id_bytes()` uses `node_id.to_le_bytes()`. Are these consistent?

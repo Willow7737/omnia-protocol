@@ -1,5 +1,7 @@
 # Omnia Protocol: Real-World Use Cases
 
+**Version:** 4.0.0
+
 ## 1. Financial Inclusion for the Unbanked
 
 ### The Problem
@@ -14,11 +16,11 @@
 
 **Scenario:** Amara, a farmer in rural Kenya
 
-1. **Identity:** Amara creates a DID on her phone (no government ID needed)
-2. **Reputation:** She completes small tasks on Omnia, building reputation
-3. **Borrowing:** With reputation as collateral, she borrows 1,000 Omnia for seeds
-4. **Selling:** She sells her harvest directly to buyers globally, receiving payment instantly
-5. **Saving:** Her savings earn interest through RPGF rewards
+1. **Identity:** Amara creates a DID on her phone (no government ID needed). The `did:omnia:` method (implemented in `shards/src/identity/did.rs`) creates a self-sovereign identifier from her Ed25519 public key.
+2. **Reputation:** She completes small tasks on Omnia, building reputation. Proof-of-Useful-Work submissions (`UsefulWorkProof` in `economics/src/useful_work.rs`) earn her additional UBC via `UbcToken::reward()`.
+3. **Borrowing:** With reputation as collateral, she borrows 1,000 Omnia for seeds. The `FinancialShard` (`shards/src/lib.rs`) processes the `FinancialOp::Transfer` operation with strict causal ordering to prevent double-spends.
+4. **Selling:** She sells her harvest directly to buyers globally, receiving payment instantly. The `ShardRouter` enforces fees via `FeeSchedule` and deducts UBC from the caller's quota.
+5. **Saving:** Her savings earn interest through RPGF rewards.
 
 **Impact:**
 - Amara has a financial identity without a bank
@@ -32,7 +34,7 @@
 Phase 1: Mobile wallet with offline support
 - Works on 2G networks
 - Transactions sync when online
-- Biometric authentication
+- Biometric authentication via BiometricAnchor (shards/src/identity/biometric.rs)
 
 Phase 2: Peer-to-peer lending
 - Amara can borrow from other users
@@ -62,22 +64,22 @@ Global supply chains are opaque. Consumers cannot verify:
 **Scenario:** A coffee buyer in New York
 
 **The Journey:**
-1. **Farming (Ethiopia):** Farmer registers coffee batch with RF fingerprint and quantum seal
-2. **Cooperative:** Beans are washed, graded, and RF fingerprint is updated
-3. **Export:** Container is sealed with quantum seal and GPS tracking
-4. **Roasting (Portland):** Roaster verifies quantum seal, roasts to specification
+1. **Farming (Ethiopia):** Farmer registers coffee batch with RF fingerprint and quantum seal. The `PhysicalOp::AnchorItem` operation (in `shards/src/physical/ops.rs`) creates an immutable provenance entry.
+2. **Cooperative:** Beans are washed, graded, and RF fingerprint is updated. `PhysicalOp::TransferOwnership` records the transfer in the append-only provenance log.
+3. **Export:** Container is sealed with quantum seal and GPS tracking. A `CrossShardMessage` (in `shards/src/cross_shard.rs`) may trigger a financial payment to the cooperative.
+4. **Roasting (Portland):** Roaster verifies quantum seal, roasts to specification. `PhysicalOp::VerifyChain` validates the complete provenance chain.
 5. **Retail:** Retailer scans QR code, verifies full chain
 6. **Consumer:** Buys coffee, scans with phone, sees complete provenance
 
 **What the Consumer Sees:**
 ```
-☕ Your Coffee's Journey
+Your Coffee's Journey
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Origin: Ethiopia, Yirgacheffe Region
-Farmer: Abebe Kebede (verified identity, 4.8★ reputation)
+Farmer: Abebe Kebede (verified identity, 4.8 reputation)
 Harvest: March 2026 (satellite-verified weather data)
 Cooperative: Cooperative #47 (RF: 0x9a2f..., quantum seal intact)
-Shipping: Container MSCU2847561 (quantum seal verified, temp: 15-20°C)
+Shipping: Container MSCU2847561 (quantum seal verified, temp: 15-20C)
 Roasting: Portland Roasters (carbon footprint: 0.3kg CO2)
 Fair Trade: Price to farmer: $4.20/kg (verified)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -93,7 +95,7 @@ Trust no one. Verify everything.
 
 ---
 
-## 3. Healthcare & Vaccination Records
+## 3. Healthcare and Vaccination Records
 
 ### The Problem
 
@@ -108,19 +110,19 @@ Healthcare records are fragmented across providers. Patients cannot:
 **Scenario:** Sarah, traveling to a conference
 
 1. **Vaccination Proof:** Sarah proves she's vaccinated without revealing her full medical record
-   - Uses zero-knowledge proof
-   - Conference verifies she's vaccinated
-   - No personal data is shared
+   - Uses zero-knowledge proof via `BiologicalOp::QueryWithZkProof` (defined in `shards/src/biological/ops.rs`)
+   - The Biological shard's consent registry (`ConsentRecord` in `shards/src/biological/state.rs`) verifies that Sarah has granted the conference access
+   - No personal data is shared beyond the verified claim
 
 2. **Medical History:** Sarah's doctor can access her full history across providers
-   - Encrypted on Omnia
-   - Only accessible to authorized providers
-   - Sarah controls access
+   - `BiologicalOp::GrantAccess` authorizes the doctor
+   - `BiologicalOp::RevokeAccess` allows Sarah to withdraw consent at any time
+   - Sarah controls access through the consent registry
 
 3. **Research Participation:** Sarah contributes her anonymized data to cancer research
    - Her data is encrypted
    - Researchers can analyze without seeing her identity
-   - She earns RPGF rewards for contribution
+   - She earns UBC rewards for contribution via `UsefulWorkProof`
 
 **Implementation:**
 ```
@@ -142,7 +144,7 @@ Phase 3: Research participation
 
 ---
 
-## 4. Intellectual Property & Digital Rights
+## 4. Intellectual Property and Digital Rights
 
 ### The Problem
 
@@ -156,8 +158,8 @@ Artists, musicians, and creators lose control of their work:
 
 **Scenario:** Maya, a musician
 
-1. **Registration:** Maya registers her song on Omnia with cryptographic proof of creation
-2. **Distribution:** She sells directly to listeners (no Spotify middleman)
+1. **Registration:** Maya registers her song on Omnia with cryptographic proof of creation. The `PhysicalOp::AnchorItem` operation creates a permanent provenance entry for the digital work.
+2. **Distribution:** She sells directly to listeners (no Spotify middleman). The `FinancialOp::Transfer` operation handles payments with strict causal ordering.
 3. **Royalties:** Every derivative work automatically pays her
 4. **Attribution:** Her name is cryptographically linked to her work forever
 5. **Licensing:** Other artists can license her work with automatic payment
@@ -186,22 +188,23 @@ AI models are trained on centralized data, controlled by a few companies:
 
 1. **Data Contribution:** Hospitals contribute anonymized patient data
    - Data is encrypted
-   - Hospitals retain control
-   - Hospitals earn rewards
+   - Hospitals retain control via `BiologicalOp::GrantAccess` with scoped consent
+   - Hospitals earn rewards via `UsefulWorkType::AiTraining` (in `economics/src/useful_work.rs`)
 
 2. **Model Training:** Thousands of devices train the model in parallel
    - Each device trains on a subset of data
    - No single entity sees all data
-   - Proof-of-useful-work is verified
+   - Proof-of-useful-work is verified via `UsefulWorkProof::validate()` and `verify_stub()`
+   - The `ComputationalOp::SubmitTask`, `SubmitProof`, and `VerifyProof` operations manage the task lifecycle
 
 3. **Model Ownership:** The model is owned by all contributors
-   - Voting power is proportional to contribution
+   - Voting power is proportional to contribution (quadratic voting via `GovernanceState`)
    - Model improvements are shared
    - Revenue is distributed
 
 4. **Deployment:** The model is deployed on Omnia
-   - Hospitals can use it for free (UBC quota)
-   - Commercial users pay small fee
+   - Hospitals can use it for free (UBC quota: 1,000 UBC/month default)
+   - Commercial users pay small fee (enforced by `FeeSchedule::computational_op_fee = 5`)
    - Fees go to RPGF pool
 
 **Impact:**
@@ -232,12 +235,12 @@ As humanity expands to Mars and beyond, traditional finance breaks:
 
 2. **Periodic Sync:** Mars and Earth synchronize every 22 minutes
    - Causal graph merges
-   - Conflicts resolved by causal ordering
+   - Conflicts resolved by causal ordering via `VectorClock::happened_before()`
    - No hard fork needed
 
 3. **Atomic Swaps:** Martian resources trade for Earth resources
    - Peer-to-peer settlement
-   - Time-locked contracts
+   - Time-locked contracts via `TimeLockVoting` (in `economics/src/time_lock.rs`)
    - Automatic execution
 
 **Example Transaction:**
@@ -257,7 +260,7 @@ Result: Trade complete, both parties satisfied, no intermediary needed
 
 ---
 
-## 7. Refugee Identity & Resettlement
+## 7. Refugee Identity and Resettlement
 
 ### The Problem
 
@@ -272,9 +275,9 @@ Refugees lack official documentation:
 **Scenario:** Ahmed, a Syrian refugee
 
 1. **Identity:** Ahmed creates a DID
-   - No government ID needed
-   - Biometric anchor proves he's a living human
-   - Social recovery via trusted friends
+   - No government ID needed — the `did:omnia:` method requires only a 32-byte Ed25519 public key
+   - `BiometricAnchor::enroll()` (in `shards/src/identity/biometric.rs`) proves he's a living human via a salted BLAKE3 commitment — the raw template is never stored
+   - Social recovery via `ShamirRecovery::split()` (in `shards/src/identity/recovery.rs`) — configurable K-of-N threshold
 
 2. **Credentials:** Ahmed's skills are verified
    - Former employer issues credential (encrypted)
@@ -287,7 +290,7 @@ Refugees lack official documentation:
    - He gets hired based on merit, not documentation
 
 4. **Banking:** Ahmed opens an account on Omnia
-   - Receives UBC quota
+   - Receives UBC quota (1,000 UBC/month default via `DEFAULT_UBC_QUOTA`)
    - Can send money to family
    - Can borrow for housing
 
@@ -299,7 +302,7 @@ Refugees lack official documentation:
 
 ---
 
-## 8. Decentralized Governance & DAOs
+## 8. Decentralized Governance and DAOs
 
 ### The Problem
 
@@ -314,9 +317,9 @@ Traditional organizations are hierarchical:
 **Scenario:** A global climate action DAO
 
 1. **Membership:** Anyone can join by staking Omnia
-   - Quadratic voting prevents whale dominance
+   - Quadratic voting (`GovernanceState::set_weight()`) prevents whale dominance — voting power = isqrt(stake)
    - Reputation determines voting power
-   - Transparent voting
+   - Transparent voting via `Proposal` and `VoteChoice` types (in `economics/src/governance.rs`)
 
 2. **Proposals:** Members propose climate initiatives
    - Reforestation in Amazon
@@ -324,14 +327,18 @@ Traditional organizations are hierarchical:
    - Wind turbines in North Sea
 
 3. **Funding:** Community votes on funding allocation
-   - 75% approval required
+   - `GovernanceState::vote()` casts a weighted vote using effective weight (including decay)
    - Funds are distributed automatically
    - Progress is tracked on-chain
 
 4. **Execution:** Projects are executed by contractors
-   - Proof-of-work verifies completion
+   - Proof-of-work verifies completion via `UsefulWorkProof::verify_stub()`
    - Payments are released automatically
    - Results are auditable
+
+5. **Flash loan prevention:** Time-locked voting (`TimeLockVoting` in `economics/src/time_lock.rs`) ensures that freshly-locked stake has zero voting power until the lock matures (default: 100 blocks minimum)
+
+6. **AI agent participation:** AI agents with `AgentCapability::GovernanceVote { max_weight }` can participate with bounded influence
 
 **Impact:**
 - Climate action is coordinated globally
@@ -358,7 +365,7 @@ Centralized energy grids are inefficient:
 1. **Peer-to-Peer Trading:** Neighbors trade energy directly
    - Alice has excess solar → sells to Bob
    - Bob has excess battery → sells to Carol
-   - All transactions are automatic
+   - All transactions are automatic via `FinancialOp::Transfer`
 
 2. **Smart Contracts:** Contracts optimize energy flow
    - Charge batteries when solar is abundant
@@ -373,7 +380,7 @@ Centralized energy grids are inefficient:
 4. **Incentives:** Users are rewarded for conservation
    - Reducing peak demand = rewards
    - Sharing renewable energy = rewards
-   - Rewards are distributed via RPGF
+   - Rewards are distributed via `UsefulWorkType::DistributedStorage`
 
 **Impact:**
 - Renewable energy is maximized
@@ -383,7 +390,7 @@ Centralized energy grids are inefficient:
 
 ---
 
-## 10. Scientific Research & Open Science
+## 10. Scientific Research and Open Science
 
 ### The Problem
 
@@ -399,13 +406,13 @@ Scientific research is siloed:
 
 1. **Data Sharing:** Researchers share data on Omnia
    - Data is encrypted
-   - Researchers retain control
+   - Researchers retain control via biological consent management
    - Collaboration is easy
 
 2. **Proof-of-Useful-Work:** Compute power is used for research
-   - Researchers submit climate models
+   - `UsefulWorkType::ScientificSimulation { simulation_id, params_hash }` allows researchers to submit climate models
    - Validators run models on their hardware
-   - Validators are rewarded
+   - Validators are rewarded via `UbcToken::reward()` at a 1:1 ratio with compute units consumed
 
 3. **Reproducibility:** All research is verifiable
    - Code is on-chain
@@ -414,7 +421,7 @@ Scientific research is siloed:
 
 4. **Funding:** RPGF rewards impactful research
    - Researchers apply for funding
-   - Community votes on impact
+   - Community votes on impact using quadratic voting
    - Funding is distributed automatically
 
 **Impact:**
@@ -432,7 +439,7 @@ Scientific research is siloed:
 | Financial Inclusion | Phase 0 | Months 0-18 |
 | Supply Chain | Phase 1 | Years 1-2 |
 | Healthcare | Phase 1 | Years 1-2 |
-| IP & Digital Rights | Phase 1 | Years 1-2 |
+| IP and Digital Rights | Phase 1 | Years 1-2 |
 | Decentralized AI | Phase 2 | Years 3-5 |
 | Interplanetary Trade | Phase 3 | Years 5-10 |
 | Refugee Identity | Phase 1 | Years 1-2 |
@@ -442,6 +449,6 @@ Scientific research is siloed:
 
 ---
 
-**Status:** Use Cases Document  
-**Version:** 1.0  
+**Status:** Use Cases Document
+**Version:** 4.0.0
 **Last Updated:** May 2026

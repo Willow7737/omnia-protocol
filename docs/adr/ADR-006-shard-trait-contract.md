@@ -2,6 +2,7 @@
 
 **Status**: Proposed
 **Date**: 2026-05-14
+**Version**: 4.0.0
 **Decision**: Define a `Shard` trait with formal contracts for determinism, purity of validation, and reproducible state snapshots, ensuring that all domain shards behave predictably under the substrate's multi-threaded execution model.
 
 ## Context
@@ -21,6 +22,8 @@ The Financial shard (`shards/src/financial/`) is the most critical shard for Pha
 
 ### Trait Definition
 
+The `Shard` trait is defined exactly as follows in `shards/src/shard.rs`:
+
 ```rust
 pub trait Shard: Send + Sync {
     fn shard_id(&self) -> ShardId;
@@ -29,6 +32,23 @@ pub trait Shard: Send + Sync {
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError>;
 }
 ```
+
+The `ShardId` is a 32-byte identifier with well-known constructors for each shard type. The `ShardOp` enum is a union over all domain operations plus a `CrossShard` variant. The `Event` type provides context (creator, vector clock, signature) from the substrate layer.
+
+### The Six Implementations
+
+Six concrete types implement the `Shard` trait, each defined in `shards/src/lib.rs`:
+
+| Implementation | `shard_id()` | State Type | Source File |
+|---------------|--------------|------------|-------------|
+| `FinancialShard` | `ShardId::financial()` (`"FINANCE0"`) | `FinancialState` | `shards/src/lib.rs` |
+| `ComputationalShard` | `ShardId::computational()` (`"COMP___0"`) | `ComputationalState` | `shards/src/lib.rs` |
+| `PhysicalShard` | `ShardId::physical()` (`"PHYS___0"`) | `PhysicalState` | `shards/src/lib.rs` |
+| `BiologicalShard` | `ShardId::biological()` (`"BIO____0"`) | `BiologicalState` | `shards/src/lib.rs` |
+| `IdentityShard` | `ShardId::identity()` (`"IDENT__0"`) | `IdentityState` | `shards/src/lib.rs` |
+| `EconomicsShard` | `ShardId::economics()` (`"ECONOM00"`) | `EconomicsShardState` | `shards/src/lib.rs` |
+
+Each shard's `process_event()` implementation validates the operation before applying it, delegates to the domain-specific validator and state, and returns `ShardError` on failure. The `state_snapshot()` method serializes state via `bincode::serialize()` (some shards prefix a version byte).
 
 ### Formal Contracts
 
@@ -68,10 +88,11 @@ pub trait Shard: Send + Sync {
 If snapshots were non-reproducible, the same shard state would produce different state roots on different nodes, breaking consensus.
 
 **Implications for implementations**:
-- All serialization must use deterministic formats. `bincode` (used by `FinancialState::to_bytes()`) is deterministic by default.
-- Map types must use `BTreeMap` (deterministic iteration order), not `HashMap` (non-deterministic iteration order). The `FinancialState` uses `HashMap<AccountId, AccountBalance>`, which is a known issue — it must be migrated to `BTreeMap` before mainnet.
-- Floating-point numbers must not appear in serialized state (NaN != NaN, -0.0 != +0.0).
+- All serialization must use deterministic formats. `bincode` (used by all shard `to_bytes()` methods) is deterministic by default.
+- Map types must use `BTreeMap` (deterministic iteration order), not `HashMap` (non-deterministic iteration order). The `FinancialState` and other shards use `HashMap`, which is a known issue — they must be migrated to `BTreeMap` before mainnet.
+- Floating-point numbers must not appear in serialized state (NaN != NaN, -0.0 != +0.0). The economics crate enforces this: all calculations use fixed-point PPM arithmetic.
 - No padding bytes or uninitialized memory in the serialized output.
+- Some shards prefix a version byte (`FinancialState::FINANCIAL_STATE_VERSION = 1`, `EconomicsState::ECONOMICS_STATE_VERSION = 1`) to support future format migrations.
 
 #### 4. `Send + Sync` Requirements
 
@@ -86,34 +107,51 @@ If snapshots were non-reproducible, the same shard state would produce different
 
 ### Error Handling: ShardError Variants
 
-The `ShardError` enum (in `shards/src/shard.rs`) provides six variants:
+The `ShardError` enum (in `shards/src/shard.rs`) provides seven variants:
 
 | Variant | When to Use | Example |
 |---------|-------------|---------|
 | `InvalidOperation` | The operation is not valid for this shard type | Calling a financial op on the identity shard |
 | `ValidationFailed` | The operation would violate a business rule | Insufficient balance for transfer |
-| `StateConflict` | A state-level conflict is detected | Double-spend attempt |
+| `StateConflict` | A state-level conflict is detected | Double-spend attempt, task already exists |
 | `CrossShardError` | A cross-shard communication failure | Timeout waiting for another shard |
 | `DeserializationError` | Failed to decode the shard payload | Malformed `ShardOp` bytes |
 | `UnknownShard` | The target shard was not found in the router | Routing to a non-existent shard |
+| `InsufficientFee` | The caller lacks UBC quota to pay the fee | Quota exceeded for the operation |
 
 `ValidationFailed` vs `StateConflict`: Use `ValidationFailed` for rule violations that are caught by the `validate()` method (e.g., insufficient balance). Use `StateConflict` for violations detected during `process_event()` that represent actual state corruption (e.g., a double-spend where the same UTXO is spent twice). The distinction is important because `StateConflict` may trigger slashing, while `ValidationFailed` simply rejects the operation.
+
+`InsufficientFee` is returned by the `ShardRouter::route_event()` method when the caller's UBC balance cannot cover the fee determined by `FeeSchedule::fee_for_op()`.
+
+### ShardRouter: Dispatch and Fee Enforcement
+
+The `ShardRouter` (`shards/src/router.rs`) is the central dispatch point. It:
+
+1. **Deserializes** the event payload into a `ShardPayload`.
+2. **Checks nonces** for replay protection (persists via `NonceStore`).
+3. **Deducts fees** from the caller's UBC quota via `QuotaSystem::spend()`.
+4. **Routes** the operation to the target shard based on the `ShardOp` variant.
+
+The router also implements `omnia_substrate::EventProcessor`, making it compatible with the substrate's event processing pipeline.
 
 ### Financial Shard: Strict Causal Ordering, NOT CRDTs
 
 The Financial shard (`shards/src/financial/`) uses strict causal ordering for balance updates. This is a deliberate design choice:
 
-- **Why not CRDTs?** CRDTs (Conflict-free Replicated Data Types) like the `GCounter` (used in the substrate layer for other purposes) only support increment operations. Financial operations require decrement (transfer, burn), which is not commutative. A `Transfer { from: A, to: B, amount: 100 }` and a `Transfer { from: A, to: C, amount: 100 }` are not commutative if A's balance is 150 — the order matters.
+- **Why not CRDTs?** CRDTs (Conflict-free Replicated Data Types) like the `GCounter` (used in the substrate layer for other purposes) only support increment operations. Financial operations require decrement (transfer, burn), which is not commutative. A `Transfer { to, amount }` and another `Transfer { to, amount }` from the same sender are not commutative if the sender's balance is insufficient for both — the order matters.
 
 - **How strict ordering works**: The `FinancialState::apply()` method processes events in causal order (determined by the event's vector clock). The `AccountBalance::decrement()` method checks for insufficient funds and returns `ShardError::ValidationFailed` if the balance is too low. The `last_update` vector clock on each account tracks the causal context of the last modification, enabling conflict detection.
 
 - **Concurrent transfer handling**: If two transfers from the same account arrive concurrently (their vector clocks are `CausalOrder::Concurrent`), the Financial shard processes them in the topological order determined by the `CausalGraph::topological_order()` method. This order is deterministic across all nodes because it is based on event hashes and timestamps, which are invariant.
+
+- **FinancialOp variants**: The Financial shard supports four operations: `Transfer { to: AccountId, amount: u64 }`, `Mint { to: AccountId, amount: u64 }`, `Burn { from: AccountId, amount: u64 }`, and `BalanceQuery { account: AccountId }` (read-only).
 
 ## Consequences
 
 - **Positive**: Formal contracts ensure that all shards behave predictably, which is essential for consensus.
 - **Positive**: `validate()` purity enables pre-flight checks without side effects.
 - **Positive**: Reproducible snapshots enable state root computation and cross-node verification.
-- **Negative**: The determinism contract prohibits `HashMap` in serialized state. The `FinancialState` currently uses `HashMap` and must be migrated to `BTreeMap`.
+- **Positive**: The `ShardError::InsufficientFee` variant enables clean fee enforcement at the router level.
+- **Negative**: The determinism contract prohibits `HashMap` in serialized state. All shard states currently use `HashMap` and must be migrated to `BTreeMap` before mainnet.
 - **Negative**: Strict causal ordering for the Financial shard means that concurrent transfers from the same account are serialized, which limits parallelism. This is a necessary trade-off for financial correctness.
 - **Trade-off**: The `ShardError` enum is shared across all shard types, which means some error variants may not apply to all shards. This is simpler than per-shard error types but reduces type safety at the router level.

@@ -2,6 +2,7 @@
 
 **Status**: Proposed
 **Date**: 2026-05-14
+**Version**: 4.0.0
 **Decision**: Use a `ProvenanceTracker` wrapper that enriches PhysicalShard events with Binding Layer capabilities (RF fingerprints, quantum commitments, provenance logs), rather than modifying the existing PhysicalShard implementation.
 
 ## Context
@@ -14,7 +15,27 @@ The Binding Layer (`binding/` crate) provides cryptographic binding between phys
 - `PhysicalAnchor` (`binding/src/anchor.rs`) — The unified type combining all three pillars.
 - `ProvenanceTracker` (`binding/src/physical_shard.rs`) — The integration point between the Binding Layer and the Physical Shard.
 
-The Physical Shard (`shards/src/physical/`) handles physical-world state: item registration, location tracking, and sensor data. It implements the `Shard` trait from `shards/src/shard.rs`.
+The Physical Shard (`shards/src/physical/`) handles physical-world state: item registration, location tracking, and sensor data. It implements the `Shard` trait from `shards/src/shard.rs`. The shard's operations are defined in `PhysicalOp`:
+
+```rust
+// shards/src/physical/ops.rs
+pub enum PhysicalOp {
+    AnchorItem { item_id: ItemId, owner: OwnerId, metadata: Vec<u8> },
+    TransferOwnership { item_id: ItemId, new_owner: OwnerId },
+    VerifyChain { item_id: ItemId },
+}
+```
+
+Where `ItemId = [u8; 32]` and `OwnerId = [u8; 32]`. The `PhysicalState` maintains a provenance log:
+
+```rust
+// shards/src/physical/state.rs
+pub struct PhysicalState {
+    pub provenance: HashMap<ItemId, Vec<ProvenanceEvent>>,
+}
+```
+
+Each `ProvenanceEvent` records an `event_type` (e.g., `"anchor"`, `"transfer"`), the `owner`, a `VectorClock`, and optional `metadata`.
 
 The design constraint is that the existing PhysicalShard implementation must not be modified. Instead, the Binding Layer provides a `ProvenanceTracker` that wraps the shard and enriches it with binding-layer capabilities.
 
@@ -25,12 +46,13 @@ The design constraint is that the existing PhysicalShard implementation must not
 When a physical item is anchored on-chain, the event flow is:
 
 ```
-PhysicalShard event → ProvenanceTracker.create() → CausalGraph anchor
+ShardOp::Physical(PhysicalOp::AnchorItem) → ShardRouter → PhysicalShard.process_event()
+                                                      → ProvenanceTracker.anchor_item()
 ```
 
 Concretely:
 
-1. A `ShardOp::PhysicalCreate` event arrives at the `ShardRouter`.
+1. A `ShardOp::Physical(PhysicalOp::AnchorItem { item_id, owner, metadata })` event arrives at the `ShardRouter`.
 2. The router dispatches the event to the Physical Shard, which creates the item in its internal state (`PhysicalState`).
 3. Simultaneously, the `ProvenanceTracker` intercepts the event and calls `anchor_item()`:
 
@@ -51,7 +73,9 @@ pub fn anchor_item(
 For transfers, the flow is similar:
 
 ```
-PhysicalShard transfer event → ProvenanceTracker.transfer_item() → ProvenanceLog.append(Transferred)
+ShardOp::Physical(PhysicalOp::TransferOwnership) → PhysicalShard.process_event()
+                                                  → ProvenanceTracker.transfer_item()
+                                                  → ProvenanceLog.append(Transferred)
 ```
 
 ### Error Handling: Hardware Unavailable → Soft Failure
@@ -66,15 +90,32 @@ The Binding Layer interacts with physical hardware (RF sensors, quantum key gene
 
 The key principle is: **hardware unavailability is a soft failure (log warning, continue), but logical errors (double-anchor, transfer of destroyed item) are hard failures (return error)**.
 
+Note that the Physical shard itself enforces some of these constraints directly:
+- `AnchorItem` on an already-anchored item returns `ShardError::StateConflict`.
+- `TransferOwnership` on a non-existent item returns `ShardError::ValidationFailed`.
+- `VerifyChain` on a non-existent item returns `ShardError::ValidationFailed`.
+
 ### State Consistency: Provenance Log Must Match PhysicalShard State
 
 A critical invariant is that the `ProvenanceTracker`'s state must be consistent with the Physical Shard's `PhysicalState`. Specifically:
 
 - If an item exists in `PhysicalState`, it must have a corresponding `PhysicalAnchor` in the `ProvenanceTracker`.
 - If an item is destroyed in `PhysicalState`, the `ProvenanceLog` must have a `Destroyed` event as its last entry.
-- The `current_holder` in the `ProvenanceLog` must match the owner in `PhysicalState`.
+- The `current_owner` in the `ProvenanceLog` must match the owner in `PhysicalState`.
 
 This consistency is maintained by the `ShardRouter`, which calls both the Physical Shard and the `ProvenanceTracker` in sequence for every physical operation. If either call fails, the router rolls back both (or, in Phase 0, logs the inconsistency and continues).
+
+The `PhysicalState::current_owner()` method returns the owner from the last `ProvenanceEvent` in the item's log:
+
+```rust
+// shards/src/physical/state.rs
+pub fn current_owner(&self, item_id: &ItemId) -> Option<OwnerId> {
+    self.provenance
+        .get(item_id)
+        .and_then(|log| log.last())
+        .map(|event| event.owner)
+}
+```
 
 ### How ProvenanceLog's Append-Only CRDT Interacts with the Shard Trait
 
@@ -114,12 +155,29 @@ pub fn verify(&self, current_rf: &[u8; 32], public_key: &PqPublicKey) -> bool {
 
 This is the type that replaces trusted third-party attestations. When a physical claim needs to be verified ("this diamond is real", "this shipment arrived"), the verifier checks the `PhysicalAnchor` rather than trusting an oracle.
 
+### Cross-Shard Messaging for Physical Operations
+
+When a physical operation requires coordination with another shard (e.g., an `AnchorItem` event that also triggers a financial payment), the `CrossShardMessage` type (`shards/src/cross_shard.rs`) is used:
+
+```rust
+// shards/src/cross_shard.rs
+pub struct CrossShardMessage {
+    pub source_shard: ShardId,
+    pub target_shard: ShardId,
+    pub payload: Vec<u8>,
+    pub causal_proof: VectorClock,
+}
+```
+
+The `ShardRouter::route_cross_shard()` method deserializes the inner `ShardOp` from `msg.payload` and dispatches it to the target shard. The `causal_proof` vector clock ensures that the target shard only processes the message after the source shard's state transition is causally confirmed.
+
 ## Consequences
 
 - **Positive**: The existing Physical Shard implementation is unchanged, maintaining the constraint of not modifying shards core logic.
 - **Positive**: The `ProvenanceTracker` sidecar pattern can be applied to other shards in the future (e.g., adding provenance tracking to the Biological shard).
 - **Positive**: Hardware unavailability is handled gracefully as soft failures, allowing the system to continue operating.
 - **Positive**: The `PhysicalAnchor` provides a unified verification type that combines physical, cryptographic, and chain-of-custody proofs.
+- **Positive**: `CrossShardMessage` enables the Physical shard to trigger operations on other shards with causal ordering guarantees.
 - **Negative**: State consistency between `ProvenanceTracker` and `PhysicalState` is not enforced by the type system — it relies on the `ShardRouter` calling both in sequence. A bug in the router could lead to state divergence.
 - **Negative**: The sidecar pattern means that physical operations involve two state mutations (Physical Shard + ProvenanceTracker), which doubles the risk of partial failures.
 - **Trade-off**: Using stub RF fingerprints and quantum commitments for Phase 0 means that the Binding Layer provides no real physical security until real hardware integration is complete. The stubs are deterministic placeholders that will be replaced with real measurements in later phases.

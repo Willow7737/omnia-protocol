@@ -163,11 +163,12 @@ Every module has comprehensive unit tests. The critical integration test simulat
 ```
 
 ### Layer 3: Binding ✅
-- `ProvenanceLog` — append-only CRDT log for supply chain tracking
-- `PhysicalAnchor` — combines RF fingerprinting stub, quantum commitment stub, and provenance
+- `ProvenanceLog` — append-only CRDT log for supply chain tracking (`binding/src/provenance.rs`)
+- `PhysicalAnchor` — combines RF fingerprinting stub, quantum commitments, and provenance (`binding/src/anchor.rs`)
 - `ProvenanceTracker` — full create/transfer/verify/destroy lifecycle
-- ⚠️ RF fingerprinting is a stub (Hamming distance comparison); real implementation requires SDR hardware (HackRF/USRP)
-- ⚠️ Quantum commitments are a stub (hybrid classical + PQC placeholder); real implementation requires CRYSTALS-Dilithium
+- ✅ Hybrid PQC signatures: Ed25519 + CRYSTALS-Dilithium real verification (`binding/src/quantum_commit.rs`, using `ed25519-dalek` + `pqc_dilithium`)
+- `PqcKeyRotationManager` — post-quantum key rotation with 3-phase migration (ClassicalOnly → Hybrid → PostQuantum) (`binding/src/key_rotation.rs`)
+- ⚠️ RF fingerprinting is a stub (Hamming distance comparison); real implementation requires SDR hardware (HackRF/USRP) (`binding/src/rf_fingerprint.rs`)
 - Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks.
 
 ### Layer 4: Identity ✅
@@ -185,13 +186,17 @@ Every module has comprehensive unit tests. The critical integration test simulat
 - ⚠️ Proof-of-useful-work stubs (3 work types defined, not production-ready)
 
 ### Phase 0: ZK-Rollup ✅
-- Settlement-agnostic architecture via `SettlementLayer` trait
-- Ethereum adapter with Solidity contract (OmniaRollup.sol)
-- Stubs for Bitcoin, Solana, Celestia adapters
-- L2 operator with batch builder
-- ⚠️ ZK circuit stub — currently uses hash chain, not a full R1CS circuit (arkworks integration is the production target)
-- Merkle state root and inclusion proofs
+- Settlement-agnostic architecture via `SettlementLayer` trait (`zk/src/settlement/mod.rs`)
+- Ethereum adapter with Solidity contract (OmniaRollup.sol) (`zk/src/settlement/ethereum.rs`)
+- Stubs for Bitcoin, Solana, Celestia adapters (return `NotImplemented`)
+- L2 operator with batch builder (`zk/src/operator.rs`)
+- ✅ ZK circuit: arkworks R1CS + Groth16 on BN254 (`zk/src/circuit.rs`, `zk/src/proof.rs`)
+- ✅ Poseidon SNARK-friendly hash (BN254, t=3, R_F=8, R_P=57) replacing field-addition placeholder (`zk/src/poseidon.rs`)
+- ✅ ExpandedRollupCircuit: Merkle path verification + per-event state transition constraints
+- ✅ Trusted setup ceremony: Powers of Tau + circuit-specific key derivation (`zk/src/setup/`)
+- Merkle state root and inclusion proofs (`zk/src/merkle.rs`)
 - Event pruning (`prune_old_events`) for long-term state sustainability
+- ⚠️ Poseidon parameters use Cauchy MDS matrix and BLAKE3-derived round constants (not Grain LFSR from paper)
 
 ```
 ┌───────────────────────────────────────────────┐
@@ -227,8 +232,8 @@ Every module has comprehensive unit tests. The critical integration test simulat
 | 6 | Deterministic convergence — CRDTs guarantee identical state | ✅ Implemented |
 | 7 | State commitments — `state_root()` and `merkle_proof()` | ✅ Implemented |
 | 8 | Sustainability — `prune_old_events()` prevents unbounded growth | ✅ Implemented |
-| 9 | Economic security (slashing, staking) | 🌑 Not yet implemented |
-| 10 | Post-quantum cryptography (Dilithium) | 🔄 Stub |
+| 9 | Economic security (slashing, staking) | ✅ Implemented |
+| 10 | Post-quantum cryptography (Dilithium) | ✅ Real verification (Ed25519 + Dilithium hybrid) |
 
 ---
 

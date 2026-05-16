@@ -1,13 +1,20 @@
 # Security Policy
 
+**Version**: 4.0.0
+**Last Updated**: 2026-05-16
+
 ## Supported Versions
 
 The following versions of Omnia Protocol are currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+| 0.1.x   | :white_check_mark: |
+| < 0.1   | :x:                |
+
+**Note**: The current crate versions in `Cargo.toml` are `0.1.0` for both
+`omnia-zk` and `omnia-binding`. Security patches are applied to the `0.1.x`
+line until a stable `1.0.0` release.
 
 ## Reporting a Vulnerability
 
@@ -38,10 +45,16 @@ We are committed to keeping reporters informed throughout the process. If you do
 The following are considered in scope for vulnerability reports:
 
 - Cryptographic implementation flaws in `zk/` or `binding/`
+  - Groth16 proof soundness in `zk/src/prover.rs`
+  - Poseidon hash correctness in `zk/src/poseidon.rs`
+  - Trusted setup ceremony integrity in `zk/src/setup/`
+  - Quantum commitment verification in `binding/src/quantum_commit.rs`
+  - PQC key rotation in `binding/src/key_rotation.rs`
 - Consensus or state corruption vulnerabilities in `shards/` or `substrate/`
 - Authentication or authorization bypass
 - Denial-of-service vectors in the protocol layer
 - Data integrity violations in the provenance log or state snapshots
+- Side-channel vulnerabilities in cryptographic comparison operations
 
 The following are out of scope:
 
@@ -60,16 +73,17 @@ Every pull request that touches the following directories **requires** security 
 - `substrate/` — Core causal graph and CRDT primitives
 - `shards/` — Shard state machines and operation handlers
 - `economics/` — UBC token logic and governance
-- `zk/` — Zero-knowledge proof circuits and verification
+- `zk/` — Zero-knowledge proof circuits, Poseidon hash, trusted setup ceremony, and verification
+- `binding/` — Quantum commitments, RF fingerprinting, provenance logs, PQC key rotation
 
 ### Review Roles
 
 | Role | Responsibility | Scope |
 |------|---------------|-------|
-| **Cipher** | Cryptographic correctness, key management, proof soundness | `zk/`, `binding/`, any PR with cryptographic changes |
+| **Cipher** | Cryptographic correctness, key management, proof soundness, Poseidon parameters, trusted setup integrity | `zk/`, `binding/`, any PR with cryptographic changes |
 | **Sentry** | Protocol integrity, state consistency, denial-of-service resistance | `substrate/`, `shards/`, `economics/` |
 
-Cryptographic PRs (any change to `zk/`, `binding/quantum_commit.rs`, `binding/rf_fingerprint.rs`, or cryptographic key handling) require **both Cipher and Sentry review** — no exceptions.
+Cryptographic PRs (any change to `zk/`, `binding/quantum_commit.rs`, `binding/rf_fingerprint.rs`, `binding/key_rotation.rs`, or cryptographic key handling) require **both Cipher and Sentry review** — no exceptions.
 
 ### Review Rules
 
@@ -91,14 +105,21 @@ Report format is maintained in `docs/security/weekly-reports/`.
 
 ## Threat Model
 
-A detailed threat model for Omnia Protocol is maintained at [`docs/security/threat-model.md`](docs/security/threat-model.md). It covers:
+A detailed threat model for Omnia Protocol is maintained at two complementary documents:
+
+- [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) — Structured attack surface inventory and unmitigated risks
+- [`docs/security/threat-model.md`](docs/security/threat-model.md) — STRIDE threat classification with detailed attack vectors
+
+Both documents cover:
 
 - Adversary capabilities and attack surfaces
 - Trust assumptions for the causal graph, shard state, and binding layers
 - Cryptographic assumptions and fallback postures
 - Supply-chain integrity and dependency risks
+- ZK proof system security (trusted setup, Poseidon hash, Groth16 soundness)
+- Binding layer threats (RF fingerprinting bypass, quantum commitment forgery, PQC key rotation attacks)
 
-All security reviews should reference the threat model when evaluating potential impact.
+All security reviews should reference both threat model documents when evaluating potential impact.
 
 ## Fuzzing
 
@@ -107,9 +128,25 @@ Omnia Protocol employs fuzz testing to uncover edge cases in serialization, dese
 - `from_bytes()` deserialization for all shard state types (including version-byte validation)
 - Operation application via `apply()` with arbitrary inputs
 - Provenance chain construction and verification
-- Zero-knowledge circuit edge cases
+- Zero-knowledge circuit edge cases (including `fuzz_zk_proof_deserialization`)
+- Vector clock merge operations
+- Gossip message deserialization
+- Consensus state transitions
+- Rate limiter behavior
 
 Fuzzing is integrated into CI and runs on every merge to the main branch. New fuzz targets should be added whenever a new shard type or state format is introduced.
+
+## Side-Channel Resistance
+
+All cryptographic comparison operations in the substrate crate use constant-time
+comparisons via the `subtle` crate. See [`docs/security/SIDE_CHANNEL_AUDIT.md`](docs/security/SIDE_CHANNEL_AUDIT.md)
+for the full audit report.
+
+**Note**: The ZK and binding crates have not yet undergone a dedicated
+side-channel audit. Priority areas for future audit include:
+- Poseidon hash field-element comparisons in `zk/src/poseidon.rs`
+- Ed25519 and Dilithium signature verification paths in `binding/src/quantum_commit.rs`
+- `PqPublicKey` comparison in `binding/src/key_rotation.rs`
 
 ## Responsible Disclosure
 

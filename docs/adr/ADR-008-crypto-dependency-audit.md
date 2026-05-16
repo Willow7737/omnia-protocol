@@ -1,102 +1,174 @@
 # ADR-008: Cryptographic Dependency Audit
 
-**Status**: Accepted  
-**Date**: 2026-03-04  
-**Decider**: Cipher (Agent 02 — ZK/Crypto Layer)  
-**Sprint**: Sprint 1  
+**Status**: Accepted
+**Date**: 2026-03-04
+**Updated**: 2026-05-16
+**Decider**: Cipher (Agent 02 — ZK/Crypto Layer)
+**Sprint**: Sprint 1
 
 ## Context
 
-The Omnia Protocol relies on several cryptographic crates for core security guarantees: event signing, Merkle tree computation, state root hashing, and networking. As part of Sprint 1 hardening, we need to audit all cryptographic dependencies for version appropriateness and known vulnerabilities.
+The Omnia Protocol relies on several cryptographic crates for core security guarantees: event signing, Merkle tree computation, state root hashing, ZK proof generation, and post-quantum commitments. As part of Sprint 1 hardening, we need to audit all cryptographic dependencies for version appropriateness and known vulnerabilities.
 
 The spec mandates:
 - ed25519-dalek should be 2.1+
 - blake3 should be 1.5+
 
+This audit covers two crates with cryptographic dependencies:
+- **`omnia-zk`** (`zk/Cargo.toml`): ZK proof system (ark-* crates, Poseidon hash, Powers of Tau)
+- **`omnia-binding`** (`binding/Cargo.toml`): Post-quantum commitments and RF fingerprinting
+
 ## Audit Results
 
-### 1. ed25519-dalek
+### 1. ed25519-dalek (binding crate)
 
 | Field | Value |
 |-------|-------|
 | **Specified** | ≥ 2.1 |
-| **Cargo.toml** | `"2.1"` |
-| **Resolved (Cargo.lock)** | **2.2.0** |
+| **Cargo.toml** | `"2.1"` (with `rand_core` feature) |
 | **Assessment** | ✅ **Safe** |
 
-ed25519-dalek 2.2.0 supersedes the 1.x line which had side-channel vulnerabilities (CVE-2020-12973 class). Version 2.x uses `curve25519-dalek` 4.x with constant-time operations by default. No known vulnerabilities in 2.2.0.
+ed25519-dalek 2.x supersedes the 1.x line which had side-channel vulnerabilities (CVE-2020-12973 class). Version 2.x uses `curve25519-dalek` 4.x with constant-time operations by default. Used in `binding/src/quantum_commit.rs` for classical signature creation (`QuantumCommitment::sign_classical()`) and verification (`verify_ed25519()`). The `NodeKeypair` type from `omnia-substrate` wraps the `ed25519_dalek::SigningKey`.
 
 **Recommendation**: Keep at current version. Monitor for any future advisories on the 2.x line.
 
-### 2. blake3
+### 2. blake3 (both crates)
 
 | Field | Value |
 |-------|-------|
 | **Specified** | ≥ 1.5 |
-| **Cargo.toml** | `"1.5"` |
-| **Resolved (Cargo.lock)** | **1.8.5** |
+| **zk/Cargo.toml** | `"1.5"` |
+| **binding/Cargo.toml** | `"1.5"` |
 | **Assessment** | ✅ **Safe** |
 
-BLAKE3 is a relatively new hash function with no known cryptographic vulnerabilities. The 1.8.5 release includes performance improvements and SIMD optimizations. Used for Merkle tree computation in `CausalGraph::state_root()` and `CausalGraph::merkle_proof()`, as well as batch commitment hashing in the ZK module.
+BLAKE3 is a relatively new hash function with no known cryptographic vulnerabilities. Used extensively across the ZK and binding crates:
+
+- **ZK crate**: Merkle tree construction (`merkle.rs::build_merkle_tree`, `compute_root_from_proof`), batch commitment hashing (`proof.rs::compute_batch_commitment`), Powers of Tau transcript hashing (`setup/contribution.rs`), Poseidon round constant generation (`poseidon.rs::generate_round_constants`), Ethereum adapter simulated tx hashes (`settlement/ethereum.rs`)
+- **Binding crate**: Quantum commitment data hashing (`quantum_commit.rs::hash_data`), stub commitment creation (`new_stub`)
 
 **Recommendation**: Keep at current version. The 1.5+ minimum ensures AVX-512 support and the optimized SIMD backend.
 
-### 3. sha2
+### 3. pqc_dilithium (binding crate)
 
 | Field | Value |
 |-------|-------|
-| **Specified** | N/A (not specified in spec) |
-| **Cargo.toml** | `"0.10"` |
-| **Resolved (Cargo.lock)** | **0.10.9** |
+| **Specified** | N/A (added for PQC support) |
+| **Cargo.toml** | `"0.2"` |
 | **Assessment** | ✅ **Safe** |
 
-SHA-256 (via sha2 0.10.x) is used for computing event IDs in `Event::compute_hash()`. Version 0.10.x uses the `digest` 0.10 trait system and includes hardware-accelerated SHA extensions via `cpufeatures`. No known vulnerabilities. This is the current recommended version.
+CRYSTALS-Dilithium is a NIST PQC standard for digital signatures. The `pqc_dilithium` crate provides the `Keypair::generate()`, `Keypair::sign()`, and `verify()` functions used in `binding/src/quantum_commit.rs` for hybrid and post-quantum signature modes:
 
-**Recommendation**: Keep at 0.10.x. Do not downgrade to 0.9.x (different `digest` trait, no longer maintained).
+```rust
+pub fn sign_hybrid(data: &[u8], ed_keypair: &NodeKeypair, dilithium_keypair: &pqc_dilithium::Keypair) -> Result<Self, BindingError>
+pub fn sign_post_quantum(data: &[u8], dilithium_keypair: &pqc_dilithium::Keypair) -> Result<Self, BindingError>
+```
 
-### 4. rand
+**Recommendation**: Monitor NIST for any updates to the Dilithium standard. Version 0.2 implements Dilithium as specified in FIPS 204. Watch for a 1.0 release that may include API changes.
+
+### 4. ark-groth16 / ark-bn254 / ark-r1cs-std / ark-relations (ZK crate)
 
 | Field | Value |
 |-------|-------|
-| **Specified** | N/A |
-| **Cargo.toml** | `"0.8"` |
-| **Resolved (Cargo.lock)** | **0.8.6** (also 0.9.4 via transitive deps) |
+| **Cargo.toml** | `"0.4"` (all ark-* crates) |
+| **Assessment** | ✅ **Safe** |
+
+The `ark-*` ecosystem provides the Groth16 proof system on the BN254 curve. Used throughout the ZK crate:
+
+- `ark-groth16` 0.4: `Groth16::setup()`, `Groth16::prove()`, `Groth16::verify()` in `zk/src/prover.rs`
+- `ark-bn254` 0.4: Bn254 pairing-friendly curve, `Fr` field element type used in circuits
+- `ark-r1cs-std` 0.4: R1CS gadget library (`FpVar`, `Boolean`, `CondSelectGadget`, `EqGadget`) used in `zk/src/circuit.rs` and `zk/src/poseidon.rs`
+- `ark-relations` 0.4: `ConstraintSynthesizer` trait, `ConstraintSystemRef`, `SynthesisError`
+- `ark-serialize` 0.4: Canonical serialization for proofs and keys
+- `ark-ec` 0.4: Elliptic curve operations for Powers of Tau
+- `ark-ff` 0.4: Field arithmetic (`PrimeField`, `Field`, `Zero`, `UniformRand`)
+- `ark-crypto-primitives` 0.4: `CircuitSpecificSetupSNARK` trait
+
+The 0.4 line is the latest stable release. No known vulnerabilities.
+
+**Recommendation**: Keep at 0.4. Watch for 0.5 release which may include BLS12-381 circuit support improvements.
+
+### 5. rand / rand_chacha (ZK crate)
+
+| Field | Value |
+|-------|-------|
+| **zk/Cargo.toml (rand)** | `"0.8"` |
+| **zk/Cargo.toml (rand_chacha)** | `"0.3"` |
+| **binding/Cargo.toml (rand)** | `"0.8"` |
 | **Assessment** | ⚠️ **Acceptable, with note** |
 
-rand 0.8.x is used directly in the substrate crate for `OsRng` in key generation. The rand 0.9.x entry in Cargo.lock comes from transitive dependencies (libp2p ecosystem). This dual-version situation is harmless but adds to compile time.
+rand 0.8.x is used in the ZK crate for `ChaCha8Rng::from_entropy()` in trusted setup and proof generation (`prover.rs`). `ChaCha8Rng::from_seed()` is used for deterministic contributions in the trusted setup ceremony (`setup/contribution.rs`). The binding crate uses rand for `Fr::rand()` operations.
 
-No known security vulnerabilities in rand 0.8.6. The 0.9.x line changed the trait system significantly; migration is non-trivial but not urgent.
+No known security vulnerabilities in rand 0.8.x.
 
-**Recommendation**: Remain on 0.8.x for direct usage. Plan migration to 0.9.x in a future sprint to reduce dependency duplication.
+**Recommendation**: Remain on 0.8.x for direct usage. Plan migration to 0.9.x in a future sprint to reduce dependency duplication with transitive dependencies.
 
-### 5. libp2p
+### 6. ark-serialize (ZK crate)
 
 | Field | Value |
 |-------|-------|
-| **Specified** | N/A |
-| **Cargo.toml** | `"0.56"` |
-| **Resolved (Cargo.lock)** | **0.56.0** |
-| **Assessment** | ⚠️ **Acceptable, consider upgrade** |
+| **Cargo.toml** | `"0.4"` |
+| **Assessment** | ✅ **Safe** |
 
-libp2p 0.56.0 is used for the gossip protocol (QUIC, Kademlia DHT, Gossipsub). This is not a cryptographic primitive per se, but it transports cryptographic operations (Noise protocol for encryption, multiplexing via Yamux).
+Used for canonical serialization of Groth16 proofs and verifying keys in `zk/src/prover.rs`:
+- `serialize_proof()` uses `serialize_uncompressed()`
+- `deserialize_proof()` uses `deserialize_uncompressed()`
+- `serialize_verifying_key()` / `deserialize_verifying_key()` for VK persistence
 
-No critical CVEs known for 0.56.0. The libp2p team frequently releases updates; 0.56 is a few versions behind the latest.
+Uncompressed serialization is used for simplicity and compatibility. Production deployments should consider compressed serialization to reduce proof size.
 
-**Recommendation**: Consider upgrading to the latest 0.5x line in a future sprint. Ensure Noise protocol configuration uses the `XX` handshake pattern (currently default).
+**Recommendation**: Consider switching to compressed serialization in a future sprint for reduced wire size.
+
+### 7. serde / bincode (both crates)
+
+| Field | Value |
+|-------|-------|
+| **Cargo.toml (serde)** | `"1.0"` with `derive` feature |
+| **Cargo.toml (bincode)** | `"1"` |
+| **Assessment** | ✅ **Safe** |
+
+Used for `ProofBundle` serialization (`proof_bundle.rs`), `MerkleProof` serialization (`merkle.rs`), `ProvenanceLog` serialization (`provenance.rs`), `PowersOfTau` serialization (`setup/powers_of_tau.rs`), `Contribution` and `ContributionProof` serialization (`setup/contribution.rs`), and `PqcKeyRotationRequest` serialization (`key_rotation.rs`).
+
+bincode 1.x is in maintenance mode; bincode 2.x is available with breaking changes.
+
+**Recommendation**: Plan migration to bincode 2.x in a future sprint for improved error handling and performance.
+
+### 8. thiserror (both crates)
+
+| Field | Value |
+|-------|-------|
+| **Cargo.toml** | `"2.0"` |
+| **Assessment** | ✅ **Safe** |
+
+Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementError`, `RollupError`, `SetupError`, `BindingError`, `ProvenanceTrackerError`. thiserror 2.0 is the current release.
+
+**Recommendation**: Keep at current version.
 
 ## Summary Table
 
-| Crate | Cargo.toml | Resolved | Spec Met | Status |
-|-------|-----------|----------|----------|--------|
-| ed25519-dalek | 2.1 | 2.2.0 | ✅ ≥2.1 | ✅ Safe |
-| blake3 | 1.5 | 1.8.5 | ✅ ≥1.5 | ✅ Safe |
-| sha2 | 0.10 | 0.10.9 | N/A | ✅ Safe |
-| rand | 0.8 | 0.8.6 | N/A | ⚠️ Acceptable |
-| libp2p | 0.56 | 0.56.0 | N/A | ⚠️ Acceptable |
+| Crate | Location | Cargo.toml | Spec Met | Status |
+|-------|----------|-----------|----------|--------|
+| ed25519-dalek | binding | 2.1 | ✅ ≥2.1 | ✅ Safe |
+| blake3 | both | 1.5 | ✅ ≥1.5 | ✅ Safe |
+| pqc_dilithium | binding | 0.2 | N/A | ✅ Safe |
+| ark-groth16 | zk | 0.4 | N/A | ✅ Safe |
+| ark-bn254 | zk | 0.4 | N/A | ✅ Safe |
+| ark-r1cs-std | zk | 0.4 | N/A | ✅ Safe |
+| ark-relations | zk | 0.4 | N/A | ✅ Safe |
+| ark-serialize | zk | 0.4 | N/A | ✅ Safe |
+| ark-ec | zk | 0.4 | N/A | ✅ Safe |
+| ark-ff | zk | 0.4 | N/A | ✅ Safe |
+| ark-crypto-primitives | zk | 0.4 | N/A | ✅ Safe |
+| rand | both | 0.8 | N/A | ⚠️ Acceptable |
+| rand_chacha | zk | 0.3 | N/A | ✅ Safe |
+| serde | both | 1.0 | N/A | ✅ Safe |
+| bincode | both | 1 | N/A | ✅ Safe |
+| thiserror | both | 2.0 | N/A | ✅ Safe |
 
 ## Action Items
 
-1. **No immediate changes required** — all spec requirements are met and no known vulnerabilities exist.
+1. **No immediate changes required** — all spec requirements are met and no known vulnerabilities exist in any cryptographic dependency.
 2. **Future sprint**: Migrate rand from 0.8.x to 0.9.x to eliminate dependency duplication.
-3. **Future sprint**: Upgrade libp2p to latest 0.5x line for bug fixes and performance improvements.
-4. **Ongoing**: Subscribe to RustSec advisories for all crypto crates; integrate `cargo audit` into CI when available.
+3. **Future sprint**: Migrate bincode from 1.x to 2.x for improved error handling.
+4. **Future sprint**: Consider switching from uncompressed to compressed ark-serialize for reduced proof wire size.
+5. **Ongoing**: Subscribe to RustSec advisories for all crypto crates; integrate `cargo audit` into CI when available.
+6. **Ongoing**: Monitor NIST for updates to CRYSTALS-Dilithium standard (FIPS 204) and watch for `pqc_dilithium` crate updates.

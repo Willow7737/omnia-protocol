@@ -273,7 +273,7 @@ What actually happens
 ## Environment
 - OS: macOS 12.0
 - Rust: 1.75.0
-- Version: 1.0.0
+- Version: 4.0.0
 ```
 
 ### Feature Requests

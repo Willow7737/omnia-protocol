@@ -115,6 +115,8 @@ cargo bench --no-run
 - Physical anchor (RF + quantum + provenance)
 - ProvenanceTracker with create/transfer/verify/destroy lifecycle
 - Hybrid PQC signatures (Ed25519 + CRYSTALS-Dilithium)
+- ✅ Real PQC signatures (Ed25519 + CRYSTALS-Dilithium hybrid verification)
+- ✅ PqcKeyRotationManager for post-quantum key rotation (3-phase migration)
 - ⚠️ Stubs: RF fingerprinting (needs SDR hardware)
 
 ### Layer 4: Identity Hardening ✅
@@ -140,7 +142,7 @@ cargo bench --no-run
 - ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
 - Sparse Merkle tree proofs (BLAKE3 off-circuit)
 - Event pruning for sustainability
-- ⚠️ Placeholder: ExpandedRollupCircuit uses simplified field-addition hash (needs Pedersen/Poseidon for production)
+- ⚠️ Placeholder: ExpandedRollupCircuit uses Poseidon hash (production-ready, but parameters use Cauchy MDS + BLAKE3 round constants, not Grain LFSR from paper)
 
 ---
 
@@ -153,7 +155,7 @@ cargo bench --no-run
 | Validator network | 🌑 Not started | Single-node operator for Phase 0 |
 | Conviction voting | 🌑 Not started | Planned for Phase 1 |
 | Delegation | 🌑 Not started | Planned for Phase 1 |
-| Production ZK hash gadget | ⚠️ Placeholder | ExpandedRollupCircuit uses simplified field-addition hash; needs Pedersen/Poseidon for production |
+| Production ZK hash gadget | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
 
 ---
 
@@ -200,13 +202,13 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 *Goal: Independence*
 - 📋 Standalone validator network
 - 📋 Real RF fingerprinting (SDR hardware)
-- 📋 Production ZK hash gadget (Pedersen/Poseidon)
+- 📋 Production ZK hash gadget (✅ Poseidon already implemented)
 - 📋 Mobile wallet
 - 📋 Conviction voting & delegation
 
 ### Phase 2: The Trunk 🔮 Long-term Vision
 *Goal: Decentralization*
-- 🔮 Quantum-resistant cryptography
+- ✅ Quantum-resistant cryptography (Ed25519 + CRYSTALS-Dilithium hybrid)
 - 🔮 Hardware mesh networks
 - 🔮 Proof-of-useful-work (production)
 

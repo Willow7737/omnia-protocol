@@ -1,7 +1,7 @@
 # ADR-003: Gossip → Substrate Event Flow
 
-**Status**: Proposed
-**Date**: 2026-05-14
+**Status**: Accepted
+**Date:** 2026-05-14
 **Decision**: Define the event flow from gossip network reception through the substrate's causal graph insertion and consensus queue population.
 
 ## Context
@@ -85,6 +85,20 @@ if let Some(ref mut gossip) = self.gossip {
 
 **Step 5: Consensus Processing.** The `process_consensus()` method drains `unprocessed_events` and feeds each event through `consensus.process_event()`, returning committed event IDs.
 
+### Parallel Event Path: REST API
+
+In addition to the gossip path, the `omnia-node` binary provides a second event submission path through the REST API (`POST /api/v1/events`). The API handler in `node/src/api/events.rs`:
+
+1. Decodes the hex payload from the request body
+2. Checks payload size against `omnia_substrate::MAX_PAYLOAD_SIZE`
+3. Creates a `Event::genesis()` with the node's configured `node_id_bytes()`
+4. Signs the event with a fresh `generate_keypair()` keypair
+5. Submits the event to the substrate via `substrate.write().await.submit_event(event).await`
+6. Stores a simplified `StoredEvent` in the in-memory `event_store` for later retrieval
+7. Increments the `omnia_node_events_submitted_total` Prometheus counter
+
+**Important difference from gossip path:** The API path creates a new keypair for each event submission rather than reusing a persistent identity. This means each API-submitted event has a different `creator` field (derived from `blake3(pubkey)`), which affects equivocation detection and slashing.
+
 ### Error Handling: Invalid Events Are Logged and Dropped
 
 At every stage of the pipeline, errors are caught and logged without propagating:
@@ -93,6 +107,9 @@ At every stage of the pipeline, errors are caught and logged without propagating
 - **Graph insertion failure** (invalid hash, missing parent, cycle): Logged via `tracing::warn!`, event rejected.
 - **Duplicate event**: Silently accepted (idempotent), stats incremented as rejected.
 - **Gossip processing error** (returned from `process_pending_events()`): Logged at the substrate level, but the substrate loop continues.
+- **API payload too large**: Returns HTTP 413 (Payload Too Large) to the client.
+- **Invalid hex payload**: Returns HTTP 400 (Bad Request) to the client.
+- **Event submission failure**: Event is still stored in the event store with `status: "submission_failed"`.
 
 At no point does an invalid event cause a panic or halt the substrate. This is a critical safety invariant for a network-facing component.
 
@@ -123,6 +140,8 @@ This design ensures that network events land in the graph where `Substrate::proc
 - **Positive**: Clean separation of concerns — the gossip protocol handles network I/O and deserialization, the causal graph handles structural validation, and the substrate handles consensus routing.
 - **Positive**: Error isolation — malformed or malicious events cannot crash the node.
 - **Positive**: Idempotency — duplicate events (from gossip retransmission) are silently handled by `CausalGraph::insert()` returning `DuplicateEvent`.
+- **Positive**: Dual event path — events can enter the system via gossip (network) or the REST API (local), both feeding into the same substrate pipeline.
 - **Negative**: The `seen_events` HashSet grows unboundedly. In a long-running node with high throughput, this could consume significant memory. A pruning strategy (e.g., LRU eviction) is needed.
 - **Negative**: Backpressure via dropping oldest events means that under extreme load, events may be silently lost. For a BFT system, this is acceptable because events are gossiped to multiple nodes — another node will process them.
+- **Negative**: The REST API event path creates a fresh keypair per submission, which means each API-submitted event has a unique creator. This prevents equivocation detection for API-submitted events (since each uses a different key), but also means these events cannot be attributed to a persistent identity.
 - **Trade-off**: The `Arc<RwLock<CausalGraph>>` pattern means that graph insertion requires an async write lock. Under high contention (many concurrent insertions), this could become a bottleneck. However, the lock is held only for the duration of `insert()`, which is O(1) for the HashMap lookup plus O(k) for ancestry checks.
