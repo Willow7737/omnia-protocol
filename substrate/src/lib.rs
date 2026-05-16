@@ -225,11 +225,14 @@ impl SubstrateConfig {
     /// constructing the substrate.
     pub fn new(node_id: NodeId) -> Self {
         let total_nodes = 4;
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid debug-build panic
         Self {
             node_id,
             gossip: GossipConfig::default(),
             consensus: ConsensusConfig {
                 total_nodes,
+                round_seed: seed,
                 ..Default::default()
             },
             total_nodes,
@@ -247,11 +250,14 @@ impl SubstrateConfig {
     ///
     /// Slashing defaults to in-memory mode with standard thresholds.
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid debug-build panic
         Self {
             node_id,
             gossip: GossipConfig::default(),
             consensus: ConsensusConfig {
                 total_nodes,
+                round_seed: seed,
                 ..Default::default()
             },
             total_nodes,
