@@ -231,10 +231,6 @@ pub struct ConsensusEngine {
     slashing: SlashingEngine,
     /// Round timer for liveness enforcement
     round_timer: RoundTimer,
-    /// Tracks (creator, sequence) pairs that have been seen.
-    /// If we see a new event with the same (creator, sequence) but different EventId,
-    /// that's equivocation.
-    seen_sequences: HashSet<(NodeId, u64)>,
     /// Maps (creator, sequence) → first EventId seen for that pair.
     first_event_for_sequence: HashMap<(NodeId, u64), EventId>,
 }
@@ -282,7 +278,7 @@ impl ConsensusEngine {
             _last_finalized: VectorClock::new(),
             slashing,
             round_timer,
-            seen_sequences: HashSet::new(),
+
             first_event_for_sequence: HashMap::new(),
         }
     }

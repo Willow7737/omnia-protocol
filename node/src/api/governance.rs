@@ -123,12 +123,12 @@ pub async fn cast_vote(
 
     // Reject votes from voters with no registered stake
     if !economics.governance.voting_weights.contains_key(&body.did) {
-        return (
+        return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
                 "error": "Voter has no registered stake. Register stake before voting."
             })),
-        );
+        ));
     }
 
     let effective_weight = economics
