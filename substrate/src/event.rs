@@ -18,9 +18,9 @@ use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 
-/// Maximum allowed clock drift for event timestamps (5 minutes in milliseconds).
+/// Maximum allowed clock drift for event timestamps (2 minutes in milliseconds).
 /// Events with timestamps more than this far in the future are rejected.
-pub const MAX_TIMESTAMP_DRIFT_MS: u64 = 300_000;
+pub const MAX_TIMESTAMP_DRIFT_MS: u64 = 120_000; // 2 minutes (was 5 min)
 
 /// Maximum age for an event before it is considered ancient (365 days in milliseconds).
 /// Events older than this are rejected as unreasonably stale.
@@ -595,7 +595,7 @@ mod tests {
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]);
 
-        // Set timestamp 10 minutes in the future (beyond 5-minute drift)
+        // Set timestamp 10 minutes in the future (beyond 2-minute drift)
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()

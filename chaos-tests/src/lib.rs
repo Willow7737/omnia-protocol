@@ -101,8 +101,11 @@ impl ChaosNode {
         // Derive node_id from the keypair: node_id = blake3(creator_pubkey)
         // This matches Event::sign_with_keypair() which sets creator = blake3(pubkey)
         let node_id: NodeId = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        let mut seed = [0u8; 32];
+        seed[0] = (index as u8) + 1; // Non-zero to avoid debug-build panic
         let config = ConsensusConfig {
             total_nodes,
+            round_seed: seed,
             ..Default::default()
         };
         let slashing =
@@ -195,8 +198,11 @@ impl ChaosNetwork {
         // Create nodes, each with all validators registered
         let mut nodes = Vec::with_capacity(n);
         for i in 0..n {
+            let mut seed = [0u8; 32];
+            seed[0] = (i as u8) + 1; // Non-zero to avoid debug-build panic
             let config = ConsensusConfig {
                 total_nodes: n,
+                round_seed: seed,
                 ..Default::default()
             };
             let slashing =

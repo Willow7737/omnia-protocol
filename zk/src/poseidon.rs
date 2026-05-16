@@ -76,6 +76,19 @@ const ALPHA: u64 = 5;
 /// guaranteed to be MDS (Maximum Distance Separable) — providing the
 /// optimal diffusion property required by the Poseidon construction.
 ///
+/// # Warning: Breaking Change
+///
+/// The current MDS matrix uses a Cauchy construction which differs from the
+/// standard reference constants in the Filecoin/Neptune repository. Switching
+/// to the standard reference MDS matrix would change Poseidon hash outputs
+/// and invalidate existing ZK proofs. A future sprint will migrate to the
+/// reference constants.
+///
+/// To migrate:
+/// 1. Regenerate trusted setup keys with the new Poseidon parameters
+/// 2. Regenerate all existing ZK proofs
+/// 3. Update any off-chain code that computes Poseidon hashes
+///
 /// # Returns
 ///
 /// A 3×3 MDS matrix of field elements.
@@ -106,6 +119,13 @@ fn generate_mds_matrix() -> [[Fr; T]; T] {
 /// weaknesses. The approach is analogous to the Grain LFSR method specified
 /// in the Poseidon paper (Section 4.2), but uses BLAKE3 for simplicity and
 /// auditability.
+///
+/// # Warning: Breaking Change
+///
+/// The current round constants use a BLAKE3-derived method which differs
+/// from the standard Grain LFSR constants in the Poseidon specification.
+/// A future sprint will migrate to the reference constants from the
+/// Filecoin/Neptune repository.
 ///
 /// # Returns
 ///

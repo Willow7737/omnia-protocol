@@ -41,6 +41,8 @@ anyhow = "1"
 # Embedded database for persistent nonce and slashing state — sled provides
 # fast key-value storage used by SledNonceStore and SledSlashingStore
 # https://docs.rs/sled
+# ⚠️ sled 0.34 is alpha-quality. Production deployments should migrate to
+# rocksdb or redb. See docs/OPERATIONS.md for migration guidance.
 sled = "0.34"
 
 # Hex encoding for event IDs and node identifiers in JSON responses

@@ -19,6 +19,11 @@ use thiserror::Error;
 /// Maximum depth for ancestry traversal (prevents infinite loops from corrupted data)
 const MAX_ANCESTRY_DEPTH: usize = 1_000_000;
 
+/// Maximum number of distinct nodes visited during ancestry traversal.
+/// Bounds memory usage even on wide DAGs where depth is shallow but
+/// breadth is large.
+const MAX_ANCESTRY_VISITED: usize = 100_000;
+
 /// Maximum number of tips to track before forced consolidation
 const MAX_TIPS: usize = 10_000;
 
@@ -345,6 +350,11 @@ impl CausalGraph {
                     hex::encode(&descendant[..8]).to_string(),
                 ));
             }
+            if visited.len() > MAX_ANCESTRY_VISITED {
+                return Err(CausalGraphError::MaxDepthExceeded(
+                    hex::encode(&descendant[..8]).to_string(),
+                ));
+            }
 
             if let Some(event) = self.events.get(&current_id) {
                 for parent in [event.self_parent, event.other_parent].iter().flatten() {
@@ -372,6 +382,11 @@ impl CausalGraph {
         while let Some(current_id) = queue.pop_front() {
             depth += 1;
             if depth > MAX_ANCESTRY_DEPTH {
+                return Err(CausalGraphError::MaxDepthExceeded(
+                    hex::encode(&event_id[..8]).to_string(),
+                ));
+            }
+            if ancestors.len() > MAX_ANCESTRY_VISITED {
                 return Err(CausalGraphError::MaxDepthExceeded(
                     hex::encode(&event_id[..8]).to_string(),
                 ));

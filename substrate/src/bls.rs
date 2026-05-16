@@ -157,11 +157,31 @@ impl BlsKeypair {
     /// let keypair = BlsKeypair::generate(None);
     /// ```
     pub fn generate(seed: Option<&[u8]>) -> Self {
-        let ikm = seed.unwrap_or(&[0u8; 32]);
+        let ikm = seed.unwrap_or_else(|| {
+            #[cfg(debug_assertions)]
+            panic!("BlsKeypair::generate(None) is insecure — provide a seed or use BlsKeypair::generate_random()");
+            #[cfg(not(debug_assertions))]
+            {
+                tracing::warn!("⚠️  BLS keypair generated with zero seed — INSECURE for production");
+                &[0u8; 32]
+            }
+        });
         let sk = BlstSecretKey::key_gen(ikm, &[])
             .expect("BLS key generation should not fail with valid input");
         let pk = sk.sk_to_pk();
+        Self {
+            secret_key: sk,
+            public_key: pk,
+        }
+    }
 
+    /// Generate a BLS keypair with cryptographically random entropy.
+    pub fn generate_random() -> Self {
+        let mut ikm = [0u8; 32];
+        getrandom::getrandom(&mut ikm).expect("Failed to generate random IKM for BLS key");
+        let sk = BlstSecretKey::key_gen(&ikm, &[])
+            .expect("BLS key generation should not fail with valid input");
+        let pk = sk.sk_to_pk();
         Self {
             secret_key: sk,
             public_key: pk,
@@ -584,7 +604,7 @@ mod tests {
 
     #[test]
     fn test_bls_keypair_generate() {
-        let kp = BlsKeypair::generate(None);
+        let kp = BlsKeypair::generate(Some(&[1u8; 32]));
         let pk = kp.public_key();
         assert_eq!(pk.0.len(), PUBLIC_KEY_SIZE);
     }

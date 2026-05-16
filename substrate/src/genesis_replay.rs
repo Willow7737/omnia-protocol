@@ -51,8 +51,13 @@ pub struct ReplayConfig {
 
 impl Default for ReplayConfig {
     fn default() -> Self {
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid debug-build panic
         Self {
-            consensus_config: ConsensusConfig::default(),
+            consensus_config: ConsensusConfig {
+                round_seed: seed,
+                ..ConsensusConfig::default()
+            },
             slash_threshold: crate::slashing::DEFAULT_SLASH_THRESHOLD,
             ejection_threshold: crate::slashing::DEFAULT_EJECTION_THRESHOLD,
         }
@@ -220,8 +225,13 @@ mod tests {
 
     #[test]
     fn test_genesis_events_replay() {
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid debug-build panic
         let config = ReplayConfig {
-            consensus_config: ConsensusConfig::default(),
+            consensus_config: ConsensusConfig {
+                round_seed: seed,
+                ..ConsensusConfig::default()
+            },
             slash_threshold: DEFAULT_SLASH_THRESHOLD,
             ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
         };

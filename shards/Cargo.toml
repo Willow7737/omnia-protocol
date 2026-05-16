@@ -22,6 +22,8 @@ blake3 = "1.5"
 # Persistent nonce storage — needed for replay protection that survives restarts.
 # Sled is chosen for its simplicity, embedded nature (no external DB server),
 # and cross-platform compatibility (pure Rust, works on Linux/macOS/Windows).
+# ⚠️ sled 0.34 is alpha-quality. Production deployments should migrate to
+# rocksdb or redb. See docs/OPERATIONS.md for migration guidance.
 sled = "0.34"
 
 [dev-dependencies]
