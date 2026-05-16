@@ -25,7 +25,7 @@
 //! # Constraints
 //!
 //! - Undo is rate-limited: at most one undo per node per 1000 blocks.
-//! - Undo only decrements points by [`LIVENESS_VIOLATION_POINTS`] (100)
+//! - Undo only decrements points by [`crate::slashing::LIVENESS_VIOLATION_POINTS`] (100)
 //!   per request, preventing a governance takeover from fully clearing
 //!   a genuinely malicious validator.
 //! - All undos are permanently recorded in the audit log.
@@ -153,7 +153,7 @@ impl SlashingUndoManager {
     /// Apply a slashing undo request.
     ///
     /// Decrements the target validator's slash points by
-    /// [`LIVENESS_VIOLATION_POINTS`] (100) and records the undo in the
+    /// [`crate::slashing::LIVENESS_VIOLATION_POINTS`] (100) and records the undo in the
     /// audit log. Enforces the rate limit — at most one undo per validator
     /// per `min_undo_interval` rounds.
     ///

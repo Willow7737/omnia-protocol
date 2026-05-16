@@ -16,7 +16,7 @@
 //!
 //! # Migration Playbook
 //!
-//! See [`docs/CRYPTO_MIGRATION.md`] for the step-by-step migration procedure
+//! See `docs/CRYPTO_MIGRATION.md` for the step-by-step migration procedure
 //! for each primitive compromise scenario and the Q-Day procedure.
 
 use serde::{Deserialize, Serialize};
