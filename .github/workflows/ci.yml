@@ -31,17 +31,35 @@ jobs:
       - name: Verify exemption notes
         run: |
           python3 -c "
-          import toml
+          import sys
+          # Parse TOML without external dependency
           with open('supply-chain/config.toml') as f:
-              config = toml.load(f)
+              content = f.read()
+          # Simple check: every exemption block should have a notes field
+          in_exemption = False
+          has_notes = False
+          current_name = ''
           missing = []
-          for exp in config.get('exemptions', []):
-              if 'notes' not in exp or not exp['notes'].strip():
-                  missing.append(exp['name'])
+          for line in content.splitlines():
+              stripped = line.strip()
+              if stripped.startswith('[[') and 'exemptions' in stripped:
+                  if in_exemption and not has_notes:
+                      missing.append(current_name)
+                  in_exemption = True
+                  has_notes = False
+                  current_name = stripped
+              elif in_exemption and stripped.startswith('notes'):
+                  has_notes = True
+              elif stripped.startswith('[[') or stripped.startswith('['):
+                  if in_exemption and not has_notes:
+                      missing.append(current_name)
+                  in_exemption = False
+          if in_exemption and not has_notes:
+              missing.append(current_name)
           if missing:
-              print(f'Missing notes for exemptions: {missing}')
-              exit(1)
-          print('All exemptions have notes')
+              print(f'❌ Missing notes for {len(missing)} exemptions')
+              sys.exit(1)
+          print('✅ All exemptions have notes')
           "
 
   test:
