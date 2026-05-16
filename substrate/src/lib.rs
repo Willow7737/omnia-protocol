@@ -25,31 +25,40 @@ pub mod causal_graph;
 pub mod consensus;
 pub mod crdt;
 pub mod crypto;
+pub mod crypto_schemes;
 pub mod event;
+pub mod genesis_replay;
 pub mod gossip;
 pub mod keystore;
 pub mod network;
 pub mod rate_limiter;
 pub mod slashing;
+pub mod slashing_undo;
 pub mod snapshot;
+pub mod snapshot_replication;
+pub mod threshold;
 pub mod vector_clock;
 pub mod vrf;
 
 // Re-export commonly used types
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, verify_aggregate, BlsError, BlsKeypair,
-    BlsPublicKey, BlsSignature,
+    aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
+    BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
-pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState};
+pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, RoundTimer};
 pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
+pub use crypto_schemes::{
+    CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
+};
 pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
+pub use genesis_replay::{replay_genesis, ReplayResult};
 pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
     GossipStats,
@@ -65,7 +74,12 @@ pub use slashing::{
     SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
+pub use slashing_undo::{SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
 pub use snapshot::{SnapshotError, StateSnapshot};
+pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
+pub use threshold::{
+    KeyShare, PartialSignature, ThresholdConfig, ThresholdKeyManager, ThresholdSignature,
+};
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
 

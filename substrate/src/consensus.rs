@@ -25,6 +25,7 @@ use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 /// Supermajority threshold (>2/3)
@@ -58,6 +59,12 @@ pub struct ConsensusConfig {
     ///
     /// See: draft-irtf-cfrg-vrf-15, §5 — VRF-based leader selection
     pub round_seed: [u8; 32],
+    /// Maximum duration (in milliseconds) a round may take before advancing.
+    /// Default: 30_000 (30 seconds).
+    pub round_timeout_ms: u64,
+    /// Maximum consecutive timed-out rounds before entering recovery mode.
+    /// Default: 3.
+    pub max_consecutive_timeouts: u32,
 }
 
 impl Default for ConsensusConfig {
@@ -69,7 +76,83 @@ impl Default for ConsensusConfig {
             optimistic_threshold: 3, // >2/3 of 4
             max_look_ahead: 10,
             round_seed: [0u8; 32], // Must be set before production use
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
         }
+    }
+}
+
+/// Tracks round timing and timeout state for liveness.
+///
+/// This struct monitors whether consensus rounds complete within the
+/// configured timeout. If too many consecutive rounds time out, the
+/// engine enters "recovery mode" with halved timeouts to accelerate
+/// round advancement and restore liveness.
+///
+/// Note: This type intentionally does **not** implement `Serialize`/`Deserialize`
+/// because `std::time::Instant` is not serializable. The round timer is
+/// re-initialized on startup.
+pub struct RoundTimer {
+    /// The current round number.
+    round: u64,
+    /// When the current round started.
+    started_at: Instant,
+    /// The base timeout duration.
+    timeout: Duration,
+    /// Number of consecutive timed-out rounds.
+    consecutive_timeouts: u32,
+    /// Threshold for entering recovery mode.
+    max_consecutive: u32,
+}
+
+impl RoundTimer {
+    /// Create a new round timer with the given base timeout and maximum
+    /// consecutive timeout threshold.
+    pub fn new(timeout: Duration, max_consecutive: u32) -> Self {
+        Self {
+            round: 0,
+            started_at: Instant::now(),
+            timeout,
+            consecutive_timeouts: 0,
+            max_consecutive,
+        }
+    }
+
+    /// Start tracking a new round.
+    pub fn start_round(&mut self, round: u64) {
+        self.round = round;
+        self.started_at = Instant::now();
+    }
+
+    /// Check whether the current round has timed out.
+    pub fn is_timed_out(&self) -> bool {
+        self.started_at.elapsed() >= self.effective_timeout()
+    }
+
+    /// Return the effective timeout, which is halved in recovery mode
+    /// (when `consecutive_timeouts >= max_consecutive`).
+    pub fn effective_timeout(&self) -> Duration {
+        if self.consecutive_timeouts >= self.max_consecutive {
+            self.timeout / 2
+        } else {
+            self.timeout
+        }
+    }
+
+    /// Mark the current round as having succeeded, resetting the
+    /// consecutive timeout counter.
+    pub fn round_succeeded(&mut self) {
+        self.consecutive_timeouts = 0;
+    }
+
+    /// Mark the current round as having timed out. Increments the
+    /// consecutive timeout counter.
+    ///
+    /// Returns `true` if the engine has entered recovery mode
+    /// (i.e., `consecutive_timeouts >= max_consecutive`).
+    pub fn round_timed_out(&mut self) -> bool {
+        self.consecutive_timeouts += 1;
+        self.consecutive_timeouts >= self.max_consecutive
     }
 }
 
@@ -128,6 +211,8 @@ pub struct ConsensusEngine {
     _last_finalized: VectorClock,
     /// Slashing engine for Byzantine fault penalties
     slashing: SlashingEngine,
+    /// Round timer for liveness enforcement
+    round_timer: RoundTimer,
 }
 
 impl ConsensusEngine {
@@ -146,6 +231,10 @@ impl ConsensusEngine {
     /// * `slashing` — A [`SlashingEngine`] instance, typically cloned from
     ///   the one created in [`Substrate::new`](crate::Substrate::new).
     pub fn new(config: ConsensusConfig, slashing: SlashingEngine) -> Self {
+        let round_timer = RoundTimer::new(
+            Duration::from_millis(config.round_timeout_ms),
+            config.max_consecutive_timeouts,
+        );
         Self {
             config,
             event_states: HashMap::new(),
@@ -156,6 +245,7 @@ impl ConsensusEngine {
             committed_count: 0,
             _last_finalized: VectorClock::new(),
             slashing,
+            round_timer,
         }
     }
 
@@ -574,6 +664,64 @@ impl ConsensusEngine {
         );
         self.config.round_seed = new_seed;
     }
+
+    /// Check whether the current round has timed out and advance if needed.
+    ///
+    /// Returns `true` if the round was advanced due to a timeout.
+    pub fn check_round_timeout(&mut self) -> bool {
+        if self.round_timer.is_timed_out() {
+            self.advance_round();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Mark the current round as successfully committed.
+    ///
+    /// Resets the consecutive timeout counter in the round timer.
+    pub fn round_committed(&mut self) {
+        self.round_timer.round_succeeded();
+    }
+
+    /// Get the current maximum round across all nodes.
+    pub fn current_round(&self) -> u64 {
+        self.node_info
+            .values()
+            .map(|i| i.current_round)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Advance to the next round after a timeout.
+    ///
+    /// Logs a warning, increments the round number, and updates the
+    /// round seed to ensure the next leader selection is unpredictable.
+    /// Does **not** call `select_leader` — candidates must be provided
+    /// externally.
+    fn advance_round(&mut self) {
+        let old_round = self.current_round();
+        let new_round = old_round + 1;
+        let in_recovery = self.round_timer.round_timed_out();
+
+        tracing::warn!(
+            old_round,
+            new_round,
+            consecutive_timeouts = self.round_timer.consecutive_timeouts,
+            in_recovery,
+            "Round timed out, advancing to next round"
+        );
+
+        // Derive a new round seed from the current seed + new round number
+        // to ensure the next leader selection is unpredictable.
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&self.config.round_seed);
+        hasher.update(&new_round.to_le_bytes());
+        let new_seed: [u8; 32] = hasher.finalize().into();
+        self.update_round_seed(new_seed);
+
+        self.round_timer.start_round(new_round);
+    }
 }
 
 /// Consensus statistics
@@ -766,6 +914,8 @@ mod tests {
             optimistic_threshold: 3,
             max_look_ahead: 10,
             round_seed: [0u8; 32],
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
         };
         let mut engine = ConsensusEngine::new(
             config,
@@ -947,5 +1097,63 @@ mod proptests {
                 stats.committed, stats.total_tracked
             );
         }
+    }
+}
+
+/// Tests for the round timeout mechanism (Phase C1).
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+    use std::thread;
+
+    #[test]
+    fn test_round_timer_timeout_detection() {
+        let mut timer = RoundTimer::new(Duration::from_millis(100), 3);
+        timer.start_round(1);
+        assert!(!timer.is_timed_out());
+        thread::sleep(Duration::from_millis(150));
+        assert!(timer.is_timed_out());
+    }
+
+    #[test]
+    fn test_round_timer_success_resets_consecutive() {
+        let mut timer = RoundTimer::new(Duration::from_millis(100), 3);
+        timer.start_round(1);
+
+        // Two timeouts — not yet in recovery (2 < 3)
+        timer.round_timed_out();
+        timer.round_timed_out();
+        assert_eq!(timer.effective_timeout(), Duration::from_millis(100));
+
+        // Succeed — resets consecutive count to 0
+        timer.round_succeeded();
+        assert_eq!(timer.effective_timeout(), Duration::from_millis(100));
+
+        // Two more timeouts — still not in recovery (2 < 3, thanks to reset)
+        timer.round_timed_out();
+        timer.round_timed_out();
+        assert_eq!(timer.effective_timeout(), Duration::from_millis(100));
+
+        // Third timeout — now in recovery (3 >= 3)
+        let in_recovery = timer.round_timed_out();
+        assert!(in_recovery);
+        assert_eq!(timer.effective_timeout(), Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_recovery_mode_halved_timeout() {
+        let mut timer = RoundTimer::new(Duration::from_millis(100), 3);
+        timer.start_round(1);
+        timer.round_timed_out(); // 1
+        timer.round_timed_out(); // 2
+        let in_recovery = timer.round_timed_out(); // 3 → recovery
+        assert!(in_recovery);
+        assert_eq!(timer.effective_timeout(), Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_no_timeout_before_deadline() {
+        let timer = RoundTimer::new(Duration::from_secs(30), 3);
+        assert!(!timer.is_timed_out());
     }
 }

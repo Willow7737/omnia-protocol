@@ -43,13 +43,13 @@ pub const DEFAULT_SLASH_THRESHOLD: u64 = 500;
 pub const DEFAULT_EJECTION_THRESHOLD: u64 = 2000;
 
 /// Points assigned for an equivocation offense.
-const EQUIVOCATION_POINTS: u64 = 500;
+pub const EQUIVOCATION_POINTS: u64 = 500;
 
 /// Points assigned for a liveness violation.
-const LIVENESS_VIOLATION_POINTS: u64 = 100;
+pub const LIVENESS_VIOLATION_POINTS: u64 = 100;
 
 /// Points assigned for an invalid attestation.
-const INVALID_ATTESTATION_POINTS: u64 = 300;
+pub const INVALID_ATTESTATION_POINTS: u64 = 300;
 
 /// Categorizes the type of Byzantine offense committed by a validator.
 ///
@@ -976,6 +976,97 @@ impl SlashingEngine {
     /// ```
     pub fn slash_points_of(&self, node: &NodeId) -> u64 {
         self.slash_points.get(node).copied().unwrap_or(0)
+    }
+
+    /// Reverse a slash by decrementing slash points for a validator.
+    ///
+    /// This is the companion to [`Self::record_offense`] and is used by
+    /// governance-based slashing undo (see [`crate::slashing_undo`]).
+    /// Points are decremented by the minimum offense amount
+    /// ([`LIVENESS_VIOLATION_POINTS`] = 100).
+    ///
+    /// # Arguments
+    ///
+    /// * `node` — The `NodeId` of the validator to undo slash for.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if the validator has no slash points to undo.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_substrate::{SlashingEngine, SlashOffense};
+    ///
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
+    /// let mut node = [0u8; 32];
+    /// node[0] = 2;
+    ///
+    /// engine.register_validator(node, 10_000);
+    /// engine.record_offense(node, SlashOffense::LivenessViolation);
+    /// assert_eq!(engine.slash_points_of(&node), 100);
+    ///
+    /// engine.undo_slash(&node).unwrap();
+    /// assert_eq!(engine.slash_points_of(&node), 0);
+    /// ```
+    pub fn undo_slash(&mut self, node: &NodeId) -> Result<(), String> {
+        let current = self.slash_points.get(node).copied().unwrap_or(0);
+        if current == 0 {
+            return Err(format!(
+                "Validator {:?} has no slash points to undo",
+                &node[..4]
+            ));
+        }
+        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
+        let new_points = current - decrement;
+        self.slash_points.insert(*node, new_points);
+
+        tracing::info!(
+            node = ?&node[..4],
+            previous_points = current,
+            new_points = new_points,
+            "Slash points decremented via undo"
+        );
+
+        self.persist_state();
+        Ok(())
+    }
+
+    /// Export the current slashing state as a [`SlashingState`] snapshot.
+    ///
+    /// Used by genesis replay (see [`crate::genesis_replay`]) to capture
+    /// the final slashing state after replaying the event history.
+    pub fn to_state(&self) -> SlashingState {
+        SlashingState {
+            slash_points: self.slash_points.clone(),
+            stakes: self.stakes.clone(),
+            slash_threshold: self.slash_threshold,
+            ejection_threshold: self.ejection_threshold,
+        }
+    }
+
+    /// Returns a reference to the internal slash points map.
+    ///
+    /// Used by genesis replay to capture the final state.
+    pub fn internal_slash_points(&self) -> HashMap<NodeId, u64> {
+        self.slash_points.clone()
+    }
+
+    /// Returns a reference to the internal stakes map.
+    ///
+    /// Used by genesis replay to capture the final state.
+    pub fn internal_stakes(&self) -> HashMap<NodeId, u64> {
+        self.stakes.clone()
+    }
+
+    /// Returns the configured slash threshold.
+    pub fn internal_slash_threshold(&self) -> u64 {
+        self.slash_threshold
+    }
+
+    /// Returns the configured ejection threshold.
+    pub fn internal_ejection_threshold(&self) -> u64 {
+        self.ejection_threshold
     }
 }
 

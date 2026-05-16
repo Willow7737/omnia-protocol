@@ -1,0 +1,392 @@
+//! Governance-Based Slashing Undo.
+//!
+//! This module provides a mechanism for governance to reverse slashing
+//! decisions that were made in error (e.g., due to a software bug,
+//! misconfigured thresholds, or a coordinated false-accusation attack).
+//!
+//! # Motivation
+//!
+//! Slashing is irreversible by design — once stake is forfeited, it cannot
+//! be recovered. However, there are legitimate scenarios where slashing
+//! should be undone:
+//!
+//! - **Software bug**: A consensus bug caused false equivocation detections.
+//! - **Misconfiguration**: Slash thresholds were set too low, causing
+//!   unwarranted penalties.
+//! - **Coordinated attack**: A cartel of validators framed an honest node.
+//!
+//! # Process
+//!
+//! 1. A governance proposal creates a [`SlashingUndoRequest`].
+//! 2. If the proposal passes (supermajority vote), the request is applied.
+//! 3. The [`SlashingUndoManager`] decrements the node's slash points and
+//!    records the undo in the [`SlashingUndoRecord`] for auditability.
+//!
+//! # Constraints
+//!
+//! - Undo is rate-limited: at most one undo per node per 1000 blocks.
+//! - Undo only decrements points by [`LIVENESS_VIOLATION_POINTS`] (100)
+//!   per request, preventing a governance takeover from fully clearing
+//!   a genuinely malicious validator.
+//! - All undos are permanently recorded in the audit log.
+
+use crate::slashing::SlashingEngine;
+use crate::vector_clock::NodeId;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// A request to reverse a slashing decision for a specific node.
+///
+/// Created by governance when a slashing decision is determined to be
+/// erroneous. Each request targets a single node and is uniquely identified
+/// by a proposal ID.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlashingUndoRequest {
+    /// The node whose slash should be partially reversed.
+    pub node: NodeId,
+    /// The governance proposal ID that authorized this undo.
+    pub proposal_id: [u8; 32],
+    /// The block height at which the undo was approved.
+    pub approved_at_height: u64,
+    /// A human-readable reason for the undo.
+    pub reason: String,
+}
+
+/// A permanent audit record of a slashing undo that was applied.
+///
+/// Every undo operation is recorded for transparency and accountability.
+/// These records cannot be deleted and are available for audit queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlashingUndoRecord {
+    /// The node whose slash was reversed.
+    pub node: NodeId,
+    /// The governance proposal ID that authorized the undo.
+    pub proposal_id: [u8; 32],
+    /// Slash points before the undo.
+    pub points_before: u64,
+    /// Slash points after the undo.
+    pub points_after: u64,
+    /// The block height at which the undo was applied.
+    pub applied_at_height: u64,
+    /// Timestamp of the undo (unix epoch seconds).
+    pub timestamp: u64,
+    /// The reason for the undo.
+    pub reason: String,
+}
+
+/// Manager for governance-based slashing undo operations.
+///
+/// Tracks undo requests and applies them to the slashing engine. Maintains
+/// an audit log of all applied undos and enforces rate limits.
+///
+/// # Example
+///
+/// ```
+/// use omnia_substrate::slashing_undo::{SlashingUndoManager, SlashingUndoRequest};
+/// use omnia_substrate::slashing::{SlashingEngine, SlashOffense};
+///
+/// let mut slashing = SlashingEngine::new_in_memory(500, 2000);
+/// let mut undo_mgr = SlashingUndoManager::new();
+///
+/// let mut node = [0u8; 32];
+/// node[0] = 42;
+///
+/// // Record an offense
+/// slashing.register_validator(node, 10_000);
+/// slashing.record_offense(node, SlashOffense::LivenessViolation);
+/// assert_eq!(slashing.slash_points_of(&node), 100);
+///
+/// // Governance undoes the slash
+/// let request = SlashingUndoRequest {
+///     node,
+///     proposal_id: [1u8; 32],
+///     approved_at_height: 100,
+///     reason: "Software bug caused false positive".to_string(),
+/// };
+///
+/// let record = undo_mgr.apply_undo(&mut slashing, request, 100).unwrap();
+/// assert_eq!(slashing.slash_points_of(&node), 0);
+/// assert_eq!(undo_mgr.audit_log().len(), 1);
+/// ```
+pub struct SlashingUndoManager {
+    /// Audit log of all applied undos.
+    audit_log: Vec<SlashingUndoRecord>,
+    /// Rate-limiting: maps node → last undo height.
+    last_undo_height: HashMap<NodeId, u64>,
+    /// Minimum block interval between undos for the same node.
+    min_undo_interval: u64,
+}
+
+/// Minimum number of blocks between successive undos for the same node.
+const DEFAULT_MIN_UNDO_INTERVAL: u64 = 1000;
+
+impl SlashingUndoManager {
+    /// Create a new undo manager with the default rate-limiting interval.
+    pub fn new() -> Self {
+        Self {
+            audit_log: Vec::new(),
+            last_undo_height: HashMap::new(),
+            min_undo_interval: DEFAULT_MIN_UNDO_INTERVAL,
+        }
+    }
+
+    /// Create a new undo manager with a custom rate-limiting interval.
+    ///
+    /// # Arguments
+    ///
+    /// * `min_undo_interval` — Minimum number of blocks between successive
+    ///   undos for the same node.
+    pub fn with_interval(min_undo_interval: u64) -> Self {
+        Self {
+            audit_log: Vec::new(),
+            last_undo_height: HashMap::new(),
+            min_undo_interval,
+        }
+    }
+
+    /// Apply a slashing undo request.
+    ///
+    /// Decrements the target node's slash points by
+    /// [`LIVENESS_VIOLATION_POINTS`] (100) and records the undo in the
+    /// audit log. Enforces the rate limit — at most one undo per node
+    /// per `min_undo_interval` blocks.
+    ///
+    /// # Arguments
+    ///
+    /// * `slashing` — The [`SlashingEngine`] to apply the undo to.
+    /// * `request` — The [`SlashingUndoRequest`] from governance.
+    /// * `current_height` — The current block height (for rate limiting).
+    ///
+    /// # Returns
+    ///
+    /// A [`SlashingUndoRecord`] on success, or an error string on failure.
+    ///
+    /// # Errors
+    ///
+    /// - Rate limit exceeded: too soon since last undo for this node.
+    /// - The node has no slash points to undo.
+    pub fn apply_undo(
+        &mut self,
+        slashing: &mut SlashingEngine,
+        request: SlashingUndoRequest,
+        current_height: u64,
+    ) -> Result<SlashingUndoRecord, String> {
+        // Rate limit check
+        if let Some(&last_height) = self.last_undo_height.get(&request.node) {
+            if current_height.saturating_sub(last_height) < self.min_undo_interval {
+                return Err(format!(
+                    "Rate limit: last undo for node {:?} was at height {}, current height {}, minimum interval {}",
+                    &request.node[..4],
+                    last_height,
+                    current_height,
+                    self.min_undo_interval
+                ));
+            }
+        }
+
+        let points_before = slashing.slash_points_of(&request.node);
+
+        // Apply the undo via the slashing engine
+        slashing.undo_slash(&request.node)?;
+
+        let points_after = slashing.slash_points_of(&request.node);
+
+        let record = SlashingUndoRecord {
+            node: request.node,
+            proposal_id: request.proposal_id,
+            points_before,
+            points_after,
+            applied_at_height: current_height,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            reason: request.reason,
+        };
+
+        // Update rate-limiting state
+        self.last_undo_height.insert(request.node, current_height);
+
+        // Record in audit log
+        self.audit_log.push(record.clone());
+
+        tracing::info!(
+            node = ?&request.node[..4],
+            points_before,
+            points_after,
+            proposal = ?&request.proposal_id[..4],
+            "Slashing undo applied"
+        );
+
+        Ok(record)
+    }
+
+    /// Get the full audit log of all applied undos.
+    pub fn audit_log(&self) -> &[SlashingUndoRecord] {
+        &self.audit_log
+    }
+
+    /// Get all undo records for a specific node.
+    pub fn undo_history(&self, node: &NodeId) -> Vec<&SlashingUndoRecord> {
+        self.audit_log.iter().filter(|r| &r.node == node).collect()
+    }
+
+    /// Check whether an undo is currently allowed for the given node at the
+    /// given height (i.e., the rate limit has not been exceeded).
+    pub fn can_undo(&self, node: &NodeId, current_height: u64) -> bool {
+        if let Some(&last_height) = self.last_undo_height.get(node) {
+            current_height.saturating_sub(last_height) >= self.min_undo_interval
+        } else {
+            true
+        }
+    }
+
+    /// Get the total number of undos that have been applied.
+    pub fn total_undos(&self) -> usize {
+        self.audit_log.len()
+    }
+}
+
+impl Default for SlashingUndoManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::slashing::{SlashOffense, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
+
+    fn node(id: u8) -> NodeId {
+        let mut n = [0u8; 32];
+        n[0] = id;
+        n
+    }
+
+    fn make_request(node: NodeId, height: u64) -> SlashingUndoRequest {
+        SlashingUndoRequest {
+            node,
+            proposal_id: [1u8; 32],
+            approved_at_height: height,
+            reason: "Test undo".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_undo_liveness_violation() {
+        let mut slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut undo_mgr = SlashingUndoManager::new();
+
+        let n = node(1);
+        slashing.register_validator(n, 10_000);
+        slashing.record_offense(n, SlashOffense::LivenessViolation);
+        assert_eq!(slashing.slash_points_of(&n), 100);
+
+        let request = make_request(n, 100);
+        let record = undo_mgr.apply_undo(&mut slashing, request, 100).unwrap();
+        assert_eq!(record.points_before, 100);
+        assert_eq!(record.points_after, 0);
+        assert_eq!(slashing.slash_points_of(&n), 0);
+        assert_eq!(undo_mgr.total_undos(), 1);
+    }
+
+    #[test]
+    fn test_undo_partial_equivocation() {
+        let mut slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut undo_mgr = SlashingUndoManager::new();
+
+        let n = node(2);
+        slashing.register_validator(n, 10_000);
+        // Equivocation = 500 points
+        slashing.record_offense(n, SlashOffense::Equivocation);
+        assert_eq!(slashing.slash_points_of(&n), 500);
+
+        // Undo decrements by LIVENESS_VIOLATION_POINTS (100)
+        let request = make_request(n, 100);
+        undo_mgr.apply_undo(&mut slashing, request, 100).unwrap();
+        assert_eq!(slashing.slash_points_of(&n), 400);
+    }
+
+    #[test]
+    fn test_undo_rate_limit() {
+        let mut slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut undo_mgr = SlashingUndoManager::with_interval(100);
+
+        let n = node(3);
+        slashing.register_validator(n, 10_000);
+        slashing.record_offense(n, SlashOffense::Equivocation);
+
+        // First undo at height 100
+        let request1 = make_request(n, 100);
+        undo_mgr.apply_undo(&mut slashing, request1, 100).unwrap();
+
+        // Second undo at height 150 — should fail (interval = 100)
+        let request2 = make_request(n, 150);
+        let result = undo_mgr.apply_undo(&mut slashing, request2, 150);
+        assert!(result.is_err());
+
+        // Third undo at height 200 — should succeed
+        let request3 = make_request(n, 200);
+        undo_mgr.apply_undo(&mut slashing, request3, 200).unwrap();
+        assert_eq!(undo_mgr.total_undos(), 2);
+    }
+
+    #[test]
+    fn test_can_undo_rate_limit() {
+        let mut undo_mgr = SlashingUndoManager::with_interval(100);
+        let n = node(4);
+
+        assert!(undo_mgr.can_undo(&n, 0));
+        undo_mgr.last_undo_height.insert(n, 50);
+        assert!(!undo_mgr.can_undo(&n, 100)); // 100 - 50 = 50 < 100
+        assert!(undo_mgr.can_undo(&n, 150)); // 150 - 50 = 100 >= 100
+    }
+
+    #[test]
+    fn test_undo_no_slash_points() {
+        let mut slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut undo_mgr = SlashingUndoManager::new();
+
+        let n = node(5);
+        slashing.register_validator(n, 10_000);
+        // No offense recorded — slash points = 0
+
+        let request = make_request(n, 100);
+        let result = undo_mgr.apply_undo(&mut slashing, request, 100);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_audit_log() {
+        let mut slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut undo_mgr = SlashingUndoManager::new();
+
+        let n1 = node(10);
+        let n2 = node(20);
+
+        slashing.register_validator(n1, 10_000);
+        slashing.register_validator(n2, 10_000);
+        slashing.record_offense(n1, SlashOffense::LivenessViolation);
+        slashing.record_offense(n2, SlashOffense::LivenessViolation);
+
+        undo_mgr.apply_undo(&mut slashing, make_request(n1, 100), 100).unwrap();
+        undo_mgr.apply_undo(&mut slashing, make_request(n2, 100), 100).unwrap();
+
+        assert_eq!(undo_mgr.audit_log().len(), 2);
+        assert_eq!(undo_mgr.undo_history(&n1).len(), 1);
+        assert_eq!(undo_mgr.undo_history(&n2).len(), 1);
+    }
+
+    #[test]
+    fn test_default_undo_manager() {
+        let mgr = SlashingUndoManager::default();
+        assert!(mgr.audit_log().is_empty());
+        assert_eq!(mgr.total_undos(), 0);
+    }
+}

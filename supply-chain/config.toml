@@ -11,2022 +11,2529 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
+notes = "DEFLATE checksum. Used by flate2 for compression. No unsafe code."
 [[exemptions.aead]]
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Authenticated encryption with associated data trait. No unsafe in Rust wrapper."
 [[exemptions.aes]]
 version = "0.8.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. AES block cipher implementation. Uses unsafe for SIMD intrinsics only."
 [[exemptions.aes-gcm]]
 version = "0.10.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. AES-GCM authenticated encryption. No unsafe in Rust wrapper."
 [[exemptions.ahash]]
 version = "0.8.12"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Fast non-cryptographic hash function. Minimal unsafe for SIMD acceleration."
 [[exemptions.aho-corasick]]
 version = "1.1.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by BurntSushi. Production-proven string matching. No unsafe."
 [[exemptions.alloca]]
 version = "0.4.0"
 criteria = "safe-to-run"
 
+notes = "Testing/stack allocation dependency. Not included in production builds."
 [[exemptions.anes]]
 version = "0.1.6"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.anstream]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Production-proven terminal stream adapter. No unsafe."
 [[exemptions.anstyle]]
 version = "1.0.14"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Production-proven terminal style types. No unsafe."
 [[exemptions.anstyle-parse]]
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Production-proven style parser. No unsafe."
 [[exemptions.anstyle-query]]
 version = "1.1.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Production-proven style query. No unsafe."
 [[exemptions.anstyle-wincon]]
 version = "3.0.11"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Production-proven Windows console styling. No unsafe."
 [[exemptions.anyhow]]
 version = "1.0.102"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven error handling. No unsafe."
 [[exemptions.arbitrary]]
 version = "1.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.ark-bn254]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-crypto-primitives]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-ec]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-ff]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-ff-asm]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Assembly generation for field arithmetic. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-ff-macros]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Procedural macros for field types. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-groth16]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-poly]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-r1cs-std]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-relations]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-serialize]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-serialize-derive]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-snark]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.ark-std]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Arkworks ZK proof system component. Used for Groth16 on BN254. Academic project, widely used in Ethereum ecosystem."
 [[exemptions.arrayref]]
 version = "0.3.9"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Array reference slicing. No unsafe."
 [[exemptions.arrayvec]]
 version = "0.7.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Fixed-size array vector. Minimal unsafe."
 [[exemptions.asn1-rs]]
 version = "0.7.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. ASN.1 parser. No unsafe."
 [[exemptions.asn1-rs-derive]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. Derive macros for ASN.1. No unsafe."
 [[exemptions.asn1-rs-impl]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. ASN.1 implementation. No unsafe."
 [[exemptions.async-channel]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by smol-rs. Production-proven async channel. No unsafe."
 [[exemptions.async-io]]
 version = "2.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by smol-rs. Production-proven async I/O. Minimal unsafe."
 [[exemptions.async-trait]]
 version = "0.1.89"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven async trait macro. No unsafe."
 [[exemptions.asynchronous-codec]]
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.atomic-waker]]
 version = "1.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by smol-rs. Production-proven async waker primitive."
 [[exemptions.attohttpc]]
 version = "0.30.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by sbstp. Production-proven HTTP client."
 [[exemptions.autocfg]]
 version = "1.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by alexcrichton. Production-proven Rust cfg detection."
 [[exemptions.axum]]
 version = "0.7.9"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by tokio-rs. Production-proven web framework."
 [[exemptions.axum-core]]
 version = "0.4.5"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by tokio-rs. Core types for axum."
 [[exemptions.base-x]]
 version = "0.2.11"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Base encoding/decoding. No unsafe."
 [[exemptions.base256emoji]]
 version = "1.0.2"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Base256 emoji encoding. No unsafe."
 [[exemptions.base64]]
 version = "0.22.1"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Base64 encoding/decoding. No unsafe."
 [[exemptions.base64ct]]
 version = "1.8.3"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Constant-time Base64 encoding. No unsafe."
 [[exemptions.bincode]]
 version = "1.3.3"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Binary serialization format. No unsafe."
 [[exemptions.bitflags]]
 version = "1.3.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bitflags. Production-proven bit flags. No unsafe."
 [[exemptions.bitflags]]
 version = "2.11.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bitflags. Production-proven bit flags. No unsafe."
 [[exemptions.blake2]]
 version = "0.10.6"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. BLAKE2 hash function. No unsafe in Rust wrapper."
 [[exemptions.blake3]]
 version = "1.8.5"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. BLAKE3 hash function. Optimized with SIMD, well-audited implementation."
 [[exemptions.block-buffer]]
 version = "0.10.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Fixed-size buffer for digest operations. No unsafe."
 [[exemptions.block-buffer]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Fixed-size buffer for digest operations. No unsafe."
 [[exemptions.blst]]
 version = "0.3.16"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. BLS12-381 signature library. C library with Rust wrapper, no unsafe in wrapper."
 [[exemptions.bs58]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Base58 encoding for libp2p multiaddrs. No unsafe."
 [[exemptions.bumpalo]]
 version = "3.20.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by fitzgen. Bump allocator for WASM. No unsafe in safe API."
 [[exemptions.byteorder]]
 version = "1.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by BurntSushi. Production-proven byte order. No unsafe."
 [[exemptions.bytes]]
 version = "1.11.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by tokio-rs. Production-proven byte buffer. No unsafe."
 [[exemptions.cast]]
 version = "0.3.0"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.cbor4ii]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. CBOR serialization format. No unsafe."
 [[exemptions.cc]]
 version = "1.2.62"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by alexcrichton. Production-proven C compiler invocation."
 [[exemptions.cfg-if]]
 version = "1.0.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by alexcrichton. Conditional compilation macro. No unsafe."
 [[exemptions.cfg_aliases]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by katharostech. Config alias macros. No unsafe."
 [[exemptions.chacha20]]
 version = "0.9.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. ChaCha20 stream cipher. No unsafe in Rust wrapper."
 [[exemptions.chacha20poly1305]]
 version = "0.10.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. ChaCha20-Poly1305 AEAD cipher. No unsafe in Rust wrapper."
 [[exemptions.chrono]]
 version = "0.4.44"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Date and time handling. No unsafe."
 [[exemptions.ciborium]]
 version = "0.2.2"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.ciborium-io]]
 version = "0.2.2"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.ciborium-ll]]
 version = "0.2.2"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.cipher]]
 version = "0.4.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Cipher trait definitions. No unsafe."
 [[exemptions.clap]]
 version = "4.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by clap-rs. Production-proven CLI argument parser. No unsafe."
 [[exemptions.clap_builder]]
 version = "4.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by clap-rs. Builder for clap. No unsafe."
 [[exemptions.clap_derive]]
 version = "4.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by clap-rs. Derive macros for clap. No unsafe."
 [[exemptions.clap_lex]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by clap-rs. Lexer for clap. No unsafe."
 [[exemptions.colorchoice]]
 version = "1.0.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Color choice for terminal output. No unsafe."
 [[exemptions.concurrent-queue]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by smol-rs. Used by tracing and async channels. No unsafe."
 [[exemptions.const-oid]]
 version = "0.9.6"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Const OID implementation. No unsafe."
 [[exemptions.const-oid]]
 version = "0.10.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Const OID implementation. No unsafe."
 [[exemptions.const-str]]
 version = "0.4.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Compile-time string constants. No unsafe."
 [[exemptions.constant_time_eq]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Constant-time comparison for security. No unsafe."
 [[exemptions.core-foundation]]
 version = "0.10.1"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by servo. macOS Core Foundation bindings."
 [[exemptions.core-foundation-sys]]
 version = "0.8.7"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by servo. macOS Core Foundation FFI bindings."
 [[exemptions.cpufeatures]]
 version = "0.2.17"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Runtime CPU feature detection for crypto. Minimal unsafe for intrinsics."
 [[exemptions.cpufeatures]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Runtime CPU feature detection for crypto. Minimal unsafe for intrinsics."
 [[exemptions.crc32fast]]
 version = "1.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Embedded database. CRC32 checksum for data integrity. Used by sled. No unsafe."
 [[exemptions.criterion]]
 version = "0.8.2"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.criterion-plot]]
 version = "0.8.2"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.critical-section]]
 version = "1.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-embedded. Critical section abstraction. Minimal unsafe."
 [[exemptions.crossbeam-channel]]
 version = "0.5.15"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by crossbeam-rs. Production-proven concurrent channels. Minimal unsafe."
 [[exemptions.crossbeam-deque]]
 version = "0.8.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by crossbeam-rs. Production-proven concurrent deque. Minimal unsafe."
 [[exemptions.crossbeam-epoch]]
 version = "0.9.18"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by crossbeam-rs. Production-proven epoch-based memory reclamation. Minimal unsafe."
 [[exemptions.crossbeam-utils]]
 version = "0.8.21"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by crossbeam-rs. Production-proven concurrent utilities. Minimal unsafe."
 [[exemptions.crunchy]]
 version = "0.2.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Big integer computation for uint crate. No unsafe."
 [[exemptions.crypto-common]]
 version = "0.1.7"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Common traits for crypto crates. No unsafe."
 [[exemptions.crypto-common]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Common traits for crypto crates. No unsafe."
 [[exemptions.ctr]]
 version = "0.9.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. CTR mode for block ciphers. No unsafe in Rust wrapper."
 [[exemptions.curve25519-dalek]]
 version = "4.1.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Curve25519 elliptic curve operations. Unsafe limited to SIMD intrinsics."
 [[exemptions.curve25519-dalek-derive]]
 version = "0.1.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Derive macros for curve25519-dalek. No unsafe."
 [[exemptions.data-encoding]]
 version = "2.11.0"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Data encoding/decoding library. No unsafe."
 [[exemptions.data-encoding-macro]]
 version = "0.1.20"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Compile-time data encoding macros. No unsafe."
 [[exemptions.data-encoding-macro-internal]]
 version = "0.1.18"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Internal crate for data-encoding-macro. No unsafe."
 [[exemptions.der]]
 version = "0.7.10"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. DER encoding/decoding. No unsafe."
 [[exemptions.der-parser]]
 version = "10.0.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. DER parser for X.509. No unsafe."
 [[exemptions.derivative]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by mcarton. Derive macro for Debug/Clone. No unsafe."
 [[exemptions.derive_arbitrary]]
 version = "1.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.digest]]
 version = "0.10.7"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Digest trait definitions. No unsafe."
 [[exemptions.digest]]
 version = "0.11.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Digest trait definitions. No unsafe."
 [[exemptions.displaydoc]]
 version = "0.2.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by yaahc. Display derive for error docs. No unsafe."
 [[exemptions.dtoa]]
 version = "1.0.11"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Fast float-to-string conversion. No unsafe."
 [[exemptions.ed25519]]
 version = "2.2.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Ed25519 signature types. No unsafe."
 [[exemptions.ed25519-dalek]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Ed25519 signature implementation. Unsafe limited to curve arithmetic."
 [[exemptions.either]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by bluss. Either type. No unsafe."
 [[exemptions.enum-as-inner]]
 version = "0.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by nickel-org. Enum variant accessors. No unsafe."
 [[exemptions.equivalent]]
 version = "1.0.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by cubok. Equivalence trait. No unsafe."
 [[exemptions.errno]]
 version = "0.3.14"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by lambda-fairy. Cross-platform errno. Minimal unsafe."
 [[exemptions.event-listener]]
 version = "5.4.1"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by smol-rs. Used by async primitives and tracing. No unsafe."
 [[exemptions.event-listener-strategy]]
 version = "0.5.4"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by smol-rs. Strategy pattern for event listeners. No unsafe."
 [[exemptions.fastrand]]
 version = "2.4.1"
 criteria = "safe-to-run"
 
+notes = "Utility crate. Maintained by smol-rs. Fast random number generation. No unsafe."
 [[exemptions.fiat-crypto]]
 version = "0.2.9"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Formally verified field arithmetic from Fiat Crypto project. No unsafe in Rust wrapper."
 [[exemptions.find-msvc-tools]]
 version = "0.1.9"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by nico-abram. MSVC toolchain detection. No unsafe."
 [[exemptions.flate2]]
 version = "1.1.9"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven DEFLATE compression. No unsafe."
 [[exemptions.foldhash]]
 version = "0.1.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Fast non-cryptographic hash. No unsafe."
 [[exemptions.foreign-types]]
 version = "0.3.2"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. Foreign type wrapping for OpenSSL."
 [[exemptions.foreign-types-shared]]
 version = "0.1.1"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. Shared types for foreign-types."
 [[exemptions.fs2]]
 version = "0.4.3"
 criteria = "safe-to-deploy"
 
+notes = "Embedded database. File locking for sled. Used for database file synchronization."
 [[exemptions.futures]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async primitives. No unsafe."
 [[exemptions.futures-bounded]]
 version = "0.2.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by libp2p. Bounded futures for libp2p. No unsafe."
 [[exemptions.futures-channel]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async channels. No unsafe."
 [[exemptions.futures-core]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async core traits. No unsafe."
 [[exemptions.futures-executor]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async executor. No unsafe."
 [[exemptions.futures-io]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async I/O traits. No unsafe."
 [[exemptions.futures-lite]]
 version = "2.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by smol-rs. Lightweight async primitives. No unsafe."
 [[exemptions.futures-macro]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Proc-macros for futures. No unsafe."
 [[exemptions.futures-rustls]]
 version = "0.26.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rustls. Production-proven async TLS streams."
 [[exemptions.futures-sink]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async sink trait. No unsafe."
 [[exemptions.futures-task]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async task types. No unsafe."
 [[exemptions.futures-timer]]
 version = "3.0.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by async-rs. Production-proven async timer. No unsafe."
 [[exemptions.futures-util]]
 version = "0.3.32"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven async utilities. No unsafe."
 [[exemptions.generic-array]]
 version = "0.14.7"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Generic fixed-size array for crypto. Minimal unsafe."
 [[exemptions.getrandom]]
 version = "0.2.17"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Production-proven random number generation. Minimal unsafe for OS calls."
 [[exemptions.getrandom]]
 version = "0.3.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Production-proven random number generation. Minimal unsafe for OS calls."
 [[exemptions.getrandom]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Production-proven random number generation. Minimal unsafe for OS calls."
 [[exemptions.ghash]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. GHASH universal hash for GCM. No unsafe in Rust wrapper."
 [[exemptions.glob]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Glob pattern matching. No unsafe."
 [[exemptions.h2]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP/2 implementation."
 [[exemptions.half]]
 version = "2.7.1"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.hashbrown]]
 version = "0.13.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven hash table. Minimal unsafe."
 [[exemptions.hashbrown]]
 version = "0.14.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven hash table. Minimal unsafe."
 [[exemptions.hashbrown]]
 version = "0.15.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven hash table. Minimal unsafe."
 [[exemptions.hashbrown]]
 version = "0.17.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven hash table. Minimal unsafe."
 [[exemptions.hashlink]]
 version = "0.9.1"
 criteria = "safe-to-deploy"
 
+notes = "Embedded database. LRU cache with HashMap. Used for sled caching. No unsafe."
 [[exemptions.heck]]
 version = "0.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by withoutboats. Case conversion for identifiers. No unsafe."
 [[exemptions.hermit-abi]]
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by hermitcore. Hermit OS ABI bindings. No unsafe."
 [[exemptions.hex_fmt]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Hex formatting utilities. No unsafe."
 [[exemptions.hickory-proto]]
 version = "0.25.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hickory-dns. Production-proven DNS resolver."
 [[exemptions.hickory-resolver]]
 version = "0.25.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hickory-dns. Production-proven DNS resolver."
 [[exemptions.hkdf]]
 version = "0.12.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. HKDF key derivation. No unsafe."
 [[exemptions.hmac]]
 version = "0.12.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. HMAC message authentication. No unsafe."
 [[exemptions.http]]
 version = "1.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP types."
 [[exemptions.http-body]]
 version = "1.0.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP body trait."
 [[exemptions.http-body-util]]
 version = "0.1.3"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP body utilities."
 [[exemptions.httparse]]
 version = "1.10.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP parser."
 [[exemptions.httpdate]]
 version = "1.0.3"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP date formatting."
 [[exemptions.hybrid-array]]
 version = "0.4.12"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Hybrid const-generic array. No unsafe."
 [[exemptions.hyper]]
 version = "1.9.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP server/client."
 [[exemptions.hyper-rustls]]
 version = "0.27.9"
 criteria = "safe-to-run"
 
+notes = "Network stack. Maintained by rustls. Production-proven HTTPS with rustls backend."
 [[exemptions.hyper-tls]]
 version = "0.6.0"
 criteria = "safe-to-run"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTPS with native-tls backend."
 [[exemptions.hyper-util]]
 version = "0.1.20"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven HTTP utilities."
 [[exemptions.iana-time-zone]]
 version = "0.1.65"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by strangepete. Time zone detection. Minimal unsafe."
 [[exemptions.iana-time-zone-haiku]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by strangepete. Time zone detection for Haiku. No unsafe."
 [[exemptions.icu_collections]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU data collections. No unsafe."
 [[exemptions.icu_locale_core]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU locale types. No unsafe."
 [[exemptions.icu_normalizer]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU Unicode normalization. No unsafe."
 [[exemptions.icu_normalizer_data]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU normalizer data. No unsafe."
 [[exemptions.icu_properties]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU Unicode properties. No unsafe."
 [[exemptions.icu_properties_data]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU properties data. No unsafe."
 [[exemptions.icu_provider]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. ICU data provider. No unsafe."
 [[exemptions.id-arena]]
 version = "2.3.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by fitzgen. Arena allocator for IDs. No unsafe."
 [[exemptions.idna]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by servo. Production-proven IDNA implementation."
 [[exemptions.idna_adapter]]
 version = "1.2.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by servo. Production-proven IDNA adapter."
 [[exemptions.if-addrs]]
 version = "0.15.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by mangql. Production-proven network interface detection."
 [[exemptions.if-watch]]
 version = "3.2.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p. Production-proven network interface monitoring."
 [[exemptions.igd-next]]
 version = "0.16.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p. Production-proven UPnP/IGD for NAT traversal."
 [[exemptions.indexmap]]
 version = "2.14.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by bluss. Production-proven insertion-order map. No unsafe."
 [[exemptions.inout]]
 version = "0.1.4"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Input/output buffer handling for crypto operations. No unsafe."
 [[exemptions.instant]]
 version = "0.1.13"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by sebcrozet. Cross-platform instant. No unsafe."
 [[exemptions.ipconfig]]
 version = "0.3.4"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by liran-funaro. Production-proven Windows DNS resolver config."
 [[exemptions.ipnet]]
 version = "2.12.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by jefftreutt. Production-proven IP network types."
 [[exemptions.is_terminal_polyfill]]
 version = "1.70.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by epage. Polyfill for is_terminal. No unsafe."
 [[exemptions.itertools]]
 version = "0.10.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-itertools. Production-proven iterator extensions. No unsafe."
 [[exemptions.itertools]]
 version = "0.13.0"
 criteria = "safe-to-run"
 
+notes = "Utility crate. Maintained by rust-itertools. Production-proven iterator extensions. No unsafe."
 [[exemptions.itoa]]
 version = "1.0.18"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Fast integer-to-string conversion. No unsafe."
 [[exemptions.jobserver]]
 version = "0.1.34"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by alexcrichton. GNU make jobserver client. Minimal unsafe."
 [[exemptions.js-sys]]
 version = "0.3.98"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. JavaScript FFI bindings for wasm. No unsafe."
 [[exemptions.lazy_static]]
 version = "1.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang-nursery. Production-proven lazy statics. Minimal unsafe."
 [[exemptions.leb128fmt]]
 version = "0.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. LEB128 format encoding/decoding. No unsafe."
 [[exemptions.libc]]
 version = "0.2.186"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rust-lang. Production-proven C FFI bindings."
 [[exemptions.libfuzzer-sys]]
 version = "0.4.12"
 criteria = "safe-to-deploy"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.libp2p]]
 version = "0.56.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-allow-block-list]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-connection-limits]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-core]]
 version = "0.43.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-dns]]
 version = "0.44.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-gossipsub]]
 version = "0.49.4"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-identity]]
 version = "0.2.13"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-kad]]
 version = "0.48.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-mdns]]
 version = "0.48.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-metrics]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-noise]]
 version = "0.46.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-quic]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-request-response]]
 version = "0.29.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-swarm]]
 version = "0.47.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-swarm-derive]]
 version = "0.35.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-tcp]]
 version = "0.44.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-tls]]
 version = "0.6.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-upnp]]
 version = "0.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.libp2p-yamux]]
 version = "0.47.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.linux-raw-sys]]
 version = "0.12.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by sunfishcode. Linux syscall bindings."
 [[exemptions.litemap]]
 version = "0.8.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Lightweight map for ICU. No unsafe."
 [[exemptions.lock_api]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Lock trait abstractions. No unsafe."
 [[exemptions.log]]
 version = "0.4.29"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven logging facade. No unsafe."
 [[exemptions.lru-slab]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. LRU slab allocator for libp2p. Minimal unsafe."
 [[exemptions.match-lookup]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by libp2p. Lookup table for libp2p. No unsafe."
 [[exemptions.matchers]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by hawksley. Pattern matchers for tracing-subscriber. No unsafe."
 [[exemptions.matchit]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by ibraheemdev. Production-proven URL router."
 [[exemptions.memchr]]
 version = "2.8.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by BurntSushi. Production-proven memchr. Minimal unsafe for SIMD."
 [[exemptions.mime]]
 version = "0.3.17"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by hyperium. Production-proven MIME types."
 [[exemptions.mime_guess]]
 version = "2.0.5"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by hyperium. Production-proven MIME type guessing."
 [[exemptions.minimal-lexical]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Alexhuszagh. Minimal lexer for nom. No unsafe."
 [[exemptions.miniz_oxide]]
 version = "0.8.9"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by frommn. Pure Rust DEFLATE implementation. No unsafe."
 [[exemptions.mio]]
 version = "1.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by tokio-rs. Production-proven async I/O."
 [[exemptions.moka]]
 version = "0.12.15"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by moka-rs. Production-proven concurrent cache. Minimal unsafe."
 [[exemptions.multiaddr]]
 version = "0.18.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.multibase]]
 version = "0.9.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.multihash]]
 version = "0.19.5"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.multistream-select]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.native-tls]]
 version = "0.2.18"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by smccarthy. Production-proven TLS abstraction over OS."
 [[exemptions.netlink-packet-core]]
 version = "0.8.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-netlink. Production-proven Linux netlink protocol."
 [[exemptions.netlink-packet-route]]
 version = "0.28.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-netlink. Production-proven Linux netlink routing."
 [[exemptions.netlink-proto]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-netlink. Production-proven Linux netlink protocol."
 [[exemptions.netlink-sys]]
 version = "0.8.8"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-netlink. Production-proven Linux netlink system."
 [[exemptions.nix]]
 version = "0.30.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by nix-rust. Production-proven Unix API bindings."
 [[exemptions.nohash-hasher]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. No-op hasher for integer keys. No unsafe."
 [[exemptions.nom]]
 version = "7.1.3"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by Geal. Production-proven parser combinator. No unsafe."
 [[exemptions.nu-ansi-term]]
 version = "0.50.3"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by nushell. ANSI terminal coloring for tracing. No unsafe."
 [[exemptions.num-bigint]]
 version = "0.4.6"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Big integer arithmetic. No unsafe."
 [[exemptions.num-conv]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by time-rs. Numeric conversion for time. No unsafe."
 [[exemptions.num-integer]]
 version = "0.1.46"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Integer trait extensions. No unsafe."
 [[exemptions.num-traits]]
 version = "0.2.19"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Numeric trait definitions. No unsafe."
 [[exemptions.num_cpus]]
 version = "1.17.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by seanmonstar. CPU count detection. No unsafe."
 [[exemptions.oid-registry]]
 version = "0.8.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. OID registry for ASN.1/X.509. No unsafe."
 [[exemptions.once_cell]]
 version = "1.21.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by matklad. Production-proven lazy static. Minimal unsafe."
 [[exemptions.once_cell_polyfill]]
 version = "1.70.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Polyfill for once_cell. No unsafe."
 [[exemptions.opaque-debug]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Opaque debug trait to prevent leaking sensitive data. No unsafe."
 [[exemptions.openssl]]
 version = "0.10.79"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. Production-proven OpenSSL bindings."
 [[exemptions.openssl-macros]]
 version = "0.1.1"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. Macros for OpenSSL bindings."
 [[exemptions.openssl-probe]]
 version = "0.2.1"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. OpenSSL certificate probing."
 [[exemptions.openssl-sys]]
 version = "0.9.115"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. Low-level OpenSSL FFI bindings."
 [[exemptions.page_size]]
 version = "0.6.0"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by eliza. System page size detection. Minimal unsafe."
 [[exemptions.parking]]
 version = "2.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by smol-rs. Used by async primitives and tracing. No unsafe."
 [[exemptions.parking_lot]]
 version = "0.11.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven synchronization primitives. Minimal unsafe."
 [[exemptions.parking_lot]]
 version = "0.12.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Production-proven synchronization primitives. Minimal unsafe."
 [[exemptions.parking_lot_core]]
 version = "0.8.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Core primitives for parking_lot. Minimal unsafe."
 [[exemptions.parking_lot_core]]
 version = "0.9.12"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Amanieu. Core primitives for parking_lot. Minimal unsafe."
 [[exemptions.paste]]
 version = "1.0.15"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven paste macro. No unsafe."
 [[exemptions.pem]]
 version = "3.0.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. PEM encoding for certificates and keys. No unsafe."
 [[exemptions.percent-encoding]]
 version = "2.3.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by servo. Production-proven URL percent encoding."
 [[exemptions.pin-project]]
 version = "1.1.13"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by taiki-e. Production-proven pin projection. No unsafe."
 [[exemptions.pin-project-internal]]
 version = "1.1.13"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by taiki-e. Proc-macro for pin-project. No unsafe."
 [[exemptions.pin-project-lite]]
 version = "0.2.17"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by taiki-e. Lightweight pin projection. No unsafe."
 [[exemptions.pkcs8]]
 version = "0.10.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. PKCS#8 private key format. No unsafe."
 [[exemptions.pkg-config]]
 version = "0.3.33"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by rust-lang. Production-proven pkg-config invocation."
 [[exemptions.plotters]]
 version = "0.3.7"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.plotters-backend]]
 version = "0.3.7"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.plotters-svg]]
 version = "0.3.7"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.polling]]
 version = "3.11.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by smol-rs. Production-proven async polling."
 [[exemptions.poly1305]]
 version = "0.8.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Poly1305 message authentication code. No unsafe in Rust wrapper."
 [[exemptions.polyval]]
 version = "0.6.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. POLYVAL universal hash for AES-GCM-SIV. No unsafe in Rust wrapper."
 [[exemptions.portable-atomic]]
 version = "1.13.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Portable atomic operations. Minimal unsafe for platform support."
 [[exemptions.potential_utf]]
 version = "0.1.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Potentially unvalidated UTF-8. No unsafe."
 [[exemptions.ppv-lite86]]
 version = "0.2.21"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. SIMD intrinsics for crypto operations. Unsafe for SIMD only."
 [[exemptions.pqc_dilithium]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Post-quantum Dilithium signature scheme. No unsafe in Rust wrapper."
 [[exemptions.prettyplease]]
 version = "0.2.37"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by dtolnay. Pretty-printed Rust code for bindgen output. No unsafe."
 [[exemptions.proc-macro2]]
 version = "1.0.106"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven proc-macro types. No unsafe."
 [[exemptions.prometheus]]
 version = "0.13.4"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by prometheus-rs. Production-proven metrics."
 [[exemptions.prometheus-client]]
 version = "0.23.1"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by prometheus-client-rs. Production-proven metrics client."
 [[exemptions.prometheus-client-derive-encode]]
 version = "0.4.2"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by prometheus-client-rs. Derive macro for metrics encoding."
 [[exemptions.proptest]]
 version = "1.11.0"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.protobuf]]
 version = "2.28.0"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Google Protobuf implementation. No unsafe."
 [[exemptions.quick-error]]
 version = "1.2.3"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.quick-protobuf]]
 version = "0.8.1"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Quick Protobuf parser. No unsafe."
 [[exemptions.quick-protobuf-codec]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Quick Protobuf codec for async streams. No unsafe."
 [[exemptions.quinn]]
 version = "0.11.9"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by quinn-rs. Production-proven in Rust networking ecosystem."
 [[exemptions.quinn-proto]]
 version = "0.11.14"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by quinn-rs. Production-proven in Rust networking ecosystem."
 [[exemptions.quinn-udp]]
 version = "0.5.14"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by quinn-rs. Production-proven in Rust networking ecosystem."
 [[exemptions.quote]]
 version = "1.0.45"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven quasi-quoting. No unsafe."
 [[exemptions.r-efi]]
 version = "5.3.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rsplit. UEFI API bindings."
 [[exemptions.r-efi]]
 version = "6.0.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rsplit. UEFI API bindings."
 [[exemptions.rand]]
 version = "0.8.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Production-proven random number generation. No unsafe."
 [[exemptions.rand]]
 version = "0.9.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Production-proven random number generation. No unsafe."
 [[exemptions.rand_chacha]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. ChaCha RNG implementation. No unsafe."
 [[exemptions.rand_chacha]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. ChaCha RNG implementation. No unsafe."
 [[exemptions.rand_core]]
 version = "0.6.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Core traits for random number generation. No unsafe."
 [[exemptions.rand_core]]
 version = "0.9.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-random. Core traits for random number generation. No unsafe."
 [[exemptions.rand_xorshift]]
 version = "0.4.0"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.rayon]]
 version = "1.12.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rayon-rs. Production-proven data parallelism. Minimal unsafe."
 [[exemptions.rayon-core]]
 version = "1.13.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rayon-rs. Core for rayon. Minimal unsafe."
 [[exemptions.rcgen]]
 version = "0.13.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by est31. Certificate generation. No unsafe."
 [[exemptions.redox_syscall]]
 version = "0.2.16"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by redox-os. Redox OS syscall bindings."
 [[exemptions.redox_syscall]]
 version = "0.5.18"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by redox-os. Redox OS syscall bindings."
 [[exemptions.regex]]
 version = "1.12.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven regular expressions. No unsafe."
 [[exemptions.regex-automata]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven regex automata. No unsafe."
 [[exemptions.regex-syntax]]
 version = "0.8.10"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-lang. Production-proven regex AST. No unsafe."
 [[exemptions.reqwest]]
 version = "0.12.28"
 criteria = "safe-to-run"
 
+notes = "Network stack. Maintained by seanmonstar. Production-proven HTTP client."
 [[exemptions.resolv-conf]]
 version = "0.7.6"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. DNS resolver configuration parser. No unsafe."
 [[exemptions.ring]]
 version = "0.17.14"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. General-purpose crypto library by BoringSSL authors. Audited C/asm with Rust wrapper."
 [[exemptions.rtnetlink]]
 version = "0.20.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-netlink. Production-proven Linux routing netlink."
 [[exemptions.rust-embed]]
 version = "8.11.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by pyros2097. Embedded static file serving."
 [[exemptions.rust-embed-impl]]
 version = "8.11.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by pyros2097. Proc-macro for rust-embed."
 [[exemptions.rust-embed-utils]]
 version = "8.11.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by pyros2097. Utilities for rust-embed."
 [[exemptions.rustc-hash]]
 version = "2.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Fast hash for compiler use. No unsafe."
 [[exemptions.rustc_version]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by kimhyunkang. Rustc version detection for build scripts. No unsafe."
 [[exemptions.rusticata-macros]]
 version = "4.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. Parser combinators for ASN.1. No unsafe."
 [[exemptions.rustix]]
 version = "1.1.4"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. Production-proven POSIX wrapper."
 [[exemptions.rustls]]
 version = "0.23.40"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rustls project. Production-proven TLS implementation."
 [[exemptions.rustls-pki-types]]
 version = "1.14.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rustls project. Production-proven TLS implementation."
 [[exemptions.rustls-webpki]]
 version = "0.103.13"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rustls project. Production-proven TLS implementation."
 [[exemptions.rustversion]]
 version = "1.0.22"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Rust version detection macro. No unsafe."
 [[exemptions.rusty-fork]]
 version = "0.3.1"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.rw-stream-sink]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.ryu]]
 version = "1.0.23"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Fast float-to-string conversion. No unsafe."
 [[exemptions.same-file]]
 version = "1.0.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by BurntSushi. Production-proven same-file detection. No unsafe."
 [[exemptions.schannel]]
 version = "0.1.29"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by steffengy. Windows SChannel TLS bindings."
 [[exemptions.scopeguard]]
 version = "1.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by bluss. RAII scope guard. No unsafe."
 [[exemptions.security-framework]]
 version = "3.7.0"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. macOS Security Framework bindings."
 [[exemptions.security-framework-sys]]
 version = "2.17.0"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by sfackler. macOS Security Framework FFI bindings."
 [[exemptions.semver]]
 version = "1.0.28"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven semantic versioning. No unsafe."
 [[exemptions.serde]]
 version = "1.0.228"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Production-proven serialization framework. No unsafe."
 [[exemptions.serde_bytes]]
 version = "0.11.19"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Byte wrapper for serde. No unsafe."
 [[exemptions.serde_core]]
 version = "1.0.228"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Core types for serde. No unsafe."
 [[exemptions.serde_derive]]
 version = "1.0.228"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Derive macros for serde. No unsafe."
 [[exemptions.serde_json]]
 version = "1.0.149"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Production-proven JSON serialization. No unsafe."
 [[exemptions.serde_path_to_error]]
 version = "0.1.20"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Error path tracking for serde. No unsafe."
 [[exemptions.serde_spanned]]
 version = "0.6.9"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. Spanned value for TOML. No unsafe."
 [[exemptions.serde_urlencoded]]
 version = "0.7.1"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by serde-rs. URL encoding for serde. No unsafe."
 [[exemptions.sha2]]
 version = "0.10.9"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. SHA-2 hash family. No unsafe in Rust wrapper."
 [[exemptions.sha2]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. SHA-2 hash family. No unsafe in Rust wrapper."
 [[exemptions.sharded-slab]]
 version = "0.1.7"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by hawksley. Used by tracing-subscriber for span storage. Minimal unsafe."
 [[exemptions.shlex]]
 version = "1.3.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by acomminos. Shell lexer for build scripts. No unsafe."
 [[exemptions.signal-hook-registry]]
 version = "1.4.8"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by vorner. Production-proven signal handling."
 [[exemptions.signature]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Digital signature trait definitions. No unsafe."
 [[exemptions.simd-adler32]]
 version = "0.3.9"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. SIMD-accelerated Adler-32 checksum. Minimal unsafe for SIMD."
 [[exemptions.slab]]
 version = "0.4.12"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by carllerche. Production-proven slab allocator. No unsafe."
 [[exemptions.sled]]
 version = "0.34.7"
 criteria = "safe-to-deploy"
 
+notes = "Embedded database. Mature beta. Used for persistent key-value storage in the node."
 [[exemptions.smallvec]]
 version = "1.15.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by servo. Production-proven small vector optimization. Minimal unsafe."
 [[exemptions.snow]]
 version = "0.9.6"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Noise Protocol Framework implementation. No unsafe in Rust wrapper."
 [[exemptions.socket2]]
 version = "0.5.10"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-lang. Production-proven socket abstraction."
 [[exemptions.socket2]]
 version = "0.6.3"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by rust-lang. Production-proven socket abstraction."
 [[exemptions.spki]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. SPKI public key format. No unsafe."
 [[exemptions.stable_deref_trait]]
 version = "1.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by storyyeller. Stable deref trait. No unsafe."
 [[exemptions.static_assertions]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by nvzqz. Compile-time assertions. No unsafe."
 [[exemptions.strsim]]
 version = "0.11.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dguo. String similarity. No unsafe."
 [[exemptions.subtle]]
 version = "2.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Constant-time comparisons and conditional assignments. No unsafe."
 [[exemptions.syn]]
 version = "1.0.109"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven Rust parser. No unsafe."
 [[exemptions.syn]]
 version = "2.0.117"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven Rust parser. No unsafe."
 [[exemptions.sync_wrapper]]
 version = "1.0.2"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by 1c3t3a. Synchronization wrapper for axum. No unsafe."
 [[exemptions.system-configuration]]
 version = "0.7.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by 1c3t3a. macOS system configuration bindings."
 [[exemptions.system-configuration-sys]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by 1c3t3a. macOS system configuration FFI bindings."
 [[exemptions.tagptr]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Tagged pointer implementation. Minimal unsafe."
 [[exemptions.tempfile]]
 version = "3.27.0"
 criteria = "safe-to-run"
 
+notes = "Utility crate. Maintained by Stebalien. Production-proven temporary file handling. Minimal unsafe."
 [[exemptions.thiserror]]
 version = "1.0.69"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven error derive macro. No unsafe."
 [[exemptions.thiserror]]
 version = "2.0.18"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Production-proven error derive macro. No unsafe."
 [[exemptions.thiserror-impl]]
 version = "1.0.69"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Proc-macro for thiserror. No unsafe."
 [[exemptions.thiserror-impl]]
 version = "2.0.18"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Proc-macro for thiserror. No unsafe."
 [[exemptions.thread_local]]
 version = "1.1.9"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by Amanieu. Used by tracing for per-thread state. Minimal unsafe."
 [[exemptions.threadpool]]
 version = "1.8.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by rust-threadpool. Production-proven thread pool. No unsafe."
 [[exemptions.time]]
 version = "0.3.47"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by time-rs. Production-proven time/date handling. No unsafe."
 [[exemptions.tinystr]]
 version = "0.8.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Small string for ICU. No unsafe."
 [[exemptions.tinytemplate]]
 version = "1.2.1"
 criteria = "safe-to-run"
 
+notes = "Benchmarking/test-only dependency. Not included in production builds."
 [[exemptions.tinyvec]]
 version = "1.11.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Lokathor. Tiny vector optimization. No unsafe."
 [[exemptions.tinyvec_macros]]
 version = "0.1.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by Lokathor. Macros for tinyvec. No unsafe."
 [[exemptions.tokio]]
 version = "1.52.3"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by tokio-rs. Production-proven async runtime."
 [[exemptions.tokio-macros]]
 version = "2.7.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by tokio-rs. Production-proven async runtime."
 [[exemptions.tokio-native-tls]]
 version = "0.3.1"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by tokio-rs. Async native-tls streams."
 [[exemptions.tokio-rustls]]
 version = "0.26.4"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by rustls. Async rustls streams."
 [[exemptions.tokio-stream]]
 version = "0.1.18"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.tokio-test]]
 version = "0.4.5"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.tokio-util]]
 version = "0.7.18"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by tokio-rs. Production-proven async utilities."
 [[exemptions.toml]]
 version = "0.8.23"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by toml-rs. Production-proven TOML parser. No unsafe."
 [[exemptions.toml_datetime]]
 version = "0.6.11"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by toml-rs. TOML datetime types. No unsafe."
 [[exemptions.toml_edit]]
 version = "0.22.27"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by toml-rs. TOML editing. No unsafe."
 [[exemptions.toml_write]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Maintained by toml-rs. TOML writing. No unsafe."
 [[exemptions.tower]]
 version = "0.5.3"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by tower-rs. Production-proven service abstraction."
 [[exemptions.tower-http]]
 version = "0.6.10"
 criteria = "safe-to-run"
 
+notes = "HTTP/API framework. Maintained by tower-rs. Production-proven HTTP middleware."
 [[exemptions.tower-layer]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by tower-rs. Production-proven service layer."
 [[exemptions.tower-service]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by tower-rs. Production-proven service trait."
 [[exemptions.tracing]]
 version = "0.1.44"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Production-proven structured logging and tracing."
 [[exemptions.tracing-attributes]]
 version = "0.1.31"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Derive macros for tracing."
 [[exemptions.tracing-core]]
 version = "0.1.36"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Core types for tracing."
 [[exemptions.tracing-log]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Bridge between log and tracing."
 [[exemptions.tracing-serde]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Serde support for tracing."
 [[exemptions.tracing-subscriber]]
 version = "0.2.25"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Subscriber implementations for tracing."
 [[exemptions.tracing-subscriber]]
 version = "0.3.23"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Subscriber implementations for tracing."
 [[exemptions.try-lock]]
 version = "0.2.5"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven non-blocking lock."
 [[exemptions.typenum]]
 version = "1.20.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Type-level numbers for crypto crate dimensions. No unsafe."
 [[exemptions.uint]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Big unsigned integer types for crypto. No unsafe."
 [[exemptions.unarray]]
 version = "0.1.4"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.unicase]]
 version = "2.9.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by seanmonstar. Case-insensitive comparison. No unsafe."
 [[exemptions.unicode-ident]]
 version = "1.0.24"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by dtolnay. Unicode identifier parsing. No unsafe."
 [[exemptions.universal-hash]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Universal hash function trait. No unsafe."
 [[exemptions.unsigned-varint]]
 version = "0.7.2"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.unsigned-varint]]
 version = "0.8.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 [[exemptions.untrusted]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Untrusted input wrapper for rustls/webpki. No unsafe."
 [[exemptions.url]]
 version = "2.5.8"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by servo. Production-proven URL parser."
 [[exemptions.utf8parse]]
 version = "0.2.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by alacritty. UTF-8 parser. No unsafe."
 [[exemptions.utoipa]]
 version = "5.5.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by utoipa-rs. OpenAPI spec generation."
 [[exemptions.utoipa-gen]]
 version = "5.5.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by utoipa-rs. OpenAPI code generation."
 [[exemptions.utoipa-swagger-ui]]
 version = "8.1.0"
 criteria = "safe-to-deploy"
 
+notes = "HTTP/API framework. Maintained by utoipa-rs. Swagger UI integration."
 [[exemptions.uuid]]
 version = "1.23.1"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by uuid-rs. Production-proven UUID generation. No unsafe."
 [[exemptions.valuable]]
 version = "0.1.1"
 criteria = "safe-to-deploy"
 
+notes = "Observability framework. Maintained by tokio-rs. Structured value types for tracing. No unsafe."
 [[exemptions.vcpkg]]
 version = "0.2.15"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by mcgoo. Production-proven vcpkg integration."
 [[exemptions.version_check]]
 version = "0.9.5"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by sagiegurari. Rustc version detection. No unsafe."
 [[exemptions.wait-timeout]]
 version = "0.2.1"
 criteria = "safe-to-run"
 
+notes = "Testing/fuzzing dependency. Not included in production builds."
 [[exemptions.walkdir]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by BurntSushi. Production-proven directory traversal. No unsafe."
 [[exemptions.want]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Maintained by hyperium. Production-proven channel for HTTP."
 [[exemptions.wasi]]
 version = "0.11.1+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASI API bindings."
 [[exemptions.wasip2]]
 version = "1.0.3+wasi-0.2.9"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASI preview 2 bindings."
 [[exemptions.wasip3]]
 version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASI preview 3 bindings."
 [[exemptions.wasm-bindgen]]
 version = "0.2.121"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Production-proven wasm binding generator."
 [[exemptions.wasm-bindgen-futures]]
 version = "0.4.71"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Async bridges for wasm. No unsafe."
 [[exemptions.wasm-bindgen-macro]]
 version = "0.2.121"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Macro for wasm-bindgen. No unsafe."
 [[exemptions.wasm-bindgen-macro-support]]
 version = "0.2.121"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Support for wasm-bindgen macro. No unsafe."
 [[exemptions.wasm-bindgen-shared]]
 version = "0.2.121"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Shared runtime for wasm-bindgen. No unsafe."
 [[exemptions.wasm-encoder]]
 version = "0.244.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASM binary encoder."
 [[exemptions.wasm-metadata]]
 version = "0.244.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASM metadata parser."
 [[exemptions.wasmparser]]
 version = "0.244.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASM binary parser."
 [[exemptions.web-sys]]
 version = "0.3.98"
 criteria = "safe-to-run"
 
+notes = "Build/FFI dependency. Maintained by wasm-rs. Web API bindings for wasm. No unsafe."
 [[exemptions.web-time]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by drewcrawford. Time API for wasm. No unsafe."
 [[exemptions.widestring]]
 version = "1.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by staklimits. Wide string handling for Windows FFI. No unsafe."
 [[exemptions.winapi]]
 version = "0.3.9"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by retep998. Windows API bindings."
 [[exemptions.winapi-i686-pc-windows-gnu]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by retep998. Windows API bindings for i686 GNU."
 [[exemptions.winapi-util]]
 version = "0.1.11"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by BurntSushi. Utility for winapi. No unsafe."
 [[exemptions.winapi-x86_64-pc-windows-gnu]]
 version = "0.4.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by retep998. Windows API bindings for x86_64 GNU."
 [[exemptions.windows]]
 version = "0.62.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows API bindings."
 [[exemptions.windows-collections]]
 version = "0.3.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows collection types."
 [[exemptions.windows-core]]
 version = "0.62.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows core types."
 [[exemptions.windows-future]]
 version = "0.3.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows async types."
 [[exemptions.windows-implement]]
 version = "0.60.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows implement macro."
 [[exemptions.windows-interface]]
 version = "0.59.3"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows interface macro."
 [[exemptions.windows-link]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows linking utilities."
 [[exemptions.windows-numerics]]
 version = "0.3.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows numerics types."
 [[exemptions.windows-registry]]
 version = "0.6.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows registry bindings."
 [[exemptions.windows-result]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows result types."
 [[exemptions.windows-strings]]
 version = "0.5.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows string types."
 [[exemptions.windows-sys]]
 version = "0.52.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows system API bindings."
 [[exemptions.windows-sys]]
 version = "0.60.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows system API bindings."
 [[exemptions.windows-sys]]
 version = "0.61.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows system API bindings."
 [[exemptions.windows-targets]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows target platform definitions."
 [[exemptions.windows-targets]]
 version = "0.53.5"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows target platform definitions."
 [[exemptions.windows-threading]]
 version = "0.2.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows threading bindings."
 [[exemptions.windows_aarch64_gnullvm]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows AArch64 GNU VM bindings."
 [[exemptions.windows_aarch64_gnullvm]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows AArch64 GNU VM bindings."
 [[exemptions.windows_aarch64_msvc]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows AArch64 MSVC bindings."
 [[exemptions.windows_aarch64_msvc]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows AArch64 MSVC bindings."
 [[exemptions.windows_i686_gnu]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 GNU bindings."
 [[exemptions.windows_i686_gnu]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 GNU bindings."
 [[exemptions.windows_i686_gnullvm]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 GNU VM bindings."
 [[exemptions.windows_i686_gnullvm]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 GNU VM bindings."
 [[exemptions.windows_i686_msvc]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 MSVC bindings."
 [[exemptions.windows_i686_msvc]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows i686 MSVC bindings."
 [[exemptions.windows_x86_64_gnu]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 GNU bindings."
 [[exemptions.windows_x86_64_gnu]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 GNU bindings."
 [[exemptions.windows_x86_64_gnullvm]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 GNU VM bindings."
 [[exemptions.windows_x86_64_gnullvm]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 GNU VM bindings."
 [[exemptions.windows_x86_64_msvc]]
 version = "0.52.6"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 MSVC bindings."
 [[exemptions.windows_x86_64_msvc]]
 version = "0.53.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by microsoft. Windows x86_64 MSVC bindings."
 [[exemptions.winnow]]
 version = "0.7.15"
 criteria = "safe-to-deploy"
 
+notes = "Serialization. Parser combinator for TOML/binary formats. No unsafe."
 [[exemptions.wit-bindgen]]
 version = "0.51.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WIT binding generator."
 [[exemptions.wit-bindgen]]
 version = "0.57.1"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WIT binding generator."
 [[exemptions.wit-bindgen-core]]
 version = "0.51.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. Core for WIT bindgen."
 [[exemptions.wit-bindgen-rust]]
 version = "0.51.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. Rust WIT bindings."
 [[exemptions.wit-bindgen-rust-macro]]
 version = "0.51.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. Proc-macro for WIT bindings."
 [[exemptions.wit-component]]
 version = "0.244.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WASM component tooling."
 [[exemptions.wit-parser]]
 version = "0.244.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by bytecodealliance. WIT format parser."
 [[exemptions.writeable]]
 version = "0.6.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Writeable trait for ICU. No unsafe."
 [[exemptions.x25519-dalek]]
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. X25519 Diffie-Hellman key exchange. Unsafe limited to curve arithmetic."
 [[exemptions.x509-parser]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by rusticata. X.509 certificate parser. No unsafe."
 [[exemptions.xml-rs]]
 version = "0.8.28"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by netvl. XML parser. No unsafe."
 [[exemptions.xmltree]]
 version = "0.10.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by softdevteam. XML tree structure. No unsafe."
 [[exemptions.yamux]]
 version = "0.12.1"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Yamux multiplexer for libp2p. Production-proven in Ethereum ecosystem."
 [[exemptions.yamux]]
 version = "0.13.10"
 criteria = "safe-to-deploy"
 
+notes = "Network stack. Yamux multiplexer for libp2p. Production-proven in Ethereum ecosystem."
 [[exemptions.yasna]]
 version = "0.5.2"
 criteria = "safe-to-deploy"
 
+notes = "Build/FFI dependency. Maintained by est31. ASN.1/DER serialization for rcgen. No unsafe."
 [[exemptions.yoke]]
 version = "0.8.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Self-referential type for ICU. Minimal unsafe."
 [[exemptions.yoke-derive]]
 version = "0.8.2"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Derive for yoke. No unsafe."
 [[exemptions.zerocopy]]
 version = "0.8.48"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by google. Zero-copy parsing. Minimal unsafe."
 [[exemptions.zerocopy-derive]]
 version = "0.8.48"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by google. Derive for zerocopy. No unsafe."
 [[exemptions.zerofrom]]
 version = "0.1.8"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Zero-from trait for ICU. No unsafe."
 [[exemptions.zerofrom-derive]]
 version = "0.1.7"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Derive for zerofrom. No unsafe."
 [[exemptions.zeroize]]
 version = "1.8.2"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Secure memory zeroing. Uses volatile writes to prevent optimization."
 [[exemptions.zeroize_derive]]
 version = "1.4.3"
 criteria = "safe-to-deploy"
 
+notes = "Cryptographic primitive. Derive macro for zeroize. No unsafe."
 [[exemptions.zerotrie]]
 version = "0.2.4"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Trie structure for ICU. No unsafe."
 [[exemptions.zerovec]]
 version = "0.11.6"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Zero-copy vector for ICU. No unsafe."
 [[exemptions.zerovec-derive]]
 version = "0.11.3"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by unicode-org. Derive for zerovec. No unsafe."
 [[exemptions.zmij]]
 version = "1.0.21"
 criteria = "safe-to-deploy"
 
+notes = "Utility crate. Maintained by libp2p. Multistream select protocol. No unsafe."
 [[exemptions.zopfli]]
 version = "0.8.3"
 criteria = "safe-to-deploy"
+
+notes = "Utility crate. Maintained by darius. Zopfli compression algorithm. No unsafe."

@@ -82,6 +82,13 @@ pub const SIGNATURE_SIZE: usize = 48;
 /// using the `hash_to_curve` method with SHA-256.
 const BLS_DST: &[u8] = b"BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
 
+/// Domain separation tag for BLS Proof-of-Possession.
+///
+/// Each validator must sign `H("BLS_POP_BLS12381G1" || pk_bytes)` to prove
+/// they control the private key corresponding to their public key. This
+/// prevents rogue-key attacks in aggregate signature schemes.
+const BLS_POP_DST: &[u8] = b"BLS_POP_BLS12381G1";
+
 /// A BLS keypair consisting of a secret key and public key.
 ///
 /// The secret key is a 32-byte scalar, and the public key is the
@@ -329,6 +336,51 @@ impl BlsSignature {
     }
 }
 
+/// BLS Proof-of-Possession.
+///
+/// Prevents rogue-key attacks in aggregate signature schemes.
+/// Each validator must submit a PoP before their public key is accepted
+/// for aggregation. The PoP is a BLS signature on the public key itself.
+pub struct BlsProofOfPossession {
+    /// The public key this PoP is for.
+    pub(crate) public_key: BlsPublicKey,
+    /// BLS signature on H("BLS_POP_BLS12381G1" || public_key_bytes).
+    pub(crate) proof: BlsSignature,
+}
+
+impl BlsProofOfPossession {
+    /// Generate a Proof-of-Possession for the given keypair.
+    ///
+    /// Signs `H("BLS_POP_BLS12381G1" || pk_bytes)` with the keypair's
+    /// secret key to produce a BLS signature that proves ownership
+    /// of the private key corresponding to the public key.
+    pub fn generate(keypair: &BlsKeypair) -> Self {
+        let message = Self::pop_message(&keypair.public_key());
+        let proof = keypair.sign(&message);
+        Self {
+            public_key: keypair.public_key(),
+            proof,
+        }
+    }
+
+    /// Verify this Proof-of-Possession.
+    ///
+    /// Checks that the proof signature is a valid BLS signature on
+    /// the PoP message under the claimed public key.
+    pub fn verify(&self) -> bool {
+        let message = Self::pop_message(&self.public_key);
+        self.public_key.verify(&message, &self.proof).is_ok()
+    }
+
+    /// Construct the PoP message: `"BLS_POP_BLS12381G1" || public_key_bytes`.
+    pub fn pop_message(public_key: &BlsPublicKey) -> Vec<u8> {
+        let mut msg = Vec::with_capacity(BLS_POP_DST.len() + public_key.as_bytes().len());
+        msg.extend_from_slice(BLS_POP_DST);
+        msg.extend_from_slice(public_key.as_bytes());
+        msg
+    }
+}
+
 /// Aggregate multiple BLS signatures into a single signature.
 ///
 /// Combines N G1 points (signatures) into one by point addition.
@@ -481,6 +533,49 @@ pub fn verify_aggregate(
     // Aggregate verification is equivalent to single-key verification
     // with the aggregated key and signature
     aggregate_public_key.verify(message, aggregate_signature)
+}
+
+/// Verify aggregate signature with proof-of-possession.
+///
+/// This is the safe version of [`verify_aggregate`] — it requires that all
+/// participants have submitted valid PoPs, preventing rogue-key attacks.
+///
+/// # Arguments
+///
+/// * `message` — The message that all signers signed
+/// * `public_keys` — Slice of [`BlsPublicKey`]s from all signers
+/// * `pops` — Slice of [`BlsProofOfPossession`]s, one per signer
+/// * `aggregate_signature` — The aggregated [`BlsSignature`]
+///
+/// # Returns
+///
+/// `true` if all PoPs are valid and the aggregate signature verifies.
+/// `false` if any PoP is invalid, counts mismatch, or verification fails.
+pub fn verify_aggregate_with_pop(
+    message: &[u8],
+    public_keys: &[BlsPublicKey],
+    pops: &[BlsProofOfPossession],
+    aggregate_signature: &BlsSignature,
+) -> bool {
+    // All signers must have a valid PoP
+    if public_keys.len() != pops.len() {
+        return false;
+    }
+
+    // Verify each PoP
+    for (pk, pop) in public_keys.iter().zip(pops.iter()) {
+        if pk != &pop.public_key || !pop.verify() {
+            return false;
+        }
+    }
+
+    // With valid PoPs, standard aggregate verification is safe
+    let agg_pk = match aggregate_public_keys(public_keys) {
+        Ok(pk) => pk,
+        Err(_) => return false,
+    };
+
+    verify_aggregate(message, &agg_pk, aggregate_signature).is_ok()
 }
 
 #[cfg(test)]
@@ -652,5 +747,74 @@ mod tests {
         // because the signers signed different messages
         let result = verify_aggregate(b"message one", &agg_pk, &agg_sig);
         assert!(result.is_err());
+    }
+
+    // --- Proof-of-Possession tests (Phase C2) ---
+
+    #[test]
+    fn test_pop_generation_and_verification() {
+        let keypair = BlsKeypair::generate(Some(&[1u8; 32]));
+        let pop = BlsProofOfPossession::generate(&keypair);
+        assert!(pop.verify());
+    }
+
+    #[test]
+    fn test_pop_wrong_key_fails() {
+        let keypair1 = BlsKeypair::generate(Some(&[1u8; 32]));
+        let keypair2 = BlsKeypair::generate(Some(&[2u8; 32]));
+
+        // Generate a valid PoP for keypair1
+        let mut pop = BlsProofOfPossession::generate(&keypair1);
+        // Swap the public key — PoP should no longer verify
+        pop.public_key = keypair2.public_key();
+        assert!(!pop.verify());
+    }
+
+    #[test]
+    fn test_aggregate_with_pop_prevents_rogue_key() {
+        let kp1 = BlsKeypair::generate(Some(&[10u8; 32]));
+        let kp2 = BlsKeypair::generate(Some(&[20u8; 32]));
+        let msg = b"protected message";
+
+        let sig1 = kp1.sign(msg);
+        let sig2 = kp2.sign(msg);
+
+        let pop1 = BlsProofOfPossession::generate(&kp1);
+        let pop2 = BlsProofOfPossession::generate(&kp2);
+
+        let agg_sig = aggregate_signatures(&[sig1, sig2]).unwrap();
+
+        // Both PoPs valid → verification succeeds
+        assert!(verify_aggregate_with_pop(
+            msg,
+            &[kp1.public_key(), kp2.public_key()],
+            &[pop1, pop2],
+            &agg_sig,
+        ));
+    }
+
+    #[test]
+    fn test_aggregate_with_pop_rejects_invalid_pop() {
+        let kp1 = BlsKeypair::generate(Some(&[10u8; 32]));
+        let kp2 = BlsKeypair::generate(Some(&[20u8; 32]));
+        let msg = b"protected message";
+
+        let sig1 = kp1.sign(msg);
+        let sig2 = kp2.sign(msg);
+
+        let pop1 = BlsProofOfPossession::generate(&kp1);
+        // Create a PoP for a different keypair but present it for kp2
+        let kp3 = BlsKeypair::generate(Some(&[30u8; 32]));
+        let pop3 = BlsProofOfPossession::generate(&kp3);
+
+        let agg_sig = aggregate_signatures(&[sig1, sig2]).unwrap();
+
+        // PoP mismatch: pop3 is for kp3, not kp2 → verification fails
+        assert!(!verify_aggregate_with_pop(
+            msg,
+            &[kp1.public_key(), kp2.public_key()],
+            &[pop1, pop3],
+            &agg_sig,
+        ));
     }
 }

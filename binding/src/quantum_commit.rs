@@ -76,7 +76,7 @@ pub struct QuantumCommitment {
 ///
 /// Contains both the classical Ed25519 public key and the post-quantum
 /// Dilithium public key.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PqPublicKey {
     /// Ed25519 verifying key (32 bytes).
     pub ed25519: [u8; 32],
@@ -85,15 +85,16 @@ pub struct PqPublicKey {
 }
 
 /// Whether we are in the classical-only, hybrid, or post-quantum phase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize, Default)]
+#[repr(u8)]
 pub enum CommitmentPhase {
     /// Phase 1: Only classical (Ed25519) signatures are verified.
     #[default]
-    ClassicalOnly,
+    ClassicalOnly = 0,
     /// Phase 2: Both classical and PQC signatures must verify.
-    Hybrid,
+    Hybrid = 1,
     /// Phase 3: Only PQC signatures are verified.
-    PostQuantum,
+    PostQuantum = 2,
 }
 
 impl QuantumCommitment {

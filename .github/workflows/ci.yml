@@ -91,6 +91,39 @@ jobs:
         run: cargo install cargo-vet --locked
       - name: Run cargo-vet
         run: cargo vet
+      - name: Verify exemption notes
+        run: |
+          python3 -c "
+          import sys
+          # Parse TOML without external dependency
+          with open('supply-chain/config.toml') as f:
+              content = f.read()
+          # Simple check: every exemption block should have a notes field
+          in_exemption = False
+          has_notes = False
+          current_name = ''
+          missing = []
+          for line in content.splitlines():
+              stripped = line.strip()
+              if stripped.startswith('[[') and 'exemptions' in stripped:
+                  if in_exemption and not has_notes:
+                      missing.append(current_name)
+                  in_exemption = True
+                  has_notes = False
+                  current_name = stripped
+              elif in_exemption and stripped.startswith('notes'):
+                  has_notes = True
+              elif stripped.startswith('[[') or stripped.startswith('['):
+                  if in_exemption and not has_notes:
+                      missing.append(current_name)
+                  in_exemption = False
+          if in_exemption and not has_notes:
+              missing.append(current_name)
+          if missing:
+              print(f'❌ Missing notes for {len(missing)} exemptions')
+              sys.exit(1)
+          print('✅ All exemptions have notes')
+          "
 
   reproducibility:
     name: Build Reproducibility
@@ -147,3 +180,66 @@ jobs:
             tarpaulin-report.html
             cobertura.xml
           retention-days: 30
+
+  fuzz-smoke:
+    name: Fuzz Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Build fuzz targets
+        run: cargo fuzz build
+      - name: Smoke test each target (1000 runs each)
+        run: |
+          TARGETS=(
+            fuzz_event_deserialization
+            fuzz_gossip_message
+            fuzz_zk_proof_deserialization
+            fuzz_consensus_state_transition
+            fuzz_vector_clock_merge
+            fuzz_rate_limiter
+            fuzz_snapshot_deserialization
+          )
+          for target in "${TARGETS[@]}"; do
+            echo "--- Smoke testing $target ---"
+            timeout 30 cargo fuzz run "$target" -- -runs=1000 2>&1 || {
+              echo "❌ Fuzz target $target crashed!"
+              exit 1
+            }
+            echo "✅ $target smoke test passed"
+          done
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx
+      - name: Generate SBOM
+        run: |
+          cargo cyclonedx --all --format json --output-path sbom/
+          cargo cyclonedx --all --format xml --output-path sbom/
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-sbom
+          path: sbom/
+          retention-days: 90
+      - name: Verify SBOM completeness
+        run: |
+          CRATES="substrate shards binding economics zk node"
+          for crate in $CRATES; do
+            if [ ! -f "sbom/${crate}-sbom.json" ]; then
+              echo "❌ Missing SBOM for $crate"
+              exit 1
+            fi
+          done
+          echo "✅ SBOM generated for all crates"
