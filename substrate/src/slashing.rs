@@ -324,7 +324,7 @@ impl SlashingStore for SledSlashingStore {
                 &validator[..4]
             )));
         }
-        let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
+        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
         state.slash_points.insert(*validator, current - decrement);
         self.save(&state)
     }
@@ -409,7 +409,7 @@ impl SlashingStore for InMemorySlashingStore {
                 &validator[..4]
             )));
         }
-        let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
+        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
         state.slash_points.insert(*validator, current - decrement);
         self.save(&state)
     }

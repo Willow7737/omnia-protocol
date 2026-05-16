@@ -31,7 +31,7 @@ use crate::causal_graph::CausalGraph;
 use crate::consensus::ConsensusConfig;
 use crate::consensus::ConsensusEngine;
 use crate::event::Event;
-use crate::slashing::{SlashingEngine, SlashingState};
+use crate::slashing::SlashingEngine;
 use serde::{Deserialize, Serialize};
 
 /// Configuration for a genesis replay operation.
