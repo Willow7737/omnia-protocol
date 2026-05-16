@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "packages": {
     ".": {
-      "release-type": "rust",
-      "package-name": "omnia-protocol",
+      "release-type": "simple",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",
@@ -16,6 +15,7 @@
       "separate-pull-requests": false,
       "skip-github-release": false,
       "extra-files": [
+        "Cargo.toml",
         "substrate/Cargo.toml",
         "shards/Cargo.toml",
         "binding/Cargo.toml",
@@ -27,8 +27,6 @@
       ]
     }
   },
-  "bootstrap-sha": "HEAD",
-  "last-release-sha": "HEAD",
   "changelog-type": "default",
   "changelog-sections": [
     { "type": "feat", "section": "Features", "hidden": false },

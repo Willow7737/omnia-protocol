@@ -92,11 +92,14 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
+      # Build only the omnia-node binary, not the entire workspace.
+      # The fuzz crate requires libfuzzer-sys which doesn't cross-compile
+      # for ARM64 and doesn't link on Windows MSVC.
       - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }} -p omnia-node
 
       - name: Prepare binary artifact (Unix)
         if: runner.os != 'Windows'
@@ -303,7 +306,7 @@ jobs:
       - security-audit
       - docker-image
     runs-on: ubuntu-latest
-    if: always() && needs.validate.result == 'success'
+    if: always() && needs.validate.result == 'success' && needs.build-binaries.result == 'success'
     steps:
       - uses: actions/checkout@v4
 
@@ -317,9 +320,9 @@ jobs:
         run: |
           mkdir -p release-files
           # Move all tar.gz, zip, and checksum files
-          find release-artifacts/ -name '*.tar.gz' -exec mv {} release-files/ \;
-          find release-artifacts/ -name '*.zip' -exec mv {} release-files/ \;
-          find release-artifacts/ -name '*.sha256' -exec mv {} release-files/ \;
+          find release-artifacts/ -name '*.tar.gz' -exec mv {} release-files/ \; 2>/dev/null || true
+          find release-artifacts/ -name '*.zip' -exec mv {} release-files/ \; 2>/dev/null || true
+          find release-artifacts/ -name '*.sha256' -exec mv {} release-files/ \; 2>/dev/null || true
           # Move contract artifacts
           mkdir -p release-files/contract
           find release-artifacts/omnia-rollup-contract/ -type f -exec mv {} release-files/contract/ \; 2>/dev/null || true
@@ -335,7 +338,14 @@ jobs:
       - name: Generate comprehensive checksums
         run: |
           cd release-files
-          sha256sum *.tar.gz *.zip 2>/dev/null > SHA256SUMS
+          # Use nullglob-style approach: only checksum files that actually exist
+          shopt -s nullglob
+          files=(*.tar.gz *.zip)
+          if [ ${#files[@]} -gt 0 ]; then
+            sha256sum "${files[@]}" > SHA256SUMS
+          else
+            echo "No archive files found for checksumming" > SHA256SUMS
+          fi
           echo "=== Checksums ==="
           cat SHA256SUMS
 
