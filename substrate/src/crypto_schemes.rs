@@ -28,23 +28,34 @@ use std::fmt;
 /// deprecated, a new version is added, and the protocol enters a transition
 /// period where both old and new versions are accepted. After the transition,
 /// the old version is rejected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum SchemeVersion {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SchemeVersion(pub u8);
+
+/// Well-known scheme version constants.
+impl SchemeVersion {
     /// First version — the default scheme at protocol launch.
-    V1,
+    pub const V1: Self = SchemeVersion(1);
     /// Second version — introduced during a migration.
-    V2,
+    pub const V2: Self = SchemeVersion(2);
     /// Third version — future use.
-    V3,
+    pub const V3: Self = SchemeVersion(3);
 }
 
 impl fmt::Display for SchemeVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SchemeVersion::V1 => write!(f, "v1"),
-            SchemeVersion::V2 => write!(f, "v2"),
-            SchemeVersion::V3 => write!(f, "v3"),
-        }
+        write!(f, "v{}", self.0)
+    }
+}
+
+impl PartialOrd for SchemeVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SchemeVersion {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 
@@ -149,6 +160,8 @@ impl fmt::Display for HashScheme {
 pub enum VrfScheme {
     /// Ed25519-VRF — based on Ed25519, fast, not quantum-safe.
     Ed25519VrfV1,
+    /// BLS-VRF — BLS-based VRF for threshold settings.
+    BlsVrfV2,
     /// Dilithium-VRF — post-quantum VRF based on Dilithium.
     DilithiumVrfV2,
 }
@@ -158,6 +171,7 @@ impl VrfScheme {
     pub fn version(&self) -> SchemeVersion {
         match self {
             VrfScheme::Ed25519VrfV1 => SchemeVersion::V1,
+            VrfScheme::BlsVrfV2 => SchemeVersion::V2,
             VrfScheme::DilithiumVrfV2 => SchemeVersion::V2,
         }
     }
@@ -172,6 +186,7 @@ impl fmt::Display for VrfScheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             VrfScheme::Ed25519VrfV1 => write!(f, "Ed25519-VRF/v1"),
+            VrfScheme::BlsVrfV2 => write!(f, "BLS-VRF/v2"),
             VrfScheme::DilithiumVrfV2 => write!(f, "Dilithium-VRF/v2"),
         }
     }
@@ -184,6 +199,8 @@ pub enum ZkScheme {
     Groth16Bn254V1,
     /// Groth16 on BLS12-381 — stronger curve, universal setup.
     Groth16Bls12381V2,
+    /// PLONK — universal trusted setup, transparent, future-proof.
+    PlonkV3,
 }
 
 impl ZkScheme {
@@ -192,6 +209,7 @@ impl ZkScheme {
         match self {
             ZkScheme::Groth16Bn254V1 => SchemeVersion::V1,
             ZkScheme::Groth16Bls12381V2 => SchemeVersion::V2,
+            ZkScheme::PlonkV3 => SchemeVersion::V3,
         }
     }
 }
@@ -201,6 +219,7 @@ impl fmt::Display for ZkScheme {
         match self {
             ZkScheme::Groth16Bn254V1 => write!(f, "Groth16/BN254/v1"),
             ZkScheme::Groth16Bls12381V2 => write!(f, "Groth16/BLS12-381/v2"),
+            ZkScheme::PlonkV3 => write!(f, "PLONK/v3"),
         }
     }
 }
@@ -259,7 +278,7 @@ impl CryptoProfile {
             hash: HashScheme::Blake3V1,
             accepted_hashes: vec![HashScheme::Blake3V1, HashScheme::Sha3V2],
             vrf: VrfScheme::Ed25519VrfV1,
-            accepted_vrfs: vec![VrfScheme::Ed25519VrfV1, VrfScheme::DilithiumVrfV2],
+            accepted_vrfs: vec![VrfScheme::Ed25519VrfV1, VrfScheme::BlsVrfV2],
             zk: ZkScheme::Groth16Bn254V1,
             accepted_zks: vec![ZkScheme::Groth16Bn254V1, ZkScheme::Groth16Bls12381V2],
         }
@@ -273,9 +292,9 @@ impl CryptoProfile {
             hash: HashScheme::Blake3bV3,
             accepted_hashes: vec![HashScheme::Sha3V2, HashScheme::Blake3bV3],
             vrf: VrfScheme::DilithiumVrfV2,
-            accepted_vrfs: vec![VrfScheme::DilithiumVrfV2],
-            zk: ZkScheme::Groth16Bls12381V2,
-            accepted_zks: vec![ZkScheme::Groth16Bls12381V2],
+            accepted_vrfs: vec![VrfScheme::BlsVrfV2, VrfScheme::DilithiumVrfV2],
+            zk: ZkScheme::PlonkV3,
+            accepted_zks: vec![ZkScheme::Groth16Bls12381V2, ZkScheme::PlonkV3],
         }
     }
 
@@ -303,6 +322,41 @@ impl CryptoProfile {
     pub fn is_fully_quantum_safe(&self) -> bool {
         self.signature.is_quantum_safe() && self.vrf.is_quantum_safe()
     }
+
+    /// Returns the minimum required crypto profile for a given date.
+    ///
+    /// This is used to enforce migration deadlines — after a certain date,
+    /// nodes must use at least the specified scheme versions. The returned
+    /// profile describes the *minimum* acceptable schemes; nodes may use
+    /// stronger schemes.
+    ///
+    /// # Arguments
+    ///
+    /// * `date` — The date as a UNIX timestamp (seconds since epoch).
+    ///
+    /// # Migration Schedule
+    ///
+    /// | Date | Minimum Profile |
+    /// |------|-----------------|
+    /// | Before 2026-01-01 | Default (V1) |
+    /// | 2026-01-01 to 2027-12-31 | Hybrid migration |
+    /// | 2028-01-01 onwards | Post-quantum |
+    pub fn minimum_for_date(date: u64) -> Self {
+        // Post-2028: require post-quantum signatures and VRF
+        // 2028-01-01 00:00:00 UTC = 1830297600
+        if date >= 1_830_297_600 {
+            Self::post_quantum()
+        }
+        // Post-2026: require hybrid migration profile
+        // 2026-01-01 00:00:00 UTC = 1767225600
+        else if date >= 1_767_225_600 {
+            Self::hybrid_migration()
+        }
+        // Default: V1 schemes acceptable
+        else {
+            Self::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -314,6 +368,7 @@ mod tests {
         assert!(SchemeVersion::V2 > SchemeVersion::V1);
         assert!(SchemeVersion::V3 > SchemeVersion::V2);
         assert!(SchemeVersion::V3 > SchemeVersion::V1);
+        assert!(SchemeVersion(5) > SchemeVersion(3));
     }
 
     #[test]
@@ -321,6 +376,14 @@ mod tests {
         assert_eq!(format!("{}", SchemeVersion::V1), "v1");
         assert_eq!(format!("{}", SchemeVersion::V2), "v2");
         assert_eq!(format!("{}", SchemeVersion::V3), "v3");
+        assert_eq!(format!("{}", SchemeVersion(42)), "v42");
+    }
+
+    #[test]
+    fn test_scheme_version_equality() {
+        assert_eq!(SchemeVersion::V1, SchemeVersion(1));
+        assert_eq!(SchemeVersion::V2, SchemeVersion(2));
+        assert_eq!(SchemeVersion::V3, SchemeVersion(3));
     }
 
     #[test]
@@ -347,7 +410,27 @@ mod tests {
     #[test]
     fn test_vrf_scheme_quantum_safety() {
         assert!(!VrfScheme::Ed25519VrfV1.is_quantum_safe());
+        assert!(!VrfScheme::BlsVrfV2.is_quantum_safe());
         assert!(VrfScheme::DilithiumVrfV2.is_quantum_safe());
+    }
+
+    #[test]
+    fn test_vrf_scheme_versions() {
+        assert_eq!(VrfScheme::Ed25519VrfV1.version(), SchemeVersion::V1);
+        assert_eq!(VrfScheme::BlsVrfV2.version(), SchemeVersion::V2);
+        assert_eq!(VrfScheme::DilithiumVrfV2.version(), SchemeVersion::V2);
+    }
+
+    #[test]
+    fn test_zk_scheme_variants() {
+        assert_eq!(ZkScheme::Groth16Bn254V1.version(), SchemeVersion::V1);
+        assert_eq!(ZkScheme::Groth16Bls12381V2.version(), SchemeVersion::V2);
+        assert_eq!(ZkScheme::PlonkV3.version(), SchemeVersion::V3);
+    }
+
+    #[test]
+    fn test_zk_scheme_display() {
+        assert_eq!(format!("{}", ZkScheme::PlonkV3), "PLONK/v3");
     }
 
     #[test]
@@ -366,6 +449,7 @@ mod tests {
         assert!(profile.accepts_signature(SignatureScheme::Ed25519V1));
         assert!(profile.accepts_signature(SignatureScheme::HybridV1));
         assert!(profile.accepts_signature(SignatureScheme::DilithiumV2));
+        assert!(profile.accepts_vrf(VrfScheme::BlsVrfV2));
         assert!(!profile.is_fully_quantum_safe());
     }
 
@@ -375,6 +459,7 @@ mod tests {
         assert!(profile.is_fully_quantum_safe());
         assert_eq!(profile.signature, SignatureScheme::DilithiumV2);
         assert_eq!(profile.vrf, VrfScheme::DilithiumVrfV2);
+        assert_eq!(profile.zk, ZkScheme::PlonkV3);
     }
 
     #[test]
@@ -384,5 +469,30 @@ mod tests {
         assert!(!profile.accepts_signature(SignatureScheme::DilithiumV2));
         assert!(profile.accepts_hash(HashScheme::Blake3V1));
         assert!(!profile.accepts_hash(HashScheme::Sha3V2));
+    }
+
+    #[test]
+    fn test_minimum_for_date_before_2026() {
+        // 2024-01-01
+        let profile = CryptoProfile::minimum_for_date(1_704_067_200);
+        assert_eq!(profile.signature, SignatureScheme::Ed25519V1);
+        assert_eq!(profile.vrf, VrfScheme::Ed25519VrfV1);
+    }
+
+    #[test]
+    fn test_minimum_for_date_2026() {
+        // 2026-06-01
+        let profile = CryptoProfile::minimum_for_date(1_778_496_000);
+        assert_eq!(profile.signature, SignatureScheme::HybridV1);
+        assert!(profile.accepts_signature(SignatureScheme::Ed25519V1));
+        assert!(profile.accepts_vrf(VrfScheme::BlsVrfV2));
+    }
+
+    #[test]
+    fn test_minimum_for_date_2028() {
+        // 2028-01-01
+        let profile = CryptoProfile::minimum_for_date(1_830_297_600);
+        assert_eq!(profile.signature, SignatureScheme::DilithiumV2);
+        assert!(profile.is_fully_quantum_safe());
     }
 }

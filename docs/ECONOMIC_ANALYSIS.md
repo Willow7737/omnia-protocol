@@ -51,6 +51,30 @@ The `FeeSchedule` (defined in `shards/src/fee_schedule.rs`) specifies per-operat
 
 ---
 
+### 2.3 Low-Level Fee Schedule Parameters
+
+In addition to the domain-based fee schedule above, the protocol uses the following low-level parameters for fee calculation:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Base event fee | 2 UBC | Minimum fee for any event (covers validation + DAG insertion) |
+| Per-byte fee | 0.01 UBC/byte | Additional fee per byte of event payload |
+| Cross-shard multiplier | 3× | Multiplier applied to events that cross shard boundaries |
+| Quota burst | 50 UBC | Maximum UBC that can be consumed in a single block (burst allowance) |
+| Quota refill rate | 10 UBC/block | Rate at which burst allowance refills per block |
+
+**Formula**:
+
+```
+event_fee = max(base_event_fee, domain_fee) + (payload_size * per_byte_fee)
+cross_shard_fee = event_fee * cross_shard_multiplier
+```
+
+
+**Quota enforcement**: Each identity has a burst budget of 50 UBC per block. After exhaustion, the identity must wait for the refill rate (10 UBC/block) to replenish. This prevents a single identity from consuming all block capacity in a burst while allowing legitimate bursts.
+
+---
+
 ## 3. Spam Resistance Analysis
 
 ### 3.1 Cost Model

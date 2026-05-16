@@ -1,170 +1,94 @@
-//! PQC Key Rotation — Quantum-Resistant Key Lifecycle Management.
+//! Quantum-safe key rotation support.
 //!
-//! This module manages the lifecycle of post-quantum cryptographic (PQC)
-//! keys, including key generation, rotation scheduling, and transition
-//! periods where both old and new keys are accepted.
+//! Extends the existing key rotation mechanism to handle PQC key pairs.
+//! When rotating from a classical key to a hybrid key, both the old
+//! and new keys are valid during a transition period.
 
-use omnia_substrate::vector_clock::NodeId;
+use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-/// A request to rotate a node's PQC key.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A key rotation request that supports PQC transitions.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PqcKeyRotationRequest {
-    /// The node requesting the key rotation.
-    pub node: NodeId,
-    /// The new PQC public key (Dilithium3, 1952 bytes).
-    #[serde(with = "serde_bytes")]
-    pub new_public_key: Vec<u8>,
-    /// The block height at which the rotation was requested.
-    pub requested_at_height: u64,
-    /// The block height at which the new key becomes effective.
-    pub effective_at_height: u64,
-    /// A signature from the current (old) key authorizing the rotation.
-    #[serde(with = "serde_bytes")]
-    pub authorization_signature: Vec<u8>,
+    /// The old public key (being rotated from).
+    pub old_key: PqPublicKey,
+    /// The new public key (being rotated to).
+    pub new_key: PqPublicKey,
+    /// Signature from the old key authorizing the rotation.
+    pub authorization_sig: Vec<u8>,
+    /// The new commitment phase after rotation.
+    pub new_phase: CommitmentPhase,
+    /// Block/round at which the rotation takes effect.
+    pub effective_at: u64,
+    /// Block/round at which the old key is no longer valid.
+    pub sunset_at: u64,
 }
 
-/// The state of a key rotation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RotationState {
-    /// The rotation request has been submitted but the new key is not yet effective.
-    Pending,
-    /// The new key is effective. The old key is still accepted but deprecated.
-    Effective,
-    /// The old key has been fully deprecated. Only the new key is accepted.
-    Deprecated,
-}
-
-/// Manager for PQC key rotation operations.
+/// Manages key rotation with PQC support.
 pub struct PqcKeyRotationManager {
-    /// Number of blocks between request and effective height.
-    transition_blocks: u64,
-    /// Number of blocks between effective height and deprecation.
-    deprecation_blocks: u64,
-    /// Current key for each node (node → public key bytes).
-    current_keys: HashMap<NodeId, Vec<u8>>,
-    /// Pending rotation requests (node → request).
-    pending_rotations: HashMap<NodeId, PqcKeyRotationRequest>,
-    /// Rotation state for each node.
-    rotation_states: HashMap<NodeId, RotationState>,
+    /// Current commitment phase.
+    current_phase: CommitmentPhase,
+    /// Pending rotations.
+    pending: Vec<PqcKeyRotationRequest>,
 }
 
 impl PqcKeyRotationManager {
-    /// Create a new key rotation manager.
-    pub fn new(transition_blocks: u64, deprecation_blocks: u64) -> Self {
+    /// Create a new key rotation manager starting at the given commitment phase.
+    pub fn new(current_phase: CommitmentPhase) -> Self {
         Self {
-            transition_blocks,
-            deprecation_blocks,
-            current_keys: HashMap::new(),
-            pending_rotations: HashMap::new(),
-            rotation_states: HashMap::new(),
+            current_phase,
+            pending: Vec::new(),
         }
-    }
-
-    /// Create a key rotation manager with default timing parameters.
-    pub fn default_timing() -> Self {
-        Self::new(1000, 5000)
-    }
-
-    /// Register a node's initial PQC public key.
-    pub fn register_key(&mut self, node: NodeId, public_key: Vec<u8>) {
-        self.current_keys.insert(node, public_key);
-        self.rotation_states.insert(node, RotationState::Deprecated);
     }
 
     /// Submit a key rotation request.
     pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), String> {
-        if !self.current_keys.contains_key(&request.node) {
-            return Err(format!("Node {:?} is not registered", &request.node[..4]));
+        if request.new_phase as u8 < self.current_phase as u8 {
+            return Err(format!(
+                "Cannot downgrade from {:?} to {:?}",
+                self.current_phase, request.new_phase
+            ));
         }
 
-        if self.pending_rotations.contains_key(&request.node) {
-            return Err(format!("Node {:?} already has a pending rotation", &request.node[..4]));
+        if request.authorization_sig.is_empty() {
+            return Err("Authorization signature required".to_string());
         }
 
-        tracing::info!(
-            node = ?&request.node[..4],
-            effective_at = request.effective_at_height,
-            "PQC key rotation request submitted"
-        );
-
-        let node = request.node;
-        self.pending_rotations.insert(node, request);
-        self.rotation_states.insert(node, RotationState::Pending);
+        self.pending.push(request);
         Ok(())
     }
 
-    /// Process all pending rotations and advance their state.
-    pub fn process_effective(&mut self, current_height: u64) -> usize {
-        let mut advanced = 0;
+    /// Process rotations that have become effective.
+    pub fn process_effective(&mut self, current_round: u64) -> Vec<PqcKeyRotationRequest> {
+        let (effective, remaining): (Vec<_>, Vec<_>) = self
+            .pending
+            .drain(..)
+            .partition(|r| current_round >= r.effective_at);
 
-        let nodes_to_activate: Vec<NodeId> = self
-            .pending_rotations
-            .iter()
-            .filter(|(_, req)| current_height >= req.effective_at_height)
-            .map(|(&node, _)| node)
-            .collect();
+        self.pending = remaining;
 
-        for node in nodes_to_activate {
-            if let Some(request) = self.pending_rotations.remove(&node) {
-                self.current_keys
-                    .insert(node, request.new_public_key.clone());
-                self.rotation_states.insert(node, RotationState::Effective);
-                advanced += 1;
-
-                tracing::info!(
-                    node = ?&node[..4],
-                    height = current_height,
-                    "PQC key rotation became effective"
-                );
-            }
+        for rotation in &effective {
+            self.current_phase = rotation.new_phase;
+            tracing::info!(
+                "Key rotation effective at round {}: phase -> {:?}",
+                current_round,
+                rotation.new_phase
+            );
         }
 
-        advanced
+        effective
     }
 
-    /// Check whether a key is currently in transition for a node.
-    pub fn is_key_in_transition(&self, node: &NodeId) -> bool {
-        matches!(
-            self.rotation_states.get(node),
-            Some(RotationState::Pending) | Some(RotationState::Effective)
-        )
+    /// Get the current commitment phase.
+    pub fn current_phase(&self) -> &CommitmentPhase {
+        &self.current_phase
     }
 
-    /// Get the current public key for a node.
-    pub fn current_key(&self, node: &NodeId) -> Option<&Vec<u8>> {
-        self.current_keys.get(node)
-    }
-
-    /// Get the pending rotation request for a node, if any.
-    pub fn pending_rotation(&self, node: &NodeId) -> Option<&PqcKeyRotationRequest> {
-        self.pending_rotations.get(node)
-    }
-
-    /// Get the rotation state for a node.
-    pub fn rotation_state(&self, node: &NodeId) -> Option<RotationState> {
-        self.rotation_states.get(node).copied()
-    }
-
-    /// Get the number of registered nodes.
-    pub fn registered_count(&self) -> usize {
-        self.current_keys.len()
-    }
-
-    /// Get the number of pending rotations.
-    pub fn pending_count(&self) -> usize {
-        self.pending_rotations.len()
-    }
-
-    /// Get the transition blocks parameter.
-    pub fn transition_blocks(&self) -> u64 {
-        self.transition_blocks
-    }
-
-    /// Get the deprecation blocks parameter.
-    pub fn deprecation_blocks(&self) -> u64 {
-        self.deprecation_blocks
+    /// Check if an old key is still in the transition period.
+    pub fn is_key_in_transition(&self, key: &PqPublicKey, current_round: u64) -> bool {
+        self.pending
+            .iter()
+            .any(|r| &r.old_key == key && current_round < r.sunset_at)
     }
 }
 
@@ -172,112 +96,122 @@ impl PqcKeyRotationManager {
 mod tests {
     use super::*;
 
-    fn node(id: u8) -> NodeId {
-        let mut n = [0u8; 32];
-        n[0] = id;
-        n
-    }
-
-    fn make_request(node: NodeId, current_height: u64, transition: u64) -> PqcKeyRotationRequest {
-        PqcKeyRotationRequest {
-            node,
-            new_public_key: vec![2u8; 1952],
-            requested_at_height: current_height,
-            effective_at_height: current_height + transition,
-            authorization_signature: vec![0u8; 64],
-        }
+    fn test_ed25519_key(val: u8) -> [u8; 32] {
+        [val; 32]
     }
 
     #[test]
-    fn test_register_and_get_key() {
-        let mut mgr = PqcKeyRotationManager::default_timing();
-        let n = node(1);
-        let key = vec![1u8; 1952];
-        mgr.register_key(n, key.clone());
-        assert_eq!(mgr.current_key(&n), Some(&key));
-        assert_eq!(mgr.registered_count(), 1);
+    fn test_phase_upgrade_allowed() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        assert!(manager.submit_rotation(request).is_ok());
     }
 
     #[test]
-    fn test_submit_rotation() {
-        let mut mgr = PqcKeyRotationManager::new(100, 500);
-        let n = node(2);
-        mgr.register_key(n, vec![1u8; 1952]);
-        let request = make_request(n, 1000, 100);
-        mgr.submit_rotation(request).unwrap();
-        assert!(mgr.is_key_in_transition(&n));
-        assert_eq!(mgr.rotation_state(&n), Some(RotationState::Pending));
-        assert_eq!(mgr.pending_count(), 1);
+    fn test_phase_downgrade_rejected() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::Hybrid);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![0u8; 1952] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::ClassicalOnly,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        assert!(manager.submit_rotation(request).is_err());
     }
 
     #[test]
-    fn test_submit_rotation_unregistered() {
-        let mut mgr = PqcKeyRotationManager::default_timing();
-        let n = node(99);
-        let request = make_request(n, 1000, 100);
-        let result = mgr.submit_rotation(request);
-        assert!(result.is_err());
+    fn test_transition_period_tracking() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let old_key = PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] };
+        let request = PqcKeyRotationRequest {
+            old_key: old_key.clone(),
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        manager.submit_rotation(request).unwrap();
+
+        assert!(manager.is_key_in_transition(&old_key, 150));
+        assert!(!manager.is_key_in_transition(&old_key, 250));
     }
 
     #[test]
-    fn test_submit_rotation_already_pending() {
-        let mut mgr = PqcKeyRotationManager::new(100, 500);
-        let n = node(3);
-        mgr.register_key(n, vec![1u8; 1952]);
-        let request1 = make_request(n, 1000, 100);
-        mgr.submit_rotation(request1).unwrap();
-        let request2 = make_request(n, 1001, 100);
-        let result = mgr.submit_rotation(request2);
-        assert!(result.is_err());
+    fn test_empty_authorization_sig_rejected() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        assert!(manager.submit_rotation(request).is_err());
     }
 
     #[test]
-    fn test_process_effective_rotation() {
-        let mut mgr = PqcKeyRotationManager::new(100, 500);
-        let n = node(4);
-        mgr.register_key(n, vec![1u8; 1952]);
-        let request = make_request(n, 1000, 100);
-        mgr.submit_rotation(request).unwrap();
+    fn test_process_effective_advances_phase() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        manager.submit_rotation(request).unwrap();
 
-        let advanced = mgr.process_effective(1050);
-        assert_eq!(advanced, 0);
-        assert_eq!(mgr.rotation_state(&n), Some(RotationState::Pending));
-        assert_eq!(mgr.current_key(&n), Some(&vec![1u8; 1952]));
+        // Before effective round: phase unchanged
+        assert_eq!(*manager.current_phase(), CommitmentPhase::ClassicalOnly);
+        let effective = manager.process_effective(50);
+        assert!(effective.is_empty());
 
-        let advanced = mgr.process_effective(1100);
-        assert_eq!(advanced, 1);
-        assert_eq!(mgr.rotation_state(&n), Some(RotationState::Effective));
-        assert_eq!(mgr.current_key(&n), Some(&vec![2u8; 1952]));
-        assert_eq!(mgr.pending_count(), 0);
+        // At effective round: phase advances
+        let effective = manager.process_effective(100);
+        assert_eq!(effective.len(), 1);
+        assert_eq!(*manager.current_phase(), CommitmentPhase::Hybrid);
     }
 
     #[test]
-    fn test_key_in_transition() {
-        let mut mgr = PqcKeyRotationManager::new(100, 500);
-        let n = node(5);
-        mgr.register_key(n, vec![1u8; 1952]);
-        assert!(!mgr.is_key_in_transition(&n));
-        let request = make_request(n, 1000, 100);
-        mgr.submit_rotation(request).unwrap();
-        assert!(mgr.is_key_in_transition(&n));
-        mgr.process_effective(1100);
-        assert!(mgr.is_key_in_transition(&n));
-    }
+    fn test_full_transition_to_post_quantum() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
 
-    #[test]
-    fn test_default_timing() {
-        let mgr = PqcKeyRotationManager::default_timing();
-        assert_eq!(mgr.transition_blocks(), 1000);
-        assert_eq!(mgr.deprecation_blocks(), 5000);
-    }
+        // ClassicalOnly -> Hybrid
+        let req1 = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        manager.submit_rotation(req1).unwrap();
+        manager.process_effective(100);
+        assert_eq!(*manager.current_phase(), CommitmentPhase::Hybrid);
 
-    #[test]
-    fn test_unregistered_node() {
-        let mgr = PqcKeyRotationManager::default_timing();
-        let n = node(99);
-        assert!(mgr.current_key(&n).is_none());
-        assert!(mgr.pending_rotation(&n).is_none());
-        assert!(mgr.rotation_state(&n).is_none());
-        assert!(!mgr.is_key_in_transition(&n));
+        // Hybrid -> PostQuantum
+        let req2 = PqcKeyRotationRequest {
+            old_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            new_key: PqPublicKey { ed25519: test_ed25519_key(3), dilithium: vec![0u8; 1952] },
+            authorization_sig: vec![0u8; 64],
+            new_phase: CommitmentPhase::PostQuantum,
+            effective_at: 300,
+            sunset_at: 400,
+        };
+        manager.submit_rotation(req2).unwrap();
+        manager.process_effective(300);
+        assert_eq!(*manager.current_phase(), CommitmentPhase::PostQuantum);
     }
 }

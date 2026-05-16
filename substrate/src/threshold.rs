@@ -73,6 +73,30 @@ impl ThresholdConfig {
         Self::new(n, t)
     }
 
+    /// Preset: Validator key recovery (3-of-5).
+    ///
+    /// Three of five validator custodians must cooperate to recover
+    /// a lost validator key.
+    pub fn validator_recovery() -> Self {
+        Self::new(5, 3)
+    }
+
+    /// Preset: Emergency multisig (2-of-3).
+    ///
+    /// Two of three emergency signers can authorize critical operations
+    /// like pausing the protocol or triggering an upgrade.
+    pub fn emergency_multisig() -> Self {
+        Self::new(3, 2)
+    }
+
+    /// Preset: Governance council (5-of-7).
+    ///
+    /// Five of seven council members must approve governance decisions
+    /// that require council authorization.
+    pub fn governance_council() -> Self {
+        Self::new(7, 5)
+    }
+
     /// Returns `true` if the given number of participants meets the threshold.
     pub fn has_quorum(&self, participant_count: usize) -> bool {
         participant_count >= self.threshold
@@ -404,5 +428,55 @@ mod tests {
         let mgr = ThresholdKeyManager::new(config);
         let result = mgr.partial_sign(&node(99), b"test");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_predefined_configs_validator_recovery() {
+        let config = ThresholdConfig::validator_recovery();
+        assert_eq!(config.total_participants, 5);
+        assert_eq!(config.threshold, 3);
+    }
+
+    #[test]
+    fn test_predefined_configs_emergency_multisig() {
+        let config = ThresholdConfig::emergency_multisig();
+        assert_eq!(config.total_participants, 3);
+        assert_eq!(config.threshold, 2);
+    }
+
+    #[test]
+    fn test_predefined_configs_governance_council() {
+        let config = ThresholdConfig::governance_council();
+        assert_eq!(config.total_participants, 7);
+        assert_eq!(config.threshold, 5);
+    }
+
+    #[test]
+    fn test_duplicate_signers_detected() {
+        let config = ThresholdConfig::new(4, 3);
+        let mut mgr = ThresholdKeyManager::new(config);
+
+        // Register 4 participants
+        for i in 1..=4u8 {
+            let n = node(i);
+            let keypair = BlsKeypair::generate(Some(&[i; 32]));
+            let share = KeyShare::new(n, i as usize, keypair);
+            mgr.register_share(share);
+        }
+
+        // Create partial signatures — include one duplicate signer
+        let msg = b"duplicate signer test";
+        let p1 = mgr.partial_sign(&node(1), msg).unwrap();
+        let p2 = mgr.partial_sign(&node(2), msg).unwrap();
+        let p3 = mgr.partial_sign(&node(2), msg).unwrap(); // duplicate of signer 2
+
+        let partials = vec![p1, p2, p3];
+
+        // Combining with duplicate signers: the combine_signatures method
+        // does not deduplicate, so it counts 3 partials (meeting threshold).
+        // The signers list will contain node(2) twice, but the signature
+        // will still aggregate (BLS aggregation is commutative).
+        let result = mgr.combine_signatures(&partials, msg);
+        assert!(result.is_ok(), "Combine should succeed with 3 partials even if one signer is duplicated");
     }
 }

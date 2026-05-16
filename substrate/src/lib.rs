@@ -58,7 +58,7 @@ pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
-pub use genesis_replay::{replay_genesis, ReplayResult};
+pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
 pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
     GossipStats,

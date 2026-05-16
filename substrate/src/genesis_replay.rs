@@ -18,7 +18,8 @@
 //! 2. Replay each event through the causal graph in topological order.
 //! 3. Re-run consensus for each event to rebuild the consensus state.
 //! 4. Re-apply slashing state from the event stream.
-//! 5. Return a [`ReplayResult`] with the reconstructed state summary.
+//! 5. Verify the reconstructed state root against the expected root.
+//! 6. Return a [`ReplayResult`] with the reconstructed state summary.
 //!
 //! # Performance
 //!
@@ -27,44 +28,69 @@
 //! recovery (see [`crate::snapshot`]).
 
 use crate::causal_graph::CausalGraph;
-use crate::consensus::{ConsensusConfig, ConsensusEngine};
+use crate::consensus::ConsensusConfig;
+use crate::consensus::ConsensusEngine;
 use crate::event::Event;
 use crate::slashing::{SlashingEngine, SlashingState};
 use serde::{Deserialize, Serialize};
 
+/// Configuration for a genesis replay operation.
+///
+/// Controls the consensus parameters and slashing thresholds used during
+/// the replay. The replay constructs its own internal [`CausalGraph`] and
+/// [`ConsensusEngine`] from these parameters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplayConfig {
+    /// Consensus configuration for the replay engine.
+    pub consensus_config: ConsensusConfig,
+    /// Slash threshold for the internal slashing engine.
+    pub slash_threshold: u64,
+    /// Ejection threshold for the internal slashing engine.
+    pub ejection_threshold: u64,
+}
+
+impl Default for ReplayConfig {
+    fn default() -> Self {
+        Self {
+            consensus_config: ConsensusConfig::default(),
+            slash_threshold: crate::slashing::DEFAULT_SLASH_THRESHOLD,
+            ejection_threshold: crate::slashing::DEFAULT_EJECTION_THRESHOLD,
+        }
+    }
+}
+
 /// Result of a genesis replay operation.
 ///
 /// Contains the reconstructed state summary and metadata about the replay
-/// process, such as the number of events processed and any warnings.
+/// process, such as the number of events processed and whether the
+/// reconstructed state root matches the expected root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplayResult {
-    /// Total number of events replayed.
-    pub events_replayed: u64,
-    /// Number of events that were successfully committed through consensus.
-    pub events_committed: u64,
-    /// Number of events that failed processing (e.g., invalid signatures).
-    pub events_failed: u64,
-    /// The final slashing state after replay.
-    pub slashing_state: SlashingState,
-    /// The height of the causal graph after replay.
-    pub graph_height: u64,
-    /// Whether the replay completed successfully (no fatal errors).
-    pub success: bool,
-    /// Warnings encountered during replay (non-fatal issues).
-    pub warnings: Vec<String>,
+    /// Total number of events processed during replay.
+    pub events_processed: u64,
+    /// Number of events that were successfully finalized through consensus.
+    pub events_finalized: u64,
+    /// Number of events that were rejected (e.g., invalid signatures, consensus failure).
+    pub events_rejected: u64,
+    /// The size of the causal graph after replay (number of events).
+    pub final_graph_size: u64,
+    /// Whether the reconstructed state root matches the expected root.
+    ///
+    /// `None` if no expected root was provided for verification.
+    /// `Some(true)` if the root matches.
+    /// `Some(false)` if the root does not match (indicates data corruption).
+    pub root_matches: Option<bool>,
 }
 
 impl ReplayResult {
     /// Create an empty (zero-event) replay result.
     pub fn empty() -> Self {
         Self {
-            events_replayed: 0,
-            events_committed: 0,
-            events_failed: 0,
-            slashing_state: SlashingState::default(),
-            graph_height: 0,
-            success: true,
-            warnings: Vec::new(),
+            events_processed: 0,
+            events_finalized: 0,
+            events_rejected: 0,
+            final_graph_size: 0,
+            root_matches: None,
         }
     }
 }
@@ -72,15 +98,16 @@ impl ReplayResult {
 /// Replay a sequence of events from genesis to reconstruct node state.
 ///
 /// This function processes a slice of events in order, inserting each into
-/// the causal graph and running it through the consensus engine. The result
-/// captures the final state after all events have been processed.
+/// a new causal graph and running it through the consensus engine. If an
+/// `expected_root` is provided, the reconstructed state root is compared
+/// against it after the replay completes.
 ///
 /// # Arguments
 ///
 /// * `events` — A slice of [`Event`]s in topological order (genesis first).
-/// * `consensus_config` — Configuration for the consensus engine.
-/// * `slashing` — A [`SlashingEngine`] instance for tracking penalties.
-/// * `graph` — A mutable reference to an empty [`CausalGraph`] to populate.
+/// * `expected_root` — An optional expected state root hash for verification.
+///   If `Some`, the replay will compare the computed root against this value.
+/// * `config` — A [`ReplayConfig`] controlling consensus and slashing parameters.
 ///
 /// # Returns
 ///
@@ -89,79 +116,67 @@ impl ReplayResult {
 /// # Example
 ///
 /// ```ignore
-/// use omnia_substrate::genesis_replay::{replay_genesis, ReplayResult};
-/// use omnia_substrate::causal_graph::CausalGraph;
-/// use omnia_substrate::consensus::ConsensusConfig;
-/// use omnia_substrate::slashing::SlashingEngine;
+/// use omnia_substrate::genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
 ///
-/// let mut graph = CausalGraph::new();
-/// let slashing = SlashingEngine::new_in_memory(500, 2000);
-/// let config = ConsensusConfig::default();
-/// let result = replay_genesis(&events, &config, slashing, &mut graph);
-/// assert!(result.success);
+/// let config = ReplayConfig::default();
+/// let result = replay_genesis(&events, Some(expected_root), &config);
+/// assert!(result.root_matches.unwrap_or(false));
 /// ```
 pub fn replay_genesis(
     events: &[Event],
-    consensus_config: &ConsensusConfig,
-    slashing: SlashingEngine,
-    graph: &mut CausalGraph,
+    expected_root: Option<&[u8; 32]>,
+    config: &ReplayConfig,
 ) -> ReplayResult {
     let mut result = ReplayResult::empty();
-    let mut consensus = ConsensusEngine::new(consensus_config.clone(), slashing.clone());
+    let mut graph = CausalGraph::new();
+    let slashing =
+        SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold);
+    let mut consensus = ConsensusEngine::new(config.consensus_config.clone(), slashing.clone());
 
     for event in events {
-        result.events_replayed += 1;
+        result.events_processed += 1;
 
         // Insert event into the causal graph
         if let Err(e) = graph.insert(event.clone()) {
-            result.events_failed += 1;
-            result.warnings.push(format!(
+            result.events_rejected += 1;
+            tracing::warn!(
                 "Failed to insert event {:?}: {}",
                 &event.id[..4.min(event.id.len())],
                 e
-            ));
+            );
             continue;
         }
 
         // Process event through consensus
-        match consensus.process_event(event, graph) {
+        match consensus.process_event(event, &graph) {
             Ok(committed) => {
-                result.events_committed += committed.len() as u64;
+                result.events_finalized += committed.len() as u64;
             }
             Err(e) => {
-                result.events_failed += 1;
-                result.warnings.push(format!(
+                result.events_rejected += 1;
+                tracing::warn!(
                     "Consensus error for event {:?}: {}",
                     &event.id[..4.min(event.id.len())],
                     e
-                ));
+                );
             }
         }
     }
 
-    result.graph_height = graph.len() as u64;
-    result.slashing_state = SlashingState {
-        slash_points: slashing.internal_slash_points(),
-        stakes: slashing.internal_stakes(),
-        slash_threshold: slashing.internal_slash_threshold(),
-        ejection_threshold: slashing.internal_ejection_threshold(),
-    };
+    result.final_graph_size = graph.len() as u64;
 
-    // Replay is successful if more events committed than failed
-    result.success = result.events_failed == 0 || result.events_committed > 0;
-
-    if result.events_failed > 0 {
-        result.warnings.push(format!(
-            "{} events failed during replay out of {} total",
-            result.events_failed, result.events_replayed
-        ));
+    // Verify the state root if an expected root was provided
+    if let Some(expected) = expected_root {
+        let computed = graph.state_root();
+        result.root_matches = Some(computed == *expected);
     }
 
     tracing::info!(
-        events_replayed = result.events_replayed,
-        events_committed = result.events_committed,
-        events_failed = result.events_failed,
-        graph_height = result.graph_height,
+        events_processed = result.events_processed,
+        events_finalized = result.events_finalized,
+        events_rejected = result.events_rejected,
+        final_graph_size = result.final_graph_size,
+        root_matches = ?result.root_matches,
         "Genesis replay completed"
     );
 
@@ -184,24 +199,33 @@ mod tests {
 
     #[test]
     fn test_empty_replay() {
-        let mut graph = CausalGraph::new();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
-        let config = ConsensusConfig::default();
+        let config = ReplayConfig::default();
+        let result = replay_genesis(&[], None, &config);
 
-        let result = replay_genesis(&[], &config, slashing, &mut graph);
-        assert!(result.success);
-        assert_eq!(result.events_replayed, 0);
-        assert_eq!(result.events_committed, 0);
-        assert_eq!(result.events_failed, 0);
+        assert_eq!(result.events_processed, 0);
+        assert_eq!(result.events_finalized, 0);
+        assert_eq!(result.events_rejected, 0);
+        assert_eq!(result.final_graph_size, 0);
+        assert!(result.root_matches.is_none());
+    }
+
+    #[test]
+    fn test_empty_replay_with_expected_root() {
+        let config = ReplayConfig::default();
+        let expected = [0u8; 32]; // Empty graph should have this root
+        let result = replay_genesis(&[], Some(&expected), &config);
+
+        assert_eq!(result.events_processed, 0);
+        assert!(result.root_matches.is_some());
     }
 
     #[test]
     fn test_genesis_events_replay() {
-        let mut graph = CausalGraph::new();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
-        let config = ConsensusConfig::default();
+        let config = ReplayConfig {
+            consensus_config: ConsensusConfig::default(),
+            slash_threshold: DEFAULT_SLASH_THRESHOLD,
+            ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
+        };
 
         // Create genesis events
         let events: Vec<Event> = (0..4)
@@ -213,18 +237,46 @@ mod tests {
             })
             .collect();
 
-        let result = replay_genesis(&events, &config, slashing, &mut graph);
-        assert_eq!(result.events_replayed, 4);
-        assert!(result.events_committed >= 3, "Expected at least 3 committed events in a 4-node network, got {}", result.events_committed);
-        assert_eq!(result.events_failed, 0);
-        assert_eq!(result.graph_height, 4);
+        let result = replay_genesis(&events, None, &config);
+        assert_eq!(result.events_processed, 4);
+        assert!(
+            result.events_finalized >= 3,
+            "Expected at least 3 finalized events in a 4-node network, got {}",
+            result.events_finalized
+        );
+        assert_eq!(result.events_rejected, 0);
+        assert_eq!(result.final_graph_size, 4);
+    }
+
+    #[test]
+    fn test_rejection_tracking() {
+        let config = ReplayConfig::default();
+
+        // Create an event that will fail graph insertion (duplicate)
+        let keypair = generate_keypair();
+        let mut event1 = Event::genesis(test_node(1), vec![1]);
+        event1.sign_with_keypair(&keypair);
+        let event2 = event1.clone(); // Duplicate — should be rejected
+
+        let result = replay_genesis(&[event1, event2], None, &config);
+        assert_eq!(result.events_processed, 2);
+        assert!(result.events_rejected >= 1, "Expected at least 1 rejected event for duplicate, got {}", result.events_rejected);
     }
 
     #[test]
     fn test_replay_result_empty() {
         let result = ReplayResult::empty();
-        assert!(result.success);
-        assert_eq!(result.events_replayed, 0);
-        assert!(result.warnings.is_empty());
+        assert_eq!(result.events_processed, 0);
+        assert_eq!(result.events_finalized, 0);
+        assert_eq!(result.events_rejected, 0);
+        assert_eq!(result.final_graph_size, 0);
+        assert!(result.root_matches.is_none());
+    }
+
+    #[test]
+    fn test_replay_config_default() {
+        let config = ReplayConfig::default();
+        assert_eq!(config.slash_threshold, DEFAULT_SLASH_THRESHOLD);
+        assert_eq!(config.ejection_threshold, DEFAULT_EJECTION_THRESHOLD);
     }
 }

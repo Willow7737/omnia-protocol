@@ -25,19 +25,22 @@ use std::path::PathBuf;
 
 /// Configuration for snapshot replication.
 ///
-/// Controls how snapshots are discovered, verified, and transferred
-/// between nodes.
+/// Controls how snapshots are discovered, verified, and replicated
+/// across multiple directories for redundancy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationConfig {
-    /// Maximum number of snapshots to keep on disk (rolling window).
+    /// List of directories where snapshots are replicated for redundancy.
+    ///
+    /// Each directory receives a copy of every snapshot, providing
+    /// protection against disk failure. At least one directory is
+    /// required. If multiple are provided, snapshots are written to
+    /// all of them.
+    pub replica_dirs: Vec<PathBuf>,
+    /// Maximum number of snapshots to keep per replica directory.
     ///
     /// Older snapshots are pruned when this limit is exceeded.
     /// Default: 5.
-    pub max_snapshots: usize,
-    /// Directory where snapshots are stored.
-    ///
-    /// Each snapshot is stored as a file named `snapshot-{height}.bin`.
-    pub snapshot_dir: PathBuf,
+    pub max_snapshots_per_replica: usize,
     /// Whether to verify snapshot integrity before accepting.
     ///
     /// Should always be `true` in production. Set to `false` only
@@ -53,8 +56,8 @@ pub struct ReplicationConfig {
 impl Default for ReplicationConfig {
     fn default() -> Self {
         Self {
-            max_snapshots: 5,
-            snapshot_dir: PathBuf::from("./data/snapshots"),
+            replica_dirs: vec![PathBuf::from("./data/snapshots")],
+            max_snapshots_per_replica: 5,
             verify_on_import: true,
             min_peer_confirmations: 1,
         }
@@ -62,30 +65,45 @@ impl Default for ReplicationConfig {
 }
 
 impl ReplicationConfig {
-    /// Create a new replication config with the given snapshot directory.
+    /// Create a new replication config with a single replica directory.
     pub fn new(snapshot_dir: PathBuf) -> Self {
         Self {
-            snapshot_dir,
+            replica_dirs: vec![snapshot_dir],
             ..Default::default()
         }
     }
+
+    /// Create a new replication config with multiple replica directories.
+    pub fn with_replica_dirs(replica_dirs: Vec<PathBuf>) -> Self {
+        Self {
+            replica_dirs,
+            ..Default::default()
+        }
+    }
+
+    /// Returns the primary snapshot directory (first replica dir).
+    ///
+    /// Used by [`find_latest_snapshot`] as the default search location.
+    pub fn primary_dir(&self) -> &PathBuf {
+        self.replica_dirs.first().expect("replica_dirs must not be empty")
+    }
 }
 
-/// Replicate a snapshot by writing it to the configured snapshot directory.
+/// Replicate a snapshot by writing it to all configured replica directories.
 ///
-/// The snapshot is written to `{snapshot_dir}/snapshot-{height}.bin`.
-/// If `verify_on_import` is set in the config, the snapshot's integrity
-/// is verified before writing.
+/// The snapshot is written to each directory in `replica_dirs` as
+/// `snapshot-{height}.bin`. If `verify_on_import` is set in the config,
+/// the snapshot's integrity is verified before writing.
 ///
 /// # Arguments
 ///
-/// * `config` — The replication configuration.
 /// * `snapshot` — The [`StateSnapshot`] to replicate.
+/// * `config` — The replication configuration.
 ///
 /// # Returns
 ///
-/// The path to the written snapshot file on success, or a [`SnapshotError`]
-/// on failure.
+/// The path to the written snapshot file in the primary directory on success,
+/// or a [`SnapshotError`] on failure.
 ///
 /// # Example
 ///
@@ -94,54 +112,66 @@ impl ReplicationConfig {
 /// use std::path::PathBuf;
 ///
 /// let config = ReplicationConfig::new(PathBuf::from("./data/snapshots"));
-/// let path = replicate_snapshot(&config, &snapshot)?;
+/// let path = replicate_snapshot(&snapshot, &config)?;
 /// ```
 pub fn replicate_snapshot(
-    config: &ReplicationConfig,
     snapshot: &StateSnapshot,
+    config: &ReplicationConfig,
 ) -> Result<PathBuf, SnapshotError> {
     // Verify integrity before writing (if configured)
     if config.verify_on_import {
         snapshot.verify()?;
     }
 
-    // Ensure the snapshot directory exists
-    if let Err(e) = std::fs::create_dir_all(&config.snapshot_dir) {
-        return Err(SnapshotError::Io(e));
+    let mut primary_path = None;
+
+    for dir in &config.replica_dirs {
+        // Ensure the replica directory exists
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            return Err(SnapshotError::Io(e));
+        }
+
+        // Write snapshot to file
+        let filename = format!("snapshot-{}.bin", snapshot.height);
+        let path = dir.join(&filename);
+        snapshot.write_to_file(&path)?;
+
+        tracing::info!(
+            height = snapshot.height,
+            path = %path.display(),
+            "Snapshot replicated to disk"
+        );
+
+        if primary_path.is_none() {
+            primary_path = Some(path);
+        }
     }
 
-    // Write snapshot to file
-    let filename = format!("snapshot-{}.bin", snapshot.height);
-    let path = config.snapshot_dir.join(&filename);
-    snapshot.write_to_file(&path)?;
-
-    tracing::info!(
-        height = snapshot.height,
-        path = %path.display(),
-        "Snapshot replicated to disk"
-    );
-
-    // Prune old snapshots if we exceed the limit
-    if let Err(e) = prune_old_snapshots(config) {
-        tracing::warn!(error = %e, "Failed to prune old snapshots");
+    // Prune old snapshots in each replica directory
+    for dir in &config.replica_dirs {
+        if let Err(e) = prune_old_snapshots(dir, config.max_snapshots_per_replica) {
+            tracing::warn!(dir = %dir.display(), error = %e, "Failed to prune old snapshots");
+        }
     }
 
-    Ok(path)
+    Ok(primary_path.expect("at least one replica dir must exist"))
 }
 
-/// Find the latest snapshot in the configured snapshot directory.
+/// Find the latest snapshot in the configured snapshot directories.
 ///
-/// Scans the snapshot directory for files matching the pattern
+/// Scans the primary replica directory for files matching the pattern
 /// `snapshot-{height}.bin` and returns the one with the highest height.
+/// If no snapshot is found in the primary directory, falls back to
+/// scanning the other replica directories.
 ///
 /// # Arguments
 ///
-/// * `config` — The replication configuration (specifies the snapshot dir).
+/// * `config` — The replication configuration (specifies the replica dirs).
 ///
 /// # Returns
 ///
 /// The latest [`StateSnapshot`] on success, or `None` if no snapshots
-/// exist in the directory.
+/// exist in any directory.
 ///
 /// # Example
 ///
@@ -156,8 +186,19 @@ pub fn replicate_snapshot(
 pub fn find_latest_snapshot(
     config: &ReplicationConfig,
 ) -> Result<Option<StateSnapshot>, SnapshotError> {
-    let dir = &config.snapshot_dir;
+    for dir in &config.replica_dirs {
+        if let Some(snapshot) = find_latest_in_dir(dir, config.verify_on_import)? {
+            return Ok(Some(snapshot));
+        }
+    }
+    Ok(None)
+}
 
+/// Find the latest snapshot in a single directory.
+fn find_latest_in_dir(
+    dir: &PathBuf,
+    verify: bool,
+) -> Result<Option<StateSnapshot>, SnapshotError> {
     if !dir.exists() {
         return Ok(None);
     }
@@ -175,7 +216,7 @@ pub fn find_latest_snapshot(
             match StateSnapshot::read_from_file(&path) {
                 Ok(snapshot) => {
                     // Verify if configured
-                    if config.verify_on_import {
+                    if verify {
                         if let Err(e) = snapshot.verify() {
                             tracing::warn!(
                                 path = %path.display(),
@@ -208,9 +249,7 @@ pub fn find_latest_snapshot(
 ///
 /// Keeps the `max_snapshots` most recent snapshots (by height) and deletes
 /// the rest.
-fn prune_old_snapshots(config: &ReplicationConfig) -> Result<(), SnapshotError> {
-    let dir = &config.snapshot_dir;
-
+fn prune_old_snapshots(dir: &PathBuf, max_snapshots: usize) -> Result<(), SnapshotError> {
     if !dir.exists() {
         return Ok(());
     }
@@ -220,7 +259,7 @@ fn prune_old_snapshots(config: &ReplicationConfig) -> Result<(), SnapshotError> 
         .filter_map(|e| e.ok())
         .collect();
 
-    if entries.len() <= config.max_snapshots {
+    if entries.len() <= max_snapshots {
         return Ok(());
     }
 
@@ -244,7 +283,7 @@ fn prune_old_snapshots(config: &ReplicationConfig) -> Result<(), SnapshotError> 
     snapshots.sort_by_key(|b| std::cmp::Reverse(b.0));
 
     // Delete all but the newest max_snapshots
-    for (_, path) in snapshots.into_iter().skip(config.max_snapshots) {
+    for (_, path) in snapshots.into_iter().skip(max_snapshots) {
         if let Err(e) = std::fs::remove_file(&path) {
             tracing::warn!(path = %path.display(), error = %e, "Failed to prune old snapshot");
         } else {
@@ -288,7 +327,7 @@ mod tests {
         let config = ReplicationConfig::new(tmp.path().to_path_buf());
 
         let snapshot = make_snapshot(100);
-        let path = replicate_snapshot(&config, &snapshot).unwrap();
+        let path = replicate_snapshot(&snapshot, &config).unwrap();
 
         assert!(path.exists());
         assert!(path.to_str().unwrap().contains("snapshot-100.bin"));
@@ -306,9 +345,9 @@ mod tests {
         let s2 = make_snapshot(200);
         let s3 = make_snapshot(300);
 
-        replicate_snapshot(&config, &s1).unwrap();
-        replicate_snapshot(&config, &s2).unwrap();
-        replicate_snapshot(&config, &s3).unwrap();
+        replicate_snapshot(&s1, &config).unwrap();
+        replicate_snapshot(&s2, &config).unwrap();
+        replicate_snapshot(&s3, &config).unwrap();
 
         let latest = find_latest_snapshot(&config).unwrap().unwrap();
         assert_eq!(latest.height, 300);
@@ -333,21 +372,38 @@ mod tests {
     #[test]
     fn test_replication_config_default() {
         let config = ReplicationConfig::default();
-        assert_eq!(config.max_snapshots, 5);
+        assert_eq!(config.replica_dirs.len(), 1);
+        assert_eq!(config.max_snapshots_per_replica, 5);
         assert!(config.verify_on_import);
         assert_eq!(config.min_peer_confirmations, 1);
+    }
+
+    #[test]
+    fn test_replication_config_primary_dir() {
+        let config = ReplicationConfig::new(PathBuf::from("/tmp/test-snapshots"));
+        assert_eq!(config.primary_dir(), &PathBuf::from("/tmp/test-snapshots"));
+    }
+
+    #[test]
+    fn test_replication_config_with_replica_dirs() {
+        let dirs = vec![
+            PathBuf::from("/tmp/repl1"),
+            PathBuf::from("/tmp/repl2"),
+        ];
+        let config = ReplicationConfig::with_replica_dirs(dirs.clone());
+        assert_eq!(config.replica_dirs.len(), 2);
     }
 
     #[test]
     fn test_snapshot_pruning() {
         let tmp = TempDir::new().unwrap();
         let mut config = ReplicationConfig::new(tmp.path().to_path_buf());
-        config.max_snapshots = 2;
+        config.max_snapshots_per_replica = 2;
 
         // Create 4 snapshots
         for height in [100u64, 200, 300, 400] {
             let snapshot = make_snapshot(height);
-            replicate_snapshot(&config, &snapshot).unwrap();
+            replicate_snapshot(&snapshot, &config).unwrap();
         }
 
         // Only the 2 newest should remain
@@ -360,5 +416,28 @@ mod tests {
         // The latest should be the highest
         let latest = find_latest_snapshot(&config).unwrap().unwrap();
         assert_eq!(latest.height, 400);
+    }
+
+    #[test]
+    fn test_replicate_to_multiple_dirs() {
+        let tmp1 = TempDir::new().unwrap();
+        let tmp2 = TempDir::new().unwrap();
+
+        let config = ReplicationConfig {
+            replica_dirs: vec![tmp1.path().to_path_buf(), tmp2.path().to_path_buf()],
+            ..Default::default()
+        };
+
+        let snapshot = make_snapshot(100);
+        let path = replicate_snapshot(&snapshot, &config).unwrap();
+
+        // Primary path should be in first dir
+        assert!(path.exists());
+
+        // Both dirs should have the snapshot
+        let found1 = find_latest_in_dir(&tmp1.path().to_path_buf(), true).unwrap().unwrap();
+        let found2 = find_latest_in_dir(&tmp2.path().to_path_buf(), true).unwrap().unwrap();
+        assert_eq!(found1.height, 100);
+        assert_eq!(found2.height, 100);
     }
 }

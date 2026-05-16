@@ -420,4 +420,89 @@ mod tests {
         voting.lock(n, 500, 150, 200).unwrap();
         assert_eq!(voting.active_lock_count(&n), 2);
     }
+
+    // --- Spec-required named tests ---
+
+    #[test]
+    fn test_lock_creates_eligible_stake() {
+        // Verify that locking creates a stake eligible for voting after
+        // the lock duration elapses.
+        let config = TimeLockConfig::default();
+        let mut voting = TimeLockVoting::new(config);
+        let n = node(10);
+
+        // Lock 1000 tokens at height 100, duration 200 -> eligible at height 300
+        voting.lock(n, 1000, 100, 200).unwrap();
+
+        // Before maturity: not eligible
+        assert!(!voting.can_vote(&n, 299));
+
+        // After maturity: eligible
+        assert!(voting.can_vote(&n, 300));
+        assert_eq!(voting.voting_power(&n, 300), 1000);
+    }
+
+    #[test]
+    fn test_flash_loan_prevented() {
+        // Flash loan attack: an attacker borrows stake, votes, and repays
+        // in the same block. Time-locking prevents this because newly-locked
+        // stake has zero voting power until the lock matures.
+        let config = TimeLockConfig::default();
+        let mut voting = TimeLockVoting::new(config);
+        let attacker = node(20);
+
+        // Attacker locks at height 500 (simulating a flash loan)
+        voting.lock(attacker, 1_000_000, 500, 200).unwrap();
+
+        // Same block: no voting power (flash loan prevented!)
+        assert_eq!(voting.voting_power(&attacker, 500), 0);
+        assert!(!voting.can_vote(&attacker, 500));
+
+        // Even several blocks later (but before maturity): still no power
+        assert_eq!(voting.voting_power(&attacker, 600), 0);
+    }
+
+    #[test]
+    fn test_multiple_locks_accumulate() {
+        // Multiple locks from the same account should accumulate voting power.
+        let config = TimeLockConfig::default();
+        let mut voting = TimeLockVoting::new(config);
+        let n = node(30);
+
+        // Lock 300 tokens at height 100, duration 200 -> matures at 300
+        voting.lock(n, 300, 100, 200).unwrap();
+
+        // Lock 700 tokens at height 100, duration 300 -> matures at 400
+        voting.lock(n, 700, 100, 300).unwrap();
+
+        // At height 300: only first lock matured -> 300 power
+        assert_eq!(voting.voting_power(&n, 300), 300);
+
+        // At height 400: both locks matured -> 1000 power
+        assert_eq!(voting.voting_power(&n, 400), 1000);
+
+        // Total locked (including immature) is 1000
+        assert_eq!(voting.total_locked(&n), 1000);
+    }
+
+    #[test]
+    fn test_expired_locks_released() {
+        // After locks mature and are released, voting power drops to zero.
+        let config = TimeLockConfig::default();
+        let mut voting = TimeLockVoting::new(config);
+        let n = node(40);
+
+        voting.lock(n, 1000, 100, 200).unwrap();
+
+        // At maturity: has power
+        assert_eq!(voting.voting_power(&n, 300), 1000);
+
+        // Release the expired lock
+        let released = voting.release_expired(&n, 300);
+        assert_eq!(released, 1000);
+
+        // After release: no power, no locked stake
+        assert_eq!(voting.voting_power(&n, 300), 0);
+        assert_eq!(voting.total_locked(&n), 0);
+    }
 }

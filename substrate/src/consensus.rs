@@ -93,14 +93,14 @@ impl Default for ConsensusConfig {
 /// because `std::time::Instant` is not serializable. The round timer is
 /// re-initialized on startup.
 pub struct RoundTimer {
-    /// The current round number.
-    round: u64,
+    /// The round this timer is tracking.
+    pub round: u64,
     /// When the current round started.
     started_at: Instant,
     /// The base timeout duration.
     timeout: Duration,
     /// Number of consecutive timed-out rounds.
-    consecutive_timeouts: u32,
+    pub consecutive_timeouts: u32,
     /// Threshold for entering recovery mode.
     max_consecutive: u32,
 }
@@ -665,23 +665,39 @@ impl ConsensusEngine {
         self.config.round_seed = new_seed;
     }
 
-    /// Check whether the current round has timed out and advance if needed.
-    ///
-    /// Returns `true` if the round was advanced due to a timeout.
+    /// Called in the main consensus loop to check for round timeouts.
+    /// Returns true if the round was advanced.
     pub fn check_round_timeout(&mut self) -> bool {
         if self.round_timer.is_timed_out() {
+            let in_recovery = self.round_timer.round_timed_out();
+            let current_round = self.current_round();
+
+            if in_recovery {
+                tracing::warn!(
+                    "Round {} timed out (recovery mode, {} consecutive timeouts). \
+                     Advancing to next round with reduced timeout.",
+                    current_round,
+                    self.round_timer.consecutive_timeouts
+                );
+            } else {
+                tracing::warn!(
+                    "Round {} timed out. Advancing to next round.",
+                    current_round
+                );
+            }
+
             self.advance_round();
-            true
-        } else {
-            false
+            self.round_timer.start_round(current_round + 1);
+            return true;
         }
+        false
     }
 
-    /// Mark the current round as successfully committed.
-    ///
-    /// Resets the consecutive timeout counter in the round timer.
+    /// Mark a round as successful (called when a commitment is reached).
     pub fn round_committed(&mut self) {
         self.round_timer.round_succeeded();
+        let next_round = self.current_round() + 1;
+        self.round_timer.start_round(next_round);
     }
 
     /// Get the current maximum round across all nodes.
@@ -693,34 +709,28 @@ impl ConsensusEngine {
             .unwrap_or(0)
     }
 
-    /// Advance to the next round after a timeout.
-    ///
-    /// Logs a warning, increments the round number, and updates the
-    /// round seed to ensure the next leader selection is unpredictable.
-    /// Does **not** call `select_leader` — candidates must be provided
-    /// externally.
-    fn advance_round(&mut self) {
-        let old_round = self.current_round();
-        let new_round = old_round + 1;
-        let in_recovery = self.round_timer.round_timed_out();
+    /// Advance to the next round with a new leader.
+    /// Called when the current round times out.
+    pub fn advance_round(&mut self) {
+        let current = self.current_round();
+        let next = current + 1;
+
+        self.update_round_seed_from_timeout(next);
 
         tracing::warn!(
-            old_round,
-            new_round,
-            consecutive_timeouts = self.round_timer.consecutive_timeouts,
-            in_recovery,
-            "Round timed out, advancing to next round"
+            "Advanced from round {} to round {} due to timeout",
+            current, next
         );
+    }
 
-        // Derive a new round seed from the current seed + new round number
-        // to ensure the next leader selection is unpredictable.
+    /// Derive a new round seed from the current seed and round number
+    /// to ensure the next leader selection is unpredictable.
+    fn update_round_seed_from_timeout(&mut self, new_round: u64) {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&self.config.round_seed);
         hasher.update(&new_round.to_le_bytes());
         let new_seed: [u8; 32] = hasher.finalize().into();
         self.update_round_seed(new_seed);
-
-        self.round_timer.start_round(new_round);
     }
 }
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Generate seed files for fuzz targets
 CORPUS_DIR="$(dirname "$0")/../fuzz/fuzz_targets/corpus"
 
 echo "Generating fuzz corpus seeds..."
@@ -9,8 +8,7 @@ echo "Generating fuzz corpus seeds..."
 # Event deserialization seeds
 mkdir -p "$CORPUS_DIR/event_deserialization"
 python3 -c "
-import struct
-# Minimal valid Event seed: just some structured bytes
+import struct, os
 creator = b'\x01' * 32
 sequence = struct.pack('<Q', 1)
 payload = b'test'
@@ -47,24 +45,24 @@ with open('$CORPUS_DIR/rate_limiter/seed1.bin', 'wb') as f:
 # Gossip message seeds
 mkdir -p "$CORPUS_DIR/gossip_message"
 python3 -c "
+import struct
 with open('$CORPUS_DIR/gossip_message/seed1.bin', 'wb') as f:
-    f.write(b'\x01' + b'\x00' * 63)
+    f.write(struct.pack('<I', 1) + b'\x00' * 32 + struct.pack('<Q', 0))
 "
 
 # ZK proof deserialization seeds
 mkdir -p "$CORPUS_DIR/zk_proof_deserialization"
 python3 -c "
-import struct
 with open('$CORPUS_DIR/zk_proof_deserialization/seed1.bin', 'wb') as f:
-    f.write(struct.pack('<I', 1) + b'\x00' * 95)
+    f.write(b'\x00' * 128)
 "
 
 # Consensus state transition seeds
 mkdir -p "$CORPUS_DIR/consensus_state_transition"
 python3 -c "
+import struct
 with open('$CORPUS_DIR/consensus_state_transition/seed1.bin', 'wb') as f:
-    f.write(b'\x00' * 32)
+    f.write(struct.pack('<Q', 0) + struct.pack('<Q', 1) + b'\x01' * 32)
 "
 
-echo "✅ Corpus seeds generated in $CORPUS_DIR"
-echo "Commit these files to the repository for consistent fuzzing baselines."
+echo "Corpus seeds generated in $CORPUS_DIR"

@@ -213,6 +213,21 @@ pub trait SlashingStore: Send + Sync {
     /// Returns [`SlashingStoreError`] if the state cannot be serialized
     /// or the store cannot be written to.
     fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError>;
+    /// Get the slash count (accumulated points) for a specific validator.
+    ///
+    /// Returns 0 if the validator has no recorded offenses.
+    fn get_slash_count(&self, validator: &[u8; 32]) -> u64;
+
+    /// Decrement the slash count for a specific validator by the minimum offense amount.
+    ///
+    /// This is used by governance-based slashing undo to partially reverse
+    /// a slashing decision. The count is decremented by [`LIVENESS_VIOLATION_POINTS`] (100).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SlashingStoreError`] if the state cannot be loaded or saved,
+    /// or if the validator has no slash count to decrement.
+    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError>;
 }
 
 // ── SledSlashingStore ──────────────────────────────────────────────
@@ -293,6 +308,25 @@ impl SlashingStore for SledSlashingStore {
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
         Ok(())
     }
+
+    fn get_slash_count(&self, validator: &[u8; 32]) -> u64 {
+        self.load()
+            .map(|state| state.slash_points.get(validator).copied().unwrap_or(0))
+            .unwrap_or(0)
+    }
+
+    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError> {
+        let mut state = self.load()?;
+        let current = state.slash_points.get(validator).copied().unwrap_or(0);
+        if current == 0 {
+            return Err(SlashingStoreError::Persistence(
+                format!("Validator {:?} has no slash count to decrement", &validator[..4])
+            ));
+        }
+        let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
+        state.slash_points.insert(*validator, current - decrement);
+        self.save(&state)
+    }
 }
 
 // ── InMemorySlashingStore ──────────────────────────────────────────
@@ -357,6 +391,25 @@ impl SlashingStore for InMemorySlashingStore {
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
         *guard = state.clone();
         Ok(())
+    }
+
+    fn get_slash_count(&self, validator: &[u8; 32]) -> u64 {
+        self.load()
+            .map(|state| state.slash_points.get(validator).copied().unwrap_or(0))
+            .unwrap_or(0)
+    }
+
+    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError> {
+        let mut state = self.load()?;
+        let current = state.slash_points.get(validator).copied().unwrap_or(0);
+        if current == 0 {
+            return Err(SlashingStoreError::Persistence(
+                format!("Validator {:?} has no slash count to decrement", &validator[..4])
+            ));
+        }
+        let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
+        state.slash_points.insert(*validator, current - decrement);
+        self.save(&state)
     }
 }
 
@@ -976,6 +1029,22 @@ impl SlashingEngine {
     /// ```
     pub fn slash_points_of(&self, node: &NodeId) -> u64 {
         self.slash_points.get(node).copied().unwrap_or(0)
+    }
+
+    /// Returns the accumulated slash count for a validator.
+    ///
+    /// This is an alias for [`Self::slash_points_of`] that follows the
+    /// naming convention used by the [`SlashingStore`] trait.
+    ///
+    /// # Arguments
+    ///
+    /// * `validator` — The validator ID to query.
+    ///
+    /// # Returns
+    ///
+    /// The total slash count, or `0` if the validator has no recorded offenses.
+    pub fn get_slash_count(&self, validator: &[u8; 32]) -> u64 {
+        self.slash_points.get(validator).copied().unwrap_or(0)
     }
 
     /// Reverse a slash by decrementing slash points for a validator.

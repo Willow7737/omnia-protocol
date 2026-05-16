@@ -28,6 +28,21 @@ jobs:
       - run: cargo doc --workspace --no-deps --exclude omnia-fuzz
         env:
           RUSTDOCFLAGS: "-D warnings"
+      - name: Verify exemption notes
+        run: |
+          python3 -c "
+          import toml
+          with open('supply-chain/config.toml') as f:
+              config = toml.load(f)
+          missing = []
+          for exp in config.get('exemptions', []):
+              if 'notes' not in exp or not exp['notes'].strip():
+                  missing.append(exp['name'])
+          if missing:
+              print(f'Missing notes for exemptions: {missing}')
+              exit(1)
+          print('All exemptions have notes')
+          "
 
   test:
     name: Test (${{ matrix.rust }}, ${{ matrix.os }})
@@ -193,7 +208,7 @@ jobs:
         run: cargo install cargo-fuzz
       - name: Build fuzz targets
         run: cargo fuzz build
-      - name: Smoke test each target (1000 runs each)
+      - name: Smoke test each target (10s each)
         run: |
           TARGETS=(
             fuzz_event_deserialization
@@ -206,11 +221,11 @@ jobs:
           )
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
-            timeout 30 cargo fuzz run "$target" -- -runs=1000 2>&1 || {
-              echo "❌ Fuzz target $target crashed!"
+            timeout 10 cargo fuzz run "$target" -- -runs=1000 2>&1 || {
+              echo "Fuzz target $target crashed!"
               exit 1
             }
-            echo "✅ $target smoke test passed"
+            echo "$target smoke test passed"
           done
 
   sbom:
@@ -218,9 +233,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx
       - name: Generate SBOM
@@ -238,8 +251,8 @@ jobs:
           CRATES="substrate shards binding economics zk node"
           for crate in $CRATES; do
             if [ ! -f "sbom/${crate}-sbom.json" ]; then
-              echo "❌ Missing SBOM for $crate"
+              echo "Missing SBOM for $crate"
               exit 1
             fi
           done
-          echo "✅ SBOM generated for all crates"
+          echo "SBOM generated for all crates"
