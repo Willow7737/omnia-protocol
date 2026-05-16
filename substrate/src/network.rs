@@ -428,14 +428,14 @@ mod tests {
             node_id: [0u8; 32],
         };
         assert_eq!(handshake.protocol_version, "4.0.0");
-        assert_eq!(handshake.protocol_identifier, "/omnia/1.0.0");
+        assert_eq!(handshake.protocol_identifier, "/omnia/4.0.0");
     }
 
     #[test]
     fn test_version_handshake_serialization() {
         let handshake = VersionHandshake {
             protocol_version: "4.0.0".to_string(),
-            protocol_identifier: "/omnia/1.0.0".to_string(),
+            protocol_identifier: "/omnia/4.0.0".to_string(),
             node_id: [42u8; 32],
         };
         let json = serde_json::to_string(&handshake).expect("serialize");
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_protocol_identifier_constant() {
-        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/1.0.0");
+        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/4.0.0");
     }
 
     #[test]

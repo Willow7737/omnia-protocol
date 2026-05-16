@@ -342,7 +342,9 @@ mod tests {
 
         let n = node(3);
         slashing.register_validator(n, 10_000);
+        // Record two offenses so we have enough history for two undos
         slashing.record_offense(n, SlashOffense::Equivocation);
+        slashing.record_offense(n, SlashOffense::LivenessViolation);
 
         // First undo at round 100
         let request1 = make_request(n, 50, 100);
@@ -353,7 +355,7 @@ mod tests {
         let result = undo_mgr.apply_undo(&mut slashing, request2, 150);
         assert!(result.is_err());
 
-        // Third undo at round 200 — should succeed
+        // Third undo at round 200 — should succeed (still has one offense in history)
         let request3 = make_request(n, 50, 200);
         undo_mgr.apply_undo(&mut slashing, request3, 200).unwrap();
         assert_eq!(undo_mgr.total_undos(), 2);
