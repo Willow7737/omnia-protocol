@@ -50,7 +50,12 @@ fn test_equivocation_triggers_slash_in_consensus() {
     let n1 = creator_from_keypair(&kp); // creator = blake3(creator_pubkey)
 
     let mut graph = CausalGraph::new();
-    let config = ConsensusConfig::default();
+    let mut seed = [0u8; 32];
+    seed[0] = 1; // Non-zero to avoid debug-build panic
+    let config = ConsensusConfig {
+        round_seed: seed,
+        ..ConsensusConfig::default()
+    };
     let mut engine = ConsensusEngine::new(
         config,
         SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -152,7 +157,12 @@ fn test_slashed_node_events_rejected() {
     let n1 = creator_from_keypair(&kp); // creator = blake3(creator_pubkey)
 
     let mut graph = CausalGraph::new();
-    let config = ConsensusConfig::default();
+    let mut seed = [0u8; 32];
+    seed[0] = 1; // Non-zero to avoid debug-build panic
+    let config = ConsensusConfig {
+        round_seed: seed,
+        ..ConsensusConfig::default()
+    };
     let mut engine = ConsensusEngine::new(
         config,
         SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),

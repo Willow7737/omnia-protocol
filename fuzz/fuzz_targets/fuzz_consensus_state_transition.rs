@@ -18,7 +18,12 @@ fuzz_target!(|data: &[u8]| {
     // Deserialize a sequence of events and feed them to consensus
     if let Ok(events) = bincode::deserialize::<Vec<Event>>(data) {
         let slashing = SlashingEngine::new_in_memory(10, 20);
-        let config = ConsensusConfig::default();
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid debug-build panic
+        let config = ConsensusConfig {
+            round_seed: seed,
+            ..ConsensusConfig::default()
+        };
         let mut engine = ConsensusEngine::new(config, slashing);
         let graph = CausalGraph::new();
 

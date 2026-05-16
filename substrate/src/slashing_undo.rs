@@ -25,9 +25,9 @@
 //! # Constraints
 //!
 //! - Undo is rate-limited: at most one undo per node per 1000 blocks.
-//! - Undo only decrements points by [`crate::slashing::LIVENESS_VIOLATION_POINTS`] (100)
+//! - Undo only decrements points by the amount of the last recorded offense
 //!   per request, preventing a governance takeover from fully clearing
-//!   a genuinely malicious validator.
+//!   a genuinely malicious validator in a single operation.
 //! - All undos are permanently recorded in the audit log.
 
 use crate::slashing::SlashingEngine;
@@ -152,8 +152,8 @@ impl SlashingUndoManager {
 
     /// Apply a slashing undo request.
     ///
-    /// Decrements the target validator's slash points by
-    /// [`crate::slashing::LIVENESS_VIOLATION_POINTS`] (100) and records the undo in the
+    /// Decrements the target validator's slash points by the amount of
+    /// the last recorded offense (tracked via offense history) and records the undo in the
     /// audit log. Enforces the rate limit — at most one undo per validator
     /// per `min_undo_interval` rounds.
     ///
@@ -170,7 +170,7 @@ impl SlashingUndoManager {
     /// # Errors
     ///
     /// - Rate limit exceeded: too soon since last undo for this validator.
-    /// - The validator has no slash points to undo.
+    /// - The validator has no offense history to undo.
     pub fn apply_undo(
         &mut self,
         slashing: &mut SlashingEngine,
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_undo_partial_equivocation() {
+    fn test_undo_equivocation() {
         let mut slashing =
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::new();
@@ -328,10 +328,10 @@ mod tests {
         slashing.record_offense(n, SlashOffense::Equivocation);
         assert_eq!(slashing.slash_points_of(&n), 500);
 
-        // Undo decrements by LIVENESS_VIOLATION_POINTS (100)
+        // Undo now correctly removes the full equivocation amount (500 pts)
         let request = make_request(n, 50, 100);
         undo_mgr.apply_undo(&mut slashing, request, 100).unwrap();
-        assert_eq!(slashing.slash_points_of(&n), 400);
+        assert_eq!(slashing.slash_points_of(&n), 0);
     }
 
     #[test]

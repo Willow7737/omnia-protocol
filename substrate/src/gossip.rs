@@ -20,7 +20,7 @@ use tracing::{info, warn};
 const DEFAULT_GOSSIP_INTERVAL_MS: u64 = 100;
 const MAX_EVENTS_PER_GOSSIP: usize = 100;
 const MAX_PENDING_EVENTS: usize = 100_000;
-const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 3000;
+const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 
 /// Configuration for the gossip protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +45,7 @@ pub struct GossipConfig {
     #[serde(default)]
     pub bootstrap_peers: Vec<String>,
     /// Threshold in milliseconds after which a silent peer is considered
-    /// partitioned. Default: 3000 ms.
+    /// partitioned. Default: 30000 ms.
     #[serde(default = "default_partition_threshold")]
     pub partition_threshold_ms: u64,
     /// Maximum events per peer per second (refill rate).
@@ -788,7 +788,7 @@ mod tests {
     #[test]
     fn test_gossip_config_partition_threshold_default() {
         let config = GossipConfig::default();
-        assert_eq!(config.partition_threshold_ms, 3000);
+        assert_eq!(config.partition_threshold_ms, 30000);
     }
 
     // ── Task 3.3: Partition Detection Tests ────────────────────────────

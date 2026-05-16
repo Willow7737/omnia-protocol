@@ -164,6 +164,9 @@ pub struct SlashingState {
     pub slash_threshold: u64,
     /// Points threshold at which a node is ejected.
     pub ejection_threshold: u64,
+    /// History of offenses per node, stored as a stack for undo.
+    /// Each entry is the number of points that were added.
+    pub offense_history: HashMap<NodeId, Vec<u64>>,
 }
 
 impl Default for SlashingState {
@@ -173,6 +176,7 @@ impl Default for SlashingState {
             stakes: HashMap::new(),
             slash_threshold: DEFAULT_SLASH_THRESHOLD,
             ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
+            offense_history: HashMap::new(),
         }
     }
 }
@@ -218,6 +222,14 @@ pub trait SlashingStore: Send + Sync {
     /// Returns 0 if the validator has no recorded offenses.
     fn get_slash_count(&self, validator: &[u8; 32]) -> u64;
 
+    /// Decrement the slash count for a specific validator by the given amount.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SlashingStoreError`] if the state cannot be loaded or saved,
+    /// or if the validator has no slash count to decrement.
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError>;
+
     /// Decrement the slash count for a specific validator by the minimum offense amount.
     ///
     /// This is used by governance-based slashing undo to partially reverse
@@ -227,7 +239,9 @@ pub trait SlashingStore: Send + Sync {
     ///
     /// Returns [`SlashingStoreError`] if the state cannot be loaded or saved,
     /// or if the validator has no slash count to decrement.
-    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError>;
+    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError> {
+        self.decrement_slash_count_by(validator, LIVENESS_VIOLATION_POINTS)
+    }
 }
 
 // ── SledSlashingStore ──────────────────────────────────────────────
@@ -277,6 +291,11 @@ impl SledSlashingStore {
     /// ```
     pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
         let db = sled::open(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        tracing::warn!(
+            "⚠️  sled 0.34 is alpha-quality and NOT recommended for production use. \
+             It may lose data on crash. See: https://github.com/spacejam/sled/issues/1389 \
+             Consider migrating to rocksdb or redb for production deployments."
+        );
         let tree = db
             .open_tree("slashing")
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
@@ -315,7 +334,7 @@ impl SlashingStore for SledSlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
@@ -324,7 +343,7 @@ impl SlashingStore for SledSlashingStore {
                 &validator[..4]
             )));
         }
-        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
+        let decrement = amount.min(current);
         state.slash_points.insert(*validator, current - decrement);
         self.save(&state)
     }
@@ -400,7 +419,7 @@ impl SlashingStore for InMemorySlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count(&self, validator: &[u8; 32]) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
@@ -409,7 +428,7 @@ impl SlashingStore for InMemorySlashingStore {
                 &validator[..4]
             )));
         }
-        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
+        let decrement = amount.min(current);
         state.slash_points.insert(*validator, current - decrement);
         self.save(&state)
     }
@@ -464,6 +483,8 @@ pub struct SlashingEngine {
     ejection_threshold: u64,
     /// Persistence backend for slashing state, shared via `Arc`.
     store: Arc<dyn SlashingStore>,
+    /// Per-node stack of offense point amounts, used for type-aware undo.
+    offense_history: HashMap<NodeId, Vec<u64>>,
 }
 
 impl std::fmt::Debug for SlashingEngine {
@@ -493,6 +514,7 @@ impl Clone for SlashingEngine {
             slash_threshold: self.slash_threshold,
             ejection_threshold: self.ejection_threshold,
             store: Arc::clone(&self.store),
+            offense_history: self.offense_history.clone(),
         }
     }
 }
@@ -584,6 +606,7 @@ impl SlashingEngine {
             slash_threshold,
             ejection_threshold,
             store: Arc::new(InMemorySlashingStore::new()),
+            offense_history: HashMap::new(),
         }
     }
 
@@ -629,6 +652,7 @@ impl SlashingEngine {
             stakes: state.stakes,
             slash_threshold: state.slash_threshold,
             ejection_threshold: state.ejection_threshold,
+            offense_history: state.offense_history,
             store,
         })
     }
@@ -663,6 +687,7 @@ impl SlashingEngine {
                     stakes: state.stakes,
                     slash_threshold: state.slash_threshold,
                     ejection_threshold: state.ejection_threshold,
+                    offense_history: state.offense_history,
                     store,
                 }
             }
@@ -673,6 +698,7 @@ impl SlashingEngine {
                     stakes: HashMap::new(),
                     slash_threshold,
                     ejection_threshold,
+                    offense_history: HashMap::new(),
                     store,
                 }
             }
@@ -690,6 +716,7 @@ impl SlashingEngine {
             stakes: self.stakes.clone(),
             slash_threshold: self.slash_threshold,
             ejection_threshold: self.ejection_threshold,
+            offense_history: self.offense_history.clone(),
         };
         if let Err(e) = self.store.save(&state) {
             tracing::warn!(error = %e, "Failed to persist slashing state");
@@ -772,6 +799,9 @@ impl SlashingEngine {
         let current_points = self.slash_points.entry(node).or_insert(0);
         *current_points = current_points.saturating_add(points_added);
         let total_points = *current_points;
+
+        // Track offense history for undo
+        self.offense_history.entry(node).or_default().push(points_added);
 
         tracing::warn!(
             node = ?&node[..4],
@@ -1053,8 +1083,9 @@ impl SlashingEngine {
     ///
     /// This is the companion to [`Self::record_offense`] and is used by
     /// governance-based slashing undo (see [`crate::slashing_undo`]).
-    /// Points are decremented by the minimum offense amount
-    /// ([`LIVENESS_VIOLATION_POINTS`] = 100).
+    /// Points are decremented by the amount of the most recent offense,
+    /// tracked via the offense history stack. This ensures that undoing
+    /// an equivocation (500 pts) removes 500 pts, not just 100.
     ///
     /// # Arguments
     ///
@@ -1062,7 +1093,7 @@ impl SlashingEngine {
     ///
     /// # Errors
     ///
-    /// Returns an error string if the validator has no slash points to undo.
+    /// Returns an error string if the validator has no offense history to undo.
     ///
     /// # Example
     ///
@@ -1081,26 +1112,27 @@ impl SlashingEngine {
     /// assert_eq!(engine.slash_points_of(&node), 0);
     /// ```
     pub fn undo_slash(&mut self, node: &NodeId) -> Result<(), String> {
-        let current = self.slash_points.get(node).copied().unwrap_or(0);
-        if current == 0 {
-            return Err(format!(
-                "Validator {:?} has no slash points to undo",
-                &node[..4]
-            ));
+        let history = self.offense_history.get_mut(node);
+        match history {
+            Some(entries) if !entries.is_empty() => {
+                let last_offense_points = entries.pop().unwrap();
+                let current = self.slash_points.get(node).copied().unwrap_or(0);
+                let new_points = current.saturating_sub(last_offense_points);
+                self.slash_points.insert(*node, new_points);
+
+                tracing::info!(
+                    node = ?&node[..4],
+                    previous_points = current,
+                    removed_points = last_offense_points,
+                    new_points = new_points,
+                    "Slash points decremented via undo (offense-type-aware)"
+                );
+
+                self.persist_state();
+                Ok(())
+            }
+            _ => Err(format!("Validator {:?} has no offense history to undo", &node[..4])),
         }
-        let decrement = LIVENESS_VIOLATION_POINTS.min(current);
-        let new_points = current - decrement;
-        self.slash_points.insert(*node, new_points);
-
-        tracing::info!(
-            node = ?&node[..4],
-            previous_points = current,
-            new_points = new_points,
-            "Slash points decremented via undo"
-        );
-
-        self.persist_state();
-        Ok(())
     }
 
     /// Export the current slashing state as a [`SlashingState`] snapshot.
@@ -1113,6 +1145,7 @@ impl SlashingEngine {
             stakes: self.stakes.clone(),
             slash_threshold: self.slash_threshold,
             ejection_threshold: self.ejection_threshold,
+            offense_history: self.offense_history.clone(),
         }
     }
 
@@ -1362,5 +1395,49 @@ mod tests {
         let n = node(1);
         assert_eq!(engine.slash_points_of(&n), 0);
         assert_eq!(engine.stake_of(&n), 0);
+    }
+
+    #[test]
+    fn test_undo_slash_respects_offense_type() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let mut node = [0u8; 32];
+        node[0] = 42;
+
+        engine.register_validator(node, 10_000);
+
+        // Record equivocation (500 pts)
+        engine.record_offense(node, SlashOffense::Equivocation);
+        assert_eq!(engine.slash_points_of(&node), 500);
+
+        // Undo should remove exactly 500 pts (not 100)
+        engine.undo_slash(&node).unwrap();
+        assert_eq!(engine.slash_points_of(&node), 0);
+    }
+
+    #[test]
+    fn test_undo_slash_mixed_offenses() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let mut node = [0u8; 32];
+        node[0] = 99;
+
+        engine.register_validator(node, 10_000);
+
+        // Record: Liveness (100) + Equivocation (500) + InvalidAttestation (300) = 900
+        engine.record_offense(node, SlashOffense::LivenessViolation);
+        engine.record_offense(node, SlashOffense::Equivocation);
+        engine.record_offense(node, SlashOffense::InvalidAttestation);
+        assert_eq!(engine.slash_points_of(&node), 900);
+
+        // Undo last (InvalidAttestation = 300) → 600
+        engine.undo_slash(&node).unwrap();
+        assert_eq!(engine.slash_points_of(&node), 600);
+
+        // Undo second-to-last (Equivocation = 500) → 100
+        engine.undo_slash(&node).unwrap();
+        assert_eq!(engine.slash_points_of(&node), 100);
+
+        // Undo first (Liveness = 100) → 0
+        engine.undo_slash(&node).unwrap();
+        assert_eq!(engine.slash_points_of(&node), 0);
     }
 }

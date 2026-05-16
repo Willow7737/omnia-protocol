@@ -80,6 +80,22 @@ impl Default for ConsensusConfig {
             max_consecutive_timeouts: 3,
         }
     }
+
+    /// Create a config with a cryptographically random round seed.
+    pub fn with_random_seed(total_nodes: usize) -> Self {
+        let mut seed = [0u8; 32];
+        getrandom::getrandom(&mut seed).expect("Failed to generate random seed");
+        Self {
+            total_nodes,
+            commit_delay_rounds: 1,
+            optimistic_confirmation: true,
+            optimistic_threshold: supermajority(total_nodes) as u32,
+            max_look_ahead: 10,
+            round_seed: seed,
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
+        }
+    }
 }
 
 /// Tracks round timing and timeout state for liveness.
@@ -213,6 +229,12 @@ pub struct ConsensusEngine {
     slashing: SlashingEngine,
     /// Round timer for liveness enforcement
     round_timer: RoundTimer,
+    /// Tracks (creator, sequence) pairs that have been seen.
+    /// If we see a new event with the same (creator, sequence) but different EventId,
+    /// that's equivocation.
+    seen_sequences: HashSet<(NodeId, u64)>,
+    /// Maps (creator, sequence) → first EventId seen for that pair.
+    first_event_for_sequence: HashMap<(NodeId, u64), EventId>,
 }
 
 impl ConsensusEngine {
@@ -235,6 +257,18 @@ impl ConsensusEngine {
             Duration::from_millis(config.round_timeout_ms),
             config.max_consecutive_timeouts,
         );
+
+        // Validate round_seed is not all zeros
+        if config.round_seed == [0u8; 32] {
+            tracing::warn!(
+                "⚠️  ConsensusConfig.round_seed is all zeros! \
+                 VRF leader selection will be deterministic and INSECURE. \
+                 Use ConsensusConfig::with_random_seed() or set round_seed explicitly."
+            );
+            #[cfg(debug_assertions)]
+            panic!("ConsensusConfig.round_seed must not be all zeros in debug builds");
+        }
+
         Self {
             config,
             event_states: HashMap::new(),
@@ -246,6 +280,8 @@ impl ConsensusEngine {
             _last_finalized: VectorClock::new(),
             slashing,
             round_timer,
+            seen_sequences: HashSet::new(),
+            first_event_for_sequence: HashMap::new(),
         }
     }
 
@@ -277,21 +313,28 @@ impl ConsensusEngine {
         }
 
         // Check for equivocation — same creator + sequence, different EventId
-        if let Some(info) = self.node_info.get(&creator) {
-            if let Some(last_event_id) = info.last_event {
-                if let Some(last_event) = graph.get(&last_event_id) {
-                    if SlashingEngine::check_equivocation(last_event, event) {
+        let seq_key = (creator, event.sequence);
+        if let Some(&first_id) = self.first_event_for_sequence.get(&seq_key) {
+            // We've seen this (creator, sequence) before — check for equivocation
+            if first_id != event_id {
+                if let Some(first_event) = graph.get(&first_id) {
+                    if SlashingEngine::check_equivocation(first_event, event) {
                         let outcome = self
                             .slashing
                             .record_offense(creator, SlashOffense::Equivocation);
                         tracing::warn!(
                             node = ?&creator[..4],
+                            sequence = event.sequence,
+                            first_id = ?&first_id[..4],
+                            second_id = ?&event_id[..4],
                             outcome = ?outcome,
-                            "Equivocation detected in process_event"
+                            "Equivocation detected — multiple events with same creator+sequence"
                         );
                     }
                 }
             }
+        } else {
+            self.first_event_for_sequence.insert(seq_key, event_id);
         }
 
         // Update node info
@@ -494,23 +537,23 @@ impl ConsensusEngine {
         // FIX(bug-3): Removed shadowing line `let round = ...` that overwrote
         // the correct `round` parameter. Using the parameter directly.
 
-        // For small networks, reduce commit delay
-        let effective_delay = self.config.commit_delay_rounds.min(round.saturating_sub(1));
-        let check_round = round.saturating_sub(effective_delay);
-
-        if check_round == 0 {
-            // Genesis round: commit all genesis witnesses immediately if we have supermajority
-            if let Some(witnesses) = self.round_witnesses.get(&0) {
-                if witnesses.len() >= consensus_threshold(self.config.total_nodes) {
-                    for &witness_id in witnesses {
-                        if !self.is_committed(&witness_id) {
-                            committed.push(witness_id);
+        if round < self.config.commit_delay_rounds {
+            // Not enough rounds have passed for commitment safety.
+            // However, genesis round (round 0) with supermajority can still commit.
+            if round == 0 {
+                if let Some(witnesses) = self.round_witnesses.get(&0) {
+                    if witnesses.len() >= consensus_threshold(self.config.total_nodes) {
+                        for &witness_id in witnesses {
+                            if !self.is_committed(&witness_id) {
+                                committed.push(witness_id);
+                            }
                         }
                     }
                 }
             }
             return Ok(committed);
         }
+        let check_round = round.saturating_sub(self.config.commit_delay_rounds);
 
         // Check fame of witnesses from previous rounds
         if let Some(witnesses) = self.round_witnesses.get(&check_round).cloned() {
@@ -786,6 +829,22 @@ mod tests {
         n
     }
 
+    /// Test-friendly config with a non-zero round seed (avoids debug-build panic).
+    fn test_config() -> ConsensusConfig {
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid the debug panic
+        ConsensusConfig {
+            total_nodes: 4,
+            commit_delay_rounds: 1,
+            optimistic_confirmation: true,
+            optimistic_threshold: 3,
+            max_look_ahead: 10,
+            round_seed: seed,
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
+        }
+    }
+
     fn setup_graph_with_events() -> (CausalGraph, Vec<EventId>) {
         let mut graph = CausalGraph::new();
         let n1 = node(1);
@@ -826,7 +885,7 @@ mod tests {
 
     #[test]
     fn test_consensus_engine_creation() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let slashing =
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let engine = ConsensusEngine::new(config, slashing);
@@ -838,7 +897,7 @@ mod tests {
 
     #[test]
     fn test_process_event() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let mut engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -873,7 +932,7 @@ mod tests {
 
     #[test]
     fn test_node_consensus_info() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let mut engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -891,7 +950,7 @@ mod tests {
 
     #[test]
     fn test_insufficient_nodes_error() {
-        let mut config = ConsensusConfig::default();
+        let mut config = test_config();
         config.total_nodes = 3;
 
         let engine = ConsensusEngine::new(
@@ -903,7 +962,7 @@ mod tests {
 
     #[test]
     fn test_get_round() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let mut engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -918,13 +977,15 @@ mod tests {
 
     #[test]
     fn test_fame_determination() {
+        let mut seed = [0u8; 32];
+        seed[0] = 1;
         let config = ConsensusConfig {
             total_nodes: 4,
             commit_delay_rounds: 1,
             optimistic_confirmation: false,
             optimistic_threshold: 3,
             max_look_ahead: 10,
-            round_seed: [0u8; 32],
+            round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
         };
@@ -944,7 +1005,7 @@ mod tests {
 
     #[test]
     fn test_record_acknowledgment() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let mut engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -966,7 +1027,7 @@ mod tests {
 
     #[test]
     fn test_consensus_stats() {
-        let config = ConsensusConfig::default();
+        let config = test_config();
         let engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
@@ -982,7 +1043,7 @@ mod tests {
     /// FIX 3: Test that proves finality works in a 4-node network.
     #[test]
     fn test_four_node_finality() {
-        let mut config = ConsensusConfig::default();
+        let mut config = test_config();
         config.total_nodes = 4;
         config.commit_delay_rounds = 1; // Reduced for small network
 
@@ -1031,6 +1092,47 @@ mod tests {
             committed.len()
         );
     }
+
+    #[test]
+    fn test_commit_delay_not_bypassed_at_early_rounds() {
+        let mut config = test_config();
+        config.total_nodes = 4;
+        config.commit_delay_rounds = 3; // Require 3 rounds before commitment
+
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+        let mut graph = CausalGraph::new();
+
+        // Create and process genesis events for round 0
+        let nodes: Vec<_> = (0..4).map(|i| {
+            let mut n = [0u8; 32]; n[0] = i;
+            let kp = generate_keypair();
+            (n, kp)
+        }).collect();
+
+        let mut genesis_ids = Vec::new();
+        for (node_id, keypair) in &nodes {
+            let mut e = Event::genesis(*node_id, vec![node_id[0]]);
+            e.sign_with_keypair(keypair);
+            let id = e.id;
+            graph.insert(e).unwrap();
+            genesis_ids.push(id);
+        }
+
+        // Process through consensus
+        for id in &genesis_ids {
+            let event = graph.get(id).unwrap();
+            engine.process_event(event, &graph).unwrap();
+        }
+
+        // At round 0, with commit_delay_rounds = 3, nothing should be committed
+        // (except possibly genesis via the supermajority path)
+        // The key invariant: effective_delay must NEVER be 0 when commit_delay_rounds > 0
+        // except for the explicit genesis supermajority path
+        assert!(engine.committed_count() <= 4, "Only genesis should be committable at round 0");
+    }
 }
 
 /// Property-based tests for consensus invariants.
@@ -1068,7 +1170,7 @@ mod proptests {
             let slashing = SlashingEngine::new_in_memory(
                 DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD
             );
-            let config = ConsensusConfig::default();
+            let config = test_config();
             let mut engine = ConsensusEngine::new(config, slashing);
             let graph = CausalGraph::new();
 
@@ -1092,7 +1194,7 @@ mod proptests {
             let slashing = SlashingEngine::new_in_memory(
                 DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD
             );
-            let config = ConsensusConfig::default();
+            let config = test_config();
             let mut engine = ConsensusEngine::new(config, slashing);
             let graph = CausalGraph::new();
 

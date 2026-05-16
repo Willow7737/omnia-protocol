@@ -102,7 +102,7 @@ pub const PROTOCOL_VERSION: &str = "4.0.0";
 ///
 /// Used by the request-response behaviour for sync and state exchange.
 /// The version suffix ensures peers speak the same protocol dialect.
-pub const PROTOCOL_IDENTIFIER: &str = "/omnia/1.0.0";
+pub const PROTOCOL_IDENTIFIER: &str = "/omnia/4.0.0";
 
 /// Target throughput (transactions per second)
 pub const TARGET_TPS: u32 = 10_000;
@@ -599,7 +599,7 @@ mod tests {
     #[test]
     fn test_constants() {
         assert_eq!(PROTOCOL_VERSION, "4.0.0");
-        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/1.0.0");
+        assert_eq!(PROTOCOL_IDENTIFIER, "/omnia/4.0.0");
         assert_eq!(TARGET_TPS, 10_000);
         assert_eq!(TARGET_FINALITY_MS, 5_000);
     }
