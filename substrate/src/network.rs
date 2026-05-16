@@ -441,7 +441,7 @@ mod tests {
         let json = serde_json::to_string(&handshake).expect("serialize");
         let restored: VersionHandshake = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.protocol_version, "4.0.0");
-        assert_eq!(restored.protocol_identifier, "/omnia/1.0.0");
+        assert_eq!(restored.protocol_identifier, "/omnia/4.0.0");
         assert_eq!(restored.node_id, [42u8; 32]);
     }
 
