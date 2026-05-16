@@ -100,12 +100,26 @@ mod tests {
         [val; 32]
     }
 
+    fn classical_key(val: u8) -> PqPublicKey {
+        PqPublicKey {
+            ed25519: test_ed25519_key(val),
+            dilithium: vec![],
+        }
+    }
+
+    fn hybrid_key(val: u8) -> PqPublicKey {
+        PqPublicKey {
+            ed25519: test_ed25519_key(val),
+            dilithium: vec![0u8; 1952],
+        }
+    }
+
     #[test]
     fn test_phase_upgrade_allowed() {
         let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
         let request = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            old_key: classical_key(1),
+            new_key: hybrid_key(2),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
@@ -118,8 +132,8 @@ mod tests {
     fn test_phase_downgrade_rejected() {
         let mut manager = PqcKeyRotationManager::new(CommitmentPhase::Hybrid);
         let request = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![0u8; 1952] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![] },
+            old_key: hybrid_key(1),
+            new_key: classical_key(2),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::ClassicalOnly,
             effective_at: 100,
@@ -131,10 +145,10 @@ mod tests {
     #[test]
     fn test_transition_period_tracking() {
         let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
-        let old_key = PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] };
+        let old_key = classical_key(1);
         let request = PqcKeyRotationRequest {
             old_key: old_key.clone(),
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            new_key: hybrid_key(2),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
@@ -150,8 +164,8 @@ mod tests {
     fn test_empty_authorization_sig_rejected() {
         let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
         let request = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            old_key: classical_key(1),
+            new_key: hybrid_key(2),
             authorization_sig: vec![],
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
@@ -164,8 +178,8 @@ mod tests {
     fn test_process_effective_advances_phase() {
         let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
         let request = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            old_key: classical_key(1),
+            new_key: hybrid_key(2),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
@@ -190,8 +204,8 @@ mod tests {
 
         // ClassicalOnly -> Hybrid
         let req1 = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(1), dilithium: vec![] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
+            old_key: classical_key(1),
+            new_key: hybrid_key(2),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
@@ -203,8 +217,8 @@ mod tests {
 
         // Hybrid -> PostQuantum
         let req2 = PqcKeyRotationRequest {
-            old_key: PqPublicKey { ed25519: test_ed25519_key(2), dilithium: vec![0u8; 1952] },
-            new_key: PqPublicKey { ed25519: test_ed25519_key(3), dilithium: vec![0u8; 1952] },
+            old_key: hybrid_key(2),
+            new_key: hybrid_key(3),
             authorization_sig: vec![0u8; 64],
             new_phase: CommitmentPhase::PostQuantum,
             effective_at: 300,
