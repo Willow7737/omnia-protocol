@@ -1,11 +1,11 @@
 [package]
 name = "omnia-binding"
-version = "0.1.0"
-edition = "2021"
-authors = ["Omnia Protocol Contributors"]
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
 description = "Layer 3: The Binding Layer — Cryptographic self-proof for physical reality (RF fingerprinting, quantum-resistant commitments, provenance log)"
-license = "CC0-1.0"
-repository = "https://github.com/Willow7737/omnia-protocol"
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 omnia-substrate = { path = "../substrate" }

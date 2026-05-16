@@ -1,11 +1,11 @@
 [package]
 name = "omnia-node"
-version = "0.1.0"
-edition = "2021"
-authors = ["Omnia Protocol Contributors"]
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
 description = "Omnia node binary — runs a full node with REST API, consensus, slashing, shard routing, and economics"
-license = "CC0-1.0"
-repository = "https://github.com/Willow7737/omnia-protocol"
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 # Workspace crate dependencies — each provides a distinct protocol layer

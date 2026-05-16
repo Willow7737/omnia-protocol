@@ -10,3 +10,11 @@ members = [
     "fuzz",
 ]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Omnia Protocol Contributors"]
+license = "CC0-1.0"
+repository = "https://github.com/Willow7737/omnia-protocol"
+rust-version = "1.85"

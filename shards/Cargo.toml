@@ -1,11 +1,11 @@
 [package]
 name = "omnia-shards"
-version = "0.1.0"
-edition = "2021"
-authors = ["Omnia Protocol Contributors"]
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
 description = "Layer 2: Domain Shards — Specialized state machines for financial, computational, physical, biological, and identity domains"
-license = "CC0-1.0"
-repository = "https://github.com/Willow7737/omnia-protocol"
+license = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 omnia-substrate = { path = "../substrate" }

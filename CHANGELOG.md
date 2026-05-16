@@ -5,168 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Sprint 4] - 2026-03-05
+## [0.1.0] - 2026-05-15
 
 ### Added
 
+- substrate: CausalGraph with DAG storage, vector clock ordering, topological sort
+- substrate: ConsensusEngine with BFT finality (Hashgraph + AlephBFT hybrid), VRF leader selection, round-based commit
+- substrate: GossipProtocol with libp2p (QUIC, GossipSub, mDNS, request-response)
+- substrate: Event with Ed25519 signatures, bincode serialization
+- substrate: CRDTs: GCounter, OrSet, LWWRegister — all implement CvRDT trait
+- substrate: VectorClock (BTreeMap<NodeId, u64>) with CvRDT merge for partition reconciliation
+- substrate: SlashingEngine with equivocation (500pts), liveness (100pts), and invalid attestation (300pts) detection
+- substrate: SledSlashingStore + InMemorySlashingStore for persistent slashing state
+- substrate: SlashingUndoManager for governance-based reversal of slash decisions
+- substrate: BLS12-381 signature aggregation (blst crate) for N-to-1 verification
+- substrate: ThresholdKeyManager for t-of-n key sharing
+- substrate: EncryptedKeyStore with rotation proofs
+- substrate: Protocol version negotiation in P2P layer (VersionHandshake)
+- substrate: State snapshot system (StateSnapshot::take/verify/serialize/deserialize)
+- substrate: Event pruning by finalized round (CausalGraph::prune_finalized())
+- substrate: Token-bucket rate limiter for event submission
+- substrate: Crypto schemes abstraction (CryptoProfile with Hash/Signature/VRF/ZK schemes)
+- shards: 6 domain shards — Financial, Computational, Physical, Biological, Identity, Economics
+- shards: ShardRouter with automatic dispatch (implements EventProcessor trait)
+- shards: Cross-shard messaging with causality verification (CrossShardMessage)
+- shards: Replay protection via per-creator nonce tracking with sled persistence
+- shards: Fee enforcement via FeeSchedule + QuotaSystem integration
+- shards: Identity shard with DID (did:omnia:<hex>), Shamir recovery, biometric anchor, AI agent identity
+- shards: Financial shard with causal account balances, transfer/mint/burn operations
+- shards: Computational shard with task queue and proof registry
+- shards: Physical shard with append-only provenance log
+- shards: Biological shard with consent registry and ZK queries
+- shards: Economics shard with UBC balances, epoch advancement, governance
+- binding: RF Fingerprinting with PUF/RF-DNA spectral signatures (stub — needs SDR hardware)
+- binding: Quantum-Resistant Commitments with Ed25519 + CRYSTALS-Dilithium hybrid signatures
+- binding: Three-phase PQC migration: ClassicalOnly -> Hybrid -> PostQuantum
+- binding: ProvenanceLog (append-only CRDT) with full lifecycle (Created -> Transferred -> Verified -> Destroyed)
+- binding: PhysicalAnchor — unified verification of RF fingerprint + quantum commitment + provenance chain
+- binding: PqcKeyRotationManager for post-quantum key rotation
+- zk: Settlement-agnostic architecture (SettlementLayer trait)
+- zk: Ethereum adapter with OmniaRollup.sol contract (deposit, withdrawal with 7-day challenge, batch submission)
+- zk: Bitcoin, Solana, Celestia settlement adapters (stubs — return NotImplemented)
+- zk: Groth16/Bn254 proof system with arkworks R1CS + Groth16
 - zk: Poseidon SNARK-friendly hash function (BN254, t=3, R_F=8, R_P=57)
-- zk: Replaced field-addition hash with Poseidon in ExpandedRollupCircuit (Merkle path + state transition)
-- zk: `poseidon_hash_to_fr()` for off-circuit Merkle tree construction matching on-circuit Poseidon
-- substrate: State snapshot system (`StateSnapshot::take/verify/to_bytes/from_bytes/write_to_file/read_from_file`)
-- substrate: Event pruning by finalized round (`CausalGraph::prune_finalized()`)
-- substrate: `PrunedEventMetadata` struct and `pruned_events` field on CausalGraph
-- substrate: `finalize_event_with_round()` for tracking round at which events were finalized
-- substrate: VRF for deterministic leader selection (`vrf_compute`, `vrf_verify`, `select_leader`)
-- substrate: BLS12-381 signature aggregation (`BlsKeypair`, `aggregate_signatures`, `aggregate_public_keys`, `verify_aggregate`)
-- substrate: Encrypted key store with rotation proofs (`EncryptedKeyStore`, `KeyRotationProof`)
-- substrate: Protocol version negotiation in P2P layer (`VersionHandshake`, `check_version_compatibility`)
-- substrate: `SubstrateConfig.snapshot_interval` (default: 10000) and `SubstrateConfig.pruning_depth` (default: 0)
-- zk: Trusted setup ceremony orchestration (`SetupCeremony`, Powers of Tau, circuit-specific key derivation)
-- node: TOML configuration file support (`NodeConfigFile`, `--config` CLI flag)
-- node: `--protocol-version` CLI flag for advertising protocol version on the network
-- node: `snapshot` and `restore` CLI subcommands for state snapshot management
-- node: `keygen` CLI subcommand for validator keypair generation
-- node: `setup-contribute` and `setup-verify` CLI subcommands for trusted setup ceremony
-- monitoring: Grafana dashboard with 9 panels (finalized events, peer count, latency, gossip, slashing, fees, graph size, memory, submitted vs finalized)
-- monitoring: Alert rules for FinalityStalled, PeerCountDrop, HighSlashingRate, MemoryGrowth
-- monitoring: Grafana service in docker-compose with pre-provisioned dashboards
-- formal-verification: `OmniaCRDT.tla` with GCounter, OrSet, and LWWRegister convergence proofs
-- formal-verification: `OmniaCRDT.cfg` model checker configuration
-- node: `omnia-node.toml.example` configuration template
-- ops: Operations runbook with 7 sections (startup, key rotation, slashing, partition recovery, upgrade, snapshot/restore, monitoring)
-- docs: Side-channel resistance audit (subtle::ConstantTimeEq for creator binding, hash verification, equivocation detection)
+- zk: ExpandedRollupCircuit with Merkle path verification + per-event state transition constraints
+- zk: PowersOfTau trusted setup ceremony (Phase 1) with multi-participant contributions
+- zk: ProofBundle — chain-agnostic format with version, state roots, transition proof, L1 anchor
+- zk: RollupOperator — collects finalized events, builds batch, generates Groth16 proof, settles on L1
+- economics: UBC (Universal Basic Compute) — soulbound token, 1000 UBC/month default, non-transferable
+- economics: QuotaSystem with 30-day epochs, register/spend/reward/balance_of/advance_epoch
+- economics: Quadratic voting with reputation decay via PPM fixed-point arithmetic
+- economics: Proof-of-Useful-Work with 3 types: AI Training, Scientific Simulation, Distributed Storage
+- economics: TimeLockVoting for long-duration stake commitments
+- economics: Fixed-point arithmetic (PPM) for cross-platform deterministic governance
+- node: omnia-node binary with CLI (clap), health/metrics HTTP (axum), graceful shutdown
+- node: REST API with events/shards/governance/economics/node endpoints + utoipa Swagger UI
+- node: CLI subcommands: keygen, setup-contribute, setup-verify, snapshot, restore, run
+- node: TOML configuration file support (NodeConfigFile, --config flag)
+- node: --protocol-version CLI flag for advertising protocol version on the network
+- node: Docker setup with multi-stage build, docker-compose for 5-node testnet
+- chaos-tests: ChaosNetwork framework with partitions, crash recovery, byzantine, message loss
+- chaos-tests: 4 integration test suites (partition.rs, crash_recovery.rs, byzantine.rs, message_loss.rs)
+- fuzz: 11 libFuzzer targets with seed corpora and OSS-Fuzz Dockerfile
+- formal-verification: TLA+ specification of consensus (Agreement, NoEquivocation, Validity invariants)
+- formal-verification: TLA+ specification of CRDT convergence (GCounter, OrSet, LWWRegister)
+- monitoring: Grafana dashboard with 9 panels + alert rules
+- monitoring: Prometheus configuration + docker-compose integration
+- CI: 5 GitHub Actions workflows (ci, benchmarks, chaos-tests, network-tests, nightly-fuzz)
+- CI: Cross-platform testing (Ubuntu/macOS/Windows), cargo audit, cargo vet, SBOM generation, reproducible builds
+- CD: release-please for automated versioning + changelog, release workflow for binary + contract + Docker publishing
+- Supply chain: cargo-vet audits, CycloneDX SBOM, dependency policy
 
-### Changed
-
-- PROTOCOL_VERSION bumped to "4.0.0"
-- ExpandedRollupCircuit now uses Poseidon hash instead of field addition for Merkle path verification and state transitions
-- Event hash verification and creator binding use constant-time comparisons (`subtle::ConstantTimeEq`)
-
-### ⚠️ Known Limitations
+### Known Limitations
 
 - Poseidon parameters use a Cauchy MDS matrix and BLAKE3-derived round constants (not the Grain LFSR from the paper)
 - TLA+ CRDT model uses finite state spaces (3 nodes, MaxVal=3) — not exhaustive
 - BLS key generation uses zero seed by default in tests — production must provide entropy
 - EncryptedKeyStore uses XOR-based encryption (not AES-256-GCM) — production must upgrade
+- RF fingerprinting is a stub (Hamming distance comparison) — needs SDR hardware
+- Bitcoin/Solana/Celestia settlement adapters are stubs — return NotImplemented
+- UsefulWorkProof verification is a stub (checks non-zero hash + positive compute units only)
+- OmniaRollup.sol verifyProof is a Phase 0 stub (checks non-empty only)
+- BiometricAnchor is a stub (BLAKE3 hash of salted template)
+- sled 0.34 is alpha-quality — production deployments should migrate to rocksdb or redb
 
-## [Sprint 3] - 2026-05-15
-
-### Added
-
-- zk: ExpandedRollupCircuit with Merkle path verification + per-event state transition constraints
-- zk: Sparse Merkle tree module (BLAKE3 off-circuit, Fr↔hash conversions, MerkleProof struct)
-- zk: Expanded prover/verifier for ExpandedRollupCircuit (Groth16 on BN254)
-- substrate: SlashingStore trait + SledSlashingStore (sled-backed persistence) + InMemorySlashingStore
-- substrate: SlashingEngine::with_store() for persistent slashing state across restarts
-- node: omnia-node binary crate with CLI (clap), health/metrics HTTP (axum), graceful shutdown
-- node: REST API with events/shards/governance/economics/node endpoints + utoipa Swagger UI
-- chaos-tests: ChaosNetwork framework with partitions, crash recovery, byzantine, message loss
-- chaos-tests: 4 integration test suites (partition.rs, crash_recovery.rs, byzantine.rs, message_loss.rs)
-- formal-verification: TLA+ specification of consensus (Agreement, NoEquivocation, Validity invariants)
-- docs/audit: AUDIT_SCOPE.md, ATTACK_SURFACE.md, SELF_ASSESSMENT.md, AUDIT_README.md
-
-### Changed
-
-- README: removed stale "hash chain stub" and "REST API not started" references
-- README: added node/ and chaos-tests/ crates to workspace table
-- README: updated "What's Not Yet Implemented" table with Sprint 3 completions
-- CHANGELOG: added Sprint 3 section
-- STATUS: updated completion tracking with Sprint 3 requirements
-
-### ⚠️ Known Limitations
-
-- ExpandedRollupCircuit uses simplified field-addition hash as placeholder for Pedersen/Poseidon
-- TLA+ model uses finite state spaces (4 nodes, 3 rounds) — not exhaustive
-- Chaos tests simulate at the library level, not real network I/O
-
-## [Sprint 2] - 2026-05-14
+## [1.0.0-spec] - 2026-05-10
 
 ### Added
-
-- governance: replaced f64 decay with fixed-point PPM arithmetic (BasisPpmExt + DecayRate newtype)
-- binding: replaced PQC verify() stub with real ed25519-dalek + pqc_dilithium hybrid verification
-- shards: added FeeSchedule + QuotaSystem enforcement in ShardRouter
-- substrate: added SlashingEngine with equivocation/liveness/invalid attestation detection
-- substrate: added real libp2p QUIC multi-node integration test (#[ignore] + CI cron)
-- zk: replaced hash-chain stub with arkworks R1CS + Groth16 proof system on BN254
-
-### Changed
-
-- economics: all consensus-critical arithmetic now uses integer fixed-point (no f64/f32)
-- binding: PqPublicKey now carries separate ed25519 + dilithium key components
-- shards: ShardRouter now deducts UBC fees before routing operations
-
-## [Unreleased]
-
-### ✅ Layer 1: Substrate
-- CausalGraph with DAG storage, vector clock ordering, topological sort
-- ConsensusEngine with BFT finality (Hashgraph + AlephBFT hybrid)
-- GossipProtocol with libp2p (QUIC, GossipSub, mDNS)
-- Event with Ed25519 signatures, bincode serialization
-- CRDTs: GCounter, OrSet, LWWRegister
-- 🚀 Performance: O(new_events) consensus via unprocessed queue
-- 🛡️ Security: `state_root()`, `merkle_proof()`, `prune_old_events()`
-- 🛡️ Replay protection via nonce tracking
-
-### ✅ Layer 2: Domain Shards
-- 6 shards: Financial, Identity, Physical, Computational, Biological, Economics
-- ShardRouter with automatic dispatch (`EventProcessor` trait)
-- Cross-shard messaging with causality verification
-- Replay protection via per-creator nonce tracking (`last_nonces`)
-
-### ✅ Layer 3: Binding Layer
-- ProvenanceLog (append-only CRDT)
-- PhysicalAnchor (RF + quantum + provenance)
-- ProvenanceTracker with full lifecycle (create/transfer/verify/destroy)
-- ⚠️ RF fingerprinting stub (Hamming distance)
-- ✅ Hybrid PQC signatures (replaced quantum commitment stub — moved to Sprint 2)
-
-### ✅ Layer 4: Identity Hardening
-- `did:omnia:` method with validation
-- Shamir's Secret Sharing over GF(256)
-- BiometricAnchor (BLAKE3(salt || template))
-- AgentIdentity with 5 capability types
-- Social recovery with guardian threshold
-
-### ✅ Layer 5: Economics
-- UbcToken (soulbound, monthly quota)
-- QuotaSystem with epoch advancement
-- GovernanceState (quadratic voting + exponential decay)
-- ⚠️ UsefulWorkProof stubs (3 work types)
-
-### ✅ Phase 0: ZK-Rollup
-- Settlement-agnostic architecture (`SettlementLayer` trait)
-- Ethereum adapter with Solidity contract (OmniaRollup.sol)
-- Bitcoin, Solana, Celestia stubs
-- L2 operator with batch builder
-- ✅ ZK circuit (replaced hash-chain stub — moved to Sprint 2)
-- Merkle state root + inclusion proofs
-- Event pruning for sustainability
-
-### 📝 Documentation
-- Complete overhaul of all markdown files to match actual codebase
-- Honest labeling: stubs labeled ⚠️, planned features labeled 📋, aspirational content labeled 🔮
-- Updated build instructions, workspace structure, and test counts
-- Preserved visual design (banners, badges, ASCII art, emoji indicators)
-
-## [1.0.0] - 2026-05-10
-
-### Added 🎉
 
 - Initial release of Omnia Protocol specification.
 - Five-layer architecture definition.
 - Causal graph consensus mechanism outline.
 - Zero-Knowledge Proofs integration concept.
 - Implementation roadmap (Phase 0 to Phase 3).
-- Basic `README.md`, `CONTRIBUTING.md`, `LICENSE`, `SECURITY.md`.
+- Basic README.md, CONTRIBUTING.md, LICENSE, SECURITY.md.
 - Initial diagrams for architecture, governance, supply chain, consensus comparison, and identity system.
-
-### Changed 🔄
-
-- Updated `README.md` with new banner, logo, and architecture visual.
-- Enhanced `README.md` structure with Community & Support section.
-- Added `CODE_OF_CONDUCT.md`.
-
-### Removed ❌
-
-- Old banner image reference in `README.md`.

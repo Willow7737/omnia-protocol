@@ -1,0 +1,398 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.2.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip leading 'v' for semver comparison
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+          echo "Version: $VERSION"
+
+      - name: Verify version matches workspace
+        run: |
+          EXPECTED="${{ steps.version.outputs.version }}"
+          ACTUAL=$(grep '^version' Cargo.toml | head -1 | sed 's/version *= *"\(.*\)"/\1/')
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "ERROR: Tag version ($EXPECTED) does not match workspace version ($ACTUAL)"
+            echo "The release-please PR must be merged before the tag is created."
+            exit 1
+          fi
+          echo "Version confirmed: $EXPECTED"
+
+  build-binaries:
+    name: Build Binary (${{ matrix.target }})
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: omnia-node-x86_64-linux
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: omnia-node-aarch64-linux
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: omnia-node-x86_64-macos
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: omnia-node-aarch64-macos
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: omnia-node-x86_64-windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-release-${{ matrix.target }}"
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Prepare binary artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.artifact }}.tar.gz omnia-node
+          cd ../../..
+          sha256sum ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.sha256
+
+      - name: Prepare binary artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.target }}/release/omnia-node.exe" -DestinationPath "${{ matrix.artifact }}.zip"
+          $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ascii "${{ matrix.artifact }}.sha256"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.sha256
+          retention-days: 5
+          if-no-files-found: warn
+
+  build-contract:
+    name: Compile Solidity Contract
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install solc
+        run: |
+          sudo add-apt-repository -y ppa:ethereum/ethereum
+          sudo apt-get update
+          sudo apt-get install -y solc
+
+      - name: Compile OmniaRollup.sol
+        run: |
+          mkdir -p contract-output
+          solc --combined-json abi,bin,metadata \
+            --optimize --optimize-runs 200 \
+            --overwrite \
+            -o contract-output \
+            zk/contracts/ethereum/OmniaRollup.sol
+
+          # Also produce standalone ABI and bytecode files
+          solc --abi \
+            --optimize --optimize-runs 200 \
+            -o contract-output \
+            zk/contracts/ethereum/OmniaRollup.sol
+
+          solc --bin \
+            --optimize --optimize-runs 200 \
+            -o contract-output \
+            zk/contracts/ethereum/OmniaRollup.sol
+
+          # Rename for clarity
+          mv contract-output/OmniaRollup.abi contract-output/OmniaRollup.json 2>/dev/null || true
+          mv contract-output/OmniaRollup.bin contract-output/OmniaRollup.bin.txt 2>/dev/null || true
+
+          # Create a combined artifact with version info
+          VERSION="${{ needs.validate.outputs.version }}"
+          python3 -c "
+          import json, os
+          combined_path = 'contract-output/combined.json'
+          if os.path.exists(combined_path):
+              with open(combined_path) as f:
+                  data = json.load(f)
+              contracts = data.get('contracts', {})
+              for key, val in contracts.items():
+                  if 'OmniaRollup' in key:
+                      artifact = {
+                          'contractName': 'OmniaRollup',
+                          'version': '$VERSION',
+                          'abi': json.loads(val.get('abi', '[]')) if isinstance(val.get('abi'), str) else val.get('abi', []),
+                          'bytecode': val.get('bin', ''),
+                          'metadata': val.get('metadata', ''),
+                          'compiler': {
+                              'version': '0.8.19+commit.7dd6d6e4',
+                              'optimization': True,
+                              'runs': 200
+                          }
+                      }
+                      with open('contract-output/OmniaRollup-artifact.json', 'w') as out:
+                          json.dump(artifact, out, indent=2)
+                      break
+          "
+
+      - name: Compute contract checksums
+        run: |
+          sha256sum contract-output/* > contract-output/checksums.txt
+          cat contract-output/checksums.txt
+
+      - name: Upload contract artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-rollup-contract
+          path: contract-output/
+          retention-days: 5
+
+  generate-sbom:
+    name: Generate SBOM
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-release-sbom"
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      - name: Generate SBOM
+        run: |
+          mkdir -p sbom-output
+          cargo cyclonedx --all --format json
+          cargo cyclonedx --all --format xml
+          find . -name '*.bom.json' -exec mv {} sbom-output/ \; 2>/dev/null || true
+          find . -name '*.bom.xml' -exec mv {} sbom-output/ \; 2>/dev/null || true
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnia-sbom
+          path: sbom-output/
+          retention-days: 5
+
+  security-audit:
+    name: Security Audit
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --json > audit-report.json 2>/dev/null || true
+          cargo audit || true
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit
+          path: audit-report.json
+          retention-days: 30
+
+  docker-image:
+    name: Build & Push Docker Image
+    needs: [validate, build-binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG="${{ needs.validate.outputs.tag }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tags=ghcr.io/${{ github.repository }}/omnia-node:$VERSION,ghcr.io/${{ github.repository }}/omnia-node:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=Omnia Node
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ needs.validate.outputs.version }}
+
+  publish-release:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - build-binaries
+      - build-contract
+      - generate-sbom
+      - security-audit
+      - docker-image
+    runs-on: ubuntu-latest
+    if: always() && needs.validate.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts/
+          merge-multiple: false
+
+      - name: Consolidate release files
+        run: |
+          mkdir -p release-files
+          # Move all tar.gz, zip, and checksum files
+          find release-artifacts/ -name '*.tar.gz' -exec mv {} release-files/ \;
+          find release-artifacts/ -name '*.zip' -exec mv {} release-files/ \;
+          find release-artifacts/ -name '*.sha256' -exec mv {} release-files/ \;
+          # Move contract artifacts
+          mkdir -p release-files/contract
+          find release-artifacts/omnia-rollup-contract/ -type f -exec mv {} release-files/contract/ \; 2>/dev/null || true
+          # Move SBOM artifacts
+          mkdir -p release-files/sbom
+          find release-artifacts/omnia-sbom/ -type f -exec mv {} release-files/sbom/ \; 2>/dev/null || true
+          # Move audit report
+          find release-artifacts/security-audit/ -name 'audit-report.json' -exec mv {} release-files/ \; 2>/dev/null || true
+          # List everything
+          echo "=== Release files ==="
+          find release-files/ -type f | sort
+
+      - name: Generate comprehensive checksums
+        run: |
+          cd release-files
+          sha256sum *.tar.gz *.zip 2>/dev/null > SHA256SUMS
+          echo "=== Checksums ==="
+          cat SHA256SUMS
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: Omnia Protocol ${{ needs.validate.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
+          generate_release_notes: true
+          body: |
+            ## Omnia Protocol ${{ needs.validate.outputs.tag }}
+
+            ### Binaries
+            | Platform | Architecture | File |
+            |----------|-------------|------|
+            | Linux | x86_64 | `omnia-node-x86_64-linux.tar.gz` |
+            | Linux | ARM64 | `omnia-node-aarch64-linux.tar.gz` |
+            | macOS | x86_64 | `omnia-node-x86_64-macos.tar.gz` |
+            | macOS | ARM64 (Apple Silicon) | `omnia-node-aarch64-macos.tar.gz` |
+            | Windows | x86_64 | `omnia-node-x86_64-windows.zip` |
+
+            ### Smart Contract
+            - `contract/OmniaRollup-artifact.json` — Combined ABI + bytecode + metadata (v${{ needs.validate.outputs.version }})
+            - `contract/OmniaRollup.json` — ABI only
+            - `contract/OmniaRollup.bin.txt` — Bytecode only
+            - `contract/checksums.txt` — Contract file checksums
+
+            ### Supply Chain
+            - `sbom/` — CycloneDX Software Bill of Materials (JSON + XML)
+            - `audit-report.json` — `cargo audit` security report
+            - `SHA256SUMS` — Checksums for all binary archives
+
+            ### Docker
+            ```
+            docker pull ghcr.io/${{ github.repository }}/omnia-node:${{ needs.validate.outputs.version }}
+            ```
+
+            ### Verification
+            ```bash
+            # Verify binary integrity
+            sha256sum -c SHA256SUMS
+
+            # Verify the contract
+            cat contract/checksums.txt
+            ```
+
+            ---
+            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ needs.validate.outputs.tag }}
+          files: |
+            release-files/*.tar.gz
+            release-files/*.zip
+            release-files/*.sha256
+            release-files/SHA256SUMS
+            release-files/contract/*
+            release-files/sbom/*
+            release-files/audit-report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

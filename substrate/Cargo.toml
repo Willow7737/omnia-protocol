@@ -1,12 +1,12 @@
 [package]
 name = "omnia-substrate"
-version = "0.1.0"
-edition = "2021"
-authors = ["Omnia Protocol Contributors"]
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
 description = "Layer 1: The Substrate — Causal graph consensus, vector clocks, CRDTs, and gossip protocol"
-license = "CC0-1.0"
-repository = "https://github.com/Willow7737/omnia-protocol"
-rust-version = "1.85"
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
