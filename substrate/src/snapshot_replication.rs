@@ -85,7 +85,9 @@ impl ReplicationConfig {
     ///
     /// Used by [`find_latest_snapshot`] as the default search location.
     pub fn primary_dir(&self) -> &PathBuf {
-        self.replica_dirs.first().expect("replica_dirs must not be empty")
+        self.replica_dirs
+            .first()
+            .expect("replica_dirs must not be empty")
     }
 }
 
@@ -195,10 +197,7 @@ pub fn find_latest_snapshot(
 }
 
 /// Find the latest snapshot in a single directory.
-fn find_latest_in_dir(
-    dir: &PathBuf,
-    verify: bool,
-) -> Result<Option<StateSnapshot>, SnapshotError> {
+fn find_latest_in_dir(dir: &PathBuf, verify: bool) -> Result<Option<StateSnapshot>, SnapshotError> {
     if !dir.exists() {
         return Ok(None);
     }
@@ -386,10 +385,7 @@ mod tests {
 
     #[test]
     fn test_replication_config_with_replica_dirs() {
-        let dirs = vec![
-            PathBuf::from("/tmp/repl1"),
-            PathBuf::from("/tmp/repl2"),
-        ];
+        let dirs = vec![PathBuf::from("/tmp/repl1"), PathBuf::from("/tmp/repl2")];
         let config = ReplicationConfig::with_replica_dirs(dirs.clone());
         assert_eq!(config.replica_dirs.len(), 2);
     }
@@ -435,8 +431,12 @@ mod tests {
         assert!(path.exists());
 
         // Both dirs should have the snapshot
-        let found1 = find_latest_in_dir(&tmp1.path().to_path_buf(), true).unwrap().unwrap();
-        let found2 = find_latest_in_dir(&tmp2.path().to_path_buf(), true).unwrap().unwrap();
+        let found1 = find_latest_in_dir(&tmp1.path().to_path_buf(), true)
+            .unwrap()
+            .unwrap();
+        let found2 = find_latest_in_dir(&tmp2.path().to_path_buf(), true)
+            .unwrap()
+            .unwrap();
         assert_eq!(found1.height, 100);
         assert_eq!(found2.height, 100);
     }

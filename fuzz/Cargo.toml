@@ -10,8 +10,7 @@ omnia-substrate = { path = "../substrate" }
 omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
 omnia-zk = { path = "../zk" }
-omnia-economics = { path = "../economics"
- }
+omnia-economics = { path = "../economics" }
 bincode = "1"
 
 [[bin]]

@@ -262,9 +262,12 @@ impl ThresholdKeyManager {
 
         // Aggregate the BLS signatures
         let aggregate_signature = crate::bls::aggregate_signatures(
-            &partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>()
+            &partials
+                .iter()
+                .map(|p| p.signature.clone())
+                .collect::<Vec<_>>(),
         )
-            .map_err(|e| format!("Signature aggregation failed: {}", e))?;
+        .map_err(|e| format!("Signature aggregation failed: {}", e))?;
 
         tracing::info!(
             signers = signers.len(),
@@ -396,7 +399,8 @@ mod tests {
         assert_eq!(threshold_sig.signers.len(), 3);
 
         // Verify
-        mgr.verify(&threshold_sig).expect("Threshold signature should verify");
+        mgr.verify(&threshold_sig)
+            .expect("Threshold signature should verify");
     }
 
     #[test]
@@ -477,6 +481,9 @@ mod tests {
         // The signers list will contain node(2) twice, but the signature
         // will still aggregate (BLS aggregation is commutative).
         let result = mgr.combine_signatures(&partials, msg);
-        assert!(result.is_ok(), "Combine should succeed with 3 partials even if one signer is duplicated");
+        assert!(
+            result.is_ok(),
+            "Combine should succeed with 3 partials even if one signer is duplicated"
+        );
     }
 }

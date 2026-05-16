@@ -43,7 +43,7 @@ impl PqcKeyRotationManager {
 
     /// Submit a key rotation request.
     pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), String> {
-        if request.new_phase as u8 < self.current_phase as u8 {
+        if (request.new_phase as u8) < (self.current_phase as u8) {
             return Err(format!(
                 "Cannot downgrade from {:?} to {:?}",
                 self.current_phase, request.new_phase

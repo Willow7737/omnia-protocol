@@ -719,7 +719,8 @@ impl ConsensusEngine {
 
         tracing::warn!(
             "Advanced from round {} to round {} due to timeout",
-            current, next
+            current,
+            next
         );
     }
 

@@ -82,7 +82,10 @@ impl SignatureScheme {
 
     /// Returns `true` if this scheme provides post-quantum security.
     pub fn is_quantum_safe(&self) -> bool {
-        matches!(self, SignatureScheme::HybridV1 | SignatureScheme::DilithiumV2)
+        matches!(
+            self,
+            SignatureScheme::HybridV1 | SignatureScheme::DilithiumV2
+        )
     }
 
     /// Returns the expected public key size in bytes for this scheme.

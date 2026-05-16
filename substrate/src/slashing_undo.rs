@@ -212,7 +212,8 @@ impl SlashingUndoManager {
         };
 
         // Update rate-limiting state
-        self.last_undo_round.insert(request.validator_id, current_round);
+        self.last_undo_round
+            .insert(request.validator_id, current_round);
 
         // Record in audit log
         self.audit_log.push(record.clone());
@@ -238,7 +239,10 @@ impl SlashingUndoManager {
     /// This is the history method required by the spec, returning all
     /// undo records for a given validator ID.
     pub fn history(&self, validator_id: &NodeId) -> Vec<&SlashingUndoRecord> {
-        self.audit_log.iter().filter(|r| &r.validator_id == validator_id).collect()
+        self.audit_log
+            .iter()
+            .filter(|r| &r.validator_id == validator_id)
+            .collect()
     }
 
     /// Get all undo records for a specific validator (alias for `history`).
@@ -395,8 +399,12 @@ mod tests {
         slashing.record_offense(n1, SlashOffense::LivenessViolation);
         slashing.record_offense(n2, SlashOffense::LivenessViolation);
 
-        undo_mgr.apply_undo(&mut slashing, make_request(n1, 50, 100), 100).unwrap();
-        undo_mgr.apply_undo(&mut slashing, make_request(n2, 50, 100), 100).unwrap();
+        undo_mgr
+            .apply_undo(&mut slashing, make_request(n1, 50, 100), 100)
+            .unwrap();
+        undo_mgr
+            .apply_undo(&mut slashing, make_request(n2, 50, 100), 100)
+            .unwrap();
 
         assert_eq!(undo_mgr.audit_log().len(), 2);
         assert_eq!(undo_mgr.history(&n1).len(), 1);

@@ -319,9 +319,10 @@ impl SlashingStore for SledSlashingStore {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
-            return Err(SlashingStoreError::Persistence(
-                format!("Validator {:?} has no slash count to decrement", &validator[..4])
-            ));
+            return Err(SlashingStoreError::Persistence(format!(
+                "Validator {:?} has no slash count to decrement",
+                &validator[..4]
+            )));
         }
         let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
         state.slash_points.insert(*validator, current - decrement);
@@ -403,9 +404,10 @@ impl SlashingStore for InMemorySlashingStore {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
-            return Err(SlashingStoreError::Persistence(
-                format!("Validator {:?} has no slash count to decrement", &validator[..4])
-            ));
+            return Err(SlashingStoreError::Persistence(format!(
+                "Validator {:?} has no slash count to decrement",
+                &validator[..4]
+            )));
         }
         let decrement = crate::slashing::LIVENESS_VIOLATION_POINTS.min(current);
         state.slash_points.insert(*validator, current - decrement);

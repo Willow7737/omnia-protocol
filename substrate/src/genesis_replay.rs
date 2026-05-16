@@ -129,8 +129,7 @@ pub fn replay_genesis(
 ) -> ReplayResult {
     let mut result = ReplayResult::empty();
     let mut graph = CausalGraph::new();
-    let slashing =
-        SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold);
+    let slashing = SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold);
     let mut consensus = ConsensusEngine::new(config.consensus_config.clone(), slashing.clone());
 
     for event in events {
@@ -260,7 +259,11 @@ mod tests {
 
         let result = replay_genesis(&[event1, event2], None, &config);
         assert_eq!(result.events_processed, 2);
-        assert!(result.events_rejected >= 1, "Expected at least 1 rejected event for duplicate, got {}", result.events_rejected);
+        assert!(
+            result.events_rejected >= 1,
+            "Expected at least 1 rejected event for duplicate, got {}",
+            result.events_rejected
+        );
     }
 
     #[test]
