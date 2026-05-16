@@ -80,9 +80,11 @@ impl Default for ConsensusConfig {
             max_consecutive_timeouts: 3,
         }
     }
+}
 
+impl ConsensusConfig {
     /// Create a config with a cryptographically random round seed.
-    fn with_random_seed(total_nodes: usize) -> Self {
+    pub fn with_random_seed(total_nodes: usize) -> Self {
         let mut seed = [0u8; 32];
         getrandom::getrandom(&mut seed).expect("Failed to generate random seed");
         Self {
@@ -1156,6 +1158,22 @@ mod proptests {
         let mut node = [0u8; 32];
         node[0] = id;
         node
+    }
+
+    /// Test-friendly config with a non-zero round seed (avoids debug-build panic).
+    fn test_config() -> ConsensusConfig {
+        let mut seed = [0u8; 32];
+        seed[0] = 1; // Non-zero to avoid the debug panic
+        ConsensusConfig {
+            total_nodes: 4,
+            commit_delay_rounds: 1,
+            optimistic_confirmation: true,
+            optimistic_threshold: 3,
+            max_look_ahead: 10,
+            round_seed: seed,
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
+        }
     }
 
     /// Strategy: generate a genesis-like event with arbitrary creator and payload.

@@ -813,7 +813,10 @@ impl SlashingEngine {
         let total_points = *current_points;
 
         // Track offense history for undo
-        self.offense_history.entry(node).or_default().push(points_added);
+        self.offense_history
+            .entry(node)
+            .or_default()
+            .push(points_added);
 
         tracing::warn!(
             node = ?&node[..4],
@@ -1143,7 +1146,10 @@ impl SlashingEngine {
                 self.persist_state();
                 Ok(())
             }
-            _ => Err(format!("Validator {:?} has no offense history to undo", &node[..4])),
+            _ => Err(format!(
+                "Validator {:?} has no offense history to undo",
+                &node[..4]
+            )),
         }
     }
 
