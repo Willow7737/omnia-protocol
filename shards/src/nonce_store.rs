@@ -1,7 +1,7 @@
 //! Persistent nonce storage for replay protection.
 //!
 //! Nonce state must survive node restarts to prevent replay attacks.
-//! This module provides a `NonceStore` trait with sled-backed and
+//! This module provides a `NonceStore` trait with redb-backed and
 //! in-memory implementations.
 
 use std::collections::HashMap;
@@ -22,9 +22,9 @@ pub enum NonceStoreError {
     /// IO error during storage operations.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    /// Sled database error.
-    #[error("Sled error: {0}")]
-    Sled(String),
+    /// Redb database error.
+    #[error("Redb error: {0}")]
+    Redb(String),
     /// Serialization or deserialization error.
     #[error("Serialization error: {0}")]
     Serialization(String),
@@ -69,34 +69,71 @@ impl NonceStore for InMemoryNonceStore {
     }
 }
 
-/// Sled-backed persistent nonce store.
-pub struct SledNonceStore {
-    tree: sled::Tree,
+/// redb-backed persistent nonce store.
+pub struct RedbNonceStore {
+    db: std::sync::Arc<redb::Database>,
 }
 
-impl SledNonceStore {
-    /// Open or create a sled-backed nonce store.
+/// Table definition for the nonce store table.
+const NONCE_TABLE: redb::TableDefinition<&[u8], &[u8]> = redb::TableDefinition::new("nonces");
+
+impl RedbNonceStore {
+    /// Open or create a redb-backed nonce store.
     ///
     /// # Arguments
-    /// * `db` - The sled database instance
-    /// * `tree_name` - Name for the sled tree
-    pub fn open(db: &sled::Db, tree_name: &str) -> Result<Self, NonceStoreError> {
-        let tree = db
-            .open_tree(tree_name)
-            .map_err(|e| NonceStoreError::Sled(e.to_string()))?;
-        Ok(Self { tree })
+    /// * `path` - File path for the redb database
+    pub fn open(path: &std::path::Path) -> Result<Self, NonceStoreError> {
+        let db = redb::Database::create(path)
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        // Ensure the table exists
+        let write_txn = db
+            .begin_write()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn
+            .open_table(NONCE_TABLE)
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        Ok(Self {
+            db: std::sync::Arc::new(db),
+        })
+    }
+
+    /// Create a RedbNonceStore from an existing redb Database handle (shared ownership).
+    ///
+    /// This is useful when multiple stores (e.g., slashing + nonces) share
+    /// the same database file.
+    pub fn from_db(db: std::sync::Arc<redb::Database>) -> Result<Self, NonceStoreError> {
+        let write_txn = db
+            .begin_write()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn
+            .open_table(NONCE_TABLE)
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        Ok(Self { db })
     }
 }
 
-impl NonceStore for SledNonceStore {
+impl NonceStore for RedbNonceStore {
     fn load(&self) -> Result<HashMap<[u8; 32], u64>, NonceStoreError> {
         let mut nonces = HashMap::new();
-        for item in self.tree.iter() {
-            let (key, value) = item.map_err(|e| NonceStoreError::Sled(e.to_string()))?;
-            if key.len() == 32 {
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        let table = read_txn
+            .open_table(NONCE_TABLE)
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        for item in table.iter().map_err(|e| NonceStoreError::Redb(e.to_string()))? {
+            let (key, value) = item.map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+            if key.value().len() == 32 {
                 let mut key_arr = [0u8; 32];
-                key_arr.copy_from_slice(&key);
-                let nonce = bincode::deserialize::<u64>(&value)
+                key_arr.copy_from_slice(key.value());
+                let nonce = postcard::from_bytes::<u64>(value.value())
                     .map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
                 nonces.insert(key_arr, nonce);
             }
@@ -105,23 +142,32 @@ impl NonceStore for SledNonceStore {
     }
 
     fn save(&self, nonces: &HashMap<[u8; 32], u64>) -> Result<(), NonceStoreError> {
-        // Clear existing data
-        self.tree
-            .clear()
-            .map_err(|e| NonceStoreError::Sled(e.to_string()))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(NONCE_TABLE)
+                .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
 
-        // Insert all entries
-        for (key, &nonce) in nonces {
-            let value = bincode::serialize(&nonce)
-                .map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
-            self.tree
-                .insert(key.as_slice(), value.as_slice())
-                .map_err(|e| NonceStoreError::Sled(e.to_string()))?;
+            // Clear existing data
+            table
+                .clear()
+                .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+
+            // Insert all entries
+            for (key, &nonce) in nonces {
+                let value = postcard::to_allocvec(&nonce)
+                    .map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
+                table
+                    .insert(key.as_slice(), value.as_slice())
+                    .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+            }
         }
-
-        self.tree
-            .flush()
-            .map_err(|e| NonceStoreError::Sled(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         Ok(())
     }
 }
@@ -165,28 +211,24 @@ mod tests {
         assert_eq!(loaded.get(&[1u8; 32]), None);
     }
 
-    /// Test: SledNonceStore persistence (create, save, drop, reload → data persists).
+    /// Test: RedbNonceStore persistence (create, save, drop, reload → data persists).
     #[test]
-    fn test_sled_persistence() {
+    fn test_redb_persistence() {
         let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
-        let db_path = tmp_dir.path().join("nonce_test_db");
+        let db_path = tmp_dir.path().join("nonce_test_db.redb");
 
         // Create, save, and drop
         {
-            let db = sled::open(&db_path).expect("db open should succeed");
-            let store = SledNonceStore::open(&db, "nonces").expect("open tree should succeed");
+            let store = RedbNonceStore::open(&db_path).expect("open should succeed");
             let mut nonces = HashMap::new();
             nonces.insert([5u8; 32], 123);
             nonces.insert([6u8; 32], 456);
             store.save(&nonces).expect("save should succeed");
-            drop(store);
-            drop(db);
         }
 
         // Reload from the same path
         {
-            let db = sled::open(&db_path).expect("db reopen should succeed");
-            let store = SledNonceStore::open(&db, "nonces").expect("reopen tree should succeed");
+            let store = RedbNonceStore::open(&db_path).expect("reopen should succeed");
             let loaded = store.load().expect("load should succeed");
             assert_eq!(loaded.len(), 2);
             assert_eq!(loaded.get(&[5u8; 32]), Some(&123));
@@ -201,24 +243,20 @@ mod tests {
     #[test]
     fn test_replay_rejected_after_restart() {
         let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
-        let db_path = tmp_dir.path().join("nonce_replay_test_db");
+        let db_path = tmp_dir.path().join("nonce_replay_test_db.redb");
 
         // Phase 1: Save a nonce of 5 for a creator
         let creator = [0xABu8; 32];
         {
-            let db = sled::open(&db_path).expect("db open should succeed");
-            let store = SledNonceStore::open(&db, "nonces").expect("open tree should succeed");
+            let store = RedbNonceStore::open(&db_path).expect("open should succeed");
             let mut nonces = HashMap::new();
             nonces.insert(creator, 5);
             store.save(&nonces).expect("save should succeed");
-            drop(store);
-            drop(db);
         }
 
         // Phase 2: Reload and verify replay (nonce <= 5) would be rejected
         {
-            let db = sled::open(&db_path).expect("db reopen should succeed");
-            let store = SledNonceStore::open(&db, "nonces").expect("reopen tree should succeed");
+            let store = RedbNonceStore::open(&db_path).expect("reopen should succeed");
             let loaded = store.load().expect("load should succeed");
             let last_nonce = loaded.get(&creator).copied().unwrap_or(0);
 

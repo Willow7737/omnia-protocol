@@ -1,0 +1,15 @@
+apiVersion: v2
+name: omnia-node
+description: Omnia Protocol Node
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: omnia-protocol
+keywords:
+  - blockchain
+  - distributed-systems
+  - zero-knowledge
+home: https://github.com/Willow7737/omnia-protocol
+sources:
+  - https://github.com/Willow7737/omnia-protocol

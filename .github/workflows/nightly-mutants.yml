@@ -1,0 +1,29 @@
+name: Nightly Mutation Testing
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+  workflow_dispatch:
+
+jobs:
+  mutants:
+    name: Cargo Mutants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-mutants"
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+      - name: Run mutation testing on substrate crate
+        run: cargo mutants -p omnia-substrate --in-place --no-timeout
+      - name: Run mutation testing on zk crate
+        run: cargo mutants -p omnia-zk --in-place --no-timeout
+      - name: Upload mutants report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-report
+          path: mutants-out/
+          retention-days: 30

@@ -14,7 +14,7 @@ omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
 omnia-zk = { path = "../zk" }
 omnia-economics = { path = "../economics" }
-bincode = "1"
+postcard = { version = "1", features = ["alloc"] }
 
 [[bin]]
 name = "fuzz_event_deserialization"

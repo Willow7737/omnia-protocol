@@ -2,7 +2,7 @@
 //!
 //! ZK proofs arrive from untrusted provers. Malformed proofs must be
 //! rejected without panicking. This target tests deserialization of
-//! ProofBundle (which uses bincode) and structural validation.
+//! ProofBundle (which uses postcard) and structural validation.
 //!
 //! Note: Full pairing-check verification is intentionally omitted —
 //! it is too slow for fuzzing. We only test deserialization + integrity.

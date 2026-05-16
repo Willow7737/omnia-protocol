@@ -75,6 +75,10 @@ omnia-node --config omnia-node.toml
 ```sh
 cd docker
 
+# Copy the example env file and set a secure Grafana password
+cp .env.example .env
+# Edit .env to change GRAFANA_ADMIN_PASSWORD from the default
+
 # Start the full testnet (5 nodes)
 docker compose up -d
 
@@ -458,7 +462,7 @@ substrate_config.snapshot_interval = config.snapshot_interval;
 cd docker
 docker compose --profile monitoring up -d
 
-# Access Grafana: http://localhost:3000 (admin/omnia-admin)
+# Access Grafana: http://localhost:3000 (admin / password from docker/.env)
 # Access Prometheus: http://localhost:9095
 ```
 

@@ -56,11 +56,11 @@ impl ShardPayload {
     /// Serialize this payload into compact binary bytes for embedding
     /// into an `Event.payload`.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("ShardPayload serialization cannot fail")
+        postcard::to_allocvec(self).expect("ShardPayload serialization cannot fail")
     }
 
     /// Deserialize a `ShardPayload` from bytes extracted from `Event.payload`.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
     }
 }

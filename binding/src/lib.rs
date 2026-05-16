@@ -47,6 +47,8 @@
 //!   state.
 //! - Does not modify `substrate/` or `shards/` core logic.
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod anchor;

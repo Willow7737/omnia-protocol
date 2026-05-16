@@ -326,7 +326,11 @@ impl CausalGraph {
         self.node_sequences.get(node_id).copied().unwrap_or(0)
     }
 
-    /// Check if `ancestor` is an ancestor of `descendant`
+    /// Check if `ancestor` is an ancestor of `descendant`.
+    ///
+    /// Returns `EventPruned` if any event on the path between `descendant`
+    /// and `ancestor` has been pruned, since the parent links cannot be
+    /// followed through pruned events.
     pub fn is_ancestor_of(
         &self,
         descendant: &EventId,
@@ -356,22 +360,41 @@ impl CausalGraph {
                 ));
             }
 
-            if let Some(event) = self.events.get(&current_id) {
-                for parent in [event.self_parent, event.other_parent].iter().flatten() {
-                    if parent == ancestor {
-                        return Ok(true);
-                    }
-                    if visited.insert(*parent) {
-                        queue.push_back(*parent);
+            match self.get_checked(&current_id) {
+                Ok(event) => {
+                    for parent in [event.self_parent, event.other_parent].iter().flatten() {
+                        if parent == ancestor {
+                            return Ok(true);
+                        }
+                        if visited.insert(*parent) {
+                            queue.push_back(*parent);
+                        }
                     }
                 }
+                Err(CausalGraphError::EventPruned(_)) => {
+                    // Cannot traverse through pruned events — report the error
+                    // so callers know the result may be incomplete.
+                    return Err(CausalGraphError::EventPruned(hex::encode(
+                        &current_id[..8],
+                    )));
+                }
+                Err(CausalGraphError::InvalidEvent(_)) => {
+                    // Event never existed in the graph — skip it silently.
+                    // This can happen for IDs that were only referenced but
+                    // never inserted.
+                }
+                Err(e) => return Err(e),
             }
         }
 
         Ok(false)
     }
 
-    /// Get all ancestors of an event
+    /// Get all ancestors of an event.
+    ///
+    /// Returns `EventPruned` if any event on the ancestry path has been
+    /// pruned, since the parent links cannot be followed through pruned
+    /// events.
     pub fn get_ancestors(&self, event_id: &EventId) -> Result<HashSet<EventId>, CausalGraphError> {
         let mut ancestors = HashSet::new();
         let mut queue = VecDeque::new();
@@ -392,12 +415,24 @@ impl CausalGraph {
                 ));
             }
 
-            if let Some(event) = self.events.get(&current_id) {
-                for parent in [event.self_parent, event.other_parent].iter().flatten() {
-                    if ancestors.insert(*parent) {
-                        queue.push_back(*parent);
+            match self.get_checked(&current_id) {
+                Ok(event) => {
+                    for parent in [event.self_parent, event.other_parent].iter().flatten() {
+                        if ancestors.insert(*parent) {
+                            queue.push_back(*parent);
+                        }
                     }
                 }
+                Err(CausalGraphError::EventPruned(_)) => {
+                    // Cannot traverse through pruned events — report the error.
+                    return Err(CausalGraphError::EventPruned(hex::encode(
+                        &current_id[..8],
+                    )));
+                }
+                Err(CausalGraphError::InvalidEvent(_)) => {
+                    // Event never existed — skip silently.
+                }
+                Err(e) => return Err(e),
             }
         }
 
@@ -434,9 +469,14 @@ impl CausalGraph {
         Ok(depth)
     }
 
-    /// Find events that are concurrent with the given event
+    /// Find events that are concurrent with the given event.
+    ///
+    /// Returns an empty vector if the event has been pruned or does not
+    /// exist. Use [`Self::get_checked()`] first if you need to distinguish
+    /// these cases.
     pub fn find_concurrent(&self, event_id: &EventId) -> Vec<&Event> {
-        let Some(event) = self.events.get(event_id) else {
+        let Ok(event) = self.get_checked(event_id) else {
+            // Event was pruned or never existed — no concurrent events to report.
             return Vec::new();
         };
 
@@ -900,10 +940,24 @@ impl CausalGraph {
                         "cycle found in graph".to_string(),
                     ));
                 }
-                if let Some(event) = self.events.get(&current) {
-                    for parent in [event.self_parent, event.other_parent].iter().flatten() {
-                        queue.push_back(*parent);
+                match self.get_checked(&current) {
+                    Ok(event) => {
+                        for parent in
+                            [event.self_parent, event.other_parent].iter().flatten()
+                        {
+                            queue.push_back(*parent);
+                        }
                     }
+                    Err(CausalGraphError::EventPruned(_)) => {
+                        // Pruned events are expected in the integrity check
+                        // path — their parent links are no longer available,
+                        // so we stop traversal at this branch.
+                    }
+                    Err(CausalGraphError::InvalidEvent(_)) => {
+                        // Event never existed — skip silently. This can
+                        // happen if a parent ID was only referenced.
+                    }
+                    Err(e) => return Err(e),
                 }
             }
         }
@@ -951,6 +1005,19 @@ mod tests {
         node
     }
 
+    /// Generate a keypair and derive the node_id from blake3(pubkey).
+    ///
+    /// After `sign_with_keypair()`, the `creator` field is set to
+    /// `blake3(creator_pubkey)`, so test assertions must use the derived
+    /// node_id rather than `test_node()`.
+    fn make_keypair_and_node(id: u8) -> (crate::crypto::NodeKeypair, NodeId) {
+        let kp = crate::crypto::generate_keypair();
+        let node_id: NodeId = *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes();
+        // `id` is unused but kept for API symmetry with `test_node()`
+        let _ = id;
+        (kp, node_id)
+    }
+
     #[allow(dead_code)]
     fn create_test_event(
         creator: NodeId,
@@ -965,14 +1032,13 @@ mod tests {
     #[test]
     fn test_insert_and_retrieve() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
-        let event = Event::genesis(n1, vec![1, 2, 3]);
+        let mut event = Event::genesis(n1, vec![1, 2, 3]);
+        event.sign_with_keypair(&kp);
         let id = event.id;
-        let mut signed = event;
-        signed.sign(vec![1, 2, 3]);
 
-        graph.insert(signed.clone()).unwrap();
+        graph.insert(event.clone()).unwrap();
         assert!(graph.contains(&id));
         assert_eq!(graph.get(&id).unwrap().id, id);
     }
@@ -980,10 +1046,10 @@ mod tests {
     #[test]
     fn test_duplicate_rejection() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut event = Event::genesis(n1, vec![]);
-        event.sign(vec![1]);
+        event.sign_with_keypair(&kp);
 
         graph.insert(event.clone()).unwrap();
         assert!(matches!(
@@ -1016,22 +1082,22 @@ mod tests {
     #[test]
     fn test_ancestry() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut g = Event::genesis(n1, vec![]);
-        g.sign(vec![1]);
+        g.sign_with_keypair(&kp);
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         let vc = VectorClock::with_node(n1, 2);
         let mut child = Event::new(n1, 1, vc, Some(g_id), None, vec![]);
-        child.sign(vec![1]);
+        child.sign_with_keypair(&kp);
         let child_id = child.id;
         graph.insert(child).unwrap();
 
         let vc = VectorClock::with_node(n1, 3);
         let mut gc = Event::new(n1, 2, vc, Some(child_id), None, vec![]);
-        gc.sign(vec![1]);
+        gc.sign_with_keypair(&kp);
         let gc_id = gc.id;
         graph.insert(gc).unwrap();
 
@@ -1047,16 +1113,16 @@ mod tests {
     #[test]
     fn test_concurrent_events() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
-        let n2 = test_node(2);
+        let (kp1, n1) = make_keypair_and_node(1);
+        let (kp2, n2) = make_keypair_and_node(2);
 
         let mut e1 = Event::genesis(n1, vec![1]);
-        e1.sign(vec![1]);
+        e1.sign_with_keypair(&kp1);
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
         let mut e2 = Event::genesis(n2, vec![2]);
-        e2.sign(vec![1]);
+        e2.sign_with_keypair(&kp2);
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -1067,10 +1133,10 @@ mod tests {
     #[test]
     fn test_tips_management() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e1 = Event::genesis(n1, vec![]);
-        e1.sign(vec![1]);
+        e1.sign_with_keypair(&kp);
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
         assert!(graph.tips().any(|&t| t == e1_id));
@@ -1083,7 +1149,7 @@ mod tests {
             None,
             vec![],
         );
-        e2.sign(vec![1]);
+        e2.sign_with_keypair(&kp);
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -1094,10 +1160,10 @@ mod tests {
     #[test]
     fn test_topological_order() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut g = Event::genesis(n1, vec![]);
-        g.sign(vec![1]);
+        g.sign_with_keypair(&kp);
         let g_id = g.id;
         graph.insert(g).unwrap();
 
@@ -1109,7 +1175,7 @@ mod tests {
             None,
             vec![],
         );
-        a.sign(vec![1]);
+        a.sign_with_keypair(&kp);
         let a_id = a.id;
         graph.insert(a).unwrap();
 
@@ -1121,7 +1187,7 @@ mod tests {
             None,
             vec![],
         );
-        b.sign(vec![1]);
+        b.sign_with_keypair(&kp);
         let b_id = b.id;
         graph.insert(b).unwrap();
 
@@ -1137,10 +1203,10 @@ mod tests {
     #[test]
     fn test_integrity_check() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         graph.insert(e).unwrap();
 
         assert!(graph.verify_integrity().is_ok());
@@ -1149,15 +1215,15 @@ mod tests {
     #[test]
     fn test_stats() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
-        let n2 = test_node(2);
+        let (kp1, n1) = make_keypair_and_node(1);
+        let (kp2, n2) = make_keypair_and_node(2);
 
         let mut e1 = Event::genesis(n1, vec![]);
-        e1.sign(vec![1]);
+        e1.sign_with_keypair(&kp1);
         graph.insert(e1).unwrap();
 
         let mut e2 = Event::genesis(n2, vec![]);
-        e2.sign(vec![1]);
+        e2.sign_with_keypair(&kp2);
         graph.insert(e2).unwrap();
 
         let stats = graph.stats();
@@ -1169,10 +1235,10 @@ mod tests {
     #[test]
     fn test_finalize() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
 
@@ -1187,15 +1253,17 @@ mod tests {
         let root1 = graph.state_root();
         assert_eq!(root1, [0u8; 32]); // Empty graph
 
-        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
-        event.sign(vec![1]);
+        let (kp1, n1) = make_keypair_and_node(1);
+        let mut event = Event::genesis(n1, vec![1, 2, 3]);
+        event.sign_with_keypair(&kp1);
         graph.insert(event).unwrap();
 
         let root2 = graph.state_root();
         assert_ne!(root1, root2); // Root changed after insert
 
-        let mut event2 = Event::genesis(test_node(2), vec![4, 5, 6]);
-        event2.sign(vec![1]);
+        let (kp2, n2) = make_keypair_and_node(2);
+        let mut event2 = Event::genesis(n2, vec![4, 5, 6]);
+        event2.sign_with_keypair(&kp2);
         graph.insert(event2).unwrap();
 
         let root3 = graph.state_root();
@@ -1205,8 +1273,9 @@ mod tests {
     #[test]
     fn test_merkle_proof_verification() {
         let mut graph = CausalGraph::new();
-        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
-        event.sign(vec![1]);
+        let (kp, n1) = make_keypair_and_node(1);
+        let mut event = Event::genesis(n1, vec![1, 2, 3]);
+        event.sign_with_keypair(&kp);
         let id = event.id;
         graph.insert(event).unwrap();
 
@@ -1234,7 +1303,7 @@ mod tests {
     #[test]
     fn test_prune_old_events() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         // Create a chain of events with increasing depth
         let mut prev_id = None;
@@ -1251,7 +1320,7 @@ mod tests {
             } else {
                 Event::genesis(n1, vec![i])
             };
-            event.sign(vec![1]);
+            event.sign_with_keypair(&kp);
             let id = event.id;
             graph.insert(event).unwrap();
             prev_id = Some(id);
@@ -1277,7 +1346,7 @@ mod tests {
     // ── Merkle Proof Hardening Tests (Sprint 1, Task 2.4) ───────────
 
     /// Helper: build a chain of events with distinct payloads and return their IDs.
-    fn build_chain(graph: &mut CausalGraph, node: NodeId, count: usize) -> Vec<EventId> {
+    fn build_chain(graph: &mut CausalGraph, node: NodeId, kp: &crate::crypto::NodeKeypair, count: usize) -> Vec<EventId> {
         let mut ids = Vec::new();
         let mut prev_id = None;
         for i in 0..count {
@@ -1294,7 +1363,7 @@ mod tests {
             } else {
                 Event::genesis(node, payload)
             };
-            event.sign(vec![1]);
+            event.sign_with_keypair(kp);
             let id = event.id;
             graph.insert(event).unwrap();
             prev_id = Some(id);
@@ -1332,9 +1401,9 @@ mod tests {
     #[test]
     fn test_state_root_unchanged_after_pruning() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
-        let ids = build_chain(&mut graph, n1, 7);
+        let ids = build_chain(&mut graph, n1, &kp, 7);
         assert_eq!(graph.len(), 7);
 
         // Record root before pruning
@@ -1376,9 +1445,9 @@ mod tests {
     #[test]
     fn test_merkle_proof_valid_after_pruning_for_unpruned_events() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
-        let ids = build_chain(&mut graph, n1, 7);
+        let ids = build_chain(&mut graph, n1, &kp, 7);
         assert_eq!(graph.len(), 7);
 
         // Prune events with depth < 4 (prunes depths 1, 2, 3)
@@ -1416,9 +1485,9 @@ mod tests {
     #[test]
     fn test_merkle_proof_valid_for_pruned_events() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
-        let ids = build_chain(&mut graph, n1, 7);
+        let ids = build_chain(&mut graph, n1, &kp, 7);
         assert_eq!(graph.len(), 7);
 
         // Record root BEFORE pruning (root must not change)
@@ -1458,10 +1527,10 @@ mod tests {
     #[test]
     fn test_prune_finalized_archive_mode() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1, 2, 3]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -1477,11 +1546,11 @@ mod tests {
     #[test]
     fn test_prune_finalized_basic() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         // Create two events
         let mut e1 = Event::genesis(n1, vec![1]);
-        e1.sign(vec![1]);
+        e1.sign_with_keypair(&kp);
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
@@ -1493,7 +1562,7 @@ mod tests {
             None,
             vec![2],
         );
-        e2.sign(vec![1]);
+        e2.sign_with_keypair(&kp);
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -1516,10 +1585,10 @@ mod tests {
     #[test]
     fn test_get_checked_pruned_vs_not_found() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -1544,10 +1613,10 @@ mod tests {
     #[test]
     fn test_finalize_rejects_pruned() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -1564,10 +1633,10 @@ mod tests {
     #[test]
     fn test_pruned_metadata_preserved() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![42]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 7).unwrap();
@@ -1590,10 +1659,10 @@ mod tests {
     #[test]
     fn test_prune_finalized_nothing_to_prune() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]);
-        e.sign(vec![1]);
+        e.sign_with_keypair(&kp);
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 10).unwrap();

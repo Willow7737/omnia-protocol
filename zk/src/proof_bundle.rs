@@ -8,7 +8,7 @@
 //!
 //! ## Serialization
 //!
-//! Bundles are serialized with [`bincode`] for compact, deterministic
+//! Bundles are serialized with [`postcard`] for compact, deterministic
 //! encoding. This ensures that the same logical bundle always produces
 //! the same byte sequence, which is critical for on-chain verification.
 
@@ -113,14 +113,14 @@ impl ProofBundle {
         }
     }
 
-    /// Serialize the bundle to bytes using bincode.
+    /// Serialize the bundle to bytes using postcard.
     pub fn to_bytes(&self) -> Result<Vec<u8>, ProofBundleError> {
-        bincode::serialize(self).map_err(|e| ProofBundleError::SerializationError(e.to_string()))
+        postcard::to_allocvec(self).map_err(|e| ProofBundleError::SerializationError(e.to_string()))
     }
 
-    /// Deserialize a bundle from bytes using bincode.
+    /// Deserialize a bundle from bytes using postcard.
     pub fn from_bytes(data: &[u8]) -> Result<Self, ProofBundleError> {
-        bincode::deserialize(data).map_err(|e| ProofBundleError::SerializationError(e.to_string()))
+        postcard::from_bytes(data).map_err(|e| ProofBundleError::SerializationError(e.to_string()))
     }
 
     /// Verify the integrity of this proof bundle.

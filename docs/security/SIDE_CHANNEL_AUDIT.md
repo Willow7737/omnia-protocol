@@ -286,6 +286,174 @@ public keys are public by definition — they are not secrets.
 **Recommendation:** No change needed. If key privacy becomes a requirement
 (e.g., stealth addresses), constant-time comparison should be used.
 
+## ZK Crate — Detailed Side-Channel Analysis
+
+### Proof Generation Timing
+
+**File:** `zk/src/prover.rs` — `create_proof()`, `create_expanded_proof()`
+
+The Groth16 proof generation involves multi-scalar multiplications (MSMs) and
+FFTs as part of the `ark_groth16::Groth16::prove()` call. These operations
+may have data-dependent timing based on witness values:
+
+1. **MSM timing**: Multi-scalar multiplication iterates over scalar bits and
+   conditionally adds points. The number of non-zero bits in each scalar can
+   vary, causing timing differences. While arkworks uses windowed method with
+   fixed window size, the underlying big-integer arithmetic (for `Bn254::Fr`)
+   may have data-dependent branching in multiplication and reduction.
+
+2. **FFT timing**: The FFT algorithm processes all elements uniformly
+   regardless of values (butterfly operations are value-independent), so FFT
+   timing should be constant for a given input size.
+
+**Severity:** MEDIUM — Proof generation is an offline operation that is not
+typically observed by adversaries, but a network observer measuring response
+latency could infer information about witness distributions.
+
+**Recommendation:** Use constant-time MSM implementations where available
+(e.g., `ark-ec` with constant-time features enabled), and add random delay
+blinding for critical operations to mask timing variations.
+
+### Witness Handling
+
+**File:** `zk/src/circuit.rs` — `ExpandedRollupCircuit`, `EventWitness`,
+`MerklePathWitness`
+
+Witness data (event hashes, Merkle path siblings, intermediate roots) is
+processed in memory as `Option<Fr>` fields. After proof generation, these
+witness values remain in memory until the circuit struct is dropped. Standard
+Rust `Drop` does not zeroize memory, leaving witness data potentially
+recoverable from deallocated memory.
+
+**Severity:** MEDIUM — Witness values contain sensitive transaction data. A
+memory dump or use-after-free vulnerability could expose witness values.
+
+**Recommendation:** Ensure witness data is zeroized after use using the
+`zeroize` crate. Implement `Drop` for `EventWitness`, `MerklePathWitness`,
+and `ExpandedRollupCircuit` to zeroize all `Option<Fr>` fields. Add `zeroize`
+as a dependency to `zk/Cargo.toml`.
+
+### Circuit Evaluation
+
+**File:** `zk/src/circuit.rs` — `ExpandedRollupCircuit::generate_constraints()`
+
+The R1CS constraint evaluation within `generate_constraints()` performs
+field arithmetic via `ark-ff` and `ark-r1cs-std`. These libraries implement
+modular arithmetic on big integers that may have data-dependent timing at the
+hardware level (carry propagation, branching on digit values). However:
+
+1. Inside the R1CS constraint system, timing is irrelevant — the prover
+   computes offline and the verifier only checks the proof.
+2. The `ark-ff` library uses constant-time operations for some field elements
+   but does not guarantee constant-time behavior for all operations.
+
+**Severity:** LOW — R1CS constraint evaluation timing is not observable by
+external parties during proof generation.
+
+**Recommendation:** The arkworks library provides some constant-time guarantees
+but should be verified. Audit `ark-ff` and `ark-r1cs-std` timing behavior for
+operations used in critical paths (particularly `FpVar::conditionally_select`
+which is used for Merkle path direction handling).
+
+### Action Items — ZK Crate
+
+1. **HIGH**: Add `zeroize` dependency to `zk/Cargo.toml`
+2. **HIGH**: Implement `Drop` for `EventWitness`, `MerklePathWitness`, and
+   `ExpandedRollupCircuit` to zeroize witness-containing fields
+3. **MEDIUM**: Audit arkworks timing behavior for MSM and field arithmetic
+4. **LOW**: Add random delay blinding for proof generation latency masking
+
+## Binding Crate — Detailed Side-Channel Analysis
+
+### PQC Key Operations
+
+**File:** `binding/src/quantum_commit.rs` — `QuantumCommitment::verify()`,
+`verify_ed25519()`, `verify_dilithium()`
+**File:** `binding/src/key_rotation.rs` — `PqcKeyRotationManager`
+
+The binding crate uses CRYSTALS-Dilithium operations for post-quantum
+signature verification. The current implementation has several timing-related
+concerns:
+
+1. **Dilithium verification timing**: The `pqc_dilithium::verify()` function
+   may have data-dependent timing in the polynomial arithmetic operations.
+   While Dilithium is designed to be side-channel resistant in its reference
+   implementation, the `pqc_dilithium` Rust crate should be verified for
+   constant-time behavior.
+
+2. **Ed25519 verification timing**: The `ed25519_dalek::VerifyingKey::verify()`
+   uses variable-time scalar multiplication for batch verification efficiency.
+   Single-verification should use constant-time operations, but this should
+   be confirmed.
+
+**Severity:** MEDIUM — Signature verification timing could leak information
+about the signature or public key structure, though both are typically public.
+
+**Recommendation:** Use the `subtle` crate for constant-time comparisons in
+key comparison paths. Verify that `pqc_dilithium` and `ed25519_dalek` use
+constant-time operations for verification.
+
+### Key Rotation Timing
+
+**File:** `binding/src/key_rotation.rs` — `PqcKeyRotationManager::is_key_in_transition()`
+
+```rust
+pub fn is_key_in_transition(&self, key: &PqPublicKey, current_round: u64) -> bool {
+    self.pending
+        .iter()
+        .any(|r| &r.old_key == key && current_round < r.sunset_at)
+}
+```
+
+The `PqPublicKey` comparison uses derived `PartialEq`, which performs
+variable-time byte comparison on the `ed25519: [u8; 32]` and
+`dilithium: Vec<u8>` fields. While public keys are not secrets, the
+timing of this comparison could reveal which rotation request matches a
+queried key, leaking information about the rotation state.
+
+**Severity:** LOW — Public keys are not secrets, but rotation state might be
+sensitive in some deployment scenarios.
+
+**Recommendation:** Use constant-time signature verification for rotation
+authorization. If key rotation state becomes privacy-sensitive, implement
+constant-time `PartialEq` for `PqPublicKey` using `subtle::ConstantTimeEq`.
+
+### RF Fingerprinting
+
+**File:** `binding/src/rf_fingerprint.rs` — `RfFingerprint::verify()`,
+`hamming_distance()`
+
+The current stub implementation uses Hamming distance comparison, which is
+inherently constant-time (all bytes are processed regardless of values, with
+no early-exit). However, when this module is implemented with real RF feature
+extraction:
+
+1. **Feature extraction timing**: Real RF feature extraction (FFT, filtering,
+   peak detection) may have data-dependent timing based on signal quality and
+   noise levels.
+2. **Comparison timing**: The final threshold comparison `similarity >
+   self.confidence` is on computed values, not directly on secret data.
+
+**Severity:** LOW (current stub) / MEDIUM (future real implementation)
+
+**Recommendation:** The `rf_fingerprint.rs` module should implement
+constant-time feature extraction when moved from stub to real implementation.
+The Hamming distance approach should be preserved as it is naturally
+constant-time.
+
+### Action Items — Binding Crate
+
+1. **HIGH**: Add `subtle` usage to key comparison paths in
+   `quantum_commit.rs` (already recommended in Finding 8)
+2. **MEDIUM**: Verify `pqc_dilithium` crate timing behavior for Dilithium
+   verification operations
+3. **MEDIUM**: Add `subtle = "2"` to `binding/Cargo.toml` for constant-time
+   comparisons
+4. **LOW**: Implement constant-time `PartialEq` for `PqPublicKey` if key
+   rotation state privacy becomes a requirement
+5. **LOW**: Ensure RF fingerprint feature extraction is constant-time when
+   implemented
+
 ## Non-Findings (Acceptable)
 
 ### Unsigned Event Check (Substrate)

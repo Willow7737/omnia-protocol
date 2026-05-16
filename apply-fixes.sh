@@ -1,5 +1,15 @@
 #!/bin/bash
-# apply-fixes.sh — Apply Omnia Protocol 6 Critical Fixes
+# apply-fixes.sh — Legacy migration tool for Omnia Protocol
+#
+# This script copies pre-built fix files from the repository root (substrate/)
+# into the target substrate directory. It was created during early development
+# when critical fixes were applied as patches to a reference implementation.
+# In normal workflows this script is NOT needed — the substrate/ directory
+# already contains the correct, up-to-date source code. It is retained for
+# historical reference and for edge cases where a fresh clone needs to be
+# patched from the bundled fix files.
+#
+# Usage: ./apply-fixes.sh [repo-root-path]
 
 set -e
 

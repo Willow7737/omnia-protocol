@@ -7,10 +7,23 @@
 //!
 //! # Security Model
 //!
-//! - Private keys are encrypted with a passphrase using AES-256-GCM.
+//! - Private keys are encrypted with a passphrase using **AES-256-GCM**
+//!   with HKDF-SHA256 key derivation and per-encryption random salt + nonce.
 //! - The passphrase is never stored; it must be provided at load time.
 //! - Key rotation generates a new keypair and signs the rotation with
 //!   the old key, producing a proof that other validators can verify.
+//! - Backward compatibility: stores created with the legacy XOR encryption
+//!   can still be loaded (they are automatically upgraded on next write).
+//!
+//! # Encryption Format
+//!
+//! Encrypted data layout: `salt(32 bytes) || nonce(12 bytes) || ciphertext+tag`
+//!
+//! - **salt**: 32 random bytes, fed into HKDF-SHA256 along with the passphrase
+//!   to derive a unique 256-bit AES key per encryption.
+//! - **nonce**: 12 random bytes, the AES-256-GCM IV.
+//! - **ciphertext+tag**: AES-256-GCM ciphertext with the 16-byte authentication
+//!   tag appended (ensures integrity and authenticity).
 //!
 //! # Example
 //!
@@ -28,7 +41,14 @@
 //! ```
 
 use crate::crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signer, Verifier};
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use hkdf::Hkdf;
+use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sha2::Sha256;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -62,12 +82,11 @@ pub type KeyStoreResult<T> = Result<T, KeyStoreError>;
 ///
 /// Stores the public key in plaintext and the encrypted private key
 /// on disk. The private key is encrypted with a passphrase using
-/// a simple XOR-based encryption (for demonstration; production
-/// should use AES-256-GCM via a crate like `ring` or `aes-gcm`).
+/// **AES-256-GCM** with HKDF-SHA256 key derivation.
 ///
 /// Files created:
 /// - `<dir>/pubkey` — 32-byte Ed25519 public key (plaintext)
-/// - `<dir>/seckey.enc` — 64-byte Ed25519 secret key (encrypted)
+/// - `<dir>/seckey.enc` — Encrypted secret key (AES-256-GCM: salt(32) + nonce(12) + ciphertext+tag)
 #[derive(Debug)]
 pub struct EncryptedKeyStore {
     /// Directory where key files are stored.
@@ -125,7 +144,8 @@ impl EncryptedKeyStore {
     /// Create a new encrypted key store at the given directory.
     ///
     /// Generates a fresh Ed25519 keypair, encrypts the secret key with
-    /// the provided passphrase, and writes both keys to disk.
+    /// the provided passphrase using AES-256-GCM, and writes both keys
+    /// to disk.
     ///
     /// # Errors
     ///
@@ -147,8 +167,8 @@ impl EncryptedKeyStore {
         // Write public key (plaintext)
         std::fs::write(&pubkey_path, public_key.to_bytes())?;
 
-        // Encrypt and write secret key
-        let encrypted = xor_encrypt(keypair.to_bytes().as_slice(), passphrase);
+        // Encrypt and write secret key using AES-256-GCM
+        let encrypted = aes_gcm_encrypt(keypair.to_bytes().as_slice(), passphrase);
         std::fs::write(&seckey_path, encrypted)?;
 
         tracing::info!(
@@ -169,6 +189,10 @@ impl EncryptedKeyStore {
     /// Reads the public key and encrypted secret key from disk,
     /// decrypts the secret key with the provided passphrase,
     /// and reconstructs the keypair.
+    ///
+    /// Tries AES-256-GCM decryption first (new format). If that fails,
+    /// falls back to legacy XOR decryption for backward compatibility
+    /// with stores created before the migration.
     ///
     /// # Errors
     ///
@@ -196,8 +220,32 @@ impl EncryptedKeyStore {
             .map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
 
         // Read and decrypt secret key
+        // Try AES-256-GCM first (new format), then fall back to legacy XOR
         let encrypted_seckey = std::fs::read(&seckey_path)?;
-        let decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+
+        let decrypted = if encrypted_seckey.len() >= 44 {
+            // Could be AES-256-GCM format (salt(32) + nonce(12) + ciphertext+tag)
+            aes_gcm_decrypt(&encrypted_seckey, passphrase).or_else(|_| {
+                // Fallback: try legacy XOR decryption
+                #[allow(deprecated)]
+                let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+                if xor_decrypted.len() == 32 {
+                    // Will be validated against public key below
+                    Ok(xor_decrypted)
+                } else {
+                    Err(KeyStoreError::IncorrectPassphrase)
+                }
+            })
+        } else {
+            // Too short for AES-256-GCM, try legacy XOR
+            #[allow(deprecated)]
+            let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+            if xor_decrypted.len() == 32 {
+                Ok(xor_decrypted)
+            } else {
+                Err(KeyStoreError::IncorrectPassphrase)
+            }
+        }?;
 
         if decrypted.len() != 32 {
             return Err(KeyStoreError::IncorrectPassphrase);
@@ -230,7 +278,7 @@ impl EncryptedKeyStore {
     ///
     /// Generates a new keypair, signs the new public key with the old
     /// private key to produce a [`KeyRotationProof`], and re-encrypts
-    /// the new secret key with the new passphrase.
+    /// the new secret key with the new passphrase using AES-256-GCM.
     ///
     /// The old key files are replaced with the new ones.
     ///
@@ -285,9 +333,9 @@ impl EncryptedKeyStore {
         let pubkey_path = self.dir.join("pubkey");
         std::fs::write(&pubkey_path, new_pubkey.to_bytes())?;
 
-        // Write new encrypted secret key
+        // Write new encrypted secret key using AES-256-GCM
         let seckey_path = self.dir.join("seckey.enc");
-        let encrypted = xor_encrypt(new_keypair.to_bytes().as_slice(), new_passphrase);
+        let encrypted = aes_gcm_encrypt(new_keypair.to_bytes().as_slice(), new_passphrase);
         std::fs::write(&seckey_path, encrypted)?;
 
         tracing::info!(
@@ -332,10 +380,86 @@ impl KeyRotationProof {
     }
 }
 
+// ---------------------------------------------------------------------------
+// AES-256-GCM encryption (primary)
+// ---------------------------------------------------------------------------
+
+/// Encrypt data using AES-256-GCM with HKDF-SHA256-derived key.
+///
+/// Output format: `salt(32) || nonce(12) || ciphertext+tag`
+fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
+    let salt = generate_salt();
+    let key = derive_key_hkdf(passphrase, &salt);
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .expect("AES-256-GCM key must be 32 bytes");
+
+    let mut nonce_bytes = [0u8; 12];
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, data)
+        .expect("AES-256-GCM encryption should not fail");
+
+    let mut output = Vec::with_capacity(32 + 12 + ciphertext.len());
+    output.extend_from_slice(&salt);
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
+    output
+}
+
+/// Decrypt data encrypted with AES-256-GCM.
+///
+/// Expects input format: `salt(32) || nonce(12) || ciphertext+tag`
+fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreError> {
+    if data.len() < 44 {
+        // 32 salt + 12 nonce minimum (no ciphertext)
+        return Err(KeyStoreError::InvalidFormat(
+            "Encrypted data too short for AES-256-GCM".to_string(),
+        ));
+    }
+    let salt = &data[..32];
+    let nonce = Nonce::from_slice(&data[32..44]);
+    let ciphertext = &data[44..];
+
+    let key = derive_key_hkdf(passphrase, salt);
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .expect("AES-256-GCM key must be 32 bytes");
+
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| KeyStoreError::IncorrectPassphrase)
+}
+
+/// Derive a 32-byte encryption key using HKDF-SHA256.
+fn derive_key_hkdf(passphrase: &str, salt: &[u8]) -> [u8; 32] {
+    let hkdf = Hkdf::<Sha256>::new(Some(salt), passphrase.as_bytes());
+    let mut key = [0u8; 32];
+    hkdf.expand(b"omnia-keystore-v1", &mut key)
+        .expect("HKDF expand should not fail with 32-byte output");
+    key
+}
+
+/// Generate a random 32-byte salt.
+fn generate_salt() -> [u8; 32] {
+    let mut salt = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut salt);
+    salt
+}
+
+// ---------------------------------------------------------------------------
+// Legacy XOR encryption (deprecated — kept for backward compatibility)
+// ---------------------------------------------------------------------------
+
 /// Simple XOR-based encryption for demonstration purposes.
 ///
-/// **NOTE**: This is NOT suitable for production. Use AES-256-GCM
-/// via `ring` or `aes-gcm` crate in production deployments.
+/// **Deprecated**: Use [`aes_gcm_encrypt`] instead. This function provides
+/// no authentication, no salt, and no IV — it is not suitable for production.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use aes_gcm_encrypt instead — XOR encryption is not secure"
+)]
+#[allow(deprecated)]
 fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     let key = derive_key(passphrase);
     data.iter()
@@ -345,11 +469,24 @@ fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
 }
 
 /// Simple XOR-based decryption (symmetric with encryption).
+///
+/// **Deprecated**: Use [`aes_gcm_decrypt`] instead.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use aes_gcm_decrypt instead — XOR encryption is not secure"
+)]
+#[allow(deprecated)]
 fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     xor_encrypt(data, passphrase)
 }
 
 /// Derive a fixed-size key from a passphrase using BLAKE3.
+///
+/// **Deprecated**: Use [`derive_key_hkdf`] instead.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use derive_key_hkdf instead — deterministic key derivation without salt is insecure"
+)]
 fn derive_key(passphrase: &str) -> [u8; 32] {
     *blake3::hash(passphrase.as_bytes()).as_bytes()
 }
@@ -471,7 +608,185 @@ mod tests {
         assert!(now_ms.saturating_sub(proof.timestamp) < 60_000);
     }
 
+    // ----- AES-256-GCM tests -----
+
     #[test]
+    fn test_aes_gcm_encrypt_decrypt_roundtrip() {
+        let data = b"hello world this is a test of AES-256-GCM encryption";
+        let passphrase = "my-secret-passphrase";
+        let encrypted = aes_gcm_encrypt(data, passphrase);
+        let decrypted = aes_gcm_decrypt(&encrypted, passphrase).expect("decrypt");
+        assert_eq!(data.as_slice(), decrypted.as_slice());
+    }
+
+    #[test]
+    fn test_aes_gcm_encrypt_wrong_passphrase() {
+        let data = b"hello world";
+        let encrypted = aes_gcm_encrypt(data, "correct");
+        let result = aes_gcm_decrypt(&encrypted, "wrong");
+        assert!(
+            result.is_err(),
+            "Wrong passphrase should fail AES-256-GCM decryption"
+        );
+    }
+
+    #[test]
+    fn test_aes_gcm_encrypted_format_has_salt_nonce_and_tag() {
+        let data = b"32-byte-key-material-here-xxxxxxxx";
+        let passphrase = "test-pass";
+        let encrypted = aes_gcm_encrypt(data, passphrase);
+
+        // Format: salt(32) + nonce(12) + ciphertext+tag(data.len()+16)
+        assert!(
+            encrypted.len() >= 44,
+            "Encrypted output must be at least 44 bytes (salt+nonce)"
+        );
+        assert_eq!(
+            encrypted.len(),
+            32 + 12 + data.len() + 16,
+            "Encrypted output should be salt(32) + nonce(12) + ciphertext+tag(data.len()+16)"
+        );
+    }
+
+    #[test]
+    fn test_aes_gcm_different_salts_produce_different_ciphertexts() {
+        let data = b"same data same data same data";
+        let passphrase = "same-passphrase";
+        // Two encryptions of the same data should produce different ciphertexts
+        // (due to random salt + nonce)
+        let encrypted1 = aes_gcm_encrypt(data, passphrase);
+        let encrypted2 = aes_gcm_encrypt(data, passphrase);
+        assert_ne!(
+            encrypted1, encrypted2,
+            "Two encryptions of the same data should differ (random salt+nonce)"
+        );
+
+        // But both should decrypt to the same plaintext
+        let decrypted1 = aes_gcm_decrypt(&encrypted1, passphrase).expect("decrypt 1");
+        let decrypted2 = aes_gcm_decrypt(&encrypted2, passphrase).expect("decrypt 2");
+        assert_eq!(decrypted1, decrypted2);
+    }
+
+    #[test]
+    fn test_aes_gcm_decrypt_too_short() {
+        let short_data = [0u8; 43]; // Less than 44 bytes
+        let result = aes_gcm_decrypt(&short_data, "pass");
+        assert!(
+            result.is_err(),
+            "Data shorter than 44 bytes should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_aes_gcm_tampered_ciphertext_fails() {
+        let data = b"sensitive key material";
+        let passphrase = "test-pass";
+        let mut encrypted = aes_gcm_encrypt(data, passphrase);
+
+        // Tamper with the ciphertext portion
+        let last = encrypted.len() - 1;
+        encrypted[last] ^= 0xFF;
+
+        let result = aes_gcm_decrypt(&encrypted, passphrase);
+        assert!(
+            result.is_err(),
+            "Tampered ciphertext should fail AES-256-GCM authentication"
+        );
+    }
+
+    #[test]
+    fn test_aes_gcm_tampered_salt_fails() {
+        let data = b"sensitive key material";
+        let passphrase = "test-pass";
+        let mut encrypted = aes_gcm_encrypt(data, passphrase);
+
+        // Tamper with the salt portion (first 32 bytes)
+        encrypted[0] ^= 0xFF;
+
+        let result = aes_gcm_decrypt(&encrypted, passphrase);
+        assert!(
+            result.is_err(),
+            "Tampered salt should produce wrong key and fail decryption"
+        );
+    }
+
+    #[test]
+    fn test_derive_key_hkdf_different_salts() {
+        let passphrase = "same-passphrase";
+        let salt1 = [1u8; 32];
+        let salt2 = [2u8; 32];
+        let key1 = derive_key_hkdf(passphrase, &salt1);
+        let key2 = derive_key_hkdf(passphrase, &salt2);
+        assert_ne!(
+            key1, key2,
+            "Different salts must produce different keys from HKDF"
+        );
+    }
+
+    #[test]
+    fn test_derive_key_hkdf_same_inputs() {
+        let passphrase = "same-passphrase";
+        let salt = [42u8; 32];
+        let key1 = derive_key_hkdf(passphrase, &salt);
+        let key2 = derive_key_hkdf(passphrase, &salt);
+        assert_eq!(
+            key1, key2,
+            "Same passphrase and salt must produce the same key"
+        );
+    }
+
+    // ----- Backward compatibility tests -----
+
+    #[test]
+    fn test_load_legacy_xor_keystore() {
+        let dir = TempDir::new().expect("temp dir");
+        let keypair = generate_keypair();
+        let public_key = keypair.verifying_key();
+
+        // Manually write a legacy XOR-encrypted keystore
+        std::fs::create_dir_all(dir.path()).expect("create dir");
+        std::fs::write(dir.path().join("pubkey"), public_key.to_bytes()).expect("write pubkey");
+
+        #[allow(deprecated)]
+        let encrypted = xor_encrypt(keypair.to_bytes().as_slice(), "legacy-pass");
+        std::fs::write(dir.path().join("seckey.enc"), encrypted).expect("write seckey");
+
+        // Loading with the correct passphrase should succeed (fallback to XOR)
+        let loaded =
+            EncryptedKeyStore::load(dir.path(), "legacy-pass").expect("load legacy keystore");
+        assert_eq!(
+            loaded.public_key.to_bytes(),
+            public_key.to_bytes(),
+            "Public key should match"
+        );
+        assert!(loaded.keypair.is_some(), "Keypair should be loaded");
+    }
+
+    #[test]
+    fn test_load_legacy_xor_wrong_passphrase() {
+        let dir = TempDir::new().expect("temp dir");
+        let keypair = generate_keypair();
+        let public_key = keypair.verifying_key();
+
+        std::fs::create_dir_all(dir.path()).expect("create dir");
+        std::fs::write(dir.path().join("pubkey"), public_key.to_bytes()).expect("write pubkey");
+
+        #[allow(deprecated)]
+        let encrypted = xor_encrypt(keypair.to_bytes().as_slice(), "correct-pass");
+        std::fs::write(dir.path().join("seckey.enc"), encrypted).expect("write seckey");
+
+        // Loading with wrong passphrase should fail
+        let result = EncryptedKeyStore::load(dir.path(), "wrong-pass");
+        assert!(
+            result.is_err(),
+            "Wrong passphrase should fail even for legacy keystore"
+        );
+    }
+
+    // ----- Legacy XOR tests (deprecated but still tested) -----
+
+    #[test]
+    #[allow(deprecated)]
     fn test_xor_encrypt_decrypt_roundtrip() {
         let data = b"hello world this is a test of encryption";
         let passphrase = "my-secret-passphrase";
@@ -481,6 +796,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_xor_encrypt_wrong_passphrase() {
         let data = b"hello world";
         let encrypted = xor_encrypt(data, "correct");
@@ -489,6 +805,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_derive_key_deterministic() {
         let k1 = derive_key("passphrase");
         let k2 = derive_key("passphrase");
@@ -496,6 +813,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_derive_key_different_passphrases() {
         let k1 = derive_key("passphrase1");
         let k2 = derive_key("passphrase2");

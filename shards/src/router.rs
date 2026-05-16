@@ -83,7 +83,7 @@ impl ShardRouter {
     /// Create a shard router with a custom nonce store.
     ///
     /// Use this constructor when you need persistent nonce storage
-    /// (e.g., `SledNonceStore`) for replay protection across restarts.
+    /// (e.g., `RedbNonceStore`) for replay protection across restarts.
     ///
     /// # Arguments
     /// * `fee_schedule` - Per-operation-type fee schedule (UBC units)
@@ -149,7 +149,7 @@ impl ShardRouter {
         msg: &CrossShardMessage,
     ) -> Result<(), ShardError> {
         // Deserialize the inner payload for the target shard
-        let inner_op: ShardOp = bincode::deserialize(&msg.payload)
+        let inner_op: ShardOp = postcard::from_bytes(&msg.payload)
             .map_err(|e| ShardError::DeserializationError(e.to_string()))?;
 
         let target_id = msg.target_shard;

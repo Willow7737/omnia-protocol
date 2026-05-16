@@ -150,7 +150,7 @@ impl RollupOperator {
 
     /// Serialize events into batch data.
     fn build_batch_data(&self, events: &[Event]) -> Result<Vec<u8>, RollupError> {
-        bincode::serialize(events).map_err(|e| RollupError::Serialization(e.to_string()))
+        postcard::to_allocvec(events).map_err(|e| RollupError::Serialization(e.to_string()))
     }
 
     /// Generate a Groth16 proof for a state transition.

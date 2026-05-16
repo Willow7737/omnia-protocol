@@ -187,24 +187,25 @@ fn init_tracing(log_level: &str) {
 /// Create a shard router with all six shard types registered.
 ///
 /// Uses the standard fee schedule for operation pricing. When `nonce_data_dir`
-/// is `Some`, creates a `SledNonceStore` for persistent replay protection;
+/// is `Some`, creates a `RedbNonceStore` for persistent replay protection;
 /// otherwise falls back to in-memory nonce tracking.
 fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<ShardRouter> {
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();
 
     let mut router = match nonce_data_dir {
-        Some(dir) => {
-            // Ensure the nonce directory exists
-            std::fs::create_dir_all(dir)
-                .with_context(|| format!("Failed to create nonce directory: {}", dir.display()))?;
-            let db = sled::open(dir)
-                .with_context(|| format!("Failed to open nonce database at {}", dir.display()))?;
+        Some(db_path) => {
+            // Ensure the parent directory exists
+            if let Some(parent) = db_path.parent() {
+                std::fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create nonce directory: {}", parent.display())
+                })?;
+            }
             let nonce_store: Arc<dyn omnia_shards::NonceStore> = Arc::new(
-                omnia_shards::SledNonceStore::open(&db, "nonces")
-                    .with_context(|| "Failed to open nonce tree in sled database")?,
+                omnia_shards::RedbNonceStore::open(db_path)
+                    .with_context(|| "Failed to open nonce store in redb database")?,
             );
-            tracing::info!(path = %dir.display(), "Shard router using persistent nonce store");
+            tracing::info!(path = %db_path.display(), "Shard router using persistent nonce store");
             ShardRouter::with_nonce_store(fee_schedule, quota, nonce_store)
         }
         None => {

@@ -11,15 +11,19 @@ COPY shards/Cargo.toml shards/
 COPY binding/Cargo.toml binding/
 COPY economics/Cargo.toml economics/
 COPY zk/Cargo.toml zk/
-RUN mkdir -p substrate/src shards/src binding/src economics/src zk/src && \
+COPY node/Cargo.toml node/
+COPY fuzz/Cargo.toml fuzz/
+COPY chaos-tests/Cargo.toml chaos-tests/
+RUN mkdir -p substrate/src shards/src binding/src economics/src zk/src node/src && \
     echo "" > substrate/src/lib.rs && \
     echo "" > shards/src/lib.rs && \
     echo "" > binding/src/lib.rs && \
     echo "" > economics/src/lib.rs && \
     echo "" > zk/src/lib.rs && \
+    echo "" > node/src/lib.rs && \
     cargo fetch
 COPY . .
-RUN cargo build --release --workspace
+RUN cargo build --release -p omnia-node
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
@@ -29,7 +33,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 -s /bin/bash omnia
 WORKDIR /app
-COPY --from=builder /build/target/release/ /app/binaries/
+COPY --from=builder /build/target/release/omnia-node /app/omnia-node
 RUN mkdir -p /app/data && chown -R omnia:omnia /app
 USER omnia
 EXPOSE 9090/tcp 9090/udp

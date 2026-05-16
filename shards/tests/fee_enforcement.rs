@@ -218,7 +218,7 @@ fn test_cross_shard_fee_deduction() {
     let msg = CrossShardMessage::new(
         ShardId::financial(),
         ShardId::identity(),
-        bincode::serialize(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
+        postcard::to_allocvec(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
             document: omnia_shards::DidDocument::new(
                 "did:omnia:cross-test".to_string(),
                 keypair.verifying_key().to_bytes(),

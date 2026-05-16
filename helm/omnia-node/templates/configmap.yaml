@@ -1,0 +1,12 @@
+{{- if .Values.configMap.data }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "omnia-node.fullname" . }}-config
+  labels:
+    app: {{ include "omnia-node.name" . }}
+    chart: {{ include "omnia-node.chart" . }}
+    release: {{ .Release.Name }}
+data:
+  {{- toYaml .Values.configMap.data | nindent 2 }}
+{{- end }}

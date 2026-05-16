@@ -123,12 +123,12 @@ impl ComputationalState {
 
     /// Serialize the state to bytes for snapshots.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("ComputationalState serialization cannot fail")
+        postcard::to_allocvec(self).expect("ComputationalState serialization cannot fail")
     }
 
     /// Deserialize state from bytes.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
     }
 }
 

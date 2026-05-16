@@ -11,10 +11,10 @@ use omnia_substrate::Event;
 
 fuzz_target!(|data: &[u8]| {
     // Test that event deserialization never panics on arbitrary input
-    let _ = bincode::deserialize::<Event>(data);
+    let _ = postcard::from_bytes::<Event>(data);
 
     // If deserialization succeeds, test that validation doesn't panic
-    if let Ok(event) = bincode::deserialize::<Event>(data) {
+    if let Ok(event) = postcard::from_bytes::<Event>(data) {
         // Validation should return Err, not panic
         let _ = event.validate();
     }

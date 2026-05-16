@@ -6,6 +6,7 @@
 //! node information).
 
 pub mod economics;
+pub mod errors;
 pub mod events;
 pub mod governance;
 pub mod node;
@@ -33,6 +34,7 @@ use crate::state::AppState;
         crate::api::economics::transfer_ubc,
         crate::api::node::node_info,
         crate::api::node::node_peers,
+        crate::api::errors::error_codes,
     ),
     components(schemas(
         crate::api::events::SubmitEventRequest,
@@ -42,6 +44,8 @@ use crate::state::AppState;
         crate::api::governance::CastVoteRequest,
         crate::api::economics::TransferRequest,
         crate::api::node::PeerInfo,
+        crate::api::errors::ErrorCode,
+        crate::api::errors::ErrorResponse,
     ))
 )]
 pub struct ApiDoc;
@@ -61,6 +65,7 @@ pub struct ApiDoc;
 /// | POST   | `/api/v1/governance/vote`                 | `governance::cast_vote` |
 /// | GET    | `/api/v1/economics/balance/:did`          | `economics::get_balance` |
 /// | POST   | `/api/v1/economics/transfer`              | `economics::transfer_ubc` |
+/// | GET    | `/api/v1/errors`                          | `errors::error_codes`     |
 pub fn build_api_router() -> Router<AppState> {
     Router::new()
         // Node information
@@ -80,4 +85,6 @@ pub fn build_api_router() -> Router<AppState> {
         // Economics
         .route("/economics/balance/{did}", get(economics::get_balance))
         .route("/economics/transfer", post(economics::transfer_ubc))
+        // Error documentation
+        .route("/errors", get(errors::error_codes))
 }

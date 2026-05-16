@@ -6,7 +6,7 @@
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsOp, EconomicsShard, FinancialOp, FinancialShard,
     IdentityShard, NonceStore, PhysicalShard, ShardId, ShardOp, ShardPayload, ShardRouter,
-    SledNonceStore,
+    RedbNonceStore,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, NodeKeypair, VectorClock};
 use std::sync::Arc;
@@ -150,17 +150,17 @@ fn test_all_six_shards_registered() {
     assert!(router.has_shard(&ShardId::economics()));
 }
 
-/// Test that nonce persistence survives a simulated restart with sled backend.
+/// Test that nonce persistence survives a simulated restart with redb backend.
 ///
-/// This test creates a ShardRouter with a SledNonceStore, routes an event
+/// This test creates a ShardRouter with a RedbNonceStore, routes an event
 /// with nonce 1, then drops the router and creates a new one with the same
 /// store. The replayed nonce 1 should be rejected.
 #[test]
 fn test_nonce_persistence_across_router_restart() {
-    let dir = tempfile::tempdir().expect("tempdir should succeed");
-    let db = sled::open(dir.path()).expect("db open should succeed");
+    let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+    let db_path = tmp_dir.path().join("nonces.redb");
     let store: Arc<dyn NonceStore> =
-        Arc::new(SledNonceStore::open(&db, "nonces").expect("nonce store open should succeed"));
+        Arc::new(RedbNonceStore::open(&db_path).expect("nonce store open should succeed"));
 
     let keypair = generate_keypair();
     let creator = keypair.verifying_key().to_bytes();

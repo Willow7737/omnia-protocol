@@ -125,12 +125,12 @@ impl QuotaSystem {
 
     /// Serialize the quota system state to bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("QuotaSystem serialization cannot fail")
+        postcard::to_allocvec(self).expect("QuotaSystem serialization cannot fail")
     }
 
     /// Deserialize quota system state from bytes.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+        postcard::from_bytes(bytes)
     }
 }
 

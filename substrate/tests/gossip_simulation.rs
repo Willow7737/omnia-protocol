@@ -401,7 +401,7 @@ async fn test_process_pending_events_drains_network_rx() {
     let mut event = Event::genesis(test_node(2), vec![1, 2, 3]);
     event.sign_with_keypair(&keypair);
     let event_id = event.id;
-    let bytes = event.to_bytes();
+    let bytes = event.to_bytes().expect("test event serialization");
 
     // Send it as a network event
     // Build a dummy PeerId from a public key

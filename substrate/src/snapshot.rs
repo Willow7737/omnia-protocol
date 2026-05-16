@@ -112,12 +112,12 @@ impl StateSnapshot {
         nonces: &HashMap<[u8; 32], u64>,
         height: u64,
     ) -> Result<Self, SnapshotError> {
-        let causal_graph_bytes = bincode::serialize(&GraphSnapshot::from(graph))
+        let causal_graph_bytes = postcard::to_allocvec(&GraphSnapshot::from(graph))
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
-        let slashing_state_bytes = bincode::serialize(slashing)
+        let slashing_state_bytes = postcard::to_allocvec(slashing)
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         let nonce_state_bytes =
-            bincode::serialize(nonces).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
+            postcard::to_allocvec(nonces).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -174,7 +174,7 @@ impl StateSnapshot {
     ///
     /// Returns [`SnapshotError::Serialization`] if serialization fails.
     pub fn to_bytes(&self) -> Result<Vec<u8>, SnapshotError> {
-        bincode::serialize(self).map_err(|e| SnapshotError::Serialization(e.to_string()))
+        postcard::to_allocvec(self).map_err(|e| SnapshotError::Serialization(e.to_string()))
     }
 
     /// Deserialize a snapshot from bytes.
@@ -187,7 +187,7 @@ impl StateSnapshot {
     /// or [`SnapshotError::UnsupportedVersion`] if the version is not `1`.
     pub fn from_bytes(data: &[u8]) -> Result<Self, SnapshotError> {
         let snapshot: Self =
-            bincode::deserialize(data).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
+            postcard::from_bytes(data).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         if snapshot.version != SNAPSHOT_VERSION {
             return Err(SnapshotError::UnsupportedVersion(snapshot.version));
         }
@@ -321,7 +321,7 @@ mod tests {
 
         // Manually corrupt the version
         snapshot.version = 999;
-        let bytes = bincode::serialize(&snapshot).expect("serialize");
+        let bytes = postcard::to_allocvec(&snapshot).expect("serialize");
         let result = StateSnapshot::from_bytes(&bytes);
         assert!(
             matches!(result, Err(SnapshotError::UnsupportedVersion(999))),

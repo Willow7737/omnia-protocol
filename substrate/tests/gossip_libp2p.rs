@@ -324,7 +324,7 @@ async fn event_propagation() -> Result<(), Box<dyn std::error::Error + Send + Sy
     // Create a signed event on Node A
     let event = create_signed_event(1, vec![1, 2, 3]);
     let event_id = event.id;
-    let event_bytes = event.to_bytes();
+    let event_bytes = event.to_bytes().expect("test event serialization");
 
     // Publish from Node A
     node_a.publish("omnia_events", event_bytes.clone()).await?;
@@ -398,7 +398,7 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
 
     // Create and publish the first event from A (before D joins)
     let event1 = create_signed_event(1, vec![42]);
-    let event1_bytes = event1.to_bytes();
+    let event1_bytes = event1.to_bytes().expect("test event serialization");
 
     node_a.publish("omnia_events", event1_bytes.clone()).await?;
 
@@ -422,7 +422,7 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
 
     // Publish a new event from A that D should receive
     let event2 = create_signed_event(1, vec![99]);
-    let event2_bytes = event2.to_bytes();
+    let event2_bytes = event2.to_bytes().expect("test event serialization");
     let event2_id = event2.id;
 
     node_a.publish("omnia_events", event2_bytes.clone()).await?;
@@ -476,13 +476,13 @@ async fn multi_event_propagation() -> Result<(), Box<dyn std::error::Error + Sen
 
     // Create and publish three distinct signed events from A
     let event1 = create_signed_event(1, vec![10, 20, 30]);
-    let event1_bytes = event1.to_bytes();
+    let event1_bytes = event1.to_bytes().expect("test event serialization");
 
     let event2 = create_signed_event(1, vec![40, 50, 60]);
-    let event2_bytes = event2.to_bytes();
+    let event2_bytes = event2.to_bytes().expect("test event serialization");
 
     let event3 = create_signed_event(1, vec![70, 80, 90]);
-    let event3_bytes = event3.to_bytes();
+    let event3_bytes = event3.to_bytes().expect("test event serialization");
 
     // Publish all three events from A
     node_a.publish("omnia_events", event1_bytes.clone()).await?;

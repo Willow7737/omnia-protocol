@@ -127,7 +127,7 @@ pub struct AppState {
     pub config: NodeConfig,
     /// The substrate runtime — holds the causal graph and consensus engine.
     pub substrate: Arc<RwLock<Substrate>>,
-    /// Slashing engine with sled persistence.
+    /// Slashing engine with redb persistence.
     pub slashing: Arc<Mutex<SlashingEngine>>,
     /// Shard router for dispatching operations to domain shards.
     pub shard_router: Arc<Mutex<ShardRouter>>,

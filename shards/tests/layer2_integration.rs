@@ -177,7 +177,7 @@ async fn test_identity_shard_wired_into_substrate() {
     let router = router.lock().unwrap();
     let identity = router.get_shard(&ShardId::identity()).unwrap();
     let snapshot = identity.state_snapshot();
-    let state: IdentityState = bincode::deserialize(&snapshot).unwrap();
+    let state: IdentityState = postcard::from_bytes(&snapshot).unwrap();
     assert!(
         state.dids.contains_key(&did),
         "DID should be registered in identity shard"

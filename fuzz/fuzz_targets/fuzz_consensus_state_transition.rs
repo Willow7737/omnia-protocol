@@ -16,7 +16,7 @@ use omnia_substrate::{CausalGraph, ConsensusConfig, ConsensusEngine, Event, Slas
 
 fuzz_target!(|data: &[u8]| {
     // Deserialize a sequence of events and feed them to consensus
-    if let Ok(events) = bincode::deserialize::<Vec<Event>>(data) {
+    if let Ok(events) = postcard::from_bytes::<Vec<Event>>(data) {
         let slashing = SlashingEngine::new_in_memory(10, 20);
         let mut seed = [0u8; 32];
         seed[0] = 1; // Non-zero to avoid debug-build panic

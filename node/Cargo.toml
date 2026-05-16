@@ -38,12 +38,10 @@ prometheus = "0.13"
 # Ergonomic error handling — anyhow::Result with context chaining
 anyhow = "1"
 
-# Embedded database for persistent nonce and slashing state — sled provides
-# fast key-value storage used by SledNonceStore and SledSlashingStore
-# https://docs.rs/sled
-# ⚠️ sled 0.34 is alpha-quality. Production deployments should migrate to
-# rocksdb or redb. See docs/OPERATIONS.md for migration guidance.
-sled = "0.34"
+# Embedded database for persistent nonce and slashing state — redb provides
+# fast, ACID-compliant key-value storage used by RedbNonceStore and RedbSlashingStore.
+# redb is pure Rust, stable, and production-ready.
+redb = "2"
 
 # Hex encoding for event IDs and node identifiers in JSON responses
 hex = "0.4"

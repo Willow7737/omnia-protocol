@@ -1,0 +1,74 @@
+replicaCount: 5
+
+image:
+  repository: omnia-protocol/omnia-node
+  pullPolicy: IfNotPresent
+  tag: ""
+
+node:
+  id: ""
+  bootstrapNodes: ""
+  listenAddr: "/ip4/0.0.0.0/tcp/9090"
+  totalNodes: 5
+  dataDir: /app/data
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+service:
+  type: ClusterIP
+  port: 9090
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 9090
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 9090
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+persistence:
+  enabled: true
+  storageClass: ""
+  size: 10Gi
+  accessMode: ReadWriteOnce
+
+configMap:
+  # omnia-node.toml content overrides
+  data: {}
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

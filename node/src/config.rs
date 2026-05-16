@@ -33,7 +33,7 @@ pub struct NodeConfig {
     pub bootstrap_nodes: Vec<String>,
     /// HTTP API server port.
     pub http_port: u16,
-    /// Directory for persistent data (sled DB, slashing state, etc.).
+    /// Directory for persistent data (redb DB, slashing state, etc.).
     pub data_dir: PathBuf,
     /// Log level filter (trace, debug, info, warn, error).
     pub log_level: String,
@@ -45,7 +45,7 @@ pub struct NodeConfig {
     pub snapshot_interval: u64,
     /// Directory for persistent slashing state.
     pub slashing_data_dir: Option<PathBuf>,
-    /// Directory for persistent nonce state (sled). If None, nonce state is in-memory only.
+    /// Directory for persistent nonce state (redb). If None, nonce state is in-memory only.
     /// Production nodes MUST set this for replay protection across restarts.
     pub nonce_data_dir: Option<PathBuf>,
     /// Protocol version to advertise on the network.
@@ -94,7 +94,7 @@ pub struct NodeConfigFile {
     pub snapshot_interval: Option<u64>,
     /// Directory for persistent slashing state.
     pub slashing_data_dir: Option<String>,
-    /// Directory for persistent nonce state (sled). If None, nonce state is in-memory only.
+    /// Directory for persistent nonce state (redb). If None, nonce state is in-memory only.
     pub nonce_data_dir: Option<String>,
 }
 
@@ -174,20 +174,24 @@ impl NodeConfig {
             .context("Failed to canonicalize data directory path")
     }
 
-    /// Get the slashing store subdirectory path.
+    /// Get the slashing store database file path.
+    ///
+    /// Returns `<data_dir>/slashing.redb` if not explicitly configured.
+    /// redb uses a single file rather than a directory.
     pub fn slashing_dir(&self) -> PathBuf {
         self.slashing_data_dir
             .clone()
-            .unwrap_or_else(|| self.data_dir.join("slashing"))
+            .unwrap_or_else(|| self.data_dir.join("slashing.redb"))
     }
 
-    /// Get the nonce store subdirectory path.
+    /// Get the nonce store database file path.
     ///
-    /// Defaults to `<data_dir>/nonces` if not explicitly configured.
+    /// Returns `<data_dir>/nonces.redb` if not explicitly configured.
+    /// redb uses a single file rather than a directory.
     pub fn nonce_dir(&self) -> PathBuf {
         self.nonce_data_dir
             .clone()
-            .unwrap_or_else(|| self.data_dir.join("nonces"))
+            .unwrap_or_else(|| self.data_dir.join("nonces.redb"))
     }
 
     /// Build the config from CLI arguments parsed by clap.
@@ -553,7 +557,7 @@ mod tests {
             nonce_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
-        assert_eq!(config.slashing_dir(), PathBuf::from("./data/slashing"));
+        assert_eq!(config.slashing_dir(), PathBuf::from("./data/slashing.redb"));
     }
 
     #[test]

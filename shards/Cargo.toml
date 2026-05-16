@@ -11,7 +11,7 @@ repository = { workspace = true }
 omnia-substrate = { path = "../substrate" }
 omnia-economics = { path = "../economics" }
 serde = { version = "1.0", features = ["derive"] }
-bincode = "1"
+postcard = { version = "1", features = ["alloc"] }
 thiserror = "2.0"
 tracing = "0.1"
 hex = "0.4"
@@ -20,11 +20,9 @@ rand = "0.8"
 blake3 = "1.5"
 
 # Persistent nonce storage — needed for replay protection that survives restarts.
-# Sled is chosen for its simplicity, embedded nature (no external DB server),
-# and cross-platform compatibility (pure Rust, works on Linux/macOS/Windows).
-# ⚠️ sled 0.34 is alpha-quality. Production deployments should migrate to
-# rocksdb or redb. See docs/OPERATIONS.md for migration guidance.
-sled = "0.34"
+# redb is a pure-Rust, ACID-compliant, simple embedded database that is
+# production-ready and cross-platform (works on Linux/macOS/Windows).
+redb = "2"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -282,7 +282,7 @@ impl GossipProtocol {
         }
 
         // Send publish command to the network task
-        let bytes = event.to_bytes();
+        let bytes = event.to_bytes().map_err(|e| GossipError::SerializationError(e.to_string()))?;
         let bytes_len = bytes.len();
         if let Some(ref cmd_tx) = self.network_cmd_tx {
             cmd_tx
@@ -707,7 +707,7 @@ mod tests {
 
         // Create an unsigned event (should be rejected by validation)
         let event = Event::genesis(node(2), vec![1, 2, 3]);
-        let bytes = event.to_bytes();
+        let bytes = event.to_bytes().expect("test event serialization");
 
         let dummy_peer_id = PeerId::random();
         tx.send(NetworkEvent::GossipReceived {
@@ -716,12 +716,12 @@ mod tests {
             propagation_source: dummy_peer_id,
         })
         .await
-        .unwrap();
+        .expect("send should succeed");
 
         drop(tx);
 
         // Process pending events
-        let inserted = gossip.process_pending_events().await.unwrap();
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
         assert_eq!(inserted.len(), 0, "Unsigned event should be rejected");
         assert_eq!(gossip.stats().events_rejected, 1);
         assert!(
@@ -745,7 +745,7 @@ mod tests {
         let mut event = Event::genesis(node(2), vec![1, 2, 3]);
         event.sign_with_keypair(&keypair);
         let event_id = event.id;
-        let bytes = event.to_bytes();
+        let bytes = event.to_bytes().expect("test event serialization");
 
         let dummy_peer_id = PeerId::random();
         tx.send(NetworkEvent::GossipReceived {
@@ -754,11 +754,11 @@ mod tests {
             propagation_source: dummy_peer_id,
         })
         .await
-        .unwrap();
+        .expect("send should succeed");
 
         drop(tx);
 
-        let inserted = gossip.process_pending_events().await.unwrap();
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
         assert_eq!(inserted.len(), 1);
         assert_eq!(gossip.stats().events_received, 1);
         assert_eq!(gossip.stats().events_accepted, 1);

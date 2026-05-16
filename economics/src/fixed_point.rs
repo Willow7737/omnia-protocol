@@ -470,16 +470,16 @@ mod tests {
     #[test]
     fn test_decay_rate_serialization() {
         let rate = DecayRate::ten_percent();
-        let bytes = bincode::serialize(&rate).expect("serialize");
-        let restored: DecayRate = bincode::deserialize(&bytes).expect("deserialize");
+        let bytes = postcard::to_allocvec(&rate).expect("serialize");
+        let restored: DecayRate = postcard::from_bytes(&bytes).expect("deserialize");
         assert_eq!(rate, restored);
     }
 
     #[test]
     fn test_decay_rate_serialized_as_u64() {
         let rate = DecayRate::ten_percent();
-        let bytes = bincode::serialize(&rate.ppm()).expect("serialize u64");
-        let bytes2 = bincode::serialize(&rate).expect("serialize DecayRate");
+        let bytes = postcard::to_allocvec(&rate.ppm()).expect("serialize u64");
+        let bytes2 = postcard::to_allocvec(&rate).expect("serialize DecayRate");
         // DecayRate serializes as a u64 (transparent)
         assert_eq!(bytes, bytes2);
     }

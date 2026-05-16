@@ -14,7 +14,7 @@ http_port = 8080
 # P2P network listen address
 listen_addr = "0.0.0.0:4001"
 
-# Directory for persistent data storage (sled DB, slashing state, etc.)
+# Directory for persistent data storage (redb DB, slashing state, etc.)
 data_dir = "./data"
 
 # Log level filter (trace, debug, info, warn, error)
@@ -33,5 +33,5 @@ log_level = "info"
 # Interval (in event count) between automatic snapshots
 # snapshot_interval = 10000
 
-# Directory for persistent slashing state (default: <data_dir>/slashing)
+# Directory for persistent slashing state (default: <data_dir>/slashing.redb)
 # slashing_data_dir = "/var/lib/omnia/slashing"

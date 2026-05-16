@@ -10,15 +10,15 @@ rust-version = { workspace = true }
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-sha2 = "0.11"
+sha2 = "0.10"
 hex = "0.4"
 thiserror = "2.0"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
-# FIX 1: Real bincode for compact binary serialization
-bincode = "1"
+# Compact binary serialization — postcard replaces unmaintained bincode (RUSTSEC-2025-0141)
+postcard = { version = "1", features = ["alloc"] }
 
 # FIX 2: Ed25519 signatures
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
@@ -30,12 +30,17 @@ libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "no
 futures = "0.3"
 async-trait = "0.1"
 blake3 = "1.5"
+
+# AES-256-GCM authenticated encryption for keystore
+aes-gcm = "0.10"
+
+# HKDF key derivation for keystore
+hkdf = "0.12"
 serde_json = "1.0"
 
 # Embedded key-value store for persistent slashing state
-# ⚠️ sled 0.34 is alpha-quality. Production deployments should migrate to
-# rocksdb or redb. See docs/OPERATIONS.md for migration guidance.
-sled = "0.34"
+# redb is a pure-Rust, ACID-compliant, simple embedded database.
+redb = "2"
 
 # BLS12-381 signature aggregation — reduces N signature verifications to 1
 # Spec: Boneh-Lynn-Shacham (BLS) signatures

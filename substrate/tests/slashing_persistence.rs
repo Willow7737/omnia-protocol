@@ -1,18 +1,17 @@
 //! Integration tests for persistent slashing state.
 //!
 //! These tests verify that slashing state survives node restarts when using
-//! [`SledSlashingStore`], that corrupted data is handled gracefully, and that
+//! [`RedbSlashingStore`], that corrupted data is handled gracefully, and that
 //! [`InMemorySlashingStore`] maintains backward compatibility.
 
 use omnia_substrate::{
-    InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
-    SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
+    InMemorySlashingStore, RedbSlashingStore, SlashOffense, SlashOutcome, SlashingEngine,
+    SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Helper: create a `NodeId` from a single byte.
 fn node(id: u8) -> [u8; 32] {
@@ -24,55 +23,30 @@ fn node(id: u8) -> [u8; 32] {
 /// Global counter for unique temporary directory names.
 static DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Helper: create a unique temporary directory for sled databases.
+/// Helper: create a unique temporary directory for redb databases.
 ///
 /// Each call creates a directory under a new tempdir with a unique
-/// subdirectory name, avoiding lock conflicts between parallel tests.
+/// file name, avoiding lock conflicts between parallel tests.
 fn temp_dir(prefix: &str) -> PathBuf {
     let count = DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = tempfile::tempdir().expect("failed to create temp dir");
-    let path = dir.path().join(format!("{}-{}", prefix, count));
-    let _ = std::fs::create_dir_all(&path);
+    let path = dir.path().join(format!("{}-{}.redb", prefix, count));
     // Leak the TempDir so it is not cleaned up while the test uses it.
     // The OS will reclaim on process exit.
     std::mem::forget(dir);
     path
 }
 
-/// Helper: open a [`SledSlashingStore`] with retries.
-///
-/// Sled uses file-level locking, and the OS may not release the lock
-/// immediately after a previous instance was dropped. This helper retries
-/// opening the store a few times with a short delay.
-fn open_sled_store(dir: &PathBuf) -> SledSlashingStore {
-    let mut attempts = 0;
-    loop {
-        match SledSlashingStore::open(dir) {
-            Ok(store) => return store,
-            Err(e) => {
-                attempts += 1;
-                if attempts >= 10 {
-                    panic!(
-                        "Failed to open sled store after {} attempts: {}",
-                        attempts, e
-                    );
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-        }
-    }
-}
-
 // ── Persistent state survives restart ──────────────────────────────
 
 #[test]
-fn test_sled_slash_history_preserved_across_restart() {
-    let dir = temp_dir("slash-persist-1");
+fn test_redb_slash_history_preserved_across_restart() {
+    let db_path = temp_dir("slash-persist");
     let n1 = node(42);
 
     // First engine instance: register validator and record offense
     {
-        let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let mut engine =
             SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 10_000);
@@ -82,12 +56,9 @@ fn test_sled_slash_history_preserved_across_restart() {
         // Engine dropped here — state should be persisted
     }
 
-    // Brief pause to let the OS release the sled file lock
-    std::thread::sleep(Duration::from_millis(50));
-
     // Second engine instance with the same store path: state must survive
     {
-        let store = open_sled_store(&dir);
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 300);
         assert_eq!(engine.stake_of(&n1), 10_000);
@@ -95,39 +66,43 @@ fn test_sled_slash_history_preserved_across_restart() {
     }
 }
 
-// ── Corrupted sled data → engine starts fresh ─────────────────────
+// ── Corrupted redb data → engine starts fresh ─────────────────────
 
 #[test]
-fn test_corrupted_sled_data_starts_fresh() {
-    let dir = temp_dir("slash-corrupt-1");
+fn test_corrupted_redb_data_starts_fresh() {
+    let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+    let db_path = tmp_dir.path().join("slash-corrupt.redb");
     let n1 = node(99);
 
     // First, write some valid state
     {
-        let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let mut engine =
             SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 5_000);
         engine.record_offense(n1, SlashOffense::Equivocation); // 500 points
     }
 
-    // Brief pause to let the OS release the sled file lock
-    std::thread::sleep(Duration::from_millis(50));
-
-    // Now corrupt the sled data by inserting invalid bytes directly
+    // Now corrupt the data by writing invalid bytes directly into the redb table
     {
-        let db = sled::open(&dir).expect("failed to open sled db");
-        let tree = db.open_tree("slashing").expect("failed to open tree");
-        tree.insert("state", b"this is not valid bincode data".as_slice())
-            .expect("failed to insert corrupt data");
-        db.flush().expect("failed to flush");
+        use redb::{Database, TableDefinition};
+        const SLASHING_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("slashing");
+        let db = Database::create(&db_path).expect("failed to open redb db");
+        let write_txn = db.begin_write().expect("failed to begin write");
+        {
+            let mut table = write_txn
+                .open_table(SLASHING_TABLE)
+                .expect("failed to open table");
+            table
+                .insert("state", b"this is not valid postcard data".as_slice())
+                .expect("failed to insert corrupt data");
+        }
+        write_txn.commit().expect("failed to commit");
     }
-
-    std::thread::sleep(Duration::from_millis(50));
 
     // Creating engine with corrupted data should fail with a serialization error
     {
-        let store = open_sled_store(&dir);
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let result = SlashingEngine::with_store(Arc::new(store));
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -211,13 +186,13 @@ fn test_in_memory_store_directly() {
 
 #[test]
 fn test_persistent_state_includes_stakes() {
-    let dir = temp_dir("slash-stakes-1");
+    let db_path = temp_dir("slash-stakes");
     let n1 = node(10);
     let n2 = node(20);
 
     // First engine: register two validators with different stakes
     {
-        let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let mut engine =
             SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 50_000);
@@ -228,12 +203,9 @@ fn test_persistent_state_includes_stakes() {
         assert_eq!(engine.stake_of(&n2), 75_000);
     }
 
-    // Brief pause to let the OS release the sled file lock
-    std::thread::sleep(Duration::from_millis(50));
-
     // Second engine: stakes must be preserved
     {
-        let store = open_sled_store(&dir);
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
         assert_eq!(engine.stake_of(&n1), 50_000);
@@ -247,12 +219,12 @@ fn test_persistent_state_includes_stakes() {
 
 #[test]
 fn test_multiple_offenses_persisted_across_restart() {
-    let dir = temp_dir("slash-multi-1");
+    let db_path = temp_dir("slash-multi");
     let n1 = node(5);
 
     // First engine: accumulate points across multiple offenses
     {
-        let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let mut engine =
             SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 20_000);
@@ -263,12 +235,9 @@ fn test_multiple_offenses_persisted_across_restart() {
         assert!(!engine.is_ejected(&n1));
     }
 
-    // Brief pause to let the OS release the sled file lock
-    std::thread::sleep(Duration::from_millis(50));
-
     // Second engine: verify accumulated state and continue
     {
-        let store = open_sled_store(&dir);
+        let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
         let mut engine =
             SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
@@ -284,13 +253,13 @@ fn test_multiple_offenses_persisted_across_restart() {
     }
 }
 
-// ── Empty sled store → default state ───────────────────────────────
+// ── Empty redb store → default state ───────────────────────────────
 
 #[test]
-fn test_empty_sled_store_returns_default_state() {
-    let dir = temp_dir("slash-empty-1");
+fn test_empty_redb_store_returns_default_state() {
+    let db_path = temp_dir("slash-empty");
 
-    let store = SledSlashingStore::open(&dir).expect("failed to open sled store");
+    let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
     let state = store.load().expect("load should succeed");
     assert!(state.slash_points.is_empty());
     assert!(state.stakes.is_empty());

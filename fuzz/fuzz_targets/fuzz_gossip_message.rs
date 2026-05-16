@@ -11,7 +11,7 @@ use omnia_substrate::GossipMessage;
 
 fuzz_target!(|data: &[u8]| {
     // Test gossip message deserialization never panics
-    if let Ok(_msg) = bincode::deserialize::<GossipMessage>(data) {
+    if let Ok(_msg) = postcard::from_bytes::<GossipMessage>(data) {
         // Deserialization succeeded — the message is well-formed at the
         // serialization level. Further validation (e.g., verifying embedded
         // events) is done by the gossip protocol layer, which also must

@@ -259,3 +259,314 @@ Physical Identity Forged
 | 9 | Schedule external security audit | Post-Sprint 6 | Pending |
 | 10 | Implement leader privacy (threshold encryption) | Future | Not planned |
 | 11 | Real RF fingerprint hardware integration | Future | Stub only |
+
+---
+
+## 7. STRIDE Threat Classification
+
+The following STRIDE analysis provides detailed attack vectors, impact
+assessments, current mitigations, and remaining gaps for each threat category.
+
+### 7.1 Spoofing
+
+Spoofing attacks involve an adversary pretending to be another entity — a node, a validator, or an event creator.
+
+#### 7.1.1 Fake Events (Event Spoofing)
+
+**Attack Vector**: An adversary creates events with a forged `creator` field, claiming they originated from a different node. For example, creating a `FinancialOp::Mint` event that appears to come from the treasury node.
+
+**Impact**: HIGH. If accepted, a spoofed mint event would inflate the money supply. A spoofed transfer event would drain a victim's account.
+
+**Current Mitigation**: Every event carries an Ed25519 signature (`event.signature`) over the event hash (`event.id`), which includes the `creator_pubkey`. The `Event::verify_signature()` method (in `substrate/src/event.rs`) checks that the signature is valid for the claimed public key. The `Event::validate()` method enforces both hash integrity and signature validity before any event enters the causal graph.
+
+**Gap**: The `creator` ↔ `creator_pubkey` binding has been implemented (Sprint 4, Task A1). `Event::sign_with_keypair()` now sets `creator = blake3(creator_pubkey)`, and `validate_creator_binding()` enforces this invariant in constant time.
+
+**Priority**: HIGH (mitigated).
+
+#### 7.1.2 Fake Identities (Identity Spoofing)
+
+**Attack Vector**: An adversary creates a DID that impersonates a real-world entity (e.g., `did:omnia:bank-of-america`).
+
+**Impact**: MEDIUM. Could enable social engineering or unauthorized access to identity-bound resources.
+
+**Current Mitigation**: The Identity shard (`shards/src/identity/`) uses Ed25519 keypairs bound to DIDs. A DID document includes the controller's public key, which must sign any updates.
+
+**Gap**: No DID verification registry or certificate authority. Any node can create any DID string.
+
+**Priority**: MEDIUM. Add DID namespace reservations or a verification registry.
+
+#### 7.1.3 Fake Validators (Validator Impersonation)
+
+**Attack Vector**: An adversary joins the network claiming to be a validator node and participates in consensus.
+
+**Impact**: HIGH. A fake validator could prevent events from reaching the >2/3 supermajority threshold.
+
+**Current Mitigation**: `ConsensusConfig::total_nodes` defines the validator set size. The `supermajority()` function computes the >2/3 threshold.
+
+**Gap**: No validator authentication or on-chain validator registry.
+
+**Priority**: MEDIUM. Validator authentication is needed when the network grows.
+
+#### 7.1.4 RF Fingerprint Spoofing (Binding Layer)
+
+**Attack Vector**: An adversary clones or forges an RF fingerprint to impersonate a physical device.
+
+**Impact**: HIGH. A spoofed RF fingerprint could allow creation of fraudulent provenance events.
+
+**Current Mitigation**: `RfFingerprint::verify()` uses Hamming distance comparison with a confidence threshold.
+
+**Gap**: The RF fingerprinting implementation is a **stub** — it uses raw byte arrays instead of real RF spectral features.
+
+**Priority**: HIGH. Real RF fingerprint capture requires hardware integration.
+
+### 7.2 Tampering
+
+#### 7.2.1 Event Payload Modification
+
+**Attack Vector**: An adversary intercepts a gossip message, modifies the event payload, and re-broadcasts it.
+
+**Impact**: HIGH. A modified transfer amount could redirect funds or create tokens.
+
+**Current Mitigation**: The `Event::id` is a SHA-256 hash of all event fields. Any modification invalidates the hash and signature.
+
+**Gap**: None significant. The hash-then-sign pattern provides strong tamper protection.
+
+**Priority**: LOW. Current mitigation is strong.
+
+#### 7.2.2 State Root Manipulation
+
+**Attack Vector**: An adversary (ZK operator) posts a fraudulent state root to L1.
+
+**Impact**: CRITICAL. A fraudulent state root would allow the operator to steal all bridged assets.
+
+**Current Mitigation**: Groth16 proofs with `ExpandedRollupCircuit` add Merkle path verification and Poseidon-based state transition constraints. `ProofBundle::verify_integrity()` rejects bundles with missing or malformed data.
+
+**Gap**: The Ethereum adapter's `verify_proof()` and Solidity contract's `verifyProof()` are still stubs.
+
+**Priority**: CRITICAL. Implement real Groth16 verification in `OmniaRollup.sol` before mainnet.
+
+#### 7.2.3 Provenance Chain Tampering (Binding Layer)
+
+**Attack Vector**: An adversary attempts to modify or remove events from a provenance chain.
+
+**Impact**: HIGH. Tampered provenance could obscure the chain of custody.
+
+**Current Mitigation**: `ProvenanceLog` is append-only. `verify_chain()` checks `links_to()` relationships.
+
+**Gap**: `links_to()` only verifies consecutive commitments have different data hashes; it does NOT verify cryptographic embedding of the previous commitment hash.
+
+**Priority**: MEDIUM. Strengthen `links_to()` to verify cryptographic embedding.
+
+#### 7.2.4 Shard State Mutation Outside `process_event()`
+
+**Attack Vector**: A bug allows state mutation through `validate()` or `state_snapshot()`.
+
+**Impact**: MEDIUM. Would break determinism guarantees.
+
+**Current Mitigation**: Rust type system enforces `&self` on `validate()` and `state_snapshot()`.
+
+**Gap**: No runtime enforcement. Relies on code review.
+
+**Priority**: MEDIUM. Add property-based tests for purity.
+
+### 7.3 Repudiation
+
+#### 7.3.1 Denial of Event Creation
+
+**Attack Vector**: A node creates an event and later denies having created it.
+
+**Impact**: MEDIUM. Could undermine auditability.
+
+**Current Mitigation**: Every event is signed with Ed25519 (`Event::sign_with_keypair()`). Quantum commitments provide additional non-repudiation via `QuantumCommitment::sign_classical()` and `QuantumCommitment::sign_hybrid()`.
+
+**Gap**: No mechanism for key revocation or rotation in the substrate.
+
+**Priority**: LOW. Key rotation is a Phase 1+ feature.
+
+#### 7.3.2 Denial of Provenance Event
+
+**Attack Vector**: A participant denies having transferred or verified an item.
+
+**Impact**: MEDIUM. Could undermine supply chain accountability.
+
+**Current Mitigation**: Each `ProvenanceEvent` contains a `QuantumCommitment` signed by the participant's key.
+
+**Gap**: No integration between provenance event signatures and the causal graph.
+
+**Priority**: LOW. Current design provides strong non-repudiation within the binding layer.
+
+### 7.4 Information Disclosure
+
+#### 7.4.1 ZK Proof Data Visibility
+
+**Attack Vector**: An adversary observes ZK proof data posted to L1.
+
+**Impact**: MEDIUM. Could reveal transaction data.
+
+**Current Mitigation**: Groth16 proofs are zero-knowledge by construction. `ProofBundle::transition_proof` contains only the proof, not transaction data.
+
+**Gap**: The `post_batch()` method posts full `batch_data` bytes to L1 for data availability.
+
+**Priority**: MEDIUM. For full privacy, commit only via the Merkle root.
+
+#### 7.4.2 Trusted Setup Secret Leakage
+
+**Attack Vector**: An adversary compromises the secret randomness (`tau`) from the Powers of Tau ceremony.
+
+**Impact**: CRITICAL. A compromised trusted setup allows generation of fake proofs.
+
+**Current Mitigation**: Multi-party protocol with Proof of Knowledge (PoK) on BN254 G1.
+
+**Gap**: The current ceremony is simulated (deterministic seeds).
+
+**Priority**: HIGH. Implement production-grade ceremony before mainnet.
+
+#### 7.4.3 Shard State Exposure
+
+**Attack Vector**: An adversary queries `state_snapshot()` and extracts sensitive information.
+
+**Impact**: MEDIUM. Financial privacy exposure.
+
+**Current Mitigation**: `Shard::state_snapshot()` is only available locally, not via RPC.
+
+**Gap**: No encryption of state snapshots.
+
+**Priority**: MEDIUM. Encrypted state snapshots are a Phase 2+ feature.
+
+#### 7.4.4 Private Key Compromise
+
+**Attack Vector**: An adversary extracts the Ed25519 or Dilithium private key.
+
+**Impact**: CRITICAL. A compromised key allows signing arbitrary events or forging commitments.
+
+**Current Mitigation**: Keys are generated using `OsRng` and stored in memory only.
+
+**Gap**: No HSM integration. No key encryption at rest. No multi-signature support.
+
+**Priority**: HIGH. Add HSM support and key encryption before mainnet.
+
+### 7.5 Denial of Service
+
+#### 7.5.1 Gossip Flooding
+
+**Attack Vector**: An adversary floods the gossip network with events.
+
+**Impact**: HIGH. Could prevent timely event propagation.
+
+**Current Mitigation**: Token-bucket rate limiter (200 burst/100s), `max_pending`, `max_events_per_message`, deduplication.
+
+**Gap**: No peer reputation or blacklisting system.
+
+**Priority**: MEDIUM. Add peer reputation scoring.
+
+#### 7.5.2 Consensus Stall
+
+**Attack Vector**: A Byzantine validator refuses to create witness events.
+
+**Impact**: HIGH. Events would never achieve finality.
+
+**Current Mitigation**: BFT tolerates up to f Byzantine nodes. View-change and round timeout implemented (Sprint 6).
+
+**Gap**: If >1/3 of validators are offline or Byzantine, the network cannot make progress.
+
+**Priority**: LOW. BFT bounds are by design.
+
+#### 7.5.3 ZK Proving DoS
+
+**Attack Vector**: An adversary submits many events requiring expensive ZK proof generation.
+
+**Impact**: MEDIUM. Could delay batch finalization.
+
+**Current Mitigation**: Configurable `batch_size` limit, cached trusted setup keys.
+
+**Gap**: No per-event proving cost limit. No proving timeout.
+
+**Priority**: MEDIUM. Add maximum circuit size and proving timeout.
+
+### 7.6 Elevation of Privilege
+
+#### 7.6.1 Validator Takeover
+
+**Attack Vector**: An adversary gains control of a validator node.
+
+**Impact**: CRITICAL. A compromised validator can create arbitrary events and influence finality.
+
+**Current Mitigation**: BFT tolerates up to f Byzantine validators. Slashing implemented.
+
+**Gap**: No validator rotation or ejection mechanism.
+
+**Priority**: HIGH. Implement validator rotation before mainnet.
+
+#### 7.6.2 Governance Manipulation
+
+**Attack Vector**: An adversary accumulates governance tokens and passes self-serving proposals.
+
+**Impact**: MEDIUM. Could centralize control.
+
+**Current Mitigation**: Quadratic voting reduces large holder influence. Time-locked voting prevents flash loans.
+
+**Gap**: No delegation mechanism. No minimum quorum.
+
+**Priority**: MEDIUM. Strengthen governance mechanisms.
+
+#### 7.6.3 PQC Key Rotation Downgrade
+
+**Attack Vector**: An adversary attempts to downgrade from Hybrid to ClassicalOnly.
+
+**Impact**: MEDIUM. Would make commitments vulnerable to quantum attacks.
+
+**Current Mitigation**: `PqcKeyRotationManager` rejects phase downgrades.
+
+**Gap**: No cryptographic verification of the `authorization_sig` — only emptiness check.
+
+**Priority**: MEDIUM. Add proper signature verification for rotation authorization.
+
+#### 7.6.4 Shard-Level Privilege Escalation
+
+**Attack Vector**: An adversary exploits a bug to escalate privileges within a shard.
+
+**Impact**: HIGH. Could create unlimited tokens or modify balances.
+
+**Current Mitigation**: `FinancialState::apply()` enforces business rules. `Shard::validate()` provides pre-flight validation.
+
+**Gap**: No ACL for shard operations. Any event can trigger any operation.
+
+**Priority**: HIGH. Add ACL checks in `Shard::process_event()`.
+
+### 7.7 STRIDE Threat Summary
+
+| Category | Threat | Impact | Priority | Current Status |
+|----------|--------|--------|----------|----------------|
+| Spoofing | Fake Events | HIGH | HIGH | Mitigated by Ed25519 + creator binding |
+| Spoofing | Fake Identities | MEDIUM | MEDIUM | Mitigated by key-bound DIDs; gap in DID verification |
+| Spoofing | Fake Validators | HIGH | MEDIUM | Mitigated by BFT threshold; gap in validator authentication |
+| Spoofing | RF Fingerprint Spoofing | HIGH | HIGH | Stub implementation provides no real physical security |
+| Tampering | Event Payload Mod. | HIGH | LOW | Strongly mitigated by hash-then-sign |
+| Tampering | State Root Manip. | CRITICAL | CRITICAL | Groth16 proofs implemented; Solidity verifier still stub |
+| Tampering | Provenance Chain Tampering | HIGH | MEDIUM | Append-only log with links_to(); gap in cryptographic embedding |
+| Tampering | Shard State Mutation | MEDIUM | MEDIUM | Mitigated by Rust type system; gap in runtime enforcement |
+| Repudiation | Denial of Event Creation | MEDIUM | LOW | Non-repudiable Ed25519 + Dilithium signatures |
+| Repudiation | Denial of Provenance Event | MEDIUM | LOW | Quantum commitments provide non-repudiation |
+| Info Disclosure | ZK Proof Data Visibility | MEDIUM | MEDIUM | ZK proofs are zero-knowledge; batch data may be posted to L1 |
+| Info Disclosure | Trusted Setup Compromise | CRITICAL | HIGH | Multi-party PoK ceremony; production ceremony needed |
+| Info Disclosure | Shard State Exposure | MEDIUM | MEDIUM | No external API; gap in encryption at rest |
+| Info Disclosure | Private Key Compromise | CRITICAL | HIGH | Keys in memory only; no HSM |
+| DoS | Gossip Flooding | HIGH | MEDIUM | Rate limiting implemented |
+| DoS | Consensus Stall | HIGH | LOW | View-change implemented |
+| DoS | ZK Proving DoS | MEDIUM | MEDIUM | No circuit size limit or proving timeout |
+| Elevation | Validator Takeover | CRITICAL | HIGH | BFT + slashing; no validator rotation |
+| Elevation | Governance Manip. | MEDIUM | MEDIUM | Quadratic voting + time-locks |
+| Elevation | PQC Key Rotation Downgrade | MEDIUM | MEDIUM | Downgrade rejected; authorization sig not verified |
+| Elevation | Shard Privilege Esc. | HIGH | HIGH | No ACL for shard operations |
+
+### 7.8 Priority Action Items
+
+1. **CRITICAL — Implement Solidity Groth16 verifier**: Replace stub `verifyProof()` in `OmniaRollup.sol` with a real Groth16 verifier contract.
+2. **HIGH — Fix `creator` ↔ `creator_pubkey` binding**: ✅ Implemented (Sprint 4, Task A1).
+3. **HIGH — Production trusted setup ceremony**: Implement real multi-party ceremony with secure randomness before mainnet.
+4. **HIGH — RF fingerprint hardware integration**: Replace stub with real RF-DNA feature extraction.
+5. **HIGH — Shard ACL**: Add authorization checks for privileged shard operations (minting, burning).
+6. **HIGH — HSM support**: Add hardware security module integration for key protection.
+7. **MEDIUM — Strengthen `links_to()` verification**: Verify cryptographic embedding of previous commitment hash.
+8. **MEDIUM — Verify rotation authorization signatures**: Add cryptographic verification in `PqcKeyRotationManager`.
+9. **MEDIUM — ZK proving DoS protection**: Add circuit size limits and proving timeouts.

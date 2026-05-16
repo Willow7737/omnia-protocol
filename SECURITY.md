@@ -105,12 +105,11 @@ Report format is maintained in `docs/security/weekly-reports/`.
 
 ## Threat Model
 
-A detailed threat model for Omnia Protocol is maintained at two complementary documents:
+A detailed threat model for Omnia Protocol is maintained at:
 
-- [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) — Structured attack surface inventory and unmitigated risks
-- [`docs/security/threat-model.md`](docs/security/threat-model.md) — STRIDE threat classification with detailed attack vectors
+- [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) — Structured attack surface inventory, unmitigated risks, and STRIDE threat classification
 
-Both documents cover:
+The document covers:
 
 - Adversary capabilities and attack surfaces
 - Trust assumptions for the causal graph, shard state, and binding layers

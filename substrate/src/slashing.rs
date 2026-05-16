@@ -8,7 +8,7 @@
 //!
 //! # Persistence
 //!
-//! The slashing state can be persisted to disk using the [`SledSlashingStore`]
+//! The slashing state can be persisted to disk using the [`RedbSlashingStore`]
 //! backend, ensuring that slash history survives node restarts. For tests and
 //! backward compatibility, [`InMemorySlashingStore`] keeps state in memory only.
 //!
@@ -128,7 +128,7 @@ pub enum SlashOutcome {
 #[derive(Debug, thiserror::Error)]
 pub enum SlashingStoreError {
     /// An error occurred while reading from or writing to the persistence
-    /// backend (e.g., sled I/O failure).
+    /// backend (e.g., redb I/O failure).
     #[error("persistence error: {0}")]
     Persistence(String),
     /// An error occurred while serializing or deserializing slashing state.
@@ -140,7 +140,7 @@ pub enum SlashingStoreError {
 ///
 /// This struct captures the full operational state of the slashing engine,
 /// including accumulated slash points, staked amounts, and the configured
-/// thresholds. It is designed to be serialized with `bincode` for compact
+/// thresholds. It is designed to be serialized with `postcard` for compact
 /// on-disk storage.
 ///
 /// # Example
@@ -248,37 +248,39 @@ pub trait SlashingStore: Send + Sync {
     }
 }
 
-// ── SledSlashingStore ──────────────────────────────────────────────
+// ── RedbSlashingStore ──────────────────────────────────────────────
 
-/// Sled-backed persistent slashing store.
+/// redb-backed persistent slashing store.
 ///
 /// Persists slashing state to disk so that slash history survives
-/// node restarts. Uses the `sled` embedded database for simplicity
-/// and zero external dependencies.
+/// node restarts. Uses the `redb` embedded database — pure Rust,
+/// ACID-compliant, and production-ready.
 ///
 /// # Example
 ///
 /// ```no_run
-/// use omnia_substrate::slashing::{SledSlashingStore, SlashingStore};
+/// use omnia_substrate::slashing::{RedbSlashingStore, SlashingStore};
 /// use std::path::Path;
 ///
-/// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+/// let store = RedbSlashingStore::open(Path::new("/tmp/omnia-slashing.redb")).unwrap();
 /// let state = store.load().unwrap();
 /// ```
-pub struct SledSlashingStore {
-    db: sled::Db,
-    tree: sled::Tree,
+pub struct RedbSlashingStore {
+    db: redb::Database,
 }
 
-impl SledSlashingStore {
-    /// Open a sled database at the given path for slashing state.
+/// Table definition for the slashing state table.
+const SLASHING_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("slashing");
+
+impl RedbSlashingStore {
+    /// Open a redb database at the given path for slashing state.
     ///
-    /// If the database does not exist, sled will create it. If it already
+    /// If the database does not exist, redb will create it. If it already
     /// exists, previously persisted state will be available via [`SlashingStore::load`].
     ///
     /// # Arguments
     ///
-    /// * `path` — Directory path for the sled database.
+    /// * `path` — File path for the redb database.
     ///
     /// # Errors
     ///
@@ -287,47 +289,65 @@ impl SledSlashingStore {
     /// # Example
     ///
     /// ```no_run
-    /// use omnia_substrate::slashing::{SledSlashingStore, SlashingStore};
+    /// use omnia_substrate::slashing::{RedbSlashingStore, SlashingStore};
     /// use std::path::Path;
     ///
-    /// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+    /// let store = RedbSlashingStore::open(Path::new("/tmp/omnia-slashing.redb")).unwrap();
     /// let state = store.load().unwrap();
     /// ```
     pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
-        let db = sled::open(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
-        tracing::warn!(
-            "⚠️  sled 0.34 is alpha-quality and NOT recommended for production use. \
-             It may lose data on crash. See: https://github.com/spacejam/sled/issues/1389 \
-             Consider migrating to rocksdb or redb for production deployments."
-        );
-        let tree = db
-            .open_tree("slashing")
+        let db = redb::Database::create(path)
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
-        Ok(Self { db, tree })
+        // Ensure the table exists
+        let write_txn = db
+            .begin_write()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        write_txn
+            .open_table(SLASHING_TABLE)
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        Ok(Self { db })
     }
 }
 
-impl SlashingStore for SledSlashingStore {
+impl SlashingStore for RedbSlashingStore {
     fn load(&self) -> Result<SlashingState, SlashingStoreError> {
-        match self
-            .tree
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        let table = read_txn
+            .open_table(SLASHING_TABLE)
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        match table
             .get("state")
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
         {
-            Some(bytes) => bincode::deserialize(&bytes)
+            Some(value) => postcard::from_bytes(value.value())
                 .map_err(|e| SlashingStoreError::Serialization(e.to_string())),
             None => Ok(SlashingState::default()),
         }
     }
 
     fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError> {
-        let bytes = bincode::serialize(state)
+        let bytes = postcard::to_allocvec(state)
             .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
-        self.tree
-            .insert("state", bytes)
+        let write_txn = self
+            .db
+            .begin_write()
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
-        self.db
-            .flush()
+        {
+            let mut table = write_txn
+                .open_table(SLASHING_TABLE)
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+            table
+                .insert("state", bytes.as_slice())
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        }
+        write_txn
+            .commit()
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
         Ok(())
     }
@@ -468,7 +488,7 @@ impl SlashingStore for InMemorySlashingStore {
 /// # Persistence
 ///
 /// Use [`SlashingEngine::new`] with `Some(path)` for production nodes to
-/// persist slashing state to sled. Use [`SlashingEngine::new_in_memory`]
+/// persist slashing state to redb. Use [`SlashingEngine::new_in_memory`]
 /// for tests only — in-memory state is lost on restart.
 ///
 /// # Example
@@ -518,7 +538,7 @@ impl Clone for SlashingEngine {
     /// (slash points, stakes, thresholds) but shares the underlying
     /// persistence store. This is the key mechanism for the single-engine
     /// architecture: both consensus and the API layer hold clones that
-    /// write to the same sled database.
+    /// write to the same redb database.
     fn clone(&self) -> Self {
         Self {
             slash_points: self.slash_points.clone(),
@@ -540,14 +560,14 @@ impl Clone for SlashingEngine {
 impl SlashingEngine {
     /// Create a new `SlashingEngine` with optional persistence.
     ///
-    /// - `Some(path)`: Persists slashing state to sled at the given directory.
-    ///   Falls back to in-memory if sled fails to open.
+    /// - `Some(path)`: Persists slashing state to redb at the given path.
+    ///   Falls back to in-memory if redb fails to open.
     /// - `None`: Uses in-memory store (state lost on restart — for testing only).
     ///
     /// # Arguments
     ///
-    /// * `data_dir` — If `Some(path)`, persists slashing state to sled at that
-    ///   directory. If `None`, uses in-memory store (state lost on restart).
+    /// * `data_dir` — If `Some(path)`, persists slashing state to redb at that
+    ///   path. If `None`, uses in-memory store (state lost on restart).
     /// * `slash_threshold` — Slash points at which a node is considered
     ///   *slashed* (stake forfeited). Defaults to 500.
     /// * `ejection_threshold` — Slash points at which a node is *ejected*
@@ -573,11 +593,11 @@ impl SlashingEngine {
     /// ```
     pub fn new(data_dir: Option<PathBuf>, slash_threshold: u64, ejection_threshold: u64) -> Self {
         match data_dir {
-            Some(path) => match SledSlashingStore::open(&path) {
+            Some(path) => match RedbSlashingStore::open(&path) {
                 Ok(store) => {
                     tracing::info!(
                         path = %path.display(),
-                        "Slashing engine: using persistent sled store"
+                        "Slashing engine: using persistent redb store"
                     );
                     Self::with_store_with_thresholds(
                         Arc::new(store),
@@ -589,7 +609,7 @@ impl SlashingEngine {
                     tracing::warn!(
                         error = %e,
                         path = %path.display(),
-                        "Failed to open sled store — falling back to in-memory"
+                        "Failed to open redb store — falling back to in-memory"
                     );
                     Self::new_in_memory(slash_threshold, ejection_threshold)
                 }
@@ -632,7 +652,7 @@ impl SlashingEngine {
     /// # Arguments
     ///
     /// * `store` — An `Arc`-wrapped [`SlashingStore`] implementation (e.g.,
-    ///   [`SledSlashingStore`]). Using `Arc` allows the same store to be
+    ///   [`RedbSlashingStore`]). Using `Arc` allows the same store to be
     ///   shared across multiple `SlashingEngine` clones.
     ///
     /// # Returns
@@ -643,11 +663,11 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```no_run
-    /// use omnia_substrate::slashing::{SledSlashingStore, SlashingEngine};
+    /// use omnia_substrate::slashing::{RedbSlashingStore, SlashingEngine};
     /// use std::path::Path;
     /// use std::sync::Arc;
     ///
-    /// let store = SledSlashingStore::open(Path::new("/tmp/omnia-slashing")).unwrap();
+    /// let store = RedbSlashingStore::open(Path::new("/tmp/omnia-slashing.redb")).unwrap();
     /// let engine = SlashingEngine::with_store(Arc::new(store)).unwrap();
     /// ```
     pub fn with_store(store: Arc<dyn SlashingStore>) -> Result<Self, SlashingStoreError> {
@@ -1405,7 +1425,7 @@ mod tests {
     }
 
     #[test]
-    fn test_with_store_preserves_state_via_sled() {
+    fn test_with_store_preserves_state_via_redb() {
         // This test is covered more thoroughly in tests/slashing_persistence.rs
         // Here we just verify with_store loads empty state correctly.
         let store = Arc::new(InMemorySlashingStore::new());

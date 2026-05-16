@@ -259,9 +259,13 @@ impl Event {
 
     /// Legacy sign method for backward compatibility in tests.
     /// In production, always use `sign_with_keypair`.
+    #[deprecated(
+        since = "0.2.0",
+        note = "sign() is a no-op and will be removed. Use sign_with_keypair() instead."
+    )]
     pub fn sign(&mut self, _signature: Vec<u8>) {
-        // No-op: real signing requires a keypair.
-        // Tests should migrate to `sign_with_keypair`.
+        // Deprecated no-op: real signing requires a keypair via sign_with_keypair().
+        // This method will be removed in a future release.
     }
 
     /// Get the event header (lightweight metadata)
@@ -369,13 +373,21 @@ impl Event {
     }
 
     /// Serialize event to compact binary bytes for network transmission.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("Event serialization cannot fail")
+    ///
+    /// The output is prefixed with a wire-format version byte to enable
+    /// future format migrations. The current format uses `postcard` for
+    /// deterministic, `no_std`-compatible encoding.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, EventValidationError> {
+        crate::wire_format::serialize_with_version(self)
+            .map_err(|_| EventValidationError::SerializationError)
     }
 
     /// Deserialize event from compact binary bytes.
+    ///
+    /// Checks the wire-format version byte before deserializing.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EventValidationError> {
-        bincode::deserialize(bytes).map_err(|_| EventValidationError::DeserializationError)
+        crate::wire_format::deserialize_with_version(bytes)
+            .map_err(|_| EventValidationError::DeserializationError)
     }
 
     /// Mark this event as having received an acknowledgment
@@ -430,6 +442,9 @@ pub enum EventValidationError {
     #[error("Failed to deserialize event")]
     /// Deserialization failed
     DeserializationError,
+    #[error("Failed to serialize event")]
+    /// Serialization failed
+    SerializationError,
     #[error("Event timestamp is too far in the future")]
     /// Timestamp exceeds allowed drift
     FutureTimestamp,
@@ -677,8 +692,8 @@ mod tests {
         let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
         event.sign_with_keypair(&keypair);
 
-        let bytes = event.to_bytes();
-        let restored = Event::from_bytes(&bytes).unwrap();
+        let bytes = event.to_bytes().expect("test event serialization");
+        let restored = Event::from_bytes(&bytes).expect("test event deserialization");
         assert_eq!(event.id, restored.id);
         assert_eq!(event.signature, restored.signature);
         assert_eq!(event.creator_pubkey, restored.creator_pubkey);

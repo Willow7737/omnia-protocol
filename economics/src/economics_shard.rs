@@ -171,7 +171,7 @@ impl EconomicsState {
     /// state-format migrations.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![Self::ECONOMICS_STATE_VERSION];
-        bytes.extend(bincode::serialize(self).expect("EconomicsState serialization cannot fail"));
+        bytes.extend(postcard::to_allocvec(self).expect("EconomicsState serialization cannot fail"));
         bytes
     }
 
@@ -179,20 +179,15 @@ impl EconomicsState {
     ///
     /// Reads and validates the version byte before deserializing the
     /// payload. Returns an error if the version is unsupported.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
         if bytes.is_empty() {
-            return Err(Box::new(bincode::ErrorKind::Custom(
-                "Empty state bytes".into(),
-            )));
+            return Err(postcard::Error::DeserializeUnexpectedEnd);
         }
         let version = bytes[0];
         if version != Self::ECONOMICS_STATE_VERSION {
-            return Err(Box::new(bincode::ErrorKind::Custom(format!(
-                "Unsupported economics state version: {}",
-                version
-            ))));
+            return Err(postcard::Error::DeserializeUnexpectedEnd);
         }
-        bincode::deserialize(&bytes[1..])
+        postcard::from_bytes(&bytes[1..])
     }
 }
 

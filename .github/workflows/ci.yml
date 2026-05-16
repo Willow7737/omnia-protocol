@@ -61,6 +61,10 @@ jobs:
               sys.exit(1)
           print('✅ All exemptions have notes')
           "
+      - name: Check Prettier formatting
+        run: |
+          npm install -g prettier
+          npx prettier --check "**/*.md" "**/*.json" "!**/node_modules/**" "!target/**"
 
   test:
     name: Test (${{ matrix.rust }}, ${{ matrix.os }})
@@ -98,6 +102,22 @@ jobs:
       - run: cargo test --workspace --exclude omnia-fuzz --all-features --verbose
         timeout-minutes: 15
 
+  chaos-critical:
+    name: Critical Chaos Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-chaos"
+      - name: Run crash recovery chaos test
+        run: cargo test -p omnia-chaos-tests --test crash_recovery --verbose
+        timeout-minutes: 10
+      - name: Run byzantine chaos test
+        run: cargo test -p omnia-chaos-tests --test byzantine --verbose
+        timeout-minutes: 10
+
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -110,10 +130,23 @@ jobs:
       - run: cargo install cargo-audit --locked
       - run: cargo audit --deny warnings
 
+  deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run cargo-deny
+        run: cargo deny check
+
   supply-chain:
     name: Supply Chain Audit
     runs-on: ubuntu-latest
-    continue-on-error: true  # Third-party crates not yet fully audited — warning-level initially
+    # Blocking: supply-chain audit failures now fail the CI pipeline
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -204,7 +237,7 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:

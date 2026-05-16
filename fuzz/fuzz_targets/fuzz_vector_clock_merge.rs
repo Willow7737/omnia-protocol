@@ -12,7 +12,7 @@ use omnia_substrate::VectorClock;
 
 fuzz_target!(|data: &[u8]| {
     // Try to deserialize two vector clocks and merge them
-    if let Ok((a, b)) = bincode::deserialize::<(VectorClock, VectorClock)>(data) {
+    if let Ok((a, b)) = postcard::from_bytes::<(VectorClock, VectorClock)>(data) {
         // Merge must never panic
         let _merged = a.merged(&b);
 

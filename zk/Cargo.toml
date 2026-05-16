@@ -10,7 +10,7 @@ repository = { workspace = true }
 [dependencies]
 omnia-substrate = { path = "../substrate" }
 serde = { version = "1.0", features = ["derive"] }
-bincode = "1"
+postcard = { version = "1", features = ["alloc"] }
 blake3 = "1.5"
 tokio = { version = "1.35", features = ["full"] }
 tracing = "0.1"

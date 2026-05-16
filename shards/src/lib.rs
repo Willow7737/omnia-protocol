@@ -39,6 +39,8 @@
 //! router.route_event(&event)?;
 //! ```
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod biological;
@@ -58,7 +60,7 @@ pub mod shard;
 pub use cross_shard::CrossShardMessage;
 pub use economics_shard::{EconomicsOp, EconomicsVoteChoice};
 pub use fee_schedule::FeeSchedule;
-pub use nonce_store::{InMemoryNonceStore, NonceStore, NonceStoreError, SledNonceStore};
+pub use nonce_store::{InMemoryNonceStore, NonceStore, NonceStoreError, RedbNonceStore};
 pub use payload::{ShardOp, ShardPayload};
 pub use router::ShardRouter;
 pub use shard::{Shard, ShardError, ShardId};
@@ -165,7 +167,7 @@ impl EconomicsShardState {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("EconomicsShardState serialization cannot fail")
+        postcard::to_allocvec(self).expect("EconomicsShardState serialization cannot fail")
     }
 }
 

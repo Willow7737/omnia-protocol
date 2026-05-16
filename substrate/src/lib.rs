@@ -17,6 +17,8 @@
 //! the substrate via `with_shard_processor()` and are invoked automatically
 //! in the main run loop for each newly-committed event.
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
 
@@ -39,6 +41,7 @@ pub mod snapshot_replication;
 pub mod threshold;
 pub mod vector_clock;
 pub mod vrf;
+pub mod wire_format;
 
 // Re-export commonly used types
 pub use bls::{
@@ -70,8 +73,8 @@ pub use network::{
 };
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
-    InMemorySlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState,
-    SlashingStore, SlashingStoreError, SledSlashingStore, DEFAULT_EJECTION_THRESHOLD,
+    InMemorySlashingStore, RedbSlashingStore, SlashOffense, SlashOutcome, SlashingEngine,
+    SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
 pub use slashing_undo::{SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
@@ -82,6 +85,9 @@ pub use threshold::{
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
+pub use wire_format::{
+    deserialize_with_version, serialize_with_version, WIRE_FORMAT_VERSION,
+};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -176,7 +182,7 @@ pub struct SubstrateConfig {
     pub consensus: ConsensusConfig,
     /// Total number of nodes in the network
     pub total_nodes: usize,
-    /// Directory for persistent slashing state (sled).
+    /// Directory for persistent slashing state (redb).
     ///
     /// If `None`, slashing state is kept in memory only (for tests).
     /// Production nodes should always set this to ensure slash history
@@ -192,7 +198,7 @@ pub struct SubstrateConfig {
     /// preventing DoS via oversized payloads. Defaults to 1 MiB
     /// (`MAX_PAYLOAD_SIZE`).
     pub max_payload_size: usize,
-    /// Directory for persistent nonce state (sled).
+    /// Directory for persistent nonce state (redb).
     ///
     /// If `None`, nonce state is kept in memory only (for tests).
     /// Production nodes should set this to ensure nonce tracking
@@ -283,7 +289,7 @@ pub struct Substrate {
     ///
     /// Cloning this field yields a new `SlashingEngine` that shares the
     /// same `Arc<dyn SlashingStore>`, so slash events recorded by consensus
-    /// are visible to the API and persisted to the same sled database.
+    /// are visible to the API and persisted to the same redb database.
     pub slashing: SlashingEngine,
     /// Optional Layer 2 shard processor (e.g., domain shard router).
     ///

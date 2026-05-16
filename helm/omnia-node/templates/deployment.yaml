@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "omnia-node.fullname" . }}
+  labels:
+    app: {{ include "omnia-node.name" . }}
+    chart: {{ include "omnia-node.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "omnia-node.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "omnia-node.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "omnia-node.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: p2p
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: OMNIA_NODE_ID
+              value: {{ .Values.node.id | quote }}
+            - name: OMNIA_BOOTSTRAP_NODES
+              value: {{ .Values.node.bootstrapNodes | quote }}
+            - name: OMNIA_LISTEN_ADDR
+              value: {{ .Values.node.listenAddr | quote }}
+            - name: OMNIA_TOTAL_NODES
+              value: {{ .Values.node.totalNodes | quote }}
+            - name: OMNIA_DATA_DIR
+              value: {{ .Values.node.dataDir | quote }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+        {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "omnia-node.fullname" . }}
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}

@@ -200,7 +200,9 @@ impl RollupCircuitLegacy {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&self.old_state_root);
         for event in &self.events {
-            hasher.update(&event.to_bytes());
+            if let Ok(bytes) = event.to_bytes() {
+                hasher.update(&bytes);
+            }
         }
         hasher.update(&self.new_state_root);
         hasher.finalize().as_bytes().to_vec()

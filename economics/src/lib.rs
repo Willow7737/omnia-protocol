@@ -18,6 +18,8 @@
 //!   maps DIDs to quotas
 //! - **Layer 4**: `AgentIdentity` with `GovernanceVote` capability
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod economics_shard;

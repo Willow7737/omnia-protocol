@@ -44,6 +44,10 @@
 //! - **Solana**: Stub (returns `NotImplemented`)
 //! - **Celestia**: Stub (returns `NotImplemented`)
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 pub mod circuit;
 pub mod merkle;
 pub mod operator;
