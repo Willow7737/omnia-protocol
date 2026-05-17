@@ -290,7 +290,7 @@ pub fn select_leader(
     // Return last candidate as fallback (should never happen).
     Ok(*valid_candidates
         .last()
-        .expect("valid_candidates is non-empty")
+        .ok_or(VrfError::NoEligibleLeader(round_number))?
         .0)
 }
 

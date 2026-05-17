@@ -216,7 +216,7 @@ impl GossipProtocol {
     /// The event_rx is stored in self.network_rx so that
     /// process_pending_events() can drain network events into the
     /// pending queue and process them through the graph + consensus.
-    pub async fn start_with_network(&mut self, mut network: OmniaNetwork) {
+    pub async fn start_with_network(&mut self, mut network: OmniaNetwork) -> Result<(), GossipError> {
         self.running = true;
 
         // Take the event_rx out of the network — we consume it in
@@ -225,7 +225,7 @@ impl GossipProtocol {
         let event_rx = network
             .event_rx
             .take()
-            .expect("event_rx should be present after OmniaNetwork::new()");
+            .ok_or(GossipError::ChannelNotInitialized)?;
         self.network_rx = Some(event_rx);
 
         // Command channel for broadcast_event() → network task
@@ -246,6 +246,8 @@ impl GossipProtocol {
             node = ?&self.node_id[..4],
             "Gossip protocol started with network"
         );
+
+        Ok(())
     }
 
     /// Start the gossip protocol without a network (local-only).
@@ -560,7 +562,7 @@ fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     })
 }
 
-/// Errors from the gossip protocol
+    /// Errors from the gossip protocol
 #[derive(Error, Debug, Clone)]
 pub enum GossipError {
     #[error("Graph error: {0}")]
@@ -578,6 +580,9 @@ pub enum GossipError {
     #[error("Event validation failed: {0}")]
     /// Event validation failed
     ValidationFailed(String),
+    #[error("Channel not initialized")]
+    /// Channel for network events is not initialized
+    ChannelNotInitialized,
 }
 
 impl From<CausalGraphError> for GossipError {

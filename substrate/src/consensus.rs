@@ -84,10 +84,11 @@ impl Default for ConsensusConfig {
 
 impl ConsensusConfig {
     /// Create a config with a cryptographically random round seed.
-    pub fn with_random_seed(total_nodes: usize) -> Self {
+    pub fn with_random_seed(total_nodes: usize) -> Result<Self, ConsensusError> {
         let mut seed = [0u8; 32];
-        getrandom::getrandom(&mut seed).expect("Failed to generate random seed");
-        Self {
+        getrandom::getrandom(&mut seed)
+            .map_err(|e| ConsensusError::EntropyFailed(e.to_string()))?;
+        Ok(Self {
             total_nodes,
             commit_delay_rounds: 1,
             optimistic_confirmation: true,
@@ -96,7 +97,7 @@ impl ConsensusConfig {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
-        }
+        })
     }
 }
 
@@ -389,7 +390,7 @@ impl ConsensusEngine {
             let info = self
                 .node_info
                 .get_mut(&creator)
-                .expect("creator should exist in node_info when processing witness");
+                .ok_or_else(|| ConsensusError::InvariantViolated("creator not in node_info".to_string()))?;
             info.current_round = info.current_round.max(round);
             // FIX 3: update last witness round to round+1 to prevent
             // subsequent events in the same round from also being witnesses
@@ -846,6 +847,12 @@ pub enum ConsensusError {
     #[error("Node has been slashed: {0:?}")]
     /// The node has been slashed and its events are rejected
     NodeSlashed(NodeId),
+    /// Failed to obtain entropy for random seed generation.
+    #[error("entropy generation failed: {0}")]
+    EntropyFailed(String),
+    /// An invariant was violated.
+    #[error("invariant violated: {0}")]
+    InvariantViolated(String),
 }
 
 #[cfg(test)]

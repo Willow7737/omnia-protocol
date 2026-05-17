@@ -571,11 +571,11 @@ impl CausalGraph {
             let event_a = self
                 .events
                 .get(a)
-                .expect("event should exist in graph for topological sort");
+                .unwrap_or_else(|| panic!("event {:?} should exist in graph for topological sort", hex::encode(&a[..8])));
             let event_b = self
                 .events
                 .get(b)
-                .expect("event should exist in graph for topological sort");
+                .unwrap_or_else(|| panic!("event {:?} should exist in graph for topological sort", hex::encode(&b[..8])));
             event_a
                 .timestamp
                 .cmp(&event_b.timestamp)
@@ -848,10 +848,10 @@ impl CausalGraph {
     /// let pruned = graph.prune_finalized(current_round, 1000);
     /// tracing::info!(pruned, "pruned old finalized events");
     /// ```
-    pub fn prune_finalized(&mut self, current_round: u64, depth: u64) -> usize {
+    pub fn prune_finalized(&mut self, current_round: u64, depth: u64) -> Result<usize, CausalGraphError> {
         // Archive mode: never prune
         if depth == 0 {
-            return 0;
+            return Ok(0);
         }
 
         let cutoff_round = current_round.saturating_sub(depth);
@@ -872,7 +872,9 @@ impl CausalGraph {
                 let finalized_round = self
                     .finalized_rounds
                     .remove(id)
-                    .expect("finalized_rounds entry exists for event in to_prune");
+                    .ok_or_else(|| CausalGraphError::IntegrityError(
+                        format!("finalized_rounds entry missing for event {}", hex::encode(&id[..8]))
+                    ))?;
                 let depth_val = self.depths.remove(id).unwrap_or(0);
 
                 let metadata = PrunedEventMetadata {
@@ -916,7 +918,7 @@ impl CausalGraph {
             );
         }
 
-        pruned_count
+        Ok(pruned_count)
     }
 
     /// Get the total size of all payloads in bytes.
@@ -1591,7 +1593,7 @@ mod tests {
         graph.finalize_event_with_round(&e_id, 1).unwrap();
 
         // depth=0 means archive mode — nothing should be pruned
-        let pruned = graph.prune_finalized(100, 0);
+        let pruned = graph.prune_finalized(100, 0).unwrap();
         assert_eq!(pruned, 0);
         assert!(graph.contains(&e_id));
         assert!(!graph.is_pruned(&e_id));
@@ -1628,7 +1630,7 @@ mod tests {
         // Prune with depth=3 from round 5: cutoff = 5-3 = 2
         // e1 was finalized at round 1 < 2, so it should be pruned
         // e2 was finalized at round 5 >= 2, so it should remain
-        let pruned = graph.prune_finalized(5, 3);
+        let pruned = graph.prune_finalized(5, 3).unwrap();
         assert_eq!(pruned, 1);
         assert!(!graph.contains(&e1_id));
         assert!(graph.is_pruned(&e1_id));
@@ -1652,8 +1654,7 @@ mod tests {
         assert!(graph.get_checked(&e_id).is_ok());
 
         // Prune the event
-        graph.prune_finalized(10, 5);
-
+        graph.prune_finalized(10, 5).unwrap();
         // After pruning: get_checked returns EventPruned error
         let result = graph.get_checked(&e_id);
         assert!(matches!(result, Err(CausalGraphError::EventPruned(_))));
@@ -1677,8 +1678,7 @@ mod tests {
         graph.finalize_event_with_round(&e_id, 1).unwrap();
 
         // Prune the event
-        graph.prune_finalized(10, 5);
-
+        graph.prune_finalized(10, 5).unwrap();
         // Attempting to finalize a pruned event should fail
         let result = graph.finalize_event_with_round(&e_id, 99);
         assert!(matches!(result, Err(CausalGraphError::EventPruned(_))));
@@ -1697,7 +1697,7 @@ mod tests {
         graph.finalize_event_with_round(&e_id, 7).unwrap();
 
         // Prune the event
-        let pruned = graph.prune_finalized(20, 10);
+        let pruned = graph.prune_finalized(20, 10).unwrap();
         assert_eq!(pruned, 1);
 
         // Verify metadata is in pruned_events (we can't access the field directly,
@@ -1724,7 +1724,7 @@ mod tests {
 
         // Prune with a cutoff that doesn't qualify any events
         // current_round=5, depth=3 -> cutoff=2. Event at round 10 is NOT pruned.
-        let pruned = graph.prune_finalized(5, 3);
+        let pruned = graph.prune_finalized(5, 3).unwrap();
         assert_eq!(pruned, 0);
         assert!(graph.contains(&e_id));
     }

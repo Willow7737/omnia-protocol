@@ -99,7 +99,7 @@ const BLS_POP_DST: &[u8] = b"BLS_POP_BLS12381G1";
 /// ```ignore
 /// use omnia_substrate::bls::BlsKeypair;
 ///
-/// let keypair = BlsKeypair::generate(None);
+/// let keypair = BlsKeypair::generate(&[1u8; 32])?;
 /// let msg = b"hello world";
 /// let sig = keypair.sign(msg);
 /// assert!(keypair.public_key().verify(msg, &sig).is_ok());
@@ -136,56 +136,46 @@ impl BlsKeypair {
     /// Generate a new BLS keypair.
     ///
     /// Uses the `blst` library's key derivation function to derive a
-    /// secret key from the provided seed. If no seed is given, a
-    /// default zero seed is used (for testing only — production code
-    /// must provide cryptographic entropy).
+    /// secret key from the provided seed.
     ///
     /// # Arguments
     ///
-    /// * `seed` — Optional seed bytes for key generation. If `None`,
-    ///   a zero seed is used (testing only).
+    /// * `seed` — Seed bytes for key generation (must be at least 32 bytes).
     ///
     /// # Returns
     ///
-    /// A new [`BlsKeypair`] with a random or seeded secret key.
+    /// A new [`BlsKeypair`] with a seeded secret key, or a [`BlsError`]
+    /// if key generation fails.
     ///
     /// # Example
     ///
     /// ```ignore
     /// use omnia_substrate::bls::BlsKeypair;
     ///
-    /// let keypair = BlsKeypair::generate(None);
+    /// let keypair = BlsKeypair::generate(&[1u8; 32])?;
     /// ```
-    pub fn generate(seed: Option<&[u8]>) -> Self {
-        let ikm = seed.unwrap_or_else(|| {
-            #[cfg(debug_assertions)]
-            panic!("BlsKeypair::generate(None) is insecure — provide a seed or use BlsKeypair::generate_random()");
-            #[cfg(not(debug_assertions))]
-            {
-                tracing::warn!("⚠️  BLS keypair generated with zero seed — INSECURE for production");
-                &[0u8; 32]
-            }
-        });
-        let sk = BlstSecretKey::key_gen(ikm, &[])
-            .expect("BLS key generation should not fail with valid input");
+    pub fn generate(seed: &[u8]) -> Result<Self, BlsError> {
+        let sk = BlstSecretKey::key_gen(seed, &[])
+            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
         let pk = sk.sk_to_pk();
-        Self {
+        Ok(Self {
             secret_key: sk,
             public_key: pk,
-        }
+        })
     }
 
     /// Generate a BLS keypair with cryptographically random entropy.
-    pub fn generate_random() -> Self {
+    pub fn generate_random() -> Result<Self, BlsError> {
         let mut ikm = [0u8; 32];
-        getrandom::getrandom(&mut ikm).expect("Failed to generate random IKM for BLS key");
+        getrandom::getrandom(&mut ikm)
+            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
         let sk = BlstSecretKey::key_gen(&ikm, &[])
-            .expect("BLS key generation should not fail with valid input");
+            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
         let pk = sk.sk_to_pk();
-        Self {
+        Ok(Self {
             secret_key: sk,
             public_key: pk,
-        }
+        })
     }
 
     /// Get the serializable public key.
@@ -217,7 +207,7 @@ impl BlsKeypair {
     /// ```ignore
     /// use omnia_substrate::bls::BlsKeypair;
     ///
-    /// let keypair = BlsKeypair::generate(None);
+    /// let keypair = BlsKeypair::generate(&[1u8; 32])?;
     /// let sig = keypair.sign(b"hello world");
     /// ```
     pub fn sign(&self, message: &[u8]) -> BlsSignature {
@@ -286,7 +276,7 @@ impl BlsPublicKey {
     /// ```ignore
     /// use omnia_substrate::bls::{BlsKeypair, BlsPublicKey};
     ///
-    /// let keypair = BlsKeypair::generate(None);
+    /// let keypair = BlsKeypair::generate(&[1u8; 32])?;
     /// let sig = keypair.sign(b"hello");
     /// let pk = keypair.public_key();
     /// pk.verify(b"hello", &sig)?;
@@ -421,8 +411,8 @@ impl BlsProofOfPossession {
 /// ```ignore
 /// use omnia_substrate::bls::{BlsKeypair, aggregate_signatures};
 ///
-/// let kp1 = BlsKeypair::generate(None);
-/// let kp2 = BlsKeypair::generate(None);
+/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
+/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
 /// let msg = b"same message";
 ///
 /// let sig1 = kp1.sign(msg);
@@ -477,8 +467,8 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
 /// ```ignore
 /// use omnia_substrate::bls::{BlsKeypair, aggregate_public_keys};
 ///
-/// let kp1 = BlsKeypair::generate(None);
-/// let kp2 = BlsKeypair::generate(None);
+/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
+/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
 /// let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()])?;
 /// ```
 pub fn aggregate_public_keys(public_keys: &[BlsPublicKey]) -> Result<BlsPublicKey, BlsError> {
@@ -534,8 +524,8 @@ pub fn aggregate_public_keys(public_keys: &[BlsPublicKey]) -> Result<BlsPublicKe
 ///     BlsKeypair, aggregate_signatures, aggregate_public_keys, verify_aggregate,
 /// };
 ///
-/// let kp1 = BlsKeypair::generate(None);
-/// let kp2 = BlsKeypair::generate(None);
+/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
+/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
 /// let msg = b"same message";
 ///
 /// let sig1 = kp1.sign(msg);
@@ -605,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_bls_keypair_generate() {
-        let kp = BlsKeypair::generate(Some(&[1u8; 32]));
+        let kp = BlsKeypair::generate(&[1u8; 32]).unwrap();
         let pk = kp.public_key();
         assert_eq!(pk.0.len(), PUBLIC_KEY_SIZE);
     }
@@ -613,14 +603,14 @@ mod tests {
     #[test]
     fn test_bls_keypair_deterministic() {
         let seed = [42u8; 32];
-        let kp1 = BlsKeypair::generate(Some(&seed));
-        let kp2 = BlsKeypair::generate(Some(&seed));
+        let kp1 = BlsKeypair::generate(&seed).unwrap();
+        let kp2 = BlsKeypair::generate(&seed).unwrap();
         assert_eq!(kp1.public_key(), kp2.public_key());
     }
 
     #[test]
     fn test_bls_sign_and_verify() {
-        let kp = BlsKeypair::generate(Some(&[1u8; 32]));
+        let kp = BlsKeypair::generate(&[1u8; 32]).unwrap();
         let msg = b"test message for BLS";
         let sig = kp.sign(msg);
         assert_eq!(sig.0.len(), SIGNATURE_SIZE);
@@ -631,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_bls_verify_wrong_message() {
-        let kp = BlsKeypair::generate(Some(&[2u8; 32]));
+        let kp = BlsKeypair::generate(&[2u8; 32]).unwrap();
         let sig = kp.sign(b"correct message");
 
         let pk = kp.public_key();
@@ -641,8 +631,8 @@ mod tests {
 
     #[test]
     fn test_bls_verify_wrong_key() {
-        let kp1 = BlsKeypair::generate(Some(&[3u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[4u8; 32]));
+        let kp1 = BlsKeypair::generate(&[3u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[4u8; 32]).unwrap();
         let msg = b"same message";
         let sig = kp1.sign(msg);
 
@@ -653,9 +643,9 @@ mod tests {
 
     #[test]
     fn test_bls_aggregate_signatures() {
-        let kp1 = BlsKeypair::generate(Some(&[10u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[20u8; 32]));
-        let kp3 = BlsKeypair::generate(Some(&[30u8; 32]));
+        let kp1 = BlsKeypair::generate(&[10u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[20u8; 32]).unwrap();
+        let kp3 = BlsKeypair::generate(&[30u8; 32]).unwrap();
         let msg = b"same message for all";
 
         let sig1 = kp1.sign(msg);
@@ -669,8 +659,8 @@ mod tests {
 
     #[test]
     fn test_bls_aggregate_public_keys() {
-        let kp1 = BlsKeypair::generate(Some(&[11u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[22u8; 32]));
+        let kp1 = BlsKeypair::generate(&[11u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[22u8; 32]).unwrap();
 
         let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()])
             .expect("aggregation should succeed");
@@ -679,9 +669,9 @@ mod tests {
 
     #[test]
     fn test_bls_verify_aggregate() {
-        let kp1 = BlsKeypair::generate(Some(&[15u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[25u8; 32]));
-        let kp3 = BlsKeypair::generate(Some(&[35u8; 32]));
+        let kp1 = BlsKeypair::generate(&[15u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[25u8; 32]).unwrap();
+        let kp3 = BlsKeypair::generate(&[35u8; 32]).unwrap();
         let msg = b"aggregate verify test";
 
         let sig1 = kp1.sign(msg);
@@ -711,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_bls_single_aggregate_equals_original() {
-        let kp = BlsKeypair::generate(Some(&[77u8; 32]));
+        let kp = BlsKeypair::generate(&[77u8; 32]).unwrap();
         let msg = b"single signer";
         let sig = kp.sign(msg);
 
@@ -724,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_bls_public_key_from_bytes() {
-        let kp = BlsKeypair::generate(Some(&[88u8; 32]));
+        let kp = BlsKeypair::generate(&[88u8; 32]).unwrap();
         let pk = kp.public_key();
         let pk2 = BlsPublicKey::from_bytes(pk.as_bytes()).expect("from_bytes should work");
         assert_eq!(pk, pk2);
@@ -732,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_bls_signature_from_bytes() {
-        let kp = BlsKeypair::generate(Some(&[99u8; 32]));
+        let kp = BlsKeypair::generate(&[99u8; 32]).unwrap();
         let sig = kp.sign(b"test");
         let sig2 = BlsSignature::from_bytes(sig.as_bytes()).expect("from_bytes should work");
         assert_eq!(sig, sig2);
@@ -754,8 +744,8 @@ mod tests {
 
     #[test]
     fn test_bls_different_messages_cannot_aggregate_verify() {
-        let kp1 = BlsKeypair::generate(Some(&[55u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[66u8; 32]));
+        let kp1 = BlsKeypair::generate(&[55u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[66u8; 32]).unwrap();
 
         // Sign different messages — aggregate verify should fail
         let sig1 = kp1.sign(b"message one");
@@ -775,15 +765,15 @@ mod tests {
 
     #[test]
     fn test_pop_generation_and_verification() {
-        let keypair = BlsKeypair::generate(Some(&[1u8; 32]));
+        let keypair = BlsKeypair::generate(&[1u8; 32]).unwrap();
         let pop = BlsProofOfPossession::generate(&keypair);
         assert!(pop.verify());
     }
 
     #[test]
     fn test_pop_wrong_key_fails() {
-        let keypair1 = BlsKeypair::generate(Some(&[1u8; 32]));
-        let keypair2 = BlsKeypair::generate(Some(&[2u8; 32]));
+        let keypair1 = BlsKeypair::generate(&[1u8; 32]).unwrap();
+        let keypair2 = BlsKeypair::generate(&[2u8; 32]).unwrap();
 
         // Generate a valid PoP for keypair1
         let mut pop = BlsProofOfPossession::generate(&keypair1);
@@ -794,8 +784,8 @@ mod tests {
 
     #[test]
     fn test_aggregate_with_pop_prevents_rogue_key() {
-        let kp1 = BlsKeypair::generate(Some(&[10u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[20u8; 32]));
+        let kp1 = BlsKeypair::generate(&[10u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[20u8; 32]).unwrap();
         let msg = b"protected message";
 
         let sig1 = kp1.sign(msg);
@@ -817,8 +807,8 @@ mod tests {
 
     #[test]
     fn test_aggregate_with_pop_rejects_invalid_pop() {
-        let kp1 = BlsKeypair::generate(Some(&[10u8; 32]));
-        let kp2 = BlsKeypair::generate(Some(&[20u8; 32]));
+        let kp1 = BlsKeypair::generate(&[10u8; 32]).unwrap();
+        let kp2 = BlsKeypair::generate(&[20u8; 32]).unwrap();
         let msg = b"protected message";
 
         let sig1 = kp1.sign(msg);
@@ -826,7 +816,7 @@ mod tests {
 
         let pop1 = BlsProofOfPossession::generate(&kp1);
         // Create a PoP for a different keypair but present it for kp2
-        let kp3 = BlsKeypair::generate(Some(&[30u8; 32]));
+        let kp3 = BlsKeypair::generate(&[30u8; 32]).unwrap();
         let pop3 = BlsProofOfPossession::generate(&kp3);
 
         let agg_sig = aggregate_signatures(&[sig1, sig2]).unwrap();

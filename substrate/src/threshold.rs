@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn test_key_share_partial_sign() {
         let n = node(1);
-        let keypair = BlsKeypair::generate(Some(&[1u8; 32]));
+        let keypair = BlsKeypair::generate(&[1u8; 32]).unwrap();
         let share = KeyShare::new(n, 1, keypair);
         let partial = share.partial_sign(b"test message");
         assert_eq!(partial.participant, n);
@@ -381,7 +381,7 @@ mod tests {
         // Register 4 participants
         for i in 1..=4u8 {
             let n = node(i);
-            let keypair = BlsKeypair::generate(Some(&[i; 32]));
+            let keypair = BlsKeypair::generate(&[i; 32]).unwrap();
             let share = KeyShare::new(n, i as usize, keypair);
             mgr.register_share(share);
         }
@@ -464,7 +464,7 @@ mod tests {
         // Register 4 participants
         for i in 1..=4u8 {
             let n = node(i);
-            let keypair = BlsKeypair::generate(Some(&[i; 32]));
+            let keypair = BlsKeypair::generate(&[i; 32]).unwrap();
             let share = KeyShare::new(n, i as usize, keypair);
             mgr.register_share(share);
         }

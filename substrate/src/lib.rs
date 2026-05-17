@@ -433,7 +433,9 @@ impl Substrate {
     /// Start with network and run main loop
     pub async fn start_with_network(&mut self, network: OmniaNetwork) {
         if let Some(ref mut gossip) = self.gossip {
-            gossip.start_with_network(network).await;
+            if let Err(e) = gossip.start_with_network(network).await {
+                tracing::error!("Failed to start gossip with network: {}", e);
+            }
         }
         self.run().await;
     }
