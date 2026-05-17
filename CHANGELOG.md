@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12](https://github.com/Willow7737/omnia-protocol/compare/v0.1.11...v0.1.12) (2026-05-17)
+
+
+### Bug Fixes
+
+* **ci:** remove deprecated deny.toml keys (unlicensed, copyleft, default) for cargo-deny 0.19.x ([fa044f2](https://github.com/Willow7737/omnia-protocol/commit/fa044f2e57ab86d7482c3b8fcd235c9215af5df5))
+
 ## [0.1.11](https://github.com/Willow7737/omnia-protocol/compare/v0.1.10...v0.1.11) (2026-05-17)
 
 
