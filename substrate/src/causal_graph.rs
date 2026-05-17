@@ -496,7 +496,14 @@ impl CausalGraph {
     }
 
     /// Get a topological ordering of events
-    pub fn topological_order(&self, start_from: Option<&VectorClock>) -> Vec<EventId> {
+    ///
+    /// Returns `Err(CausalGraphError::EventPruned)` when the ancestry chain
+    /// is broken by pruning — i.e., when a child event's parent has been
+    /// pruned. In this case, the topological invariant (parents must precede
+    /// children) cannot be guaranteed because the pruned parent edge is
+    /// invisible to Kahn's algorithm, causing the child's in-degree to be
+    /// under-counted.
+    pub fn topological_order(&self, start_from: Option<&VectorClock>) -> Result<Vec<EventId>, CausalGraphError> {
         let relevant_events: Vec<&Event> = match start_from {
             Some(vc) => self
                 .events
@@ -505,6 +512,20 @@ impl CausalGraph {
                 .collect(),
             None => self.events.values().collect(),
         };
+
+        // Check for pruned parents in relevant events
+        for event in &relevant_events {
+            for parent_id in [event.self_parent, event.other_parent].iter().flatten() {
+                // If the parent is not in self.events, check if it was pruned
+                if !self.events.contains_key(parent_id) {
+                    if self.pruned_events.contains_key(parent_id) {
+                        return Err(CausalGraphError::EventPruned(hex::encode(&parent_id[..8])));
+                    }
+                    // If not in events and not in pruned_events, it's a missing parent
+                    // (shouldn't happen for valid graphs, but skip silently)
+                }
+            }
+        }
 
         let mut in_degree: HashMap<EventId, usize> = HashMap::new();
         let mut children: HashMap<EventId, Vec<EventId>> = HashMap::new();
@@ -562,7 +583,7 @@ impl CausalGraph {
             }
         }
 
-        result
+        Ok(result)
     }
 
     /// Find events that are in our graph but not in the given set
@@ -657,7 +678,7 @@ impl CausalGraph {
     }
 
     /// Get all finalized events in topological order
-    pub fn finalized_order(&self) -> Vec<&Event> {
+    pub fn finalized_order(&self) -> Result<Vec<&Event>, CausalGraphError> {
         let finalized: Vec<EventId> = self
             .events
             .values()
@@ -665,12 +686,12 @@ impl CausalGraph {
             .map(|e| e.id)
             .collect();
 
-        let order = self.topological_order(None);
-        order
+        let order = self.topological_order(None)?;
+        Ok(order
             .into_iter()
             .filter(|id| finalized.contains(id))
             .filter_map(|id| self.events.get(&id))
-            .collect()
+            .collect())
     }
 
     /// Compute the Merkle root of all event hashes in the graph.
@@ -1202,7 +1223,7 @@ mod tests {
         let b_id = b.id;
         graph.insert(b).unwrap();
 
-        let order = graph.topological_order(None);
+        let order = graph.topological_order(None).unwrap();
         let g_pos = order.iter().position(|&id| id == g_id).unwrap();
         let a_pos = order.iter().position(|&id| id == a_id).unwrap();
         let b_pos = order.iter().position(|&id| id == b_id).unwrap();
