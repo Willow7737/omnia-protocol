@@ -245,8 +245,8 @@ jobs:
       - name: Run cargo audit
         run: |
           cargo install cargo-audit --locked
-          cargo audit --json > audit-report.json 2>/dev/null || true
-          cargo audit || true
+          cargo audit --json > audit-report.json 2>/dev/null
+          cargo audit
 
       - name: Upload audit report
         uses: actions/upload-artifact@v4

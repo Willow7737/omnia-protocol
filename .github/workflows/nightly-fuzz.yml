@@ -20,7 +20,6 @@ jobs:
         run: rustup override set nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-        continue-on-error: true
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-fuzz"
@@ -33,12 +32,11 @@ jobs:
           for target in causal_graph_insert event_validate shard_route vector_clock_merge; do
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
-              timeout 300 cargo fuzz run $target -- -max_total_time=300 || true
+              timeout 300 cargo fuzz run $target -- -max_total_time=300
             else
               echo "Fuzz target $target not found — skipping"
             fi
           done
-        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: fuzz-corpus-${{ github.run_id }}
@@ -56,7 +54,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
       - run: cargo audit --json > audit-report.json
-        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: security-audit-${{ github.run_id }}
