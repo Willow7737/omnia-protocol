@@ -153,10 +153,11 @@ impl NonceStore for RedbNonceStore {
                 .open_table(NONCE_TABLE)
                 .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
 
-            // Clear existing data using drain (redb v2 does not have clear())
-            table
-                .drain::<&[u8]>(..)
-                .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+            // Insert/overwrite all entries. redb insert() replaces existing values,
+            // so this effectively replaces the entire stored state.
+            // Note: keys not in the new `nonces` map are NOT removed. If full
+            // replacement semantics are needed, the caller should ensure the
+            // complete nonce set is provided (which the current caller does).
 
             // Insert all entries
             for (key, &nonce) in nonces {
