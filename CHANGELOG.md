@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9](https://github.com/Willow7737/omnia-protocol/compare/v0.1.8...v0.1.9) (2026-05-17)
+
+
+### Bug Fixes
+
+* make Prettier check non-blocking, exclude generated files ([ebb3c0f](https://github.com/Willow7737/omnia-protocol/commit/ebb3c0f7458c857932d02211cfc992323c26dd2c))
+
 ## [0.1.8](https://github.com/Willow7737/omnia-protocol/compare/v0.1.7...v0.1.8) (2026-05-17)
 
 
