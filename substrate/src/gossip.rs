@@ -220,7 +220,10 @@ impl GossipProtocol {
     /// The event_rx is stored in self.network_rx so that
     /// process_pending_events() can drain network events into the
     /// pending queue and process them through the graph + consensus.
-    pub async fn start_with_network(&mut self, mut network: OmniaNetwork) -> Result<(), GossipError> {
+    pub async fn start_with_network(
+        &mut self,
+        mut network: OmniaNetwork,
+    ) -> Result<(), GossipError> {
         self.running = true;
 
         // Take the event_rx out of the network — we consume it in
@@ -574,7 +577,7 @@ fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     })
 }
 
-    /// Errors from the gossip protocol
+/// Errors from the gossip protocol
 #[derive(Error, Debug, Clone)]
 pub enum GossipError {
     #[error("Graph error: {0}")]

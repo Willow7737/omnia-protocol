@@ -312,8 +312,9 @@ impl IdentityState {
                 config.threshold
             )));
         }
-        ShamirRecovery::reconstruct(shares)
-            .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {}", e)))
+        ShamirRecovery::reconstruct(shares).map_err(|e| {
+            ShardError::ValidationFailed(format!("Recovery reconstruction failed: {}", e))
+        })
     }
 
     /// Register an AI agent identity.

@@ -230,8 +230,12 @@ impl GovernanceState {
 
         match choice {
             VoteChoice::For => proposal.votes_for = proposal.votes_for.saturating_add(weight),
-            VoteChoice::Against => proposal.votes_against = proposal.votes_against.saturating_add(weight),
-            VoteChoice::Abstain => proposal.votes_abstain = proposal.votes_abstain.saturating_add(weight),
+            VoteChoice::Against => {
+                proposal.votes_against = proposal.votes_against.saturating_add(weight)
+            }
+            VoteChoice::Abstain => {
+                proposal.votes_abstain = proposal.votes_abstain.saturating_add(weight)
+            }
         }
 
         self.last_active.insert(did.to_string(), current_epoch);

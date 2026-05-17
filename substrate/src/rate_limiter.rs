@@ -130,7 +130,8 @@ impl RateLimiter {
         let now = Instant::now();
         let threshold = std::time::Duration::from_secs(max_idle_secs);
         let before = self.buckets.len();
-        self.buckets.retain(|_, bucket| now.duration_since(bucket.last_access) <= threshold);
+        self.buckets
+            .retain(|_, bucket| now.duration_since(bucket.last_access) <= threshold);
         before - self.buckets.len()
     }
 

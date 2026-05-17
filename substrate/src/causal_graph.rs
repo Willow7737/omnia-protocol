@@ -576,14 +576,18 @@ impl CausalGraph {
 
         let mut queue_vec: Vec<EventId> = queue.into_iter().collect();
         queue_vec.sort_by(|a, b| {
-            let event_a = self
-                .events
-                .get(a)
-                .unwrap_or_else(|| panic!("event {:?} should exist in graph for topological sort", hex::encode(&a[..8])));
-            let event_b = self
-                .events
-                .get(b)
-                .unwrap_or_else(|| panic!("event {:?} should exist in graph for topological sort", hex::encode(&b[..8])));
+            let event_a = self.events.get(a).unwrap_or_else(|| {
+                panic!(
+                    "event {:?} should exist in graph for topological sort",
+                    hex::encode(&a[..8])
+                )
+            });
+            let event_b = self.events.get(b).unwrap_or_else(|| {
+                panic!(
+                    "event {:?} should exist in graph for topological sort",
+                    hex::encode(&b[..8])
+                )
+            });
             event_a
                 .timestamp
                 .cmp(&event_b.timestamp)
@@ -857,7 +861,11 @@ impl CausalGraph {
     /// let pruned = graph.prune_finalized(current_round, 1000);
     /// tracing::info!(pruned, "pruned old finalized events");
     /// ```
-    pub fn prune_finalized(&mut self, current_round: u64, depth: u64) -> Result<usize, CausalGraphError> {
+    pub fn prune_finalized(
+        &mut self,
+        current_round: u64,
+        depth: u64,
+    ) -> Result<usize, CausalGraphError> {
         // Archive mode: never prune
         if depth == 0 {
             return Ok(0);
@@ -878,12 +886,12 @@ impl CausalGraph {
         for id in &to_prune {
             // Create minimal metadata from the event before removing it
             if let Some(event) = self.events.remove(id) {
-                let finalized_round = self
-                    .finalized_rounds
-                    .remove(id)
-                    .ok_or_else(|| CausalGraphError::IntegrityError(
-                        format!("finalized_rounds entry missing for event {}", hex::encode(&id[..8]))
-                    ))?;
+                let finalized_round = self.finalized_rounds.remove(id).ok_or_else(|| {
+                    CausalGraphError::IntegrityError(format!(
+                        "finalized_rounds entry missing for event {}",
+                        hex::encode(&id[..8])
+                    ))
+                })?;
                 let depth_val = self.depths.remove(id).unwrap_or(0);
 
                 let metadata = PrunedEventMetadata {

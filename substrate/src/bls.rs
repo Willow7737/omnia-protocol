@@ -167,8 +167,7 @@ impl BlsKeypair {
     /// Generate a BLS keypair with cryptographically random entropy.
     pub fn generate_random() -> Result<Self, BlsError> {
         let mut ikm = [0u8; 32];
-        getrandom::getrandom(&mut ikm)
-            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
+        getrandom::getrandom(&mut ikm).map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
         let sk = BlstSecretKey::key_gen(&ikm, &[])
             .map_err(|e| BlsError::KeyGenerationFailed(format!("BLS key_gen failed: {e:?}")))?;
         let pk = sk.sk_to_pk();

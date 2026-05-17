@@ -205,11 +205,11 @@ pub struct NodeConsensusInfo {
 
 /// Default number of rounds beyond which a Committed event is considered
 /// old enough to be cleaned up from `event_states`.
-const DEFAULT_COMMITTED_ROUND_THRESHOLD: u64 = 10_000;
+pub const DEFAULT_COMMITTED_ROUND_THRESHOLD: u64 = 10_000;
 
 /// Default sequence distance beyond which a `first_event_for_sequence` entry
 /// is considered stale and can be cleaned up.
-const DEFAULT_SEQUENCE_CLEANUP_DISTANCE: u64 = 1_000;
+pub const DEFAULT_SEQUENCE_CLEANUP_DISTANCE: u64 = 1_000;
 
 /// The consensus engine
 ///
@@ -390,10 +390,9 @@ impl ConsensusEngine {
                 .entry(round)
                 .or_default()
                 .insert(event_id);
-            let info = self
-                .node_info
-                .get_mut(&creator)
-                .ok_or_else(|| ConsensusError::InvariantViolated("creator not in node_info".to_string()))?;
+            let info = self.node_info.get_mut(&creator).ok_or_else(|| {
+                ConsensusError::InvariantViolated("creator not in node_info".to_string())
+            })?;
             info.current_round = info.current_round.max(round);
             // FIX 3: update last witness round to round+1 to prevent
             // subsequent events in the same round from also being witnesses
@@ -949,10 +948,7 @@ impl ConsensusEngine {
         }
 
         if removed > 0 {
-            tracing::debug!(
-                removed,
-                "cleaned up stale first_event_for_sequence entries"
-            );
+            tracing::debug!(removed, "cleaned up stale first_event_for_sequence entries");
         }
 
         removed
@@ -1618,18 +1614,25 @@ mod timeout_tests {
 
         // Add entries for sequences 0..5 for n1 and n2
         for seq in 0..5u64 {
-            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
-            engine.first_event_for_sequence.insert((n2, seq), [seq as u8; 32]);
+            engine
+                .first_event_for_sequence
+                .insert((n1, seq), [seq as u8; 32]);
+            engine
+                .first_event_for_sequence
+                .insert((n2, seq), [seq as u8; 32]);
         }
 
         // Set n1's events_created to 2000 (far ahead of seq 0-4)
-        engine.node_info.insert(n1, NodeConsensusInfo {
-            current_round: 0,
-            last_witness_round: 0,
-            events_created: 2000,
-            events_committed: 0,
-            last_event: None,
-        });
+        engine.node_info.insert(
+            n1,
+            NodeConsensusInfo {
+                current_round: 0,
+                last_witness_round: 0,
+                events_created: 2000,
+                events_committed: 0,
+                last_event: None,
+            },
+        );
 
         // n2 has no node_info entry — its entries won't be cleaned
         // (creator not tracked in node_info means we can't determine staleness)
@@ -1654,17 +1657,22 @@ mod timeout_tests {
 
         // Add entries for sequences 95..100
         for seq in 95..100u64 {
-            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
+            engine
+                .first_event_for_sequence
+                .insert((n1, seq), [seq as u8; 32]);
         }
 
         // n1 has created 100 events — distance from seq 95 is only 5
-        engine.node_info.insert(n1, NodeConsensusInfo {
-            current_round: 0,
-            last_witness_round: 0,
-            events_created: 100,
-            events_committed: 0,
-            last_event: None,
-        });
+        engine.node_info.insert(
+            n1,
+            NodeConsensusInfo {
+                current_round: 0,
+                last_witness_round: 0,
+                events_created: 100,
+                events_committed: 0,
+                last_event: None,
+            },
+        );
 
         // With distance=100, none should be removed (100-95=5, 5 <= 100)
         let removed = engine.cleanup_stale_sequences(Some(100));

@@ -119,7 +119,8 @@ impl EconomicsShardState {
                     ));
                 }
                 let current = self.balances.get(did).copied().unwrap_or(0);
-                self.balances.insert(did.clone(), current.saturating_add(*amount));
+                self.balances
+                    .insert(did.clone(), current.saturating_add(*amount));
                 Ok(())
             }
             EconomicsOp::SpendUbc { did, amount } => {
@@ -154,8 +155,13 @@ impl EconomicsShardState {
             }
             EconomicsOp::SubmitWork { did, .. } => {
                 // Simplified: reward 100 UBC for any submitted work
-                let current = self.balances.get(did).copied().unwrap_or(self.default_quota);
-                self.balances.insert(did.clone(), current.saturating_add(100));
+                let current = self
+                    .balances
+                    .get(did)
+                    .copied()
+                    .unwrap_or(self.default_quota);
+                self.balances
+                    .insert(did.clone(), current.saturating_add(100));
                 Ok(())
             }
             EconomicsOp::CreateProposal { .. } | EconomicsOp::Vote { .. } => {
