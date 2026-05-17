@@ -573,14 +573,14 @@ impl ConsensusEngine {
         round: u64,
         graph: &CausalGraph,
     ) -> Result<Vec<EventId>, ConsensusError> {
-        let mut committed = Vec::new();
+        let mut committed = HashSet::new();
 
         // Only witnesses can trigger commitments
         if !matches!(
             self.event_states.get(&event_id),
             Some(ConsensusState::Witness { .. })
         ) {
-            return Ok(committed);
+            return Ok(committed.into_iter().collect());
         }
 
         // FIX(bug-3): Removed shadowing line `let round = ...` that overwrote
@@ -594,13 +594,13 @@ impl ConsensusEngine {
                     if witnesses.len() >= consensus_threshold(self.config.total_nodes) {
                         for &witness_id in witnesses {
                             if !self.is_committed(&witness_id) {
-                                committed.push(witness_id);
+                                committed.insert(witness_id);
                             }
                         }
                     }
                 }
             }
-            return Ok(committed);
+            return Ok(committed.into_iter().collect());
         }
         let check_round = round.saturating_sub(self.config.commit_delay_rounds);
 
@@ -613,12 +613,12 @@ impl ConsensusEngine {
 
                 if self.is_famous(witness_id, check_round, graph)? {
                     self.fame_status.insert(witness_id, true);
-                    committed.push(witness_id);
+                    committed.insert(witness_id);
 
                     if let Ok(ancestors) = graph.get_ancestors(&witness_id) {
                         for ancestor in ancestors {
                             if !self.is_committed(&ancestor) {
-                                committed.push(ancestor);
+                                committed.insert(ancestor);
                             }
                         }
                     }
@@ -626,7 +626,7 @@ impl ConsensusEngine {
             }
         }
 
-        Ok(committed)
+        Ok(committed.into_iter().collect())
     }
 
     /// Determine if a witness is famous
