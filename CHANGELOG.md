@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.18](https://github.com/Willow7737/omnia-protocol/compare/v0.1.17...v0.1.18) (2026-05-17)
+
+
+### Bug Fixes
+
+* **ci:** fix CI coverage enforcement and remove continue-on-error on security jobs ([1716c4c](https://github.com/Willow7737/omnia-protocol/commit/1716c4c8bfa475cbae719cc402829cd59466f8fe))
+* **ci:** fix release workflow and nightly fuzz error handling ([9ce12a5](https://github.com/Willow7737/omnia-protocol/commit/9ce12a5858d1d10502e3cf63874f67ea4ed9c45a))
+* **deps:** set unknown-git to deny in deny.toml ([dc7bd12](https://github.com/Willow7737/omnia-protocol/commit/dc7bd126a332c4fd2532a7b4e55df4551ec9c3cb))
+* **economics:** use saturating_add for vote accumulation in governance ([a579608](https://github.com/Willow7737/omnia-protocol/commit/a5796084907b1dc374271f8a14b6a4587175db94))
+* **fuzz:** update OSS-Fuzz Dockerfile to Rust 1.85 ([37cddcf](https://github.com/Willow7737/omnia-protocol/commit/37cddcfedf32067e1a1228b09f8167993d293c97))
+* **security:** add constant-time comparisons in ZK and binding crates ([be29809](https://github.com/Willow7737/omnia-protocol/commit/be298099f2d1c89b01538bd033fe07d642a05392))
+* **security:** Phase 1 - Critical smart contract fixes for OmniaRollup.sol ([7d52c57](https://github.com/Willow7737/omnia-protocol/commit/7d52c5753153b0eb35253587f54a419d7542dd9d))
+* **shards:** change Shard state_snapshot() trait to return Result ([b34cc66](https://github.com/Willow7737/omnia-protocol/commit/b34cc66d260221103b60f2910e6c89228566b276))
+* **shards:** return Result from ShamirRecovery::gf_inverse() instead of panicking ([46b2e73](https://github.com/Willow7737/omnia-protocol/commit/46b2e732c78159b8a164ae9cdb0f4002870fc3b7))
+* **shards:** use saturating_add for EconomicsShardState balance operations ([abb4183](https://github.com/Willow7737/omnia-protocol/commit/abb418369d294d6d1dfd7919bcaad8e32290a7c7))
+* **substrate:** add auto-upgrade path for legacy XOR keystores ([ceb5ca6](https://github.com/Willow7737/omnia-protocol/commit/ceb5ca61e32c9b7f4a0a16f6b2b7033042941265))
+* **substrate:** add bounded caches and pruning for unbounded collections ([743c9c4](https://github.com/Willow7737/omnia-protocol/commit/743c9c45c2688eab14d51f928912faec92ed9521))
+* **substrate:** deduplicate committed events in check_commitments with HashSet ([af33da1](https://github.com/Willow7737/omnia-protocol/commit/af33da1fa3d597d4c19b06d2c52053e465b32235))
+* **substrate:** fix can_strongly_see() EventPruned handling - propagate error instead of false default ([c562a94](https://github.com/Willow7737/omnia-protocol/commit/c562a945081bb6b843f15e913a5b15e24d9d1964))
+* **substrate:** fix finalized_order() O(n²) performance with HashSet ([470f82b](https://github.com/Willow7737/omnia-protocol/commit/470f82b8cb9ccf9cdb73ea8c7caaf432909bb473))
+* **substrate:** fix GCounter overflow and add crate lints to chaos-tests ([51e677b](https://github.com/Willow7737/omnia-protocol/commit/51e677bdf8616f04fe8c927a38f1bc9b10845f96))
+* **substrate:** fix SlashingEngine Clone divergent state with Arc&lt;RwLock&lt;SlashingState&gt;&gt; ([774a597](https://github.com/Willow7737/omnia-protocol/commit/774a5973bb8853dcfc0ef4964d3b1df089e42840))
+* **substrate:** fix verify_integrity() for pruned graphs by checking pruned_events ([890be85](https://github.com/Willow7737/omnia-protocol/commit/890be85474b26905133354ab334a02bf043ade36))
+* **substrate:** propagate Result in KeyStore AES-256-GCM functions ([fc58998](https://github.com/Willow7737/omnia-protocol/commit/fc589985fb3d2a61c6a80998ce80988015078b9e))
+* **substrate:** return Result from ConsensusConfig::with_random_seed() and BlsKeypair::generate_random() ([cae0963](https://github.com/Willow7737/omnia-protocol/commit/cae096342b43eec505f42c122320e425ec1e8caa))
+* **zk:** make Ethereum settlement stub return error instead of true ([9a97686](https://github.com/Willow7737/omnia-protocol/commit/9a9768623a9915029719a67db671d525e1e37c4f))
+* **zk:** return Result from PowersOfTau::new() instead of using expect() ([92fdcbb](https://github.com/Willow7737/omnia-protocol/commit/92fdcbb63e86683d7075431ca23904cef9b8bdb6))
+
+
+### Documentation
+
+* replace all sled references with redb in documentation ([f52f769](https://github.com/Willow7737/omnia-protocol/commit/f52f769140882aeafaeb95cb8d4831a5635a6032))
+* replace bincode references with postcard in documentation ([93ad377](https://github.com/Willow7737/omnia-protocol/commit/93ad3774dc8fecb8f04b8c137c1077232f726544))
+
 ## [0.1.17](https://github.com/Willow7737/omnia-protocol/compare/v0.1.16...v0.1.17) (2026-05-17)
 
 
