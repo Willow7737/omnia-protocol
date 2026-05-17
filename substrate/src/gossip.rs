@@ -957,16 +957,19 @@ mod tests {
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
         let mut protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
-        // Insert MAX_SEEN_EVENTS + 1 entries directly
+        // Insert MAX_SEEN_EVENTS + 1 unique entries directly using
+        // 4-byte indices to avoid hash collisions in the 32-byte EventId.
         for i in 0..=MAX_SEEN_EVENTS {
             let mut id = [0u8; 32];
-            id[0] = (i % 256) as u8;
-            id[1] = ((i >> 8) % 256) as u8;
+            id[0] = (i & 0xFF) as u8;
+            id[1] = ((i >> 8) & 0xFF) as u8;
+            id[2] = ((i >> 16) & 0xFF) as u8;
+            id[3] = ((i >> 24) & 0xFF) as u8;
             protocol.seen_events.insert(id);
         }
 
-        // The set should have MAX_SEEN_EVENTS + 1 entries
-        assert!(protocol.seen_events.len() > MAX_SEEN_EVENTS);
+        // The set should have exactly MAX_SEEN_EVENTS + 1 entries
+        assert_eq!(protocol.seen_events.len(), MAX_SEEN_EVENTS + 1);
 
         // Simulate the cleanup that happens in process_pending_events
         if protocol.seen_events.len() > MAX_SEEN_EVENTS {

@@ -133,6 +133,15 @@ impl RateLimiter {
         self.buckets.retain(|_, bucket| now.duration_since(bucket.last_access) <= threshold);
         before - self.buckets.len()
     }
+
+    /// Clean up stale buckets using the default idle threshold (1 hour).
+    ///
+    /// # Returns
+    ///
+    /// The number of buckets removed.
+    pub fn cleanup_stale_default(&mut self) -> usize {
+        self.cleanup_stale(DEFAULT_STALE_BUCKET_THRESHOLD_SECS)
+    }
 }
 
 /// Default idle threshold for stale bucket cleanup (1 hour in seconds).

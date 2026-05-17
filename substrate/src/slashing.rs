@@ -397,7 +397,7 @@ impl SlashingStore for RedbSlashingStore {
 /// assert!(state.slash_points.is_empty());
 /// ```
 pub struct InMemorySlashingStore {
-    state: std::sync::RwLock<SlashingState>,
+    state: RwLock<SlashingState>,
 }
 
 impl InMemorySlashingStore {
@@ -414,7 +414,7 @@ impl InMemorySlashingStore {
     /// ```
     pub fn new() -> Self {
         Self {
-            state: std::sync::RwLock::new(SlashingState::default()),
+            state: RwLock::new(SlashingState::default()),
         }
     }
 }

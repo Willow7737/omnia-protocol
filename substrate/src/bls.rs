@@ -156,7 +156,7 @@ impl BlsKeypair {
     /// ```
     pub fn generate(seed: &[u8]) -> Result<Self, BlsError> {
         let sk = BlstSecretKey::key_gen(seed, &[])
-            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
+            .map_err(|e| BlsError::KeyGenerationFailed(format!("BLS key_gen failed: {e:?}")))?;
         let pk = sk.sk_to_pk();
         Ok(Self {
             secret_key: sk,
@@ -170,7 +170,7 @@ impl BlsKeypair {
         getrandom::getrandom(&mut ikm)
             .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
         let sk = BlstSecretKey::key_gen(&ikm, &[])
-            .map_err(|e| BlsError::KeyGenerationFailed(e.to_string()))?;
+            .map_err(|e| BlsError::KeyGenerationFailed(format!("BLS key_gen failed: {e:?}")))?;
         let pk = sk.sk_to_pk();
         Ok(Self {
             secret_key: sk,

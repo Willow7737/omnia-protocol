@@ -875,13 +875,14 @@ impl ConsensusEngine {
             .event_states
             .iter()
             .filter(|(_, &state)| state == ConsensusState::Committed)
-            .filter(|(id, _)| {
-                self.event_rounds
-                    .get(id)
-                    .map(|&round| round < cutoff_round)
-                    .unwrap_or(false)
+            .filter_map(|(id, _)| {
+                let round = self.event_rounds.get(id).copied()?;
+                if round < cutoff_round {
+                    Some(*id)
+                } else {
+                    None
+                }
             })
-            .map(|(id, _)| *id)
             .collect();
 
         let removed = to_remove.len();
@@ -1432,7 +1433,77 @@ mod proptests {
 #[allow(clippy::unwrap_used)]
 mod timeout_tests {
     use super::*;
+    #[cfg(test)]
+    use crate::causal_graph::CausalGraph;
+    #[cfg(test)]
+    use crate::crypto::generate_keypair;
+    #[cfg(test)]
+    use crate::event::Event;
+    #[cfg(test)]
+    use crate::vector_clock::VectorClock;
     use std::thread;
+
+    /// Helper: create a NodeId from a u8.
+    fn node(id: u8) -> NodeId {
+        let mut n = [0u8; 32];
+        n[0] = id;
+        n
+    }
+
+    /// Test-friendly config with a non-zero round seed (avoids debug-build panic).
+    fn test_config() -> ConsensusConfig {
+        let mut seed = [0u8; 32];
+        seed[0] = 1;
+        ConsensusConfig {
+            total_nodes: 4,
+            commit_delay_rounds: 1,
+            optimistic_confirmation: true,
+            optimistic_threshold: 3,
+            max_look_ahead: 10,
+            round_seed: seed,
+            round_timeout_ms: 30_000,
+            max_consecutive_timeouts: 3,
+        }
+    }
+
+    /// Helper: set up a graph with events for cleanup tests.
+    fn setup_graph_with_events() -> (CausalGraph, Vec<EventId>) {
+        let mut graph = CausalGraph::new();
+        let n1 = node(1);
+        let n2 = node(2);
+        let n3 = node(3);
+        let n4 = node(4);
+
+        let mut events = Vec::new();
+
+        for &n in &[n1, n2, n3, n4] {
+            let keypair = generate_keypair();
+            let mut e = Event::genesis(n, vec![n[0]]);
+            e.sign_with_keypair(&keypair);
+            let id = e.id;
+            graph.insert(e).unwrap();
+            events.push(id);
+        }
+
+        for i in 0..4 {
+            let creator = [n1, n2, n3, n4][i];
+            let keypair = generate_keypair();
+            let sp = events[i];
+            let op = events[(i + 1) % 4];
+
+            let mut vc = VectorClock::with_node(creator, 2);
+            let other = [n1, n2, n3, n4][(i + 1) % 4];
+            vc.set(other, 1);
+
+            let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]);
+            e.sign_with_keypair(&keypair);
+            let id = e.id;
+            graph.insert(e).unwrap();
+            events.push(id);
+        }
+
+        (graph, events)
+    }
 
     #[test]
     fn test_round_timer_timeout_detection() {
@@ -1524,7 +1595,7 @@ mod timeout_tests {
     #[test]
     fn test_cleanup_old_committed_noop_when_rounds_low() {
         let config = test_config();
-        let engine = ConsensusEngine::new(
+        let mut engine = ConsensusEngine::new(
             config,
             SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
         );
