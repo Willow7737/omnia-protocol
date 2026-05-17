@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11](https://github.com/Willow7737/omnia-protocol/compare/v0.1.10...v0.1.11) (2026-05-17)
+
+
+### Bug Fixes
+
+* **ci:** fix deny.toml yanked field value — accepts allow/warn/deny not workspace ([52bb45e](https://github.com/Willow7737/omnia-protocol/commit/52bb45ef38cf852ba8cba8fe288f36dfdd0899b3))
+
 ## [0.1.10](https://github.com/Willow7737/omnia-protocol/compare/v0.1.9...v0.1.10) (2026-05-17)
 
 
