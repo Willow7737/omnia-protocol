@@ -23,6 +23,7 @@
 use ark_bn254::Bn254;
 use ark_groth16::{ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use subtle::ConstantTimeEq;
 
 use crate::circuit::RollupCircuit;
 use crate::prover::{generate_trusted_setup, generate_trusted_setup_expanded};
@@ -210,7 +211,7 @@ pub fn verify_key_consistency(pk_bytes: &[u8], vk_bytes: &[u8]) -> Result<(), Se
         bytes
     };
 
-    if pk_vk_bytes != standalone_vk_bytes {
+    if pk_vk_bytes.ct_ne(&standalone_vk_bytes).into() {
         return Err(SetupError::KeyDerivationFailed(
             "Proving key and verifying key are inconsistent".to_string(),
         ));

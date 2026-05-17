@@ -29,6 +29,7 @@ ark-crypto-primitives = "0.4"
 rand_chacha = "0.3"
 rand = "0.8"
 serde_bytes = "0.11"
+subtle = "2"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -25,6 +25,7 @@
 use ed25519_dalek::{Signer, Verifier};
 use omnia_substrate::{NodeKeypair, VectorClock};
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 
 /// Errors that can occur during quantum commitment operations.
 #[derive(Debug, thiserror::Error)]
@@ -251,7 +252,7 @@ impl QuantumCommitment {
     pub fn verify(&self, public_key: &PqPublicKey, data: &[u8], phase: CommitmentPhase) -> bool {
         // Always verify the data hash first
         let hash = blake3::hash(data);
-        if hash.as_bytes() != &self.data_hash {
+        if hash.as_bytes().ct_ne(&self.data_hash).into() {
             return false;
         }
 
@@ -323,9 +324,9 @@ impl QuantumCommitment {
     /// current implementation, we check if the data hash differs (i.e., both
     /// commitments are not identical placeholders).
     pub fn links_to(&self, previous: &QuantumCommitment) -> bool {
-        let valid_current = self.data_hash != [0u8; 32];
-        let valid_previous = previous.data_hash != [0u8; 32];
-        let progressing = self.data_hash != previous.data_hash;
+        let valid_current: bool = self.data_hash.ct_ne(&[0u8; 32]).into();
+        let valid_previous: bool = previous.data_hash.ct_ne(&[0u8; 32]).into();
+        let progressing: bool = self.data_hash.ct_ne(&previous.data_hash).into();
 
         valid_current && valid_previous && progressing
     }
