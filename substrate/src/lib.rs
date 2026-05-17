@@ -42,6 +42,7 @@ pub mod threshold;
 pub mod vector_clock;
 pub mod vrf;
 pub mod wire_format;
+pub mod migration;
 
 // Re-export commonly used types
 pub use bls::{

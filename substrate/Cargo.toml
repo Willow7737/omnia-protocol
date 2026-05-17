@@ -55,6 +55,13 @@ subtle = "2"
 # Cryptographic random number generation — needed for secure round seed generation
 getrandom = "0.2"
 
+# Legacy sled database support for one-time migration to redb
+sled = { version = "0.34", optional = true }
+
+[features]
+default = []
+migration = ["sled"]
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
@@ -62,6 +69,9 @@ criterion = { version = "0.8", features = ["html_reports"] }
 
 # FIX 6: Property-based testing
 proptest = "1.4"
+
+# sled is needed for integration tests of migration utility
+sled = "0.34"
 
 [[bench]]
 name = "throughput"
