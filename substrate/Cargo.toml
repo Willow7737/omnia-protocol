@@ -73,6 +73,9 @@ proptest = "1.4"
 # sled is needed for integration tests of migration utility
 sled = "0.34"
 
+# bincode 1.x for legacy wire format deserialization (v0 fallback)
+bincode = { workspace = true }
+
 [[bench]]
 name = "throughput"
 harness = false

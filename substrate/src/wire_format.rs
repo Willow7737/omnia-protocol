@@ -12,6 +12,20 @@
 /// - Version `1` is the current postcard format (with version prefix).
 pub const WIRE_FORMAT_VERSION: u8 = 1;
 
+/// Errors that can occur during wire-format deserialization.
+#[derive(Debug, thiserror::Error)]
+pub enum WireFormatError {
+    /// The input data is empty (missing version byte).
+    #[error("Empty data — missing version byte")]
+    EmptyData,
+    /// The version byte is not recognized.
+    #[error("Unknown wire format version: {0}")]
+    UnknownVersion(u8),
+    /// Deserialization failed.
+    #[error("Deserialization failed: {0}")]
+    DeserializationFailed(String),
+}
+
 /// Serialize a value with wire-format version prefix.
 ///
 /// The output is `[WIRE_FORMAT_VERSION] ++ postcard(value)`.
@@ -23,20 +37,33 @@ pub fn serialize_with_version<T: serde::Serialize>(value: &T) -> Result<Vec<u8>,
     Ok(bytes)
 }
 
-/// Deserialize a value, checking wire-format version.
+/// Deserialize a value, handling wire-format version.
 ///
-/// Expects the first byte to be `WIRE_FORMAT_VERSION`. Returns an error
-/// if the version byte is missing or doesn't match.
-pub fn deserialize_with_version<'de, T: serde::Deserialize<'de>>(
-    bytes: &'de [u8],
-) -> Result<T, postcard::Error> {
+/// Supports two format versions:
+/// - Version `0`: Legacy bincode 1.x format (for backward compatibility)
+/// - Version `1`: Current postcard format
+///
+/// Returns an error for empty data or unknown version bytes.
+pub fn deserialize_with_version<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+) -> Result<T, WireFormatError> {
     if bytes.is_empty() {
-        return Err(postcard::Error::DeserializeUnexpectedEnd);
+        return Err(WireFormatError::EmptyData);
     }
-    if bytes[0] != WIRE_FORMAT_VERSION {
-        return Err(postcard::Error::DeserializeUnexpectedEnd);
+    let version = bytes[0];
+    match version {
+        0 => {
+            // Legacy bincode format
+            bincode::deserialize(&bytes[1..])
+                .map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
+        }
+        1 => {
+            // Current postcard format
+            postcard::from_bytes(&bytes[1..])
+                .map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
+        }
+        v => Err(WireFormatError::UnknownVersion(v)),
     }
-    postcard::from_bytes(&bytes[1..])
 }
 
 #[cfg(test)]
@@ -76,8 +103,30 @@ mod tests {
             label: "x".into(),
         };
         let mut bytes = serialize_with_version(&msg).unwrap();
-        bytes[0] = 0xFF; // Wrong version
+        bytes[0] = 0xFF; // Unknown version
         let result: Result<TestMsg, _> = deserialize_with_version(&bytes);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_legacy_bincode_deserialization() {
+        // Simulate a v0 (bincode) serialized message
+        let msg = TestMsg {
+            id: 99,
+            label: "legacy".into(),
+        };
+        let bincode_bytes = bincode::serialize(&msg).unwrap();
+        let mut bytes = vec![0u8]; // version 0
+        bytes.extend(bincode_bytes);
+
+        let restored: TestMsg = deserialize_with_version(&bytes).unwrap();
+        assert_eq!(restored, msg);
+    }
+
+    #[test]
+    fn test_unknown_version_returns_error() {
+        let bytes = [255u8, 0, 0, 0];
+        let result: Result<TestMsg, _> = deserialize_with_version(&bytes);
+        assert!(matches!(result, Err(WireFormatError::UnknownVersion(255))));
     }
 }

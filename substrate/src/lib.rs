@@ -86,7 +86,7 @@ pub use threshold::{
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
-pub use wire_format::{deserialize_with_version, serialize_with_version, WIRE_FORMAT_VERSION};
+pub use wire_format::{deserialize_with_version, serialize_with_version, WIRE_FORMAT_VERSION, WireFormatError};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

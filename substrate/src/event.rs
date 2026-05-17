@@ -387,7 +387,7 @@ impl Event {
     /// Checks the wire-format version byte before deserializing.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EventValidationError> {
         crate::wire_format::deserialize_with_version(bytes)
-            .map_err(|_| EventValidationError::DeserializationError)
+            .map_err(|e| EventValidationError::DeserializationError(format!("{e}")))
     }
 
     /// Mark this event as having received an acknowledgment
@@ -439,9 +439,9 @@ pub enum EventValidationError {
     #[error("Event has been rejected")]
     /// Event was previously rejected
     RejectedEvent,
-    #[error("Failed to deserialize event")]
+    #[error("Failed to deserialize event: {0}")]
     /// Deserialization failed
-    DeserializationError,
+    DeserializationError(String),
     #[error("Failed to serialize event")]
     /// Serialization failed
     SerializationError,
