@@ -120,7 +120,11 @@ contract OmniaRollup {
 
     bytes32 public stateRoot;
     address public operator;
+    address public pendingOperator;
     uint256 public batchIndex;
+
+    /// @dev Emergency pause flag.
+    bool public paused;
 
     mapping(bytes32 => uint256) public deposits;
     mapping(bytes32 => address) public depositOwners;
@@ -131,8 +135,10 @@ contract OmniaRollup {
         bytes32 l2Did;
         uint256 amount;
         uint256 requestedAt;
+        bool finalized;
     }
-    mapping(address => Withdrawal[]) public withdrawals;
+    mapping(address => mapping(uint256 => Withdrawal)) public withdrawals;
+    mapping(address => uint256) public withdrawalCount;
 
     // -----------------------------------------------------------------------
     // Verifying key (set in constructor, immutable afterwards)
@@ -162,6 +168,10 @@ contract OmniaRollup {
     event Deposited(address indexed sender, bytes32 indexed l2Did, uint256 amount);
     event WithdrawalRequested(address indexed recipient, bytes32 indexed l2Did, uint256 amount);
     event WithdrawalFinalized(address indexed recipient, uint256 amount);
+    event OperatorTransferInitiated(address indexed previousOperator, address indexed newOperator);
+    event OperatorTransferCompleted(address indexed previousOperator, address indexed newOperator);
+    event Paused(address account);
+    event Unpaused(address account);
 
     // -----------------------------------------------------------------------
     // Constructor
@@ -229,15 +239,24 @@ contract OmniaRollup {
         // which is a complete security bypass.
         require(_publicInputs.length >= 1, "Public inputs required");
 
-        if (_publicInputs.length >= 2) {
+        if (_publicInputs.length >= 3) {
             // ExpandedRollupCircuit: public inputs are [old_state_root, new_state_root, event_commitment]
             // Bind: old state root must match the contract current root
             require(uint256(stateRoot) == _publicInputs[0], "Old root mismatch");
             // Bind: new state root must match the proposed root
             require(uint256(_newStateRoot) == _publicInputs[1], "New root mismatch");
-        } else {
-            // RollupCircuit: single public input is the new state root
+            // Bind batch data to event commitment
+            bytes32 dataCommitment = keccak256(_batchData);
+            require(uint256(dataCommitment) == _publicInputs[2], "Batch data commitment mismatch");
+        } else if (_publicInputs.length == 1) {
+            // RollupCircuit: single public input is the new state root.
+            // Contract still binds old root against its own state.
             require(uint256(_newStateRoot) == _publicInputs[0], "State root mismatch");
+            // NOTE: RollupCircuit does not constrain old_state_root in-circuit.
+            // Consider deprecating the 1-input path entirely and migrating to
+            // ExpandedRollupCircuit only.
+        } else {
+            revert("Invalid public input count");
         }
 
         require(verifyProof(_proofA, _proofB, _proofC, _publicInputs), "Invalid proof");
@@ -431,15 +450,21 @@ contract OmniaRollup {
     // -----------------------------------------------------------------------
 
     /// @notice Deposit ETH into the rollup, credited to an L2 identity.
-    function deposit(bytes32 _l2Did) external payable {
+    function deposit(bytes32 _l2Did) external payable whenNotPaused {
         require(msg.value > 0, "Must deposit > 0");
+        require(_l2Did != bytes32(0), "Invalid l2Did");
+        address currentOwner = depositOwners[_l2Did];
+        require(
+            currentOwner == address(0) || currentOwner == msg.sender,
+            "l2Did already owned by another address"
+        );
         deposits[_l2Did] += msg.value;
         depositOwners[_l2Did] = msg.sender;
         emit Deposited(msg.sender, _l2Did, msg.value);
     }
 
     /// @notice Request a withdrawal from L2 to L1.
-    function requestWithdrawal(bytes32 _l2Did, uint256 _amount) external {
+    function requestWithdrawal(bytes32 _l2Did, uint256 _amount) external whenNotPaused nonReentrant {
         require(msg.sender == depositOwners[_l2Did], "Not deposit owner");
         require(deposits[_l2Did] >= _amount, "Insufficient balance");
 
@@ -447,30 +472,32 @@ contract OmniaRollup {
         deposits[_l2Did] -= _amount;
         pendingWithdrawals[_l2Did] += _amount;
 
-        withdrawals[msg.sender].push(Withdrawal({
+        uint256 idx = withdrawalCount[msg.sender];
+        withdrawals[msg.sender][idx] = Withdrawal({
             l2Did: _l2Did,
             amount: _amount,
-            requestedAt: block.timestamp
-        }));
+            requestedAt: block.timestamp,
+            finalized: false
+        });
+        withdrawalCount[msg.sender] = idx + 1;
         emit WithdrawalRequested(msg.sender, _l2Did, _amount);
     }
 
     /// @notice Finalize a withdrawal after the 7-day challenge period.
     /// @dev Follows the Checks-Effects-Interactions pattern to prevent reentrancy.
     ///      Uses a reentrancy guard and low-level .call() instead of .transfer().
-    function finalizeWithdrawal(uint256 _withdrawalIndex) external nonReentrant {
+    function finalizeWithdrawal(uint256 _withdrawalIndex) external whenNotPaused nonReentrant {
         Withdrawal storage w = withdrawals[msg.sender][_withdrawalIndex];
         require(w.amount > 0, "Invalid withdrawal");
+        require(!w.finalized, "Already finalized");
         require(block.timestamp >= w.requestedAt + 7 days, "Challenge period active");
 
         // --- Effects: save and clear state BEFORE external call ---
         bytes32 l2Did = w.l2Did;
         uint256 amount = w.amount;
 
-        // Zero out the withdrawal to prevent reentrancy
-        w.l2Did = bytes32(0);
-        w.amount = 0;
-        w.requestedAt = 0;
+        // Mark as finalized to prevent reentrancy
+        w.finalized = true;
 
         // Decrease the pending withdrawal balance (escrow pattern)
         pendingWithdrawals[l2Did] -= amount;
@@ -497,6 +524,55 @@ contract OmniaRollup {
         _locked = true;
         _;
         _locked = false;
+    }
+
+    /// @dev Modifier to prevent actions when contract is paused.
+    modifier whenNotPaused() {
+        require(!paused, "Pausable: paused");
+        _;
+    }
+
+    /// @dev Modifier to allow actions only when contract is paused.
+    modifier whenPaused() {
+        require(paused, "Pausable: not paused");
+        _;
+    }
+
+    // -----------------------------------------------------------------------
+    // Operator transfer (two-step)
+    // -----------------------------------------------------------------------
+
+    /// @notice Initiate a two-step operator transfer.
+    /// @param _newOperator The address of the proposed new operator.
+    function initiateOperatorTransfer(address _newOperator) external onlyOperator {
+        require(_newOperator != address(0), "Zero address");
+        pendingOperator = _newOperator;
+        emit OperatorTransferInitiated(operator, _newOperator);
+    }
+
+    /// @notice Accept the operator transfer. Only the pending operator can accept.
+    function acceptOperatorTransfer() external {
+        require(msg.sender == pendingOperator, "Not pending operator");
+        address oldOperator = operator;
+        operator = pendingOperator;
+        pendingOperator = address(0);
+        emit OperatorTransferCompleted(oldOperator, operator);
+    }
+
+    // -----------------------------------------------------------------------
+    // Emergency pause
+    // -----------------------------------------------------------------------
+
+    /// @notice Pause the contract. Only the operator can pause.
+    function pause() external onlyOperator whenNotPaused {
+        paused = true;
+        emit Paused(msg.sender);
+    }
+
+    /// @notice Unpause the contract. Only the operator can unpause.
+    function unpause() external onlyOperator whenPaused {
+        paused = false;
+        emit Unpaused(msg.sender);
     }
 
     // -----------------------------------------------------------------------
