@@ -150,7 +150,6 @@ jobs:
   supply-chain:
     name: Supply Chain Audit
     runs-on: ubuntu-latest
-    continue-on-error: true  # New dependencies (redb, postcard, aes-gcm) not yet fully vetted
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -198,7 +197,6 @@ jobs:
   reproducibility:
     name: Build Reproducibility
     runs-on: ubuntu-latest
-    continue-on-error: true  # Rust builds are not yet fully deterministic
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -241,7 +239,7 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           files: ./cobertura.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
@@ -254,7 +252,6 @@ jobs:
   fuzz-smoke:
     name: Fuzz Smoke Test
     runs-on: ubuntu-latest
-    continue-on-error: true  # cargo-fuzz workspace integration may vary by version
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -289,7 +286,6 @@ jobs:
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
-    continue-on-error: true  # SBOM generation is best-effort
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
