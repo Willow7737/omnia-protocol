@@ -511,6 +511,14 @@ impl ConsensusEngine {
     }
 
     /// Check if an event can "strongly see" a set of witnesses
+    ///
+    /// Returns `Ok(true)` if the event can strongly see enough witnesses
+    /// to meet the consensus threshold, `Ok(false)` otherwise.
+    ///
+    /// Returns `Err(ConsensusError::EventPruned)` if ancestry cannot be
+    /// determined because an event on the path has been pruned. The caller
+    /// can then decide how to handle this case (e.g., skip the round
+    /// assignment or use a fallback).
     fn can_strongly_see(
         &self,
         event: &Event,
@@ -520,8 +528,15 @@ impl ConsensusEngine {
         let mut seen_count = 0;
 
         for witness_id in witnesses {
-            if graph.is_ancestor_of(&event.id, witness_id).unwrap_or(false) {
-                seen_count += 1;
+            match graph.is_ancestor_of(&event.id, witness_id) {
+                Ok(true) => seen_count += 1,
+                Ok(false) => {}
+                Err(crate::causal_graph::CausalGraphError::EventPruned(msg)) => {
+                    return Err(ConsensusError::EventPruned(msg));
+                }
+                Err(e) => {
+                    return Err(ConsensusError::GraphError(e.to_string()));
+                }
             }
         }
 
@@ -627,11 +642,15 @@ impl ConsensusEngine {
             let mut seeing_count = 0;
 
             for later_witness_id in witnesses {
-                if graph
-                    .is_ancestor_of(later_witness_id, &witness_id)
-                    .unwrap_or(false)
-                {
-                    seeing_count += 1;
+                match graph.is_ancestor_of(later_witness_id, &witness_id) {
+                    Ok(true) => seeing_count += 1,
+                    Ok(false) => {}
+                    Err(crate::causal_graph::CausalGraphError::EventPruned(msg)) => {
+                        return Err(ConsensusError::EventPruned(msg));
+                    }
+                    Err(e) => {
+                        return Err(ConsensusError::GraphError(e.to_string()));
+                    }
                 }
             }
 
@@ -853,6 +872,10 @@ pub enum ConsensusError {
     /// An invariant was violated.
     #[error("invariant violated: {0}")]
     InvariantViolated(String),
+    /// An event on the ancestry path has been pruned, so ancestry
+    /// cannot be determined.
+    #[error("event pruned: {0}")]
+    EventPruned(String),
 }
 
 #[cfg(test)]
