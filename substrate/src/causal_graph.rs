@@ -166,19 +166,33 @@ impl CausalGraph {
 
         // Verify parents exist (except for genesis events)
         if let Some(sp) = event.self_parent {
-            if !self.events.contains_key(&sp) {
-                return Err(CausalGraphError::MissingParent(format!(
-                    "self-parent {}",
-                    hex::encode(&sp[..8])
-                )));
+            match self.get_checked(&sp) {
+                Ok(_) => {} // parent exists, OK
+                Err(CausalGraphError::EventPruned(_)) => {
+                    return Err(CausalGraphError::EventPruned(hex::encode(&sp[..8])));
+                }
+                Err(CausalGraphError::InvalidEvent(_)) => {
+                    return Err(CausalGraphError::MissingParent(format!(
+                        "self-parent {}",
+                        hex::encode(&sp[..8])
+                    )));
+                }
+                Err(e) => return Err(e),
             }
         }
         if let Some(op) = event.other_parent {
-            if !self.events.contains_key(&op) {
-                return Err(CausalGraphError::MissingParent(format!(
-                    "other-parent {}",
-                    hex::encode(&op[..8])
-                )));
+            match self.get_checked(&op) {
+                Ok(_) => {} // parent exists, OK
+                Err(CausalGraphError::EventPruned(_)) => {
+                    return Err(CausalGraphError::EventPruned(hex::encode(&op[..8])));
+                }
+                Err(CausalGraphError::InvalidEvent(_)) => {
+                    return Err(CausalGraphError::MissingParent(format!(
+                        "other-parent {}",
+                        hex::encode(&op[..8])
+                    )));
+                }
+                Err(e) => return Err(e),
             }
         }
 
