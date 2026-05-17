@@ -1,0 +1,20 @@
+# cargo-mutants configuration for Omnia Protocol
+# Mutation testing verifies test suites catch real bugs
+
+# Exclude generated code and test utilities from mutation
+exclude_re = ["target/", "fuzz/", "chaos-tests/"]
+
+# Minimum mutation score to pass CI
+minimum_score = 75
+
+# Timeout for individual test runs (seconds)
+timeout = 120
+
+# Number of test runs per mutation for flakiness reduction
+test_runs = 2
+
+# Skip mutations that are known to be equivalent or trivially caught
+skip_re = [
+    "impl Display",
+    "impl Debug",
+]
