@@ -67,7 +67,7 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 
 **Mitigation:** A real R1CS circuit (`RollupCircuit`) was implemented using arkworks on the BN254 curve with Groth16 proving and verification. The `ExpandedRollupCircuit` adds Merkle path verification and per-event state transition constraints.
 
-**Residual risk:** The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding. The legacy stub circuit is retained under `#[cfg(test)]`.
+**Residual risk:** The `ExpandedRollupCircuit` now uses Poseidon hash (see §3.2 for current status). The legacy stub circuit is retained under `#[cfg(test)]`. The Poseidon implementation uses BLAKE3-derived round constants instead of the Filecoin/Neptune reference constants — auditors should verify this does not weaken the permutation.
 
 ### 2.6 No Binary Entrypoint (Sprint 3) → ✅ Resolved
 
@@ -108,11 +108,20 @@ An attacker with network access can:
 
 **Planned mitigation:** Add API authentication (JWT or API keys), rate limiting (tower-governor or similar), HTTPS via reverse proxy, and authorization checks on privileged operations.
 
-### 3.2 ZK Circuit Is Minimal (Critical) → 🟡 Partially Addressed
+### 3.2 ZK Circuit Is Minimal (Critical) → 🟢 Addressed
 
 The original `RollupCircuit` enforced only `new_state_root == expected_new_state_root`. The `ExpandedRollupCircuit` adds Merkle path inclusion verification, per-event state transition constraints, and old state root binding.
 
-**Remaining gap:** The `ExpandedRollupCircuit` uses a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function (Pedersen or Poseidon). This means the hash constraint is not cryptographically binding — a real hash gadget is needed for production soundness.
+**Previously remaining gap:** The `ExpandedRollupCircuit` used a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function. This meant the hash constraint was not cryptographically binding.
+
+**Current status:** The `ExpandedRollupCircuit` now uses **Poseidon hash** (implemented in `zk/src/poseidon.rs`) with:
+- Cauchy MDS matrix construction (`generate_mds_matrix()`) for the linear layer
+- BLAKE3-derived round constants (deterministically generated from a seed, not the Filecoin/Neptune reference constants)
+- Full R1CS gadget (`poseidon_permutation_gadget()`) for on-circuit verification
+- Parameters: BN254 field, t=3 (arity), R_F=8 (full rounds), R_P=57 (partial rounds)
+- Off-circuit verification via `poseidon_hash()` for regular usage
+
+**Deviation from reference:** The round constants are derived via BLAKE3 rather than using the Filecoin/Neptune reference constants. The code includes warning comments documenting this deviation. This is a deliberate choice for simplicity, but auditors should verify that the BLAKE3 derivation does not introduce weaknesses in the round function.
 
 ### 3.3 Unencrypted Private Key Storage (High)
 
@@ -268,7 +277,7 @@ Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 | Category | Status | Trend |
 |---|---|---|
 | Consensus safety | Partially verified (TLA+ bounded, property tests, chaos tests) | Improving |
-| Cryptographic correctness | Real implementations (not stubs), minimal ZK circuit | Needs work (circuit soundness) |
+| Cryptographic correctness | Real implementations (not stubs), Poseidon hash in ZK circuit | Improving |
 | Economic security | Fee enforcement + slashing + persistence available | Improving |
 | Network security | Gossip bounds exist, no rate limiting | Needs work |
 | **API security** | **No authentication, no rate limiting, no authorization** | **Needs urgent work** |
