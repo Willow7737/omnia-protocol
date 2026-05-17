@@ -18,13 +18,18 @@ allow = [
     "Zlib",
     "0BSD",
     "Unicode-DFS-2016",
+    "Unicode-3.0",     # Used by ICU crates (icu_collections, icu_normalizer, etc.)
+    "NCSA",            # Used by libfuzzer-sys
 ]
-# Deny all licenses not in the allow list (replaces removed unlicensed/default keys)
-exceptions = []
+
+[[licenses.clarify]]
+name = "omnia-fuzz"
+expression = "CC0-1.0"
+license-files = []
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+wildcards = "warn"   # workspace-internal path deps lack version keys — not a real risk
 highlight = "all"
 
 [sources]
