@@ -419,7 +419,7 @@ fn poseidon_permutation_gadget(
 ///
 /// let a = Fr::from(42u64);
 /// let b = Fr::from(123u64);
-/// let hash = poseidon_hash_offchain(a, b)?;
+/// let hash = poseidon_hash_offchain(a, b).expect("hash should succeed");
 /// assert_ne!(hash, Fr::zero()); // non-trivial output
 /// ```
 ///

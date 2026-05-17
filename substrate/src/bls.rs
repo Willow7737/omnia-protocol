@@ -715,7 +715,8 @@ mod tests {
         let msg = b"single signer";
         let sig = kp.sign(msg);
 
-        let agg_sig = aggregate_signatures(&[sig.clone()]).expect("single sig aggregation");
+        let agg_sig =
+            aggregate_signatures(std::slice::from_ref(&sig)).expect("single sig aggregation");
         let agg_pk = aggregate_public_keys(&[kp.public_key()]).expect("single pk aggregation");
 
         verify_aggregate(msg, &agg_pk, &agg_sig).expect("single aggregate should verify");

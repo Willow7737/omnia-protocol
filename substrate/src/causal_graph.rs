@@ -517,7 +517,10 @@ impl CausalGraph {
     /// children) cannot be guaranteed because the pruned parent edge is
     /// invisible to Kahn's algorithm, causing the child's in-degree to be
     /// under-counted.
-    pub fn topological_order(&self, start_from: Option<&VectorClock>) -> Result<Vec<EventId>, CausalGraphError> {
+    pub fn topological_order(
+        &self,
+        start_from: Option<&VectorClock>,
+    ) -> Result<Vec<EventId>, CausalGraphError> {
         let relevant_events: Vec<&Event> = match start_from {
             Some(vc) => self
                 .events
@@ -531,13 +534,13 @@ impl CausalGraph {
         for event in &relevant_events {
             for parent_id in [event.self_parent, event.other_parent].iter().flatten() {
                 // If the parent is not in self.events, check if it was pruned
-                if !self.events.contains_key(parent_id) {
-                    if self.pruned_events.contains_key(parent_id) {
-                        return Err(CausalGraphError::EventPruned(hex::encode(&parent_id[..8])));
-                    }
-                    // If not in events and not in pruned_events, it's a missing parent
-                    // (shouldn't happen for valid graphs, but skip silently)
+                if !self.events.contains_key(parent_id)
+                    && self.pruned_events.contains_key(parent_id)
+                {
+                    return Err(CausalGraphError::EventPruned(hex::encode(&parent_id[..8])));
                 }
+                // If not in events and not in pruned_events, it's a missing parent
+                // (shouldn't happen for valid graphs, but skip silently)
             }
         }
 

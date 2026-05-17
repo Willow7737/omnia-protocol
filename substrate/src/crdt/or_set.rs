@@ -285,7 +285,11 @@ mod tests {
         let merged_ab = a.merged(&b);
         let merged_ba = b.merged(&a);
 
-        assert_eq!(merged_ab.elements().sort(), merged_ba.elements().sort());
+        let mut ab = merged_ab.elements();
+        let mut ba = merged_ba.elements();
+        ab.sort();
+        ba.sort();
+        assert_eq!(ab, ba);
     }
 
     #[test]
@@ -298,7 +302,11 @@ mod tests {
 
         let merged = a.merged(&a);
         assert_eq!(a.len(), merged.len());
-        assert_eq!(a.elements().sort(), merged.elements().sort());
+        let mut orig = a.elements();
+        let mut merged_elems = merged.elements();
+        orig.sort();
+        merged_elems.sort();
+        assert_eq!(orig, merged_elems);
     }
 
     #[test]

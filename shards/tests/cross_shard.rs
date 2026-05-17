@@ -56,8 +56,11 @@ fn test_financial_transfer_lifecycle() {
         operation: ShardOp::Financial(mint_op),
         nonce: 1,
     };
-    let mint_event =
-        create_test_event_with_keypair(test_node(1), mint_payload.to_bytes().unwrap(), &sender_keypair);
+    let mint_event = create_test_event_with_keypair(
+        test_node(1),
+        mint_payload.to_bytes().unwrap(),
+        &sender_keypair,
+    );
     router
         .route_event(&mint_event)
         .expect("Mint should succeed");
@@ -73,8 +76,11 @@ fn test_financial_transfer_lifecycle() {
         operation: ShardOp::Financial(transfer_op),
         nonce: 2,
     };
-    let transfer_event =
-        create_test_event_with_keypair(test_node(1), transfer_payload.to_bytes().unwrap(), &sender_keypair);
+    let transfer_event = create_test_event_with_keypair(
+        test_node(1),
+        transfer_payload.to_bytes().unwrap(),
+        &sender_keypair,
+    );
     router
         .route_event(&transfer_event)
         .expect("Transfer should succeed");

@@ -146,7 +146,8 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
+    let event1 =
+        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event1).is_ok(),
         "First op should succeed"
@@ -158,7 +159,8 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
+    let event2 =
+        create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event2).is_ok(),
         "Second op should succeed"
@@ -170,7 +172,8 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 3,
     };
-    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
+    let event3 =
+        create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event3);
     assert!(
         result.is_err(),
@@ -314,7 +317,8 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
+    let event1 =
+        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event1).is_ok(),
         "Op with exact fee balance should succeed"
@@ -326,7 +330,8 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
+    let event2 =
+        create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event2).is_err(),
         "Op after balance exhausted should fail"

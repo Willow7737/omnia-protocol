@@ -32,6 +32,7 @@ pub mod event;
 pub mod genesis_replay;
 pub mod gossip;
 pub mod keystore;
+pub mod migration;
 pub mod network;
 pub mod rate_limiter;
 pub mod slashing;
@@ -42,7 +43,6 @@ pub mod threshold;
 pub mod vector_clock;
 pub mod vrf;
 pub mod wire_format;
-pub mod migration;
 
 // Re-export commonly used types
 pub use bls::{
@@ -86,7 +86,9 @@ pub use threshold::{
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
-pub use wire_format::{deserialize_with_version, serialize_with_version, WIRE_FORMAT_VERSION, WireFormatError};
+pub use wire_format::{
+    deserialize_with_version, serialize_with_version, WireFormatError, WIRE_FORMAT_VERSION,
+};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -408,7 +410,7 @@ impl Substrate {
                                 );
                             }
                         }
-                        Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                        Err(CausalGraphError::EventPruned(_)) => {
                             tracing::warn!(
                                 "Skipping pruned event {} in shard processor",
                                 hex::encode(&event_id[..4])
@@ -522,7 +524,7 @@ impl Substrate {
                             }
                         }
                     }
-                    Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                    Err(CausalGraphError::EventPruned(_)) => {
                         // Pruned events have no payload; skip gracefully
                     }
                     Err(_) => {
@@ -552,7 +554,7 @@ impl Substrate {
                         all_committed.extend(committed);
                     }
                 }
-                Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                Err(CausalGraphError::EventPruned(_)) => {
                     tracing::warn!(
                         "Skipping pruned event {} in consensus processing",
                         hex::encode(&id[..4])

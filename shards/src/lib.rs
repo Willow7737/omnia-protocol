@@ -215,7 +215,9 @@ impl Shard for EconomicsShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("EconomicsShardState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("EconomicsShardState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -286,7 +288,9 @@ impl Shard for FinancialShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("FinancialState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("FinancialState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -342,7 +346,9 @@ impl Shard for IdentityShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("IdentityState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("IdentityState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -398,7 +404,9 @@ impl Shard for ComputationalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("ComputationalState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("ComputationalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -456,7 +464,9 @@ impl Shard for PhysicalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("PhysicalState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("PhysicalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -512,7 +522,9 @@ impl Shard for BiologicalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes().expect("BiologicalState serialization cannot fail")
+        self.state
+            .to_bytes()
+            .expect("BiologicalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {

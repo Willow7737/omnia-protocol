@@ -213,7 +213,7 @@ pub fn hash_to_fr(hash: &[u8; 32]) -> Fr {
 ///
 /// let a = Fr::from(42u64);
 /// let b = Fr::from(123u64);
-/// let hash = poseidon_hash_to_fr(a, b)?;
+/// let hash = poseidon_hash_to_fr(a, b).expect("hash should succeed");
 /// assert_ne!(hash, Fr::zero()); // non-trivial output
 /// ```
 ///
@@ -262,7 +262,7 @@ mod tests {
         // The proof's siblings contain the padding node, not the leaf itself
         // So compute_root_from_proof with the raw item won't match the root
         // We need to use the hashed leaf
-        let leaf = blake3::hash(&item).as_bytes().clone();
+        let leaf = *blake3::hash(&item).as_bytes();
         let computed_from_leaf = compute_root_from_proof(&leaf, &proofs[0]);
         assert_eq!(root, computed_from_leaf);
     }
@@ -272,7 +272,7 @@ mod tests {
         let items: Vec<[u8; 32]> = vec![[1u8; 32], [2u8; 32]];
         let (root, proofs) = build_merkle_tree(&items);
         for (i, item) in items.iter().enumerate() {
-            let leaf = blake3::hash(item).as_bytes().clone();
+            let leaf = *blake3::hash(item).as_bytes();
             let computed = compute_root_from_proof(&leaf, &proofs[i]);
             assert_eq!(root, computed, "proof for item {} should verify", i);
         }
@@ -356,7 +356,7 @@ mod proptests {
 
             // Verify each proof also produces the same root
             for (i, item) in items.iter().enumerate() {
-                let leaf = blake3::hash(item).as_bytes().clone();
+                let leaf = *blake3::hash(item).as_bytes();
                 let computed1 = compute_root_from_proof(&leaf, &proofs[i]);
                 let computed2 = compute_root_from_proof(&leaf, &proofs[i]);
                 assert_eq!(computed1, computed2, "Proof verification not deterministic!");
