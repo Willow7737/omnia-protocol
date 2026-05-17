@@ -145,8 +145,8 @@ impl IdentityState {
                 // we only validate the shares and set recovery_enabled = true.
                 // Production fix: derive new key from reconstructed secret, update
                 // doc.public_key and doc.authentication, invalidate old key.
-                let _reconstructed = ShamirRecovery::reconstruct(shares).ok_or_else(|| {
-                    ShardError::ValidationFailed("Recovery reconstruction failed".into())
+                let _reconstructed = ShamirRecovery::reconstruct(shares).map_err(|e| {
+                    ShardError::ValidationFailed(format!("Recovery reconstruction failed: {}", e))
                 })?;
 
                 // Recovery successful — update the document
@@ -313,7 +313,7 @@ impl IdentityState {
             )));
         }
         ShamirRecovery::reconstruct(shares)
-            .ok_or_else(|| ShardError::ValidationFailed("Recovery reconstruction failed".into()))
+            .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {}", e)))
     }
 
     /// Register an AI agent identity.

@@ -11,6 +11,18 @@
 
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+/// Errors that can occur during Shamir secret sharing operations.
+#[derive(Debug, Error)]
+pub enum ShamirError {
+    /// Attempted to invert zero in GF(256).
+    #[error("cannot invert zero in GF(256)")]
+    ZeroInverse,
+    /// Invalid share data provided.
+    #[error("invalid share: {0}")]
+    InvalidShare(String),
+}
 
 /// A single share in a Shamir secret sharing scheme.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,10 +83,10 @@ impl ShamirRecovery {
 
     /// Reconstruct the secret from at least `threshold` shares.
     ///
-    /// Returns `None` if the shares list is empty.
-    pub fn reconstruct(shares: &[RecoveryShare]) -> Option<Vec<u8>> {
+    /// Returns an error if the shares list is empty or interpolation fails.
+    pub fn reconstruct(shares: &[RecoveryShare]) -> Result<Vec<u8>, ShamirError> {
         if shares.is_empty() {
-            return None;
+            return Err(ShamirError::InvalidShare("no shares provided".into()));
         }
         let secret_len = shares[0].value.len();
         let mut secret = Vec::with_capacity(secret_len);
@@ -85,10 +97,10 @@ impl ShamirRecovery {
                 .iter()
                 .map(|s| (s.index, s.value[byte_pos]))
                 .collect();
-            let byte = Self::lagrange_interpolate(&points, 0);
+            let byte = Self::lagrange_interpolate(&points, 0)?;
             secret.push(byte);
         }
-        Some(secret)
+        Ok(secret)
     }
 
     /// Evaluate a polynomial at x in GF(256).
@@ -103,7 +115,7 @@ impl ShamirRecovery {
     }
 
     /// Lagrange interpolation at `at` in GF(256).
-    fn lagrange_interpolate(points: &[(u8, u8)], at: u8) -> u8 {
+    fn lagrange_interpolate(points: &[(u8, u8)], at: u8) -> Result<u8, ShamirError> {
         let mut result = 0u8;
         for (i, &(x_i, y_i)) in points.iter().enumerate() {
             let mut numerator = 1u8;
@@ -114,9 +126,9 @@ impl ShamirRecovery {
                     denominator = Self::gf_mul(denominator, x_i ^ x_j);
                 }
             }
-            result ^= Self::gf_mul(y_i, Self::gf_div(numerator, denominator));
+            result ^= Self::gf_mul(y_i, Self::gf_div(numerator, denominator)?);
         }
-        result
+        Ok(result)
     }
 
     /// GF(256) multiplication using carryless multiplication with reduction
@@ -140,15 +152,16 @@ impl ShamirRecovery {
     }
 
     /// GF(256) division: a / b = a * b^(-1).
-    fn gf_div(a: u8, b: u8) -> u8 {
-        Self::gf_mul(a, Self::gf_inverse(b))
+    fn gf_div(a: u8, b: u8) -> Result<u8, ShamirError> {
+        let inv = Self::gf_inverse(b)?;
+        Ok(Self::gf_mul(a, inv))
     }
 
     /// GF(256) multiplicative inverse using exponentiation.
     /// a^(-1) = a^(254) since GF(256)* is cyclic of order 255.
-    fn gf_inverse(a: u8) -> u8 {
+    fn gf_inverse(a: u8) -> Result<u8, ShamirError> {
         if a == 0 {
-            panic!("cannot invert zero in GF(256)");
+            return Err(ShamirError::ZeroInverse);
         }
         // 254 = 11111110 in binary
         let mut result = 1u8;
@@ -157,7 +170,7 @@ impl ShamirRecovery {
             base = Self::gf_mul(base, base); // square
             result = Self::gf_mul(result, base);
         }
-        result
+        Ok(result)
     }
 }
 
@@ -184,7 +197,7 @@ mod tests {
     fn test_gf_inverse_roundtrip() {
         // a * a^(-1) = 1 for any non-zero a
         for a in [1u8, 2, 0x57, 0x83, 0xFF] {
-            let inv = ShamirRecovery::gf_inverse(a);
+            let inv = ShamirRecovery::gf_inverse(a).unwrap();
             assert_eq!(ShamirRecovery::gf_mul(a, inv), 1);
         }
     }
@@ -216,7 +229,7 @@ mod tests {
         // With fewer than threshold shares, reconstruction should produce
         // different data (not the secret)
         let result = ShamirRecovery::reconstruct(&shares[0..2]);
-        assert!(result.is_some());
+        assert!(result.is_ok());
         assert_ne!(result.unwrap(), secret);
     }
 
@@ -232,6 +245,6 @@ mod tests {
     #[test]
     fn test_reconstruct_empty_shares() {
         let result = ShamirRecovery::reconstruct(&[]);
-        assert!(result.is_none());
+        assert!(result.is_err());
     }
 }

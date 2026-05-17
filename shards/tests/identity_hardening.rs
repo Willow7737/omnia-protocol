@@ -38,7 +38,7 @@ fn test_shamir_split_and_reconstruct() {
 
     // Reconstruct with fewer than threshold shares should return wrong data
     let result = ShamirRecovery::reconstruct(&shares[0..2]);
-    assert!(result.is_some());
+    assert!(result.is_ok());
     assert_ne!(result.unwrap(), secret);
 }
 
@@ -381,6 +381,6 @@ fn test_shamir_higher_threshold() {
 
     // 4 shares should fail
     let result = ShamirRecovery::reconstruct(&shares[0..4]);
-    assert!(result.is_some());
+    assert!(result.is_ok());
     assert_ne!(result.unwrap(), secret);
 }
