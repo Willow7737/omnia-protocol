@@ -100,6 +100,10 @@ pub enum ShardError {
     /// The caller does not have enough UBC quota to pay the fee.
     #[error("Insufficient fee: {0}")]
     InsufficientFee(String),
+
+    /// Failed to serialize shard state for a snapshot.
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 
 /// The core trait that every domain shard must implement.
@@ -120,7 +124,7 @@ pub trait Shard: Send + Sync {
     /// Serialize the current shard state into bytes for snapshots.
     ///
     /// Must be deterministic: the same state always produces the same bytes.
-    fn state_snapshot(&self) -> Vec<u8>;
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError>;
 
     /// Validate an operation without mutating state.
     ///

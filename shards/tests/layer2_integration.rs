@@ -106,7 +106,7 @@ async fn test_financial_shard_wired_into_substrate() {
     // 7. Verify shard state
     let router = router.lock().unwrap();
     let financial = router.get_shard(&ShardId::financial()).unwrap();
-    let snapshot = financial.state_snapshot();
+    let snapshot = financial.state_snapshot().unwrap();
     let state = FinancialState::from_bytes(&snapshot).unwrap();
     assert_eq!(state.balance_of(&account), 1000);
     assert_eq!(state.total_supply, 1000);
@@ -177,7 +177,7 @@ async fn test_identity_shard_wired_into_substrate() {
     // 7. Verify shard state
     let router = router.lock().unwrap();
     let identity = router.get_shard(&ShardId::identity()).unwrap();
-    let snapshot = identity.state_snapshot();
+    let snapshot = identity.state_snapshot().unwrap();
     let state: IdentityState = postcard::from_bytes(&snapshot).unwrap();
     assert!(
         state.dids.contains_key(&did),

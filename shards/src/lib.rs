@@ -214,10 +214,10 @@ impl Shard for EconomicsShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("EconomicsShardState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -287,10 +287,10 @@ impl Shard for FinancialShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("FinancialState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -345,10 +345,10 @@ impl Shard for IdentityShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("IdentityState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -403,10 +403,10 @@ impl Shard for ComputationalShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("ComputationalState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -463,10 +463,10 @@ impl Shard for PhysicalShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("PhysicalState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -521,10 +521,10 @@ impl Shard for BiologicalShard {
         }
     }
 
-    fn state_snapshot(&self) -> Vec<u8> {
+    fn state_snapshot(&self) -> Result<Vec<u8>, ShardError> {
         self.state
             .to_bytes()
-            .expect("BiologicalState serialization cannot fail")
+            .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
