@@ -18,7 +18,8 @@ jobs:
         with:
           shared-key: "omnia-bench"
       - run: sudo apt-get update && sudo apt-get install -y gnuplot
-      - run: cargo bench --workspace
+      - run: cargo bench -p omnia-substrate --bench throughput
+        timeout-minutes: 30
       - uses: actions/upload-artifact@v4
         with:
           name: benchmark-results

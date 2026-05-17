@@ -242,11 +242,51 @@ version = "1.8.3"
 criteria = "safe-to-deploy"
 
 notes = "Serialization. Constant-time Base64 encoding. No unsafe."
+[[exemptions.atomic-polyfill]]
+version = "1.0.3"
+criteria = "safe-to-deploy"
+
+notes = "Embedded/atomic dependency. Maintained by Dirbaio. Provides atomic polyfills for embedded targets. No unsafe in safe API."
+[[exemptions.cobs]]
+version = "0.3.0"
+criteria = "safe-to-deploy"
+
+notes = "Serialization. Consistent Overhead Byte Stuffing encoder/decoder. Used by postcard for framed encoding. No unsafe."
+[[exemptions.embedded-io]]
+version = "0.4.0"
+criteria = "safe-to-deploy"
+
+notes = "Embedded I/O traits. Maintained by Dirbaio. Used by postcard for no_std I/O. No unsafe."
+[[exemptions.embedded-io]]
+version = "0.6.1"
+criteria = "safe-to-deploy"
+
+notes = "Embedded I/O traits. Maintained by Dirbaio. Used by postcard for no_std I/O. No unsafe."
+[[exemptions.hash32]]
+version = "0.2.1"
+criteria = "safe-to-deploy"
+
+notes = "Utility crate. Maintained by japaric. 32-bit hashing for embedded/no_std targets. No unsafe."
+[[exemptions.heapless]]
+version = "0.7.17"
+criteria = "safe-to-deploy"
+
+notes = "Embedded/no_std data structures. Maintained by Dirbaio. Used by postcard for heapless serialization. Minimal unsafe for static allocation."
 [[exemptions.postcard]]
-version = "1.0.0"
+version = "1.1.3"
 criteria = "safe-to-deploy"
 
 notes = "Serialization. no_std-compatible deterministic serde serializer. Replaces unmaintained bincode (RUSTSEC-2025-0141)."
+[[exemptions.redb]]
+version = "2.6.3"
+criteria = "safe-to-deploy"
+
+notes = "Embedded database. Pure-Rust ACID-compliant key-value store. Replaces sled. Minimal unsafe for mmap I/O."
+[[exemptions.spin]]
+version = "0.9.8"
+criteria = "safe-to-deploy"
+
+notes = "Synchronization primitive. Maintained by zesterer. Spin locks and once cells. Minimal unsafe for atomic operations."
 [[exemptions.bitflags]]
 version = "1.3.2"
 criteria = "safe-to-deploy"

@@ -18,9 +18,9 @@ jobs:
       - name: Install cargo-mutants
         run: cargo install cargo-mutants --locked
       - name: Run mutation testing on substrate crate
-        run: cargo mutants -p omnia-substrate --in-place --no-timeout
+        run: cargo mutants -p omnia-substrate --in-place --no-times
       - name: Run mutation testing on zk crate
-        run: cargo mutants -p omnia-zk --in-place --no-timeout
+        run: cargo mutants -p omnia-zk --in-place --no-times
       - name: Upload mutants report
         uses: actions/upload-artifact@v4
         with:
