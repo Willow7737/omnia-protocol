@@ -1,14 +1,12 @@
 //! Structured error reporting endpoint.
 
-use std::sync::Arc;
-
 use axum::{extract::State, http::StatusCode, Json};
 use serde::Serialize;
 
 use crate::state::AppState;
 
 /// Structured error code for API responses.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     /// Internal processing error
@@ -24,7 +22,7 @@ pub enum ErrorCode {
 }
 
 /// Structured error response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ErrorResponse {
     /// Machine-readable error code
     pub code: ErrorCode,
@@ -38,8 +36,16 @@ pub struct ErrorResponse {
 ///
 /// Rate-limited to prevent abuse. Does not leak internal details
 /// (no stack traces, file paths, or system info).
+#[utoipa::path(
+    get,
+    path = "/api/v1/errors",
+    responses(
+        (status = 200, description = "List of supported error codes", body = Vec<ErrorResponse>),
+    ),
+    tag = "errors",
+)]
 pub async fn error_codes(
-    State(_state): State<Arc<AppState>>,
+    State(_state): State<AppState>,
 ) -> (StatusCode, Json<Vec<ErrorResponse>>) {
     let codes = vec![
         ErrorResponse {

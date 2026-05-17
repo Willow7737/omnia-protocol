@@ -1152,7 +1152,7 @@ impl SlashingEngine {
         let history = self.offense_history.get_mut(node);
         match history {
             Some(entries) if !entries.is_empty() => {
-                let last_offense_points = entries.pop().unwrap();
+                let last_offense_points = entries.pop().expect("entries is non-empty per guard above");
                 let current = self.slash_points.get(node).copied().unwrap_or(0);
                 let new_points = current.saturating_sub(last_offense_points);
                 self.slash_points.insert(*node, new_points);

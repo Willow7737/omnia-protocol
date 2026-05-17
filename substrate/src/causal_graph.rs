@@ -521,8 +521,8 @@ impl CausalGraph {
 
         let mut queue_vec: Vec<EventId> = queue.into_iter().collect();
         queue_vec.sort_by(|a, b| {
-            let event_a = self.events.get(a).unwrap();
-            let event_b = self.events.get(b).unwrap();
+            let event_a = self.events.get(a).expect("event should exist in graph for topological sort");
+            let event_b = self.events.get(b).expect("event should exist in graph for topological sort");
             event_a
                 .timestamp
                 .cmp(&event_b.timestamp)
