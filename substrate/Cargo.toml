@@ -58,6 +58,9 @@ getrandom = "0.2"
 # Legacy sled database support for one-time migration to redb
 sled = { version = "0.34", optional = true }
 
+# bincode 1.x for legacy wire format deserialization (v0 fallback)
+bincode = { workspace = true }
+
 [features]
 default = []
 migration = ["sled"]
@@ -72,9 +75,6 @@ proptest = "1.4"
 
 # sled is needed for integration tests of migration utility
 sled = "0.34"
-
-# bincode 1.x for legacy wire format deserialization (v0 fallback)
-bincode = { workspace = true }
 
 [[bench]]
 name = "throughput"

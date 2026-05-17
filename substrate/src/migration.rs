@@ -7,12 +7,14 @@
 //!
 //! # Usage
 //!
-//! Call [`migrate_sled_to_redb`] on startup. If a sled database exists at the
-//! configured data directory, all key-value pairs are read from sled trees and
-//! written to the new redb database. The sled directory is renamed to
-//! `<path>.sled.bak` after successful migration.
+//! Enable the `migration` feature and call [`migrate_sled_to_redb`] on startup.
+//! If a sled database exists at the configured data directory, all key-value
+//! pairs are read from sled trees and written to the new redb database. The
+//! sled directory is renamed to `<path>.sled.bak` after successful migration.
 
 use std::path::Path;
+
+use redb::TableDefinition;
 
 /// Result type for migration operations.
 pub type MigrationResult<T> = Result<T, MigrationError>;
@@ -75,6 +77,7 @@ pub enum MigrationError {
 ///     tracing::info!(migrated, "Successfully migrated sled data to redb");
 /// }
 /// ```
+#[cfg(feature = "migration")]
 pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResult<usize> {
     // Check if sled database exists
     if !sled_path.exists() {
@@ -101,7 +104,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
     let tree_names: Vec<String> = sled_db
         .tree_names()
         .into_iter()
-        .map(|name| String::from_utf8_lossy(&name).to_string())
+        .map(|name| String::from_utf8_lossy(name.as_ref()).to_string())
         .collect();
 
     tracing::info!(trees = tree_names.len(), "Found sled trees to migrate");
@@ -111,16 +114,17 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
             .open_tree(tree_name)
             .map_err(|e| MigrationError::SledRead(e.to_string()))?;
 
-        // Create a redb table for this tree
-        let table_name = format!("migrated_{}", tree_name.replace(|c: char| !c.is_alphanumeric(), "_"));
+        // Create a redb table definition for this tree
+        let table_key = format!("migrated_{}", tree_name.replace(|c: char| !c.is_alphanumeric(), "_"));
+        let table_def: TableDefinition<&[u8], &[u8]> = TableDefinition::new(&table_key);
 
         let write_txn = redb_db
             .begin_write()
             .map_err(|e| MigrationError::RedbWrite(e.to_string()))?;
 
         {
-            let mut table: redb::Table<&[u8], &[u8]> = write_txn
-                .open_or_create_table(&table_name)
+            let mut table = write_txn
+                .open_table(table_def)
                 .map_err(|e| MigrationError::RedbWrite(e.to_string()))?;
 
             let mut tree_count = 0usize;
@@ -139,7 +143,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
             total_migrated += tree_count;
             tracing::info!(
                 tree = tree_name,
-                table = %table_name,
+                table = %table_key,
                 entries = tree_count,
                 "Migrated sled tree to redb table"
             );
@@ -172,6 +176,22 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
     Ok(total_migrated)
 }
 
+/// Stub function when migration feature is not enabled.
+///
+/// Returns 0 (no migration performed) and logs that the migration feature
+/// is not enabled.
+#[cfg(not(feature = "migration"))]
+pub fn migrate_sled_to_redb(sled_path: &Path, _redb_path: &Path) -> MigrationResult<usize> {
+    if sled_path.exists() {
+        tracing::warn!(
+            path = %sled_path.display(),
+            "Sled database found but migration feature is not enabled. \
+             Enable the 'migration' feature to migrate sled data to redb."
+        );
+    }
+    Ok(0)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -189,6 +209,7 @@ mod tests {
         assert_eq!(result, 0);
     }
 
+    #[cfg(feature = "migration")]
     #[test]
     fn test_migrate_empty_sled_database() {
         let dir = TempDir::new().unwrap();
@@ -204,12 +225,11 @@ mod tests {
 
         // Sled directory should be renamed
         assert!(!sled_path.exists());
-        assert!(sled_path.with_extension("sled.bak").exists() || {
-            let backup = format!("{}.sled.bak", sled_path.display());
-            Path::new(&backup).exists()
-        });
+        let backup = format!("{}.sled.bak", sled_path.display());
+        assert!(Path::new(&backup).exists());
     }
 
+    #[cfg(feature = "migration")]
     #[test]
     fn test_migrate_sled_with_data() {
         let dir = TempDir::new().unwrap();

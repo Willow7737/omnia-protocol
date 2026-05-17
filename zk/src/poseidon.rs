@@ -51,15 +51,15 @@ use thiserror::Error;
 /// R1CS synthesis, and other ZK-specific operations.
 #[derive(Error, Debug)]
 pub enum ZkError {
-    /// MDS matrix inversion failed — a Cauchy denominator was zero.
+    /// MDS matrix inversion failed -- a Cauchy denominator was zero.
     ///
     /// This should never happen with correctly chosen Cauchy vectors
-    /// (where all `x_i`, `y_j` are distinct and `x_i ≠ y_j`),
+    /// (where all `x_i`, `y_j` are distinct and `x_i != y_j`),
     /// but is guarded against to avoid runtime panics.
-    #[error("MDS matrix inversion failed: Cauchy denominator was zero at ({0}, {1})")
+    #[error("MDS matrix inversion failed")]
     MdsMatrixInversionFailed(usize, usize),
     /// An R1CS synthesis error occurred during circuit construction.
-    #[error("synthesis error: {0}")
+    #[error("synthesis error")]
     Synthesis(#[from] SynthesisError),
 }
 
@@ -67,7 +67,7 @@ impl From<ZkError> for SynthesisError {
     fn from(e: ZkError) -> Self {
         match e {
             ZkError::Synthesis(s) => s,
-            other => SynthesisError::Unsatisfiable,
+            _other => SynthesisError::Unsatisfiable,
         }
     }
 }
