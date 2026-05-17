@@ -599,6 +599,7 @@ pub fn verify_aggregate_with_pop(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

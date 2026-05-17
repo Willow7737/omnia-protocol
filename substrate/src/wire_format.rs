@@ -40,6 +40,7 @@ pub fn deserialize_with_version<'de, T: serde::Deserialize<'de>>(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};

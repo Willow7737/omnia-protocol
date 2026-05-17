@@ -541,6 +541,7 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use omnia_substrate::crypto::generate_keypair;

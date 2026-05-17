@@ -267,6 +267,7 @@ impl fmt::Display for CausalOrder {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -577,6 +578,7 @@ mod tests {
 /// These tests verify the mathematical invariants that a CRDT must satisfy:
 /// idempotency, commutativity, associativity, and monotonicity.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use proptest::prelude::*;

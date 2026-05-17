@@ -445,6 +445,7 @@ pub fn poseidon_hash(
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use ark_r1cs_std::alloc::AllocVar;

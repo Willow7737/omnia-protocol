@@ -546,6 +546,7 @@ pub struct SubstrateStats {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::crypto::generate_keypair;

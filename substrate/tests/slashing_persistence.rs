@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration tests for persistent slashing state.
 //!
 //! These tests verify that slashing state survives node restarts when using

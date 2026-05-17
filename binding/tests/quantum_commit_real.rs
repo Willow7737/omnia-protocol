@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Real cryptographic verification tests for quantum commitments.
 //!
 //! These tests exercise the Ed25519 and Dilithium signing and verification

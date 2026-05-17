@@ -117,6 +117,7 @@ pub fn hamming_distance(a: &[u8; 32], b: &[u8; 32]) -> u32 {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

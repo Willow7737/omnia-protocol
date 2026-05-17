@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! End-to-end UBC lifecycle + governance test
 //!
 //! Tests the full lifecycle of the economics layer:

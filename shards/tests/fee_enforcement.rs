@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Fee enforcement integration tests
 //!
 //! Verifies that the ShardRouter correctly enforces fee deductions

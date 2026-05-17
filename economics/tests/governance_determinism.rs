@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Governance determinism regression tests
 //!
 //! These tests verify that governance calculations produce bit-for-bit

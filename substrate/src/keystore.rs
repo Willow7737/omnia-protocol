@@ -490,6 +490,7 @@ fn derive_key(passphrase: &str) -> [u8; 32] {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use tempfile::TempDir;

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use omnia_substrate::*;
 use proptest::prelude::*;
 

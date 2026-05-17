@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration tests for the slashing module.
 //!
 //! These tests exercise the slashing engine both in isolation and integrated

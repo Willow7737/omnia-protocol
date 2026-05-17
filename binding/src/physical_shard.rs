@@ -223,6 +223,7 @@ impl Default for ProvenanceTracker {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::quantum_commit::QuantumCommitment;

@@ -248,6 +248,7 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use ark_ff::Zero;
@@ -337,6 +338,7 @@ mod tests {
 
 /// Property-based tests for Merkle tree and hash invariants.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use proptest::prelude::*;

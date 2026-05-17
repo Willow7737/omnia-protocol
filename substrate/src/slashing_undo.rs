@@ -275,6 +275,7 @@ impl Default for SlashingUndoManager {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::slashing::{SlashOffense, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};

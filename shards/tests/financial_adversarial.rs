@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! FinancialShard adversarial test suite
 //!
 //! Tests that the Financial shard correctly rejects invalid operations and

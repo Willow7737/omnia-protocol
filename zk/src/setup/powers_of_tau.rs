@@ -206,6 +206,7 @@ pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTa
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

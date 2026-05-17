@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Message loss chaos tests.
 //!
 //! Tests that the protocol can tolerate moderate message loss (20%) and

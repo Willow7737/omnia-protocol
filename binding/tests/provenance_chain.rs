@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! End-to-end provenance chain test
 //!
 //! Simulates a complete supply chain scenario: factory -> distributor ->

@@ -174,6 +174,7 @@ impl<T: Clone + Ord + Hash + Serialize> Default for OrSet<T> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use proptest::prelude::*;

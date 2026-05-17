@@ -337,6 +337,7 @@ impl QuantumCommitment {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use omnia_substrate::generate_keypair;

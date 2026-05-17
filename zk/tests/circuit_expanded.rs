@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration tests for the expanded Groth16 ZK circuit.
 //!
 //! These tests verify the full lifecycle of the expanded rollup circuit:

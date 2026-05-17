@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test: Layer 2 wired into Layer 1
 //!
 //! Creates a Substrate with a ShardRouter, submits a financial/identity event,

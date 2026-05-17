@@ -494,6 +494,7 @@ impl fmt::Display for Event {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::crypto::generate_keypair;

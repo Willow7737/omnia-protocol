@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration tests for settlement-agnostic ZK-rollup.
 //!
 //! These tests verify that:

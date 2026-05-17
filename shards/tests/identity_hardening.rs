@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Integration test: Layer 4 Identity Hardening
 //!
 //! Tests the full lifecycle of the hardened identity system:

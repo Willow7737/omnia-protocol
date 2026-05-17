@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Cross-shard messaging integration test
 //!
 //! Tests the full lifecycle of cross-shard messages: a financial transfer

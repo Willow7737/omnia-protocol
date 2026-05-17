@@ -849,6 +849,7 @@ pub enum ConsensusError {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::causal_graph::CausalGraph;
@@ -1180,6 +1181,7 @@ mod tests {
 /// consistency even when fed arbitrary events. The key property is
 /// that processing events never panics, regardless of input.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use crate::event::Event;
@@ -1270,6 +1272,7 @@ mod proptests {
 
 /// Tests for the round timeout mechanism (Phase C1).
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod timeout_tests {
     use super::*;
     use std::thread;

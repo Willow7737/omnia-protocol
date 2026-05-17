@@ -294,6 +294,7 @@ fn prune_old_snapshots(dir: &PathBuf, max_snapshots: usize) -> Result<(), Snapsh
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::causal_graph::CausalGraph;

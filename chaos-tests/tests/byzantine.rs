@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Byzantine fault chaos tests.
 //!
 //! Tests that the SlashingEngine detects and penalizes Byzantine behavior,

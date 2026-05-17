@@ -220,6 +220,7 @@ pub fn verify_key_consistency(pk_bytes: &[u8], vk_bytes: &[u8]) -> Result<(), Se
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::circuit::RollupCircuit;

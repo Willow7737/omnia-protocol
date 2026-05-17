@@ -274,6 +274,7 @@ impl BasisPpmExt for u64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

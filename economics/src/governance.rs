@@ -273,6 +273,7 @@ impl GovernanceState {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::BASIS_PPM;
@@ -382,6 +383,7 @@ mod tests {
 /// These tests verify that quadratic voting weight is monotonically
 /// increasing with stake, and that decay rate computations never panic.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod proptests {
     use super::*;
     use crate::fixed_point::{DecayRate, BASIS_PPM};

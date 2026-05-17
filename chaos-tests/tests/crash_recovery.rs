@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Crash and recovery chaos test.
 //!
 //! Tests that a crashed node can be restarted and successfully recover

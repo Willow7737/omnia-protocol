@@ -587,6 +587,7 @@ impl From<CausalGraphError> for GossipError {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::crypto::generate_keypair;

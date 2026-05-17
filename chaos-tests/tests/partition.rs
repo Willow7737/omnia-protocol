@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Network partition chaos test.
 //!
 //! Tests that a 4-node network maintains safety and eventually achieves

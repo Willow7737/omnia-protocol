@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 //! Replay protection integration test
 //!
 //! Verifies that the ShardRouter rejects events with non-monotonic

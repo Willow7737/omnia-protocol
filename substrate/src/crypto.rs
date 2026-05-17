@@ -19,6 +19,7 @@ pub fn generate_keypair() -> NodeKeypair {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
