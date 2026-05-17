@@ -131,13 +131,13 @@ fn test_three_node_crdt_convergence() {
 
     // Each node increments independently
     for _ in 0..5 {
-        counter_a.increment(n1, 1);
+        counter_a.increment(n1, 1).unwrap();
     }
     for _ in 0..3 {
-        counter_b.increment(n2, 1);
+        counter_b.increment(n2, 1).unwrap();
     }
     for _ in 0..7 {
-        counter_c.increment(n3, 1);
+        counter_c.increment(n3, 1).unwrap();
     }
 
     // Merge all (simulates gossip propagation)
@@ -290,13 +290,13 @@ fn test_crdt_100_percent_convergence() {
         let mut c3 = GCounter::new();
 
         for _ in 0..increments[0] {
-            c1.increment(n1, 1);
+            c1.increment(n1, 1).unwrap();
         }
         for _ in 0..increments[1] {
-            c2.increment(n2, 1);
+            c2.increment(n2, 1).unwrap();
         }
         for _ in 0..increments[2] {
-            c3.increment(n3, 1);
+            c3.increment(n3, 1).unwrap();
         }
 
         // Full mesh merge

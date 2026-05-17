@@ -12,14 +12,14 @@ proptest! {
         let mut node_b = [0u8; 32]; node_b[0] = 2;
         let mut node_c = [0u8; 32]; node_c[0] = 3;
 
-        g1.increment(node_a, a);
-        g1.increment(node_b, b);
-        g1.increment(node_c, c);
+        g1.increment(node_a, a).unwrap();
+        g1.increment(node_b, b).unwrap();
+        g1.increment(node_c, c).unwrap();
 
         // Different order
-        g2.increment(node_c, c);
-        g2.increment(node_a, a);
-        g2.increment(node_b, b);
+        g2.increment(node_c, c).unwrap();
+        g2.increment(node_a, a).unwrap();
+        g2.increment(node_b, b).unwrap();
 
         prop_assert_eq!(g1.value(), g2.value());
     }
@@ -33,13 +33,13 @@ proptest! {
         let mut node_c = [0u8; 32]; node_c[0] = 3;
 
         let mut g1 = GCounter::new();
-        g1.increment(node_a, a);
+        g1.increment(node_a, a).unwrap();
 
         let mut g2 = GCounter::new();
-        g2.increment(node_b, b);
+        g2.increment(node_b, b).unwrap();
 
         let mut g3 = GCounter::new();
-        g3.increment(node_c, c);
+        g3.increment(node_c, c).unwrap();
 
         // (g1 merge g2) merge g3 == g1 merge (g2 merge g3)
         let mut left = g1.clone();

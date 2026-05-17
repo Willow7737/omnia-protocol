@@ -18,7 +18,7 @@ pub mod g_counter;
 pub mod lww_register;
 pub mod or_set;
 
-pub use g_counter::GCounter;
+pub use g_counter::{CrdtError, GCounter};
 pub use lww_register::LwwRegister;
 pub use or_set::OrSet;
 
@@ -143,10 +143,11 @@ impl AccountBalance {
     }
 
     /// Increment the balance for a node
-    pub fn increment(&mut self, node_id: NodeId, amount: u64) {
-        self.counter.increment(node_id, amount);
+    pub fn increment(&mut self, node_id: NodeId, amount: u64) -> Result<(), CrdtError> {
+        self.counter.increment(node_id, amount)?;
         self.last_updater = Some(node_id);
         let _ = self.vector_clock.increment(node_id);
+        Ok(())
     }
 
     /// Get the total balance value

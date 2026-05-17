@@ -17,6 +17,15 @@ use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use thiserror::Error;
+
+/// Errors that can occur during CRDT operations.
+#[derive(Debug, Error)]
+pub enum CrdtError {
+    /// Operation would cause an overflow.
+    #[error("CRDT overflow")]
+    Overflow,
+}
 
 /// A Grow-Only Counter CRDT
 ///
@@ -42,11 +51,12 @@ impl GCounter {
     /// * `node_id` - The node performing the increment
     /// * `amount` - Amount to increment by (default 1)
     ///
-    /// # Panics
-    /// Panics if increment would overflow u64
-    pub fn increment(&mut self, node_id: NodeId, amount: u64) {
+    /// # Errors
+    /// Returns `CrdtError::Overflow` if the increment would overflow u64.
+    pub fn increment(&mut self, node_id: NodeId, amount: u64) -> Result<(), CrdtError> {
         let entry = self.counts.entry(node_id).or_insert(0);
-        *entry = entry.checked_add(amount).expect("GCounter overflow");
+        *entry = entry.checked_add(amount).ok_or(CrdtError::Overflow)?;
+        Ok(())
     }
 
     /// Get the current total value (sum of all node counts)
@@ -115,7 +125,7 @@ mod tests {
             for (node_byte, amount) in increments {
                 let mut node_id = [0u8; 32];
                 node_id[0] = node_byte;
-                counter.increment(node_id, amount);
+                let _ = counter.increment(node_id, amount);
             }
             counter
         })
@@ -127,9 +137,9 @@ mod tests {
         let n1 = node(1);
 
         assert_eq!(counter.value(), 0);
-        counter.increment(n1, 1);
+        counter.increment(n1, 1).unwrap();
         assert_eq!(counter.value(), 1);
-        counter.increment(n1, 5);
+        counter.increment(n1, 5).unwrap();
         assert_eq!(counter.value(), 6);
     }
 
@@ -140,9 +150,9 @@ mod tests {
         let n2 = node(2);
         let n3 = node(3);
 
-        counter.increment(n1, 10);
-        counter.increment(n2, 20);
-        counter.increment(n3, 30);
+        counter.increment(n1, 10).unwrap();
+        counter.increment(n2, 20).unwrap();
+        counter.increment(n3, 30).unwrap();
 
         assert_eq!(counter.value(), 60);
         assert_eq!(counter.node_value(&n1), 10);
@@ -157,12 +167,12 @@ mod tests {
         let n3 = node(3);
 
         let mut counter_a = GCounter::new();
-        counter_a.increment(n1, 5);
-        counter_a.increment(n2, 10);
+        counter_a.increment(n1, 5).unwrap();
+        counter_a.increment(n2, 10).unwrap();
 
         let mut counter_b = GCounter::new();
-        counter_b.increment(n2, 8); // lower than a's 10
-        counter_b.increment(n3, 15);
+        counter_b.increment(n2, 8).unwrap(); // lower than a's 10
+        counter_b.increment(n3, 15).unwrap();
 
         counter_a.merge(&counter_b);
 
@@ -181,10 +191,10 @@ mod tests {
         let n2 = node(2);
 
         let mut a = GCounter::new();
-        a.increment(n1, 5);
+        a.increment(n1, 5).unwrap();
 
         let mut b = GCounter::new();
-        b.increment(n2, 10);
+        b.increment(n2, 10).unwrap();
 
         let merged_ab = a.merged(&b);
         let merged_ba = b.merged(&a);
@@ -197,7 +207,7 @@ mod tests {
         let n1 = node(1);
 
         let mut a = GCounter::new();
-        a.increment(n1, 5);
+        a.increment(n1, 5).unwrap();
 
         let merged = a.merged(&a);
         assert_eq!(a.value(), merged.value());
@@ -210,13 +220,13 @@ mod tests {
         let n3 = node(3);
 
         let mut a = GCounter::new();
-        a.increment(n1, 1);
+        a.increment(n1, 1).unwrap();
 
         let mut b = GCounter::new();
-        b.increment(n2, 2);
+        b.increment(n2, 2).unwrap();
 
         let mut c = GCounter::new();
-        c.increment(n3, 3);
+        c.increment(n3, 3).unwrap();
 
         // (a merge b) merge c == a merge (b merge c)
         let ab_c = a.merged(&b).merged(&c);
@@ -231,9 +241,9 @@ mod tests {
         let mut counter = GCounter::new();
 
         let v1 = counter.value();
-        counter.increment(n1, 1);
+        counter.increment(n1, 1).unwrap();
         let v2 = counter.value();
-        counter.increment(n1, 1);
+        counter.increment(n1, 1).unwrap();
         let v3 = counter.value();
 
         assert!(v1 < v2);
@@ -245,14 +255,14 @@ mod tests {
         let n1 = node(1);
         let mut counter = GCounter::new();
         let hash1 = counter.state_hash();
-        counter.increment(n1, 1);
+        counter.increment(n1, 1).unwrap();
         let hash2 = counter.state_hash();
 
         assert_ne!(hash1, hash2);
 
         // Same state -> same hash
         let mut counter2 = GCounter::new();
-        counter2.increment(n1, 1);
+        counter2.increment(n1, 1).unwrap();
         assert_eq!(counter.state_hash(), counter2.state_hash());
     }
 
@@ -303,7 +313,7 @@ mod tests {
             node_id[0] = node_byte;
             let mut counter = a.clone();
             let before_inc = counter.value();
-            counter.increment(node_id, amount);
+            let _ = counter.increment(node_id, amount);
             let after_inc = counter.value();
             prop_assert!(after_inc >= before_inc,
                 "value decreased after increment: {} -> {}", before_inc, after_inc);

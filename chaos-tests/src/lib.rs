@@ -32,6 +32,10 @@
 //! assert!(net.check_liveness());
 //! ```
 
+#![deny(clippy::unwrap_used)]
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId,
     NodeKeypair, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
@@ -242,10 +246,9 @@ impl ChaosNetwork {
             event.sign_with_keypair(&keypairs[i]);
 
             // Insert into the node's own graph (graph only needs &mut graph)
-            nodes[i]
-                .graph
-                .insert(event.clone())
-                .expect("Genesis insert should not fail");
+            if let Err(e) = nodes[i].graph.insert(event.clone()) {
+                panic!("Genesis insert failed for node {}: {e}", i);
+            }
 
             // Track state — use event.creator (which is blake3(pubkey) after signing)
             nodes[i].next_sequence = 1;

@@ -53,7 +53,7 @@ pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, RoundTimer};
-pub use crdt::{CvRDT, GCounter, LwwRegister, OrSet};
+pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use crypto_schemes::{
     CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
