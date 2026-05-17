@@ -25,7 +25,7 @@ All data arriving over the network is untrusted. The libp2p gossip layer is the 
 **Impact:** A crafted gossip message could inject invalid events into the causal graph (if signature/hash verification is bypassed), cause deserialization panics (if `unwrap()` is used on parsed data), or exhaust memory via oversized messages.
 
 **Current mitigation:**
-- `Event::from_bytes()` uses `bincode::deserialize()` which returns `Result` — no panic on malformed data
+- `Event::from_bytes()` uses `postcard::from_bytes()` which returns `Result` — no panic on malformed data
 - `Event::validate()` checks hash integrity (`verify_hash()`) and signature validity (`verify_signature()`) before causal graph insertion
 - `CausalGraph::insert()` re-validates the hash before inserting
 - `GossipConfig::max_pending` (default: 100,000) bounds the pending event queue
@@ -112,14 +112,14 @@ User-submitted data enters the protocol through event payloads, shard operations
 **Impact:** A malicious payload could trigger a deserialization panic, inject invalid shard operations (e.g., unauthorized minting), or bypass fee enforcement by crafting a payload that maps to a zero-fee operation.
 
 **Current mitigation:**
-- `ShardPayload::from_bytes()` uses `bincode::deserialize()` with proper error handling
+- `ShardPayload::from_bytes()` uses `postcard::from_bytes()` with proper error handling
 - `ShardRouter::route_event()` validates nonces (replay protection) and deducts fees before routing
 - Each shard's `validate()` method checks operation-specific constraints before `process_event()`
 
 **Remaining gaps:**
 - `MAX_PAYLOAD_SIZE` is enforced at the HTTP layer but not at the gossip/event level
 - No authorization checks on shard operations (e.g., only the treasury should be able to mint)
-- `bincode::deserialize()` on cross-shard message payloads processes unvalidated data
+- `postcard::from_bytes()` on cross-shard message payloads processes unvalidated data
 
 ### 3.3 Shard Operations
 
@@ -311,10 +311,10 @@ State transitions are where the protocol's invariants must hold. Incorrect trans
 - Points are accumulated using `saturating_add` (no overflow)
 - Thresholds are configurable and use `u64` integers (no floating-point)
 - Equivocation detection compares `creator + sequence + event_id` (three-field check)
-- Persistent storage via `SledSlashingStore` (configured automatically in `omnia-node`)
+- Persistent storage via `RedbSlashingStore` (configured automatically in `omnia-node`)
 
 **Remaining gaps:**
-- **Slashing persistence is opt-in in the library API** — `SlashingEngine::new()` uses `InMemorySlashingStore`, but the `omnia-node` binary always configures sled persistence. A library user who forgets `with_store()` loses slashing state on restart.
+- **Slashing persistence is opt-in in the library API** — `SlashingEngine::new()` uses `InMemorySlashingStore`, but the `omnia-node` binary always configures redb persistence. A library user who forgets `with_store()` loses slashing state on restart.
 - `persist_state()` is called after every mutation but only logs a warning on failure (does not rollback)
 - No slashing event emission — other nodes are not notified when a validator is slashed
 - No stake locking — the `SlashingEngine` tracks stakes but does not actually lock or confiscate them
@@ -446,18 +446,18 @@ Each arrow represents a trust boundary crossing. Data flows from untrusted (left
 
 ## 10. Data Persistence (NEW)
 
-### 10.1 Sled Database Alpha Quality
+### 10.1 Redb Database Reliability
 
-**Severity:** Medium
-**Description:** Both `SledSlashingStore` and `SledNonceStore` use sled 0.34, which is alpha-quality software. The Cargo.toml explicitly warns: "sled 0.34 is alpha-quality. Production deployments should migrate to rocksdb or redb."
-**Current mitigation:** Both stores are configured with explicit data directories for persistence.
-**Remaining gaps:** No crash consistency guarantee; no forward compatibility guarantee for on-disk format; no migration tool to rocksdb/redb; data loss on power failure is possible.
+**Severity:** Low
+**Description:** Both `RedbSlashingStore` and `RedbNonceStore` use redb as their embedded database. redb provides ACID transactions, crash-safe durability, and a simple single-file database format with forward compatibility guarantees. The previous sled 0.34 alpha-quality dependency has been replaced.
+**Current mitigation:** Both stores are configured with explicit data directories for persistence. redb uses a write-ahead log (WAL) for crash safety.
+**Remaining gaps:** No automated backup or replication of database files; no database repair tooling.
 
 ### 10.2 Nonce Store Persistence
 
 **Severity:** Medium
-**Description:** `SledNonceStore` provides persistent replay protection across restarts. If the nonce database is corrupted or deleted, replay protection is lost.
-**Current mitigation:** `create_shard_router()` in `main.rs` creates a `SledNonceStore` when `nonce_data_dir` is provided (the default in `omnia-node`).
+**Description:** `RedbNonceStore` provides persistent replay protection across restarts. If the nonce database is corrupted or deleted, replay protection is lost.
+**Current mitigation:** `create_shard_router()` in `main.rs` creates a `RedbNonceStore` when `nonce_data_dir` is provided (the default in `omnia-node`).
 **Remaining gaps:** No integrity check on nonce database startup; no backup mechanism; no recovery procedure if nonce database is corrupted.
 
 ---

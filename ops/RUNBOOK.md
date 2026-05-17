@@ -97,8 +97,8 @@ When `omnia-node` starts, it follows this sequence (see `node/src/main.rs`):
 3. Validate configuration (`node_id != 0`, `http_port != 0`, valid log level)
 4. Initialize structured logging (tracing) — supports JSON output via `RUST_LOG_FORMAT=json`
 5. Create data directory if it doesn't exist
-6. Initialize substrate with persistent slashing engine (sled)
-7. Create shard router with persistent nonce store (sled) and register all 6 shard types
+6. Initialize substrate with persistent slashing engine (redb)
+7. Create shard router with persistent nonce store (redb) and register all 6 shard types
 8. Initialize economics state (10% decay, 1000 UBC/month quota)
 9. Initialize Prometheus metrics (`NodeMetrics`)
 10. Build shared `AppState` and mount HTTP router
@@ -240,7 +240,7 @@ curl -s http://localhost:8080/metrics | grep omnia_node_peers_connected
 curl -s http://localhost:8080/metrics | grep omnia_node_events_finalized_total
 ```
 
-**Important:** If the slashing state is stored in-memory (the default `SlashingEngine::new_in_memory()`), all slash points are lost on node restart. Production nodes must use `SledSlashingStore` for persistence, which is configured automatically when running via `omnia-node` (it sets `substrate_config.slashing_data_dir`).
+**Important:** If the slashing state is stored in-memory (the default `SlashingEngine::new_in_memory()`), all slash points are lost on node restart. Production nodes must use `RedbSlashingStore` for persistence, which is configured automatically when running via `omnia-node` (it sets `substrate_config.slashing_data_dir`).
 
 ---
 

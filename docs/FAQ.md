@@ -30,7 +30,7 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 ### Q: What is the current state of the project?
 
-**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (sled), chaos testing, and TLA+ formal verification. Fee enforcement is implemented via `FeeSchedule` and `ShardRouter` integration. Some features like real RF fingerprinting remain stubs awaiting hardware. There is no mobile wallet and no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
+**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (redb), chaos testing, and TLA+ formal verification. Fee enforcement is implemented via `FeeSchedule` and `ShardRouter` integration. Some features like real RF fingerprinting remain stubs awaiting hardware. There is no mobile wallet and no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
 
 ### Q: How do I run the tests?
 
@@ -219,7 +219,7 @@ A `ShardRouter::new_without_fees()` constructor is available for testing.
 | Ed25519 signatures | Implemented |
 | BLAKE3 hashing | Implemented |
 | BFT consensus (<1/3 faulty nodes) | Implemented |
-| Replay protection (nonce tracking with sled persistence) | Implemented |
+| Replay protection (nonce tracking with redb persistence) | Implemented |
 | State commitments (Merkle root) | Implemented |
 | Event pruning (sustainability) | Implemented |
 | Fee enforcement (FeeSchedule + QuotaSystem) | Implemented |

@@ -7,7 +7,7 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-278%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-300%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-stable-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
@@ -65,7 +65,7 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 | Crate | Purpose | Tests | Status |
 |-------|---------|-------|--------|
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (sled) | 144+ | ✅ |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 144+ | ✅ |
 | `shards/` | 6 domain shards + cross-shard messaging | 46+ | ✅ |
 | `binding/` | Provenance log, RF stub, hybrid PQC signatures | 26+ | ✅ |
 | `economics/` | UBC token, quota, governance, useful work | 37+ | ✅ |
@@ -99,7 +99,7 @@ cargo bench --no-run
 - Ed25519 signatures with replay protection
 - Performance: O(new_events) consensus processing (not O(n) graph walk)
 - SlashingEngine with equivocation/liveness/invalid attestation detection
-- Persistent slashing state via `sled` embedded database (`SledSlashingStore`)
+- Persistent slashing state via `redb` embedded database (`RedbSlashingStore`)
 - Security: `state_root()`, `merkle_proof()`, `prune_old_events()`
 
 ### Layer 2: Domain Shards ✅
@@ -192,7 +192,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 ### Sprint 3 Completed 🎉
 - ✅ Expanded ZK circuit: Merkle path verification + per-event state transition constraints
 - ✅ TLA+ formal verification: consensus safety, agreement, validity, no-equivocation invariants
-- ✅ Persistent slashing state: sled-backed `SledSlashingStore` with graceful fallback
+- ✅ Persistent slashing state: redb-backed `RedbSlashingStore` with graceful fallback
 - ✅ Binary entrypoint: `omnia-node` with CLI, health/metrics HTTP, graceful shutdown
 - ✅ REST API: axum + utoipa Swagger UI with events/shards/governance/economics/node endpoints
 - ✅ Chaos testing: partitions, crash recovery, byzantine behavior, message loss

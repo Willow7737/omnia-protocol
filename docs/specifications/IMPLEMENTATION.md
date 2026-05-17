@@ -58,7 +58,7 @@ State Management:
 - CRDTs (GCounter, OrSet, LWWRegister)
 - Merkle state root + inclusion proofs
 - Event pruning for sustainability
-- Sled-backed persistent slashing and nonce stores
+- Redb-backed persistent slashing and nonce stores
 
 HTTP/REST API (axum):
 - 9 endpoints under /api/v1/
@@ -78,8 +78,8 @@ Monitoring:
 - Causal graph consensus with vector clock ordering
 - 6 domain shards with cross-shard messaging
 - Fee enforcement via FeeSchedule + QuotaSystem
-- Replay protection with persistent nonce store (SledNonceStore)
-- Slashing engine with persistent sled storage (SledSlashingStore)
+- Replay protection with persistent nonce store (RedbNonceStore)
+- Slashing engine with persistent redb storage (RedbSlashingStore)
 - Provenance tracking (full lifecycle)
 - DID method (`did:omnia:`) with validation
 - Shamir's Secret Sharing for social recovery
@@ -181,7 +181,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ REST API with 9 endpoints + Swagger UI
 - ✅ Prometheus metrics (6 node-level counters/gauges)
 - ✅ Graceful shutdown (SIGINT/SIGTERM)
-- ✅ Persistent slashing and nonce stores (sled)
+- ✅ Persistent slashing and nonce stores (redb)
 - ✅ State snapshot/restore subcommands
 - ✅ Trusted setup ceremony subcommands
 - ✅ Structured logging with JSON support
@@ -214,7 +214,7 @@ Build standalone capabilities and expand the protocol's reach.
 | Encrypted key storage | P0 | 📋 Planned |
 | SNARK-friendly hash (Pedersen/Poseidon) | P0 | 📋 Planned |
 | Sybil resistance / staking | P0 | 📋 Planned |
-| sled → rocksdb migration | P1 | 📋 Planned |
+| redb persistence optimization | P1 | 📋 Planned |
 | Mobile wallet | P1 | 📋 Planned |
 | Validator network | P1 | 📋 Planned |
 | Conviction voting | P2 | 📋 Planned |
@@ -366,7 +366,7 @@ but TPS has not been measured at scale.
 - [ ] Security audit completed
 - [ ] All tests passing (`cargo test --workspace`)
 - [ ] API authentication implemented
-- [ ] sled → rocksdb migration completed
+- [ ] redb persistence optimization
 - [ ] SNARK-friendly hash integrated into ZK circuit
 - [ ] Encrypted key storage implemented
 - [ ] Documentation complete

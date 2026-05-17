@@ -269,9 +269,9 @@ cargo test -p omnia-chaos-tests
 
 4. **The codebase has a binary entrypoint.** `omnia-node` provides a CLI (clap with `OMNIA_` env var overrides), HTTP health/metrics/API endpoints (axum), Swagger UI (utoipa), and graceful shutdown (SIGINT/SIGTERM). The core protocol remains a set of composable libraries.
 
-5. **Slashing state supports persistence.** `SledSlashingStore` provides sled-backed persistence. The `omnia-node` binary always configures persistent slashing. The default `SlashingEngine::new()` constructor still uses `InMemorySlashingStore` — library users must explicitly use `with_store()`.
+5. **Slashing state supports persistence.** `RedbSlashingStore` provides redb-backed persistence. The `omnia-node` binary always configures persistent slashing. The default `SlashingEngine::new()` constructor still uses `InMemorySlashingStore` — library users must explicitly use `with_store()`.
 
-6. **Nonce state supports persistence.** `SledNonceStore` provides sled-backed persistence for replay protection. The `omnia-node` binary always configures persistent nonces. The `ShardRouter::new()` constructor uses in-memory nonces — library users must use `ShardRouter::with_nonce_store()` for persistence.
+6. **Nonce state supports persistence.** `RedbNonceStore` provides redb-backed persistence for replay protection. The `omnia-node` binary always configures persistent nonces. The `ShardRouter::new()` constructor uses in-memory nonces — library users must use `ShardRouter::with_nonce_store()` for persistence.
 
 7. **The ZK circuit has been expanded.** `ExpandedRollupCircuit` adds Merkle path verification and per-event state transition constraints. However, it uses a simplified field-addition hash as a placeholder — a production SNARK-friendly hash (Pedersen/Poseidon) is still needed. See `SELF_ASSESSMENT.md` §3.1.
 
@@ -283,7 +283,7 @@ cargo test -p omnia-chaos-tests
 
 11. **The `keygen` subcommand writes unencrypted private keys.** The `validator_key.bin` file is raw bytes with no encryption or passphrase protection.
 
-12. **sled 0.34 is alpha-quality.** Both `SledSlashingStore` and `SledNonceStore` depend on sled, which is not recommended for production by its own author.
+12. **redb is production-quality.** Both `RedbSlashingStore` and `RedbNonceStore` use redb, which provides ACID transactions, crash-safe durability, and is actively maintained.
 
 ---
 
@@ -364,7 +364,7 @@ omnia-protocol/
 │       ├── anchor.rs             # Asset anchoring
 │       └── rf_fingerprint.rs     # RF fingerprinting STUB
 ├── node/                         # Node binary + library
-│   ├── Cargo.toml                # Dependencies: substrate, shards, economics, binding, zk, axum, clap, sled, utoipa
+│   ├── Cargo.toml                # Dependencies: substrate, shards, economics, binding, zk, axum, clap, redb, utoipa
 │   └── src/
 │       ├── main.rs               # Binary entrypoint with CLI subcommands
 │       ├── lib.rs                 # Library root (api, config, http, state modules)
@@ -416,7 +416,7 @@ omnia-protocol/
 │   ├── adr/                      # Architecture Decision Records
 │   │   ├── ADR-001-event-processor-trait.md
 │   │   └── ADR-003-gossip-substrate-interface.md
-│   ├── OPERATIONS.md             # Operations guide (sled, persistence)
+│   ├── OPERATIONS.md             # Operations guide (redb, persistence)
 │   ├── DEPENDENCY_POLICY.md      # Dependency review policy
 │   └── specifications/
 │       ├── ARCHITECTURE.md       # Full architecture specification

@@ -125,7 +125,7 @@ Listed separately for emphasis due to its economic impact.
 **Key audit points:**
 - Point accumulation uses `saturating_add` — no overflow, but does this allow infinite accumulation without ejection?
 - Equivocation detection relies on `EventId` comparison — are there hash collision scenarios?
-- `SlashingEngine` supports persistent storage via `SlashingStore` trait (`SledSlashingStore` for disk, `InMemorySlashingStore` for tests). The `omnia-node` binary configures sled persistence automatically.
+- `SlashingEngine` supports persistent storage via `SlashingStore` trait (`RedbSlashingStore` for disk, `InMemorySlashingStore` for tests). The `omnia-node` binary configures redb persistence automatically.
 - `persist_state()` is called after every mutation but only logs a warning on failure (does not rollback)
 - `check_liveness()` threshold boundary: `inactive_rounds > threshold` uses strict greater-than; is this correct?
 - No slashing decay or forgiveness mechanism — is this intentional?
@@ -156,7 +156,7 @@ The shard router is the central dispatch point that deserializes payloads, enfor
 
 **Key audit points:**
 - `route_event()` processing order: nonce check → fee deduction → route — is this order correct?
-- Cross-shard message deserialization uses `bincode::deserialize()` — is this a deserialization-of-unevicted-data risk?
+- Cross-shard message deserialization uses `postcard::from_bytes()` — is this a deserialization-of-unevicted-data risk?
 - `pubkey_to_did()` is a simple hex encoding — no collision resistance beyond the 32-byte Ed25519 key space
 - `ShardRouter::new_without_fees()` bypasses fee enforcement — verify it is test-only
 
@@ -257,13 +257,13 @@ Economic state transitions — fee deduction, UBC minting, slashing confiscation
 - `SlashingEngine::record_offense()` — slash point accumulation
 - `UbcToken::mint_monthly()` — epoch-based UBC issuance
 
-### 5.6 Persistence Boundary (sled)
+### 5.6 Persistence Boundary (redb)
 
-Data persisted to sled databases crosses from volatile to durable storage. Sled is alpha-quality software.
+Data persisted to redb databases crosses from volatile to durable storage. redb provides ACID transactions and crash-safe durability.
 
 **Crossing points**:
-- `SledSlashingStore::persist_state()` — slashing state durability
-- `SledNonceStore::set_nonce()` — nonce state durability
+- `RedbSlashingStore::persist_state()` — slashing state durability
+- `RedbNonceStore::set_nonce()` — nonce state durability
 
 ---
 

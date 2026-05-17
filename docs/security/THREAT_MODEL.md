@@ -28,7 +28,7 @@ architectures. The system comprises:
 - **Economics layer**: Governance with quadratic voting, fee scheduling
 - **ZK layer**: Groth16 rollup proofs with Poseidon hash on BN254, Powers of Tau
   trusted setup ceremony, expanded circuit with Merkle path verification
-- **Node layer**: REST API (axum), networking (libp2p QUIC), storage (sled)
+- **Node layer**: REST API (axum), networking (libp2p QUIC), storage (redb)
 
 ### Trust Assumptions
 - At most f Byzantine nodes out of N >= 3f + 1
@@ -46,7 +46,7 @@ architectures. The system comprises:
 | Attack | Severity | Mitigation | Status |
 |--------|----------|------------|--------|
 | Gossip flood (DoS) | High | Token-bucket rate limiter (200 burst/100s) | Implemented |
-| Replay attack | High | Nonce-based replay protection + sled persistence | Implemented |
+| Replay attack | High | Nonce-based replay protection + redb persistence | Implemented |
 | Eclipse attack | High | Bootstrap nodes + peer diversity requirements | Partial - no geographic diversity enforcement |
 | Sybil attack | Medium | Stake-weighted VRF leader selection | Implemented |
 | Network partition | High | BFT assumption (3f+1), partition recovery in runbook | Documented |
@@ -124,9 +124,9 @@ architectures. The system comprises:
 | Snapshot tampering | High | BLAKE3 integrity hash + verify() | Implemented |
 | Event graph corruption | Medium | Causal graph consistency checks | Implemented |
 | CRDT divergence | High | TLA+-proven convergence | Proven |
-| Nonce reset (disk corruption) | Medium | sled durability guarantees | Partial - No nonce backup |
+| Nonce reset (disk corruption) | Medium | redb durability guarantees | Partial - No nonce backup |
 | Pruning data loss | Medium | Archive mode default + PrunedEventMetadata | Implemented |
-| ProofBundle tampering | High | bincode serialization + verify_integrity() | Implemented |
+| ProofBundle tampering | High | postcard serialization + verify_integrity() | Implemented |
 
 ### 2.8 Supply Chain Attack Surface
 
@@ -186,7 +186,7 @@ Network Halts
 |   +-- Amplification via cross-shard routing [Mitigated - fee enforcement]
 +-- State corruption
     +-- Corrupt snapshot loaded [Mitigated - BLAKE3 verify]
-    +-- sled corruption [Low probability - ACID]
+    +-- redb corruption [Low probability - ACID transactions]
     +-- Memory exhaustion via large events [Mitigated - 1 MiB limit]
 ```
 

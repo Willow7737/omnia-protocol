@@ -74,7 +74,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | :--- | :--- | :--- | :--- |
 | **REQ-7.1** | Expanded ZK Circuit (Merkle path + event constraints) | P1 | ✅ Completed |
 | **REQ-7.2** | TLA+ Formal Verification (consensus safety/liveness) | P1 | ✅ Completed |
-| **REQ-7.3** | Persistent Slashing State (sled) | P1 | ✅ Completed |
+| **REQ-7.3** | Persistent Slashing State (redb) | P1 | ✅ Completed |
 | **REQ-7.4** | Binary Entrypoint (omnia-node) | P2 | ✅ Completed |
 | **REQ-7.5** | REST API (axum + utoipa Swagger UI) | P2 | ✅ Completed |
 | **REQ-7.6** | Chaos Testing Framework | P2 | ✅ Completed |
@@ -88,7 +88,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-8.1** | Creator ↔ Pubkey Binding (blake3) | P0 | ✅ Completed |
 | **REQ-8.2** | Payload Size Limits (1 MiB default) | P0 | ✅ Completed |
 | **REQ-8.3** | Gossip Rate Limiting (token-bucket) | P1 | ✅ Completed |
-| **REQ-8.4** | Nonce Persistence (sled) | P1 | ✅ Completed |
+| **REQ-8.4** | Nonce Persistence (redb) | P1 | ✅ Completed |
 | **REQ-8.5** | TLA+ Agreement Fix + Liveness | P0 | ✅ Completed |
 | **REQ-8.6** | Poseidon Hash in ZK Circuit | P0 | ✅ Completed |
 | **REQ-8.7** | Snapshot Sync | P1 | ✅ Completed |

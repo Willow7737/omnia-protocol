@@ -40,7 +40,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | :--- | :--- | :--- | :--- |
 | **Causal Consensus** | Implemented | Low | Rust, 75+ tests passing, O(new_events) processing |
 | **Identity Shard** | Implemented | Low | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery |
-| **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with sled persistence) |
+| **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence) |
 | **Computational Shard** | Implemented | Low | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub |
 | **Physical Shard** | Implemented | Low | Append-only provenance log (CRDT-friendly), ownership tracking, chain verification |
 | **Biological Shard** | Implemented | Low | Consent registry (grant/revoke), ZK query stub, expiration tracking |
@@ -99,7 +99,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] Economics Layer (UBC, quadratic voting with PPM decay, time-locked voting, useful-work proofs)
 - [x] ZK-Rollup Settlement Architecture (Ethereum adapter)
 - [x] Fee enforcement (FeeSchedule + ShardRouter integration)
-- [x] Replay protection (nonce tracking with sled persistence)
+- [x] Replay protection (nonce tracking with redb persistence)
 - [x] AI agent identity (5 capability types including governance)
 - [x] Shamir's Secret Sharing social recovery (GF(256) with Lagrange interpolation)
 - [x] Biometric anchors (BLAKE3 salted commitments, raw template never stored)

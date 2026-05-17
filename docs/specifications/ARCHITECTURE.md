@@ -97,7 +97,7 @@ For state that requires convergence, Omnia uses CRDTs (formally verified in `Omn
 
 #### Replay Protection — ✅ Implemented
 
-Per-creator nonce tracking in both CausalGraph and ShardRouter prevents replay attacks. Nonce state is persisted via `SledNonceStore` across restarts (configured automatically in `omnia-node`).
+Per-creator nonce tracking in both CausalGraph and ShardRouter prevents replay attacks. Nonce state is persisted via `RedbNonceStore` across restarts (configured automatically in `omnia-node`).
 
 #### State Commitments — ✅ Implemented
 
@@ -274,7 +274,7 @@ The `SlashingEngine` tracks three offense types with configurable thresholds:
 | LivenessViolation | 100 | 500 | 2000 |
 | InvalidAttestation | 300 | 500 | 2000 |
 
-Persistent storage via `SledSlashingStore`. The `omnia-node` binary configures sled persistence automatically.
+Persistent storage via `RedbSlashingStore`. The `omnia-node` binary configures redb persistence automatically.
 
 ### Conviction Voting — 📋 Planned
 
@@ -430,7 +430,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 |-----------|--------|
 | ✅ Consistency (2/3 honest → system consistent) | Designed |
 | ✅ Liveness (connected + 2/3 honest → progress) | Designed |
-| ✅ Replay protection (nonce tracking with sled persistence) | Implemented |
+| ✅ Replay protection (nonce tracking with redb persistence) | Implemented |
 | ✅ State commitments (Merkle root + proofs) | Implemented |
 | ✅ Event pruning (sustainability) | Implemented |
 | ✅ Economic security (slashing with persistence) | Implemented |
@@ -452,7 +452,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 1. **REST API has no security controls** — no authentication, no rate limiting, no authorization
 2. **Unencrypted private key storage** — keygen writes raw binary
 3. **ZK circuit hash placeholder** — needs Pedersen/Poseidon for production soundness
-4. **sled 0.34 alpha quality** — crash consistency risks, no migration path
+4. **redb is production-quality** — ACID transactions, crash-safe, no alpha-quality concerns
 5. **No Sybil resistance** — no staking requirement for validators
 6. **Creator-public key binding gap** — `Event::validate()` does not verify `creator == hash(creator_pubkey)`
 
