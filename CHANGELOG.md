@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.15](https://github.com/Willow7737/omnia-protocol/compare/v0.1.14...v0.1.15) (2026-05-17)
+
+
+### Features
+
+* **substrate:** add bincode v0 fallback deserialization in wire format ([b6b66da](https://github.com/Willow7737/omnia-protocol/commit/b6b66da6d6599efea5a36727d102dadc3d190f09))
+* **substrate:** add sled-to-redb migration utility ([7b28dc3](https://github.com/Willow7737/omnia-protocol/commit/7b28dc32be21e3540d97f4f13d06296854c8a8a2))
+* **tooling:** add cargo-mutants configuration ([d8fba17](https://github.com/Willow7737/omnia-protocol/commit/d8fba172c5730af6d912381ef2ede69c1abdbe49))
+
+
+### Bug Fixes
+
+* **api:** remove false rate-limiting claim and unused ErrorCode::RateLimited variant ([58f7639](https://github.com/Willow7737/omnia-protocol/commit/58f7639badceefd5e7515ed4f2794bfda18793d7))
+* **causal-graph:** return EventPruned instead of MissingParent for pruned parents in insert() ([377da82](https://github.com/Willow7737/omnia-protocol/commit/377da826469c580de9a65dceb2d83392f75abc48))
+* **causal-graph:** return Result from topological_order() to detect pruned ancestry ([82ab609](https://github.com/Willow7737/omnia-protocol/commit/82ab6099e34fd754e612acbaba122b4f5415222c))
+* **ci:** add clippy::unwrap_used checks to CI pipeline ([37b038b](https://github.com/Willow7737/omnia-protocol/commit/37b038bd2c2647f08cd7ef6a1017d1bdd70e5573))
+* **consensus:** detect equivocation even when first event is pruned ([b58d092](https://github.com/Willow7737/omnia-protocol/commit/b58d092badfbd4af7237ad667cb1032f216e8fb0))
+* **helm:** replace {{ .Service }} with {{ .Release.Service }} in all templates ([8c7995b](https://github.com/Willow7737/omnia-protocol/commit/8c7995bbd17578d7639e0369e4d9759d188cae62))
+* **lints:** add #[allow(clippy::unwrap_used)] to all test modules and integration tests ([11aafc7](https://github.com/Willow7737/omnia-protocol/commit/11aafc7dd452e4918926c7740bc9033b8b6c7cc1))
+* resolve compilation errors in migration.rs, poseidon.rs, and Cargo.toml ([5530fe2](https://github.com/Willow7737/omnia-protocol/commit/5530fe216b33d63d3ea740b5aef50d1d4f6d6e9e))
+* **rollup:** add withdrawal access control, escrow pattern, and reentrancy guard ([7c85e20](https://github.com/Willow7737/omnia-protocol/commit/7c85e20dfae3126f48bb1d725099091cfa3bd570))
+* **rollup:** bind state root to proof public inputs in submitBatch() ([02ba4a6](https://github.com/Willow7737/omnia-protocol/commit/02ba4a6ae9f50272947e203eb7fe59c2825ec89d))
+* **shards,economics:** convert to_bytes() from panicking expect() to Result return type ([206e8a2](https://github.com/Willow7737/omnia-protocol/commit/206e8a2ceb3a42992314304c6c7b7d0992c15650))
+* **substrate,chaos-tests:** replace graph.get() with graph.get_checked() for pruned event handling ([ae9927d](https://github.com/Willow7737/omnia-protocol/commit/ae9927dffd8215205ff841ce0ebd24cf8d649b10))
+* **zk:** replace expect() with Result return type in poseidon.rs and contribution.rs ([2c2896d](https://github.com/Willow7737/omnia-protocol/commit/2c2896dcb986e7d33920f2a1d90546c8a232d5f2))
+
+
+### Documentation
+
+* **self-assessment:** update section 3.2 to reflect Poseidon hash implementation ([5bdb993](https://github.com/Willow7737/omnia-protocol/commit/5bdb9930ff87bba5d9e522976d443977e2f19b85))
+
 ## [0.1.14](https://github.com/Willow7737/omnia-protocol/compare/v0.1.13...v0.1.14) (2026-05-17)
 
 
