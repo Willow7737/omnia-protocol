@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.17](https://github.com/Willow7737/omnia-protocol/compare/v0.1.16...v0.1.17) (2026-05-17)
+
+
+### Bug Fixes
+
+* **ci:** add RUSTSEC-2025-0141 (bincode v1 unmaintained) to ignore lists ([1f67a22](https://github.com/Willow7737/omnia-protocol/commit/1f67a22c3d6b925a01455cc32dae03451d6f3dc3))
+
 ## [0.1.16](https://github.com/Willow7737/omnia-protocol/compare/v0.1.15...v0.1.16) (2026-05-17)
 
 
