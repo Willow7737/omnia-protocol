@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7](https://github.com/Willow7737/omnia-protocol/compare/v0.1.6...v0.1.7) (2026-05-17)
+
+
+### Bug Fixes
+
+* rustfmt formatting in errors.rs function signature ([41750fb](https://github.com/Willow7737/omnia-protocol/commit/41750fb56707ca61e43f03a4957cbf63a52ed768))
+
 ## [0.1.6](https://github.com/Willow7737/omnia-protocol/compare/v0.1.5...v0.1.6) (2026-05-17)
 
 
