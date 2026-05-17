@@ -354,7 +354,10 @@ impl ConsensusEngine {
                 .entry(round)
                 .or_default()
                 .insert(event_id);
-            let info = self.node_info.get_mut(&creator).expect("creator should exist in node_info when processing witness");
+            let info = self
+                .node_info
+                .get_mut(&creator)
+                .expect("creator should exist in node_info when processing witness");
             info.current_round = info.current_round.max(round);
             // FIX 3: update last witness round to round+1 to prevent
             // subsequent events in the same round from also being witnesses

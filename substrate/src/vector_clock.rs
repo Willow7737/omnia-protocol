@@ -227,7 +227,11 @@ impl VectorClock {
             }
             let mut node_id = [0u8; 32];
             node_id.copy_from_slice(&bytes[offset..offset + 32]);
-            let clock = u64::from_le_bytes(bytes[offset + 32..offset + 40].try_into().expect("slice is exactly 8 bytes per bounds check above"));
+            let clock = u64::from_le_bytes(
+                bytes[offset + 32..offset + 40]
+                    .try_into()
+                    .expect("slice is exactly 8 bytes per bounds check above"),
+            );
             clocks.insert(node_id, clock);
             offset += 40;
         }

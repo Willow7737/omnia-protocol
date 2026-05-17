@@ -1,10 +1,8 @@
 [advisories]
-db-path = "~/.cargo/advisory-db"
 vulnerability = "deny"
 unmaintained = "warn"
 unsound = "deny"
 yanked = "warn"
-notice = "warn"
 
 [licenses]
 unlicensed = "deny"
@@ -20,7 +18,6 @@ allow = [
     "Unicode-DFS-2016",
 ]
 copyleft = "deny"
-allow-osi-fsf = "both"
 default = "deny"
 
 [bans]
@@ -31,4 +28,3 @@ highlight = "all"
 [sources]
 unknown-registry = "warn"
 unknown-git = "warn"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
