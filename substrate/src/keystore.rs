@@ -98,6 +98,8 @@ pub struct EncryptedKeyStore {
     public_key: NodePublicKey,
     /// The keypair (only available after load with correct passphrase).
     keypair: Option<NodeKeypair>,
+    /// Whether the keystore was loaded from legacy XOR format and needs upgrade.
+    needs_upgrade: bool,
 }
 
 /// Proof that a key rotation was performed by the previous key holder.
@@ -184,6 +186,7 @@ impl EncryptedKeyStore {
             dir: dir.to_path_buf(),
             public_key,
             keypair: Some(keypair),
+            needs_upgrade: false,
         })
     }
 
@@ -226,29 +229,33 @@ impl EncryptedKeyStore {
         // Try AES-256-GCM first (new format), then fall back to legacy XOR
         let encrypted_seckey = std::fs::read(&seckey_path)?;
 
-        let decrypted = if encrypted_seckey.len() >= 44 {
+        let (decrypted, needs_upgrade) = if encrypted_seckey.len() >= 44 {
             // Could be AES-256-GCM format (salt(32) + nonce(12) + ciphertext+tag)
-            aes_gcm_decrypt(&encrypted_seckey, passphrase).or_else(|_| {
-                // Fallback: try legacy XOR decryption
-                #[allow(deprecated)]
-                let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
-                if xor_decrypted.len() == 32 {
-                    // Will be validated against public key below
-                    Ok(xor_decrypted)
-                } else {
-                    Err(KeyStoreError::IncorrectPassphrase)
+            match aes_gcm_decrypt(&encrypted_seckey, passphrase) {
+                Ok(plain) => (plain, false),
+                Err(_) => {
+                    // Fallback: try legacy XOR decryption
+                    #[allow(deprecated)]
+                    let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+                    if xor_decrypted.len() == 32 {
+                        tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
+                        (xor_decrypted, true)
+                    } else {
+                        return Err(KeyStoreError::IncorrectPassphrase);
+                    }
                 }
-            })
+            }
         } else {
             // Too short for AES-256-GCM, try legacy XOR
             #[allow(deprecated)]
             let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
             if xor_decrypted.len() == 32 {
-                Ok(xor_decrypted)
+                tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
+                (xor_decrypted, true)
             } else {
-                Err(KeyStoreError::IncorrectPassphrase)
+                return Err(KeyStoreError::IncorrectPassphrase);
             }
-        }?;
+        };
 
         if decrypted.len() != 32 {
             return Err(KeyStoreError::IncorrectPassphrase);
@@ -274,6 +281,7 @@ impl EncryptedKeyStore {
             dir: dir.to_path_buf(),
             public_key,
             keypair: Some(keypair),
+            needs_upgrade,
         })
     }
 
@@ -348,12 +356,33 @@ impl EncryptedKeyStore {
             "Rotated validator key"
         );
 
+        // If the keystore was loaded from legacy XOR format, the rotation
+        // automatically re-encrypts with AES-256-GCM (above), completing
+        // the upgrade. The caller should re-load the keystore to get an
+        // instance with needs_upgrade = false.
+        if self.needs_upgrade {
+            tracing::info!(
+                dir = %self.dir.display(),
+                "Legacy XOR keystore automatically upgraded to AES-256-GCM via rotation"
+            );
+        }
+
         Ok(proof)
     }
 
     /// Get the public key from this key store.
     pub fn public_key(&self) -> &NodePublicKey {
         &self.public_key
+    }
+
+    /// Check whether this keystore was loaded from a legacy XOR format
+    /// and needs to be upgraded to AES-256-GCM.
+    ///
+    /// After calling [`rotate()`](Self::rotate), the on-disk format is
+    /// automatically upgraded. Re-loading the keystore will produce an
+    /// instance with `needs_upgrade == false`.
+    pub fn needs_upgrade(&self) -> bool {
+        self.needs_upgrade
     }
 
     /// Get the directory where key files are stored.
