@@ -73,6 +73,9 @@ pub enum KeyStoreError {
     /// A cryptographic operation failed.
     #[error("Crypto error: {0}")]
     Crypto(String),
+    /// AES-256-GCM encryption failed.
+    #[error("Encryption failed: {0}")]
+    EncryptionFailed(String),
 }
 
 /// Result type for key store operations.
@@ -168,7 +171,7 @@ impl EncryptedKeyStore {
         std::fs::write(&pubkey_path, public_key.to_bytes())?;
 
         // Encrypt and write secret key using AES-256-GCM
-        let encrypted = aes_gcm_encrypt(keypair.to_bytes().as_slice(), passphrase);
+        let encrypted = aes_gcm_encrypt(keypair.to_bytes().as_slice(), passphrase)?;
         std::fs::write(&seckey_path, encrypted)?;
 
         tracing::info!(
@@ -335,7 +338,7 @@ impl EncryptedKeyStore {
 
         // Write new encrypted secret key using AES-256-GCM
         let seckey_path = self.dir.join("seckey.enc");
-        let encrypted = aes_gcm_encrypt(new_keypair.to_bytes().as_slice(), new_passphrase);
+        let encrypted = aes_gcm_encrypt(new_keypair.to_bytes().as_slice(), new_passphrase)?;
         std::fs::write(&seckey_path, encrypted)?;
 
         tracing::info!(
@@ -387,10 +390,11 @@ impl KeyRotationProof {
 /// Encrypt data using AES-256-GCM with HKDF-SHA256-derived key.
 ///
 /// Output format: `salt(32) || nonce(12) || ciphertext+tag`
-fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
+fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreError> {
     let salt = generate_salt();
     let key = derive_key_hkdf(passphrase, &salt);
-    let cipher = Aes256Gcm::new_from_slice(&key).expect("AES-256-GCM key must be 32 bytes");
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
@@ -398,13 +402,13 @@ fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
 
     let ciphertext = cipher
         .encrypt(nonce, data)
-        .expect("AES-256-GCM encryption should not fail");
+        .map_err(|e| KeyStoreError::EncryptionFailed(e.to_string()))?;
 
     let mut output = Vec::with_capacity(32 + 12 + ciphertext.len());
     output.extend_from_slice(&salt);
     output.extend_from_slice(&nonce_bytes);
     output.extend_from_slice(&ciphertext);
-    output
+    Ok(output)
 }
 
 /// Decrypt data encrypted with AES-256-GCM.
@@ -422,7 +426,8 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
     let ciphertext = &data[44..];
 
     let key = derive_key_hkdf(passphrase, salt);
-    let cipher = Aes256Gcm::new_from_slice(&key).expect("AES-256-GCM key must be 32 bytes");
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
     cipher
         .decrypt(nonce, ciphertext)
@@ -613,7 +618,7 @@ mod tests {
     fn test_aes_gcm_encrypt_decrypt_roundtrip() {
         let data = b"hello world this is a test of AES-256-GCM encryption";
         let passphrase = "my-secret-passphrase";
-        let encrypted = aes_gcm_encrypt(data, passphrase);
+        let encrypted = aes_gcm_encrypt(data, passphrase).unwrap();
         let decrypted = aes_gcm_decrypt(&encrypted, passphrase).expect("decrypt");
         assert_eq!(data.as_slice(), decrypted.as_slice());
     }
@@ -621,7 +626,7 @@ mod tests {
     #[test]
     fn test_aes_gcm_encrypt_wrong_passphrase() {
         let data = b"hello world";
-        let encrypted = aes_gcm_encrypt(data, "correct");
+        let encrypted = aes_gcm_encrypt(data, "correct").unwrap();
         let result = aes_gcm_decrypt(&encrypted, "wrong");
         assert!(
             result.is_err(),
@@ -633,7 +638,7 @@ mod tests {
     fn test_aes_gcm_encrypted_format_has_salt_nonce_and_tag() {
         let data = b"32-byte-key-material-here-xxxxxxxx";
         let passphrase = "test-pass";
-        let encrypted = aes_gcm_encrypt(data, passphrase);
+        let encrypted = aes_gcm_encrypt(data, passphrase).unwrap();
 
         // Format: salt(32) + nonce(12) + ciphertext+tag(data.len()+16)
         assert!(
@@ -653,8 +658,8 @@ mod tests {
         let passphrase = "same-passphrase";
         // Two encryptions of the same data should produce different ciphertexts
         // (due to random salt + nonce)
-        let encrypted1 = aes_gcm_encrypt(data, passphrase);
-        let encrypted2 = aes_gcm_encrypt(data, passphrase);
+        let encrypted1 = aes_gcm_encrypt(data, passphrase).unwrap();
+        let encrypted2 = aes_gcm_encrypt(data, passphrase).unwrap();
         assert_ne!(
             encrypted1, encrypted2,
             "Two encryptions of the same data should differ (random salt+nonce)"
@@ -680,7 +685,7 @@ mod tests {
     fn test_aes_gcm_tampered_ciphertext_fails() {
         let data = b"sensitive key material";
         let passphrase = "test-pass";
-        let mut encrypted = aes_gcm_encrypt(data, passphrase);
+        let mut encrypted = aes_gcm_encrypt(data, passphrase).unwrap();
 
         // Tamper with the ciphertext portion
         let last = encrypted.len() - 1;
@@ -697,7 +702,7 @@ mod tests {
     fn test_aes_gcm_tampered_salt_fails() {
         let data = b"sensitive key material";
         let passphrase = "test-pass";
-        let mut encrypted = aes_gcm_encrypt(data, passphrase);
+        let mut encrypted = aes_gcm_encrypt(data, passphrase).unwrap();
 
         // Tamper with the salt portion (first 32 bytes)
         encrypted[0] ^= 0xFF;
