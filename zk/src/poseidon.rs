@@ -39,6 +39,38 @@ use ark_ff::{Field, PrimeField, Zero};
 use ark_r1cs_std::fields::fp::FpVar;
 use ark_r1cs_std::fields::FieldVar;
 use ark_relations::r1cs::{ConstraintSystemRef, SynthesisError};
+use thiserror::Error;
+
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+/// Errors that can occur during ZK cryptographic operations.
+///
+/// This enum covers failures in Poseidon parameter generation,
+/// R1CS synthesis, and other ZK-specific operations.
+#[derive(Error, Debug)]
+pub enum ZkError {
+    /// MDS matrix inversion failed — a Cauchy denominator was zero.
+    ///
+    /// This should never happen with correctly chosen Cauchy vectors
+    /// (where all `x_i`, `y_j` are distinct and `x_i ≠ y_j`),
+    /// but is guarded against to avoid runtime panics.
+    #[error("MDS matrix inversion failed: Cauchy denominator was zero at ({0}, {1})")
+    MdsMatrixInversionFailed(usize, usize),
+    /// An R1CS synthesis error occurred during circuit construction.
+    #[error("synthesis error: {0}")
+    Synthesis(#[from] SynthesisError),
+}
+
+impl From<ZkError> for SynthesisError {
+    fn from(e: ZkError) -> Self {
+        match e {
+            ZkError::Synthesis(s) => s,
+            other => SynthesisError::Unsatisfiable,
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Poseidon parameters for BN254, t = 3
@@ -91,8 +123,9 @@ const ALPHA: u64 = 5;
 ///
 /// # Returns
 ///
-/// A 3×3 MDS matrix of field elements.
-fn generate_mds_matrix() -> [[Fr; T]; T] {
+/// A 3×3 MDS matrix of field elements, or [`ZkError::MdsMatrixInversionFailed`]
+/// if a Cauchy denominator is unexpectedly zero.
+fn generate_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
     let xs: [u64; T] = [1, 2, 3];
     let ys: [u64; T] = [5, 6, 7];
 
@@ -100,13 +133,14 @@ fn generate_mds_matrix() -> [[Fr; T]; T] {
     for i in 0..T {
         for j in 0..T {
             let denom = Fr::from(xs[i]) + Fr::from(ys[j]);
-            // denom is non-zero by construction (all sums are distinct and non-zero)
+            // denom is non-zero by construction (all sums are distinct and non-zero),
+            // but we return an error instead of panicking.
             matrix[i][j] = denom
                 .inverse()
-                .expect("Cauchy matrix denominator must be non-zero");
+                .ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
         }
     }
-    matrix
+    Ok(matrix)
 }
 
 /// Generate round constants using a deterministic hash-based method.
@@ -220,8 +254,8 @@ fn mds_multiply_gadget(mds: &[[Fr; T]; T], state: &[FpVar<Fr>; T]) -> [FpVar<Fr>
 ///
 /// The round structure is: [R_F/2 full] [R_P partial] [R_F/2 full]
 #[allow(clippy::needless_range_loop)]
-fn poseidon_permutation(state: &mut [Fr; T]) {
-    let mds = generate_mds_matrix();
+fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
+    let mds = generate_mds_matrix()?;
     let rc = generate_round_constants();
 
     let mut rc_idx = 0;
@@ -277,6 +311,8 @@ fn poseidon_permutation(state: &mut [Fr; T]) {
         T * (R_F + R_P),
         "all round constants must be consumed"
     );
+
+    Ok(())
 }
 
 /// Apply the Poseidon permutation to a state vector (on-circuit / R1CS gadget).
@@ -292,8 +328,8 @@ fn poseidon_permutation(state: &mut [Fr; T]) {
 fn poseidon_permutation_gadget(
     _cs: ConstraintSystemRef<Fr>,
     state: &mut [FpVar<Fr>; T],
-) -> Result<(), SynthesisError> {
-    let mds = generate_mds_matrix();
+) -> Result<(), ZkError> {
+    let mds = generate_mds_matrix()?;
     let rc = generate_round_constants();
 
     let mut rc_idx = 0;
@@ -383,7 +419,7 @@ fn poseidon_permutation_gadget(
 ///
 /// let a = Fr::from(42u64);
 /// let b = Fr::from(123u64);
-/// let hash = poseidon_hash_offchain(a, b);
+/// let hash = poseidon_hash_offchain(a, b)?;
 /// assert_ne!(hash, Fr::zero()); // non-trivial output
 /// ```
 ///
@@ -391,10 +427,10 @@ fn poseidon_permutation_gadget(
 ///
 /// Grassi et al. (2019), "Poseidon: A New Hash Function for
 /// Zero-Knowledge Proof Systems", <https://eprint.iacr.org/2019/458>
-pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Fr {
+pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Result<Fr, ZkError> {
     let mut state = [Fr::zero(), left, right];
-    poseidon_permutation(&mut state);
-    state[0]
+    poseidon_permutation(&mut state)?;
+    Ok(state[0])
 }
 
 /// Compute the Poseidon hash of two circuit variables (on-circuit).
@@ -416,7 +452,8 @@ pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Fr {
 ///
 /// # Errors
 ///
-/// Returns [`SynthesisError`] if constraint allocation fails.
+/// Returns [`ZkError`] if constraint allocation fails or MDS matrix
+/// generation fails.
 ///
 /// # Constraints
 ///
@@ -432,7 +469,7 @@ pub fn poseidon_hash(
     cs: ConstraintSystemRef<Fr>,
     left: &FpVar<Fr>,
     right: &FpVar<Fr>,
-) -> Result<FpVar<Fr>, SynthesisError> {
+) -> Result<FpVar<Fr>, ZkError> {
     let mut state: [FpVar<Fr>; T] = [FpVar::constant(Fr::zero()), left.clone(), right.clone()];
 
     poseidon_permutation_gadget(cs, &mut state)?;
@@ -456,7 +493,7 @@ mod tests {
     fn test_poseidon_nonzero_output() {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let hash = poseidon_hash_offchain(a, b);
+        let hash = poseidon_hash_offchain(a, b).unwrap();
         assert_ne!(
             hash,
             Fr::zero(),
@@ -466,7 +503,7 @@ mod tests {
 
     #[test]
     fn test_poseidon_zero_inputs() {
-        let hash = poseidon_hash_offchain(Fr::zero(), Fr::zero());
+        let hash = poseidon_hash_offchain(Fr::zero(), Fr::zero()).unwrap();
         // Even with zero inputs, the round constants ensure a non-trivial output
         assert_ne!(
             hash,
@@ -479,8 +516,8 @@ mod tests {
     fn test_poseidon_non_commutative() {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let hash_ab = poseidon_hash_offchain(a, b);
-        let hash_ba = poseidon_hash_offchain(b, a);
+        let hash_ab = poseidon_hash_offchain(a, b).unwrap();
+        let hash_ba = poseidon_hash_offchain(b, a).unwrap();
         assert_ne!(
             hash_ab, hash_ba,
             "Poseidon hash should NOT be commutative (unlike field addition)"
@@ -494,8 +531,8 @@ mod tests {
         let c = Fr::from(3u64);
         let d = Fr::from(4u64);
 
-        let hash1 = poseidon_hash_offchain(a, b);
-        let hash2 = poseidon_hash_offchain(c, d);
+        let hash1 = poseidon_hash_offchain(a, b).unwrap();
+        let hash2 = poseidon_hash_offchain(c, d).unwrap();
         assert_ne!(
             hash1, hash2,
             "Different inputs must produce different outputs (collision resistance)"
@@ -506,8 +543,8 @@ mod tests {
     fn test_poseidon_deterministic() {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let hash1 = poseidon_hash_offchain(a, b);
-        let hash2 = poseidon_hash_offchain(a, b);
+        let hash1 = poseidon_hash_offchain(a, b).unwrap();
+        let hash2 = poseidon_hash_offchain(a, b).unwrap();
         assert_eq!(hash1, hash2, "Poseidon hash must be deterministic");
     }
 
@@ -524,7 +561,7 @@ mod tests {
             FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "right"), || Ok(right_val)).unwrap();
 
         let on_circuit_result = poseidon_hash(cs, &left_var, &right_var).unwrap();
-        let off_circuit_result = poseidon_hash_offchain(left_val, right_val);
+        let off_circuit_result = poseidon_hash_offchain(left_val, right_val).unwrap();
 
         assert_eq!(
             on_circuit_result.value().unwrap(),
@@ -535,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_mds_matrix_is_invertible() {
-        let mds = generate_mds_matrix();
+        let mds = generate_mds_matrix().unwrap();
         // Check that the MDS matrix has full rank by verifying it has a non-zero determinant
         // For a 3x3 matrix, compute the determinant
         let det = mds[0][0] * (mds[1][1] * mds[2][2] - mds[1][2] * mds[2][1])

@@ -45,7 +45,7 @@ fn build_poseidon_merkle_tree(event_hashes: &[Fr], depth: usize) -> (Fr, Vec<Mer
         for i in (0..current_level.len()).step_by(2) {
             let left = current_level[i];
             let right = current_level[i + 1];
-            next_level.push(poseidon_hash_to_fr(left, right));
+            next_level.push(poseidon_hash_to_fr(left, right).unwrap());
         }
         current_level = next_level.clone();
         levels.push(next_level);
@@ -123,7 +123,7 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = poseidon_hash_to_fr(current_root, *event_hash);
+        current_root = poseidon_hash_to_fr(current_root, *event_hash).unwrap();
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];
@@ -159,7 +159,7 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = poseidon_hash_to_fr(current_root, *event_hash);
+        current_root = poseidon_hash_to_fr(current_root, *event_hash).unwrap();
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];
@@ -285,7 +285,7 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
     for event_hash in &event_hashes {
-        current_root = poseidon_hash_to_fr(current_root, *event_hash);
+        current_root = poseidon_hash_to_fr(current_root, *event_hash).unwrap();
         intermediate_roots.push(current_root);
     }
     let new_root = intermediate_roots[num_events];

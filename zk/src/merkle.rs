@@ -213,7 +213,7 @@ pub fn hash_to_fr(hash: &[u8; 32]) -> Fr {
 ///
 /// let a = Fr::from(42u64);
 /// let b = Fr::from(123u64);
-/// let hash = poseidon_hash_to_fr(a, b);
+/// let hash = poseidon_hash_to_fr(a, b)?;
 /// assert_ne!(hash, Fr::zero()); // non-trivial output
 /// ```
 ///
@@ -221,7 +221,7 @@ pub fn hash_to_fr(hash: &[u8; 32]) -> Fr {
 ///
 /// Grassi et al. (2019), "Poseidon: A New Hash Function for
 /// Zero-Knowledge Proof Systems", <https://eprint.iacr.org/2019/458>
-pub fn poseidon_hash_to_fr(left: Fr, right: Fr) -> Fr {
+pub fn poseidon_hash_to_fr(left: Fr, right: Fr) -> Result<Fr, crate::poseidon::ZkError> {
     crate::poseidon::poseidon_hash_offchain(left, right)
 }
 
@@ -305,9 +305,9 @@ mod tests {
     fn test_poseidon_hash_to_fr_matches_poseidon_offchain() {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let hash = poseidon_hash_to_fr(a, b);
+        let hash = poseidon_hash_to_fr(a, b).unwrap();
         // Must match the direct call to poseidon_hash_offchain
-        let expected = crate::poseidon::poseidon_hash_offchain(a, b);
+        let expected = crate::poseidon::poseidon_hash_offchain(a, b).unwrap();
         assert_eq!(hash, expected);
     }
 
@@ -315,7 +315,7 @@ mod tests {
     fn test_poseidon_hash_to_fr_non_zero() {
         let a = Fr::from(1u64);
         let b = Fr::from(2u64);
-        let hash = poseidon_hash_to_fr(a, b);
+        let hash = poseidon_hash_to_fr(a, b).unwrap();
         assert_ne!(
             hash,
             Fr::zero(),
@@ -327,8 +327,8 @@ mod tests {
     fn test_poseidon_hash_to_fr_non_commutative() {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let hash_ab = poseidon_hash_to_fr(a, b);
-        let hash_ba = poseidon_hash_to_fr(b, a);
+        let hash_ab = poseidon_hash_to_fr(a, b).unwrap();
+        let hash_ba = poseidon_hash_to_fr(b, a).unwrap();
         assert_ne!(
             hash_ab, hash_ba,
             "poseidon_hash_to_fr should not be commutative"
@@ -380,8 +380,8 @@ mod proptests {
         ) {
             let fr_a = Fr::from(a);
             let fr_b = Fr::from(b);
-            let h1 = poseidon_hash_to_fr(fr_a, fr_b);
-            let h2 = poseidon_hash_to_fr(fr_a, fr_b);
+            let h1 = poseidon_hash_to_fr(fr_a, fr_b).unwrap();
+            let h2 = poseidon_hash_to_fr(fr_a, fr_b).unwrap();
             assert_eq!(h1, h2, "poseidon_hash_to_fr not deterministic!");
         }
     }

@@ -105,12 +105,17 @@ pub struct Contribution {
 /// * `old_transcript_hash` — Hash of the previous transcript
 /// * `new_transcript_hash` — Hash of the new transcript
 /// * `rng` — Random number generator for the commitment nonce
+///
+/// # Errors
+///
+/// Returns [`SetupError::SerializationFailed`] if point or scalar serialization
+/// fails (which should not occur for valid elliptic curve points and scalars).
 fn generate_pok(
     secret: &Fr,
     old_transcript_hash: &[u8],
     new_transcript_hash: &[u8],
     rng: &mut impl rand::Rng,
-) -> ContributionProof {
+) -> Result<ContributionProof, SetupError> {
     let g1 = G1Affine::generator();
 
     // Public key: PK = G1 * s (projective coordinates for scalar mult)
@@ -119,7 +124,7 @@ fn generate_pok(
     let mut pk_bytes = Vec::new();
     pk_affine
         .serialize_compressed(&mut pk_bytes)
-        .expect("G1 point serialization cannot fail");
+        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
 
     // Random nonce: r
     let r = Fr::rand(rng);
@@ -130,7 +135,7 @@ fn generate_pok(
     let mut commitment_bytes = Vec::new();
     commitment_affine
         .serialize_compressed(&mut commitment_bytes)
-        .expect("G1 point serialization cannot fail");
+        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
 
     // Challenge: c = H(R || old_hash || new_hash) mod q
     let mut hasher = blake3::Hasher::new();
@@ -146,14 +151,14 @@ fn generate_pok(
     let mut response_bytes = Vec::new();
     response
         .serialize_compressed(&mut response_bytes)
-        .expect("Fr serialization cannot fail");
+        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
 
-    ContributionProof {
+    Ok(ContributionProof {
         commitment: commitment_bytes,
         challenge: challenge_bytes.as_bytes().to_vec(),
         response: response_bytes,
         public_key: pk_bytes,
-    }
+    })
 }
 
 /// Verify a Proof of Knowledge for a contribution.
@@ -332,7 +337,7 @@ pub fn contribute(
     let mut public_key = Vec::new();
     pk_affine
         .serialize_compressed(&mut public_key)
-        .expect("G1 point serialization cannot fail");
+        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
 
     // Compute the new transcript by "updating" the accumulator.
     // In a full implementation, this would multiply each G1 point by the secret.
@@ -357,7 +362,7 @@ pub fn contribute(
     let new_hash = blake3::hash(&new_transcript);
 
     // Generate the Proof of Knowledge
-    let proof = generate_pok(&secret, old_hash.as_bytes(), new_hash.as_bytes(), &mut rng);
+    let proof = generate_pok(&secret, old_hash.as_bytes(), new_hash.as_bytes(), &mut rng)?;
 
     tracing::info!(
         participant = ?&participant_id[..4],

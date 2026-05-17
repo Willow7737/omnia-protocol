@@ -78,3 +78,6 @@ pub use merkle::{
     build_merkle_tree, compute_root_from_proof, fr_to_hash, hash_to_fr, poseidon_hash_to_fr,
     MerkleProof,
 };
+
+// Re-export ZK error type
+pub use poseidon::ZkError;
