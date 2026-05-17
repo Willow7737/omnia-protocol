@@ -81,7 +81,7 @@ Using `async_trait` allows the substrate runtime to yield the Tokio task while w
 
 **`request_withdrawal(l2_did, amount)`** initiates a withdrawal from L2 to L1. The actual withdrawal may require a proof and a challenge period before assets are released on L1. In the Ethereum adapter, this simulates a withdrawal request.
 
-**`submit_batch(bundle: &ProofBundle)`** submits a complete `ProofBundle` (from `zk/src/proof_bundle.rs`) to L1 for verification and settlement. This is the preferred method for production use — it carries the structured proof bundle with version, state roots, transition proof, batch Merkle root, and L1 anchor. In the Ethereum adapter, the bundle is serialized with `bincode` and posted as simulated calldata.
+**`submit_batch(bundle: &ProofBundle)`** submits a complete `ProofBundle` (from `zk/src/proof_bundle.rs`) to L1 for verification and settlement. This is the preferred method for production use — it carries the structured proof bundle with version, state roots, transition proof, batch Merkle root, and L1 anchor. In the Ethereum adapter, the bundle is serialized with `postcard` and posted as simulated calldata.
 
 ### How New L1 Adapters Are Added
 

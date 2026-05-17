@@ -48,7 +48,7 @@ Six concrete types implement the `Shard` trait, each defined in `shards/src/lib.
 | `IdentityShard` | `ShardId::identity()` (`"IDENT__0"`) | `IdentityState` | `shards/src/lib.rs` |
 | `EconomicsShard` | `ShardId::economics()` (`"ECONOM00"`) | `EconomicsShardState` | `shards/src/lib.rs` |
 
-Each shard's `process_event()` implementation validates the operation before applying it, delegates to the domain-specific validator and state, and returns `ShardError` on failure. The `state_snapshot()` method serializes state via `bincode::serialize()` (some shards prefix a version byte).
+Each shard's `process_event()` implementation validates the operation before applying it, delegates to the domain-specific validator and state, and returns `ShardError` on failure. The `state_snapshot()` method serializes state via `postcard::to_allocvec()` (some shards prefix a version byte).
 
 ### Formal Contracts
 
@@ -88,7 +88,7 @@ Each shard's `process_event()` implementation validates the operation before app
 If snapshots were non-reproducible, the same shard state would produce different state roots on different nodes, breaking consensus.
 
 **Implications for implementations**:
-- All serialization must use deterministic formats. `bincode` (used by all shard `to_bytes()` methods) is deterministic by default.
+- All serialization must use deterministic formats. `postcard` (used by all shard `to_bytes()` methods) is deterministic by default and `no_std`-compatible, ensuring byte-for-byte reproducible output. This is critical for consensus, where all nodes must produce identical state snapshots from the same state.
 - Map types must use `BTreeMap` (deterministic iteration order), not `HashMap` (non-deterministic iteration order). The `FinancialState` and other shards use `HashMap`, which is a known issue — they must be migrated to `BTreeMap` before mainnet.
 - Floating-point numbers must not appear in serialized state (NaN != NaN, -0.0 != +0.0). The economics crate enforces this: all calculations use fixed-point PPM arithmetic.
 - No padding bytes or uninitialized memory in the serialized output.

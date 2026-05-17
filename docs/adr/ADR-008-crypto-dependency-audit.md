@@ -118,19 +118,24 @@ Uncompressed serialization is used for simplicity and compatibility. Production 
 
 **Recommendation**: Consider switching to compressed serialization in a future sprint for reduced wire size.
 
-### 7. serde / bincode (both crates)
+### 7. serde / postcard (both crates)
 
 | Field | Value |
 |-------|-------|
 | **Cargo.toml (serde)** | `"1.0"` with `derive` feature |
-| **Cargo.toml (bincode)** | `"1"` |
+| **Cargo.toml (postcard)** | `"1"` |
 | **Assessment** | ✅ **Safe** |
 
-Used for `ProofBundle` serialization (`proof_bundle.rs`), `MerkleProof` serialization (`merkle.rs`), `ProvenanceLog` serialization (`provenance.rs`), `PowersOfTau` serialization (`setup/powers_of_tau.rs`), `Contribution` and `ContributionProof` serialization (`setup/contribution.rs`), and `PqcKeyRotationRequest` serialization (`key_rotation.rs`).
+Used for `ProofBundle` serialization (`proof_bundle.rs`), `MerkleProof` serialization (`merkle.rs`), `ProvenanceLog` serialization (`provenance.rs`), `PowersOfTau` serialization (`setup/powers_of_tau.rs`), `Contribution` and `ContributionProof` serialization (`setup/contribution.rs`), and `PqcKeyRotationRequest` serialization (`key_rotation.rs`). Also used for shard state serialization across all domain shards.
 
-bincode 1.x is in maintenance mode; bincode 2.x is available with breaking changes.
+postcard is a `no_std`-compatible, deterministic, compact binary serialization format. It was chosen over bincode for the following reasons:
+- **Deterministic encoding**: postcard always produces the same byte sequence for the same data, which is critical for consensus reproducibility.
+- **`no_std` compatibility**: postcard works in embedded and WASM environments without `std`.
+- **Active maintenance**: postcard is actively maintained and has no known vulnerabilities.
 
-**Recommendation**: Plan migration to bincode 2.x in a future sprint for improved error handling and performance.
+bincode 1.x is retained only for v0 backward compatibility (deserializing legacy data from before the migration). New code should use `postcard::to_allocvec()` and `postcard::from_bytes()` exclusively.
+
+**Recommendation**: Complete removal of bincode dependency once all legacy data has been migrated or deprecated.
 
 ### 8. thiserror (both crates)
 
@@ -161,14 +166,15 @@ Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementEr
 | rand | both | 0.8 | N/A | ⚠️ Acceptable |
 | rand_chacha | zk | 0.3 | N/A | ✅ Safe |
 | serde | both | 1.0 | N/A | ✅ Safe |
-| bincode | both | 1 | N/A | ✅ Safe |
+| postcard | both | 1 | N/A | ✅ Safe |
+| bincode | both | 1 | N/A | ⚠️ Legacy only (v0 backward compat) |
 | thiserror | both | 2.0 | N/A | ✅ Safe |
 
 ## Action Items
 
 1. **No immediate changes required** — all spec requirements are met and no known vulnerabilities exist in any cryptographic dependency.
 2. **Future sprint**: Migrate rand from 0.8.x to 0.9.x to eliminate dependency duplication.
-3. **Future sprint**: Migrate bincode from 1.x to 2.x for improved error handling.
+3. **Future sprint**: Remove bincode 1.x dependency entirely once all legacy v0 data has been migrated or deprecated.
 4. **Future sprint**: Consider switching from uncompressed to compressed ark-serialize for reduced proof wire size.
 5. **Ongoing**: Subscribe to RustSec advisories for all crypto crates; integrate `cargo audit` into CI when available.
 6. **Ongoing**: Monitor NIST for updates to CRYSTALS-Dilithium standard (FIPS 204) and watch for `pqc_dilithium` crate updates.

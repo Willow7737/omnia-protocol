@@ -1,6 +1,6 @@
 # Security Policy
 
-**Version**: 4.0.0
+**Document version**: 4.0
 **Last Updated**: 2026-05-16
 
 ## Supported Versions

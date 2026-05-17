@@ -130,7 +130,7 @@ pub fn verify_integrity(&self) -> Result<(), ProofBundleError> {
 
 ### Serialization Strategy
 
-**Internal serialization: bincode.** Within the Omnia L2 node, `ProofBundle` is serialized using `bincode` for efficiency. Bincode is a compact binary format that produces minimal wire size, which is critical when storing thousands of bundles in memory or transmitting them between L2 nodes. Serialization and deserialization are provided via `to_bytes()` and `from_bytes()` methods.
+**Internal serialization: postcard.** Within the Omnia L2 node, `ProofBundle` is serialized using `postcard` for efficiency and determinism. Postcard is a `no_std`-compatible, compact binary serialization format that produces deterministic output — the same data always produces the same byte sequence, which is critical for consensus reproducibility and cross-node state root agreement. Serialization and deserialization are provided via `to_allocvec()` and `from_bytes()` methods.
 
 **Per-chain encoder for L1.** Each `SettlementLayer` adapter is responsible for encoding the `ProofBundle` into a format that its L1 can process:
 
@@ -148,7 +148,7 @@ This dual serialization strategy means the `ProofBundle` struct itself is chain-
 - `InvalidVersion(u16)` — Unsupported format version
 - `EmptyProof` — The transition proof is empty
 - `SameStateRoots` — `prev_state_root` and `state_root` are identical
-- `SerializationError(String)` — bincode serialization/deserialization failure
+- `SerializationError(String)` — postcard serialization/deserialization failure
 - `IntegrityError(String)` — General integrity check failure
 
 ### How This Format Enables Multi-Chain Settlement
