@@ -37,24 +37,28 @@ async fn test_ethereum_adapter_post_batch() {
 }
 
 #[tokio::test]
-async fn test_ethereum_adapter_verify_proof() {
+async fn test_ethereum_adapter_verify_proof_not_implemented() {
     let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
     let proof = vec![0u8; 64];
-    let valid = adapter
+    let result = adapter
         .verify_proof(&[0u8; 32], &[1u8; 32], &proof)
-        .await
-        .unwrap();
-    assert!(valid);
+        .await;
+    assert!(result.is_err(), "verify_proof should return NotImplemented error");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not yet implemented"),
+        "Unexpected error: {}",
+        err_msg
+    );
 }
 
 #[tokio::test]
-async fn test_ethereum_adapter_verify_proof_empty_fails() {
+async fn test_ethereum_adapter_verify_proof_empty_not_implemented() {
     let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
-    let valid = adapter
+    let result = adapter
         .verify_proof(&[0u8; 32], &[1u8; 32], &[])
-        .await
-        .unwrap();
-    assert!(!valid);
+        .await;
+    assert!(result.is_err(), "verify_proof should return NotImplemented error even for empty proof");
 }
 
 #[tokio::test]

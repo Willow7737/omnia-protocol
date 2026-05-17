@@ -69,14 +69,14 @@ impl SettlementLayer for EthereumAdapter {
         &self,
         _old_root: &[u8; 32],
         _new_root: &[u8; 32],
-        proof: &[u8],
+        _proof: &[u8],
     ) -> Result<bool, SettlementError> {
-        // Phase 0: Stub verification.
+        // Phase 0: Stub verification — not yet implemented.
         // In production, this would call the Solidity verifier contract.
         // The contract uses a pre-compiled verifying key to check Groth16 proofs.
-        let valid = !proof.is_empty() && proof.len() >= 32;
-        tracing::info!("[Ethereum] Proof verification: {}", valid);
-        Ok(valid)
+        Err(SettlementError::NotImplemented(
+            "Ethereum on-chain verification not yet implemented".into(),
+        ))
     }
 
     async fn latest_state_root(&self) -> Result<[u8; 32], SettlementError> {
