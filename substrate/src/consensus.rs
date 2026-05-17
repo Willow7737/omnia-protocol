@@ -208,6 +208,14 @@ pub struct NodeConsensusInfo {
     pub last_event: Option<EventId>,
 }
 
+/// Default number of rounds beyond which a Committed event is considered
+/// old enough to be cleaned up from `event_states`.
+const DEFAULT_COMMITTED_ROUND_THRESHOLD: u64 = 10_000;
+
+/// Default sequence distance beyond which a `first_event_for_sequence` entry
+/// is considered stale and can be cleaned up.
+const DEFAULT_SEQUENCE_CLEANUP_DISTANCE: u64 = 1_000;
+
 /// The consensus engine
 ///
 /// Tracks consensus state for all events and determines finality.
@@ -829,6 +837,130 @@ impl ConsensusEngine {
         let new_seed: [u8; 32] = hasher.finalize().into();
         self.update_round_seed(new_seed);
     }
+
+    /// Remove Committed events from `event_states` (and associated
+    /// `event_rounds`, `fame_status`) whose assigned round is older than
+    /// `current_round - threshold`.
+    ///
+    /// This prevents unbounded growth of `event_states` in long-running
+    /// nodes. Committed events that are this old are no longer needed for
+    /// consensus decisions.
+    ///
+    /// # Arguments
+    ///
+    /// * `threshold` — Number of rounds of committed state to retain.
+    ///   Use `None` for the default ([`DEFAULT_COMMITTED_ROUND_THRESHOLD`]).
+    ///
+    /// # Returns
+    ///
+    /// The number of entries removed.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Call at the end of each round
+    /// let removed = engine.cleanup_old_committed(None);
+    /// if removed > 0 {
+    ///     tracing::debug!(removed, "cleaned up old committed events");
+    /// }
+    /// ```
+    pub fn cleanup_old_committed(&mut self, threshold: Option<u64>) -> usize {
+        let threshold = threshold.unwrap_or(DEFAULT_COMMITTED_ROUND_THRESHOLD);
+        let current_round = self.current_round();
+
+        // Don't bother if we haven't advanced enough rounds
+        if current_round <= threshold {
+            return 0;
+        }
+
+        let cutoff_round = current_round - threshold;
+
+        // Find events that are Committed and old enough
+        let to_remove: Vec<EventId> = self
+            .event_states
+            .iter()
+            .filter(|(_, &state)| state == ConsensusState::Committed)
+            .filter(|(id, _)| {
+                self.event_rounds
+                    .get(id)
+                    .map(|&round| round < cutoff_round)
+                    .unwrap_or(false)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        let removed = to_remove.len();
+        for id in &to_remove {
+            self.event_states.remove(id);
+            self.event_rounds.remove(id);
+            self.fame_status.remove(id);
+        }
+
+        if removed > 0 {
+            tracing::debug!(
+                removed,
+                current_round,
+                cutoff_round,
+                "cleaned up old committed events from event_states"
+            );
+        }
+
+        removed
+    }
+
+    /// Clean up `first_event_for_sequence` entries where the creator's
+    /// current sequence has advanced far beyond the stored sequence number.
+    ///
+    /// When a creator has advanced many sequences beyond the stored entry,
+    /// the old entry is no longer useful for equivocation detection
+    /// (the creator has long since moved on).
+    ///
+    /// # Arguments
+    ///
+    /// * `distance` — Minimum sequence distance between the creator's
+    ///   current sequence and the stored sequence for the entry to be
+    ///   considered stale. Use `None` for the default
+    ///   ([`DEFAULT_SEQUENCE_CLEANUP_DISTANCE`]).
+    ///
+    /// # Returns
+    ///
+    /// The number of entries removed.
+    pub fn cleanup_stale_sequences(&mut self, distance: Option<u64>) -> usize {
+        let distance = distance.unwrap_or(DEFAULT_SEQUENCE_CLEANUP_DISTANCE);
+
+        // Collect the current sequence for each node from node_info
+        let node_seqs: HashMap<NodeId, u64> = self
+            .node_info
+            .iter()
+            .map(|(node_id, info)| (*node_id, info.events_created))
+            .collect();
+
+        let to_remove: Vec<(NodeId, u64)> = self
+            .first_event_for_sequence
+            .keys()
+            .filter(|(creator, seq)| {
+                node_seqs
+                    .get(creator)
+                    .map(|&current_seq| current_seq.saturating_sub(*seq) > distance)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
+
+        let removed = to_remove.len();
+        for key in &to_remove {
+            self.first_event_for_sequence.remove(key);
+        }
+
+        if removed > 0 {
+            tracing::debug!(
+                removed,
+                "cleaned up stale first_event_for_sequence entries"
+            );
+        }
+
+        removed
+    }
 }
 
 /// Consensus statistics
@@ -1356,5 +1488,121 @@ mod timeout_tests {
     fn test_no_timeout_before_deadline() {
         let timer = RoundTimer::new(Duration::from_secs(30), 3);
         assert!(!timer.is_timed_out());
+    }
+
+    // ── Task 30: Bounded Caches and Pruning Tests ──────────────────────
+
+    #[test]
+    fn test_cleanup_old_committed_removes_old_events() {
+        let config = test_config();
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+        let (graph, events) = setup_graph_with_events();
+
+        // Process all events
+        for event_id in &events {
+            let event = graph.get(event_id).unwrap();
+            engine.process_event(event, &graph).unwrap();
+        }
+
+        // Manually set some events as Committed with old rounds
+        // First, find any committed events and adjust their rounds
+        let committed = engine.get_committed();
+        if !committed.is_empty() {
+            // Set the round to 0 for the first committed event to make it "old"
+            let first_committed = committed[0];
+            engine.event_rounds.insert(first_committed, 0);
+
+            // Set current_round high enough
+            for info in engine.node_info.values_mut() {
+                info.current_round = 20_001;
+            }
+
+            // With threshold of 10_000, events in round 0 should be cleaned up
+            let removed = engine.cleanup_old_committed(Some(10_000));
+            assert!(removed >= 1, "Should remove at least 1 old committed event");
+        }
+    }
+
+    #[test]
+    fn test_cleanup_old_committed_noop_when_rounds_low() {
+        let config = test_config();
+        let engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+
+        // current_round is 0 — nothing to clean up
+        let removed = engine.cleanup_old_committed(None);
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn test_cleanup_stale_sequences_removes_old_entries() {
+        let config = test_config();
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+
+        let n1 = node(1);
+        let n2 = node(2);
+
+        // Add entries for sequences 0..5 for n1 and n2
+        for seq in 0..5u64 {
+            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
+            engine.first_event_for_sequence.insert((n2, seq), [seq as u8; 32]);
+        }
+
+        // Set n1's events_created to 2000 (far ahead of seq 0-4)
+        engine.node_info.insert(n1, NodeConsensusInfo {
+            current_round: 0,
+            last_witness_round: 0,
+            events_created: 2000,
+            events_committed: 0,
+            last_event: None,
+        });
+
+        // n2 has no node_info entry — its entries won't be cleaned
+        // (creator not tracked in node_info means we can't determine staleness)
+
+        // Clean up with distance=100: n1's entries (seq 0-4) are 1996-2000
+        // away from 2000 — all should be removed since distance > 100
+        let removed = engine.cleanup_stale_sequences(Some(100));
+        assert_eq!(removed, 5, "Should remove all 5 entries for n1");
+        // n2's entries should remain (no node_info → not stale)
+        assert_eq!(engine.first_event_for_sequence.len(), 5);
+    }
+
+    #[test]
+    fn test_cleanup_stale_sequences_keeps_recent_entries() {
+        let config = test_config();
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+
+        let n1 = node(1);
+
+        // Add entries for sequences 95..100
+        for seq in 95..100u64 {
+            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
+        }
+
+        // n1 has created 100 events — distance from seq 95 is only 5
+        engine.node_info.insert(n1, NodeConsensusInfo {
+            current_round: 0,
+            last_witness_round: 0,
+            events_created: 100,
+            events_committed: 0,
+            last_event: None,
+        });
+
+        // With distance=100, none should be removed (100-95=5, 5 <= 100)
+        let removed = engine.cleanup_stale_sequences(Some(100));
+        assert_eq!(removed, 0);
+        assert_eq!(engine.first_event_for_sequence.len(), 5);
     }
 }
