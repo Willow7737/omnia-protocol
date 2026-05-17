@@ -166,8 +166,8 @@ impl EconomicsShardState {
         }
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("EconomicsShardState serialization cannot fail")
+    fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 }
 
@@ -215,7 +215,7 @@ impl Shard for EconomicsShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("EconomicsShardState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -286,7 +286,7 @@ impl Shard for FinancialShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("FinancialState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -342,7 +342,7 @@ impl Shard for IdentityShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("IdentityState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -398,7 +398,7 @@ impl Shard for ComputationalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("ComputationalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -456,7 +456,7 @@ impl Shard for PhysicalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("PhysicalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {
@@ -512,7 +512,7 @@ impl Shard for BiologicalShard {
     }
 
     fn state_snapshot(&self) -> Vec<u8> {
-        self.state.to_bytes()
+        self.state.to_bytes().expect("BiologicalState serialization cannot fail")
     }
 
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError> {

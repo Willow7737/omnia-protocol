@@ -43,7 +43,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes(), &keypair);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(router.route_event(&event1).is_ok());
 
     // Same nonce 1 again — should fail (replay)
@@ -52,7 +52,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes(), &keypair);
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event2);
     assert!(result.is_err());
     assert!(
@@ -66,7 +66,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes(), &keypair);
+    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
     assert!(router.route_event(&event3).is_ok());
 }
 
@@ -87,7 +87,7 @@ fn test_replay_protection_different_creators() {
         }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes(), &keypair1);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair1);
     assert!(router.route_event(&event1).is_ok());
 
     let payload2 = ShardPayload {
@@ -98,7 +98,7 @@ fn test_replay_protection_different_creators() {
         }),
         nonce: 1,
     };
-    let event2 = create_test_event_with_keypair(test_node(2), payload2.to_bytes(), &keypair2);
+    let event2 = create_test_event_with_keypair(test_node(2), payload2.to_bytes().unwrap(), &keypair2);
     assert!(router.route_event(&event2).is_ok());
 }
 
@@ -127,7 +127,7 @@ fn test_economics_shard_route_event() {
         }),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     assert!(router.route_event(&event).is_ok());
 }
 
@@ -179,7 +179,7 @@ fn test_nonce_persistence_across_router_restart() {
             operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
             nonce: 1,
         };
-        let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+        let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
         assert!(
             router1.route_event(&event).is_ok(),
             "First event should succeed"
@@ -202,7 +202,7 @@ fn test_nonce_persistence_across_router_restart() {
             nonce: 1,
         };
         let replay_event =
-            create_test_event_with_keypair(test_node(1), replay_payload.to_bytes(), &keypair);
+            create_test_event_with_keypair(test_node(1), replay_payload.to_bytes().unwrap(), &keypair);
         let result = router2.route_event(&replay_event);
         assert!(
             result.is_err(),
@@ -220,7 +220,7 @@ fn test_nonce_persistence_across_router_restart() {
             nonce: 2,
         };
         let new_event =
-            create_test_event_with_keypair(test_node(1), new_payload.to_bytes(), &keypair);
+            create_test_event_with_keypair(test_node(1), new_payload.to_bytes().unwrap(), &keypair);
         assert!(
             router2.route_event(&new_event).is_ok(),
             "New nonce should succeed after restart"

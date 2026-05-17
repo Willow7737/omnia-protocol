@@ -55,8 +55,8 @@ pub enum ShardOp {
 impl ShardPayload {
     /// Serialize this payload into compact binary bytes for embedding
     /// into an `Event.payload`.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("ShardPayload serialization cannot fail")
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
     /// Deserialize a `ShardPayload` from bytes extracted from `Event.payload`.

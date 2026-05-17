@@ -56,7 +56,7 @@ fn test_financial_transfer_lifecycle() {
         nonce: 1,
     };
     let mint_event =
-        create_test_event_with_keypair(test_node(1), mint_payload.to_bytes(), &sender_keypair);
+        create_test_event_with_keypair(test_node(1), mint_payload.to_bytes().unwrap(), &sender_keypair);
     router
         .route_event(&mint_event)
         .expect("Mint should succeed");
@@ -73,7 +73,7 @@ fn test_financial_transfer_lifecycle() {
         nonce: 2,
     };
     let transfer_event =
-        create_test_event_with_keypair(test_node(1), transfer_payload.to_bytes(), &sender_keypair);
+        create_test_event_with_keypair(test_node(1), transfer_payload.to_bytes().unwrap(), &sender_keypair);
     router
         .route_event(&transfer_event)
         .expect("Transfer should succeed");
@@ -88,7 +88,7 @@ fn test_financial_transfer_lifecycle() {
         operation: ShardOp::Financial(mint_op2),
         nonce: 3,
     };
-    let mint_event2 = create_test_event(test_node(1), mint_payload2.to_bytes());
+    let mint_event2 = create_test_event(test_node(1), mint_payload2.to_bytes().unwrap());
     router
         .route_event(&mint_event2)
         .expect("Second mint should succeed");
@@ -112,7 +112,7 @@ fn test_insufficient_balance_transfer() {
         operation: ShardOp::Financial(transfer_op),
         nonce: 1,
     };
-    let transfer_event = create_test_event(sender, transfer_payload.to_bytes());
+    let transfer_event = create_test_event(sender, transfer_payload.to_bytes().unwrap());
     let result = router.route_event(&transfer_event);
     assert!(result.is_err(), "Transfer with no balance should fail");
 }
@@ -133,7 +133,7 @@ fn test_identity_did_lifecycle() {
         operation: ShardOp::Identity(create_op),
         nonce: 1,
     };
-    let create_event = create_test_event(owner, create_payload.to_bytes());
+    let create_event = create_test_event(owner, create_payload.to_bytes().unwrap());
     router
         .route_event(&create_event)
         .expect("Create DID should succeed");
@@ -146,7 +146,7 @@ fn test_identity_did_lifecycle() {
         operation: ShardOp::Identity(dup_op),
         nonce: 2,
     };
-    let dup_event = create_test_event(owner, dup_payload.to_bytes());
+    let dup_event = create_test_event(owner, dup_payload.to_bytes().unwrap());
     let result = router.route_event(&dup_event);
     assert!(result.is_err(), "Duplicate DID creation should fail");
 }
@@ -200,7 +200,7 @@ fn test_payload_serialization_roundtrip() {
         nonce: 42,
     };
 
-    let bytes = payload.to_bytes();
+    let bytes = payload.to_bytes().unwrap();
     let restored = ShardPayload::from_bytes(&bytes).expect("Deserialization should succeed");
 
     assert_eq!(payload.nonce, restored.nonce);
@@ -225,7 +225,7 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(mint_op),
         nonce: 1,
     };
-    let mint_event = create_test_event(minter, mint_payload.to_bytes());
+    let mint_event = create_test_event(minter, mint_payload.to_bytes().unwrap());
     router
         .route_event(&mint_event)
         .expect("Mint should succeed");
@@ -240,7 +240,7 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(burn_op),
         nonce: 2,
     };
-    let burn_event = create_test_event(minter, burn_payload.to_bytes());
+    let burn_event = create_test_event(minter, burn_payload.to_bytes().unwrap());
     router
         .route_event(&burn_event)
         .expect("Burn should succeed");
@@ -255,7 +255,7 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(overburn_op),
         nonce: 3,
     };
-    let overburn_event = create_test_event(minter, overburn_payload.to_bytes());
+    let overburn_event = create_test_event(minter, overburn_payload.to_bytes().unwrap());
     let result = router.route_event(&overburn_event);
     assert!(result.is_err(), "Burning more than balance should fail");
 }

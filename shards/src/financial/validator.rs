@@ -613,7 +613,7 @@ mod tests {
         state.apply(&mint, &event).unwrap();
 
         // Serialize and deserialize
-        let bytes = state.to_bytes();
+        let bytes = state.to_bytes().unwrap();
         let restored = FinancialState::from_bytes(&bytes).unwrap();
 
         assert_eq!(restored.balance_of(&account_a), 500);

@@ -415,7 +415,7 @@ fn test_economics_serialization_roundtrip() {
         )
         .unwrap();
 
-    let bytes = state.to_bytes();
+    let bytes = state.to_bytes().unwrap();
     let restored = EconomicsState::from_bytes(&bytes).unwrap();
 
     assert_eq!(

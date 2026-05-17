@@ -124,8 +124,8 @@ impl QuotaSystem {
     }
 
     /// Serialize the quota system state to bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("QuotaSystem serialization cannot fail")
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
     /// Deserialize quota system state from bytes.

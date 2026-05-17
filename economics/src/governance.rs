@@ -262,8 +262,8 @@ impl GovernanceState {
     }
 
     /// Serialize the governance state to bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("GovernanceState serialization cannot fail")
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
     /// Deserialize governance state from bytes.

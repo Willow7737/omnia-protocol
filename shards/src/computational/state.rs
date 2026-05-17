@@ -122,8 +122,8 @@ impl ComputationalState {
     }
 
     /// Serialize the state to bytes for snapshots.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("ComputationalState serialization cannot fail")
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
     }
 
     /// Deserialize state from bytes.

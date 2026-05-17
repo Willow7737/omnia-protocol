@@ -165,11 +165,10 @@ impl FinancialState {
     ///
     /// The output is prefixed with a version byte to support future
     /// state-format migrations.
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
         let mut bytes = vec![Self::FINANCIAL_STATE_VERSION];
-        bytes
-            .extend(postcard::to_allocvec(self).expect("FinancialState serialization cannot fail"));
-        bytes
+        bytes.extend(postcard::to_allocvec(self)?);
+        Ok(bytes)
     }
 
     /// Deserialize state from bytes.

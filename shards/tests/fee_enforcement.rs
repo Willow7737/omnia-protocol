@@ -73,7 +73,7 @@ fn test_funded_quota_operations_succeed() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event).is_ok(),
         "Funded operation should succeed"
@@ -104,7 +104,7 @@ fn test_zero_quota_operations_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event);
 
     assert!(result.is_err(), "Zero-quota operation should fail");
@@ -145,7 +145,7 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes(), &keypair);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event1).is_ok(),
         "First op should succeed"
@@ -157,7 +157,7 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes(), &keypair);
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event2).is_ok(),
         "Second op should succeed"
@@ -169,7 +169,7 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 3,
     };
-    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes(), &keypair);
+    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event3);
     assert!(
         result.is_err(),
@@ -234,7 +234,7 @@ fn test_cross_shard_fee_deduction() {
         operation: ShardOp::CrossShard(msg),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     // The cross-shard fee is 15, and the DID has exactly 15, so it should succeed
     assert!(
         router.route_event(&event).is_ok(),
@@ -267,7 +267,7 @@ fn test_cross_shard_insufficient_balance() {
         operation: ShardOp::CrossShard(msg),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event);
     assert!(
         result.is_err(),
@@ -313,7 +313,7 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes(), &keypair);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event1).is_ok(),
         "Op with exact fee balance should succeed"
@@ -325,7 +325,7 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes(), &keypair);
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event2).is_err(),
         "Op after balance exhausted should fail"
@@ -369,7 +369,7 @@ fn test_unregistered_did_fails_with_insufficient_fee() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event);
 
     assert!(result.is_err(), "Unregistered DID should fail fee check");
@@ -405,7 +405,7 @@ fn test_zero_fee_schedule_never_deducts() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes(), &keypair);
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     // With zero fees, even a DID with 0 balance should succeed
     assert!(
         router.route_event(&event).is_ok(),
