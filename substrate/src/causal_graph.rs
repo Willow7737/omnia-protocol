@@ -946,11 +946,19 @@ impl CausalGraph {
         }
     }
 
+    /// Check whether an event ID exists either in the live event set or
+    /// in the pruned-events index. After pruning, a child event's parent
+    /// may have been moved from `events` to `pruned_events`, so both
+    /// collections must be consulted.
+    fn parent_exists(&self, id: &EventId) -> bool {
+        self.events.contains_key(id) || self.pruned_events.contains_key(id)
+    }
+
     /// Verify graph integrity
     pub fn verify_integrity(&self) -> Result<(), CausalGraphError> {
         for (id, event) in &self.events {
             if let Some(sp) = event.self_parent {
-                if !self.events.contains_key(&sp) {
+                if !self.parent_exists(&sp) {
                     return Err(CausalGraphError::IntegrityError(format!(
                         "event {} has dangling self-parent {}",
                         hex::encode(&id[..8]),
@@ -959,7 +967,7 @@ impl CausalGraph {
                 }
             }
             if let Some(op) = event.other_parent {
-                if !self.events.contains_key(&op) {
+                if !self.parent_exists(&op) {
                     return Err(CausalGraphError::IntegrityError(format!(
                         "event {} has dangling other-parent {}",
                         hex::encode(&id[..8]),
