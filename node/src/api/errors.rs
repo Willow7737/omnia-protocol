@@ -44,9 +44,7 @@ pub struct ErrorResponse {
     ),
     tag = "errors",
 )]
-pub async fn error_codes(
-    State(_state): State<AppState>,
-) -> (StatusCode, Json<Vec<ErrorResponse>>) {
+pub async fn error_codes(State(_state): State<AppState>) -> (StatusCode, Json<Vec<ErrorResponse>>) {
     let codes = vec![
         ErrorResponse {
             code: ErrorCode::InternalError,
