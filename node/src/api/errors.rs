@@ -1,8 +1,10 @@
 //! Structured error reporting endpoint.
 
+use std::sync::Arc;
+
 use axum::{extract::State, http::StatusCode, Json};
 use serde::Serialize;
-use std::sync::Arc;
+
 use crate::state::AppState;
 
 /// Structured error code for API responses.

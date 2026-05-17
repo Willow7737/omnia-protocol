@@ -31,13 +31,15 @@
 //! restored.verify()?;
 //! ```
 
+use std::collections::HashMap;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
 use crate::causal_graph::CausalGraph;
 use crate::causal_graph::GraphSnapshot;
 use crate::slashing::SlashingState;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
-use thiserror::Error;
 
 /// Current snapshot format version.
 const SNAPSHOT_VERSION: u32 = 1;

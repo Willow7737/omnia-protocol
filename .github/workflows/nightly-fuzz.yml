@@ -16,6 +16,8 @@ jobs:
         with:
           toolchain: nightly
           components: llvm-tools-preview
+      - name: Override toolchain for fuzz
+        run: rustup override set nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
         continue-on-error: true

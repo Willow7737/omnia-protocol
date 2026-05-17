@@ -243,7 +243,7 @@ criteria = "safe-to-deploy"
 
 notes = "Serialization. Constant-time Base64 encoding. No unsafe."
 [[exemptions.postcard]]
-version = "1"
+version = "1.0.0"
 criteria = "safe-to-deploy"
 
 notes = "Serialization. no_std-compatible deterministic serde serializer. Replaces unmaintained bincode (RUSTSEC-2025-0141)."

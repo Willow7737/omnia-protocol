@@ -256,6 +256,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
+      - name: Override toolchain for fuzz
+        run: rustup override set nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked || cargo install cargo-fuzz
       - name: Build fuzz targets

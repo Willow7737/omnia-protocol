@@ -117,6 +117,7 @@ pub const TARGET_TPS: u32 = 10_000;
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
 use std::path::PathBuf;
+
 use thiserror::Error;
 
 /// Trait for Layer 2 event processors (e.g., domain shards).

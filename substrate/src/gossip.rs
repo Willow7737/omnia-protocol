@@ -3,19 +3,21 @@
 //! Refactored from std::sync::Mutex to tokio::sync::RwLock to prevent deadlocks
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
+use std::time::Instant;
+
+use libp2p::{Multiaddr, PeerId};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tokio::sync::{mpsc, RwLock};
+use tracing::{info, warn};
+
 use crate::causal_graph::{CausalGraph, CausalGraphError};
 use crate::event::{Event, EventBatch, EventId, EventRequest};
 use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use crate::rate_limiter::RateLimiter;
 use crate::vector_clock::{NodeId, VectorClock};
-use libp2p::{Multiaddr, PeerId};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
-use std::time::Instant;
-use thiserror::Error;
-use tokio::sync::{mpsc, RwLock};
-use tracing::{info, warn};
 
 const DEFAULT_GOSSIP_INTERVAL_MS: u64 = 100;
 const MAX_EVENTS_PER_GOSSIP: usize = 100;

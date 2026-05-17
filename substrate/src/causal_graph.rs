@@ -10,11 +10,13 @@
 //! - Topological ordering for deterministic event sequencing
 //! - Diff calculation for efficient synchronization
 
+use std::collections::{HashMap, HashSet, VecDeque};
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
 use crate::event::{Event, EventId, EventStatus};
 use crate::vector_clock::{NodeId, VectorClock};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-use thiserror::Error;
 
 /// Maximum depth for ancestry traversal (prevents infinite loops from corrupted data)
 const MAX_ANCESTRY_DEPTH: usize = 1_000_000;

@@ -29,12 +29,14 @@
 //!
 //! All points and thresholds are `u64` integers — no floating-point arithmetic.
 
-use crate::event::Event;
-use crate::vector_clock::NodeId;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+
+use crate::event::Event;
+use crate::vector_clock::NodeId;
 
 /// Default slash threshold: accumulated points at which a node is slashed.
 pub const DEFAULT_SLASH_THRESHOLD: u64 = 500;
