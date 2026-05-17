@@ -118,8 +118,8 @@ impl StateSnapshot {
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         let slashing_state_bytes = postcard::to_allocvec(slashing)
             .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
-        let nonce_state_bytes =
-            postcard::to_allocvec(nonces).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
+        let nonce_state_bytes = postcard::to_allocvec(nonces)
+            .map_err(|e| SnapshotError::Serialization(e.to_string()))?;
 
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

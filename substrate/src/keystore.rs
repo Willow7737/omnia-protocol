@@ -390,8 +390,7 @@ impl KeyRotationProof {
 fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     let salt = generate_salt();
     let key = derive_key_hkdf(passphrase, &salt);
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .expect("AES-256-GCM key must be 32 bytes");
+    let cipher = Aes256Gcm::new_from_slice(&key).expect("AES-256-GCM key must be 32 bytes");
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
@@ -423,8 +422,7 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
     let ciphertext = &data[44..];
 
     let key = derive_key_hkdf(passphrase, salt);
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .expect("AES-256-GCM key must be 32 bytes");
+    let cipher = Aes256Gcm::new_from_slice(&key).expect("AES-256-GCM key must be 32 bytes");
 
     cipher
         .decrypt(nonce, ciphertext)

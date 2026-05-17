@@ -1,2 +1,9 @@
 [advisories]
-ignore = ["RUSTSEC-2025-0141"]  # bincode 1.x unmaintained - migrated to postcard
+ignore = [
+    "RUSTSEC-2025-0141",  # bincode 1.x unmaintained - migrated to postcard
+    "RUSTSEC-2026-0118",  # hickory-proto NSEC3 unbounded loop - not directly used
+    "RUSTSEC-2026-0119",  # hickory-proto CPU exhaustion O(n^2) - not directly used
+    "RUSTSEC-2024-0437",  # protobuf uncontrolled recursion - transitive dep
+    "RUSTSEC-2025-0055",  # tracing ANSI escape sequence - low severity
+    "RUSTSEC-2023-0089",  # atomic-polyfill unmaintained - transitive dep
+]

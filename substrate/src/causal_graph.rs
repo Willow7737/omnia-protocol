@@ -376,9 +376,7 @@ impl CausalGraph {
                 Err(CausalGraphError::EventPruned(_)) => {
                     // Cannot traverse through pruned events — report the error
                     // so callers know the result may be incomplete.
-                    return Err(CausalGraphError::EventPruned(hex::encode(
-                        &current_id[..8],
-                    )));
+                    return Err(CausalGraphError::EventPruned(hex::encode(&current_id[..8])));
                 }
                 Err(CausalGraphError::InvalidEvent(_)) => {
                     // Event never existed in the graph — skip it silently.
@@ -427,9 +425,7 @@ impl CausalGraph {
                 }
                 Err(CausalGraphError::EventPruned(_)) => {
                     // Cannot traverse through pruned events — report the error.
-                    return Err(CausalGraphError::EventPruned(hex::encode(
-                        &current_id[..8],
-                    )));
+                    return Err(CausalGraphError::EventPruned(hex::encode(&current_id[..8])));
                 }
                 Err(CausalGraphError::InvalidEvent(_)) => {
                     // Event never existed — skip silently.
@@ -944,9 +940,7 @@ impl CausalGraph {
                 }
                 match self.get_checked(&current) {
                     Ok(event) => {
-                        for parent in
-                            [event.self_parent, event.other_parent].iter().flatten()
-                        {
+                        for parent in [event.self_parent, event.other_parent].iter().flatten() {
                             queue.push_back(*parent);
                         }
                     }
@@ -1348,7 +1342,12 @@ mod tests {
     // ── Merkle Proof Hardening Tests (Sprint 1, Task 2.4) ───────────
 
     /// Helper: build a chain of events with distinct payloads and return their IDs.
-    fn build_chain(graph: &mut CausalGraph, node: NodeId, kp: &crate::crypto::NodeKeypair, count: usize) -> Vec<EventId> {
+    fn build_chain(
+        graph: &mut CausalGraph,
+        node: NodeId,
+        kp: &crate::crypto::NodeKeypair,
+        count: usize,
+    ) -> Vec<EventId> {
         let mut ids = Vec::new();
         let mut prev_id = None;
         for i in 0..count {

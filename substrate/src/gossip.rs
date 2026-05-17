@@ -284,7 +284,9 @@ impl GossipProtocol {
         }
 
         // Send publish command to the network task
-        let bytes = event.to_bytes().map_err(|e| GossipError::SerializationError(e.to_string()))?;
+        let bytes = event
+            .to_bytes()
+            .map_err(|e| GossipError::SerializationError(e.to_string()))?;
         let bytes_len = bytes.len();
         if let Some(ref cmd_tx) = self.network_cmd_tx {
             cmd_tx
@@ -723,7 +725,10 @@ mod tests {
         drop(tx);
 
         // Process pending events
-        let inserted = gossip.process_pending_events().await.expect("process should succeed");
+        let inserted = gossip
+            .process_pending_events()
+            .await
+            .expect("process should succeed");
         assert_eq!(inserted.len(), 0, "Unsigned event should be rejected");
         assert_eq!(gossip.stats().events_rejected, 1);
         assert!(
@@ -760,7 +765,10 @@ mod tests {
 
         drop(tx);
 
-        let inserted = gossip.process_pending_events().await.expect("process should succeed");
+        let inserted = gossip
+            .process_pending_events()
+            .await
+            .expect("process should succeed");
         assert_eq!(inserted.len(), 1);
         assert_eq!(gossip.stats().events_received, 1);
         assert_eq!(gossip.stats().events_accepted, 1);

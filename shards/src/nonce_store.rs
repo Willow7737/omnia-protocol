@@ -83,8 +83,7 @@ impl RedbNonceStore {
     /// # Arguments
     /// * `path` - File path for the redb database
     pub fn open(path: &std::path::Path) -> Result<Self, NonceStoreError> {
-        let db = redb::Database::create(path)
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        let db = redb::Database::create(path).map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         // Ensure the table exists
         let write_txn = db
             .begin_write()
@@ -128,7 +127,10 @@ impl NonceStore for RedbNonceStore {
         let table = read_txn
             .open_table(NONCE_TABLE)
             .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
-        for item in table.iter().map_err(|e| NonceStoreError::Redb(e.to_string()))? {
+        let range = table
+            .range::<&[u8]>(..)
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        for item in range {
             let (key, value) = item.map_err(|e| NonceStoreError::Redb(e.to_string()))?;
             if key.value().len() == 32 {
                 let mut key_arr = [0u8; 32];
@@ -151,9 +153,9 @@ impl NonceStore for RedbNonceStore {
                 .open_table(NONCE_TABLE)
                 .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
 
-            // Clear existing data
+            // Clear existing data using drain (redb v2 does not have clear())
             table
-                .clear()
+                .drain::<&[u8]>(..)
                 .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
 
             // Insert all entries

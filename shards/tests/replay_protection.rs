@@ -5,8 +5,8 @@
 
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsOp, EconomicsShard, FinancialOp, FinancialShard,
-    IdentityShard, NonceStore, PhysicalShard, ShardId, ShardOp, ShardPayload, ShardRouter,
-    RedbNonceStore,
+    IdentityShard, NonceStore, PhysicalShard, RedbNonceStore, ShardId, ShardOp, ShardPayload,
+    ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, NodeKeypair, VectorClock};
 use std::sync::Arc;

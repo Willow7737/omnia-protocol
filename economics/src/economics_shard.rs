@@ -171,7 +171,8 @@ impl EconomicsState {
     /// state-format migrations.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![Self::ECONOMICS_STATE_VERSION];
-        bytes.extend(postcard::to_allocvec(self).expect("EconomicsState serialization cannot fail"));
+        bytes
+            .extend(postcard::to_allocvec(self).expect("EconomicsState serialization cannot fail"));
         bytes
     }
 
