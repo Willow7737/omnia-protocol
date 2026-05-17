@@ -31,7 +31,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -507,48 +507,44 @@ impl SlashingStore for InMemorySlashingStore {
 /// assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
 /// ```
 pub struct SlashingEngine {
-    /// Accumulated slash points per node.
-    slash_points: HashMap<NodeId, u64>,
-    /// Staked amounts per node.
-    stakes: HashMap<NodeId, u64>,
-    /// Points threshold at which a node is slashed.
-    slash_threshold: u64,
-    /// Points threshold at which a node is ejected.
-    ejection_threshold: u64,
+    /// Shared mutable in-memory state, wrapped in `Arc<RwLock<...>>` so
+    /// that all clones share the **same** state. This fixes the divergent
+    /// state bug where `Clone` previously gave each clone its own copy of
+    /// `slash_points`, `stakes`, and `offense_history`.
+    state: Arc<RwLock<SlashingState>>,
     /// Persistence backend for slashing state, shared via `Arc`.
     store: Arc<dyn SlashingStore>,
-    /// Per-node stack of offense point amounts, used for type-aware undo.
-    offense_history: HashMap<NodeId, Vec<u64>>,
 }
 
 impl std::fmt::Debug for SlashingEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "SlashingEngine::fmt — lock poisoned");
+            std::process::abort()
+        });
         f.debug_struct("SlashingEngine")
-            .field("slash_points", &self.slash_points)
-            .field("stakes", &self.stakes)
-            .field("slash_threshold", &self.slash_threshold)
-            .field("ejection_threshold", &self.ejection_threshold)
+            .field("slash_points", &state.slash_points)
+            .field("stakes", &state.stakes)
+            .field("slash_threshold", &state.slash_threshold)
+            .field("ejection_threshold", &state.ejection_threshold)
             .field("store", &"Arc<dyn SlashingStore>")
             .finish()
     }
 }
 
 impl Clone for SlashingEngine {
-    /// Clone the engine, sharing the same `Arc<dyn SlashingStore>`.
+    /// Clone the engine, sharing the **same** in-memory state and
+    /// persistence store.
     ///
-    /// The clone receives a snapshot of the current in-memory state
-    /// (slash points, stakes, thresholds) but shares the underlying
-    /// persistence store. This is the key mechanism for the single-engine
-    /// architecture: both consensus and the API layer hold clones that
-    /// write to the same redb database.
+    /// Both the `Arc<RwLock<SlashingState>>` and the `Arc<dyn
+    /// SlashingStore>` are cloned by reference, so all clones observe
+    /// and mutate the same underlying state. This eliminates the
+    /// divergent-state bug that existed when each clone held its own
+    /// copy of `slash_points`, `stakes`, and `offense_history`.
     fn clone(&self) -> Self {
         Self {
-            slash_points: self.slash_points.clone(),
-            stakes: self.stakes.clone(),
-            slash_threshold: self.slash_threshold,
-            ejection_threshold: self.ejection_threshold,
+            state: Arc::clone(&self.state),
             store: Arc::clone(&self.store),
-            offense_history: self.offense_history.clone(),
         }
     }
 }
@@ -634,13 +630,16 @@ impl SlashingEngine {
     /// * `slash_threshold` — Slash points at which a node is slashed.
     /// * `ejection_threshold` — Slash points at which a node is ejected.
     pub fn new_in_memory(slash_threshold: u64, ejection_threshold: u64) -> Self {
-        Self {
+        let state = SlashingState {
             slash_points: HashMap::new(),
             stakes: HashMap::new(),
             slash_threshold,
             ejection_threshold,
-            store: Arc::new(InMemorySlashingStore::new()),
             offense_history: HashMap::new(),
+        };
+        Self {
+            state: Arc::new(RwLock::new(state)),
+            store: Arc::new(InMemorySlashingStore::new()),
         }
     }
 
@@ -673,20 +672,16 @@ impl SlashingEngine {
     /// let engine = SlashingEngine::with_store(Arc::new(store)).unwrap();
     /// ```
     pub fn with_store(store: Arc<dyn SlashingStore>) -> Result<Self, SlashingStoreError> {
-        let state = store.load()?;
+        let loaded = store.load()?;
         tracing::info!(
-            slash_points_count = state.slash_points.len(),
-            stakes_count = state.stakes.len(),
-            slash_threshold = state.slash_threshold,
-            ejection_threshold = state.ejection_threshold,
+            slash_points_count = loaded.slash_points.len(),
+            stakes_count = loaded.stakes.len(),
+            slash_threshold = loaded.slash_threshold,
+            ejection_threshold = loaded.ejection_threshold,
             "Loaded slashing state from persistent store"
         );
         Ok(Self {
-            slash_points: state.slash_points,
-            stakes: state.stakes,
-            slash_threshold: state.slash_threshold,
-            ejection_threshold: state.ejection_threshold,
-            offense_history: state.offense_history,
+            state: Arc::new(RwLock::new(loaded)),
             store,
         })
     }
@@ -707,35 +702,31 @@ impl SlashingEngine {
         slash_threshold: u64,
         ejection_threshold: u64,
     ) -> Self {
-        match store.load() {
-            Ok(state) => {
+        let state = match store.load() {
+            Ok(loaded) => {
                 tracing::info!(
-                    slash_points_count = state.slash_points.len(),
-                    stakes_count = state.stakes.len(),
-                    slash_threshold = state.slash_threshold,
-                    ejection_threshold = state.ejection_threshold,
+                    slash_points_count = loaded.slash_points.len(),
+                    stakes_count = loaded.stakes.len(),
+                    slash_threshold = loaded.slash_threshold,
+                    ejection_threshold = loaded.ejection_threshold,
                     "Loaded slashing state from persistent store"
                 );
-                Self {
-                    slash_points: state.slash_points,
-                    stakes: state.stakes,
-                    slash_threshold: state.slash_threshold,
-                    ejection_threshold: state.ejection_threshold,
-                    offense_history: state.offense_history,
-                    store,
-                }
+                loaded
             }
             Err(e) => {
                 tracing::warn!(error = %e, "Failed to load slashing state — starting fresh");
-                Self {
+                SlashingState {
                     slash_points: HashMap::new(),
                     stakes: HashMap::new(),
                     slash_threshold,
                     ejection_threshold,
                     offense_history: HashMap::new(),
-                    store,
                 }
             }
+        };
+        Self {
+            state: Arc::new(RwLock::new(state)),
+            store,
         }
     }
 
@@ -745,13 +736,10 @@ impl SlashingEngine {
     /// valid. This keeps the engine operational even when persistence
     /// is temporarily unavailable.
     fn persist_state(&self) {
-        let state = SlashingState {
-            slash_points: self.slash_points.clone(),
-            stakes: self.stakes.clone(),
-            slash_threshold: self.slash_threshold,
-            ejection_threshold: self.ejection_threshold,
-            offense_history: self.offense_history.clone(),
-        };
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "persist_state — lock poisoned");
+            std::process::abort()
+        });
         if let Err(e) = self.store.save(&state) {
             tracing::warn!(error = %e, "Failed to persist slashing state");
         }
@@ -786,10 +774,15 @@ impl SlashingEngine {
             stake = stake,
             "Registering validator with stake"
         );
-        self.stakes.insert(node, stake);
+        let mut state = self.state.write().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "register_validator — lock poisoned");
+            std::process::abort()
+        });
+        state.stakes.insert(node, stake);
         // Ensure slash_points entry exists so slash_points_of returns 0
         // instead of implicitly missing.
-        self.slash_points.entry(node).or_insert(0);
+        state.slash_points.entry(node).or_insert(0);
+        drop(state);
         self.persist_state();
     }
 
@@ -830,15 +823,25 @@ impl SlashingEngine {
     /// ```
     pub fn record_offense(&mut self, node: NodeId, offense: SlashOffense) -> SlashOutcome {
         let points_added = offense.points();
-        let current_points = self.slash_points.entry(node).or_insert(0);
+        let mut state = self.state.write().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "record_offense — lock poisoned");
+            std::process::abort()
+        });
+        let current_points = state.slash_points.entry(node).or_insert(0);
         *current_points = current_points.saturating_add(points_added);
         let total_points = *current_points;
 
         // Track offense history for undo
-        self.offense_history
+        state
+            .offense_history
             .entry(node)
             .or_default()
             .push(points_added);
+
+        let ejection_threshold = state.ejection_threshold;
+        let slash_threshold = state.slash_threshold;
+        let stake_amount = state.stakes.get(&node).copied().unwrap_or(0);
+        drop(state);
 
         tracing::warn!(
             node = ?&node[..4],
@@ -848,23 +851,25 @@ impl SlashingEngine {
             "Slashing offense recorded"
         );
 
-        let outcome = if total_points >= self.ejection_threshold {
+        let outcome = if total_points >= ejection_threshold {
             tracing::info!(node = ?&node[..4], total_points, "Node ejected from consensus");
             SlashOutcome::Ejected { node }
-        } else if total_points >= self.slash_threshold {
-            let amount = self.stakes.get(&node).copied().unwrap_or(0);
+        } else if total_points >= slash_threshold {
             tracing::info!(
                 node = ?&node[..4],
                 total_points,
-                amount,
+                amount = stake_amount,
                 "Node slashed"
             );
-            SlashOutcome::Slashed { node, amount }
+            SlashOutcome::Slashed {
+                node,
+                amount: stake_amount,
+            }
         } else {
             tracing::debug!(
                 node = ?&node[..4],
                 total_points,
-                threshold = self.slash_threshold,
+                threshold = slash_threshold,
                 "Node warned — below slash threshold"
             );
             SlashOutcome::Warned {
@@ -1003,9 +1008,14 @@ impl SlashingEngine {
     /// assert!(engine.is_slashed(&node));
     /// ```
     pub fn is_slashed(&self, node: &NodeId) -> bool {
-        self.slash_points
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "is_slashed — lock poisoned");
+            std::process::abort()
+        });
+        state
+            .slash_points
             .get(node)
-            .map(|&p| p >= self.slash_threshold)
+            .map(|&p| p >= state.slash_threshold)
             .unwrap_or(false)
     }
 
@@ -1039,9 +1049,14 @@ impl SlashingEngine {
     /// assert!(engine.is_ejected(&node));
     /// ```
     pub fn is_ejected(&self, node: &NodeId) -> bool {
-        self.slash_points
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "is_ejected — lock poisoned");
+            std::process::abort()
+        });
+        state
+            .slash_points
             .get(node)
-            .map(|&p| p >= self.ejection_threshold)
+            .map(|&p| p >= state.ejection_threshold)
             .unwrap_or(false)
     }
 
@@ -1069,7 +1084,11 @@ impl SlashingEngine {
     /// assert_eq!(engine.stake_of(&node), 10_000);
     /// ```
     pub fn stake_of(&self, node: &NodeId) -> u64 {
-        self.stakes.get(node).copied().unwrap_or(0)
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "stake_of — lock poisoned");
+            std::process::abort()
+        });
+        state.stakes.get(node).copied().unwrap_or(0)
     }
 
     /// Returns the accumulated slash points for a node.
@@ -1097,7 +1116,11 @@ impl SlashingEngine {
     /// assert_eq!(engine.slash_points_of(&node), 100);
     /// ```
     pub fn slash_points_of(&self, node: &NodeId) -> u64 {
-        self.slash_points.get(node).copied().unwrap_or(0)
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "slash_points_of — lock poisoned");
+            std::process::abort()
+        });
+        state.slash_points.get(node).copied().unwrap_or(0)
     }
 
     /// Returns the accumulated slash count for a validator.
@@ -1113,7 +1136,11 @@ impl SlashingEngine {
     ///
     /// The total slash count, or `0` if the validator has no recorded offenses.
     pub fn get_slash_count(&self, validator: &[u8; 32]) -> u64 {
-        self.slash_points.get(validator).copied().unwrap_or(0)
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "get_slash_count — lock poisoned");
+            std::process::abort()
+        });
+        state.slash_points.get(validator).copied().unwrap_or(0)
     }
 
     /// Reverse a slash by decrementing slash points for a validator.
@@ -1149,14 +1176,18 @@ impl SlashingEngine {
     /// assert_eq!(engine.slash_points_of(&node), 0);
     /// ```
     pub fn undo_slash(&mut self, node: &NodeId) -> Result<(), String> {
-        let history = self.offense_history.get_mut(node);
+        let mut state = self.state.write().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "undo_slash — lock poisoned");
+            std::process::abort()
+        });
+        let history = state.offense_history.get_mut(node);
         match history {
             Some(entries) if !entries.is_empty() => {
                 let last_offense_points =
                     entries.pop().expect("entries is non-empty per guard above");
-                let current = self.slash_points.get(node).copied().unwrap_or(0);
+                let current = state.slash_points.get(node).copied().unwrap_or(0);
                 let new_points = current.saturating_sub(last_offense_points);
-                self.slash_points.insert(*node, new_points);
+                state.slash_points.insert(*node, new_points);
 
                 tracing::info!(
                     node = ?&node[..4],
@@ -1166,6 +1197,7 @@ impl SlashingEngine {
                     "Slash points decremented via undo (offense-type-aware)"
                 );
 
+                drop(state);
                 self.persist_state();
                 Ok(())
             }
@@ -1181,37 +1213,51 @@ impl SlashingEngine {
     /// Used by genesis replay (see [`crate::genesis_replay`]) to capture
     /// the final slashing state after replaying the event history.
     pub fn to_state(&self) -> SlashingState {
-        SlashingState {
-            slash_points: self.slash_points.clone(),
-            stakes: self.stakes.clone(),
-            slash_threshold: self.slash_threshold,
-            ejection_threshold: self.ejection_threshold,
-            offense_history: self.offense_history.clone(),
-        }
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "to_state — lock poisoned");
+            std::process::abort()
+        });
+        state.clone()
     }
 
     /// Returns a reference to the internal slash points map.
     ///
     /// Used by genesis replay to capture the final state.
     pub fn internal_slash_points(&self) -> HashMap<NodeId, u64> {
-        self.slash_points.clone()
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "internal_slash_points — lock poisoned");
+            std::process::abort()
+        });
+        state.slash_points.clone()
     }
 
     /// Returns a reference to the internal stakes map.
     ///
     /// Used by genesis replay to capture the final state.
     pub fn internal_stakes(&self) -> HashMap<NodeId, u64> {
-        self.stakes.clone()
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "internal_stakes — lock poisoned");
+            std::process::abort()
+        });
+        state.stakes.clone()
     }
 
     /// Returns the configured slash threshold.
     pub fn internal_slash_threshold(&self) -> u64 {
-        self.slash_threshold
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "internal_slash_threshold — lock poisoned");
+            std::process::abort()
+        });
+        state.slash_threshold
     }
 
     /// Returns the configured ejection threshold.
     pub fn internal_ejection_threshold(&self) -> u64 {
-        self.ejection_threshold
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "internal_ejection_threshold — lock poisoned");
+            std::process::abort()
+        });
+        state.ejection_threshold
     }
 }
 
