@@ -579,9 +579,26 @@ impl ChaosNetwork {
 
         for (idx, node) in self.nodes.iter().enumerate() {
             for event_id in node.consensus.get_committed() {
-                if let Some(event) = node.graph.get(&event_id) {
-                    let key = (event.creator, event.sequence);
-                    commits_by_key.entry(key).or_default().push((idx, event_id));
+                match node.graph.get_checked(&event_id) {
+                    Ok(event) => {
+                        let key = (event.creator, event.sequence);
+                        commits_by_key.entry(key).or_default().push((idx, event_id));
+                    }
+                    Err(omnia_substrate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                        // Pruned events are expected — they were committed but later cleaned up.
+                        // Account for them in safety calculations by checking metadata.
+                        if let Some(metadata) = node.graph.get_pruned_metadata(&event_id) {
+                            let key = (metadata.creator, metadata.sequence);
+                            commits_by_key.entry(key).or_default().push((idx, event_id));
+                        }
+                    }
+                    Err(_) => {
+                        // Event not found — should not happen for committed events
+                        tracing::warn!(
+                            "Committed event {} not found in graph during safety check",
+                            hex::encode(&event_id[..4])
+                        );
+                    }
                 }
             }
         }

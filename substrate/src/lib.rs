@@ -398,12 +398,26 @@ impl Substrate {
             if let Some(ref mut processor) = self.shard_processor {
                 let graph = self.graph.read().await;
                 for event_id in &committed {
-                    if let Some(event) = graph.get(event_id) {
-                        if let Err(e) = processor.process_event(event) {
+                    match graph.get_checked(event_id) {
+                        Ok(event) => {
+                            if let Err(e) = processor.process_event(event) {
+                                tracing::warn!(
+                                    "Shard processor error for event {}: {}",
+                                    hex::encode(&event_id[..4]),
+                                    e
+                                );
+                            }
+                        }
+                        Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
                             tracing::warn!(
-                                "Shard processor error for event {}: {}",
-                                hex::encode(&event_id[..4]),
-                                e
+                                "Skipping pruned event {} in shard processor",
+                                hex::encode(&event_id[..4])
+                            );
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "Event {} not found in graph for shard processing",
+                                hex::encode(&event_id[..4])
                             );
                         }
                     }
@@ -500,11 +514,19 @@ impl Substrate {
         if let Some(ref mut processor) = self.shard_processor {
             let graph = self.graph.read().await;
             for event_id in graph.event_ids() {
-                if let Some(event) = graph.get(&event_id) {
-                    if !event.payload.is_empty() {
-                        if let Err(e) = processor.process_event(event) {
-                            tracing::warn!("Shard processor error: {}", e);
+                match graph.get_checked(&event_id) {
+                    Ok(event) => {
+                        if !event.payload.is_empty() {
+                            if let Err(e) = processor.process_event(event) {
+                                tracing::warn!("Shard processor error: {}", e);
+                            }
                         }
+                    }
+                    Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                        // Pruned events have no payload; skip gracefully
+                    }
+                    Err(_) => {
+                        // Event not found — skip
                     }
                 }
             }
@@ -524,9 +546,23 @@ impl Substrate {
         let to_process: Vec<EventId> = self.unprocessed_events.drain(..).collect();
 
         for id in &to_process {
-            if let Some(event) = graph.get(id) {
-                if let Ok(committed) = self.consensus.process_event(event, &graph) {
-                    all_committed.extend(committed);
+            match graph.get_checked(id) {
+                Ok(event) => {
+                    if let Ok(committed) = self.consensus.process_event(event, &graph) {
+                        all_committed.extend(committed);
+                    }
+                }
+                Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                    tracing::warn!(
+                        "Skipping pruned event {} in consensus processing",
+                        hex::encode(&id[..4])
+                    );
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        "Event {} not found in graph for consensus",
+                        hex::encode(&id[..4])
+                    );
                 }
             }
         }
