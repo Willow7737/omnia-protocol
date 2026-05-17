@@ -123,6 +123,9 @@ contract OmniaRollup {
     uint256 public batchIndex;
 
     mapping(bytes32 => uint256) public deposits;
+    mapping(bytes32 => address) public depositOwners;
+    mapping(bytes32 => uint256) public pendingWithdrawals;
+    bool private _locked;
 
     struct Withdrawal {
         bytes32 l2Did;
@@ -431,12 +434,19 @@ contract OmniaRollup {
     function deposit(bytes32 _l2Did) external payable {
         require(msg.value > 0, "Must deposit > 0");
         deposits[_l2Did] += msg.value;
+        depositOwners[_l2Did] = msg.sender;
         emit Deposited(msg.sender, _l2Did, msg.value);
     }
 
     /// @notice Request a withdrawal from L2 to L1.
     function requestWithdrawal(bytes32 _l2Did, uint256 _amount) external {
+        require(msg.sender == depositOwners[_l2Did], "Not deposit owner");
         require(deposits[_l2Did] >= _amount, "Insufficient balance");
+
+        // Escrow: deduct from deposits at request time
+        deposits[_l2Did] -= _amount;
+        pendingWithdrawals[_l2Did] += _amount;
+
         withdrawals[msg.sender].push(Withdrawal({
             l2Did: _l2Did,
             amount: _amount,
@@ -447,8 +457,8 @@ contract OmniaRollup {
 
     /// @notice Finalize a withdrawal after the 7-day challenge period.
     /// @dev Follows the Checks-Effects-Interactions pattern to prevent reentrancy.
-    ///      State is cleared BEFORE the external ETH transfer.
-    function finalizeWithdrawal(uint256 _withdrawalIndex) external {
+    ///      Uses a reentrancy guard and low-level .call() instead of .transfer().
+    function finalizeWithdrawal(uint256 _withdrawalIndex) external nonReentrant {
         Withdrawal storage w = withdrawals[msg.sender][_withdrawalIndex];
         require(w.amount > 0, "Invalid withdrawal");
         require(block.timestamp >= w.requestedAt + 7 days, "Challenge period active");
@@ -462,11 +472,12 @@ contract OmniaRollup {
         w.amount = 0;
         w.requestedAt = 0;
 
-        // Decrease the deposit balance
-        deposits[l2Did] -= amount;
+        // Decrease the pending withdrawal balance (escrow pattern)
+        pendingWithdrawals[l2Did] -= amount;
 
         // --- Interactions: external call LAST ---
-        payable(msg.sender).transfer(amount);
+        (bool success, ) = payable(msg.sender).call{value: amount}("");
+        require(success, "Transfer failed");
 
         emit WithdrawalFinalized(msg.sender, amount);
     }
@@ -478,6 +489,14 @@ contract OmniaRollup {
     modifier onlyOperator() {
         require(msg.sender == operator, "Not operator");
         _;
+    }
+
+    /// @dev Reentrancy guard modifier
+    modifier nonReentrant() {
+        require(!_locked, "ReentrancyGuard: reentrant call");
+        _locked = true;
+        _;
+        _locked = false;
     }
 
     // -----------------------------------------------------------------------
