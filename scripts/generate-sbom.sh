@@ -6,7 +6,7 @@ echo "=== Generating SBOM for Omnia Protocol ==="
 # Install cargo-cyclonedx if not present
 if ! command -v cargo-cyclonedx &> /dev/null; then
     echo "Installing cargo-cyclonedx..."
-    cargo install cargo-cyclonedx
+    cargo install cargo-cyclonedx --locked
 fi
 
 # Clean and generate

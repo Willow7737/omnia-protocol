@@ -34,11 +34,6 @@ fn supermajority(total_nodes: usize) -> usize {
     (2 * total_nodes) / 3 + 1
 }
 
-/// Minimum votes needed for consensus
-fn consensus_threshold(total_nodes: usize) -> usize {
-    supermajority(total_nodes)
-}
-
 /// Consensus configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusConfig {
@@ -485,7 +480,7 @@ impl ConsensusEngine {
                 .unwrap_or(0),
             by_state,
             total_nodes: self.config.total_nodes,
-            threshold: consensus_threshold(self.config.total_nodes),
+            threshold: supermajority(self.config.total_nodes),
         }
     }
 
@@ -548,7 +543,7 @@ impl ConsensusEngine {
             }
         }
 
-        Ok(seen_count >= consensus_threshold(self.config.total_nodes))
+        Ok(seen_count >= supermajority(self.config.total_nodes))
     }
 
     /// FIX 3: Check if an event is a witness (first event in its round for its creator)
@@ -599,7 +594,7 @@ impl ConsensusEngine {
             // However, genesis round (round 0) with supermajority can still commit.
             if round == 0 {
                 if let Some(witnesses) = self.round_witnesses.get(&0) {
-                    if witnesses.len() >= consensus_threshold(self.config.total_nodes) {
+                    if witnesses.len() >= supermajority(self.config.total_nodes) {
                         for &witness_id in witnesses {
                             if !self.is_committed(&witness_id) {
                                 committed.insert(witness_id);
@@ -662,7 +657,7 @@ impl ConsensusEngine {
                 }
             }
 
-            return Ok(seeing_count >= consensus_threshold(self.config.total_nodes));
+            return Ok(seeing_count >= supermajority(self.config.total_nodes));
         }
 
         Ok(false)

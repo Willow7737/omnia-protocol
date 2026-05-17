@@ -93,6 +93,19 @@ async fn main() -> Result<()> {
         .context("Failed to initialize data directory")?;
     tracing::info!(data_dir = %data_dir.display(), "Data directory ready");
 
+    // 3b. Check for legacy sled database and migrate if present
+    let sled_path = data_dir.join("sled");
+    if sled_path.exists() {
+        tracing::info!(
+            sled_path = %sled_path.display(),
+            "Detected legacy sled database, migrating to redb..."
+        );
+        let redb_path = data_dir.join("omnia.redb");
+        omnia_substrate::migration::migrate_sled_to_redb(&sled_path, &redb_path)
+            .context("Sled-to-redb migration failed")?;
+        tracing::info!("Migration complete");
+    }
+
     // 4. Initialize substrate components
     let node_id_bytes = config.node_id_bytes();
     let slashing_dir = config.slashing_dir();

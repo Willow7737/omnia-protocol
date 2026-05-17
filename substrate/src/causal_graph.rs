@@ -806,29 +806,30 @@ impl CausalGraph {
         Some(proof)
     }
 
-    /// Remove payload data from events with depth less than `min_depth`.
+    /// Clear payload data from events with depth less than `min_depth`.
     ///
-    /// Preserves the event ID in the graph structure (for Merkle root
-    /// computation) but removes the full Event data (payload) to save
-    /// memory. This is called after events have been committed to L1
-    /// and are no longer needed for consensus.
-    pub fn prune_old_events(&mut self, min_depth: usize) {
-        let to_prune: Vec<EventId> = self
+    /// Preserves the event shell (ID, parent links, depth) in the graph
+    /// structure for Merkle root computation and ancestry traversal,
+    /// but removes the full Event data (payload) to save memory. This
+    /// is called after events have been committed to L1 and are no
+    /// longer needed for consensus.
+    ///
+    /// Note: This does *not* remove events from the graph. Use
+    /// [`Self::prune_finalized()`] for actual event removal.
+    pub fn clear_old_payloads(&mut self, min_depth: usize) {
+        let to_clear: Vec<EventId> = self
             .depths
             .iter()
             .filter(|(_, &depth)| depth < min_depth)
             .map(|(id, _)| *id)
             .collect();
 
-        for id in &to_prune {
+        for id in &to_clear {
             if let Some(event) = self.events.get_mut(id) {
                 // Keep the event shell (for parent links and depth) but clear payload
                 event.payload.clear();
             }
         }
-
-        // Clean up tips that no longer exist
-        self.tips.retain(|id| self.events.contains_key(id));
     }
 
     /// Prune finalized events older than a given depth from the current round.
@@ -1404,7 +1405,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_old_events() {
+    fn test_clear_old_payloads() {
         let mut graph = CausalGraph::new();
         let (kp, n1) = make_keypair_and_node(1);
 
@@ -1434,7 +1435,7 @@ mod tests {
         assert!(size_before > 0);
 
         // Prune events with depth < 3 (events at depth 1 and 2)
-        graph.prune_old_events(3);
+        graph.clear_old_payloads(3);
 
         // Events with depth >= 3 still have payloads
         // Events with depth < 3 have empty payloads
@@ -1519,7 +1520,7 @@ mod tests {
         assert_ne!(root_before, [0u8; 32]); // Non-trivial graph
 
         // Prune events with depth < 4 (prunes depths 1, 2, 3)
-        graph.prune_old_events(4);
+        graph.clear_old_payloads(4);
 
         // Root must be identical after pruning
         let root_after = graph.state_root();
@@ -1559,7 +1560,7 @@ mod tests {
         assert_eq!(graph.len(), 7);
 
         // Prune events with depth < 4 (prunes depths 1, 2, 3)
-        graph.prune_old_events(4);
+        graph.clear_old_payloads(4);
 
         let root = graph.state_root();
 
@@ -1602,7 +1603,7 @@ mod tests {
         let root_before = graph.state_root();
 
         // Prune events with depth < 4 (prunes depths 1, 2, 3)
-        graph.prune_old_events(4);
+        graph.clear_old_payloads(4);
 
         // Root must be unchanged
         let root_after = graph.state_root();
