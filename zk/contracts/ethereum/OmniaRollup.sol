@@ -221,6 +221,22 @@ contract OmniaRollup {
         uint256[] calldata _publicInputs,
         bytes calldata _batchData
     ) external onlyOperator {
+        // Bind state root to proof public inputs BEFORE verification.
+        // Without these checks, a valid proof for root X could set stateRoot to Y,
+        // which is a complete security bypass.
+        require(_publicInputs.length >= 1, "Public inputs required");
+
+        if (_publicInputs.length >= 2) {
+            // ExpandedRollupCircuit: public inputs are [old_state_root, new_state_root, event_commitment]
+            // Bind: old state root must match the contract current root
+            require(uint256(stateRoot) == _publicInputs[0], "Old root mismatch");
+            // Bind: new state root must match the proposed root
+            require(uint256(_newStateRoot) == _publicInputs[1], "New root mismatch");
+        } else {
+            // RollupCircuit: single public input is the new state root
+            require(uint256(_newStateRoot) == _publicInputs[0], "State root mismatch");
+        }
+
         require(verifyProof(_proofA, _proofB, _proofC, _publicInputs), "Invalid proof");
         bytes32 oldRoot = stateRoot;
         stateRoot = _newStateRoot;
