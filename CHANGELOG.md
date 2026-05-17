@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://github.com/Willow7737/omnia-protocol/compare/v0.1.4...v0.1.5) (2026-05-17)
+
+
+### Bug Fixes
+
+* redb v2 API — use range() for iteration, remove drain() call ([3625438](https://github.com/Willow7737/omnia-protocol/commit/36254387f6a1f58a5d4d957868f0d9194eec53ce))
+
 ## [0.1.4](https://github.com/Willow7737/omnia-protocol/compare/v0.1.3...v0.1.4) (2026-05-17)
 
 
