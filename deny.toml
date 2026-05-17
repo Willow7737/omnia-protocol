@@ -8,7 +8,6 @@ ignore = [
 ]
 
 [licenses]
-unlicensed = "deny"
 allow = [
     "CC0-1.0",
     "MIT",
@@ -20,8 +19,8 @@ allow = [
     "0BSD",
     "Unicode-DFS-2016",
 ]
-copyleft = "deny"
-default = "deny"
+# Deny all licenses not in the allow list (replaces removed unlicensed/default keys)
+exceptions = []
 
 [bans]
 multiple-versions = "warn"
