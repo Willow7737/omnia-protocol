@@ -15,8 +15,6 @@ pub enum ErrorCode {
     InvalidRequest,
     /// Resource not found
     NotFound,
-    /// Rate limit exceeded
-    RateLimited,
     /// Service unavailable
     ServiceUnavailable,
 }
@@ -34,8 +32,7 @@ pub struct ErrorResponse {
 
 /// GET /api/v1/errors — Returns supported error codes and documentation.
 ///
-/// Rate-limited to prevent abuse. Does not leak internal details
-/// (no stack traces, file paths, or system info).
+/// Does not leak internal details (no stack traces, file paths, or system info).
 #[utoipa::path(
     get,
     path = "/api/v1/errors",
@@ -59,11 +56,6 @@ pub async fn error_codes(State(_state): State<AppState>) -> (StatusCode, Json<Ve
         ErrorResponse {
             code: ErrorCode::NotFound,
             message: "The requested resource was not found".to_string(),
-            request_id: None,
-        },
-        ErrorResponse {
-            code: ErrorCode::RateLimited,
-            message: "Rate limit exceeded, please retry later".to_string(),
             request_id: None,
         },
         ErrorResponse {
