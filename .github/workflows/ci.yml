@@ -24,7 +24,10 @@ jobs:
         with:
           shared-key: "omnia-ci"
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --exclude omnia-fuzz -- -D warnings
+      - name: Clippy (lib code — deny unwrap_used)
+        run: cargo clippy --lib --workspace --exclude omnia-fuzz -- -D warnings -D clippy::unwrap_used
+      - name: Clippy (all targets — deny unwrap_used in test code too)
+        run: cargo clippy --all-targets --workspace --exclude omnia-fuzz -- -D clippy::unwrap_used
       - run: cargo doc --workspace --no-deps --exclude omnia-fuzz
         env:
           RUSTDOCFLAGS: "-D warnings"
