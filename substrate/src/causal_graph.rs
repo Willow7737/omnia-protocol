@@ -696,7 +696,7 @@ impl CausalGraph {
 
     /// Get all finalized events in topological order
     pub fn finalized_order(&self) -> Result<Vec<&Event>, CausalGraphError> {
-        let finalized: Vec<EventId> = self
+        let finalized: HashSet<EventId> = self
             .events
             .values()
             .filter(|e| e.status == EventStatus::Finalized)
