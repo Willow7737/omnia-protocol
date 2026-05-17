@@ -72,28 +72,28 @@ impl PowersOfTau {
     /// # Returns
     ///
     /// A new [`PowersOfTau`] with identity elements.
-    pub fn new(degree: usize) -> Self {
+    pub fn new(degree: usize) -> Result<Self, SetupError> {
         // Serialize the identity G1 point
         let mut g1_bytes = Vec::new();
         G1Affine::identity()
             .serialize_uncompressed(&mut g1_bytes)
-            .expect("G1 identity serialization should not fail");
+            .map_err(|e| SetupError::SerializationFailed(format!("G1 identity: {e}")))?;
 
         // Serialize the generator G2 point
         let mut g2_bytes = Vec::new();
         G2Affine::generator()
             .serialize_uncompressed(&mut g2_bytes)
-            .expect("G2 generator serialization should not fail");
+            .map_err(|e| SetupError::SerializationFailed(format!("G2 generator: {e}")))?;
 
         let g1_powers = vec![g1_bytes; degree];
         let g2_powers = vec![g2_bytes; 2];
 
-        Self {
+        Ok(Self {
             g1_powers,
             g2_powers,
             contribution_count: 0,
             transcript_hash: [0u8; 32],
-        }
+        })
     }
 
     /// Serialize the accumulator into a flat byte vector.
@@ -183,7 +183,7 @@ impl PowersOfTau {
 /// assert_eq!(srs.contribution_count, 3);
 /// ```
 pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTau, SetupError> {
-    let mut accumulator = PowersOfTau::new(degree);
+    let mut accumulator = PowersOfTau::new(degree)?;
 
     tracing::info!(degree, num_participants, "Starting Powers of Tau ceremony");
 
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_powers_of_tau_creation() {
-        let pot = PowersOfTau::new(8);
+        let pot = PowersOfTau::new(8).unwrap();
         assert_eq!(pot.g1_powers.len(), 8);
         assert_eq!(pot.g2_powers.len(), 2);
         assert_eq!(pot.contribution_count, 0);
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_to_transcript() {
-        let pot = PowersOfTau::new(4);
+        let pot = PowersOfTau::new(4).unwrap();
         let transcript = pot.to_transcript();
         // Each G1 point is ~64 bytes, G2 is ~128 bytes (uncompressed)
         let g1_size = pot.g1_powers[0].len();
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_ceremony_increments_contribution_count() {
-        let mut pot = PowersOfTau::new(4);
+        let mut pot = PowersOfTau::new(4).unwrap();
         assert_eq!(pot.contribution_count, 0);
 
         let transcript = pot.to_transcript();

@@ -295,7 +295,7 @@ fn run_setup_contribute(
         .with_target(true)
         .init();
 
-    let mut srs = PowersOfTau::new(degree);
+    let mut srs = PowersOfTau::new(degree).context("Failed to initialize Powers of Tau")?;
     println!("Powers of Tau ceremony initialized (degree={})", degree);
 
     // Parse optional seed

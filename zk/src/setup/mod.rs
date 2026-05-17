@@ -114,7 +114,8 @@ impl SetupCeremony {
     /// A new [`SetupCeremony`] ready to accept contributions.
     pub fn new(degree: usize, min_participants: usize) -> Self {
         Self {
-            srs: PowersOfTau::new(degree),
+            srs: PowersOfTau::new(degree)
+                .expect("PowersOfTau initialization should not fail with valid degree"),
             min_participants,
             completed: false,
         }

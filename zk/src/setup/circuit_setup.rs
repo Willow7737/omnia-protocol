@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_derive_keys_basic_circuit() {
-        let srs = PowersOfTau::new(8);
+        let srs = PowersOfTau::new(8).unwrap();
         let circuit = RollupCircuit::empty();
 
         let keypair = derive_keys(&srs, &circuit).expect("derive_keys failed");
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_derive_keys_expanded_circuit() {
-        let srs = PowersOfTau::new(8);
+        let srs = PowersOfTau::new(8).unwrap();
 
         let keypair = derive_keys_expanded(&srs, 2, 4).expect("derive_keys_expanded failed");
 
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_key_consistency() {
-        let srs = PowersOfTau::new(8);
+        let srs = PowersOfTau::new(8).unwrap();
         let circuit = RollupCircuit::empty();
 
         let keypair = derive_keys(&srs, &circuit).expect("derive_keys failed");
