@@ -315,18 +315,50 @@ impl ConsensusEngine {
         if let Some(&first_id) = self.first_event_for_sequence.get(&seq_key) {
             // We've seen this (creator, sequence) before — check for equivocation
             if first_id != event_id {
-                if let Some(first_event) = graph.get(&first_id) {
-                    if SlashingEngine::check_equivocation(first_event, event) {
-                        let outcome = self
-                            .slashing
-                            .record_offense(creator, SlashOffense::Equivocation);
-                        tracing::warn!(
-                            node = ?&creator[..4],
-                            sequence = event.sequence,
-                            first_id = ?&first_id[..4],
-                            second_id = ?&event_id[..4],
-                            outcome = ?outcome,
-                            "Equivocation detected — multiple events with same creator+sequence"
+                match graph.get_checked(&first_id) {
+                    Ok(first_event) => {
+                        // Existing equivocation check using full Event data
+                        if SlashingEngine::check_equivocation(first_event, event) {
+                            let outcome = self
+                                .slashing
+                                .record_offense(creator, SlashOffense::Equivocation);
+                            tracing::warn!(
+                                node = ?&creator[..4],
+                                sequence = event.sequence,
+                                first_id = ?&first_id[..4],
+                                second_id = ?&event_id[..4],
+                                outcome = ?outcome,
+                                "Equivocation detected — multiple events with same creator+sequence"
+                            );
+                        }
+                    }
+                    Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
+                        // The first event was pruned, but we can still detect equivocation
+                        // using the pruned metadata (creator, sequence, event_id)
+                        if let Some(metadata) = graph.get_pruned_metadata(&first_id) {
+                            if metadata.creator == creator
+                                && metadata.sequence == event.sequence
+                                && metadata.event_id != event_id
+                            {
+                                let outcome = self
+                                    .slashing
+                                    .record_offense(creator, SlashOffense::Equivocation);
+                                tracing::warn!(
+                                    node = ?&creator[..4],
+                                    sequence = event.sequence,
+                                    first_id = ?&first_id[..4],
+                                    second_id = ?&event_id[..4],
+                                    outcome = ?outcome,
+                                    "Equivocation detected (pruned first event) — multiple events with same creator+sequence"
+                                );
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Event not found at all — should not happen
+                        tracing::error!(
+                            ?first_id,
+                            "first_event_for_sequence references non-existent event"
                         );
                     }
                 }

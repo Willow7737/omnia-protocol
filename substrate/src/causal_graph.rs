@@ -271,6 +271,15 @@ impl CausalGraph {
         }
     }
 
+    /// Get the pruned metadata for an event, if it has been pruned.
+    ///
+    /// Returns `Some(&PrunedEventMetadata)` if the event was previously in the
+    /// graph but has been pruned via [`Self::prune_finalized()`]. Returns
+    /// `None` if the event is still present or never existed.
+    pub fn get_pruned_metadata(&self, event_id: &EventId) -> Option<&PrunedEventMetadata> {
+        self.pruned_events.get(event_id)
+    }
+
     /// Check whether an event has been pruned from the graph.
     ///
     /// Returns `true` if the event was previously in the graph but has
