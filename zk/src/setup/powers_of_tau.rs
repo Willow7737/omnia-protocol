@@ -268,19 +268,23 @@ impl PowersOfTau {
         // Verify G1 powers are valid curve points
         for (i, g1_bytes) in self.g1_powers.iter().enumerate() {
             let mut slice = g1_bytes.as_slice();
-            let _g1 = G1Affine::deserialize_uncompressed(&mut slice)
-                .map_err(|e| SetupError::InvalidContribution(format!(
-                    "G1 power {} is not a valid curve point: {}", i, e
-                )))?;
+            let _g1 = G1Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
+                SetupError::InvalidContribution(format!(
+                    "G1 power {} is not a valid curve point: {}",
+                    i, e
+                ))
+            })?;
         }
 
         // Verify G2 powers are valid curve points
         for (i, g2_bytes) in self.g2_powers.iter().enumerate() {
             let mut slice = g2_bytes.as_slice();
-            let _g2 = G2Affine::deserialize_uncompressed(&mut slice)
-                .map_err(|e| SetupError::InvalidContribution(format!(
-                    "G2 power {} is not a valid curve point: {}", i, e
-                )))?;
+            let _g2 = G2Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
+                SetupError::InvalidContribution(format!(
+                    "G2 power {} is not a valid curve point: {}",
+                    i, e
+                ))
+            })?;
         }
 
         // After contributions, points should be non-identity
@@ -341,7 +345,11 @@ pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTa
     // Initialize with generator points (representing τ = 1)
     let mut accumulator = PowersOfTau::new(degree)?;
 
-    tracing::info!(degree, num_participants, "Starting Powers of Tau ceremony (real EC operations)");
+    tracing::info!(
+        degree,
+        num_participants,
+        "Starting Powers of Tau ceremony (real EC operations)"
+    );
 
     for i in 0..num_participants {
         let mut seed = [0u8; 32];
@@ -377,8 +385,8 @@ pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTa
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::*;
     use super::super::contribution::contribute;
+    use super::*;
 
     #[test]
     fn test_powers_of_tau_creation() {
@@ -475,7 +483,8 @@ mod tests {
     #[test]
     fn test_verify_srs() {
         let pot = run_ceremony(4, 2).expect("ceremony failed");
-        pot.verify_srs().expect("SRS verification should pass after ceremony");
+        pot.verify_srs()
+            .expect("SRS verification should pass after ceremony");
     }
 
     #[test]

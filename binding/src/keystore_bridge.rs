@@ -6,12 +6,12 @@
 
 use std::path::{Path, PathBuf};
 
-use omnia_substrate::keystore::{EncryptedKeyStore, KeyStoreError};
 use omnia_substrate::crypto::{NodeKeypair, Signer};
+use omnia_substrate::keystore::{EncryptedKeyStore, KeyStoreError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::key_rotation::{PqcKeyRotationManager, PqcKeyRotationRequest, KeyRotationError};
+use crate::key_rotation::{KeyRotationError, PqcKeyRotationManager, PqcKeyRotationRequest};
 use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
 
 /// Errors that can occur during keystore bridge operations.
@@ -295,7 +295,10 @@ mod tests {
     fn test_load_creates_new_bridge() {
         let dir = TempDir::new().expect("temp dir");
         let bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
-        assert!(matches!(bridge.current_phase(), CommitmentPhase::ClassicalOnly));
+        assert!(matches!(
+            bridge.current_phase(),
+            CommitmentPhase::ClassicalOnly
+        ));
     }
 
     #[test]
@@ -306,7 +309,9 @@ mod tests {
         {
             let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
             let sig = vec![1u8; 64]; // Mock signature
-            bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
+            bridge
+                .rotate(&sig, CommitmentPhase::Hybrid, 100)
+                .expect("rotate");
         }
 
         // Reload
@@ -321,7 +326,9 @@ mod tests {
 
         // First rotate to Hybrid
         let sig = vec![1u8; 64];
-        bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate to hybrid");
+        bridge
+            .rotate(&sig, CommitmentPhase::Hybrid, 100)
+            .expect("rotate to hybrid");
 
         // Try to downgrade to ClassicalOnly
         let result = bridge.rotate(&sig, CommitmentPhase::ClassicalOnly, 200);
@@ -353,6 +360,9 @@ mod tests {
         let json = serde_json::to_string(&state).expect("serialize");
         let deserialized: RotationState = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(state.version, deserialized.version);
-        assert!(matches!(deserialized.current_phase, CommitmentPhase::Hybrid));
+        assert!(matches!(
+            deserialized.current_phase,
+            CommitmentPhase::Hybrid
+        ));
     }
 }

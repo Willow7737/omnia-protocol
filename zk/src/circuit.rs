@@ -665,11 +665,8 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
                     .ok_or(SynthesisError::AssignmentMissing)
             })?;
 
-            let expected_payload_hash = crate::poseidon::poseidon_hash(
-                cs.clone(),
-                &event_hash,
-                &operation_type,
-            )?;
+            let expected_payload_hash =
+                crate::poseidon::poseidon_hash(cs.clone(), &event_hash, &operation_type)?;
             payload_hash.enforce_equal(&expected_payload_hash)?;
 
             // State transition constraint:
@@ -790,9 +787,18 @@ mod tests {
         assert_eq!(OperationType::from_u8(2), Some(OperationType::Unstake));
         assert_eq!(OperationType::from_u8(3), Some(OperationType::Delegate));
         assert_eq!(OperationType::from_u8(4), Some(OperationType::Slash));
-        assert_eq!(OperationType::from_u8(5), Some(OperationType::GovernanceVote));
-        assert_eq!(OperationType::from_u8(6), Some(OperationType::CrossShardMessage));
-        assert_eq!(OperationType::from_u8(7), Some(OperationType::IdentityUpdate));
+        assert_eq!(
+            OperationType::from_u8(5),
+            Some(OperationType::GovernanceVote)
+        );
+        assert_eq!(
+            OperationType::from_u8(6),
+            Some(OperationType::CrossShardMessage)
+        );
+        assert_eq!(
+            OperationType::from_u8(7),
+            Some(OperationType::IdentityUpdate)
+        );
     }
 
     #[test]

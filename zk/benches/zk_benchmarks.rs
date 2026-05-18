@@ -7,16 +7,16 @@
 //! - Merkle tree construction
 //! - Trusted setup / key generation
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use omnia_zk::circuit::{ExpandedRollupCircuit, RollupCircuit};
-use omnia_zk::prover::{
-    generate_trusted_setup, generate_trusted_setup_expanded,
-    create_proof, create_expanded_proof, verify_proof,
-};
 use omnia_zk::merkle::build_merkle_tree;
 use omnia_zk::poseidon::poseidon_hash_offchain;
+use omnia_zk::prover::{
+    create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded,
+    verify_proof,
+};
 
 fn bench_poseidon_hash(c: &mut Criterion) {
     let mut group = c.benchmark_group("poseidon_hash");
@@ -103,15 +103,11 @@ fn bench_merkle_tree(c: &mut Criterion) {
             })
             .collect();
 
-        group.bench_with_input(
-            BenchmarkId::new("build_tree", size),
-            &size,
-            |b, _| {
-                b.iter(|| {
-                    let _ = build_merkle_tree(&items);
-                })
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("build_tree", size), &size, |b, _| {
+            b.iter(|| {
+                let _ = build_merkle_tree(&items);
+            })
+        });
     }
 
     group.finish();

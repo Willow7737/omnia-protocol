@@ -422,8 +422,7 @@ mod tests {
         use ark_serialize::CanonicalDeserialize;
 
         // 1. Run a 3-participant ceremony
-        let srs = super::super::powers_of_tau::run_ceremony(8, 3)
-            .expect("ceremony failed");
+        let srs = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony failed");
         assert_eq!(srs.contribution_count, 3);
 
         // 2. Verify each contribution modified G1/G2 points via actual EC ops
@@ -445,8 +444,7 @@ mod tests {
 
         // 3. Derive circuit keys from the SRS
         let circuit = RollupCircuit::empty();
-        let keypair =
-            derive_keys_from_srs(&srs, &circuit).expect("derive_keys_from_srs failed");
+        let keypair = derive_keys_from_srs(&srs, &circuit).expect("derive_keys_from_srs failed");
 
         // 4. Generate a proof using derived keys
         let pk = ProvingKey::deserialize_uncompressed(keypair.proving_key.as_slice())

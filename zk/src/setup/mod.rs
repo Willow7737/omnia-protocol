@@ -69,8 +69,7 @@ use thiserror::Error;
 
 // Re-export key types for convenience
 pub use circuit_setup::{
-    derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency,
-    CircuitKeyPair,
+    derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency, CircuitKeyPair,
 };
 pub use contribution::{
     contribute, initial_transcript_with_generators, verify_ceremony_transcript,

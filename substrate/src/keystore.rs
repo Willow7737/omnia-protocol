@@ -488,13 +488,9 @@ impl EncryptedKeyStore {
         let purpose_index = purpose as u32;
         let derivation_info = format!("OMNIA-SLIP0010-{}-{}-V1", purpose_index, index);
 
-        let hkdf = Hkdf::<Sha256>::new(
-            Some(&purpose_index.to_be_bytes()),
-            &secret_bytes,
-        );
+        let hkdf = Hkdf::<Sha256>::new(Some(&purpose_index.to_be_bytes()), &secret_bytes);
         let mut derived_key = [0u8; 32];
-        hkdf
-            .expand(derivation_info.as_bytes(), &mut derived_key)
+        hkdf.expand(derivation_info.as_bytes(), &mut derived_key)
             .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
 
         Ok(ed25519_dalek::SigningKey::from_bytes(&derived_key))
@@ -505,8 +501,7 @@ impl EncryptedKeyStore {
         let salt = blake3_hash_domain(b"OMNIA-KEYSTORE-FROM-MNEMONIC-V1", seed);
         let hkdf = Hkdf::<Sha256>::new(Some(&salt), seed);
         let mut key = [0u8; 32];
-        hkdf
-            .expand(b"omnia-keystore-mnemonic-v1", &mut key)
+        hkdf.expand(b"omnia-keystore-mnemonic-v1", &mut key)
             .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
         Ok(key)
     }
@@ -1040,8 +1035,8 @@ mod tests {
         let dir = TempDir::new().expect("temp dir");
 
         // Generate keystore with mnemonic
-        let (keystore, mnemonic) =
-            EncryptedKeyStore::generate_with_mnemonic(None, dir.path()).expect("generate with mnemonic");
+        let (keystore, mnemonic) = EncryptedKeyStore::generate_with_mnemonic(None, dir.path())
+            .expect("generate with mnemonic");
 
         // Get the mnemonic phrase
         let phrase = mnemonic.words().collect::<Vec<&str>>().join(" ");
@@ -1053,19 +1048,16 @@ mod tests {
         // Recreate from the same mnemonic
         let dir2 = TempDir::new().expect("temp dir 2");
         let restored_mnemonic = bip39::Mnemonic::parse_normalized(&phrase).expect("parse mnemonic");
-        let _restored =
-            EncryptedKeyStore::from_mnemonic(&restored_mnemonic, None, dir2.path())
-                .expect("restore from mnemonic");
+        let _restored = EncryptedKeyStore::from_mnemonic(&restored_mnemonic, None, dir2.path())
+            .expect("restore from mnemonic");
     }
 
     #[test]
     fn test_mnemonic_with_passphrase() {
         let dir = TempDir::new().expect("temp dir");
-        let (keystore, _mnemonic) = EncryptedKeyStore::generate_with_mnemonic(
-            Some("my-bip39-passphrase"),
-            dir.path(),
-        )
-        .expect("generate with mnemonic and passphrase");
+        let (keystore, _mnemonic) =
+            EncryptedKeyStore::generate_with_mnemonic(Some("my-bip39-passphrase"), dir.path())
+                .expect("generate with mnemonic and passphrase");
 
         assert!(keystore.keypair.is_some());
     }
@@ -1073,8 +1065,7 @@ mod tests {
     #[test]
     fn test_derive_child_key() {
         let dir = TempDir::new().expect("temp dir");
-        let keystore =
-            EncryptedKeyStore::create(dir.path(), "test-pass").expect("create keystore");
+        let keystore = EncryptedKeyStore::create(dir.path(), "test-pass").expect("create keystore");
 
         let identity_key = keystore
             .derive_child_key(KeyPurpose::Identity, 0)

@@ -1397,27 +1397,54 @@ impl SlashingEngine {
         match offense {
             SlashOffense::Equivocation => {
                 if offense_count == 0 {
-                    SlashPenalty::Jailed { burn_percentage: 5.0, jail_rounds: 1000, auto_release: true }
+                    SlashPenalty::Jailed {
+                        burn_percentage: 5.0,
+                        jail_rounds: 1000,
+                        auto_release: true,
+                    }
                 } else if offense_count < 3 {
-                    SlashPenalty::Jailed { burn_percentage: 25.0, jail_rounds: 5000, auto_release: false }
+                    SlashPenalty::Jailed {
+                        burn_percentage: 25.0,
+                        jail_rounds: 5000,
+                        auto_release: false,
+                    }
                 } else {
-                    SlashPenalty::Ejected { burn_percentage: 100.0, reason: "repeat_equivocation".into() }
+                    SlashPenalty::Ejected {
+                        burn_percentage: 100.0,
+                        reason: "repeat_equivocation".into(),
+                    }
                 }
             }
             SlashOffense::LivenessViolation => {
                 if offense_count < 2 {
-                    SlashPenalty::Warning { burn_percentage: 1.0 }
+                    SlashPenalty::Warning {
+                        burn_percentage: 1.0,
+                    }
                 } else if offense_count < 5 {
-                    SlashPenalty::Jailed { burn_percentage: 5.0, jail_rounds: 500, auto_release: true }
+                    SlashPenalty::Jailed {
+                        burn_percentage: 5.0,
+                        jail_rounds: 500,
+                        auto_release: true,
+                    }
                 } else {
-                    SlashPenalty::Ejected { burn_percentage: 100.0, reason: "chronic_liveness".into() }
+                    SlashPenalty::Ejected {
+                        burn_percentage: 100.0,
+                        reason: "chronic_liveness".into(),
+                    }
                 }
             }
             SlashOffense::InvalidAttestation => {
                 if offense_count == 0 {
-                    SlashPenalty::Jailed { burn_percentage: 10.0, jail_rounds: 2000, auto_release: true }
+                    SlashPenalty::Jailed {
+                        burn_percentage: 10.0,
+                        jail_rounds: 2000,
+                        auto_release: true,
+                    }
                 } else {
-                    SlashPenalty::Ejected { burn_percentage: 100.0, reason: "repeat_invalid_attestation".into() }
+                    SlashPenalty::Ejected {
+                        burn_percentage: 100.0,
+                        reason: "repeat_invalid_attestation".into(),
+                    }
                 }
             }
         }
@@ -1440,7 +1467,11 @@ impl SlashingEngine {
     }
 
     /// Try to release a validator from jail if their term is served.
-    pub fn try_release_from_jail(&mut self, validator_id: NodeId, current_round: u64) -> Result<bool, SlashingStoreError> {
+    pub fn try_release_from_jail(
+        &mut self,
+        validator_id: NodeId,
+        current_round: u64,
+    ) -> Result<bool, SlashingStoreError> {
         let mut state = self.state.write().unwrap_or_else(|e| {
             tracing::error!(error = %e, "try_release_from_jail — lock poisoned");
             std::process::abort()
@@ -1475,7 +1506,11 @@ impl SlashingEngine {
             tracing::error!(error = %e, "get_offense_history — lock poisoned");
             std::process::abort()
         });
-        state.typed_offense_history.get(&validator_id).cloned().unwrap_or_default()
+        state
+            .typed_offense_history
+            .get(&validator_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Compute partial burn amount from stake and burn percentage.
@@ -1772,12 +1807,24 @@ mod tests {
 
         // First equivocation: Jailed
         let penalty = engine.compute_penalty(node, &SlashOffense::Equivocation);
-        assert!(matches!(penalty, SlashPenalty::Jailed { burn_percentage: 5.0, .. }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                ..
+            }
+        ));
 
         // Second equivocation: Jailed with higher penalty
         engine.record_offense(node, SlashOffense::Equivocation);
         let penalty = engine.compute_penalty(node, &SlashOffense::Equivocation);
-        assert!(matches!(penalty, SlashPenalty::Jailed { burn_percentage: 25.0, .. }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 25.0,
+                ..
+            }
+        ));
 
         // Third equivocation (with history): Ejected
         engine.record_offense(node, SlashOffense::Equivocation);
@@ -1798,14 +1845,17 @@ mod tests {
                 tracing::error!(error = %e, "lock poisoned");
                 std::process::abort()
             });
-            state.jail_registry.insert(node, JailState {
-                validator_id: node,
-                jailed_at_round: 100,
-                release_round: 1100,
-                offense_history: vec![SlashOffense::Equivocation],
-                stake_locked: 10_000,
-                auto_release: true,
-            });
+            state.jail_registry.insert(
+                node,
+                JailState {
+                    validator_id: node,
+                    jailed_at_round: 100,
+                    release_round: 1100,
+                    offense_history: vec![SlashOffense::Equivocation],
+                    stake_locked: 10_000,
+                    auto_release: true,
+                },
+            );
         }
 
         // Not released yet
@@ -1857,22 +1907,28 @@ mod tests {
                 tracing::error!(error = %e, "lock poisoned");
                 std::process::abort()
             });
-            state.jail_registry.insert(node1, JailState {
-                validator_id: node1,
-                jailed_at_round: 100,
-                release_round: 1100,
-                offense_history: vec![SlashOffense::Equivocation],
-                stake_locked: 10_000,
-                auto_release: true,
-            });
-            state.jail_registry.insert(node2, JailState {
-                validator_id: node2,
-                jailed_at_round: 200,
-                release_round: 1200,
-                offense_history: vec![SlashOffense::LivenessViolation],
-                stake_locked: 5_000,
-                auto_release: true,
-            });
+            state.jail_registry.insert(
+                node1,
+                JailState {
+                    validator_id: node1,
+                    jailed_at_round: 100,
+                    release_round: 1100,
+                    offense_history: vec![SlashOffense::Equivocation],
+                    stake_locked: 10_000,
+                    auto_release: true,
+                },
+            );
+            state.jail_registry.insert(
+                node2,
+                JailState {
+                    validator_id: node2,
+                    jailed_at_round: 200,
+                    release_round: 1200,
+                    offense_history: vec![SlashOffense::LivenessViolation],
+                    stake_locked: 5_000,
+                    auto_release: true,
+                },
+            );
         }
 
         let jailed = engine.jailed_validators();
@@ -1886,6 +1942,11 @@ mod tests {
 
         // First liveness: Warning
         let penalty = engine.compute_penalty(node, &SlashOffense::LivenessViolation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 1.0 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage: 1.0
+            }
+        ));
     }
 }

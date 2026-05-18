@@ -86,9 +86,8 @@ pub use slashing_undo::{
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 pub use threshold::{
-    DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
-    KeyShare, PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager,
-    ThresholdSignature,
+    DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
+    PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};

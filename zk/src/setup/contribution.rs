@@ -320,9 +320,7 @@ pub fn verify_contribution(
                 // Both first two G1 points are identity — this is valid for a
                 // ceremony that started with identity points, but indicates the
                 // contribution didn't change the accumulator meaningfully.
-                tracing::warn!(
-                    "Contribution consistency check: first two G1 points are identity"
-                );
+                tracing::warn!("Contribution consistency check: first two G1 points are identity");
             }
         }
         // If deserialization fails, the points are not valid G1 points.

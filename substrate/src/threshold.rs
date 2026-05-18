@@ -624,7 +624,9 @@ impl DkgSession {
             .commitments
             .values()
             .filter_map(|commitments| {
-                commitments.first().and_then(|c| BlsPublicKey::from_bytes(c).ok())
+                commitments
+                    .first()
+                    .and_then(|c| BlsPublicKey::from_bytes(c).ok())
             })
             .collect();
 

@@ -34,28 +34,31 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-fuzz"
+      - name: Build fuzz targets
+        run: cargo fuzz build --fuzz-dir fuzz
       - name: Run fuzz targets
+        shell: bash
         run: |
+          set +e  # Don't exit on non-zero — we handle exit codes manually
           if ! command -v cargo-fuzz &>/dev/null; then
             echo "cargo-fuzz not installed — skipping fuzz run"
             exit 0
           fi
+          FAILED=0
           for target in fuzz_event_deserialization fuzz_gossip_message fuzz_zk_proof_deserialization fuzz_consensus_state_transition fuzz_vector_clock_merge fuzz_rate_limiter fuzz_snapshot_deserialization; do
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
-              # Use || true to prevent set -e from killing the script on
-              # timeout exit code 124; capture the real exit code separately.
-              timeout 300 cargo fuzz run $target -- -max_total_time=300 && ec=0 || ec=$?
-              # Exit code 124 means timeout killed the process after 300s,
-              # which is normal for fuzz testing (the target ran until the
-              # time budget was exhausted).  Exit code 0 means the fuzz
-              # target exited on its own (e.g. -runs limit reached).
-              # Any other non-zero exit code indicates a crash or error.
+              # Run fuzz target with a time budget.  Exit code 124 from timeout
+              # is normal (time exhausted).  Exit code 0 means the target
+              # exited on its own (e.g. -runs limit reached).  Any other
+              # non-zero exit code indicates a crash or error.
+              timeout 180 cargo fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=180 -runs=50000
+              ec=$?
               if [ $ec -eq 124 ]; then
                 echo "$target: time budget exhausted (normal)"
               elif [ $ec -ne 0 ]; then
                 echo "::error::$target exited with code $ec (possible crash)"
-                exit $ec
+                FAILED=1
               else
                 echo "$target: completed successfully"
               fi
@@ -63,7 +66,9 @@ jobs:
               echo "Fuzz target $target not found — skipping"
             fi
           done
+          exit $FAILED
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: fuzz-corpus-${{ github.run_id }}
           path: fuzz/corpus/

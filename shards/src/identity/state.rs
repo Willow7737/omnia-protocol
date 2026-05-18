@@ -388,10 +388,7 @@ impl IdentityState {
             key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
             key_input.push(share.index);
 
-            let key = blake3::derive_key(
-                "OMNIA-SHARE-ENCRYPTION-KEY",
-                &key_input,
-            );
+            let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
 
             // Derive a nonce from a separate BLAKE3 context for domain separation
             let nonce_input: Vec<u8> = {
@@ -436,10 +433,7 @@ impl IdentityState {
             key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
             key_input.push(enc.custodian);
 
-            let key = blake3::derive_key(
-                "OMNIA-SHARE-ENCRYPTION-KEY",
-                &key_input,
-            );
+            let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
 
             // XOR-decrypt (XOR is its own inverse)
             let plaintext = xor_with_key(&enc.ciphertext, &key);
@@ -551,8 +545,11 @@ mod tests {
         assert_eq!(all_shares.len(), 5);
 
         // Pick 3 out of 5 shares (e.g., custodians 1, 3, 5)
-        let recovering_shares: Vec<RecoveryShare> =
-            vec![all_shares[0].clone(), all_shares[2].clone(), all_shares[4].clone()];
+        let recovering_shares: Vec<RecoveryShare> = vec![
+            all_shares[0].clone(),
+            all_shares[2].clone(),
+            all_shares[4].clone(),
+        ];
 
         // Step 4: Reconstruct the secret
         let reconstructed = ShamirRecovery::reconstruct(&recovering_shares).unwrap();
@@ -628,7 +625,10 @@ mod tests {
         // Different secrets should produce different keys
         let key_a = derive_identity_key(b"secret-a");
         let key_b = derive_identity_key(b"secret-b");
-        assert_ne!(key_a, key_b, "Different secrets must produce different keys");
+        assert_ne!(
+            key_a, key_b,
+            "Different secrets must produce different keys"
+        );
 
         // Same secret should produce the same key
         let key_1 = derive_identity_key(b"same-secret");

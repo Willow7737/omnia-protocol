@@ -295,12 +295,14 @@ pub fn verify_proofs_batch(
     for (i, (proof, inputs)) in proof_pairs.iter().enumerate() {
         transcript.extend_from_slice(&i.to_le_bytes());
         let mut proof_bytes = Vec::new();
-        proof.serialize_compressed(&mut proof_bytes)
+        proof
+            .serialize_compressed(&mut proof_bytes)
             .map_err(|e| ProverError::SerializationError(e.to_string()))?;
         transcript.extend_from_slice(&proof_bytes);
         for input in inputs {
             let mut input_bytes = Vec::new();
-            input.serialize_compressed(&mut input_bytes)
+            input
+                .serialize_compressed(&mut input_bytes)
                 .map_err(|e| ProverError::SerializationError(e.to_string()))?;
             transcript.extend_from_slice(&input_bytes);
         }
@@ -341,9 +343,9 @@ pub fn verify_proofs_batch(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::circuit::RollupCircuit;
     use ark_bn254::Fr;
     use ark_ff::PrimeField;
-    use crate::circuit::RollupCircuit;
 
     #[test]
     fn test_batch_verify_valid_proofs() {
