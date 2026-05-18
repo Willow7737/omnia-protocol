@@ -26,8 +26,8 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api;
+use crate::api::auth::{self as api_auth, default_cors_layer, RateLimiter};
 use crate::api::ApiDoc;
-use crate::api::auth::{self as api_auth, RateLimiter, default_cors_layer};
 use crate::state::AppState;
 
 /// Build the complete HTTP router with all routes, CORS, and rate limiting.

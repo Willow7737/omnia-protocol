@@ -351,8 +351,7 @@ impl GovernanceState {
         // We compute (total_votes * 100) >= (total_possible_weight * quorum_percentage)
         // to avoid floating-point arithmetic.
         if total_possible_weight > 0 {
-            let quorum_threshold = total_possible_weight
-                .saturating_mul(self.quorum_percentage);
+            let quorum_threshold = total_possible_weight.saturating_mul(self.quorum_percentage);
             let votes_percentage_scale = total_votes.saturating_mul(100);
             if votes_percentage_scale < quorum_threshold {
                 return Err(EconomicsError::QuorumNotMet {
@@ -389,7 +388,10 @@ impl GovernanceState {
     /// This is used for quorum computation: a proposal passes quorum when
     /// the total weight of votes cast ≥ `quorum_percentage`% of this total.
     pub fn total_voting_weight(&self) -> u64 {
-        self.voting_weights.values().copied().fold(0u64, u64::saturating_add)
+        self.voting_weights
+            .values()
+            .copied()
+            .fold(0u64, u64::saturating_add)
     }
 
     /// Remove expired proposals from the active set.
@@ -559,23 +561,13 @@ mod tests {
 
     #[test]
     fn test_proposal_execution_time_initially_none() {
-        let proposal = Proposal::new(
-            "prop1".to_string(),
-            "test".to_string(),
-            0,
-            10,
-        );
+        let proposal = Proposal::new("prop1".to_string(), "test".to_string(), 0, 10);
         assert!(proposal.execution_time.is_none());
     }
 
     #[test]
     fn test_proposal_is_ready_for_execution() {
-        let mut proposal = Proposal::new(
-            "prop1".to_string(),
-            "test".to_string(),
-            0,
-            10,
-        );
+        let mut proposal = Proposal::new("prop1".to_string(), "test".to_string(), 0, 10);
 
         // Not ready — no execution_time set
         assert!(!proposal.is_ready_for_execution(1_000_000));
@@ -615,7 +607,10 @@ mod tests {
         assert!(result.is_ok());
 
         let proposal = gov.get_proposal("prop1").expect("proposal exists");
-        assert_eq!(proposal.execution_time, Some(1_000_000 + DEFAULT_TIME_LOCK_MS));
+        assert_eq!(
+            proposal.execution_time,
+            Some(1_000_000 + DEFAULT_TIME_LOCK_MS)
+        );
     }
 
     #[test]

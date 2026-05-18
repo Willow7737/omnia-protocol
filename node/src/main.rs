@@ -315,8 +315,12 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
         file_bytes.extend_from_slice(&ciphertext);
 
         let privkey_path = dir.join("validator_key.enc");
-        std::fs::write(&privkey_path, &file_bytes)
-            .with_context(|| format!("Failed to write encrypted private key to {:?}", privkey_path))?;
+        std::fs::write(&privkey_path, &file_bytes).with_context(|| {
+            format!(
+                "Failed to write encrypted private key to {:?}",
+                privkey_path
+            )
+        })?;
 
         // Set file permissions to 0600 (owner read/write only) on Unix
         #[cfg(unix)]
@@ -391,10 +395,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
 /// - The magic header does not match `OMNIAKEY01`
 /// - The file is too short to contain the header, nonce, and tag
 /// - Decryption fails (wrong passphrase, corrupted data, or tampering)
-pub fn load_encrypted_key(
-    path: &std::path::Path,
-    passphrase: &str,
-) -> Result<[u8; 64]> {
+pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u8; 64]> {
     use aes_gcm::aead::Aead;
     use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 

@@ -260,7 +260,16 @@ jobs:
       - name: Override toolchain for fuzz
         run: rustup override set nightly
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked || cargo install cargo-fuzz
+        run: |
+          # Try without --locked first so cargo resolves compatible transitive
+          # deps for the current nightly.  Fall back to a known-good nightly
+          # if the default latest nightly breaks (e.g. rustix incompatibility).
+          if ! cargo install cargo-fuzz 2>/dev/null; then
+            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-03-15"
+            rustup toolchain install nightly-2026-03-15 --component rust-src
+            rustup override set nightly-2026-03-15
+            cargo install cargo-fuzz --locked
+          fi
       - name: Build fuzz targets
         run: cargo fuzz build --fuzz-dir fuzz
       - name: Smoke test each target (10s each)

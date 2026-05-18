@@ -19,11 +19,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::extract::Request;
-use axum::Extension;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -496,10 +496,8 @@ mod tests {
 
     #[test]
     fn test_authorized_callers_from_caller_ids() {
-        let callers = AuthorizedCallers::from_caller_ids(vec![
-            "node-1".to_string(),
-            "node-2".to_string(),
-        ]);
+        let callers =
+            AuthorizedCallers::from_caller_ids(vec!["node-1".to_string(), "node-2".to_string()]);
         assert!(callers.is_authorized("node-1"));
         assert!(callers.is_authorized("node-2"));
         assert!(!callers.is_authorized("node-3"));
@@ -507,7 +505,8 @@ mod tests {
 
     #[test]
     fn test_authorized_callers_from_iterator_trait() {
-        let callers: AuthorizedCallers = vec!["a".to_string(), "b".to_string()].into_iter().collect();
+        let callers: AuthorizedCallers =
+            vec!["a".to_string(), "b".to_string()].into_iter().collect();
         assert!(callers.is_authorized("a"));
         assert!(callers.is_authorized("b"));
         assert!(!callers.is_authorized("c"));

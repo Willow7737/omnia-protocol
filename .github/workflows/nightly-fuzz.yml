@@ -19,7 +19,18 @@ jobs:
       - name: Override toolchain for fuzz
         run: rustup override set nightly
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        run: |
+          # Try installing the latest cargo-fuzz first (without --locked
+          # so cargo resolves compatible transitive deps for the current
+          # nightly toolchain).  Fall back to pinning a known-good nightly
+          # if the default latest nightly breaks due to rustc attribute
+          # reservation (e.g. rustix incompatibility).
+          if ! cargo install cargo-fuzz 2>/dev/null; then
+            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-03-15"
+            rustup toolchain install nightly-2026-03-15 --component llvm-tools-preview
+            rustup override set nightly-2026-03-15
+            cargo install cargo-fuzz --locked
+          fi
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-fuzz"

@@ -35,7 +35,9 @@ pub mod useful_work;
 pub use economics_shard::{EconomicsOp, EconomicsState};
 pub use error::EconomicsError;
 pub use fixed_point::{BasisPpmExt, DecayRate, BASIS_PPM};
-pub use governance::{GovernanceState, Proposal, VoteChoice, DEFAULT_QUORUM_PERCENTAGE, DEFAULT_TIME_LOCK_MS};
+pub use governance::{
+    GovernanceState, Proposal, VoteChoice, DEFAULT_QUORUM_PERCENTAGE, DEFAULT_TIME_LOCK_MS,
+};
 pub use quota::{QuotaSystem, DEFAULT_EPOCH_DURATION_MS, DEFAULT_UBC_QUOTA};
 pub use time_lock::{LockedStake, TimeLockConfig, TimeLockVoting};
 pub use ubc::UbcToken;

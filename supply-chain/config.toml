@@ -1027,6 +1027,11 @@ version = "0.3.98"
 criteria = "safe-to-deploy"
 
 notes = "Build/FFI dependency. Maintained by wasm-rs. JavaScript FFI bindings for wasm. No unsafe."
+[[exemptions.jsonwebtoken]]
+version = "9.3.1"
+criteria = "safe-to-deploy"
+
+notes = "HTTP/API framework. Maintained by Keats. Production-proven JWT library for Rust. Widely used in production."
 [[exemptions.lazy_static]]
 version = "1.5.0"
 criteria = "safe-to-deploy"
@@ -1817,6 +1822,11 @@ version = "0.3.9"
 criteria = "safe-to-deploy"
 
 notes = "Utility crate. SIMD-accelerated Adler-32 checksum. Minimal unsafe for SIMD."
+[[exemptions.simple_asn1]]
+version = "0.6.4"
+criteria = "safe-to-deploy"
+
+notes = "Cryptographic dependency. Maintained by acw. ASN.1 DER encoding/decoding for jsonwebtoken. No unsafe."
 [[exemptions.slab]]
 version = "0.4.12"
 criteria = "safe-to-deploy"
@@ -2024,9 +2034,9 @@ criteria = "safe-to-deploy"
 notes = "HTTP/API framework. Maintained by tower-rs. Production-proven service abstraction."
 [[exemptions.tower-http]]
 version = "0.6.10"
-criteria = "safe-to-run"
+criteria = "safe-to-deploy"
 
-notes = "HTTP/API framework. Maintained by tower-rs. Production-proven HTTP middleware."
+notes = "HTTP/API framework. Maintained by tower-rs. Production-proven HTTP middleware. Used for CORS in REST API."
 [[exemptions.tower-layer]]
 version = "0.3.3"
 criteria = "safe-to-deploy"
