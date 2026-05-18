@@ -44,6 +44,20 @@ jobs:
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
               timeout 300 cargo fuzz run $target -- -max_total_time=300
+              ec=$?
+              # Exit code 124 means timeout killed the process after 300s,
+              # which is normal for fuzz testing (the target ran until the
+              # time budget was exhausted).  Exit code 0 means the fuzz
+              # target exited on its own (e.g. -runs limit reached).
+              # Any other non-zero exit code indicates a crash or error.
+              if [ $ec -eq 124 ]; then
+                echo "$target: time budget exhausted (normal)"
+              elif [ $ec -ne 0 ]; then
+                echo "::error::$target exited with code $ec (possible crash)"
+                exit $ec
+              else
+                echo "$target: completed successfully"
+              fi
             else
               echo "Fuzz target $target not found — skipping"
             fi
