@@ -34,6 +34,30 @@ use crate::slashing::SlashingEngine;
 use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Errors that can occur during governance-based slashing undo operations.
+#[derive(Error, Debug)]
+pub enum SlashingUndoError {
+    /// The rate limit for undos on this validator has been exceeded.
+    #[error("rate limit: last undo for validator {:?} was at round {last_round}, current round {current_round}, minimum interval {min_interval}", .validator_prefix, last_round = last_round, current_round = current_round, min_interval = min_interval)]
+    RateLimitExceeded {
+        /// First 4 bytes of the validator ID (for display).
+        validator_prefix: [u8; 4],
+        /// Round of the last undo for this validator.
+        last_round: u64,
+        /// Current consensus round.
+        current_round: u64,
+        /// Minimum interval between undos.
+        min_interval: u64,
+    },
+    /// The validator has no offense history to undo.
+    #[error("validator {:?} has no offense history to undo", .0)]
+    NoOffenseHistory([u8; 4]),
+    /// The underlying slashing engine failed to undo the slash.
+    #[error("slashing undo failed: {0}")]
+    UndoFailed(#[from] crate::slashing::SlashingStoreError),
+}
 
 /// A request to reverse a slashing decision for a specific validator.
 ///
@@ -176,24 +200,25 @@ impl SlashingUndoManager {
         slashing: &mut SlashingEngine,
         request: SlashingUndoRequest,
         current_round: u64,
-    ) -> Result<SlashingUndoRecord, String> {
+    ) -> Result<SlashingUndoRecord, SlashingUndoError> {
         // Rate limit check
         if let Some(&last_round) = self.last_undo_round.get(&request.validator_id) {
             if current_round.saturating_sub(last_round) < self.min_undo_interval {
-                return Err(format!(
-                    "Rate limit: last undo for validator {:?} was at round {}, current round {}, minimum interval {}",
-                    &request.validator_id[..4],
+                let mut prefix = [0u8; 4];
+                prefix.copy_from_slice(&request.validator_id[..4]);
+                return Err(SlashingUndoError::RateLimitExceeded {
+                    validator_prefix: prefix,
                     last_round,
                     current_round,
-                    self.min_undo_interval
-                ));
+                    min_interval: self.min_undo_interval,
+                });
             }
         }
 
         let points_before = slashing.slash_points_of(&request.validator_id);
 
         // Apply the undo via the slashing engine
-        slashing.undo_slash(&request.validator_id)?;
+        slashing.undo_slash(&request.validator_id).map_err(SlashingUndoError::UndoFailed)?;
 
         let points_after = slashing.slash_points_of(&request.validator_id);
 
@@ -452,5 +477,32 @@ mod tests {
         assert_eq!(record.validator_id[0], 42);
         assert_eq!(record.slashed_round, 50);
         assert_eq!(record.undo_round, 100);
+    }
+
+    #[test]
+    fn test_slashing_undo_error_variants_display() {
+        let e = SlashingUndoError::RateLimitExceeded {
+            validator_prefix: [1, 2, 3, 4],
+            last_round: 50,
+            current_round: 75,
+            min_interval: 100,
+        };
+        assert!(e.to_string().contains("rate limit"));
+        assert!(e.to_string().contains("50"));
+        assert!(e.to_string().contains("75"));
+
+        let e = SlashingUndoError::NoOffenseHistory([1, 2, 3, 4]);
+        assert!(e.to_string().contains("no offense history"));
+
+        let store_err = crate::slashing::SlashingStoreError::Persistence("db error".to_string());
+        let e = SlashingUndoError::UndoFailed(store_err);
+        assert!(e.to_string().contains("slashing undo failed"));
+    }
+
+    #[test]
+    fn test_slashing_undo_error_from_slashing_store_error() {
+        let store_err = crate::slashing::SlashingStoreError::Serialization("serde fail".to_string());
+        let undo_err: SlashingUndoError = store_err.into();
+        assert!(matches!(undo_err, SlashingUndoError::UndoFailed(_)));
     }
 }

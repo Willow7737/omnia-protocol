@@ -35,7 +35,7 @@ struct SharedShardProcessor {
 }
 
 impl omnia_substrate::EventProcessor for SharedShardProcessor {
-    fn process_event(&mut self, event: &Event) -> Result<(), String> {
+    fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
         self.inner.lock().unwrap().process_event(event)
     }
 }

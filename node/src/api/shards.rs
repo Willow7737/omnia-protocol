@@ -23,6 +23,7 @@ use utoipa::ToSchema;
 
 use crate::api::auth::AuthorizedCallers;
 use crate::api::auth::CallerIdentity;
+use crate::api::governance::ApiParseError;
 use crate::state::AppState;
 
 /// Set of operations that require elevated (privileged) authorization.
@@ -192,20 +193,20 @@ async fn handle_generic_shard_op(
 /// - `spend` — Spend UBC from a DID (params: `did`, `amount`)
 /// - `register` — Register a DID in the quota system (params: `did`)
 /// - `advance_epoch` — Advance to the next epoch **[privileged]**
-fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, String> {
+fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, ApiParseError> {
     match body.operation.as_str() {
         "mint" => {
             let did = body
                 .params
                 .get("did")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing 'did' parameter")?
+                .ok_or_else(|| ApiParseError::MissingParameter("did".to_string()))?
                 .to_string();
             let amount = body
                 .params
                 .get("amount")
                 .and_then(|v| v.as_u64())
-                .ok_or("Missing or invalid 'amount' parameter")?;
+                .ok_or_else(|| ApiParseError::InvalidParameter("amount".to_string()))?;
             Ok(EconomicsOp::MintUbc { did, amount })
         }
         "spend" => {
@@ -213,13 +214,13 @@ fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, Strin
                 .params
                 .get("did")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing 'did' parameter")?
+                .ok_or_else(|| ApiParseError::MissingParameter("did".to_string()))?
                 .to_string();
             let amount = body
                 .params
                 .get("amount")
                 .and_then(|v| v.as_u64())
-                .ok_or("Missing or invalid 'amount' parameter")?;
+                .ok_or_else(|| ApiParseError::InvalidParameter("amount".to_string()))?;
             Ok(EconomicsOp::SpendUbc { did, amount })
         }
         "register" => {
@@ -227,14 +228,11 @@ fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, Strin
                 .params
                 .get("did")
                 .and_then(|v| v.as_str())
-                .ok_or("Missing 'did' parameter")?
+                .ok_or_else(|| ApiParseError::MissingParameter("did".to_string()))?
                 .to_string();
             Ok(EconomicsOp::RegisterDid { did })
         }
         "advance_epoch" => Ok(EconomicsOp::AdvanceEpoch),
-        other => Err(format!(
-            "Unknown economics operation: '{}'. Supported: mint, spend, register, advance_epoch",
-            other
-        )),
+        other => Err(ApiParseError::UnknownOperation(other.to_string())),
     }
 }

@@ -248,7 +248,18 @@ impl Default for ShardRouter {
 }
 
 impl omnia_substrate::EventProcessor for ShardRouter {
-    fn process_event(&mut self, event: &Event) -> Result<(), String> {
-        self.route_event(event).map_err(|e| e.to_string())
+    fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
+        self.route_event(event).map_err(|e| match e {
+            ShardError::DeserializationError(msg) => {
+                omnia_substrate::EventProcessorError::Deserialization(msg)
+            }
+            ShardError::ValidationFailed(msg) => {
+                omnia_substrate::EventProcessorError::ValidationFailed(msg)
+            }
+            ShardError::UnknownShard(msg) => {
+                omnia_substrate::EventProcessorError::UnknownShard(msg)
+            }
+            other => omnia_substrate::EventProcessorError::ShardError(other.to_string()),
+        })
     }
 }

@@ -10,9 +10,27 @@ use axum::Json;
 use omnia_economics::governance::VoteChoice;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use thiserror::Error;
 use utoipa::ToSchema;
 
 use crate::state::AppState;
+
+/// Errors that can occur when parsing API request parameters.
+#[derive(Error, Debug, serde::Serialize)]
+pub enum ApiParseError {
+    /// An invalid vote choice was provided.
+    #[error("invalid vote choice: '{0}'. Must be 'for', 'against', or 'abstain'")]
+    InvalidVoteChoice(String),
+    /// A required parameter is missing.
+    #[error("missing parameter: {0}")]
+    MissingParameter(String),
+    /// A parameter has an invalid value or type.
+    #[error("invalid parameter: {0}")]
+    InvalidParameter(String),
+    /// An unknown operation was requested.
+    #[error("unknown operation: '{0}'")]
+    UnknownOperation(String),
+}
 
 /// Request body for creating a new governance proposal.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -182,14 +200,11 @@ pub async fn cast_vote(
 /// Parse a vote choice string into a `VoteChoice` enum.
 ///
 /// Accepts case-insensitive values: "for", "against", "abstain".
-fn parse_vote_choice(s: &str) -> Result<VoteChoice, String> {
+fn parse_vote_choice(s: &str) -> Result<VoteChoice, ApiParseError> {
     match s.to_lowercase().as_str() {
         "for" => Ok(VoteChoice::For),
         "against" => Ok(VoteChoice::Against),
         "abstain" => Ok(VoteChoice::Abstain),
-        other => Err(format!(
-            "Invalid vote choice: '{}'. Must be 'for', 'against', or 'abstain'",
-            other
-        )),
+        other => Err(ApiParseError::InvalidVoteChoice(other.to_string())),
     }
 }

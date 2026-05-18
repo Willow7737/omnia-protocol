@@ -6,6 +6,23 @@
 
 use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+/// Errors that can occur during PQC key rotation.
+#[derive(Error, Debug)]
+pub enum KeyRotationError {
+    /// Cannot downgrade the commitment phase.
+    #[error("cannot downgrade from {from:?} to {to:?}")]
+    PhaseDowngrade {
+        /// Current commitment phase.
+        from: CommitmentPhase,
+        /// Requested (lower) phase.
+        to: CommitmentPhase,
+    },
+    /// Authorization signature is missing.
+    #[error("authorization signature required")]
+    AuthorizationSignatureRequired,
+}
 
 /// A key rotation request that supports PQC transitions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,16 +59,16 @@ impl PqcKeyRotationManager {
     }
 
     /// Submit a key rotation request.
-    pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), String> {
+    pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), KeyRotationError> {
         if (request.new_phase as u8) < (self.current_phase as u8) {
-            return Err(format!(
-                "Cannot downgrade from {:?} to {:?}",
-                self.current_phase, request.new_phase
-            ));
+            return Err(KeyRotationError::PhaseDowngrade {
+                from: self.current_phase,
+                to: request.new_phase,
+            });
         }
 
         if request.authorization_sig.is_empty() {
-            return Err("Authorization signature required".to_string());
+            return Err(KeyRotationError::AuthorizationSignatureRequired);
         }
 
         self.pending.push(request);
@@ -228,5 +245,19 @@ mod tests {
         manager.submit_rotation(req2).unwrap();
         manager.process_effective(300);
         assert_eq!(*manager.current_phase(), CommitmentPhase::PostQuantum);
+    }
+
+    #[test]
+    fn test_key_rotation_error_variants_display() {
+        let e = KeyRotationError::PhaseDowngrade {
+            from: CommitmentPhase::Hybrid,
+            to: CommitmentPhase::ClassicalOnly,
+        };
+        assert!(e.to_string().contains("cannot downgrade"));
+        assert!(e.to_string().contains("Hybrid"));
+        assert!(e.to_string().contains("ClassicalOnly"));
+
+        let e = KeyRotationError::AuthorizationSignatureRequired;
+        assert!(e.to_string().contains("authorization signature required"));
     }
 }

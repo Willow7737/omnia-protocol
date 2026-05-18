@@ -39,6 +39,6 @@ pub use governance::{
     GovernanceState, Proposal, VoteChoice, DEFAULT_QUORUM_PERCENTAGE, DEFAULT_TIME_LOCK_MS,
 };
 pub use quota::{QuotaSystem, DEFAULT_EPOCH_DURATION_MS, DEFAULT_UBC_QUOTA};
-pub use time_lock::{LockedStake, TimeLockConfig, TimeLockVoting};
+pub use time_lock::{LockedStake, TimeLockConfig, TimeLockError, TimeLockVoting};
 pub use ubc::UbcToken;
 pub use useful_work::{UsefulWorkProof, UsefulWorkType};

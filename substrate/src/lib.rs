@@ -80,11 +80,12 @@ pub use slashing::{
     SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
-pub use slashing_undo::{SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
+pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 pub use threshold::{
-    KeyShare, PartialSignature, ThresholdConfig, ThresholdKeyManager, ThresholdSignature,
+    KeyShare, PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager,
+    ThresholdSignature,
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
@@ -123,6 +124,26 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+/// Errors that can occur during event processing by a Layer 2 processor.
+#[derive(Error, Debug)]
+pub enum EventProcessorError {
+    /// The event payload could not be deserialized.
+    #[error("payload deserialization failed: {0}")]
+    Deserialization(String),
+    /// The event failed validation (e.g., replay, oversized payload).
+    #[error("validation failed: {0}")]
+    ValidationFailed(String),
+    /// The target shard was not found in the router.
+    #[error("unknown shard: {0}")]
+    UnknownShard(String),
+    /// A shard-specific processing error occurred.
+    #[error("shard error: {0}")]
+    ShardError(String),
+    /// An internal error occurred during event processing.
+    #[error("internal error: {0}")]
+    Internal(String),
+}
+
 /// Trait for Layer 2 event processors (e.g., domain shards).
 ///
 /// Implementations receive every event that passes through consensus
@@ -138,15 +159,15 @@ use thiserror::Error;
 /// struct MyShard;
 ///
 /// impl EventProcessor for MyShard {
-///     fn process_event(&mut self, event: &Event) -> Result<(), String> {
+///     fn process_event(&mut self, event: &Event) -> Result<(), EventProcessorError> {
 ///         // Handle the event
 ///         Ok(())
 ///     }
 /// }
 /// ```
 pub trait EventProcessor: Send + Sync {
-    /// Process a single event. Return an error string if processing fails.
-    fn process_event(&mut self, event: &Event) -> std::result::Result<(), String>;
+    /// Process a single event. Return an error if processing fails.
+    fn process_event(&mut self, event: &Event) -> std::result::Result<(), EventProcessorError>;
 }
 
 /// Errors at the substrate layer
@@ -671,5 +692,23 @@ mod tests {
         let config = SubstrateConfig::with_network_size(test_node(1), 10);
         assert_eq!(config.total_nodes, 10);
         assert_eq!(config.consensus.total_nodes, 10);
+    }
+
+    #[test]
+    fn test_event_processor_error_variants_display() {
+        let e = EventProcessorError::Deserialization("bad payload".to_string());
+        assert!(e.to_string().contains("bad payload"));
+
+        let e = EventProcessorError::ValidationFailed("replay".to_string());
+        assert!(e.to_string().contains("replay"));
+
+        let e = EventProcessorError::UnknownShard("shard-0".to_string());
+        assert!(e.to_string().contains("shard-0"));
+
+        let e = EventProcessorError::ShardError("conflict".to_string());
+        assert!(e.to_string().contains("conflict"));
+
+        let e = EventProcessorError::Internal("oops".to_string());
+        assert!(e.to_string().contains("oops"));
     }
 }

@@ -60,7 +60,7 @@ pub mod rf_fingerprint;
 
 // Re-export core types for convenience
 pub use anchor::PhysicalAnchor;
-pub use key_rotation::{PqcKeyRotationManager, PqcKeyRotationRequest};
+pub use key_rotation::{KeyRotationError, PqcKeyRotationManager, PqcKeyRotationRequest};
 pub use physical_shard::{ProvenanceTracker, ProvenanceTrackerError};
 pub use provenance::{ProvenanceEvent, ProvenanceEventType, ProvenanceLog};
 pub use quantum_commit::{BindingError, CommitmentPhase, PqPublicKey, QuantumCommitment};

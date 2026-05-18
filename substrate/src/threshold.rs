@@ -23,10 +23,41 @@
 //! - The combined signature is a standard BLS signature — verifiers do not
 //!   need to know the threshold scheme was used.
 
-use crate::bls::{BlsKeypair, BlsPublicKey, BlsSignature};
+use crate::bls::{BlsError, BlsKeypair, BlsPublicKey, BlsSignature};
 use crate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Errors that can occur during threshold signature operations.
+#[derive(Error, Debug)]
+pub enum ThresholdError {
+    /// Insufficient partial signatures to meet the threshold.
+    #[error("insufficient partial signatures: got {got}, need {need}")]
+    InsufficientPartials {
+        /// Number of partial signatures provided.
+        got: usize,
+        /// Required threshold.
+        need: usize,
+    },
+    /// BLS signature aggregation failed.
+    #[error("signature aggregation failed: {0}")]
+    AggregationFailed(#[from] BlsError),
+    /// A signer's public key was not found in the key manager.
+    #[error("unknown signers: found {found} public keys for {expected} signers")]
+    UnknownSigners {
+        /// Number of public keys found.
+        found: usize,
+        /// Expected number of signers.
+        expected: usize,
+    },
+    /// Threshold signature verification failed.
+    #[error("threshold signature verification failed: {0}")]
+    VerificationFailed(String),
+    /// The participant is not registered in the key manager.
+    #[error("participant {:?} not registered", .0)]
+    ParticipantNotRegistered([u8; 4]),
+}
 
 /// Configuration for threshold signature operations.
 ///
@@ -248,13 +279,12 @@ impl ThresholdKeyManager {
         &self,
         partials: &[PartialSignature],
         message: &[u8],
-    ) -> Result<ThresholdSignature, String> {
+    ) -> Result<ThresholdSignature, ThresholdError> {
         if !self.has_quorum(partials.len()) {
-            return Err(format!(
-                "Insufficient partial signatures: got {}, need {}",
-                partials.len(),
-                self.config.threshold
-            ));
+            return Err(ThresholdError::InsufficientPartials {
+                got: partials.len(),
+                need: self.config.threshold,
+            });
         }
 
         // Collect unique signers
@@ -266,8 +296,7 @@ impl ThresholdKeyManager {
                 .iter()
                 .map(|p| p.signature.clone())
                 .collect::<Vec<_>>(),
-        )
-        .map_err(|e| format!("Signature aggregation failed: {}", e))?;
+        )?;
 
         tracing::info!(
             signers = signers.len(),
@@ -292,7 +321,7 @@ impl ThresholdKeyManager {
     /// # Returns
     ///
     /// `Ok(())` if the signature is valid, `Err(String)` otherwise.
-    pub fn verify(&self, threshold_sig: &ThresholdSignature) -> Result<(), String> {
+    pub fn verify(&self, threshold_sig: &ThresholdSignature) -> Result<(), ThresholdError> {
         // Collect public keys for all signers
         let public_keys: Vec<BlsPublicKey> = threshold_sig
             .signers
@@ -301,16 +330,14 @@ impl ThresholdKeyManager {
             .collect();
 
         if public_keys.len() != threshold_sig.signers.len() {
-            return Err(format!(
-                "Unknown signers: found {} public keys for {} signers",
-                public_keys.len(),
-                threshold_sig.signers.len()
-            ));
+            return Err(ThresholdError::UnknownSigners {
+                found: public_keys.len(),
+                expected: threshold_sig.signers.len(),
+            });
         }
 
         // Aggregate public keys
-        let agg_pk = crate::bls::aggregate_public_keys(&public_keys)
-            .map_err(|e| format!("Public key aggregation failed: {}", e))?;
+        let agg_pk = crate::bls::aggregate_public_keys(&public_keys)?;
 
         // Verify aggregate signature
         crate::bls::verify_aggregate(
@@ -318,7 +345,7 @@ impl ThresholdKeyManager {
             &agg_pk,
             &threshold_sig.aggregate_signature,
         )
-        .map_err(|e| format!("Threshold signature verification failed: {}", e))
+        .map_err(|e| ThresholdError::VerificationFailed(e.to_string()))
     }
 
     /// Produce a partial signature for the given participant and message.
@@ -328,11 +355,15 @@ impl ThresholdKeyManager {
         &self,
         participant: &NodeId,
         message: &[u8],
-    ) -> Result<PartialSignature, String> {
+    ) -> Result<PartialSignature, ThresholdError> {
         let share = self
             .key_shares
             .get(participant)
-            .ok_or_else(|| format!("Participant {:?} not registered", &participant[..4]))?;
+            .ok_or_else(|| {
+                let mut prefix = [0u8; 4];
+                prefix.copy_from_slice(&participant[..4]);
+                ThresholdError::ParticipantNotRegistered(prefix)
+            })?;
         Ok(share.partial_sign(message))
     }
 }
@@ -412,7 +443,8 @@ mod tests {
         let partials = vec![];
         let result = mgr.combine_signatures(&partials, b"test");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Insufficient"));
+        let err = result.unwrap_err();
+        assert!(matches!(err, ThresholdError::InsufficientPartials { got: 0, need: 3 }));
     }
 
     #[test]
@@ -486,5 +518,32 @@ mod tests {
             result.is_ok(),
             "Combine should succeed with 3 partials even if one signer is duplicated"
         );
+    }
+
+    #[test]
+    fn test_threshold_error_variants_display() {
+        let e = ThresholdError::InsufficientPartials { got: 1, need: 3 };
+        assert!(e.to_string().contains("insufficient"));
+        assert!(e.to_string().contains("1"));
+        assert!(e.to_string().contains("3"));
+
+        let e = ThresholdError::UnknownSigners {
+            found: 2,
+            expected: 3,
+        };
+        assert!(e.to_string().contains("unknown signers"));
+
+        let e = ThresholdError::VerificationFailed("bad sig".to_string());
+        assert!(e.to_string().contains("bad sig"));
+
+        let e = ThresholdError::ParticipantNotRegistered([1, 2, 3, 4]);
+        assert!(e.to_string().contains("not registered"));
+    }
+
+    #[test]
+    fn test_threshold_error_from_bls_error() {
+        let bls_err = BlsError::AggregationFailed("empty set".to_string());
+        let threshold_err: ThresholdError = bls_err.into();
+        assert!(matches!(threshold_err, ThresholdError::AggregationFailed(_)));
     }
 }

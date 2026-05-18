@@ -24,6 +24,28 @@
 use omnia_substrate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Errors that can occur during time-locked voting operations.
+#[derive(Error, Debug)]
+pub enum TimeLockError {
+    /// The lock duration is below the configured minimum.
+    #[error("lock duration {duration} is below minimum {min_duration}")]
+    DurationBelowMinimum {
+        /// Requested lock duration.
+        duration: u64,
+        /// Minimum allowed duration.
+        min_duration: u64,
+    },
+    /// The lock duration exceeds the configured maximum.
+    #[error("lock duration {duration} exceeds maximum {max_duration}")]
+    DurationExceedsMaximum {
+        /// Requested lock duration.
+        duration: u64,
+        /// Maximum allowed duration.
+        max_duration: u64,
+    },
+}
 
 /// Configuration for time-locked voting.
 ///
@@ -182,18 +204,18 @@ impl TimeLockVoting {
         amount: u64,
         current_height: u64,
         duration: u64,
-    ) -> Result<(), String> {
+    ) -> Result<(), TimeLockError> {
         if duration < self.config.min_lock_duration {
-            return Err(format!(
-                "Lock duration {} is below minimum {}",
-                duration, self.config.min_lock_duration
-            ));
+            return Err(TimeLockError::DurationBelowMinimum {
+                duration,
+                min_duration: self.config.min_lock_duration,
+            });
         }
         if duration > self.config.max_lock_duration {
-            return Err(format!(
-                "Lock duration {} exceeds maximum {}",
-                duration, self.config.max_lock_duration
-            ));
+            return Err(TimeLockError::DurationExceedsMaximum {
+                duration,
+                max_duration: self.config.max_lock_duration,
+            });
         }
 
         let locked = LockedStake::new(owner, amount, current_height, duration);
@@ -377,7 +399,13 @@ mod tests {
 
         let result = voting.lock(n, 1000, 100, 50);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("below minimum"));
+        assert!(matches!(
+            result.unwrap_err(),
+            TimeLockError::DurationBelowMinimum {
+                duration: 50,
+                min_duration: 100,
+            }
+        ));
     }
 
     #[test]
@@ -388,7 +416,13 @@ mod tests {
 
         let result = voting.lock(n, 1000, 100, 200_000);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("exceeds maximum"));
+        assert!(matches!(
+            result.unwrap_err(),
+            TimeLockError::DurationExceedsMaximum {
+                duration: 200_000,
+                max_duration: 100_000,
+            }
+        ));
     }
 
     #[test]
@@ -505,5 +539,24 @@ mod tests {
         // After release: no power, no locked stake
         assert_eq!(voting.voting_power(&n, 300), 0);
         assert_eq!(voting.total_locked(&n), 0);
+    }
+
+    #[test]
+    fn test_time_lock_error_variants_display() {
+        let e = TimeLockError::DurationBelowMinimum {
+            duration: 50,
+            min_duration: 100,
+        };
+        assert!(e.to_string().contains("50"));
+        assert!(e.to_string().contains("100"));
+        assert!(e.to_string().contains("below minimum"));
+
+        let e = TimeLockError::DurationExceedsMaximum {
+            duration: 200_000,
+            max_duration: 100_000,
+        };
+        assert!(e.to_string().contains("200000"));
+        assert!(e.to_string().contains("100000"));
+        assert!(e.to_string().contains("exceeds maximum"));
     }
 }

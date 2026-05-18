@@ -136,6 +136,9 @@ pub enum SlashingStoreError {
     /// An error occurred while serializing or deserializing slashing state.
     #[error("serialization error: {0}")]
     Serialization(String),
+    /// An undo operation failed because the validator has no offense history.
+    #[error("validator {:?} has no offense history to undo", .0)]
+    UndoNoOffenseHistory([u8; 4]),
 }
 
 /// Serializable slashing state that can be persisted across restarts.
@@ -1195,7 +1198,7 @@ impl SlashingEngine {
     /// engine.undo_slash(&node).unwrap();
     /// assert_eq!(engine.slash_points_of(&node), 0);
     /// ```
-    pub fn undo_slash(&mut self, node: &NodeId) -> Result<(), String> {
+    pub fn undo_slash(&mut self, node: &NodeId) -> Result<(), SlashingStoreError> {
         let mut state = self.state.write().unwrap_or_else(|e| {
             tracing::error!(error = %e, "undo_slash — lock poisoned");
             std::process::abort()
@@ -1232,10 +1235,11 @@ impl SlashingEngine {
                 }
                 Ok(())
             }
-            _ => Err(format!(
-                "Validator {:?} has no offense history to undo",
-                &node[..4]
-            )),
+            _ => {
+                let mut prefix = [0u8; 4];
+                prefix.copy_from_slice(&node[..4]);
+                Err(SlashingStoreError::UndoNoOffenseHistory(prefix))
+            }
         }
     }
 
