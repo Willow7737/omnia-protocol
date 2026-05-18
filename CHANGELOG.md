@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21](https://github.com/Willow7737/omnia-protocol/compare/v0.1.20...v0.1.21) (2026-05-18)
+
+
+### Features
+
+* **binding:** integrate PQC key rotation with encrypted keystore (H-4) ([ba6f0f8](https://github.com/Willow7737/omnia-protocol/commit/ba6f0f8ba007d9a0c8cfea346a79c0f6056efe0f))
+* **shards:** fix SSS recovery flow with encrypted shares and key derivation (C-1) ([bead81a](https://github.com/Willow7737/omnia-protocol/commit/bead81af45cb72b6862281c2ddcf90a00edca0dd))
+* **substrate:** add BIP-39 mnemonic support to keystore (M-1) ([068f32b](https://github.com/Willow7737/omnia-protocol/commit/068f32bb3a4c954b328a10eb78ca7919a88e9ad5))
+* **substrate:** add gradual slashing with jail/suspension and events (H-5) ([17e08f2](https://github.com/Willow7737/omnia-protocol/commit/17e08f206d25a273432a68ec3b16da296d1fc10e))
+* **substrate:** implement DKG for threshold signatures (M-2) ([71ba10a](https://github.com/Willow7737/omnia-protocol/commit/71ba10a6cdc2177da079a84c25ccc4e956cc98b7))
+* **zk:** add Groth16 batch verification (H-3) ([8ae958f](https://github.com/Willow7737/omnia-protocol/commit/8ae958ff2d0aa8622ce7b02fcae619821b3f1307))
+* **zk:** add ZK-SNARK benchmark suite (H-2) ([ad795d5](https://github.com/Willow7737/omnia-protocol/commit/ad795d50c4bc6390d0a8ce88f447293d2e4f3dd8))
+* **zk:** fix trusted setup ceremony with real EC scalar multiplication (C-2) ([65e00be](https://github.com/Willow7737/omnia-protocol/commit/65e00beb9bdce7090ed3beb368cfcee03b18d2d4))
+* **zk:** populate circuit dummy fields with event semantics constraints (H-1) ([8738e05](https://github.com/Willow7737/omnia-protocol/commit/8738e059a8e8192e259d7738d4f1c91dec80c4d6))
+
+
+### Documentation
+
+* add ADRs 010-014 and update project dashboard (M-4, M-5) ([ef52634](https://github.com/Willow7737/omnia-protocol/commit/ef5263448820b272a12c3399104dd9d9e87f34db))
+* add PHASE_2_SUMMARY.md documenting all Phase 2 deliverables ([a269a49](https://github.com/Willow7737/omnia-protocol/commit/a269a4994bacfa9d6394ed51649da337588c87b9))
+
 ## [0.1.20](https://github.com/Willow7737/omnia-protocol/compare/v0.1.19...v0.1.20) (2026-05-17)
 
 
