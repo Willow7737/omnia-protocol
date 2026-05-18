@@ -9,12 +9,13 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use ark_bn254::Fr;
-use omnia_zk::circuit::{ExpandedRollupCircuit, RollupCircuit, OperationType};
+use ark_ff::PrimeField;
+use omnia_zk::circuit::{ExpandedRollupCircuit, RollupCircuit};
 use omnia_zk::prover::{
     generate_trusted_setup, generate_trusted_setup_expanded,
     create_proof, create_expanded_proof, verify_proof,
 };
-use omnia_zk::merkle::{build_merkle_tree, poseidon_hash_to_fr, hash_to_fr};
+use omnia_zk::merkle::build_merkle_tree;
 use omnia_zk::poseidon::poseidon_hash_offchain;
 
 fn bench_poseidon_hash(c: &mut Criterion) {
