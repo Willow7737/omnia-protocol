@@ -493,6 +493,12 @@ pub fn default_cors_layer() -> CorsLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Global mutex to serialize tests that read/write `OMNIA_JWT_SECRET`.
+    /// Without this, parallel test execution causes race conditions where
+    /// one test sets the var and another removes it mid-assertion.
+    static JWT_SECRET_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_authorized_callers_from_caller_ids() {
@@ -520,7 +526,9 @@ mod tests {
 
     #[test]
     fn test_create_and_validate_token() {
-        // Set a secret for this test
+        // Hold the lock for the entire test so no other test touches the
+        // JWT_SECRET env var while we depend on it.
+        let _lock = JWT_SECRET_LOCK.lock().unwrap();
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let token = create_token("caller-42", 3600).expect("create token");
         let claims = validate_token(&token).expect("validate token");
@@ -530,9 +538,7 @@ mod tests {
 
     #[test]
     fn test_validate_expired_token() {
-        // Create a token with exp well in the past (beyond the 60s leeway).
-        // We encode directly to avoid the env-var dependency and to control
-        // the exp claim precisely.
+        // Encode/decode directly — no env-var dependency, no lock needed.
         let secret = "test-expired-secret";
         let claims = Claims {
             sub: "expired-caller".to_string(),
@@ -555,24 +561,20 @@ mod tests {
 
     #[test]
     fn test_create_token_no_secret() {
-        // This test verifies that create_token returns an error when
-        // OMNIA_JWT_SECRET is not set. Because other tests may set this
-        // env var concurrently, we use a unique key and only assert if
-        // the env var was actually absent.
-        let had_secret = std::env::var("OMNIA_JWT_SECRET").is_ok();
-        if !had_secret {
-            let result = create_token("caller-42", 3600);
-            assert!(
-                matches!(result, Err(AuthError::SecretNotConfigured)),
-                "Expected SecretNotConfigured when OMNIA_JWT_SECRET is unset"
-            );
-        }
-        // If the env var was already set by a parallel test, skip the
-        // assertion — the logic is still correct, just not testable here.
+        let _lock = JWT_SECRET_LOCK.lock().unwrap();
+        // Remove the var if it was set by a previous test, then verify
+        // that create_token returns SecretNotConfigured.
+        std::env::remove_var("OMNIA_JWT_SECRET");
+        let result = create_token("caller-42", 3600);
+        assert!(
+            matches!(result, Err(AuthError::SecretNotConfigured)),
+            "Expected SecretNotConfigured when OMNIA_JWT_SECRET is unset"
+        );
     }
 
     #[test]
     fn test_validate_invalid_token() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap();
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let result = validate_token("not.a.valid-token");
         assert!(matches!(result, Err(AuthError::InvalidToken(_))));
