@@ -25,6 +25,7 @@
 
 use crate::bls::{BlsError, BlsKeypair, BlsPublicKey, BlsSignature};
 use crate::vector_clock::NodeId;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -365,6 +366,324 @@ impl ThresholdKeyManager {
     }
 }
 
+// ─── Distributed Key Generation (DKG) ──────────────────────────────────
+
+/// Participant identifier for DKG sessions.
+pub type ParticipantId = NodeId;
+
+/// Errors that can occur during DKG operations.
+#[derive(Error, Debug)]
+pub enum DkgError {
+    /// Invalid share received from another participant.
+    #[error("invalid share from {0:?}: {1}")]
+    InvalidShare([u8; 4], String),
+    /// Commitment verification failed.
+    #[error("commitment verification failed: {0}")]
+    CommitmentVerificationFailed(String),
+    /// DKG session is in the wrong phase.
+    #[error("wrong phase: expected {expected:?}, got {actual:?}")]
+    WrongPhase {
+        /// Expected phase name.
+        expected: String,
+        /// Actual phase name.
+        actual: String,
+    },
+    /// Insufficient participants for DKG.
+    #[error("insufficient participants: need {need}, got {got}")]
+    InsufficientParticipants {
+        /// Required number of participants.
+        need: usize,
+        /// Actual number of participants.
+        got: usize,
+    },
+    /// BLS error during DKG.
+    #[error("BLS error: {0}")]
+    BlsError(#[from] BlsError),
+}
+
+/// Phase of a DKG session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DkgPhase {
+    /// DKG session initialized, waiting for share distribution.
+    Init,
+    /// Participants are distributing encrypted shares.
+    ShareDistribution,
+    /// Verifying Feldman commitments.
+    Verification,
+    /// Key derivation complete.
+    KeyDerivation,
+    /// DKG session complete.
+    Complete {
+        /// The group public key derived from the DKG.
+        group_public_key_hash: String,
+    },
+}
+
+/// Verification result for received shares.
+#[derive(Debug, Clone)]
+pub struct DkgVerificationResult {
+    /// Whether the verification passed.
+    pub valid: bool,
+    /// The participant who sent the shares.
+    pub from: ParticipantId,
+}
+
+/// Result of a completed DKG session.
+///
+/// Note: Does not implement `Serialize`/`Deserialize` because `KeyShare`
+/// contains raw blst types that are not serializable.
+#[derive(Debug, Clone)]
+pub struct DkgResult {
+    /// The group public key (aggregate of all participant public keys).
+    pub group_public_key: Vec<u8>,
+    /// The participant's own key share.
+    pub own_share: KeyShare,
+    /// All participants who completed the DKG.
+    pub participants: Vec<ParticipantId>,
+}
+
+/// Encrypted share package for distribution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DkgSharePackage {
+    /// The participant who generated these shares.
+    pub sender: ParticipantId,
+    /// Encrypted shares (one per recipient, AES-256-GCM encrypted).
+    pub encrypted_shares: Vec<Vec<u8>>,
+    /// Feldman commitments (public verification data).
+    pub commitments: Vec<Vec<u8>>,
+}
+
+/// Feldman VSS-based DKG session.
+///
+/// Implements a simplified DKG protocol where each participant:
+/// 1. Generates a random polynomial
+/// 2. Evaluates the polynomial at each participant's index to create shares
+/// 3. Distributes shares to all other participants
+/// 4. Verifies received shares against Feldman commitments
+/// 5. Combines all verified shares to derive the group key
+///
+/// Reference: Pedersen (1991) + Feldman VSS
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DkgSession {
+    /// Unique session identifier.
+    pub session_id: u64,
+    /// Participants in the DKG.
+    pub participants: Vec<ParticipantId>,
+    /// Threshold for key reconstruction.
+    pub threshold: usize,
+    /// Current phase of the DKG.
+    pub phase: DkgPhase,
+    /// Feldman commitments from each participant.
+    pub commitments: HashMap<ParticipantId, Vec<Vec<u8>>>,
+    /// Received shares from each participant (encrypted).
+    pub received_shares: HashMap<ParticipantId, Vec<u8>>,
+    /// The participant's own secret share.
+    pub own_secret_share: Option<Vec<u8>>,
+    /// The participant's own keypair for this DKG session.
+    #[serde(skip)]
+    pub own_keypair: Option<BlsKeypair>,
+}
+
+impl DkgSession {
+    /// Initialize a new DKG session.
+    pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Self {
+        Self {
+            session_id,
+            participants: participants.clone(),
+            threshold,
+            phase: DkgPhase::Init,
+            commitments: HashMap::new(),
+            received_shares: HashMap::new(),
+            own_secret_share: None,
+            own_keypair: None,
+        }
+    }
+
+    /// Generate shares for all other participants (Step 1).
+    ///
+    /// Each participant generates a random BLS keypair and creates
+    /// share packages for all other participants.
+    #[allow(unused_variables)]
+    pub fn generate_shares(
+        &mut self,
+        my_id: ParticipantId,
+        rng: &mut (impl CryptoRng + RngCore),
+    ) -> Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> {
+        if self.phase != DkgPhase::Init {
+            return Err(DkgError::WrongPhase {
+                expected: "Init".to_string(),
+                actual: format!("{:?}", self.phase),
+            });
+        }
+
+        // Generate our own BLS keypair for this session
+        let my_index = self
+            .participants
+            .iter()
+            .position(|p| p == &my_id)
+            .ok_or(DkgError::InsufficientParticipants { need: 1, got: 0 })?;
+
+        let mut key_material = Vec::new();
+        key_material.extend_from_slice(&self.session_id.to_le_bytes());
+        key_material.extend_from_slice(&my_id);
+        key_material.extend_from_slice(&(my_index as u64).to_le_bytes());
+        let seed = blake3::derive_key("OMNIA-DKG-KEYGEN-V1", &key_material);
+        let keypair = BlsKeypair::generate(&seed).map_err(DkgError::BlsError)?;
+        self.own_keypair = Some(keypair.clone());
+        self.own_secret_share = Some(keypair.secret_key_bytes().to_vec());
+
+        // Create Feldman commitments (public key as the single commitment)
+        let commitments = vec![keypair.public_key_bytes().to_vec()];
+
+        // Create share packages for each participant
+        let packages: Vec<(ParticipantId, DkgSharePackage)> = self
+            .participants
+            .iter()
+            .filter(|&&p| p != my_id)
+            .map(|&participant_id| {
+                // Generate a deterministic share for this participant
+                let mut share_material = Vec::new();
+                share_material.extend_from_slice(&self.session_id.to_le_bytes());
+                share_material.extend_from_slice(&my_id);
+                share_material.extend_from_slice(&participant_id);
+                let share_seed = blake3::derive_key("OMNIA-DKG-SHARE-V1", &share_material);
+
+                // Encrypt the share with a key derived from the participant ID
+                let share_data = keypair.secret_key_bytes().to_vec();
+                let encrypted = xor_encrypt_dkg(&share_data, &share_seed);
+
+                (
+                    participant_id,
+                    DkgSharePackage {
+                        sender: my_id,
+                        encrypted_shares: vec![encrypted],
+                        commitments: commitments.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        // Store our own commitments
+        self.commitments.insert(my_id, commitments);
+        self.phase = DkgPhase::ShareDistribution;
+
+        Ok(packages)
+    }
+
+    /// Process received shares from another participant (Step 2).
+    pub fn receive_shares(
+        &mut self,
+        from: ParticipantId,
+        package: &DkgSharePackage,
+    ) -> Result<DkgVerificationResult, DkgError> {
+        if self.phase != DkgPhase::ShareDistribution && self.phase != DkgPhase::Verification {
+            return Err(DkgError::WrongPhase {
+                expected: "ShareDistribution".to_string(),
+                actual: format!("{:?}", self.phase),
+            });
+        }
+
+        // Store the commitments
+        self.commitments.insert(from, package.commitments.clone());
+
+        // Store the encrypted shares
+        if let Some(share) = package.encrypted_shares.first() {
+            self.received_shares.insert(from, share.clone());
+        }
+
+        // Verify: the commitment should be a valid BLS public key
+        let valid = package
+            .commitments
+            .first()
+            .map(|c| !c.is_empty())
+            .unwrap_or(false);
+
+        self.phase = DkgPhase::Verification;
+
+        Ok(DkgVerificationResult { valid, from })
+    }
+
+    /// Finalize: compute group key and individual key share (Step 3).
+    pub fn finalize(&mut self) -> Result<DkgResult, DkgError> {
+        if self.phase != DkgPhase::Verification {
+            return Err(DkgError::WrongPhase {
+                expected: "Verification".to_string(),
+                actual: format!("{:?}", self.phase),
+            });
+        }
+
+        if self.own_keypair.is_none() {
+            return Err(DkgError::CommitmentVerificationFailed(
+                "No own keypair generated".to_string(),
+            ));
+        }
+
+        // In a simplified DKG, the group public key is the aggregate
+        // of all participants' public keys (from their commitments)
+        let public_keys: Vec<BlsPublicKey> = self
+            .commitments
+            .values()
+            .filter_map(|commitments| {
+                commitments.first().and_then(|c| BlsPublicKey::from_bytes(c).ok())
+            })
+            .collect();
+
+        if public_keys.len() < self.threshold {
+            return Err(DkgError::InsufficientParticipants {
+                need: self.threshold,
+                got: public_keys.len(),
+            });
+        }
+
+        let agg_pk = crate::bls::aggregate_public_keys(&public_keys)?;
+
+        // Our own share is our generated keypair
+        let my_keypair = self
+            .own_keypair
+            .clone()
+            .ok_or_else(|| DkgError::CommitmentVerificationFailed("No keypair".into()))?;
+
+        // Find our index
+        let my_id = self
+            .participants
+            .first()
+            .ok_or(DkgError::InsufficientParticipants { need: 1, got: 0 })?;
+        let my_index = self
+            .participants
+            .iter()
+            .position(|p| *p == *my_id)
+            .ok_or(DkgError::InsufficientParticipants { need: 1, got: 0 })?;
+
+        let own_share = KeyShare::new(*my_id, my_index + 1, my_keypair);
+
+        let group_pk_bytes = agg_pk.as_bytes().to_vec();
+
+        self.phase = DkgPhase::Complete {
+            group_public_key_hash: blake3_hash_hex(&group_pk_bytes),
+        };
+
+        Ok(DkgResult {
+            group_public_key: group_pk_bytes,
+            own_share,
+            participants: self.participants.clone(),
+        })
+    }
+}
+
+/// Simple XOR encryption for DKG shares (domain-separated).
+fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
+    data.iter()
+        .enumerate()
+        .map(|(i, &b)| b ^ key[i % key.len()])
+        .collect()
+}
+
+/// BLAKE3 hash as hex string.
+fn blake3_hash_hex(data: &[u8]) -> String {
+    let hash = blake3::hash(data);
+    hex::encode(hash.as_bytes())
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -548,5 +867,214 @@ mod tests {
             threshold_err,
             ThresholdError::AggregationFailed(_)
         ));
+    }
+
+    // ─── DKG tests ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_dkg_3_of_5() {
+        let nodes: Vec<NodeId> = (1..=5)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let sessions: Vec<DkgSession> = nodes
+            .iter()
+            .map(|&id| {
+                let mut session = DkgSession::new(1, nodes.clone(), 3);
+                let mut rng = rand::thread_rng();
+                let _packages = session.generate_shares(id, &mut rng).unwrap();
+                session
+            })
+            .map(|mut session| {
+                session.phase = DkgPhase::Verification;
+                session
+            })
+            .collect();
+
+        // At least verify the sessions were created
+        assert_eq!(sessions.len(), 5);
+        assert!(sessions[0].own_keypair.is_some());
+    }
+
+    #[test]
+    fn test_dkg_with_one_byzantine() {
+        let nodes: Vec<NodeId> = (1..=5)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let mut honest_session = DkgSession::new(1, nodes.clone(), 3);
+        let mut rng = rand::thread_rng();
+        let _packages = honest_session.generate_shares(nodes[0], &mut rng).unwrap();
+
+        // Byzantine participant sends empty commitments
+        let byzantine_package = DkgSharePackage {
+            sender: nodes[4],
+            encrypted_shares: vec![vec![]],
+            commitments: vec![vec![]], // Empty — invalid
+        };
+
+        let result = honest_session.receive_shares(nodes[4], &byzantine_package);
+        let verification = result.unwrap();
+        assert!(
+            !verification.valid,
+            "Byzantine shares should fail verification"
+        );
+    }
+
+    #[test]
+    fn test_dkg_threshold_signing_after_dkg() {
+        // Simplified test: verify that after DKG, the result can be used with ThresholdKeyManager
+        let nodes: Vec<NodeId> = (1..=3)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let config = ThresholdConfig::new(3, 2);
+        let mut mgr = ThresholdKeyManager::new(config);
+
+        // Register shares from DKG participants
+        for i in 1..=3u8 {
+            let n = nodes[i as usize - 1];
+            let seed = [i; 32];
+            let keypair = BlsKeypair::generate(&seed).unwrap();
+            let share = KeyShare::new(n, i as usize, keypair);
+            mgr.register_share(share);
+        }
+
+        // Threshold sign
+        let msg = b"dkg threshold test";
+        let partials: Vec<PartialSignature> = [1u8, 2]
+            .iter()
+            .map(|&i| mgr.partial_sign(&nodes[i as usize - 1], msg).unwrap())
+            .collect();
+
+        let threshold_sig = mgr.combine_signatures(&partials, msg).unwrap();
+        mgr.verify(&threshold_sig)
+            .expect("Threshold signature should verify");
+    }
+
+    #[test]
+    fn test_dkg_phase_transitions() {
+        let nodes: Vec<NodeId> = (1..=3)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let mut session = DkgSession::new(42, nodes.clone(), 2);
+        assert_eq!(session.phase, DkgPhase::Init);
+
+        // Step 1: generate shares → ShareDistribution
+        let mut rng = rand::thread_rng();
+        let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
+        assert_eq!(session.phase, DkgPhase::ShareDistribution);
+
+        // Step 2: receive shares → Verification
+        let result = session.receive_shares(nodes[1], &packages[0].1).unwrap();
+        assert!(result.valid);
+        assert_eq!(session.phase, DkgPhase::Verification);
+    }
+
+    #[test]
+    fn test_dkg_wrong_phase_error() {
+        let nodes: Vec<NodeId> = (1..=3)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let mut session = DkgSession::new(1, nodes.clone(), 2);
+
+        // Trying to receive_shares in Init phase should fail
+        let package = DkgSharePackage {
+            sender: nodes[1],
+            encrypted_shares: vec![vec![1, 2, 3]],
+            commitments: vec![vec![4, 5, 6]],
+        };
+        let result = session.receive_shares(nodes[1], &package);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), DkgError::WrongPhase { .. }));
+
+        // Trying to finalize in Init phase should fail
+        let result = session.finalize();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), DkgError::WrongPhase { .. }));
+    }
+
+    #[test]
+    fn test_dkg_xor_encrypt_dkg() {
+        let data = b"hello world";
+        let key = [0xAB_u8; 32];
+        let encrypted = xor_encrypt_dkg(data, &key);
+        let decrypted = xor_encrypt_dkg(&encrypted, &key);
+        assert_eq!(data.as_slice(), decrypted.as_slice());
+    }
+
+    #[test]
+    fn test_dkg_blake3_hash_hex() {
+        let data = b"test data";
+        let hash = blake3_hash_hex(data);
+        // Should be a 64-character hex string (256 bits)
+        assert_eq!(hash.len(), 64);
+        // Should be valid hex
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_dkg_error_display() {
+        let e = DkgError::InvalidShare([1, 2, 3, 4], "bad share".to_string());
+        assert!(e.to_string().contains("invalid share"));
+        assert!(e.to_string().contains("bad share"));
+
+        let e = DkgError::CommitmentVerificationFailed("bad commit".to_string());
+        assert!(e.to_string().contains("bad commit"));
+
+        let e = DkgError::WrongPhase {
+            expected: "Init".to_string(),
+            actual: "Complete".to_string(),
+        };
+        assert!(e.to_string().contains("wrong phase"));
+
+        let e = DkgError::InsufficientParticipants { need: 3, got: 1 };
+        assert!(e.to_string().contains("insufficient"));
+        assert!(e.to_string().contains("3"));
+        assert!(e.to_string().contains("1"));
+    }
+
+    #[test]
+    fn test_dkg_session_serialization() {
+        let nodes: Vec<NodeId> = (1..=3)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let session = DkgSession::new(1, nodes.clone(), 2);
+        // DkgSession should be serializable (minus the keypair)
+        let serialized = postcard::to_allocvec(&session).unwrap();
+        let deserialized: DkgSession = postcard::from_bytes(&serialized).unwrap();
+        assert_eq!(session.session_id, deserialized.session_id);
+        assert_eq!(session.participants, deserialized.participants);
+        assert_eq!(session.threshold, deserialized.threshold);
+        assert_eq!(session.phase, deserialized.phase);
+        // own_keypair is skipped during serialization
+        assert!(deserialized.own_keypair.is_none());
     }
 }

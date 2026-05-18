@@ -187,6 +187,24 @@ impl BlsKeypair {
         BlsPublicKey(self.public_key.compress().as_slice().to_vec())
     }
 
+    /// Get the secret key as raw bytes.
+    ///
+    /// # Returns
+    ///
+    /// A 32-byte array containing the BLS secret key scalar.
+    pub fn secret_key_bytes(&self) -> [u8; SECRET_KEY_SIZE] {
+        self.secret_key.serialize()
+    }
+
+    /// Get the public key as raw compressed bytes.
+    ///
+    /// # Returns
+    ///
+    /// A 96-byte vector containing the compressed G2 public key point.
+    pub fn public_key_bytes(&self) -> Vec<u8> {
+        self.public_key.compress().as_slice().to_vec()
+    }
+
     /// Sign a message using this keypair's secret key.
     ///
     /// The signature is a G1 point on BLS12-381. The message is hashed
