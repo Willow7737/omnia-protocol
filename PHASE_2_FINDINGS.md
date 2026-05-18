@@ -1,7 +1,7 @@
 # Omnia Protocol — Phase 2 Pre-Work Findings
 
 **Version:** v5.0.0
-**Date:** 2025-05-18
+**Date:** 2026-05-18
 **Auditor:** Phase 2 Internal Review
 **Scope:** Cryptographic subsystems, ZK circuit integrity, identity recovery
 
