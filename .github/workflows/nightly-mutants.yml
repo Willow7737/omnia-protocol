@@ -9,6 +9,7 @@ jobs:
   mutants:
     name: Cargo Mutants
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -19,9 +20,12 @@ jobs:
         run: cargo install cargo-mutants --locked
       - name: Run mutation testing on substrate crate
         run: cargo mutants -p omnia-substrate --in-place --no-times
+        timeout-minutes: 40
       - name: Run mutation testing on zk crate
         run: cargo mutants -p omnia-zk --in-place --no-times
+        timeout-minutes: 40
       - name: Upload mutants report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mutants-report
