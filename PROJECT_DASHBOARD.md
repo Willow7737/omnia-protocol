@@ -179,18 +179,18 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 | ADR-007 | Binding Shard Interface | 2026-05-10 | Implemented |
 | ADR-008 | Crypto Dependency Audit | 2026-05-10 | Accepted |
 | ADR-009 | Poseidon Parameter Justification | 2026-05-14 | Accepted |
-| ADR-010 | Encrypted Keystore Design | 2025-05-18 | Accepted |
-| ADR-011 | Gradual Slashing Model | 2025-05-18 | Accepted |
-| ADR-012 | VRF Construction Choice | 2025-05-18 | Accepted |
-| ADR-013 | DKG Protocol Selection | 2025-05-18 | Accepted |
-| ADR-014 | Poseidon Parameter Migration Strategy | 2025-05-18 | Accepted |
+| ADR-010 | Encrypted Keystore Design | 2026-05-18 | Accepted |
+| ADR-011 | Gradual Slashing Model | 2026-05-18 | Accepted |
+| ADR-012 | VRF Construction Choice | 2026-05-18 | Accepted |
+| ADR-013 | DKG Protocol Selection | 2026-05-18 | Accepted |
+| ADR-014 | Poseidon Parameter Migration Strategy | 2026-05-18 | Accepted |
 
 ---
 
 ## Transparency Log
 *Every major decision and status change is logged here.*
 
-- **2025-05-18:** Phase 2 pre-work: Created ADRs 010-014 (encrypted keystore design, gradual slashing model, VRF construction choice, DKG protocol selection, Poseidon parameter migration strategy). Updated project dashboard. Documented Phase 2 findings (PHASE_2_FINDINGS.md).
+- **2026-05-18:** Phase 2 pre-work: Created ADRs 010-014 (encrypted keystore design, gradual slashing model, VRF construction choice, DKG protocol selection, Poseidon parameter migration strategy). Updated project dashboard. Documented Phase 2 findings (PHASE_2_FINDINGS.md).
 - **2026-05-18:** Phase 1 complete. All 8 deliverables verified: typed errors (34 enums), `unwrap()` elimination, E2E API tests (19 functions), code coverage integration, RUSTSEC review, documentation sprint (50+ fixes), Groth16 verifier, rustdoc coverage (35 items).
 - **2026-03-05:** Phase 0 complete. All critical and high-severity security findings resolved (JWT auth FIND-001, ACL FIND-002, creator binding FIND-003, encrypted keys FIND-010, slashing rollback FIND-011, governance quorum FIND-020, gossip limits FIND-021, BLAKE3 domain FIND-022). 295+ tests, 7 fuzz targets, TLA+ verified. Documentation sprint (FIND-034) resolved 42 discrepancies across 10 documentation files.
 - **2026-05-14:** Documentation audit (Task 3-b): All docs updated to match actual codebase. Corrected fee schedule descriptions, epoch duration (30 days not 24 hours), ShardError variant count (7 not 6), time-locked voting status (implemented not planned), DID format (hex not multi-base), fee mechanism status (implemented not "not started"). Added code references and type signatures.
