@@ -40,7 +40,7 @@ jobs:
             echo "cargo-fuzz not installed — skipping fuzz run"
             exit 0
           fi
-          for target in causal_graph_insert event_validate shard_route vector_clock_merge; do
+          for target in fuzz_event_deserialization fuzz_gossip_message fuzz_zk_proof_deserialization fuzz_consensus_state_transition fuzz_vector_clock_merge fuzz_rate_limiter fuzz_snapshot_deserialization; do
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
               timeout 300 cargo fuzz run $target -- -max_total_time=300
