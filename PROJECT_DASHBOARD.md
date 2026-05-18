@@ -28,7 +28,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | :--- | :--- | :--- |
 | **Project Lead** | [@Willow7737](https://github.com/Willow7737) | Active |
 | **Distributed Systems** | *Vacant* | Recruiting |
-| **Applied Cryptography** | *Vacant* | Recruiting |
+| **Applied Cryptography** | @10299614-lgtm](10299614-lgtm)10299614-lgtm | Recruiting |
 | **Protocol Engineering** | *Vacant* | Recruiting |
 | **Community & Gov** | *Vacant* | Recruiting |
 
