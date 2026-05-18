@@ -38,6 +38,15 @@ prometheus = "0.13"
 # Ergonomic error handling — anyhow::Result with context chaining
 anyhow = "1"
 
+# Structured error types — thiserror derives Display and Error
+thiserror = "2"
+
+# JWT creation and validation — industry-standard HMAC-SHA256 tokens
+jsonwebtoken = "9"
+
+# Tower middleware for HTTP concerns (CORS, etc.)
+tower-http = { version = "0.6", features = ["cors"] }
+
 # Embedded database for persistent nonce and slashing state — redb provides
 # fast, ACID-compliant key-value storage used by RedbNonceStore and RedbSlashingStore.
 # redb is pure Rust, stable, and production-ready.
@@ -45,6 +54,15 @@ redb = "2"
 
 # Hex encoding for event IDs and node identifiers in JSON responses
 hex = "0.4"
+
+# AES-256-GCM authenticated encryption for encrypting private key files
+aes-gcm = "0.10"
+
+# BLAKE3 hash for key derivation from passphrase
+blake3 = "1.5"
+
+# Cryptographic random number generation for nonce generation
+rand = "0.8"
 
 # TOML configuration file parsing — industry-standard format for node configuration
 toml = "0.8"

@@ -24,6 +24,20 @@ use serde::{Deserialize, Serialize};
 use crate::error::EconomicsError;
 use crate::fixed_point::{isqrt, BasisPpmExt, DecayRate};
 
+/// Default quorum percentage required for a proposal to pass (2/3 supermajority).
+///
+/// A proposal must have total votes cast ≥ 67% of eligible voters to pass,
+/// even if a simple majority voted yes. This prevents small activist groups
+/// from passing proposals when most participants are absent.
+pub const DEFAULT_QUORUM_PERCENTAGE: u64 = 67;
+
+/// Default time-lock delay before a passed proposal can be executed (24 hours in ms).
+///
+/// After a proposal passes, it must wait this duration before execution.
+/// This gives the community time to review and potentially veto or raise
+/// concerns about the proposal before it takes effect.
+pub const DEFAULT_TIME_LOCK_MS: u64 = 86_400_000;
+
 /// A vote choice on a governance proposal.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum VoteChoice {
@@ -52,6 +66,13 @@ pub struct Proposal {
     pub votes_against: u64,
     /// Total quadratic weight abstained.
     pub votes_abstain: u64,
+    /// Scheduled execution time (milliseconds since UNIX epoch).
+    ///
+    /// When a proposal passes finalization, `execution_time` is set to
+    /// `current_time_ms + time_lock_ms`. The proposal can only be executed
+    /// after this time has elapsed. `None` means the proposal has not
+    /// been finalized (or was rejected).
+    pub execution_time: Option<u64>,
 }
 
 impl Proposal {
@@ -70,6 +91,7 @@ impl Proposal {
             votes_for: 0,
             votes_against: 0,
             votes_abstain: 0,
+            execution_time: None,
         }
     }
 
@@ -79,6 +101,9 @@ impl Proposal {
     }
 
     /// Check if the proposal passes (more "for" than "against" votes).
+    ///
+    /// This only checks the simple-majority condition. Use
+    /// [`GovernanceState::finalize_proposal`] for the full quorum + majority check.
     pub fn passes(&self) -> bool {
         self.votes_for > self.votes_against
     }
@@ -88,6 +113,19 @@ impl Proposal {
         self.votes_for
             .saturating_add(self.votes_against)
             .saturating_add(self.votes_abstain)
+    }
+
+    /// Check whether the proposal is ready for execution.
+    ///
+    /// Returns `true` if the proposal has an `execution_time` set and the
+    /// current time (in ms since UNIX epoch) is at or past that time.
+    /// Returns `false` if the proposal has not been finalized or the
+    /// time-lock has not yet elapsed.
+    pub fn is_ready_for_execution(&self, current_time_ms: u64) -> bool {
+        match self.execution_time {
+            Some(exec_time) => current_time_ms >= exec_time,
+            None => false,
+        }
     }
 }
 
@@ -102,14 +140,29 @@ pub struct GovernanceState {
     pub decay_rate: DecayRate,
     /// Active proposals keyed by ID.
     pub proposals: HashMap<String, Proposal>,
+    /// Minimum quorum percentage (0–100) required for a proposal to pass.
+    ///
+    /// The total votes cast on a proposal must represent at least this
+    /// percentage of all eligible voters (those with non-zero `voting_weights`).
+    /// If quorum is not met, the proposal fails even if a majority voted yes.
+    pub quorum_percentage: u64,
+    /// Time-lock delay in milliseconds before a passed proposal can be executed.
+    ///
+    /// After finalization, the proposal's `execution_time` is set to
+    /// `current_time_ms + time_lock_ms`.
+    pub time_lock_ms: u64,
 }
 
 impl GovernanceState {
-    /// Create a new governance state with the specified decay rate.
+    /// Create a new governance state with the specified decay rate and
+    /// default quorum / time-lock settings.
     ///
     /// The decay rate is specified as a [`DecayRate`] in parts-per-million.
     /// Use [`DecayRate::ten_percent()`] for the standard 10% decay per epoch,
     /// or [`DecayRate::from_percent`] for a custom rate.
+    ///
+    /// Quorum defaults to [`DEFAULT_QUORUM_PERCENTAGE`] (67%) and the
+    /// time-lock to [`DEFAULT_TIME_LOCK_MS`] (24 hours).
     ///
     /// # Examples
     ///
@@ -125,6 +178,8 @@ impl GovernanceState {
             last_active: HashMap::new(),
             decay_rate,
             proposals: HashMap::new(),
+            quorum_percentage: DEFAULT_QUORUM_PERCENTAGE,
+            time_lock_ms: DEFAULT_TIME_LOCK_MS,
         }
     }
 
@@ -245,6 +300,96 @@ impl GovernanceState {
     /// Get a reference to a proposal by ID.
     pub fn get_proposal(&self, id: &str) -> Option<&Proposal> {
         self.proposals.get(id)
+    }
+
+    /// Get a mutable reference to a proposal by ID.
+    pub fn get_proposal_mut(&mut self, id: &str) -> Option<&mut Proposal> {
+        self.proposals.get_mut(id)
+    }
+
+    /// Finalize an expired proposal, applying quorum and time-lock rules.
+    ///
+    /// This method must be called after a proposal has expired
+    /// (`current_epoch > proposal.expires_at_epoch`). It checks:
+    ///
+    /// 1. **Quorum**: total votes cast ≥ `quorum_percentage`% of eligible voters.
+    /// 2. **Majority**: more "for" than "against" votes.
+    ///
+    /// If both conditions are met, the proposal is marked as passed and
+    /// receives an `execution_time` = `current_time_ms + time_lock_ms`.
+    /// If quorum is not met, the proposal fails with [`EconomicsError::QuorumNotMet`].
+    /// If quorum is met but the majority voted against, the proposal fails
+    /// with [`EconomicsError::ProposalDefeated`].
+    ///
+    /// # Errors
+    ///
+    /// - [`EconomicsError::ProposalNotFound`] — no proposal with the given ID.
+    /// - [`EconomicsError::ProposalNotExpired`] — the proposal has not yet expired.
+    /// - [`EconomicsError::QuorumNotMet`] — insufficient voter participation.
+    /// - [`EconomicsError::ProposalDefeated`] — majority voted against.
+    pub fn finalize_proposal(
+        &mut self,
+        proposal_id: &str,
+        current_epoch: u64,
+        current_time_ms: u64,
+    ) -> Result<(), EconomicsError> {
+        let proposal = self
+            .proposals
+            .get(proposal_id)
+            .ok_or_else(|| EconomicsError::ProposalNotFound(proposal_id.to_string()))?;
+
+        if !proposal.is_expired(current_epoch) {
+            return Err(EconomicsError::ProposalNotExpired(proposal_id.to_string()));
+        }
+
+        let total_votes = proposal.total_participation();
+        let eligible_voters = self.eligible_voter_count();
+        let total_possible_weight = self.total_voting_weight();
+
+        // Check quorum: total vote weight cast must be >= quorum_percentage%
+        // of total possible voting weight (sum of all eligible voters' weights).
+        // We compute (total_votes * 100) >= (total_possible_weight * quorum_percentage)
+        // to avoid floating-point arithmetic.
+        if total_possible_weight > 0 {
+            let quorum_threshold = total_possible_weight
+                .saturating_mul(self.quorum_percentage);
+            let votes_percentage_scale = total_votes.saturating_mul(100);
+            if votes_percentage_scale < quorum_threshold {
+                return Err(EconomicsError::QuorumNotMet {
+                    proposal_id: proposal_id.to_string(),
+                    votes_cast: total_votes,
+                    eligible_voters,
+                    quorum_percentage: self.quorum_percentage,
+                });
+            }
+        }
+
+        // Check majority
+        if !proposal.passes() {
+            return Err(EconomicsError::ProposalDefeated(proposal_id.to_string()));
+        }
+
+        // Proposal passes: set execution_time with time-lock delay.
+        let proposal = self
+            .proposals
+            .get_mut(proposal_id)
+            .expect("proposal was found above");
+        proposal.execution_time = Some(current_time_ms.saturating_add(self.time_lock_ms));
+
+        Ok(())
+    }
+
+    /// Count the number of eligible voters (DIDs with non-zero voting weight).
+    pub fn eligible_voter_count(&self) -> u64 {
+        self.voting_weights.values().filter(|&&w| w > 0).count() as u64
+    }
+
+    /// Compute the total possible voting weight (sum of all base weights).
+    ///
+    /// This is used for quorum computation: a proposal passes quorum when
+    /// the total weight of votes cast ≥ `quorum_percentage`% of this total.
+    pub fn total_voting_weight(&self) -> u64 {
+        self.voting_weights.values().copied().fold(0u64, u64::saturating_add)
     }
 
     /// Remove expired proposals from the active set.
@@ -379,6 +524,168 @@ mod tests {
         // This test documents the requirement that no f64/f32 exists
         // in the economics crate source. The actual check is done
         // via grep in the final checklist.
+    }
+
+    // ── Quorum and time-lock tests ─────────────────────────────────────
+
+    #[test]
+    fn test_default_quorum_percentage() {
+        assert_eq!(DEFAULT_QUORUM_PERCENTAGE, 67);
+    }
+
+    #[test]
+    fn test_default_time_lock_ms() {
+        assert_eq!(DEFAULT_TIME_LOCK_MS, 86_400_000);
+    }
+
+    #[test]
+    fn test_governance_state_default_quorum() {
+        let gov = GovernanceState::new(DecayRate::ten_percent());
+        assert_eq!(gov.quorum_percentage, 67);
+        assert_eq!(gov.time_lock_ms, 86_400_000);
+    }
+
+    #[test]
+    fn test_eligible_voter_count() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        assert_eq!(gov.eligible_voter_count(), 0);
+
+        gov.set_weight("alice", 100); // weight = 10
+        assert_eq!(gov.eligible_voter_count(), 1);
+
+        gov.set_weight("bob", 400); // weight = 20
+        assert_eq!(gov.eligible_voter_count(), 2);
+    }
+
+    #[test]
+    fn test_proposal_execution_time_initially_none() {
+        let proposal = Proposal::new(
+            "prop1".to_string(),
+            "test".to_string(),
+            0,
+            10,
+        );
+        assert!(proposal.execution_time.is_none());
+    }
+
+    #[test]
+    fn test_proposal_is_ready_for_execution() {
+        let mut proposal = Proposal::new(
+            "prop1".to_string(),
+            "test".to_string(),
+            0,
+            10,
+        );
+
+        // Not ready — no execution_time set
+        assert!(!proposal.is_ready_for_execution(1_000_000));
+
+        // Set execution_time to 2_000_000
+        proposal.execution_time = Some(2_000_000);
+
+        // Not ready before the scheduled time
+        assert!(!proposal.is_ready_for_execution(1_999_999));
+
+        // Ready exactly at the scheduled time
+        assert!(proposal.is_ready_for_execution(2_000_000));
+
+        // Ready after the scheduled time
+        assert!(proposal.is_ready_for_execution(3_000_000));
+    }
+
+    #[test]
+    fn test_finalize_proposal_quorum_met_and_majority() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        // 3 eligible voters
+        gov.set_weight("alice", 100); // weight = 10
+        gov.set_weight("bob", 400); // weight = 20
+        gov.set_weight("charlie", 900); // weight = 30
+
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+            .ok();
+
+        // All 3 vote "for" → 60 total weight, eligible = 3
+        // quorum: 60 * 100 = 6000 >= 3 * 67 = 201 ✓
+        gov.vote("alice", "prop1", VoteChoice::For, 0).ok();
+        gov.vote("bob", "prop1", VoteChoice::For, 1).ok();
+        gov.vote("charlie", "prop1", VoteChoice::For, 2).ok();
+
+        // Finalize at epoch 11 (after expires_at_epoch=10)
+        let result = gov.finalize_proposal("prop1", 11, 1_000_000);
+        assert!(result.is_ok());
+
+        let proposal = gov.get_proposal("prop1").expect("proposal exists");
+        assert_eq!(proposal.execution_time, Some(1_000_000 + DEFAULT_TIME_LOCK_MS));
+    }
+
+    #[test]
+    fn test_finalize_proposal_quorum_not_met() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        // 10 eligible voters, each with weight 10 (isqrt(100))
+        // total_possible_weight = 100
+        for i in 0..10 {
+            gov.set_weight(&format!("voter{}", i), 100);
+        }
+
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+            .ok();
+
+        // Only 1 voter votes "for" → 10 total weight, total_possible_weight = 100
+        // quorum: 10 * 100 = 1000 < 100 * 67 = 6700 ✗
+        gov.vote("voter0", "prop1", VoteChoice::For, 0).ok();
+
+        let result = gov.finalize_proposal("prop1", 11, 1_000_000);
+        assert!(matches!(result, Err(EconomicsError::QuorumNotMet { .. })));
+    }
+
+    #[test]
+    fn test_finalize_proposal_defeated() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100);
+        gov.set_weight("bob", 400);
+
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+            .ok();
+
+        // Both vote, quorum met, but majority against
+        gov.vote("alice", "prop1", VoteChoice::Against, 0).ok();
+        gov.vote("bob", "prop1", VoteChoice::Against, 1).ok();
+
+        let result = gov.finalize_proposal("prop1", 11, 1_000_000);
+        assert!(matches!(result, Err(EconomicsError::ProposalDefeated(_))));
+    }
+
+    #[test]
+    fn test_finalize_proposal_not_expired() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100);
+
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+            .ok();
+
+        // Try to finalize before expiration (current_epoch=5, expires_at=10)
+        let result = gov.finalize_proposal("prop1", 5, 1_000_000);
+        assert!(matches!(result, Err(EconomicsError::ProposalNotExpired(_))));
+    }
+
+    #[test]
+    fn test_finalize_proposal_not_found() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        let result = gov.finalize_proposal("nonexistent", 11, 1_000_000);
+        assert!(matches!(result, Err(EconomicsError::ProposalNotFound(_))));
+    }
+
+    #[test]
+    fn test_get_proposal_mut() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+            .ok();
+
+        let proposal = gov.get_proposal_mut("prop1");
+        assert!(proposal.is_some());
+
+        let missing = gov.get_proposal_mut("nonexistent");
+        assert!(missing.is_none());
     }
 }
 

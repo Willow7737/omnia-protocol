@@ -46,8 +46,11 @@ async fn main() -> Result<()> {
     // Handle subcommands before starting the node
     if let Some(command) = cli.command {
         match command {
-            CliCommand::Keygen { output_dir } => {
-                return run_keygen(&output_dir);
+            CliCommand::Keygen {
+                output_dir,
+                passphrase,
+            } => {
+                return run_keygen(&output_dir, passphrase.as_deref());
             }
             CliCommand::SetupContribute {
                 degree,
@@ -238,17 +241,41 @@ fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<Shard
     Ok(router)
 }
 
+/// Magic bytes identifying an encrypted Omnia key file.
+///
+/// Format: `OMNIAKEY01` (10 bytes) + nonce (12 bytes) + ciphertext+tag (80 bytes) = 102 bytes total.
+const ENCRYPTED_KEY_MAGIC: &[u8; 10] = b"OMNIAKEY01";
+
+/// Domain separation tag for BLAKE3 key derivation from passphrase.
+const KEY_DERIVATION_CONTEXT: &str = "omnia-keygen-aes256gcm";
+
 /// Generate a new validator keypair and save it to the specified output directory.
 ///
-/// Creates two files:
-/// - `validator_key.pem` — the encrypted private key
+/// When a `passphrase` is provided, the private key is encrypted with
+/// AES-256-GCM and saved as `validator_key.enc`. The key is derived from
+/// the passphrase using BLAKE3 with domain separation.
+///
+/// When no passphrase is provided, the private key is written as raw bytes
+/// to `validator_key.bin` with a prominent warning.
+///
+/// # Files Created
+///
 /// - `validator_pubkey.txt` — the hex-encoded public key
+/// - `validator_key.enc` (encrypted) or `validator_key.bin` (unencrypted) — the private key
+///
+/// # Encrypted File Format
+///
+/// ```text
+/// [OMNIAKEY01 (10B)] [nonce (12B)] [ciphertext+tag (80B)]
+/// ```
 ///
 /// # Errors
 ///
-/// Returns an error if the output directory cannot be created or if
-/// file writing fails.
-fn run_keygen(output_dir: &str) -> Result<()> {
+/// Returns an error if the output directory cannot be created, if
+/// encryption fails, or if file writing fails.
+fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
     use omnia_substrate::crypto::generate_keypair;
 
     let dir = std::path::Path::new(output_dir);
@@ -263,25 +290,167 @@ fn run_keygen(output_dir: &str) -> Result<()> {
     std::fs::write(&pubkey_path, hex::encode(pubkey_bytes))
         .with_context(|| format!("Failed to write public key to {:?}", pubkey_path))?;
 
-    // Write private key bytes (in production, this would be encrypted)
-    let privkey_path = dir.join("validator_key.bin");
-    std::fs::write(&privkey_path, keypair.to_bytes())
-        .with_context(|| format!("Failed to write private key to {:?}", privkey_path))?;
+    let privkey_bytes = keypair.to_bytes();
 
-    tracing::info!(
-        output_dir = %dir.display(),
-        pubkey = %hex::encode(&pubkey_bytes[..8]),
-        "Validator keypair generated successfully"
-    );
+    if let Some(pass) = passphrase {
+        // ---- Encrypted path ----
+        // Derive a 256-bit key from the passphrase using BLAKE3 with domain separation
+        let derived_key = blake3::derive_key(KEY_DERIVATION_CONTEXT, pass.as_bytes());
+        let cipher_key = aes_gcm::Key::<Aes256Gcm>::from_slice(&derived_key);
+        let cipher = Aes256Gcm::new(cipher_key);
 
-    println!("Validator keypair generated in {}", dir.display());
-    println!("  Public key: {}", hex::encode(pubkey_bytes));
-    println!(
-        "  WARNING: Protect the private key file at {:?}",
-        privkey_path
-    );
+        // Generate a random 96-bit (12-byte) nonce
+        let nonce_bytes: [u8; 12] = rand::random();
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        // Encrypt: ciphertext includes the 16-byte GCM authentication tag appended
+        let ciphertext = cipher
+            .encrypt(nonce, privkey_bytes.as_slice())
+            .map_err(|e| anyhow::anyhow!("AES-256-GCM encryption failed: {}", e))?;
+
+        // Build the file: magic + nonce + ciphertext+tag
+        let mut file_bytes = Vec::with_capacity(10 + 12 + ciphertext.len());
+        file_bytes.extend_from_slice(ENCRYPTED_KEY_MAGIC);
+        file_bytes.extend_from_slice(&nonce_bytes);
+        file_bytes.extend_from_slice(&ciphertext);
+
+        let privkey_path = dir.join("validator_key.enc");
+        std::fs::write(&privkey_path, &file_bytes)
+            .with_context(|| format!("Failed to write encrypted private key to {:?}", privkey_path))?;
+
+        // Set file permissions to 0600 (owner read/write only) on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            std::fs::set_permissions(&privkey_path, perms)
+                .with_context(|| format!("Failed to set permissions on {:?}", privkey_path))?;
+        }
+
+        tracing::info!(
+            output_dir = %dir.display(),
+            pubkey = %hex::encode(&pubkey_bytes[..8]),
+            encrypted = true,
+            "Validator keypair generated and encrypted successfully"
+        );
+
+        println!("Validator keypair generated in {}", dir.display());
+        println!("  Public key: {}", hex::encode(pubkey_bytes));
+        println!("  Private key: {:?} (AES-256-GCM encrypted)", privkey_path);
+    } else {
+        // ---- Unencrypted path (NOT recommended for production) ----
+        let privkey_path = dir.join("validator_key.bin");
+        std::fs::write(&privkey_path, privkey_bytes)
+            .with_context(|| format!("Failed to write private key to {:?}", privkey_path))?;
+
+        // Set file permissions to 0600 (owner read/write only) on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            std::fs::set_permissions(&privkey_path, perms)
+                .with_context(|| format!("Failed to set permissions on {:?}", privkey_path))?;
+        }
+
+        tracing::warn!(
+            output_dir = %dir.display(),
+            "Private key written WITHOUT encryption — provide --passphrase for production use"
+        );
+
+        println!("Validator keypair generated in {}", dir.display());
+        println!("  Public key: {}", hex::encode(pubkey_bytes));
+        println!("╔══════════════════════════════════════════════════════════════╗");
+        println!("║  ⚠  WARNING: Private key is stored UNENCRYPTED!            ║");
+        println!("║     Provide --passphrase or set OMNIA_KEYGEN_PASSPHRASE    ║");
+        println!("║     to encrypt the key with AES-256-GCM.                  ║");
+        println!("║     Unencrypted keys are NOT suitable for production.     ║");
+        println!("╚══════════════════════════════════════════════════════════════╝");
+        println!("  Private key: {:?}", privkey_path);
+    }
 
     Ok(())
+}
+
+/// Load and decrypt an encrypted validator private key from disk.
+///
+/// Reads the file at `path`, validates the `OMNIAKEY01` magic header,
+/// extracts the nonce and ciphertext, decrypts with AES-256-GCM using
+/// the key derived from `passphrase` via BLAKE3, and returns the raw
+/// 64-byte Ed25519 keypair bytes.
+///
+/// # Expected File Format
+///
+/// ```text
+/// [OMNIAKEY01 (10B)] [nonce (12B)] [ciphertext+tag (80B)]
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be read
+/// - The magic header does not match `OMNIAKEY01`
+/// - The file is too short to contain the header, nonce, and tag
+/// - Decryption fails (wrong passphrase, corrupted data, or tampering)
+pub fn load_encrypted_key(
+    path: &std::path::Path,
+    passphrase: &str,
+) -> Result<[u8; 64]> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+
+    let file_bytes =
+        std::fs::read(path).with_context(|| format!("Failed to read key file: {:?}", path))?;
+
+    // Validate minimum length: magic(10) + nonce(12) + tag(16) = 38 bytes minimum
+    // (ciphertext must be at least 0 bytes + 16-byte tag, but Ed25519 keypair is 64 bytes,
+    //  so the real minimum is 10 + 12 + 64 + 16 = 102)
+    if file_bytes.len() < 38 {
+        anyhow::bail!(
+            "Key file too short ({} bytes), expected at least 38 bytes",
+            file_bytes.len()
+        );
+    }
+
+    // Validate magic header
+    if &file_bytes[..10] != ENCRYPTED_KEY_MAGIC {
+        anyhow::bail!(
+            "Invalid key file magic: expected {:?}, got {:?}",
+            std::str::from_utf8(ENCRYPTED_KEY_MAGIC),
+            std::str::from_utf8(&file_bytes[..10]).unwrap_or("<invalid UTF-8>")
+        );
+    }
+
+    let nonce_bytes = &file_bytes[10..22];
+    let ciphertext = &file_bytes[22..];
+
+    if ciphertext.len() < 16 {
+        anyhow::bail!(
+            "Ciphertext too short ({} bytes), must include 16-byte GCM tag",
+            ciphertext.len()
+        );
+    }
+
+    // Derive the same key from the passphrase
+    let derived_key = blake3::derive_key(KEY_DERIVATION_CONTEXT, passphrase.as_bytes());
+    let cipher_key = aes_gcm::Key::<Aes256Gcm>::from_slice(&derived_key);
+    let cipher = Aes256Gcm::new(cipher_key);
+    let nonce = Nonce::from_slice(nonce_bytes);
+
+    // Decrypt — this also verifies the authentication tag
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| anyhow::anyhow!("Decryption failed: wrong passphrase or corrupted file"))?;
+
+    if plaintext.len() != 64 {
+        anyhow::bail!(
+            "Decrypted key has unexpected length: expected 64 bytes, got {}",
+            plaintext.len()
+        );
+    }
+
+    let mut key_bytes = [0u8; 64];
+    key_bytes.copy_from_slice(&plaintext);
+    Ok(key_bytes)
 }
 
 /// Contribute to the Powers of Tau trusted setup ceremony (Phase 1).

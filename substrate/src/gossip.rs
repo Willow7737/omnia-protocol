@@ -13,8 +13,9 @@ use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::causal_graph::{CausalGraph, CausalGraphError};
-use crate::event::{Event, EventBatch, EventId, EventRequest};
+use crate::event::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
 use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use crate::rate_limiter::RateLimiter;
 use crate::vector_clock::{NodeId, VectorClock};
@@ -113,8 +114,17 @@ pub struct GossipStats {
     pub messages_rejected_invalid_sig: u64,
     /// Number of syncs completed
     pub syncs_completed: u64,
-    /// Average events per sync operation
-    pub avg_events_per_sync: f64,
+    /// Total number of events received across all completed sync operations.
+    ///
+    /// To compute the average events per sync, divide by `total_syncs`:
+    /// `avg = total_events_in_syncs / total_syncs` (caller handles division).
+    pub total_events_in_syncs: u64,
+    /// Total number of completed sync operations.
+    ///
+    /// Combined with `total_events_in_syncs`, this allows the caller to
+    /// compute the average events per sync without losing precision to
+    /// floating-point arithmetic.
+    pub total_syncs: u64,
     /// Time since last sync in milliseconds
     pub time_since_last_sync_ms: u64,
     /// Number of known peers
@@ -495,10 +505,24 @@ impl GossipProtocol {
                     // Update last_seen for partition detection
                     self.last_seen.insert(source, Instant::now());
 
-                    // Rate limit check: hash PeerId bytes to [u8; 32] for the rate limiter
-                    let peer_id_bytes = blake3::hash(&source.to_bytes());
-                    if !self.rate_limiter.allow(peer_id_bytes.as_bytes()) {
+                    // Rate limit check: hash PeerId bytes with domain separation
+                    let peer_id_bytes = blake3_hash_domain(b"omnia-nonce", &source.to_bytes());
+                    if !self.rate_limiter.allow(&peer_id_bytes) {
                         warn!(peer = ?source, "Rate limiting peer — dropping event");
+                        self.stats.events_rejected += 1;
+                        continue;
+                    }
+
+                    // Defense-in-depth: reject oversized payloads BEFORE
+                    // any expensive crypto validation. The Event::validate()
+                    // also checks this, but the gossip layer enforces it
+                    // early to avoid wasted CPU on signature verification.
+                    if event.payload.len() > MAX_PAYLOAD_SIZE {
+                        warn!(
+                            size = event.payload.len(),
+                            max = MAX_PAYLOAD_SIZE,
+                            "Gossip event rejected: payload exceeds MAX_PAYLOAD_SIZE"
+                        );
                         self.stats.events_rejected += 1;
                         continue;
                     }
@@ -598,6 +622,14 @@ pub enum GossipError {
     #[error("Channel not initialized")]
     /// Channel for network events is not initialized
     ChannelNotInitialized,
+    #[error("Payload too large for gossip: {size} bytes (max {max})")]
+    /// Gossip event payload exceeds the maximum allowed size
+    PayloadTooLarge {
+        /// Actual payload size in bytes.
+        size: usize,
+        /// Maximum allowed payload size in bytes.
+        max: usize,
+    },
 }
 
 impl From<CausalGraphError> for GossipError {

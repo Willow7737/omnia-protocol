@@ -75,7 +75,7 @@ pub struct NodeConfig {
 #[serde(deny_unknown_fields)]
 pub struct NodeConfigFile {
     /// Unique node identifier in the network.
-    pub node_id: Option<u16>,
+    pub node_id: Option<u64>,
     /// HTTP API server port.
     pub http_port: Option<u16>,
     /// Network listen address for P2P communication.
@@ -330,6 +330,10 @@ pub enum CliCommand {
         /// Output directory for the generated keypair files.
         #[arg(long, default_value = ".")]
         output_dir: String,
+        /// Passphrase to encrypt the private key file (required for production).
+        /// If not provided, the key will be written unencrypted with a WARNING.
+        #[arg(long, env = "OMNIA_KEYGEN_PASSPHRASE")]
+        passphrase: Option<String>,
     },
 
     /// Contribute to the Powers of Tau trusted setup ceremony (Phase 1).

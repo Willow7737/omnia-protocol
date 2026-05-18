@@ -32,6 +32,7 @@
 //! - Buterin, V., Griffith, V. *Casper the Friendly Finality Gadget*.
 //!   arXiv:1710.09437, 2017.
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::crypto::{NodeKeypair, NodePublicKey};
 use crate::vector_clock::NodeId;
 use ed25519_dalek::{Signature, Signer, Verifier};
@@ -108,14 +109,14 @@ pub fn vrf_compute(keypair: &NodeKeypair, input: &[u8]) -> VrfOutput {
     let proof = signature.to_bytes().to_vec();
 
     // Derive the VRF output from the public key and signature
-    // Using blake3 for domain-separated hashing
+    // Using blake3 with domain separation
     let mut preimage = Vec::new();
     preimage.extend_from_slice(b"OMNIA-VRF-V1");
     preimage.extend_from_slice(&keypair.verifying_key().to_bytes());
     preimage.extend_from_slice(&signature.to_bytes());
     preimage.extend_from_slice(input);
 
-    let output: [u8; 32] = blake3::hash(&preimage).into();
+    let output: [u8; 32] = blake3_hash_domain(b"omnia-commitment", &preimage);
 
     VrfOutput { output, proof }
 }
@@ -174,7 +175,7 @@ pub fn vrf_verify(
     preimage.extend_from_slice(&proof_bytes);
     preimage.extend_from_slice(input);
 
-    let expected_output: [u8; 32] = blake3::hash(&preimage).into();
+    let expected_output: [u8; 32] = blake3_hash_domain(b"omnia-commitment", &preimage);
 
     if expected_output != vrf_output.output {
         return Err(VrfError::VerificationFailed(
@@ -493,27 +494,31 @@ mod tests {
             *counts.entry(leader).or_insert(0) += 1;
         }
 
-        // Each candidate should be selected approximately proportional to stake
-        let total = rounds as f64;
-        let freq_1 = *counts.get(&test_node(1)).unwrap_or(&0) as f64 / total;
-        let freq_2 = *counts.get(&test_node(2)).unwrap_or(&0) as f64 / total;
-        let freq_3 = *counts.get(&test_node(3)).unwrap_or(&0) as f64 / total;
+        // Each candidate should be selected approximately proportional to stake.
+        // Use basis-point (BPS) arithmetic instead of f64: frequency_bps = count * 10_000 / total.
+        // 10% = 1000 bps, 40% = 4000 bps, 50% = 5000 bps.
+        let freq_1_bps =
+            (*counts.get(&test_node(1)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_2_bps =
+            (*counts.get(&test_node(2)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_3_bps =
+            (*counts.get(&test_node(3)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
 
-        // Allow 5% tolerance for statistical variance
+        // Allow 500 bps (5%) tolerance for statistical variance
         assert!(
-            (freq_1 - 0.10).abs() < 0.05,
-            "Node 1 frequency {} not ~10%",
-            freq_1
+            freq_1_bps > 500 && freq_1_bps < 1500,
+            "Node 1 frequency {} bps not ~1000 bps (10%)",
+            freq_1_bps
         );
         assert!(
-            (freq_2 - 0.40).abs() < 0.05,
-            "Node 2 frequency {} not ~40%",
-            freq_2
+            freq_2_bps > 3500 && freq_2_bps < 4500,
+            "Node 2 frequency {} bps not ~4000 bps (40%)",
+            freq_2_bps
         );
         assert!(
-            (freq_3 - 0.50).abs() < 0.05,
-            "Node 3 frequency {} not ~50%",
-            freq_3
+            freq_3_bps > 4500 && freq_3_bps < 5500,
+            "Node 3 frequency {} bps not ~5000 bps (50%)",
+            freq_3_bps
         );
     }
 

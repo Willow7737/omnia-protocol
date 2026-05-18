@@ -36,10 +36,10 @@ WORKDIR /app
 COPY --from=builder /build/target/release/omnia-node /app/omnia-node
 RUN mkdir -p /app/data && chown -R omnia:omnia /app
 USER omnia
-EXPOSE 9090/tcp 9090/udp
+EXPOSE 8080/tcp 4001/tcp 4001/udp
 ENV RUST_LOG=info
 ENV OMNIA_NODE_ID=""
 ENV OMNIA_BOOTSTRAP_NODES=""
 ENV OMNIA_DATA_DIR=/app/data
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:9090/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1

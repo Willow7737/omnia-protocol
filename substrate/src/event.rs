@@ -10,6 +10,7 @@
 //! - Parallel event creation (no single leader)
 //! - Complete network history through graph traversal
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::crypto::{NodeKeypair, NodePublicKey, Signature as EdSignature, Signer, Verifier};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
@@ -219,8 +220,9 @@ impl Event {
     /// Sign this event with an Ed25519 keypair.
     ///
     /// Stores the public key in `creator_pubkey`, derives the `creator` field
-    /// as `blake3(creator_pubkey)` to bind identity to the signing key, recomputes
-    /// the event hash, and then signs the hash with the private key.
+    /// as `blake3_hash_domain(b"omnia-creator", creator_pubkey)` to bind identity to
+    /// the signing key, recomputes the event hash, and then signs the hash with
+    /// the private key.
     ///
     /// # Arguments
     ///
@@ -237,8 +239,8 @@ impl Event {
     /// ```
     pub fn sign_with_keypair(&mut self, keypair: &NodeKeypair) {
         self.creator_pubkey = keypair.verifying_key().to_bytes();
-        // Derive creator from pubkey: creator = blake3(creator_pubkey)
-        self.creator = *blake3::hash(&self.creator_pubkey).as_bytes();
+        // Derive creator from pubkey: creator = blake3_hash_domain("omnia-creator", creator_pubkey)
+        self.creator = blake3_hash_domain(b"omnia-creator", &self.creator_pubkey);
         // Recompute hash now that pubkey and creator are set
         self.id = self.compute_hash();
         let sig = keypair.sign(&self.id);
@@ -283,7 +285,8 @@ impl Event {
 
     /// Validate the creator-identity binding.
     ///
-    /// The `creator` field MUST be the BLAKE3 hash of `creator_pubkey`.
+    /// The `creator` field MUST be the domain-separated BLAKE3 hash of
+    /// `creator_pubkey` with domain `b"omnia-creator"`.
     /// This prevents impersonation: a malicious actor cannot claim a different
     /// creator identity while signing with their own key.
     ///
@@ -293,7 +296,7 @@ impl Event {
     ///
     /// # Returns
     ///
-    /// * `Ok(())` if `creator == blake3(creator_pubkey)` (constant-time)
+    /// * `Ok(())` if `creator == blake3_hash_domain("omnia-creator", creator_pubkey)` (constant-time)
     /// * `Err(EventValidationError::CreatorPubkeyMismatch)` otherwise
     ///
     /// # Example
@@ -303,11 +306,11 @@ impl Event {
     /// assert!(result.is_ok());
     /// ```
     fn validate_creator_binding(&self) -> Result<(), EventValidationError> {
-        let expected_creator = blake3::hash(&self.creator_pubkey);
-        if self.creator.ct_ne(expected_creator.as_bytes()).into() {
+        let expected_creator = blake3_hash_domain(b"omnia-creator", &self.creator_pubkey);
+        if self.creator.ct_ne(&expected_creator).into() {
             return Err(EventValidationError::CreatorPubkeyMismatch {
                 claimed: hex::encode(self.creator),
-                derived: hex::encode(expected_creator.as_bytes()),
+                derived: hex::encode(expected_creator),
             });
         }
         Ok(())
@@ -862,7 +865,7 @@ mod tests {
 
     // ── Creator-binding tests (Sprint 4, Task A1) ─────────────────────
 
-    /// Test that a valid event (creator == blake3(creator_pubkey)) validates successfully.
+    /// Test that a valid event (creator == blake3_hash_domain("omnia-creator", creator_pubkey)) validates successfully.
     /// This would have passed before A1 too, but now it explicitly checks the binding.
     #[test]
     fn test_validate_creator_binding_valid() {
@@ -872,8 +875,8 @@ mod tests {
         let mut event = Event::new(creator_from_new, 0, vc, None, None, vec![1, 2, 3]);
         event.sign_with_keypair(&keypair);
 
-        // After sign_with_keypair, creator == blake3(creator_pubkey)
-        let expected = *blake3::hash(&event.creator_pubkey).as_bytes();
+        // After sign_with_keypair, creator == blake3_hash_domain("omnia-creator", creator_pubkey)
+        let expected = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey);
         assert_eq!(event.creator, expected);
 
         let result = event.validate();
@@ -912,7 +915,7 @@ mod tests {
     }
 
     /// Test that an event created through sign_with_keypair automatically has
-    /// the correct creator binding (creator == blake3(creator_pubkey)).
+    /// the correct creator binding (creator == blake3_hash_domain("omnia-creator", creator_pubkey)).
     #[test]
     fn test_sign_with_keypair_sets_correct_creator_binding() {
         let keypair = test_keypair();
@@ -925,8 +928,8 @@ mod tests {
 
         event.sign_with_keypair(&keypair);
 
-        // After signing, creator MUST be blake3(creator_pubkey), not the original value
-        let expected_creator = *blake3::hash(&event.creator_pubkey).as_bytes();
+        // After signing, creator MUST be blake3_hash_domain("omnia-creator", creator_pubkey)
+        let expected_creator = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey);
         assert_eq!(event.creator, expected_creator);
         assert_ne!(event.creator, arbitrary_creator); // ensure it was actually changed
     }
@@ -955,7 +958,7 @@ mod tests {
     #[test]
     fn test_payload_at_max_size_accepts() {
         let keypair = test_keypair();
-        let creator = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let vc = VectorClock::with_node(creator, 1);
         let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]);
         event.sign_with_keypair(&keypair);
@@ -973,7 +976,7 @@ mod tests {
     #[test]
     fn test_payload_exceeds_max_size_rejects() {
         let keypair = test_keypair();
-        let creator = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let vc = VectorClock::with_node(creator, 1);
         let oversized = vec![0u8; MAX_PAYLOAD_SIZE + 1];
         let mut event = Event::new(creator, 0, vc, None, None, oversized);

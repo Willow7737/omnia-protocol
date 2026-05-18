@@ -22,6 +22,7 @@
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
 
+pub mod blake3_domain;
 pub mod bls;
 pub mod causal_graph;
 pub mod consensus;
@@ -45,6 +46,7 @@ pub mod vrf;
 pub mod wire_format;
 
 // Re-export commonly used types
+pub use blake3_domain::blake3_hash_domain;
 pub use bls::{
     aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
     BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,

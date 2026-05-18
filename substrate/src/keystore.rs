@@ -40,6 +40,7 @@
 //! let proof = loaded.rotate("my-secure-passphrase", "new-secure-passphrase")?;
 //! ```
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signer, Verifier};
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -520,7 +521,7 @@ fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     note = "Use derive_key_hkdf instead — deterministic key derivation without salt is insecure"
 )]
 fn derive_key(passphrase: &str) -> [u8; 32] {
-    *blake3::hash(passphrase.as_bytes()).as_bytes()
+    blake3_hash_domain(b"omnia-commitment", passphrase.as_bytes())
 }
 
 #[cfg(test)]

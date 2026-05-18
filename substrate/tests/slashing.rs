@@ -19,9 +19,9 @@ fn node(id: u8) -> [u8; 32] {
 }
 
 /// Helper: derive the creator NodeId from a keypair.
-/// After Sprint 4 Task A1, `creator = blake3(creator_pubkey)`.
+/// After Sprint 4 Task A1, `creator = blake3_hash_domain("omnia-creator", creator_pubkey)`.
 fn creator_from_keypair(kp: &omnia_substrate::NodeKeypair) -> [u8; 32] {
-    *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes()
+    omnia_substrate::blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes())
 }
 
 // ── Equivocation detection ─────────────────────────────────────────

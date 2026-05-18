@@ -102,9 +102,9 @@ impl ChaosNode {
     /// * `keypair` — Ed25519 signing keypair for this node (node_id is derived as blake3(pubkey)).
     /// * `total_nodes` — Total number of validators (used for consensus thresholds).
     pub fn new(index: usize, keypair: NodeKeypair, total_nodes: usize) -> Self {
-        // Derive node_id from the keypair: node_id = blake3(creator_pubkey)
-        // This matches Event::sign_with_keypair() which sets creator = blake3(pubkey)
-        let node_id: NodeId = *blake3::hash(&keypair.verifying_key().to_bytes()).as_bytes();
+        // Derive node_id from the keypair: node_id = blake3_hash_domain("omnia-creator", pubkey)
+        // This matches Event::sign_with_keypair() which sets creator = blake3_hash_domain("omnia-creator", pubkey)
+        let node_id: NodeId = omnia_substrate::blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let mut seed = [0u8; 32];
         seed[0] = (index as u8) + 1; // Non-zero to avoid debug-build panic
         let config = ConsensusConfig {
@@ -193,10 +193,10 @@ impl ChaosNetwork {
             keypairs.push(generate_keypair());
         }
 
-        // Derive node IDs from the BLAKE3 hash of each keypair's public key
+        // Derive node IDs from the domain-separated BLAKE3 hash of each keypair's public key
         let node_ids: Vec<NodeId> = keypairs
             .iter()
-            .map(|kp| *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes())
+            .map(|kp| omnia_substrate::blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes()))
             .collect();
 
         // Create nodes, each with all validators registered

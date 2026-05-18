@@ -44,4 +44,28 @@ pub enum EconomicsError {
     /// An invalid amount was specified (e.g., zero).
     #[error("Invalid amount: {0}")]
     InvalidAmount(String),
+
+    /// Quorum was not met — too few voters participated.
+    ///
+    /// The total votes cast on the proposal were less than
+    /// `quorum_percentage`% of the eligible voters.
+    #[error("Quorum not met for proposal {proposal_id}: {votes_cast} votes cast, need {quorum_percentage}% of {eligible_voters} eligible voters")]
+    QuorumNotMet {
+        /// The proposal that failed quorum.
+        proposal_id: String,
+        /// Total quadratic weight of votes cast.
+        votes_cast: u64,
+        /// Number of eligible voters (non-zero weight).
+        eligible_voters: u64,
+        /// Required quorum percentage (0–100).
+        quorum_percentage: u64,
+    },
+
+    /// The proposal has not yet expired and cannot be finalized.
+    #[error("Proposal not yet expired: {0}")]
+    ProposalNotExpired(String),
+
+    /// The proposal was defeated — majority voted against.
+    #[error("Proposal defeated: {0}")]
+    ProposalDefeated(String),
 }

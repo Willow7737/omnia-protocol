@@ -16,6 +16,7 @@
 // since we cannot annotate the derived code directly.
 #![allow(missing_docs)]
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::PROTOCOL_IDENTIFIER;
 #[allow(unused_imports)] // PROTOCOL_VERSION used in tests
 use crate::PROTOCOL_VERSION;
@@ -186,8 +187,8 @@ impl OmniaNetwork {
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .validation_mode(ValidationMode::Strict)
             .message_id_fn(|msg: &gossipsub::Message| {
-                let hash = blake3::hash(&msg.data);
-                gossipsub::MessageId::from(hash.as_bytes().to_vec())
+                let hash = blake3_hash_domain(b"omnia-commitment", &msg.data);
+                gossipsub::MessageId::from(hash.to_vec())
             })
             .build()?;
 

@@ -732,17 +732,14 @@ impl SlashingEngine {
 
     /// Persists the current state to the backing store.
     ///
-    /// On failure, a warning is logged but the in-memory state remains
-    /// valid. This keeps the engine operational even when persistence
-    /// is temporarily unavailable.
-    fn persist_state(&self) {
+    /// Returns `Err` if persistence fails so the caller can rollback
+    /// the in-memory state to a pre-mutation snapshot.
+    fn persist_state(&self) -> Result<(), SlashingStoreError> {
         let state = self.state.read().unwrap_or_else(|e| {
             tracing::error!(error = %e, "persist_state — lock poisoned");
             std::process::abort()
         });
-        if let Err(e) = self.store.save(&state) {
-            tracing::warn!(error = %e, "Failed to persist slashing state");
-        }
+        self.store.save(&state)
     }
 
     /// Registers a validator with an initial stake.
@@ -778,12 +775,23 @@ impl SlashingEngine {
             tracing::error!(error = %e, "register_validator — lock poisoned");
             std::process::abort()
         });
+        let snapshot = state.clone();
         state.stakes.insert(node, stake);
         // Ensure slash_points entry exists so slash_points_of returns 0
         // instead of implicitly missing.
         state.slash_points.entry(node).or_insert(0);
         drop(state);
-        self.persist_state();
+        if let Err(e) = self.persist_state() {
+            tracing::error!(
+                error = %e,
+                "Failed to persist slashing state after register_validator — rolling back"
+            );
+            let mut state = self.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "register_validator rollback — lock poisoned");
+                std::process::abort()
+            });
+            *state = snapshot;
+        }
     }
 
     /// Records a slashing offense for a node and returns the resulting outcome.
@@ -827,6 +835,7 @@ impl SlashingEngine {
             tracing::error!(error = %e, "record_offense — lock poisoned");
             std::process::abort()
         });
+        let snapshot = state.clone();
         let current_points = state.slash_points.entry(node).or_insert(0);
         *current_points = current_points.saturating_add(points_added);
         let total_points = *current_points;
@@ -878,7 +887,18 @@ impl SlashingEngine {
             }
         };
 
-        self.persist_state();
+        if let Err(e) = self.persist_state() {
+            tracing::error!(
+                error = %e,
+                "Failed to persist slashing state after record_offense — rolling back"
+            );
+            let mut state = self.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "record_offense rollback — lock poisoned");
+                std::process::abort()
+            });
+            *state = snapshot;
+        }
+
         outcome
     }
 
@@ -1180,6 +1200,7 @@ impl SlashingEngine {
             tracing::error!(error = %e, "undo_slash — lock poisoned");
             std::process::abort()
         });
+        let snapshot = state.clone();
         let history = state.offense_history.get_mut(node);
         match history {
             Some(entries) if !entries.is_empty() => {
@@ -1198,7 +1219,17 @@ impl SlashingEngine {
                 );
 
                 drop(state);
-                self.persist_state();
+                if let Err(e) = self.persist_state() {
+                    tracing::error!(
+                        error = %e,
+                        "Failed to persist slashing state after undo_slash — rolling back"
+                    );
+                    let mut state = self.state.write().unwrap_or_else(|e| {
+                        tracing::error!(error = %e, "undo_slash rollback — lock poisoned");
+                        std::process::abort()
+                    });
+                    *state = snapshot;
+                }
                 Ok(())
             }
             _ => Err(format!(

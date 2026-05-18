@@ -2,9 +2,18 @@
 //!
 //! Provides the endpoint for routing operations to specific shards:
 //! - `POST /api/v1/shards/:shard_id/operations` — submit an operation to a shard
+//!
+//! # Authorization
+//!
+//! Privileged operations (`mint`, `advance_epoch`) require the caller's
+//! identity to appear in the [`AuthorizedCallers`] registry. Unprivileged
+//! operations (`spend`, `register`) only require a valid JWT.
+
+use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::Extension;
 use axum::Json;
 use omnia_shards::{EconomicsOp, ShardOp};
 use omnia_substrate::{generate_keypair, Event};
@@ -12,7 +21,17 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
 
+use crate::api::auth::AuthorizedCallers;
+use crate::api::auth::CallerIdentity;
 use crate::state::AppState;
+
+/// Set of operations that require elevated (privileged) authorization.
+const PRIVILEGED_OPS: &[&str] = &["mint", "advance_epoch"];
+
+/// Check whether an operation name requires privileged authorization.
+fn is_privileged(op: &str) -> bool {
+    PRIVILEGED_OPS.contains(&op)
+}
 
 /// Request body for submitting a shard operation.
 ///
@@ -33,6 +52,11 @@ pub struct ShardOperationRequest {
 /// Routes the specified operation to the appropriate shard via the
 /// `ShardRouter`. Currently supports operations on the economics
 /// shard; other shards return a "not implemented" response.
+///
+/// Privileged operations (`mint`, `advance_epoch`) require the caller
+/// to be listed in the [`AuthorizedCallers`] registry. Unprivileged
+/// operations only require a valid JWT (enforced by the `require_auth`
+/// middleware).
 #[utoipa::path(
     post,
     path = "/api/v1/shards/{shard_id}/operations",
@@ -43,19 +67,39 @@ pub struct ShardOperationRequest {
     responses(
         (status = 200, description = "Operation processed"),
         (status = 400, description = "Invalid request"),
+        (status = 403, description = "Forbidden — caller not authorized for privileged operation"),
         (status = 404, description = "Unknown shard"),
     )
 )]
 pub async fn submit_shard_operation(
     State(state): State<AppState>,
     Path(shard_id): Path<String>,
+    Extension(authorized): Extension<Arc<AuthorizedCallers>>,
+    Extension(caller): Extension<CallerIdentity>,
     Json(body): Json<ShardOperationRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     tracing::info!(
         shard_id = %shard_id,
         operation = %body.operation,
+        caller = %caller.caller_id,
         "Processing shard operation"
     );
+
+    // Check authorization for privileged operations
+    if is_privileged(&body.operation) && !authorized.is_authorized(&caller.caller_id) {
+        tracing::warn!(
+            operation = %body.operation,
+            caller = %caller.caller_id,
+            "Unauthorized privileged operation attempt"
+        );
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": format!("caller '{}' is not authorized for privileged operation '{}'",
+                    caller.caller_id, body.operation),
+            })),
+        ));
+    }
 
     match shard_id.as_str() {
         "economics" => handle_economics_op(&state, &body).await,
@@ -144,10 +188,10 @@ async fn handle_generic_shard_op(
 /// Parse an economics operation from the request body.
 ///
 /// Supported operations:
-/// - `mint` — Mint UBC to a DID (params: `did`, `amount`)
+/// - `mint` — Mint UBC to a DID (params: `did`, `amount`) **[privileged]**
 /// - `spend` — Spend UBC from a DID (params: `did`, `amount`)
 /// - `register` — Register a DID in the quota system (params: `did`)
-/// - `advance_epoch` — Advance to the next epoch
+/// - `advance_epoch` — Advance to the next epoch **[privileged]**
 fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, String> {
     match body.operation.as_str() {
         "mint" => {

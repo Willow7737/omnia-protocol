@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::blake3_domain::blake3_hash_domain;
 use crate::event::{Event, EventId, EventStatus};
 use crate::vector_clock::{NodeId, VectorClock};
 
@@ -740,13 +741,14 @@ impl CausalGraph {
         // Build Merkle tree bottom-up
         let mut level: Vec<[u8; 32]> = ids
             .iter()
-            .map(|id| blake3::hash(&**id).as_bytes().to_owned())
+            .map(|id| blake3_hash_domain(b"omnia-state-root", &**id))
             .collect();
 
         while level.len() > 1 {
             let mut next_level = Vec::new();
             for chunk in level.chunks(2) {
                 let mut hasher = blake3::Hasher::new();
+                hasher.update(b"omnia-state-root");
                 hasher.update(&chunk[0]);
                 if chunk.len() > 1 {
                     hasher.update(&chunk[1]);
@@ -775,7 +777,7 @@ impl CausalGraph {
         let mut index = pos;
         let mut level: Vec<[u8; 32]> = ids
             .iter()
-            .map(|id| blake3::hash(&**id).as_bytes().to_owned())
+            .map(|id| blake3_hash_domain(b"omnia-state-root", &**id))
             .collect();
 
         while level.len() > 1 {
@@ -796,6 +798,7 @@ impl CausalGraph {
             let mut next_level = Vec::new();
             for chunk in level.chunks(2) {
                 let mut hasher = blake3::Hasher::new();
+                hasher.update(b"omnia-state-root");
                 hasher.update(&chunk[0]);
                 if chunk.len() > 1 {
                     hasher.update(&chunk[1]);
@@ -1117,14 +1120,14 @@ mod tests {
         node
     }
 
-    /// Generate a keypair and derive the node_id from blake3(pubkey).
+    /// Generate a keypair and derive the node_id from blake3_hash_domain("omnia-creator", pubkey).
     ///
     /// After `sign_with_keypair()`, the `creator` field is set to
-    /// `blake3(creator_pubkey)`, so test assertions must use the derived
+    /// `blake3_hash_domain("omnia-creator", creator_pubkey)`, so test assertions must use the derived
     /// node_id rather than `test_node()`.
     fn make_keypair_and_node(id: u8) -> (crate::crypto::NodeKeypair, NodeId) {
         let kp = crate::crypto::generate_keypair();
-        let node_id: NodeId = *blake3::hash(&kp.verifying_key().to_bytes()).as_bytes();
+        let node_id: NodeId = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
         // `id` is unused but kept for API symmetry with `test_node()`
         let _ = id;
         (kp, node_id)
@@ -1395,10 +1398,11 @@ mod tests {
         let root = graph.state_root();
 
         // Verify proof manually
-        let leaf = blake3::hash(&id).as_bytes().to_owned();
+        let leaf = blake3_hash_domain(b"omnia-state-root", &id);
         let mut current = leaf;
         for (sibling, sibling_is_right) in proof {
             let mut hasher = blake3::Hasher::new();
+            hasher.update(b"omnia-state-root");
             if sibling_is_right {
                 hasher.update(&current);
                 hasher.update(&sibling);
@@ -1495,10 +1499,11 @@ mod tests {
         proof: &[([u8; 32], bool)],
         root: &[u8; 32],
     ) -> bool {
-        let leaf = blake3::hash(event_id).as_bytes().to_owned();
+        let leaf = blake3_hash_domain(b"omnia-state-root", event_id);
         let mut current = leaf;
         for (sibling, sibling_is_right) in proof {
             let mut hasher = blake3::Hasher::new();
+            hasher.update(b"omnia-state-root");
             if *sibling_is_right {
                 hasher.update(&current);
                 hasher.update(sibling);
