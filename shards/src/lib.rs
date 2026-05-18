@@ -73,8 +73,8 @@ pub use financial::{
 };
 pub use identity::{
     format_did, AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError,
-    DidUpdate, IdentityOp, IdentityState, IdentityValidator, RecoveryConfig, RecoveryShare,
-    ShamirRecovery, DID_METHOD, DID_PREFIX,
+    DidUpdate, EncryptedShare, IdentityOp, IdentityState, IdentityValidator, RecoveryConfig,
+    RecoveryShare, ShamirRecovery, DID_METHOD, DID_PREFIX,
 };
 pub use physical::{PhysicalOp, PhysicalState, PhysicalValidator, ProvenanceEvent};
 

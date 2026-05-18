@@ -22,5 +22,5 @@ pub use biometric::BiometricAnchor;
 pub use did::{format_did, validate_did, DidError, DID_METHOD, DID_PREFIX};
 pub use ops::{Did, DidUpdate, IdentityOp};
 pub use recovery::{RecoveryShare, ShamirError, ShamirRecovery};
-pub use state::{DidDocument, IdentityState, RecoveryConfig};
+pub use state::{DidDocument, EncryptedShare, IdentityState, RecoveryConfig};
 pub use validator::IdentityValidator;
