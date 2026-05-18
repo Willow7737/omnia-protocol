@@ -528,7 +528,7 @@ mod tests {
     fn test_create_and_validate_token() {
         // Hold the lock for the entire test so no other test touches the
         // JWT_SECRET env var while we depend on it.
-        let _lock = JWT_SECRET_LOCK.lock().unwrap();
+        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let token = create_token("caller-42", 3600).expect("create token");
         let claims = validate_token(&token).expect("validate token");
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_create_token_no_secret() {
-        let _lock = JWT_SECRET_LOCK.lock().unwrap();
+        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
         // Remove the var if it was set by a previous test, then verify
         // that create_token returns SecretNotConfigured.
         std::env::remove_var("OMNIA_JWT_SECRET");
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_token() {
-        let _lock = JWT_SECRET_LOCK.lock().unwrap();
+        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let result = validate_token("not.a.valid-token");
         assert!(matches!(result, Err(AuthError::InvalidToken(_))));
