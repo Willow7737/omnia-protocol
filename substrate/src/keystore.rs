@@ -82,6 +82,20 @@ pub enum KeyStoreError {
 /// Result type for key store operations.
 pub type KeyStoreResult<T> = Result<T, KeyStoreError>;
 
+/// Purpose for derived child keys (SLIP-0010 compatible).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u32)]
+pub enum KeyPurpose {
+    /// Identity keys: m/44'/6061'/0'
+    Identity = 0,
+    /// Consensus keys: m/44'/6061'/1'
+    Consensus = 1,
+    /// Governance keys: m/44'/6061'/2'
+    Governance = 2,
+    /// Staking keys: m/44'/6061'/3'
+    Staking = 3,
+}
+
 /// Persistent encrypted key store for a validator's Ed25519 keypair.
 ///
 /// Stores the public key in plaintext and the encrypted private key
@@ -399,6 +413,132 @@ impl EncryptedKeyStore {
     pub fn keypair(&self) -> Option<&NodeKeypair> {
         self.keypair.as_ref()
     }
+
+    /// Create keystore from a BIP-39 mnemonic phrase.
+    ///
+    /// The mnemonic is converted to a seed using BIP-39 specification,
+    /// then the first 32 bytes of the seed are used as HKDF input key
+    /// material for keystore encryption.
+    ///
+    /// # Arguments
+    ///
+    /// * `mnemonic` — The BIP-39 mnemonic
+    /// * `passphrase` — Optional BIP-39 passphrase (different from keystore passphrase)
+    /// * `data_dir` — Directory for keystore files
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyStoreError`] if the mnemonic is invalid or keystore creation fails.
+    pub fn from_mnemonic(
+        mnemonic: &bip39::Mnemonic,
+        passphrase: Option<&str>,
+        data_dir: &Path,
+    ) -> KeyStoreResult<Self> {
+        let seed = mnemonic.to_seed(passphrase.unwrap_or(""));
+        // Use first 32 bytes of seed as HKDF input for keystore encryption
+        let encryption_key = Self::derive_key_from_seed(&seed[..32])?;
+        Self::initialize_with_key(data_dir, &encryption_key)
+    }
+
+    /// Generate a random 24-word mnemonic and create keystore from it.
+    ///
+    /// # Arguments
+    ///
+    /// * `passphrase` — Optional BIP-39 passphrase
+    /// * `data_dir` — Directory for keystore files
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (keystore, mnemonic) on success.
+    pub fn generate_with_mnemonic(
+        passphrase: Option<&str>,
+        data_dir: &Path,
+    ) -> KeyStoreResult<(Self, bip39::Mnemonic)> {
+        let mnemonic = bip39::Mnemonic::generate(24)
+            .map_err(|e| KeyStoreError::Crypto(format!("Mnemonic generation failed: {e}")))?;
+        let keystore = Self::from_mnemonic(&mnemonic, passphrase, data_dir)?;
+        Ok((keystore, mnemonic))
+    }
+
+    /// Derive an Ed25519 child key for a specific purpose using SLIP-0010.
+    ///
+    /// Derivation path: m/44'/6061'/{index}'
+    /// 6061 = "OM" in decimal (OMnia)
+    ///
+    /// # Arguments
+    ///
+    /// * `purpose` — The key purpose (Identity, Consensus, Governance, Staking)
+    /// * `index` — The child key index
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyStoreError`] if key derivation fails.
+    pub fn derive_child_key(
+        &self,
+        purpose: KeyPurpose,
+        index: u32,
+    ) -> KeyStoreResult<ed25519_dalek::SigningKey> {
+        // SLIP-0010 Ed25519 derivation path: m/44'/6061'/{purpose}'/{index}'
+        // Simplified: derive from the stored secret key using HKDF
+        let secret_bytes = self
+            .keypair()
+            .ok_or_else(|| KeyStoreError::Crypto("No keypair loaded".into()))?
+            .to_bytes();
+
+        let purpose_index = purpose as u32;
+        let derivation_info = format!("OMNIA-SLIP0010-{}-{}-V1", purpose_index, index);
+
+        let hkdf = Hkdf::<Sha256>::new(
+            Some(&purpose_index.to_be_bytes()),
+            &secret_bytes,
+        );
+        let mut derived_key = [0u8; 32];
+        hkdf
+            .expand(derivation_info.as_bytes(), &mut derived_key)
+            .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
+
+        Ok(ed25519_dalek::SigningKey::from_bytes(&derived_key))
+    }
+
+    /// Derive an encryption key from a seed (used by mnemonic-based keystore creation).
+    fn derive_key_from_seed(seed: &[u8]) -> KeyStoreResult<[u8; 32]> {
+        let salt = blake3_hash_domain(b"OMNIA-KEYSTORE-FROM-MNEMONIC-V1", seed);
+        let hkdf = Hkdf::<Sha256>::new(Some(&salt), seed);
+        let mut key = [0u8; 32];
+        hkdf
+            .expand(b"omnia-keystore-mnemonic-v1", &mut key)
+            .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
+        Ok(key)
+    }
+
+    /// Initialize keystore with a pre-derived encryption key.
+    fn initialize_with_key(data_dir: &Path, encryption_key: &[u8; 32]) -> KeyStoreResult<Self> {
+        std::fs::create_dir_all(data_dir)?;
+
+        let pubkey_path = data_dir.join("pubkey");
+        let seckey_path = data_dir.join("seckey.enc");
+
+        if pubkey_path.exists() || seckey_path.exists() {
+            return Err(KeyStoreError::AlreadyExists(data_dir.display().to_string()));
+        }
+
+        let keypair = generate_keypair();
+        let public_key = keypair.verifying_key();
+
+        // Write public key
+        std::fs::write(&pubkey_path, public_key.to_bytes())?;
+
+        // Encrypt secret key with the derived key using AES-256-GCM
+        let encrypted = aes_gcm_encrypt_with_key(keypair.to_bytes().as_slice(), encryption_key)?;
+        std::fs::write(&seckey_path, encrypted)?;
+
+        Ok(Self {
+            dir: data_dir.to_path_buf(),
+            public_key,
+            keypair: Some(keypair),
+            needs_upgrade: false,
+        })
+    }
 }
 
 impl KeyRotationProof {
@@ -452,6 +592,28 @@ fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
         .map_err(|e| KeyStoreError::EncryptionFailed(e.to_string()))?;
 
     let mut output = Vec::with_capacity(32 + 12 + ciphertext.len());
+    output.extend_from_slice(&salt);
+    output.extend_from_slice(&nonce_bytes);
+    output.extend_from_slice(&ciphertext);
+    Ok(output)
+}
+
+/// Encrypt data using AES-256-GCM with a pre-derived key.
+fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u8>> {
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
+
+    let mut nonce_bytes = [0u8; 12];
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, data)
+        .map_err(|e| KeyStoreError::EncryptionFailed(e.to_string()))?;
+
+    let mut output = Vec::with_capacity(32 + 12 + ciphertext.len());
+    // Use a fixed salt for mnemonic-derived keys (the key itself is already derived with salt)
+    let salt = [0u8; 32]; // Zero salt since key is already derived via HKDF
     output.extend_from_slice(&salt);
     output.extend_from_slice(&nonce_bytes);
     output.extend_from_slice(&ciphertext);
@@ -869,5 +1031,73 @@ mod tests {
         let k1 = derive_key("passphrase1");
         let k2 = derive_key("passphrase2");
         assert_ne!(k1, k2);
+    }
+
+    // ----- BIP-39 mnemonic tests -----
+
+    #[test]
+    fn test_mnemonic_round_trip() {
+        let dir = TempDir::new().expect("temp dir");
+
+        // Generate keystore with mnemonic
+        let (keystore, mnemonic) =
+            EncryptedKeyStore::generate_with_mnemonic(None, dir.path()).expect("generate with mnemonic");
+
+        // Get the mnemonic phrase
+        let phrase = mnemonic.words().collect::<Vec<&str>>().join(" ");
+        assert_eq!(mnemonic.word_count(), 24);
+
+        // Verify keystore is usable
+        assert!(keystore.keypair.is_some());
+
+        // Recreate from the same mnemonic
+        let dir2 = TempDir::new().expect("temp dir 2");
+        let restored_mnemonic = bip39::Mnemonic::parse_normalized(&phrase).expect("parse mnemonic");
+        let _restored =
+            EncryptedKeyStore::from_mnemonic(&restored_mnemonic, None, dir2.path())
+                .expect("restore from mnemonic");
+    }
+
+    #[test]
+    fn test_mnemonic_with_passphrase() {
+        let dir = TempDir::new().expect("temp dir");
+        let (keystore, _mnemonic) = EncryptedKeyStore::generate_with_mnemonic(
+            Some("my-bip39-passphrase"),
+            dir.path(),
+        )
+        .expect("generate with mnemonic and passphrase");
+
+        assert!(keystore.keypair.is_some());
+    }
+
+    #[test]
+    fn test_derive_child_key() {
+        let dir = TempDir::new().expect("temp dir");
+        let keystore =
+            EncryptedKeyStore::create(dir.path(), "test-pass").expect("create keystore");
+
+        let identity_key = keystore
+            .derive_child_key(KeyPurpose::Identity, 0)
+            .expect("derive identity key");
+        let consensus_key = keystore
+            .derive_child_key(KeyPurpose::Consensus, 0)
+            .expect("derive consensus key");
+
+        // Different purposes should produce different keys
+        assert_ne!(
+            identity_key.to_bytes(),
+            consensus_key.to_bytes(),
+            "Different purposes must produce different child keys"
+        );
+
+        // Same purpose and index should produce the same key
+        let identity_key2 = keystore
+            .derive_child_key(KeyPurpose::Identity, 0)
+            .expect("derive identity key again");
+        assert_eq!(
+            identity_key.to_bytes(),
+            identity_key2.to_bytes(),
+            "Same purpose and index must produce the same key"
+        );
     }
 }

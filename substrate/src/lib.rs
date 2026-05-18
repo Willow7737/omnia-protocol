@@ -69,7 +69,7 @@ pub use gossip::{
     GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
     GossipStats,
 };
-pub use keystore::{EncryptedKeyStore, KeyRotationProof, KeyStoreError};
+pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
 pub use network::{
     check_version_compatibility, NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork,
     VersionCompatibility, VersionHandshake,
@@ -86,6 +86,7 @@ pub use slashing_undo::{
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 pub use threshold::{
+    DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
     KeyShare, PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager,
     ThresholdSignature,
 };
