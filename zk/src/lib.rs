@@ -68,7 +68,7 @@ pub use settlement::{
 pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
 
 // Re-export prover types for convenience
-pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey};
+pub use prover::{Proof, ProverError, ProvingKey, VerifyingKey, verify_proofs_batch};
 
 // Re-export expanded circuit types
 pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness, OperationType};

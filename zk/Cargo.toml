@@ -34,3 +34,8 @@ subtle = "2"
 [dev-dependencies]
 tokio-test = "0.4"
 proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "zk_benchmarks"
+harness = false

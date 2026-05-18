@@ -390,6 +390,15 @@ impl EncryptedKeyStore {
     pub fn dir(&self) -> &Path {
         &self.dir
     }
+
+    /// Get a reference to the loaded keypair, if available.
+    ///
+    /// The keypair is always present after a successful [`create`](Self::create)
+    /// or [`load`](Self::load) call, but may be `None` if the keystore
+    /// was constructed in a non-standard way.
+    pub fn keypair(&self) -> Option<&NodeKeypair> {
+        self.keypair.as_ref()
+    }
 }
 
 impl KeyRotationProof {
