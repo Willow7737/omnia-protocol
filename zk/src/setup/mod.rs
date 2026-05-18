@@ -30,11 +30,18 @@
 //!                     ↓
 //! Phase 2: Circuit Key Derivation
 //! ┌─────────────────────────────────────────┐
-//! │  SRS + Circuit ──→ derive_keys()        │
+//! │  SRS + Circuit ──→ derive_keys_from_srs()│
 //! │            ↓                            │
 //! │  (ProvingKey, VerifyingKey)             │
 //! └─────────────────────────────────────────┘
 //! ```
+//!
+//! # Real EC Operations (C-2)
+//!
+//! The ceremony now uses actual BN254 elliptic curve scalar multiplication
+//! for all SRS updates. The initial SRS is seeded with generator points
+//! (representing τ = 1), and each contribution multiplies every G1 and G2
+//! power by the contributor's secret scalar.
 //!
 //! # Security Considerations
 //!
@@ -62,9 +69,13 @@ use thiserror::Error;
 
 // Re-export key types for convenience
 pub use circuit_setup::{
-    derive_keys, derive_keys_expanded, verify_key_consistency, CircuitKeyPair,
+    derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency,
+    CircuitKeyPair,
 };
-pub use contribution::{contribute, verify_contribution, Contribution, ContributionProof};
+pub use contribution::{
+    contribute, initial_transcript_with_generators, verify_ceremony_transcript,
+    verify_contribution, Contribution, ContributionProof,
+};
 pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
 
 /// Errors that can occur during the trusted setup ceremony.
@@ -123,6 +134,10 @@ impl SetupCeremony {
 
     /// Accept a contribution from a ceremony participant.
     ///
+    /// Uses the `contribute()` + `apply_contribution()` flow, which updates
+    /// only G1 elements from the contribution transcript. For a ceremony
+    /// that updates both G1 and G2, use [`run_ceremony`] instead.
+    ///
     /// # Arguments
     ///
     /// * `seed` — Optional deterministic seed for the contribution (testing only)
@@ -132,7 +147,8 @@ impl SetupCeremony {
     /// `Ok(())` if the contribution was accepted, `Err(SetupError)` otherwise.
     pub fn accept_contribution(&mut self, seed: Option<[u8; 32]>) -> Result<(), SetupError> {
         let transcript = self.srs.to_transcript();
-        let tau_size = self.srs.g1_powers.len() + self.srs.g2_powers.len();
+        // tau_size is the number of G1 elements only (not G1 + G2)
+        let tau_size = self.srs.g1_powers.len();
         let c = contribute(&transcript, tau_size, seed)?;
         self.srs.apply_contribution(&c)?;
         tracing::info!(
@@ -143,6 +159,9 @@ impl SetupCeremony {
     }
 
     /// Complete Phase 1 and derive Phase 2 keys for the basic circuit.
+    ///
+    /// Uses [`derive_keys_from_srs`] which verifies the SRS has contributions
+    /// and is well-formed before deriving keys.
     ///
     /// # Arguments
     ///
@@ -163,7 +182,7 @@ impl SetupCeremony {
             ));
         }
 
-        let keypair = derive_keys(&self.srs, circuit)?;
+        let keypair = derive_keys_from_srs(&self.srs, circuit)?;
         self.completed = true;
         tracing::info!("Trusted setup ceremony finalized (basic circuit)");
         Ok(keypair)
