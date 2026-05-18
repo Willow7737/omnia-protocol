@@ -476,6 +476,13 @@ impl ExpandedRollupCircuit {
     ///
     /// A circuit with zero-valued assignments suitable for generating
     /// trusted setup keys.
+    ///
+    /// # Warning
+    ///
+    /// Using `empty()` for trusted setup may produce keys that do not
+    /// correctly constrain all circuit branches, since some constraint
+    /// systems behave differently with all-zero witnesses. Use
+    /// [`for_setup()`](Self::for_setup) instead for production key generation.
     pub fn empty(num_events: usize, merkle_depth: usize) -> Self {
         let events: Vec<Option<EventWitness>> = (0..num_events)
             .map(|_| {
@@ -503,6 +510,59 @@ impl ExpandedRollupCircuit {
             old_state_root: Some(Fr::zero()),
             new_state_root: Some(Fr::zero()),
             event_commitment: Some(Fr::zero()),
+            events,
+            merkle_proofs,
+            intermediate_roots,
+        }
+    }
+
+    /// Create a circuit instance for trusted setup key generation.
+    ///
+    /// Uses `MAX_OPERATION_TYPE` as the operation_type and non-zero values
+    /// for all witness fields to ensure the setup covers all constraint branches.
+    /// This is critical: if `empty()` (all zeros) is used for setup, the
+    /// resulting proving key may not correctly constrain all branches of the
+    /// circuit, allowing invalid proofs to be accepted.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_events` — Number of events in the batch (determines circuit size)
+    /// * `merkle_depth` — Depth of each Merkle proof (number of siblings)
+    ///
+    /// # Returns
+    ///
+    /// A circuit with non-zero assignments suitable for generating
+    /// trusted setup keys that correctly constrain all circuit branches.
+    pub fn for_setup(num_events: usize, merkle_depth: usize) -> Self {
+        let events: Vec<Option<EventWitness>> = (0..num_events)
+            .map(|i| {
+                Some(EventWitness {
+                    event_hash: Some(Fr::from(i as u64 + 3)),
+                    operation_type: Some(Fr::from(MAX_OPERATION_TYPE as u64)),
+                    payload_hash: Some(Fr::from(i as u64 + 5)),
+                })
+            })
+            .collect();
+
+        let merkle_proofs: Vec<Option<MerklePathWitness>> = (0..num_events)
+            .map(|_| {
+                Some(MerklePathWitness {
+                    siblings: (0..merkle_depth)
+                        .map(|j| Some(Fr::from(j as u64 + 1)))
+                        .collect(),
+                    directions: (0..merkle_depth).map(|_| Some(true)).collect(),
+                })
+            })
+            .collect();
+
+        let intermediate_roots: Vec<Option<Fr>> = (0..=num_events)
+            .map(|i| Some(Fr::from(i as u64 + 1)))
+            .collect();
+
+        Self {
+            old_state_root: Some(Fr::from(1u64)),
+            new_state_root: Some(Fr::from(2u64)),
+            event_commitment: Some(Fr::from(3u64)),
             events,
             merkle_proofs,
             intermediate_roots,
@@ -827,5 +887,40 @@ mod tests {
     fn test_max_operation_type_constant() {
         assert_eq!(MAX_OPERATION_TYPE, 7);
         assert_eq!(OP_TYPE_BITS, 3);
+    }
+
+    #[test]
+    fn test_for_setup_produces_non_zero_witnesses() {
+        let circuit = ExpandedRollupCircuit::for_setup(4, 3);
+        // All witness fields should be non-zero
+        for w in &circuit.events {
+            let witness = w.as_ref().expect("event witness should be Some");
+            let event_hash = witness.event_hash.expect("event_hash should be Some");
+            let operation_type = witness
+                .operation_type
+                .expect("operation_type should be Some");
+            let payload_hash = witness.payload_hash.expect("payload_hash should be Some");
+            assert_ne!(event_hash, Fr::zero());
+            assert_ne!(operation_type, Fr::zero());
+            assert_ne!(payload_hash, Fr::zero());
+        }
+        assert_ne!(
+            circuit
+                .old_state_root
+                .expect("old_state_root should be Some"),
+            Fr::zero()
+        );
+        assert_ne!(
+            circuit
+                .new_state_root
+                .expect("new_state_root should be Some"),
+            Fr::zero()
+        );
+        assert_ne!(
+            circuit
+                .event_commitment
+                .expect("event_commitment should be Some"),
+            Fr::zero()
+        );
     }
 }

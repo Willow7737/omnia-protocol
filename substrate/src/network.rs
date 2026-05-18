@@ -1,8 +1,9 @@
-//! Real P2P networking layer using libp2p 0.53
+//! Real P2P networking layer using libp2p 0.56
 //!
-//! Provides QUIC transport, GossipSub for event propagation, mDNS for peer discovery,
-//! and request-response for sync operations. Uses tokio::sync primitives exclusively
-//! — never std::sync::Mutex across await points.
+//! Provides QUIC transport, GossipSub for event propagation, mDNS for local
+//! peer discovery, Kademlia DHT for wide-area peer discovery, and
+//! request-response for sync operations. Uses tokio::sync primitives
+//! exclusively — never std::sync::Mutex across await points.
 //!
 //! # Protocol Version Negotiation
 //!
@@ -10,6 +11,18 @@
 //! request-response protocol. If the major versions differ, the connection
 //! is rejected to prevent consensus divergence. Minor and patch version
 //! differences are allowed (backward-compatible).
+//!
+//! # Kademlia DHT (H-4)
+//!
+//! Wide-area peer discovery via Kademlia DHT with configurable bootstrap
+//! peers and periodic routing table maintenance. See [`NetworkConfig`] for
+//! NAT traversal options (AutoNAT, relay, DCutr).
+//!
+//! # GossipSub Peer Scoring (H-5)
+//!
+//! Custom peer scoring tuned for Omnia's threat model, with heavy penalties
+//! for invalid messages and mesh delivery failures. See
+//! [`configure_gossipsub_scoring()`] and [`PeerScoreTracker`].
 
 // The libp2p NetworkBehaviour derive macro generates an event enum without
 // doc comments on its variants, which triggers missing_docs. Allow it here
@@ -21,11 +34,165 @@ use crate::PROTOCOL_IDENTIFIER;
 #[allow(unused_imports)] // PROTOCOL_VERSION used in tests
 use crate::PROTOCOL_VERSION;
 use libp2p::{
-    gossipsub::{self, IdentTopic, MessageAuthenticity, ValidationMode},
-    identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
+    gossipsub::{self, IdentTopic, MessageAuthenticity, PeerScoreParams, PeerScoreThresholds, TopicScoreParams, ValidationMode},
+    identity,
+    Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
 use std::collections::HashMap;
 use tokio::sync::mpsc;
+
+// ---------------------------------------------------------------------------
+// NetworkConfig — H-4: NAT traversal & Kademlia configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for the network layer with NAT traversal support.
+///
+/// Controls Kademlia DHT bootstrap peers, relay servers for NAT
+/// traversal, and transport fallback options.
+#[derive(Debug, Clone)]
+pub struct NetworkConfig {
+    /// Multiaddresses of bootstrap/seed peers for initial DHT population.
+    pub bootstrap_peers: Vec<Multiaddr>,
+    /// Relay server multiaddresses for NAT traversal.
+    pub relay_servers: Vec<Multiaddr>,
+    /// Kademlia DHT protocol name.
+    pub dht_protocol: String,
+    /// Enable AutoNAT probing for NAT detection.
+    pub enable_autonat: bool,
+    /// Enable relay client for NAT traversal.
+    pub enable_relay: bool,
+    /// Enable DCutr for direct connection upgrade after relay.
+    pub enable_dcutr: bool,
+    /// Enable TCP transport fallback alongside QUIC.
+    pub enable_tcp_fallback: bool,
+    /// Listen addresses for the swarm.
+    pub listen_addresses: Vec<Multiaddr>,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            bootstrap_peers: Vec::new(),
+            relay_servers: Vec::new(),
+            dht_protocol: "/omnia/kad/1.0.0".to_string(),
+            enable_autonat: true,
+            enable_relay: true,
+            enable_dcutr: true,
+            enable_tcp_fallback: true,
+            listen_addresses: vec!["/ip4/0.0.0.0/udp/0/quic-v1"
+                .parse()
+                .expect("valid QUIC listen address")],
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PeerScoreTracker — H-5: application-specific peer scoring
+// ---------------------------------------------------------------------------
+
+/// Track and update peer scores based on message validation results.
+///
+/// This is an application-level score tracker that complements the
+/// built-in GossipSub peer scoring. Scores can be fed back into the
+/// GossipSub behaviour via `set_application_score()`.
+#[derive(Debug)]
+pub struct PeerScoreTracker {
+    scores: HashMap<PeerId, f64>,
+}
+
+impl PeerScoreTracker {
+    /// Create a new empty peer score tracker.
+    pub fn new() -> Self {
+        Self {
+            scores: HashMap::new(),
+        }
+    }
+
+    /// Record a validation result for a peer's message.
+    ///
+    /// Valid messages add +1.0 to the peer's score; invalid messages
+    /// subtract 10.0.
+    pub fn record_validation(&mut self, peer: &PeerId, is_valid: bool) {
+        let score = self.scores.entry(*peer).or_insert(0.0);
+        if is_valid {
+            *score += 1.0;
+        } else {
+            *score -= 10.0;
+        }
+    }
+
+    /// Get a peer's application-specific score.
+    pub fn get_score(&self, peer: &PeerId) -> f64 {
+        *self.scores.get(peer).unwrap_or(&0.0)
+    }
+
+    /// Check if a peer should be graylisted.
+    ///
+    /// A peer is graylisted when its score falls below -100.0.
+    pub fn is_graylisted(&self, peer: &PeerId) -> bool {
+        self.get_score(peer) < -100.0
+    }
+}
+
+impl Default for PeerScoreTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GossipSub scoring configuration — H-5
+// ---------------------------------------------------------------------------
+
+/// Configure GossipSub peer scoring for Omnia's threat model.
+///
+/// Returns `(PeerScoreParams, PeerScoreThresholds)` tuned for:
+/// - Heavy penalty for invalid messages (-150 per invalid delivery)
+/// - Heavy penalty for mesh delivery failure (-50)
+/// - Rewards for first-message deliveries (+1 per delivery)
+/// - Graylisting at score -100
+pub fn configure_gossipsub_scoring() -> (PeerScoreParams, PeerScoreThresholds) {
+    let topic_params = TopicScoreParams {
+        topic_weight: 1.0,
+        time_in_mesh_weight: 0.01,
+        time_in_mesh_quantum: std::time::Duration::from_secs(1),
+        time_in_mesh_cap: 3600.0,
+        first_message_deliveries_weight: 1.0,
+        first_message_deliveries_decay: 0.99,
+        first_message_deliveries_cap: 100.0,
+        mesh_message_deliveries_weight: -50.0,
+        mesh_message_deliveries_decay: 0.99,
+        mesh_message_deliveries_threshold: 10.0,
+        mesh_message_deliveries_cap: 100.0,
+        mesh_message_deliveries_window: std::time::Duration::from_millis(100),
+        mesh_message_deliveries_activation: std::time::Duration::from_secs(30),
+        mesh_failure_penalty_weight: -50.0,
+        mesh_failure_penalty_decay: 0.99,
+        invalid_message_deliveries_weight: -150.0,
+        invalid_message_deliveries_decay: 0.999,
+    };
+
+    let mut score_params = PeerScoreParams::default();
+    score_params.topics = HashMap::from([
+        (IdentTopic::new("omnia-events").hash(), topic_params.clone()),
+        (IdentTopic::new("omnia-consensus").hash(), topic_params),
+    ]);
+    score_params.app_specific_weight = 10.0;
+
+    let thresholds = PeerScoreThresholds {
+        gossip_threshold: -10.0,
+        publish_threshold: -50.0,
+        graylist_threshold: -100.0,
+        accept_px_threshold: 10.0,
+        opportunistic_graft_threshold: 5.0,
+    };
+
+    (score_params, thresholds)
+}
+
+// ---------------------------------------------------------------------------
+// Existing types
+// ---------------------------------------------------------------------------
 
 /// Handshake message exchanged during protocol version negotiation.
 ///
@@ -129,6 +296,11 @@ pub enum NetworkEvent {
 }
 
 /// Combined libp2p behaviour for Omnia.
+///
+/// Includes GossipSub for event propagation, mDNS for LAN discovery,
+/// request-response for sync operations, Kademlia DHT for
+/// wide-area peer discovery, AutoNAT for NAT detection, relay client
+/// for NAT traversal, and DCutr for direct connection upgrades.
 #[allow(missing_docs)]
 #[derive(libp2p::swarm::NetworkBehaviour)]
 pub struct OmniaBehaviour {
@@ -138,6 +310,14 @@ pub struct OmniaBehaviour {
     pub mdns: libp2p::mdns::tokio::Behaviour,
     /// Request-response sync behaviour
     pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
+    /// Kademlia DHT for wide-area peer discovery
+    pub kademlia: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>,
+    /// AutoNAT for NAT type detection
+    pub autonat: libp2p::autonat::Behaviour,
+    /// Relay client for NAT traversal
+    pub relay_client: libp2p::relay::client::Behaviour,
+    /// DCutr for direct connection upgrade after relay
+    pub dcutr: libp2p::dcutr::Behaviour,
 }
 
 /// Command sent from external callers to the network event loop.
@@ -173,17 +353,35 @@ pub struct OmniaNetwork {
     /// Network event receiver
     pub event_rx: Option<mpsc::Receiver<NetworkEvent>>,
     known_peers: HashMap<PeerId, Multiaddr>,
+    /// Application-level peer score tracker (H-5).
+    pub peer_score_tracker: PeerScoreTracker,
+    /// Interval for periodic Kademlia bootstrap (H-4).
+    kademlia_bootstrap_interval: tokio::time::Interval,
 }
 
 impl OmniaNetwork {
-    /// Create a new network instance listening on the given address.
+    /// Create a new network instance listening on the given address with
+    /// default [`NetworkConfig`].
     pub async fn new(
         listen_addr: Multiaddr,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Self::with_config(listen_addr, NetworkConfig::default()).await
+    }
+
+    /// Create a new network instance with the given listen address and
+    /// [`NetworkConfig`].
+    ///
+    /// This initialises all behaviours (GossipSub, mDNS, request-response,
+    /// Kademlia DHT, AutoNAT, relay client, DCutr) and applies custom
+    /// GossipSub peer scoring.
+    pub async fn with_config(
+        listen_addr: Multiaddr,
+        config: NetworkConfig,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let local_key = identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        // GossipSub configuration
+        // ── GossipSub config ─────────────────────────────────────────
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .validation_mode(ValidationMode::Strict)
             .message_id_fn(|msg: &gossipsub::Message| {
@@ -192,32 +390,85 @@ impl OmniaNetwork {
             })
             .build()?;
 
-        let gossipsub = gossipsub::Behaviour::new(
-            MessageAuthenticity::Signed(local_key.clone()),
-            gossipsub_config,
-        )?;
-
-        let mdns =
-            libp2p::mdns::tokio::Behaviour::new(libp2p::mdns::Config::default(), local_peer_id)?;
-
-        let req_res = libp2p::request_response::cbor::Behaviour::new(
-            [(
-                StreamProtocol::new(PROTOCOL_IDENTIFIER),
-                libp2p::request_response::ProtocolSupport::Full,
-            )],
-            libp2p::request_response::Config::default(),
+        // ── Kademlia DHT config (H-4) ────────────────────────────────
+        let kademlia_config = libp2p::kad::Config::new(
+            StreamProtocol::try_from_owned(config.dht_protocol.clone())
+                .expect("DHT protocol name must be a valid StreamProtocol"),
         );
 
-        let behaviour = OmniaBehaviour {
-            gossipsub,
-            mdns,
-            req_res,
+        // ── AutoNAT config ───────────────────────────────────────────
+        let autonat_config = libp2p::autonat::Config {
+            timeout: std::time::Duration::from_secs(30),
+            ..Default::default()
         };
 
+        // ── Bootstrap peers (for Kademlia) ───────────────────────────
+        let bootstrap_peers = config.bootstrap_peers.clone();
+
+        // Build the swarm with relay client support.
+        // The relay client behaviour is created by `with_relay_client()` and then
+        // passed into the behaviour constructor, so that DCutr can reference it.
         let mut swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_quic()
-            .with_behaviour(|_| behaviour)?
+            .with_relay_client(libp2p::noise::Config::new, libp2p::yamux::Config::default)?
+            .with_behaviour(move |key, relay_client| {
+                let local_pid = PeerId::from(key.public());
+
+                // GossipSub with custom peer scoring
+                let mut gossipsub = gossipsub::Behaviour::new(
+                    MessageAuthenticity::Signed(key.clone()),
+                    gossipsub_config,
+                )?;
+                let (score_params, thresholds) = configure_gossipsub_scoring();
+                gossipsub.with_peer_score(score_params, thresholds)?;
+
+                // mDNS for LAN discovery
+                let mdns = libp2p::mdns::tokio::Behaviour::new(
+                    libp2p::mdns::Config::default(),
+                    local_pid,
+                )?;
+
+                // Request-response for sync operations
+                let req_res = libp2p::request_response::cbor::Behaviour::new(
+                    [(StreamProtocol::new(PROTOCOL_IDENTIFIER),
+                      libp2p::request_response::ProtocolSupport::Full)],
+                    libp2p::request_response::Config::default(),
+                );
+
+                // Kademlia DHT for wide-area peer discovery
+                let store = libp2p::kad::store::MemoryStore::new(local_pid);
+                let mut kademlia = libp2p::kad::Behaviour::with_config(
+                    local_pid,
+                    store,
+                    kademlia_config,
+                );
+                // Add bootstrap peers to the routing table
+                for addr in &bootstrap_peers {
+                    if let Some(peer_id) = extract_peer_id_from_multiaddr(addr) {
+                        kademlia.add_address(&peer_id, addr.clone());
+                    }
+                }
+
+                // AutoNAT for NAT detection
+                let autonat = libp2p::autonat::Behaviour::new(
+                    local_pid,
+                    autonat_config,
+                );
+
+                // DCutr for direct connection upgrade after relay
+                let dcutr = libp2p::dcutr::Behaviour::new(local_pid);
+
+                Ok(OmniaBehaviour {
+                    gossipsub,
+                    mdns,
+                    req_res,
+                    kademlia,
+                    autonat,
+                    relay_client,
+                    dcutr,
+                })
+            })?
             .with_swarm_config(|cfg| {
                 cfg.with_idle_connection_timeout(std::time::Duration::from_secs(60))
             })
@@ -225,7 +476,18 @@ impl OmniaNetwork {
 
         swarm.listen_on(listen_addr)?;
 
+        // Also listen on any additional configured addresses
+        for addr in &config.listen_addresses {
+            if swarm.listen_on(addr.clone()).is_ok() {
+                tracing::info!("Listening on additional address: {}", addr);
+            }
+        }
+
         let (event_tx, event_rx) = mpsc::channel(1000);
+
+        // Periodic Kademlia bootstrap every 5 minutes
+        let kademlia_bootstrap_interval =
+            tokio::time::interval(std::time::Duration::from_secs(300));
 
         Ok(Self {
             swarm,
@@ -233,6 +495,8 @@ impl OmniaNetwork {
             event_tx,
             event_rx: Some(event_rx),
             known_peers: HashMap::new(),
+            peer_score_tracker: PeerScoreTracker::new(),
+            kademlia_bootstrap_interval,
         })
     }
 
@@ -273,6 +537,12 @@ impl OmniaNetwork {
                 event = self.swarm.select_next_some() => {
                     self.handle_swarm_event(event).await;
                 }
+                _ = self.kademlia_bootstrap_interval.tick() => {
+                    // H-4: Periodic bootstrap for routing table maintenance
+                    if let Err(e) = self.swarm.behaviour_mut().kademlia.bootstrap() {
+                        tracing::warn!("Kademlia bootstrap failed: {:?}", e);
+                    }
+                }
             }
         }
     }
@@ -291,6 +561,12 @@ impl OmniaNetwork {
             tokio::select! {
                 event = self.swarm.select_next_some() => {
                     self.handle_swarm_event(event).await;
+                }
+                // H-4: Periodic Kademlia bootstrap
+                _ = self.kademlia_bootstrap_interval.tick() => {
+                    if let Err(e) = self.swarm.behaviour_mut().kademlia.bootstrap() {
+                        tracing::warn!("Kademlia bootstrap failed: {:?}", e);
+                    }
                 }
                 cmd = cmd_rx.recv() => {
                     match cmd {
@@ -336,6 +612,70 @@ impl OmniaNetwork {
                     })
                     .await;
             }
+            // H-4: Kademlia DHT event handling
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Kademlia(event)) => {
+                match event {
+                    libp2p::kad::Event::RoutingUpdated {
+                        peer,
+                        addresses,
+                        is_new_peer,
+                        ..
+                    } => {
+                        if is_new_peer {
+                            tracing::info!("Kademlia routing updated: new peer {}", peer);
+                        }
+                        // Track known addresses for this peer
+                        for addr in addresses.iter() {
+                            self.known_peers.insert(peer, addr.clone());
+                        }
+                    }
+                    libp2p::kad::Event::OutboundQueryProgressed { result, .. } => {
+                        // Log DHT query results for monitoring
+                        match result {
+                            libp2p::kad::QueryResult::GetClosestPeers(Ok(ok)) => {
+                                tracing::debug!(
+                                    "Kademlia closest peers query completed: {} peers",
+                                    ok.peers.len()
+                                );
+                            }
+                            libp2p::kad::QueryResult::Bootstrap(Ok(ok)) => {
+                                tracing::debug!(
+                                    "Kademlia bootstrap completed, remaining: {}",
+                                    ok.num_remaining
+                                );
+                            }
+                            libp2p::kad::QueryResult::GetClosestPeers(Err(e)) => {
+                                tracing::warn!("Kademlia closest peers query failed: {:?}", e);
+                            }
+                            libp2p::kad::QueryResult::Bootstrap(Err(e)) => {
+                                tracing::warn!("Kademlia bootstrap query failed: {:?}", e);
+                            }
+                            _ => {}
+                        }
+                    }
+                    libp2p::kad::Event::RoutablePeer { peer, address } => {
+                        tracing::debug!("Kademlia routable peer: {} at {}", peer, address);
+                        self.known_peers.insert(peer, address);
+                    }
+                    libp2p::kad::Event::UnroutablePeer { peer } => {
+                        tracing::debug!("Kademlia unroutable peer: {}", peer);
+                    }
+                    _ => {}
+                }
+            }
+            // AutoNAT event handling — log NAT status changes
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(event)) => {
+                match event {
+                    libp2p::autonat::Event::StatusChanged { old, new } => {
+                        tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
+                    }
+                    _ => {}
+                }
+            }
+            // DCutr event handling — log direct connection upgrades
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Dcutr(event)) => {
+                tracing::debug!("DCutr event: {:?}", event);
+            }
             SwarmEvent::NewListenAddr { address, .. } => {
                 tracing::info!("Listening on {}", address);
             }
@@ -355,6 +695,19 @@ impl OmniaNetwork {
         }
     }
 }
+
+/// Try to extract a PeerId from a Multiaddr that ends with /p2p/<peer-id>.
+fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
+    use libp2p::multiaddr::Protocol;
+    addr.iter().find_map(|proto| match proto {
+        Protocol::P2p(peer_id) => Some(peer_id),
+        _ => None,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -455,5 +808,142 @@ mod tests {
     #[test]
     fn test_protocol_version_constant() {
         assert_eq!(PROTOCOL_VERSION, "4.0.0");
+    }
+
+    // ── H-4: NetworkConfig tests ─────────────────────────────────────
+
+    #[test]
+    fn test_network_config_defaults() {
+        let config = NetworkConfig::default();
+        assert!(config.bootstrap_peers.is_empty());
+        assert!(config.relay_servers.is_empty());
+        assert_eq!(config.dht_protocol, "/omnia/kad/1.0.0");
+        assert!(config.enable_autonat);
+        assert!(config.enable_relay);
+        assert!(config.enable_dcutr);
+        assert!(config.enable_tcp_fallback);
+        assert!(!config.listen_addresses.is_empty());
+    }
+
+    #[test]
+    fn test_network_config_custom_bootstrap_peers() {
+        // Use a PeerId to generate a valid multiaddr for testing
+        let peer_id = PeerId::random();
+        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{}", peer_id)
+            .parse()
+            .expect("valid multiaddr");
+        let config = NetworkConfig {
+            bootstrap_peers: vec![addr.clone()],
+            ..Default::default()
+        };
+        assert_eq!(config.bootstrap_peers.len(), 1);
+        assert_eq!(config.bootstrap_peers[0], addr);
+    }
+
+    #[test]
+    fn test_kademlia_protocol_name() {
+        let protocol = StreamProtocol::try_from_owned("/omnia/kad/1.0.0".to_string())
+            .expect("valid protocol name");
+        assert_eq!(protocol.to_string(), "/omnia/kad/1.0.0");
+    }
+
+    // ── H-5: Peer scoring tests ──────────────────────────────────────
+
+    #[test]
+    fn test_peer_scoring_penalizes_invalid_messages() {
+        let mut tracker = PeerScoreTracker::new();
+        let peer = PeerId::random();
+
+        tracker.record_validation(&peer, false);
+        assert!(tracker.get_score(&peer) < 0.0);
+
+        // Multiple invalid messages push toward graylist (need 11 to go below -100)
+        for _ in 0..10 {
+            tracker.record_validation(&peer, false);
+        }
+        // Total: 11 invalid = -110, which is < -100
+        assert!(tracker.is_graylisted(&peer));
+    }
+
+    #[test]
+    fn test_peer_scoring_rewards_valid_messages() {
+        let mut tracker = PeerScoreTracker::new();
+        let peer = PeerId::random();
+
+        tracker.record_validation(&peer, true);
+        assert!(tracker.get_score(&peer) > 0.0);
+    }
+
+    #[test]
+    fn test_graylist_threshold() {
+        let mut tracker = PeerScoreTracker::new();
+        let peer = PeerId::random();
+
+        // Score at -90 should not be graylisted (9 * -10 = -90, not < -100)
+        for _ in 0..9 {
+            tracker.record_validation(&peer, false);
+        }
+        assert!(!tracker.is_graylisted(&peer));
+
+        // One more invalid message → -100 → still not < -100, need one more
+        tracker.record_validation(&peer, false);
+        assert!(!tracker.is_graylisted(&peer));
+
+        // One more → -110 → graylisted
+        tracker.record_validation(&peer, false);
+        assert!(tracker.is_graylisted(&peer));
+    }
+
+    #[test]
+    fn test_peer_score_tracker_default() {
+        let tracker = PeerScoreTracker::default();
+        let peer = PeerId::random();
+        assert_eq!(tracker.get_score(&peer), 0.0);
+        assert!(!tracker.is_graylisted(&peer));
+    }
+
+    #[test]
+    fn test_configure_gossipsub_scoring_params() {
+        let (params, thresholds) = configure_gossipsub_scoring();
+
+        // Check that topic scoring is configured for both Omnia topics
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia-events").hash()));
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia-consensus").hash()));
+        assert_eq!(params.app_specific_weight, 10.0);
+
+        // Check thresholds
+        assert_eq!(thresholds.gossip_threshold, -10.0);
+        assert_eq!(thresholds.publish_threshold, -50.0);
+        assert_eq!(thresholds.graylist_threshold, -100.0);
+        assert_eq!(thresholds.accept_px_threshold, 10.0);
+        assert_eq!(thresholds.opportunistic_graft_threshold, 5.0);
+    }
+
+    #[test]
+    fn test_configure_gossipsub_scoring_validates() {
+        let (params, thresholds) = configure_gossipsub_scoring();
+        assert!(params.validate().is_ok(), "PeerScoreParams should validate");
+        assert!(
+            thresholds.validate().is_ok(),
+            "PeerScoreThresholds should validate"
+        );
+    }
+
+    #[test]
+    fn test_extract_peer_id_from_multiaddr() {
+        // Multiaddr with /p2p suffix — use a generated PeerId for a valid address
+        let peer_id = PeerId::random();
+        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{}", peer_id)
+            .parse()
+            .expect("valid multiaddr");
+        let extracted = extract_peer_id_from_multiaddr(&addr);
+        assert!(extracted.is_some());
+        assert_eq!(extracted.unwrap(), peer_id);
+
+        // Multiaddr without /p2p suffix
+        let addr_no_p2p: Multiaddr = "/ip4/1.2.3.4/udp/4001/quic-v1"
+            .parse()
+            .expect("valid multiaddr");
+        assert!(extract_peer_id_from_multiaddr(&addr_no_p2p).is_none());
     }
 }

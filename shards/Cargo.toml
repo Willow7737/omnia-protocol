@@ -18,6 +18,11 @@ hex = "0.4"
 tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
 rand = "0.8"
 blake3 = "1.5"
+aes-gcm = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 
 # Persistent nonce storage — needed for replay protection that survives restarts.
 # redb is a pure-Rust, ACID-compliant, simple embedded database that is

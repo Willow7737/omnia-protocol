@@ -48,6 +48,9 @@ pub struct NodeConfig {
     /// Directory for persistent nonce state (redb). If None, nonce state is in-memory only.
     /// Production nodes MUST set this for replay protection across restarts.
     pub nonce_data_dir: Option<PathBuf>,
+    /// Directory for persistent consensus state (redb). If None, consensus state is in-memory only.
+    /// Production nodes MUST set this to avoid replaying all events from genesis after a crash.
+    pub consensus_data_dir: Option<PathBuf>,
     /// Protocol version to advertise on the network.
     pub protocol_version: String,
 }
@@ -96,6 +99,8 @@ pub struct NodeConfigFile {
     pub slashing_data_dir: Option<String>,
     /// Directory for persistent nonce state (redb). If None, nonce state is in-memory only.
     pub nonce_data_dir: Option<String>,
+    /// Directory for persistent consensus state (redb). If None, consensus state is in-memory only.
+    pub consensus_data_dir: Option<String>,
 }
 
 impl NodeConfigFile {
@@ -194,6 +199,16 @@ impl NodeConfig {
             .unwrap_or_else(|| self.data_dir.join("nonces.redb"))
     }
 
+    /// Get the consensus store database file path.
+    ///
+    /// Returns `<data_dir>/consensus.redb` if not explicitly configured.
+    /// redb uses a single file rather than a directory.
+    pub fn consensus_dir(&self) -> PathBuf {
+        self.consensus_data_dir
+            .clone()
+            .unwrap_or_else(|| self.data_dir.join("consensus.redb"))
+    }
+
     /// Build the config from CLI arguments parsed by clap.
     ///
     /// If a `--config` flag is provided, the TOML file is loaded first
@@ -256,6 +271,11 @@ impl NodeConfig {
             .and_then(|fc| fc.nonce_data_dir.clone())
             .map(PathBuf::from);
 
+        let consensus_data_dir = file_config
+            .as_ref()
+            .and_then(|fc| fc.consensus_data_dir.clone())
+            .map(PathBuf::from);
+
         Self {
             node_id,
             listen_addr,
@@ -268,6 +288,7 @@ impl NodeConfig {
             snapshot_interval,
             slashing_data_dir,
             nonce_data_dir,
+            consensus_data_dir,
             protocol_version,
         }
     }
@@ -478,6 +499,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: None,
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert!(config.validate().is_ok());
@@ -497,6 +519,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: None,
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -518,6 +541,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: None,
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -539,6 +563,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: None,
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         let result = config.validate();
@@ -560,6 +585,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: None,
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("./data/slashing.redb"));
@@ -579,6 +605,7 @@ mod tests {
             snapshot_interval: 10_000,
             slashing_data_dir: Some(PathBuf::from("/custom/slashing")),
             nonce_data_dir: None,
+            consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("/custom/slashing"));

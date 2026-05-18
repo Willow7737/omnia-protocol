@@ -36,6 +36,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod load_test;
+
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId,
     NodeKeypair, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,

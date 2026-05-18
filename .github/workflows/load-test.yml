@@ -1,0 +1,19 @@
+name: Load Test
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run load test
+        run: cargo run --bin omnia-load-test
+        env:
+          NUM_NODES: 4
+          DURATION_SECS: 30
+          EVENTS_PER_SEC: 100

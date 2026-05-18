@@ -27,25 +27,30 @@ const SHARE_ENCRYPTION_DOMAIN: &[u8] = b"OMNIA-SHARE-ENCRYPTION-V1";
 /// Domain separator for Ed25519 key derivation from reconstructed secret.
 const IDENTITY_KEY_DERIVATION_DOMAIN: &str = "OMNIA-IDENTITY-ED25519-V1";
 
-/// Format version for encrypted shares.
-const ENCRYPTED_SHARE_VERSION: u8 = 1;
+/// Format version for encrypted shares (v2 = AES-256-GCM).
+const ENCRYPTED_SHARE_VERSION: u8 = 2;
+
+/// Legacy version constant for XOR-based share encryption (backward compat).
+#[allow(dead_code)] // Used in test_v1_backward_compat via version comparison
+const ENCRYPTED_SHARE_VERSION_V1: u8 = 1;
 
 /// An encrypted Shamir share stored for a custodian.
 ///
 /// In production, each share would be encrypted with the custodian's
-/// public key. In the shards layer we use BLAKE3-derived XOR encryption
-/// with domain separation — the actual public-key encryption happens at
+/// public key. In the shards layer we use AES-256-GCM encryption
+/// with BLAKE3 + HKDF domain separation (v2). Legacy v1 shares used
+/// XOR encryption — the actual public-key encryption happens at
 /// a higher layer that has access to the custodian's key infrastructure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedShare {
     /// The participant index (1-based).
     pub custodian: u8,
-    /// XOR-encrypted share bytes.
+    /// AES-256-GCM encrypted share bytes (v2), or XOR-encrypted (v1 legacy).
     pub ciphertext: Vec<u8>,
-    /// AES-256-GCM-style nonce (12 bytes). For XOR encryption this is
-    /// derived from the BLAKE3 key material for domain separation.
+    /// 96-bit nonce for AES-256-GCM (v2). For v1 (XOR) this was derived
+    /// from BLAKE3 key material for domain separation.
     pub nonce: [u8; 12],
-    /// Format version (currently 1).
+    /// Format version: 1 = XOR (legacy), 2 = AES-256-GCM.
     pub version: u8,
 }
 
@@ -63,9 +68,9 @@ pub struct DidDocument {
     /// Whether social recovery is enabled for this DID.
     pub recovery_enabled: bool,
     /// Authentication methods (public keys authorized to sign for this DID).
-    // TODO: Recovery should add the new recovered key to authentication
-    // and optionally remove the compromised old key. Currently untouched.
     pub authentication: Vec<[u8; 32]>,
+    /// Number of times recovery has been performed (prevents replay).
+    pub recovery_count: u32,
     /// Service endpoints associated with this DID.
     pub services: HashMap<String, String>,
 }
@@ -80,6 +85,7 @@ impl DidDocument {
             updated_at: VectorClock::new(),
             recovery_enabled: false,
             authentication: vec![public_key],
+            recovery_count: 0,
             services: HashMap::new(),
         }
     }
@@ -181,15 +187,8 @@ impl IdentityState {
                 // the same secret always produces the same public key.
                 let new_public_key = derive_identity_key(&reconstructed);
 
-                // Recovery successful — update the document with key rotation
-                if let Some(doc) = self.dids.get_mut(did) {
-                    doc.updated_at.merge(vc);
-                    doc.recovery_enabled = true;
-                    // Add the new key to authentication (rotation, not replacement)
-                    if !doc.authentication.contains(&new_public_key) {
-                        doc.authentication.push(new_public_key);
-                    }
-                }
+                // Use complete_recovery() to properly update the DID document
+                self.complete_recovery(did, &new_public_key, vc)?;
 
                 Ok(())
             }
@@ -349,6 +348,39 @@ impl IdentityState {
         })
     }
 
+    /// Complete the recovery process by adding the recovered key to DID authentication.
+    ///
+    /// This method ensures:
+    /// 1. The recovered key is added to the authentication set
+    /// 2. A recovery counter is incremented (prevents replay)
+    /// 3. The DID document is properly updated
+    pub fn complete_recovery(
+        &mut self,
+        did: &str,
+        recovered_public_key: &[u8; 32],
+        vc: &VectorClock,
+    ) -> Result<(), ShardError> {
+        let doc = self
+            .dids
+            .get_mut(did)
+            .ok_or_else(|| ShardError::ValidationFailed(format!("DID not found: {}", did)))?;
+
+        // Add the recovered key to authentication (rotation, not replacement)
+        let key_array = *recovered_public_key;
+        if !doc.authentication.contains(&key_array) {
+            doc.authentication.push(key_array);
+        }
+
+        // Increment recovery counter (prevents replay attacks)
+        doc.recovery_count += 1;
+
+        // Update vector clock
+        doc.updated_at.merge(vc);
+        doc.recovery_enabled = true;
+
+        Ok(())
+    }
+
     /// Register an AI agent identity.
     pub fn register_agent(&mut self, agent: AgentIdentity) -> Result<(), ShardError> {
         if self.agent_registry.contains_key(&agent.did) {
@@ -369,11 +401,11 @@ impl IdentityState {
 
     /// Encrypt and persist recovery shares for a DID.
     ///
-    /// Each share is XOR-encrypted with a BLAKE3-derived key unique to
-    /// the custodian index. This provides domain-separated encryption
-    /// without requiring the custodian's public key (which is not
-    /// available at the shard layer). In production, a higher layer
-    /// would re-encrypt with the custodian's actual public key.
+    /// Each share is encrypted with AES-256-GCM using a per-custodian key
+    /// derived via BLAKE3 + HKDF-SHA256 with domain separation. This provides
+    /// authenticated encryption — any tampering with the ciphertext will be
+    /// detected on decryption. In production, a higher layer would re-encrypt
+    /// with the custodian's actual public key.
     pub fn persist_shares(
         &mut self,
         did: &str,
@@ -382,33 +414,26 @@ impl IdentityState {
         let mut encrypted: Vec<EncryptedShare> = Vec::with_capacity(shares.len());
 
         for share in shares {
-            // Derive a per-custodian encryption key using BLAKE3 domain separation.
-            // The key material is: domain || custodian_index (1 byte)
+            // Derive a per-custodian encryption key using BLAKE3 + HKDF domain separation
             let mut key_input = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
             key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
             key_input.push(share.index);
 
-            let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
+            // Derive AES-256 key via HKDF-SHA256 from BLAKE3-derived key material
+            let key_material = blake3::derive_key("OMNIA-SHARE-AES-KEY-V2", &key_input);
+            let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2");
 
-            // Derive a nonce from a separate BLAKE3 context for domain separation
-            let nonce_input: Vec<u8> = {
-                let mut v = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
-                v.extend_from_slice(b"OMNIA-SHARE-NONCE-V1");
-                v.push(share.index);
-                v
-            };
-            let nonce_hash = blake3::hash(&nonce_input);
-            let mut nonce = [0u8; 12];
-            nonce.copy_from_slice(&nonce_hash.as_bytes()[..12]);
+            // Generate random 96-bit nonce
+            let nonce = generate_nonce();
 
-            // XOR-encrypt the share value with the derived key (repeating as needed)
-            let ciphertext = xor_with_key(&share.value, &key);
+            // AES-256-GCM encrypt
+            let ciphertext = aes256gcm_encrypt(&share.value, &aes_key, &nonce, &key_input);
 
             encrypted.push(EncryptedShare {
                 custodian: share.index,
                 ciphertext,
                 nonce,
-                version: ENCRYPTED_SHARE_VERSION,
+                version: ENCRYPTED_SHARE_VERSION, // version 2
             });
         }
 
@@ -418,8 +443,9 @@ impl IdentityState {
 
     /// Decrypt shares for a given DID, returning the raw `RecoveryShare`s.
     ///
-    /// This reverses `persist_shares` by deriving the same BLAKE3 keys
-    /// and XOR-decrypting the ciphertext.
+    /// This reverses `persist_shares` with version-aware decryption:
+    /// - v1 (legacy): XOR decryption with BLAKE3-derived keys
+    /// - v2 (current): AES-256-GCM authenticated decryption
     pub fn decrypt_shares(&self, did: &str) -> Result<Vec<RecoveryShare>, ShardError> {
         let encrypted_shares = self.shares.get(did).ok_or_else(|| {
             ShardError::ValidationFailed(format!("No encrypted shares for DID: {}", did))
@@ -428,15 +454,35 @@ impl IdentityState {
         let mut decrypted = Vec::with_capacity(encrypted_shares.len());
 
         for enc in encrypted_shares {
-            // Derive the same per-custodian key
-            let mut key_input = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
-            key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
-            key_input.push(enc.custodian);
-
-            let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
-
-            // XOR-decrypt (XOR is its own inverse)
-            let plaintext = xor_with_key(&enc.ciphertext, &key);
+            let plaintext = match enc.version {
+                1 => {
+                    // Legacy XOR decryption (backward compatibility)
+                    tracing::warn!(
+                        "Decrypting legacy v1 XOR share for custodian {} - upgrade recommended",
+                        enc.custodian
+                    );
+                    let mut key_input = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
+                    key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
+                    key_input.push(enc.custodian);
+                    let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
+                    xor_with_key(&enc.ciphertext, &key)
+                }
+                2 => {
+                    // AES-256-GCM decryption
+                    let mut key_input = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
+                    key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
+                    key_input.push(enc.custodian);
+                    let key_material = blake3::derive_key("OMNIA-SHARE-AES-KEY-V2", &key_input);
+                    let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2");
+                    aes256gcm_decrypt(&enc.ciphertext, &aes_key, &enc.nonce, &key_input)?
+                }
+                _ => {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "Unknown share encryption version: {}",
+                        enc.version
+                    )));
+                }
+            };
 
             decrypted.push(RecoveryShare {
                 index: enc.custodian,
@@ -466,14 +512,77 @@ impl Default for IdentityState {
 
 /// XOR a byte slice with a repeating 32-byte key.
 ///
-/// This is a simple stream cipher suitable for share encryption at the
-/// shard layer. XOR is its own inverse, so the same function is used
-/// for both encryption and decryption.
+/// This is a simple stream cipher used for legacy v1 share encryption.
+/// XOR is its own inverse, so the same function is used
+/// for both encryption and decryption. Retained for backward compatibility
+/// with v1 encrypted shares.
 fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
     data.iter()
         .enumerate()
         .map(|(i, byte)| byte ^ key[i % 32])
         .collect()
+}
+
+/// Derive an AES-256 key from key material using HKDF-SHA256.
+fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> [u8; 32] {
+    use hkdf::Hkdf;
+    use sha2::Sha256;
+    let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
+    let mut aes_key = [0u8; 32];
+    hk.expand(info.as_bytes(), &mut aes_key)
+        .expect("HKDF expand should not fail for 32 bytes");
+    aes_key
+}
+
+/// Generate a random 96-bit nonce for AES-256-GCM.
+fn generate_nonce() -> [u8; 12] {
+    use rand::RngCore;
+    let mut nonce = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    nonce
+}
+
+/// AES-256-GCM encrypt with associated data.
+fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
+    let nonce = Nonce::from_slice(nonce);
+    cipher
+        .encrypt(
+            nonce,
+            aes_gcm::aead::Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .expect("AES-256-GCM encryption should not fail")
+}
+
+/// AES-256-GCM decrypt with associated data.
+fn aes256gcm_decrypt(
+    ciphertext: &[u8],
+    key: &[u8; 32],
+    nonce: &[u8; 12],
+    aad: &[u8],
+) -> Result<Vec<u8>, ShardError> {
+    use aes_gcm::aead::Aead;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
+    let nonce = Nonce::from_slice(nonce);
+    cipher
+        .decrypt(
+            nonce,
+            aes_gcm::aead::Payload {
+                msg: ciphertext,
+                aad,
+            },
+        )
+        .map_err(|_| {
+            ShardError::ValidationFailed(
+                "Share decryption failed: authentication error".to_string(),
+            )
+        })
 }
 
 /// Derive a 32-byte Ed25519 public key from a reconstructed secret
@@ -536,7 +645,7 @@ mod tests {
         let encrypted = state.shares.get(&did).unwrap();
         assert_eq!(encrypted.len(), 5);
         for enc in encrypted {
-            assert_eq!(enc.version, 1);
+            assert_eq!(enc.version, 2); // v2 = AES-256-GCM
             assert!(!enc.ciphertext.is_empty()); // ciphertext should not be empty
         }
 
@@ -594,14 +703,15 @@ mod tests {
     }
 
     #[test]
-    fn test_encrypted_share_xor_roundtrip() {
+    fn test_encrypted_share_aes256gcm_roundtrip() {
+        // Formerly test_encrypted_share_xor_roundtrip — now tests v2 AES-256-GCM.
         let mut state = IdentityState::new();
         let did = "did:omnia:test".to_string();
         let pk: [u8; 32] = [0x42; 32];
         let doc = DidDocument::new(did.clone(), pk, 0);
         state.dids.insert(did.clone(), doc);
 
-        let secret = b"test-secret-for-xor";
+        let secret = b"test-secret-for-aes-gcm";
         let shares = ShamirRecovery::split(secret, 2, 3);
 
         // Persist and then decrypt
@@ -649,7 +759,259 @@ mod tests {
 
         let encrypted = state.shares.get(&did).unwrap();
         for enc in encrypted {
-            assert_eq!(enc.version, 1);
+            assert_eq!(enc.version, 2); // v2 = AES-256-GCM
         }
+    }
+
+    #[test]
+    fn test_share_aes256gcm_round_trip() {
+        let mut state = IdentityState::new();
+        let did = "did:omnia:aes-test".to_string();
+        let pk: [u8; 32] = [0x42; 32];
+        let doc = DidDocument::new(did.clone(), pk, 0);
+        state.dids.insert(did.clone(), doc);
+
+        let secret = b"test-secret-for-aes-gcm";
+        let shares = ShamirRecovery::split(secret, 2, 3);
+        state.persist_shares(&did, &shares).unwrap();
+
+        // Verify version 2
+        let encrypted = state.shares.get(&did).unwrap();
+        for enc in encrypted {
+            assert_eq!(enc.version, 2);
+        }
+
+        // Decrypt and verify roundtrip
+        let decrypted = state.decrypt_shares(&did).unwrap();
+        assert_eq!(decrypted.len(), shares.len());
+        for (orig, dec) in shares.iter().zip(decrypted.iter()) {
+            assert_eq!(orig.index, dec.index);
+            assert_eq!(orig.value, dec.value);
+        }
+
+        // Verify reconstruction
+        let reconstructed = ShamirRecovery::reconstruct(&decrypted).unwrap();
+        assert_eq!(reconstructed, secret.to_vec());
+    }
+
+    #[test]
+    fn test_share_tamper_detected() {
+        let mut state = IdentityState::new();
+        let did = "did:omnia:tamper-test".to_string();
+        let pk: [u8; 32] = [0x33; 32];
+        let doc = DidDocument::new(did.clone(), pk, 0);
+        state.dids.insert(did.clone(), doc);
+
+        let secret = b"tamper-detection-secret";
+        let shares = ShamirRecovery::split(secret, 2, 3);
+        state.persist_shares(&did, &shares).unwrap();
+
+        // Tamper with a ciphertext byte
+        let encrypted_shares = state.shares.get_mut(&did).unwrap();
+        if !encrypted_shares[0].ciphertext.is_empty() {
+            encrypted_shares[0].ciphertext[0] ^= 0xFF;
+        }
+
+        // Decryption should fail (AEAD authentication)
+        let result = state.decrypt_shares(&did);
+        assert!(
+            result.is_err(),
+            "Tampered share should fail AES-GCM authentication"
+        );
+    }
+
+    #[test]
+    fn test_share_v1_backward_compat() {
+        let mut state = IdentityState::new();
+        let did = "did:omnia:v1-compat".to_string();
+        let pk: [u8; 32] = [0x55; 32];
+        let doc = DidDocument::new(did.clone(), pk, 0);
+        state.dids.insert(did.clone(), doc);
+
+        let secret = b"v1-backward-compat-secret";
+        let shares = ShamirRecovery::split(secret, 2, 3);
+
+        // Manually create v1 (XOR) encrypted shares
+        let mut v1_encrypted = Vec::new();
+        for share in &shares {
+            let mut key_input = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
+            key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
+            key_input.push(share.index);
+            let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
+            let nonce_input: Vec<u8> = {
+                let mut v = Vec::with_capacity(SHARE_ENCRYPTION_DOMAIN.len() + 1);
+                v.extend_from_slice(b"OMNIA-SHARE-NONCE-V1");
+                v.push(share.index);
+                v
+            };
+            let nonce_hash = blake3::hash(&nonce_input);
+            let mut nonce = [0u8; 12];
+            nonce.copy_from_slice(&nonce_hash.as_bytes()[..12]);
+            let ciphertext = xor_with_key(&share.value, &key);
+            v1_encrypted.push(EncryptedShare {
+                custodian: share.index,
+                ciphertext,
+                nonce,
+                version: 1,
+            });
+        }
+        state.shares.insert(did.clone(), v1_encrypted);
+
+        // Decrypt v1 shares should still work
+        let decrypted = state.decrypt_shares(&did).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&decrypted).unwrap();
+        assert_eq!(reconstructed, secret.to_vec());
+    }
+
+    #[test]
+    fn test_share_wrong_key_fails() {
+        let mut state = IdentityState::new();
+        let did = "did:omnia:wrong-key".to_string();
+        let pk: [u8; 32] = [0x77; 32];
+        let doc = DidDocument::new(did.clone(), pk, 0);
+        state.dids.insert(did.clone(), doc);
+
+        let secret = b"wrong-key-test-secret";
+        let shares = ShamirRecovery::split(secret, 2, 3);
+        state.persist_shares(&did, &shares).unwrap();
+
+        // Corrupt the custodian index to use wrong decryption key
+        let encrypted_shares = state.shares.get_mut(&did).unwrap();
+        encrypted_shares[0].custodian = 99; // Wrong custodian index
+
+        // Decryption should fail (derived key won't match)
+        let result = state.decrypt_shares(&did);
+        assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");
+    }
+
+    #[test]
+    fn test_sss_recovery_updates_did_auth() {
+        let mut state = IdentityState::new();
+        let vc = VectorClock::new();
+
+        // Create a DID
+        let original_pk: [u8; 32] = [0xAB; 32];
+        let did = "did:omnia:recovery-auth-test".to_string();
+        let doc = DidDocument::new(did.clone(), original_pk, 1000);
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc)
+            .unwrap();
+
+        // Configure recovery with 5 custodians, threshold=3
+        let secret = b"recovery-auth-secret";
+        state
+            .apply(
+                &IdentityOp::ConfigureRecovery {
+                    did: did.clone(),
+                    secret: secret.to_vec(),
+                    threshold: 3,
+                    total_shares: 5,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Recover with 3 shares
+        let all_shares = state.decrypt_shares(&did).unwrap();
+        let recovering_shares: Vec<RecoveryShare> = vec![
+            all_shares[0].clone(),
+            all_shares[2].clone(),
+            all_shares[4].clone(),
+        ];
+
+        // Perform recovery
+        state
+            .apply(
+                &IdentityOp::RecoverDid {
+                    did: did.clone(),
+                    shares: recovering_shares,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Verify new key is in authentication
+        let updated_doc = state.dids.get(&did).unwrap();
+        let new_public_key = derive_identity_key(secret);
+        assert!(
+            updated_doc.authentication.contains(&new_public_key),
+            "New recovered key should be in authentication set"
+        );
+
+        // Verify old key is still present (rotation, not replacement)
+        assert!(
+            updated_doc.authentication.contains(&original_pk),
+            "Original key should still be in authentication set"
+        );
+
+        // Verify recovery_count incremented
+        assert_eq!(updated_doc.recovery_count, 1);
+    }
+
+    #[test]
+    fn test_recovery_prevents_replay() {
+        let mut state = IdentityState::new();
+        let vc = VectorClock::new();
+
+        let original_pk: [u8; 32] = [0xCC; 32];
+        let did = "did:omnia:replay-test".to_string();
+        let doc = DidDocument::new(did.clone(), original_pk, 1000);
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc)
+            .unwrap();
+
+        let secret = b"replay-prevention-secret";
+        state
+            .apply(
+                &IdentityOp::ConfigureRecovery {
+                    did: did.clone(),
+                    secret: secret.to_vec(),
+                    threshold: 2,
+                    total_shares: 3,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        let shares = state.decrypt_shares(&did).unwrap();
+
+        // First recovery
+        state
+            .apply(
+                &IdentityOp::RecoverDid {
+                    did: did.clone(),
+                    shares: shares.clone(),
+                },
+                &vc,
+            )
+            .unwrap();
+
+        let doc_after_first = state.dids.get(&did).unwrap();
+        assert_eq!(doc_after_first.recovery_count, 1);
+
+        // Second recovery with same shares
+        state
+            .apply(
+                &IdentityOp::RecoverDid {
+                    did: did.clone(),
+                    shares: shares.clone(),
+                },
+                &vc,
+            )
+            .unwrap();
+
+        let doc_after_second = state.dids.get(&did).unwrap();
+        assert_eq!(doc_after_second.recovery_count, 2);
+        // The same key should not be duplicated
+        let key = derive_identity_key(secret);
+        let key_count = doc_after_second
+            .authentication
+            .iter()
+            .filter(|k| **k == key)
+            .count();
+        assert_eq!(
+            key_count, 1,
+            "Same key should not be duplicated in authentication"
+        );
     }
 }

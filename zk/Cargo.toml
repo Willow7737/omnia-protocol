@@ -7,6 +7,16 @@ description = "Phase 0: Settlement-agnostic ZK-rollup — Ethereum adapter + Bit
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+default = []
+## Enable live Ethereum RPC mode architecture.
+## Without this feature, the Ethereum adapter runs in simulated (BLAKE3-based mock) mode.
+## Note: The ethers-rs dependency is intentionally excluded from the default build
+## to keep compile times and disk usage manageable. To enable full live mode,
+## add `ethers = { version = "2", features = ["ws", "rustls"], optional = true }`
+## to [dependencies] and change this to `ethereum-live = ["ethers"]`.
+ethereum-live = []
+
 [dependencies]
 omnia-substrate = { path = "../substrate" }
 serde = { version = "1.0", features = ["derive"] }
@@ -30,6 +40,12 @@ rand_chacha = "0.3"
 rand = "0.8"
 serde_bytes = "0.11"
 subtle = "2"
+# Optional: ethers-rs for live Ethereum settlement (enabled by 'ethereum-live' feature).
+# Note: ethers-rs 2.x is very heavy (~300 deps). To use it, add:
+#   ethers = { version = "2", features = ["ws", "rustls"], optional = true }
+# and uncomment the `ethereum-live = ["ethers"]` feature above.
+# Currently, live mode stubs are present but ethers is not included to keep
+# build times and disk usage manageable in development.
 
 [dev-dependencies]
 tokio-test = "0.4"

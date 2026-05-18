@@ -26,13 +26,16 @@ pub mod blake3_domain;
 pub mod bls;
 pub mod causal_graph;
 pub mod consensus;
+pub mod consensus_store;
 pub mod crdt;
 pub mod crypto;
 pub mod crypto_schemes;
 pub mod event;
+pub mod fast_sync;
 pub mod genesis_replay;
 pub mod gossip;
 pub mod keystore;
+pub mod mempool;
 pub mod migration;
 pub mod network;
 pub mod rate_limiter;
@@ -55,6 +58,7 @@ pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, RoundTimer};
+pub use consensus_store::{ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError, RedbConsensusStore};
 pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use crypto_schemes::{
@@ -64,15 +68,19 @@ pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
+pub use fast_sync::{FastSyncManager, SyncCheckpoint, SyncError, SyncRequest, SyncResponse, SyncResult,
+    select_target_checkpoint};
 pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
+pub use mempool::{Mempool, MempoolError};
 pub use gossip::{
-    GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage, GossipProtocol,
-    GossipStats,
+    serialize_compressed, deserialize_compressed, GossipConfig, GossipDigest, GossipError,
+    GossipEvent, GossipMessage, GossipProtocol, GossipStats,
 };
 pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
 pub use network::{
-    check_version_compatibility, NetworkCommand, NetworkEvent, OmniaBehaviour, OmniaNetwork,
-    VersionCompatibility, VersionHandshake,
+    configure_gossipsub_scoring, check_version_compatibility, NetworkCommand, NetworkConfig,
+    NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
+    VersionHandshake,
 };
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
@@ -86,8 +94,9 @@ pub use slashing_undo::{
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 pub use threshold::{
-    DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
-    PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage,
+    DkgVerificationResult, KeyShare, PartialSignature, ThresholdConfig, ThresholdError,
+    ThresholdKeyManager, ThresholdSignature,
 };
 pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
@@ -122,7 +131,9 @@ pub const TARGET_TPS: u32 = 10_000;
 /// Target latency for finality (milliseconds)
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use thiserror::Error;
 
@@ -247,6 +258,38 @@ pub struct SubstrateConfig {
     ///
     /// Default: `0` (archive).
     pub pruning_depth: u64,
+    /// Maximum number of events in the mempool.
+    ///
+    /// The mempool holds events awaiting inclusion in a leader's
+    /// block proposal. When the mempool is full, new submissions
+    /// are rejected until space is freed.
+    ///
+    /// Default: `10_000`.
+    pub mempool_size: usize,
+    /// Maximum number of events per block proposal.
+    ///
+    /// When a leader produces a block, it drains at most this many
+    /// events from the mempool. Larger values increase throughput
+    /// but also increase the computational cost of block validation.
+    ///
+    /// Default: `500`.
+    pub max_block_events: usize,
+    /// Directory for persistent consensus state (redb).
+    ///
+    /// If `None`, consensus state is kept in memory only (for tests).
+    /// Production nodes should set this to ensure consensus state
+    /// survives restarts, avoiding the need to replay all events
+    /// from genesis after a crash.
+    pub consensus_data_dir: Option<PathBuf>,
+    /// Enable fast sync on startup (downloads snapshot from peers).
+    ///
+    /// When `true`, a late-joining node will attempt to download a
+    /// recent state snapshot from peers and replay only the delta
+    /// events since that snapshot, instead of replaying all events
+    /// from genesis.
+    ///
+    /// Default: `false`.
+    pub fast_sync: bool,
 }
 
 impl SubstrateConfig {
@@ -276,6 +319,10 @@ impl SubstrateConfig {
             nonce_data_dir: None,
             snapshot_interval: 10_000,
             pruning_depth: 0,
+            mempool_size: 10_000,
+            max_block_events: 500,
+            consensus_data_dir: None,
+            fast_sync: false,
         }
     }
 
@@ -301,6 +348,10 @@ impl SubstrateConfig {
             nonce_data_dir: None,
             snapshot_interval: 10_000,
             pruning_depth: 0,
+            mempool_size: 10_000,
+            max_block_events: 500,
+            consensus_data_dir: None,
+            fast_sync: false,
         }
     }
 }
@@ -308,7 +359,7 @@ impl SubstrateConfig {
 /// The main Substrate runtime that coordinates all components
 pub struct Substrate {
     config: SubstrateConfig,
-    graph: std::sync::Arc<tokio::sync::RwLock<CausalGraph>>,
+    graph: Arc<tokio::sync::RwLock<CausalGraph>>,
     gossip: Option<GossipProtocol>,
     consensus: ConsensusEngine,
     running: bool,
@@ -329,6 +380,27 @@ pub struct Substrate {
     /// `submit_event()` or from the network via gossip). `process_consensus()`
     /// drains this queue, making consensus O(new_events) instead of O(total).
     unprocessed_events: Vec<EventId>,
+    /// Mempool for pending events awaiting block inclusion.
+    ///
+    /// Events submitted locally are added to the mempool. When this node
+    /// is the VRF-selected leader for a round, `propose_block()` drains
+    /// events from the mempool and inserts them into the causal graph
+    /// for consensus processing.
+    mempool: Mempool,
+    /// Maximum number of events per block proposal.
+    max_block_events: usize,
+    /// Validator candidates for VRF-based leader selection.
+    ///
+    /// Maps `NodeId` to `(keypair, stake)` for each validator.
+    /// Used by `compute_leader()` to determine the round leader.
+    /// If empty, leader selection is skipped in the run loop.
+    validator_candidates: HashMap<NodeId, (NodeKeypair, u64)>,
+    /// Optional consensus state persistence store.
+    ///
+    /// When set, consensus state is persisted after each round
+    /// advancement, enabling crash recovery without genesis replay.
+    /// If `None`, consensus state is in-memory only.
+    consensus_store: Option<Arc<dyn ConsensusStore>>,
 }
 
 impl Substrate {
@@ -345,8 +417,49 @@ impl Substrate {
             config.slash_threshold,
             config.ejection_threshold,
         );
-        let consensus = ConsensusEngine::new(config.consensus.clone(), slashing.clone());
-        let graph = std::sync::Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
+
+        // Create consensus store if persistence is configured
+        let consensus_store: Option<Arc<dyn ConsensusStore>> =
+            config.consensus_data_dir.as_ref().and_then(|dir| {
+                match RedbConsensusStore::open(dir) {
+                    Ok(store) => {
+                        tracing::info!(
+                            path = %dir.display(),
+                            "Consensus: using persistent redb store"
+                        );
+                        Some(Arc::new(store) as Arc<dyn ConsensusStore>)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            path = %dir.display(),
+                            "Failed to open consensus store — consensus state will not persist"
+                        );
+                        None
+                    }
+                }
+            });
+
+        // Create consensus engine, restoring from persisted state if available
+        let consensus = match &consensus_store {
+            Some(store) => ConsensusEngine::load_or_new(
+                config.consensus.clone(),
+                Arc::clone(store),
+                slashing.clone(),
+            )
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    error = %e,
+                    "Failed to restore consensus state — starting fresh"
+                );
+                ConsensusEngine::new(config.consensus.clone(), slashing.clone())
+            }),
+            None => ConsensusEngine::new(config.consensus.clone(), slashing.clone()),
+        };
+
+        let graph = Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
+        let mempool_size = config.mempool_size;
+        let max_block_events = config.max_block_events;
 
         Self {
             config,
@@ -357,6 +470,10 @@ impl Substrate {
             running: false,
             shard_processor: None,
             unprocessed_events: Vec::new(),
+            mempool: Mempool::new(mempool_size),
+            max_block_events,
+            validator_candidates: HashMap::new(),
+            consensus_store,
         }
     }
 
@@ -365,7 +482,7 @@ impl Substrate {
         self.gossip = Some(GossipProtocol::new(
             self.config.node_id,
             self.config.gossip.clone(),
-            std::sync::Arc::clone(&self.graph),
+            Arc::clone(&self.graph),
         ));
     }
 
@@ -396,8 +513,52 @@ impl Substrate {
         self
     }
 
-    /// Run the substrate main loop. Processes network events, consensus,
-    /// and Layer 2 shard processors until `stop()` is called.
+    /// Register validator candidates for VRF-based leader selection.
+    ///
+    /// Each entry maps a `NodeId` to its `(keypair, stake)`. The leader
+    /// for a given round is selected deterministically from this set
+    /// using the VRF module's `select_leader()` function.
+    ///
+    /// If this method is not called, the run loop will skip the leader
+    /// check and no blocks will be proposed.
+    pub fn with_validator_candidates(
+        mut self,
+        candidates: HashMap<NodeId, (NodeKeypair, u64)>,
+    ) -> Self {
+        self.validator_candidates = candidates;
+        self
+    }
+
+    /// Register a single validator candidate.
+    ///
+    /// Convenience method for adding validators one at a time.
+    pub fn add_validator(
+        &mut self,
+        node_id: NodeId,
+        keypair: NodeKeypair,
+        stake: u64,
+    ) {
+        self.validator_candidates.insert(node_id, (keypair, stake));
+    }
+
+    /// Get a reference to the mempool.
+    pub fn mempool(&self) -> &Mempool {
+        &self.mempool
+    }
+
+    /// Get a mutable reference to the mempool.
+    pub fn mempool_mut(&mut self) -> &mut Mempool {
+        &mut self.mempool
+    }
+
+    /// Run the substrate main loop. Processes network events, leader
+    /// selection, block production, consensus, and Layer 2 shard processors
+    /// until `stop()` is called.
+    ///
+    /// Uses a round timer with `tokio::select!` for event-driven wakeup
+    /// instead of a fixed 100ms poll loop. The round timer fires at the
+    /// configured consensus round interval, waking the loop to check for
+    /// leader duties and process consensus rounds.
     ///
     /// Only committed events are forwarded to the shard processor,
     /// ensuring that shards never observe un-finalized state that
@@ -405,53 +566,84 @@ impl Substrate {
     pub async fn run(&mut self) {
         self.running = true;
 
+        // Round timer: fires at the consensus round interval (default 1 second).
+        // This replaces the previous 100ms sleep poll loop with an event-driven
+        // approach that only wakes when necessary.
+        let round_duration = tokio::time::Duration::from_millis(
+            self.config.consensus.round_timeout_ms.clamp(100, 10_000),
+        );
+        let mut round_timer = tokio::time::interval(round_duration);
+
         while self.running {
-            // 1. Drain network events into graph + queue
-            if let Some(ref mut gossip) = self.gossip {
-                match gossip.process_pending_events().await {
-                    Ok(inserted) => {
-                        self.unprocessed_events.extend(inserted);
+            tokio::select! {
+                // Wake on round timeout — check leader duties and process consensus
+                _ = round_timer.tick() => {
+                    self.process_consensus_round().await;
+                }
+            }
+        }
+    }
+
+    /// Process a single consensus round: drain gossip, check leader,
+    /// run consensus, and forward committed events to shard processor.
+    async fn process_consensus_round(&mut self) {
+        // 1. Drain network events into graph + queue
+        if let Some(ref mut gossip) = self.gossip {
+            match gossip.process_pending_events().await {
+                Ok(inserted) => {
+                    self.unprocessed_events.extend(inserted);
+                }
+                Err(e) => {
+                    tracing::warn!("Gossip processing error: {}", e);
+                }
+            }
+        }
+
+        // 2. Check if we are the leader for this round
+        let current_round = self.consensus.current_round();
+        if !self.validator_candidates.is_empty() {
+            if let Ok(leader) = self
+                .consensus
+                .compute_leader(&self.validator_candidates, current_round)
+            {
+                if leader == self.config.node_id {
+                    // We are the leader — produce a block proposal
+                    self.propose_block(current_round);
+                }
+            }
+        }
+
+        // 3. Run consensus — returns newly committed event IDs
+        let committed = self.process_consensus().await;
+
+        // 4. Process committed events through shard processor
+        if let Some(ref mut processor) = self.shard_processor {
+            let graph = self.graph.read().await;
+            for event_id in &committed {
+                match graph.get_checked(event_id) {
+                    Ok(event) => {
+                        if let Err(e) = processor.process_event(event) {
+                            tracing::warn!(
+                                "Shard processor error for event {}: {}",
+                                hex::encode(&event_id[..4]),
+                                e
+                            );
+                        }
                     }
-                    Err(e) => {
-                        tracing::warn!("Gossip processing error: {}", e);
+                    Err(CausalGraphError::EventPruned(_)) => {
+                        tracing::warn!(
+                            "Skipping pruned event {} in shard processor",
+                            hex::encode(&event_id[..4])
+                        );
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "Event {} not found in graph for shard processing",
+                            hex::encode(&event_id[..4])
+                        );
                     }
                 }
             }
-
-            // 2. Run consensus — returns newly committed event IDs
-            let committed = self.process_consensus().await;
-
-            // 3. Process committed events through shard processor
-            if let Some(ref mut processor) = self.shard_processor {
-                let graph = self.graph.read().await;
-                for event_id in &committed {
-                    match graph.get_checked(event_id) {
-                        Ok(event) => {
-                            if let Err(e) = processor.process_event(event) {
-                                tracing::warn!(
-                                    "Shard processor error for event {}: {}",
-                                    hex::encode(&event_id[..4]),
-                                    e
-                                );
-                            }
-                        }
-                        Err(CausalGraphError::EventPruned(_)) => {
-                            tracing::warn!(
-                                "Skipping pruned event {} in shard processor",
-                                hex::encode(&event_id[..4])
-                            );
-                        }
-                        Err(_) => {
-                            tracing::warn!(
-                                "Event {} not found in graph for shard processing",
-                                hex::encode(&event_id[..4])
-                            );
-                        }
-                    }
-                }
-            }
-
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
     }
 
@@ -465,7 +657,13 @@ impl Substrate {
         self.run().await;
     }
 
-    /// Submit an event to the substrate for processing
+    /// Submit an event to the substrate for processing.
+    ///
+    /// The event is validated, inserted into the causal graph, processed
+    /// through consensus, broadcast via gossip, and added to the mempool
+    /// for potential block proposal. If the mempool is full, the event
+    /// is still processed through consensus but a warning is logged and
+    /// it will not be available for block proposals.
     pub async fn submit_event(&mut self, event: Event) -> Result<()> {
         event.validate().map_err(SubstrateError::from)?;
 
@@ -482,6 +680,17 @@ impl Substrate {
             .process_event(&event, &graph)
             .map_err(SubstrateError::from)?;
         drop(graph);
+
+        // Also add to mempool for block proposal when we are the leader.
+        // If the mempool is full, log a warning but do not fail — the event
+        // has already been processed through consensus.
+        if let Err(e) = self.mempool.insert(event.clone()) {
+            tracing::warn!(
+                "Mempool full, event {} not queued for proposal: {}",
+                hex::encode(&event.id[..4]),
+                e
+            );
+        }
 
         if let Some(ref mut gossip) = self.gossip {
             gossip
@@ -562,11 +771,51 @@ impl Substrate {
         }
     }
 
+    /// Produce a block proposal as the round leader.
+    ///
+    /// Called when this node is the VRF-selected leader for the current round.
+    /// Drains pending events from the mempool and creates proposal events
+    /// for consensus. Events that are already in the graph (e.g., submitted
+    /// via `submit_event()`) are skipped gracefully since `CausalGraph::insert()`
+    /// returns `DuplicateEvent` for already-inserted events.
+    fn propose_block(&mut self, round: u64) -> Vec<EventId> {
+        let pending = self.mempool.drain_up_to(self.max_block_events);
+        if pending.is_empty() {
+            return Vec::new();
+        }
+
+        let mut proposed = Vec::new();
+        for event in pending {
+            let event_id = event.id;
+            // Insert into graph and process through consensus.
+            // If the event was already inserted (e.g., via submit_event),
+            // CausalGraph::insert returns DuplicateEvent and we skip it —
+            // it has already been processed.
+            {
+                let mut graph = self.graph.blocking_write();
+                if let Ok(()) = graph.insert(event.clone()) {
+                    self.unprocessed_events.push(event_id);
+                }
+            }
+            proposed.push(event_id);
+        }
+
+        tracing::info!(
+            "Leader {} proposed {} events for round {}",
+            hex::encode(&self.config.node_id[..4]),
+            proposed.len(),
+            round
+        );
+
+        proposed
+    }
+
     /// Process consensus for unprocessed events only.
     ///
     /// Drains the `unprocessed_events` queue, making consensus O(new_events)
     /// instead of O(total_events). Events are added to the queue when inserted
-    /// locally (via `submit_event()`) or from the network (via gossip).
+    /// locally (via `submit_event()`) or from the network (via gossip), or
+    /// when proposed as a leader via `propose_block()`.
     pub async fn process_consensus(&mut self) -> Vec<EventId> {
         let graph = self.graph.read().await;
         let mut all_committed = Vec::new();
@@ -591,6 +840,19 @@ impl Substrate {
                     tracing::warn!(
                         "Event {} not found in graph for consensus",
                         hex::encode(&id[..4])
+                    );
+                }
+            }
+        }
+
+        // Persist consensus state after processing if events were committed
+        // (indicating round advancement) and a store is configured.
+        if !all_committed.is_empty() {
+            if let Some(ref store) = self.consensus_store {
+                if let Err(e) = self.consensus.persist_state(store.as_ref()) {
+                    tracing::warn!(
+                        error = %e,
+                        "Failed to persist consensus state after round advancement"
                     );
                 }
             }

@@ -2,7 +2,8 @@
 //! Integration tests for settlement-agnostic ZK-rollup.
 //!
 //! These tests verify that:
-//! - The Ethereum adapter works correctly (simulated)
+//! - The Ethereum adapter works correctly in simulated mode
+//! - The Ethereum adapter's new config/mode API functions correctly
 //! - The Bitcoin, Solana, and Celestia stubs return `NotImplemented`
 //! - The rollup operator works with any `SettlementLayer` adapter
 //! - All four adapters implement the same trait and can be used as trait objects
@@ -10,7 +11,8 @@
 use omnia_substrate::{Substrate, SubstrateConfig};
 use omnia_zk::operator::RollupOperator;
 use omnia_zk::settlement::{
-    BitcoinAdapter, CelestiaAdapter, EthereumAdapter, SettlementLayer, SolanaAdapter,
+    BitcoinAdapter, CelestiaAdapter, EthereumAdapter, EthereumConfig, EthereumMode,
+    SettlementError, SettlementLayer, SolanaAdapter,
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -20,6 +22,10 @@ fn test_node(id: u8) -> [u8; 32] {
     node[0] = id;
     node
 }
+
+// ---------------------------------------------------------------------------
+// Ethereum adapter — backward-compatible constructor
+// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn test_ethereum_adapter_chain_id() {
@@ -37,29 +43,33 @@ async fn test_ethereum_adapter_post_batch() {
 }
 
 #[tokio::test]
-async fn test_ethereum_adapter_verify_proof_not_implemented() {
+async fn test_ethereum_adapter_verify_proof_simulated_non_empty() {
     let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
     let proof = vec![0u8; 64];
     let result = adapter.verify_proof(&[0u8; 32], &[1u8; 32], &proof).await;
+    // Simulated mode: non-empty proofs return Ok(true)
     assert!(
-        result.is_err(),
-        "verify_proof should return NotImplemented error"
+        result.is_ok(),
+        "verify_proof should succeed in simulated mode"
     );
-    let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("not yet implemented"),
-        "Unexpected error: {}",
-        err_msg
+        result.unwrap(),
+        "non-empty proof should verify as true in simulated mode"
     );
 }
 
 #[tokio::test]
-async fn test_ethereum_adapter_verify_proof_empty_not_implemented() {
+async fn test_ethereum_adapter_verify_proof_simulated_empty() {
     let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
     let result = adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[]).await;
+    // Simulated mode: empty proof returns Ok(false)
     assert!(
-        result.is_err(),
-        "verify_proof should return NotImplemented error even for empty proof"
+        result.is_ok(),
+        "verify_proof should succeed in simulated mode"
+    );
+    assert!(
+        !result.unwrap(),
+        "empty proof should verify as false in simulated mode"
     );
 }
 
@@ -85,6 +95,92 @@ async fn test_ethereum_adapter_latest_state_root() {
     let root = adapter.latest_state_root().await.unwrap();
     assert_eq!(root, [0u8; 32]);
 }
+
+// ---------------------------------------------------------------------------
+// Ethereum adapter — new config/mode API
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_ethereum_adapter_from_config() {
+    let config = EthereumConfig {
+        rpc_url: "http://localhost:8545".to_string(),
+        contract_address: "0x1234567890abcdef1234567890abcdef12345678".to_string(),
+        gas_limit: 2_000_000,
+        ..Default::default()
+    };
+    let adapter = EthereumAdapter::from_config(config);
+    assert_eq!(adapter.mode(), EthereumMode::Simulated);
+    assert_eq!(adapter.chain_id(), "ethereum");
+
+    let result = adapter.post_batch(b"config-based batch").await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_ethereum_adapter_with_mode_simulated() {
+    let config = EthereumConfig::default();
+    let adapter = EthereumAdapter::with_mode(config, EthereumMode::Simulated).unwrap();
+    assert_eq!(adapter.mode(), EthereumMode::Simulated);
+}
+
+#[tokio::test]
+async fn test_ethereum_adapter_with_mode_live_validates() {
+    let config = EthereumConfig {
+        rpc_url: "".to_string(),
+        ..Default::default()
+    };
+    let result = EthereumAdapter::with_mode(config, EthereumMode::Live);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        SettlementError::ConfigError(msg) => assert!(msg.contains("RPC URL")),
+        other => panic!("Expected ConfigError, got: {}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_ethereum_adapter_with_mode_live_not_implemented() {
+    // Live mode returns NotImplemented for all operations
+    let config = EthereumConfig::default();
+    let adapter = EthereumAdapter::with_mode(config, EthereumMode::Live).unwrap();
+    assert_eq!(adapter.mode(), EthereumMode::Live);
+
+    let result = adapter.post_batch(b"live batch").await;
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        SettlementError::NotImplemented(msg) => {
+            assert!(msg.contains("ethers-rs") || msg.contains("pending"));
+        }
+        other => panic!("Expected NotImplemented, got: {}", other),
+    }
+}
+
+#[test]
+fn test_ethereum_config_validation_valid() {
+    let config = EthereumConfig::default();
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_ethereum_config_validation_invalid_rpc() {
+    let config = EthereumConfig {
+        rpc_url: "ftp://bad".to_string(),
+        ..Default::default()
+    };
+    assert!(config.validate().is_err());
+}
+
+#[test]
+fn test_ethereum_config_validation_invalid_contract() {
+    let config = EthereumConfig {
+        contract_address: "0xbad".to_string(),
+        ..Default::default()
+    };
+    assert!(config.validate().is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Other adapters — stubs
+// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn test_bitcoin_adapter_not_implemented() {
@@ -127,6 +223,10 @@ async fn test_celestia_adapter_not_implemented() {
     let result = adapter.deposit("did:omnia:test", 100).await;
     assert!(result.is_err());
 }
+
+// ---------------------------------------------------------------------------
+// Rollup operator integration
+// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn test_operator_with_ethereum_adapter() {

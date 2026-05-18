@@ -26,7 +26,7 @@ rand = "0.8"
 
 # FIX 4: Async runtime and libp2p networking
 tokio = { version = "1.35", features = ["full"] }
-libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio"] }
+libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
 futures = "0.3"
 async-trait = "0.1"
 blake3 = "1.5"
@@ -57,6 +57,9 @@ subtle = "2"
 
 # Cryptographic random number generation — needed for secure round seed generation
 getrandom = "0.2"
+
+# Snappy compression for gossip messages — reduces bandwidth by 50-80%
+snap = "1"
 
 # Legacy sled database support for one-time migration to redb
 sled = { version = "0.34", optional = true }

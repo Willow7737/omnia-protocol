@@ -118,8 +118,9 @@ pub fn create_proof(circuit: RollupCircuit, pk: &ProvingKey) -> Result<Proof, Pr
 /// rollup circuit.
 ///
 /// The trusted setup is circuit-specific: it depends on the number of events
-/// and the Merkle proof depth. A dummy circuit with zero values and the
-/// specified structure is used to determine the constraint system.
+/// and the Merkle proof depth. A circuit with non-zero witness values and the
+/// specified structure is used to ensure the proving key correctly constrains
+/// all branches of the circuit.
 ///
 /// # Arguments
 ///
@@ -129,14 +130,20 @@ pub fn create_proof(circuit: RollupCircuit, pk: &ProvingKey) -> Result<Proof, Pr
 /// # Errors
 ///
 /// Returns [`ProverError::SetupFailed`] if the key generation fails.
+///
+/// # Security
+///
+/// Uses [`ExpandedRollupCircuit::for_setup()`] which provides non-zero witness
+/// values, ensuring the setup ceremony produces keys that correctly constrain
+/// the full circuit (including all conditional branches).
 pub fn generate_trusted_setup_expanded(
     num_events: usize,
     merkle_depth: usize,
 ) -> Result<(ProvingKey, VerifyingKey), ProverError> {
     let mut rng = ChaCha8Rng::from_entropy();
-    let dummy_circuit = ExpandedRollupCircuit::empty(num_events, merkle_depth);
+    let setup_circuit = ExpandedRollupCircuit::for_setup(num_events, merkle_depth);
 
-    Groth16::<Bn254>::setup(dummy_circuit, &mut rng)
+    Groth16::<Bn254>::setup(setup_circuit, &mut rng)
         .map_err(|e| ProverError::SetupFailed(e.to_string()))
 }
 

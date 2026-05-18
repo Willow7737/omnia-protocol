@@ -19,8 +19,11 @@
 //!    Verification requires a valid Ed25519 signature over the data hash.
 //! 2. **Phase 2 (Hybrid)**: Both classical and PQC signatures required.
 //!    Verification checks both; failure of either rejects the commitment.
+//!    A CRYSTALS-Kyber encapsulation key is stored for future PQ-secure
+//!    key exchange.
 //! 3. **Phase 3 (PostQuantum)**: Only PQC signatures required.
 //!    Classical signatures are kept for historical verification only.
+//!    A CRYSTALS-Kyber encapsulation key is stored for PQ-secure key exchange.
 
 use ed25519_dalek::{Signer, Verifier};
 use omnia_substrate::{NodeKeypair, VectorClock};
@@ -50,6 +53,45 @@ pub enum BindingError {
     /// Signing operation failed.
     #[error("Signing failed: {0}")]
     SigningFailed(String),
+    /// Kyber KEM operation failed.
+    #[error("Kyber KEM error: {0}")]
+    Kyber(#[from] KyberError),
+}
+
+/// Kyber768 keypair for PQ-secure key encapsulation.
+///
+/// Wraps the fixed-size byte arrays from `pqc_kyber` into Vec<u8> for
+/// serialization flexibility. Kyber768 provides security roughly equivalent
+/// to AES-192.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KyberKeyPair {
+    /// Kyber768 encapsulation key (public key, 1184 bytes).
+    pub encapsulation_key: Vec<u8>,
+    /// Kyber768 decapsulation key (secret key, 2400 bytes).
+    pub decapsulation_key: Vec<u8>,
+}
+
+/// Error type for Kyber KEM operations.
+#[derive(Debug, thiserror::Error)]
+pub enum KyberError {
+    /// Invalid encapsulation key length.
+    #[error("invalid encapsulation key length: {0}")]
+    InvalidEncapsulationKey(usize),
+    /// Invalid decapsulation key length.
+    #[error("invalid decapsulation key length: {0}")]
+    InvalidDecapsulationKey(usize),
+    /// Invalid ciphertext length.
+    #[error("invalid ciphertext length: {0}")]
+    InvalidCiphertext(usize),
+    /// KEM operation failed.
+    #[error("KEM operation failed: {0}")]
+    KemFailed(String),
+}
+
+impl From<pqc_kyber::KyberError> for KyberError {
+    fn from(e: pqc_kyber::KyberError) -> Self {
+        KyberError::KemFailed(format!("{e:?}"))
+    }
 }
 
 /// A hybrid (classical + post-quantum) cryptographic commitment.
@@ -149,8 +191,10 @@ impl QuantumCommitment {
     /// Sign data using both Ed25519 and Dilithium (hybrid mode).
     ///
     /// Creates a commitment with both classical and post-quantum signatures
-    /// over the data hash. Both signatures must verify during the `Hybrid`
-    /// phase. The commitment timestamp defaults to an empty `VectorClock`.
+    /// over the data hash. A CRYSTALS-Kyber encapsulation key is generated
+    /// and stored in `kyber_key` for future PQ-secure key exchange. Both
+    /// signatures must verify during the `Hybrid` phase. The commitment
+    /// timestamp defaults to an empty `VectorClock`.
     ///
     /// # Arguments
     ///
@@ -160,7 +204,7 @@ impl QuantumCommitment {
     ///
     /// # Errors
     ///
-    /// Returns `BindingError` if signing fails.
+    /// Returns `BindingError` if signing or Kyber keypair generation fails.
     pub fn sign_hybrid(
         data: &[u8],
         ed_keypair: &NodeKeypair,
@@ -169,9 +213,13 @@ impl QuantumCommitment {
         let hash = blake3::hash(data);
         let ed_sig = ed_keypair.sign(hash.as_bytes());
         let dilithium_sig = dilithium_keypair.sign(hash.as_bytes());
+
+        // Generate a Kyber768 encapsulation key for PQ-secure key exchange
+        let kyber_kp = Self::generate_kyber_keypair()?;
+
         Ok(Self {
             dilithium_sig: dilithium_sig.to_vec(),
-            kyber_key: Vec::new(),
+            kyber_key: kyber_kp.encapsulation_key,
             classical_sig: ed_sig.to_bytes().to_vec(),
             data_hash: *hash.as_bytes(),
             committed_at: VectorClock::new(),
@@ -181,8 +229,9 @@ impl QuantumCommitment {
     /// Sign data using post-quantum Dilithium only.
     ///
     /// Creates a commitment with only a Dilithium signature over the data hash.
-    /// The classical signature field is left empty. The commitment timestamp
-    /// defaults to an empty `VectorClock`.
+    /// A CRYSTALS-Kyber encapsulation key is generated and stored in `kyber_key`
+    /// for PQ-secure key exchange. The classical signature field is left empty.
+    /// The commitment timestamp defaults to an empty `VectorClock`.
     ///
     /// # Arguments
     ///
@@ -191,16 +240,20 @@ impl QuantumCommitment {
     ///
     /// # Errors
     ///
-    /// Returns `BindingError` if signing fails.
+    /// Returns `BindingError` if signing or Kyber keypair generation fails.
     pub fn sign_post_quantum(
         data: &[u8],
         dilithium_keypair: &pqc_dilithium::Keypair,
     ) -> Result<Self, BindingError> {
         let hash = blake3::hash(data);
         let dilithium_sig = dilithium_keypair.sign(hash.as_bytes());
+
+        // Generate a Kyber768 encapsulation key for PQ-secure key exchange
+        let kyber_kp = Self::generate_kyber_keypair()?;
+
         Ok(Self {
             dilithium_sig: dilithium_sig.to_vec(),
-            kyber_key: Vec::new(),
+            kyber_key: kyber_kp.encapsulation_key,
             classical_sig: Vec::new(),
             data_hash: *hash.as_bytes(),
             committed_at: VectorClock::new(),
@@ -334,6 +387,96 @@ impl QuantumCommitment {
     /// Compute the BLAKE3 hash of the given data.
     pub fn hash_data(data: &[u8]) -> [u8; 32] {
         *blake3::hash(data).as_bytes()
+    }
+
+    // -----------------------------------------------------------------------
+    // Kyber KEM operations
+    // -----------------------------------------------------------------------
+
+    /// Generate a Kyber768 keypair for PQ-secure key encapsulation.
+    ///
+    /// Returns a [`KyberKeyPair`] containing the encapsulation (public) key
+    /// and decapsulation (secret) key. The encapsulation key should be stored
+    /// in the commitment's `kyber_key` field; the decapsulation key should be
+    /// kept private by the commitment creator.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KyberError`] if the keypair generation fails (extremely
+    /// unlikely with a proper RNG).
+    pub fn generate_kyber_keypair() -> Result<KyberKeyPair, KyberError> {
+        let mut rng = rand::thread_rng();
+        let kp = pqc_kyber::keypair(&mut rng)?;
+        Ok(KyberKeyPair {
+            encapsulation_key: kp.public.to_vec(),
+            decapsulation_key: kp.secret.to_vec(),
+        })
+    }
+
+    /// Encapsulate: generate a shared secret and ciphertext using the
+    /// commitment's stored Kyber encapsulation key.
+    ///
+    /// This is the KEM analog of encryption: the sender calls `encapsulate`
+    /// with the recipient's public key to produce a shared secret and a
+    /// ciphertext. The recipient can then call [`kyber_decapsulate`] with
+    /// their secret key and the ciphertext to recover the same shared secret.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(shared_secret, ciphertext)` where both are `Vec<u8>`.
+    /// The shared secret is 32 bytes; the ciphertext is 1088 bytes (Kyber768).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KyberError`] if:
+    /// - The encapsulation key stored in this commitment is invalid
+    /// - The KEM operation fails (extremely unlikely with a proper RNG)
+    pub fn kyber_encapsulate(&self) -> Result<(Vec<u8>, Vec<u8>), KyberError> {
+        if self.kyber_key.len() != pqc_kyber::KYBER_PUBLICKEYBYTES {
+            return Err(KyberError::InvalidEncapsulationKey(self.kyber_key.len()));
+        }
+        let mut rng = rand::thread_rng();
+        let (ct, ss) = pqc_kyber::encapsulate(&self.kyber_key, &mut rng)?;
+        Ok((ss.to_vec(), ct.to_vec()))
+    }
+
+    /// Decapsulate: recover the shared secret from a ciphertext.
+    ///
+    /// This is a standalone function (not a method on `QuantumCommitment`)
+    /// because the decapsulation key must be kept private and is not stored
+    /// in the commitment itself.
+    ///
+    /// # Arguments
+    ///
+    /// * `decapsulation_key` — The Kyber768 secret key (2400 bytes)
+    /// * `ciphertext` — The KEM ciphertext (1088 bytes)
+    ///
+    /// # Returns
+    ///
+    /// The shared secret as a 32-byte `Vec<u8>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KyberError`] if the key or ciphertext has an invalid length.
+    ///
+    /// # Note on Implicit Rejection
+    ///
+    /// Kyber uses implicit rejection: if the ciphertext is invalid (e.g.,
+    /// modified by an attacker), decapsulation still succeeds but returns
+    /// a pseudorandom shared secret instead of the original one. This is
+    /// by design and prevents CCA-style attacks.
+    pub fn kyber_decapsulate(
+        decapsulation_key: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, KyberError> {
+        if decapsulation_key.len() != pqc_kyber::KYBER_SECRETKEYBYTES {
+            return Err(KyberError::InvalidDecapsulationKey(decapsulation_key.len()));
+        }
+        if ciphertext.len() != pqc_kyber::KYBER_CIPHERTEXTBYTES {
+            return Err(KyberError::InvalidCiphertext(ciphertext.len()));
+        }
+        let ss = pqc_kyber::decapsulate(ciphertext, decapsulation_key)?;
+        Ok(ss.to_vec())
     }
 }
 
@@ -477,5 +620,209 @@ mod tests {
         let hash = QuantumCommitment::hash_data(data);
         let expected = blake3::hash(data);
         assert_eq!(hash, *expected.as_bytes());
+    }
+
+    // -----------------------------------------------------------------------
+    // Kyber KEM tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_kyber_keypair_generation() {
+        let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
+        // Kyber768: encapsulation key = 1184 bytes, decapsulation key = 2400 bytes
+        assert_eq!(
+            keypair.encapsulation_key.len(),
+            pqc_kyber::KYBER_PUBLICKEYBYTES,
+            "encapsulation key should be {} bytes",
+            pqc_kyber::KYBER_PUBLICKEYBYTES
+        );
+        assert_eq!(
+            keypair.decapsulation_key.len(),
+            pqc_kyber::KYBER_SECRETKEYBYTES,
+            "decapsulation key should be {} bytes",
+            pqc_kyber::KYBER_SECRETKEYBYTES
+        );
+    }
+
+    #[test]
+    fn test_kyber_keypair_unique() {
+        let kp1 = QuantumCommitment::generate_kyber_keypair().unwrap();
+        let kp2 = QuantumCommitment::generate_kyber_keypair().unwrap();
+        // Two independently generated keypairs should differ
+        assert_ne!(
+            kp1.encapsulation_key, kp2.encapsulation_key,
+            "independent Kyber keypairs should have different encapsulation keys"
+        );
+    }
+
+    #[test]
+    fn test_kyber_encapsulate_decapsulate() {
+        let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
+
+        let commitment = QuantumCommitment {
+            dilithium_sig: Vec::new(),
+            kyber_key: keypair.encapsulation_key.clone(),
+            classical_sig: Vec::new(),
+            data_hash: [0u8; 32],
+            committed_at: VectorClock::new(),
+        };
+
+        let (shared_secret_1, ciphertext) = commitment.kyber_encapsulate().unwrap();
+        let shared_secret_2 =
+            QuantumCommitment::kyber_decapsulate(&keypair.decapsulation_key, &ciphertext).unwrap();
+
+        assert_eq!(
+            shared_secret_1, shared_secret_2,
+            "shared secrets must match"
+        );
+        assert_eq!(
+            shared_secret_1.len(),
+            pqc_kyber::KYBER_SSBYTES,
+            "shared secret should be 32 bytes"
+        );
+        assert_eq!(
+            ciphertext.len(),
+            pqc_kyber::KYBER_CIPHERTEXTBYTES,
+            "ciphertext should be {} bytes",
+            pqc_kyber::KYBER_CIPHERTEXTBYTES
+        );
+    }
+
+    #[test]
+    fn test_kyber_wrong_ciphertext_succeeds() {
+        // Kyber uses implicit rejection: decapsulation with a wrong ciphertext
+        // produces a different (pseudorandom) shared secret, not an error.
+        let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
+        let wrong_ct = vec![0u8; pqc_kyber::KYBER_CIPHERTEXTBYTES];
+        let result = QuantumCommitment::kyber_decapsulate(&keypair.decapsulation_key, &wrong_ct);
+        assert!(
+            result.is_ok(),
+            "Kyber decapsulation always succeeds (implicit rejection)"
+        );
+    }
+
+    #[test]
+    fn test_kyber_wrong_key_different_secret() {
+        let kp1 = QuantumCommitment::generate_kyber_keypair().unwrap();
+        let kp2 = QuantumCommitment::generate_kyber_keypair().unwrap();
+
+        let commitment = QuantumCommitment {
+            dilithium_sig: Vec::new(),
+            kyber_key: kp1.encapsulation_key.clone(),
+            classical_sig: Vec::new(),
+            data_hash: [0u8; 32],
+            committed_at: VectorClock::new(),
+        };
+
+        let (shared_secret_1, ciphertext) = commitment.kyber_encapsulate().unwrap();
+        // Decapsulating with the WRONG key should succeed (implicit rejection)
+        // but produce a DIFFERENT shared secret
+        let shared_secret_2 =
+            QuantumCommitment::kyber_decapsulate(&kp2.decapsulation_key, &ciphertext).unwrap();
+        assert_ne!(
+            shared_secret_1, shared_secret_2,
+            "wrong decapsulation key should produce a different shared secret"
+        );
+    }
+
+    #[test]
+    fn test_kyber_invalid_encapsulation_key() {
+        let commitment = QuantumCommitment {
+            dilithium_sig: Vec::new(),
+            kyber_key: vec![0u8; 100], // Wrong length
+            classical_sig: Vec::new(),
+            data_hash: [0u8; 32],
+            committed_at: VectorClock::new(),
+        };
+        let result = commitment.kyber_encapsulate();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            KyberError::InvalidEncapsulationKey(len) => assert_eq!(len, 100),
+            other => panic!("Expected InvalidEncapsulationKey, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_kyber_invalid_decapsulation_key() {
+        let result = QuantumCommitment::kyber_decapsulate(
+            &[0u8; 100],
+            &[0u8; pqc_kyber::KYBER_CIPHERTEXTBYTES],
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            KyberError::InvalidDecapsulationKey(len) => assert_eq!(len, 100),
+            other => panic!("Expected InvalidDecapsulationKey, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_kyber_invalid_ciphertext() {
+        let kp = QuantumCommitment::generate_kyber_keypair().unwrap();
+        let result = QuantumCommitment::kyber_decapsulate(&kp.decapsulation_key, &[0u8; 100]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            KyberError::InvalidCiphertext(len) => assert_eq!(len, 100),
+            other => panic!("Expected InvalidCiphertext, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_kyber_key_empty_in_classical_mode() {
+        let (kp, _) = test_keypair_and_pk();
+        let commitment = QuantumCommitment::sign_classical(b"classical data", &kp).unwrap();
+        assert!(
+            commitment.kyber_key.is_empty(),
+            "classical mode should have empty kyber_key"
+        );
+    }
+
+    #[test]
+    fn test_kyber_key_present_in_hybrid_mode() {
+        let (ed_kp, _) = test_keypair_and_pk();
+        let dilithium_kp = pqc_dilithium::Keypair::generate();
+        let commitment =
+            QuantumCommitment::sign_hybrid(b"hybrid data", &ed_kp, &dilithium_kp).unwrap();
+        assert_eq!(
+            commitment.kyber_key.len(),
+            pqc_kyber::KYBER_PUBLICKEYBYTES,
+            "hybrid mode should have a Kyber encapsulation key"
+        );
+    }
+
+    #[test]
+    fn test_kyber_key_present_in_post_quantum_mode() {
+        let dilithium_kp = pqc_dilithium::Keypair::generate();
+        let commitment = QuantumCommitment::sign_post_quantum(b"pq data", &dilithium_kp).unwrap();
+        assert_eq!(
+            commitment.kyber_key.len(),
+            pqc_kyber::KYBER_PUBLICKEYBYTES,
+            "post-quantum mode should have a Kyber encapsulation key"
+        );
+    }
+
+    #[test]
+    fn test_kyber_hybrid_encapsulate_decapsulate() {
+        let (ed_kp, _) = test_keypair_and_pk();
+        let dilithium_kp = pqc_dilithium::Keypair::generate();
+
+        // Sign in hybrid mode — this generates a Kyber keypair internally
+        let commitment =
+            QuantumCommitment::sign_hybrid(b"hybrid kem test", &ed_kp, &dilithium_kp).unwrap();
+
+        // We can't get the decapsulation key back from sign_hybrid (it's dropped),
+        // so generate a separate keypair and manually set the encapsulation key
+        // to test encapsulate/decapsulate with the same key.
+        let kyber_kp = QuantumCommitment::generate_kyber_keypair().unwrap();
+        let commitment_with_key = QuantumCommitment {
+            dilithium_sig: commitment.dilithium_sig,
+            kyber_key: kyber_kp.encapsulation_key.clone(),
+            classical_sig: commitment.classical_sig,
+            data_hash: commitment.data_hash,
+            committed_at: commitment.committed_at,
+        };
+
+        let (ss1, ct) = commitment_with_key.kyber_encapsulate().unwrap();
+        let ss2 = QuantumCommitment::kyber_decapsulate(&kyber_kp.decapsulation_key, &ct).unwrap();
+        assert_eq!(ss1, ss2, "shared secrets must match");
     }
 }

@@ -49,6 +49,29 @@ use serde::{Deserialize, Serialize};
 
 use super::SetupError;
 
+/// Initialize the ceremony transcript hash with domain-separated BLAKE3.
+///
+/// Uses BLAKE3 keyed hash with the domain "OMNIA-SETUP-TRANSCRIPT-V1" to
+/// produce a non-zero initial transcript hash. This strengthens the
+/// Fiat-Shamir transcript binding by preventing the all-zeros initial state.
+///
+/// # Arguments
+///
+/// * `ceremony_id` — Unique identifier for this ceremony instance
+/// * `num_participants` — Number of participants expected in the ceremony
+///
+/// # Returns
+///
+/// A 32-byte hash that is guaranteed to be non-zero and unique per
+/// (ceremony_id, num_participants) pair.
+pub fn initialize_transcript(ceremony_id: u64, num_participants: usize) -> [u8; 32] {
+    let mut input = Vec::new();
+    input.extend_from_slice(b"OMNIA-SETUP-TRANSCRIPT-V1");
+    input.extend_from_slice(&ceremony_id.to_le_bytes());
+    input.extend_from_slice(&(num_participants as u64).to_le_bytes());
+    blake3::derive_key("OMNIA-SETUP-TRANSCRIPT-V1", &input)
+}
+
 /// Proof of Knowledge that the contributor knows secret `s` such that
 /// `new_g1[i] = old_g1[i] * s` and `new_g2[i] = old_g2[i] * s`.
 ///
@@ -786,5 +809,28 @@ mod tests {
                 i
             );
         }
+    }
+
+    #[test]
+    fn test_transcript_hash_not_zero_initialized() {
+        let hash = initialize_transcript(1, 3);
+        assert_ne!(
+            hash, [0u8; 32],
+            "Transcript hash should not be zero-initialized"
+        );
+
+        // Different ceremony IDs should produce different hashes
+        let hash2 = initialize_transcript(2, 3);
+        assert_ne!(
+            hash, hash2,
+            "Different ceremony IDs must produce different hashes"
+        );
+
+        // Different participant counts should produce different hashes
+        let hash3 = initialize_transcript(1, 5);
+        assert_ne!(
+            hash, hash3,
+            "Different participant counts must produce different hashes"
+        );
     }
 }

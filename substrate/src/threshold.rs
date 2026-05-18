@@ -442,15 +442,28 @@ pub struct DkgResult {
     pub participants: Vec<ParticipantId>,
 }
 
+/// AES-256-GCM encrypted ciphertext with associated data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AeadCiphertext {
+    /// The encrypted ciphertext (includes GCM auth tag).
+    pub ciphertext: Vec<u8>,
+    /// Random 96-bit nonce.
+    pub nonce: [u8; 12],
+    /// Associated data: sender_id || recipient_id (prevents relay attacks).
+    pub associated_data: Vec<u8>,
+}
+
 /// Encrypted share package for distribution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DkgSharePackage {
     /// The participant who generated these shares.
     pub sender: ParticipantId,
     /// Encrypted shares (one per recipient, AES-256-GCM encrypted).
-    pub encrypted_shares: Vec<Vec<u8>>,
+    pub encrypted_shares: Vec<AeadCiphertext>,
     /// Feldman commitments (public verification data).
     pub commitments: Vec<Vec<u8>>,
+    /// Encryption version: 1 = XOR (legacy), 2 = AES-256-GCM.
+    pub version: u8,
 }
 
 /// Feldman VSS-based DKG session.
@@ -479,6 +492,9 @@ pub struct DkgSession {
     pub received_shares: HashMap<ParticipantId, Vec<u8>>,
     /// The participant's own secret share.
     pub own_secret_share: Option<Vec<u8>>,
+    /// The participant's own ID (set during generate_shares).
+    #[serde(default)]
+    pub own_id: Option<ParticipantId>,
     /// The participant's own keypair for this DKG session.
     #[serde(skip)]
     pub own_keypair: Option<BlsKeypair>,
@@ -495,6 +511,7 @@ impl DkgSession {
             commitments: HashMap::new(),
             received_shares: HashMap::new(),
             own_secret_share: None,
+            own_id: None,
             own_keypair: None,
         }
     }
@@ -529,6 +546,7 @@ impl DkgSession {
         key_material.extend_from_slice(&(my_index as u64).to_le_bytes());
         let seed = blake3::derive_key("OMNIA-DKG-KEYGEN-V1", &key_material);
         let keypair = BlsKeypair::generate(&seed).map_err(DkgError::BlsError)?;
+        self.own_id = Some(my_id);
         self.own_keypair = Some(keypair.clone());
         self.own_secret_share = Some(keypair.secret_key_bytes().to_vec());
 
@@ -548,9 +566,15 @@ impl DkgSession {
                 share_material.extend_from_slice(&participant_id);
                 let share_seed = blake3::derive_key("OMNIA-DKG-SHARE-V1", &share_material);
 
-                // Encrypt the share with a key derived from the participant ID
+                // Encrypt the share with AES-256-GCM
                 let share_data = keypair.secret_key_bytes().to_vec();
-                let encrypted = xor_encrypt_dkg(&share_data, &share_seed);
+                let aad = {
+                    let mut v = Vec::new();
+                    v.extend_from_slice(&my_id);
+                    v.extend_from_slice(&participant_id);
+                    v
+                };
+                let encrypted = aes256gcm_encrypt_dkg(&share_data, &share_seed, &aad);
 
                 (
                     participant_id,
@@ -558,6 +582,7 @@ impl DkgSession {
                         sender: my_id,
                         encrypted_shares: vec![encrypted],
                         commitments: commitments.clone(),
+                        version: 2,
                     },
                 )
             })
@@ -586,9 +611,52 @@ impl DkgSession {
         // Store the commitments
         self.commitments.insert(from, package.commitments.clone());
 
-        // Store the encrypted shares
-        if let Some(share) = package.encrypted_shares.first() {
-            self.received_shares.insert(from, share.clone());
+        // Decrypt and store the shares
+        if let Some(aead_ct) = package.encrypted_shares.first() {
+            let from_prefix: [u8; 4] = {
+                let mut p = [0u8; 4];
+                p.copy_from_slice(&from[..4]);
+                p
+            };
+            let share_data = match package.version {
+                2 => {
+                    let my_id = self.own_id.ok_or_else(|| {
+                        DkgError::InvalidShare(
+                            from_prefix,
+                            "own ID not set — call generate_shares first".to_string(),
+                        )
+                    })?;
+                    let mut share_material = Vec::new();
+                    share_material.extend_from_slice(&self.session_id.to_le_bytes());
+                    share_material.extend_from_slice(&from);
+                    share_material.extend_from_slice(&my_id);
+                    let share_seed = blake3::derive_key("OMNIA-DKG-SHARE-V1", &share_material);
+                    aes256gcm_decrypt_dkg(aead_ct, &share_seed)?
+                }
+                1 => {
+                    // Legacy XOR decryption
+                    tracing::warn!("Received legacy v1 XOR DKG share — upgrade recommended");
+                    let my_id = self.own_id.ok_or_else(|| {
+                        DkgError::InvalidShare(
+                            from_prefix,
+                            "own ID not set — call generate_shares first".to_string(),
+                        )
+                    })?;
+                    let mut share_material = Vec::new();
+                    share_material.extend_from_slice(&self.session_id.to_le_bytes());
+                    share_material.extend_from_slice(&from);
+                    share_material.extend_from_slice(&my_id);
+                    let share_seed = blake3::derive_key("OMNIA-DKG-SHARE-V1", &share_material);
+                    xor_encrypt_dkg(&aead_ct.ciphertext, &share_seed)
+                }
+                _ => {
+                    return Err(DkgError::InvalidShare(
+                        from_prefix,
+                        "unknown encryption version".to_string(),
+                    ))
+                }
+            };
+            self.received_shares.insert(from, share_data);
         }
 
         // Verify: the commitment should be a valid BLS public key
@@ -673,11 +741,79 @@ impl DkgSession {
 }
 
 /// Simple XOR encryption for DKG shares (domain-separated).
+/// Retained for backward compatibility with v1 DKG share packages.
 fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
     data.iter()
         .enumerate()
         .map(|(i, &b)| b ^ key[i % key.len()])
         .collect()
+}
+
+/// Derive AES-256 key for DKG share encryption from BLAKE3 key material.
+fn derive_dkg_aes_key(key_material: &[u8; 32]) -> [u8; 32] {
+    use hkdf::Hkdf;
+    use sha2::Sha256;
+    let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
+    let mut aes_key = [0u8; 32];
+    hk.expand(b"OMNIA-DKG-SHARE-V1", &mut aes_key)
+        .expect("HKDF expand for 32 bytes");
+    aes_key
+}
+
+/// AES-256-GCM encrypt a DKG share with associated data.
+fn aes256gcm_encrypt_dkg(
+    plaintext: &[u8],
+    key_material: &[u8; 32],
+    aad: &[u8],
+) -> AeadCiphertext {
+    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+    use rand::RngCore;
+
+    let aes_key = derive_dkg_aes_key(key_material);
+    let cipher = Aes256Gcm::new_from_slice(&aes_key).expect("AES key valid");
+    let mut nonce = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    let nonce_obj = Nonce::from_slice(&nonce);
+    let ciphertext = cipher
+        .encrypt(
+            nonce_obj,
+            aes_gcm::aead::Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .expect("AES-256-GCM encryption");
+    AeadCiphertext {
+        ciphertext,
+        nonce,
+        associated_data: aad.to_vec(),
+    }
+}
+
+/// AES-256-GCM decrypt a DKG share.
+fn aes256gcm_decrypt_dkg(
+    ct: &AeadCiphertext,
+    key_material: &[u8; 32],
+) -> Result<Vec<u8>, DkgError> {
+    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+    let aes_key = derive_dkg_aes_key(key_material);
+    let cipher = Aes256Gcm::new_from_slice(&aes_key).expect("AES key valid");
+    let nonce = Nonce::from_slice(&ct.nonce);
+    cipher
+        .decrypt(
+            nonce,
+            aes_gcm::aead::Payload {
+                msg: &ct.ciphertext,
+                aad: &ct.associated_data,
+            },
+        )
+        .map_err(|_| {
+            DkgError::InvalidShare(
+                [0u8; 4],
+                "AES-GCM decryption failed: authentication error".to_string(),
+            )
+        })
 }
 
 /// BLAKE3 hash as hex string.
@@ -919,8 +1055,9 @@ mod tests {
         // Byzantine participant sends empty commitments
         let byzantine_package = DkgSharePackage {
             sender: nodes[4],
-            encrypted_shares: vec![vec![]],
+            encrypted_shares: vec![],
             commitments: vec![vec![]], // Empty — invalid
+            version: 2,
         };
 
         let result = honest_session.receive_shares(nodes[4], &byzantine_package);
@@ -976,18 +1113,31 @@ mod tests {
             })
             .collect();
 
-        let mut session = DkgSession::new(42, nodes.clone(), 2);
-        assert_eq!(session.phase, DkgPhase::Init);
+        // Node 0's session: generate shares
+        let mut session0 = DkgSession::new(42, nodes.clone(), 2);
+        assert_eq!(session0.phase, DkgPhase::Init);
 
-        // Step 1: generate shares → ShareDistribution
         let mut rng = rand::thread_rng();
-        let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
-        assert_eq!(session.phase, DkgPhase::ShareDistribution);
+        let packages0 = session0.generate_shares(nodes[0], &mut rng).unwrap();
+        assert_eq!(session0.phase, DkgPhase::ShareDistribution);
+
+        // Node 1's session: generate shares, then receive from node 0
+        let mut session1 = DkgSession::new(42, nodes.clone(), 2);
+        let _packages1 = session1.generate_shares(nodes[1], &mut rng).unwrap();
+        assert_eq!(session1.phase, DkgPhase::ShareDistribution);
+
+        // Find the package that node 0 generated for node 1
+        let package_for_node1 = packages0
+            .iter()
+            .find(|(id, _)| *id == nodes[1])
+            .expect("node 0 should have a package for node 1");
 
         // Step 2: receive shares → Verification
-        let result = session.receive_shares(nodes[1], &packages[0].1).unwrap();
+        let result = session1
+            .receive_shares(nodes[0], &package_for_node1.1)
+            .unwrap();
         assert!(result.valid);
-        assert_eq!(session.phase, DkgPhase::Verification);
+        assert_eq!(session1.phase, DkgPhase::Verification);
     }
 
     #[test]
@@ -1005,8 +1155,13 @@ mod tests {
         // Trying to receive_shares in Init phase should fail
         let package = DkgSharePackage {
             sender: nodes[1],
-            encrypted_shares: vec![vec![1, 2, 3]],
+            encrypted_shares: vec![AeadCiphertext {
+                ciphertext: vec![1, 2, 3],
+                nonce: [0u8; 12],
+                associated_data: vec![],
+            }],
             commitments: vec![vec![4, 5, 6]],
+            version: 2,
         };
         let result = session.receive_shares(nodes[1], &package);
         assert!(result.is_err());
@@ -1020,11 +1175,58 @@ mod tests {
 
     #[test]
     fn test_dkg_xor_encrypt_dkg() {
+        // v1 backward compatibility: XOR encryption is still available
+        // for decrypting legacy DKG share packages.
         let data = b"hello world";
         let key = [0xAB_u8; 32];
         let encrypted = xor_encrypt_dkg(data, &key);
         let decrypted = xor_encrypt_dkg(&encrypted, &key);
         assert_eq!(data.as_slice(), decrypted.as_slice());
+    }
+
+    #[test]
+    fn test_dkg_share_encryption_round_trip() {
+        let data = b"dkg-share-secret";
+        let key = [0xAB_u8; 32];
+        let aad = b"sender||recipient";
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let pt = aes256gcm_decrypt_dkg(&ct, &key).unwrap();
+        assert_eq!(pt, data.to_vec());
+    }
+
+    #[test]
+    fn test_dkg_share_tamper_detected() {
+        let data = b"tamper-test-share";
+        let key = [0xCD_u8; 32];
+        let aad = b"s||r";
+        let mut ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        ct.ciphertext[0] ^= 0xFF;
+        let result = aes256gcm_decrypt_dkg(&ct, &key);
+        assert!(result.is_err(), "Tampered ciphertext should fail AEAD");
+    }
+
+    #[test]
+    fn test_dkg_share_relay_attack_prevented() {
+        let data = b"relay-attack-share";
+        let key = [0xEF_u8; 32];
+        let aad = b"sender1||recipient1";
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        // Change AAD to simulate relay attack
+        let mut ct_relayed = ct.clone();
+        ct_relayed.associated_data = b"sender1||recipient2".to_vec();
+        let result = aes256gcm_decrypt_dkg(&ct_relayed, &key);
+        assert!(result.is_err(), "Relay attack (wrong AAD) should fail AEAD");
+    }
+
+    #[test]
+    fn test_dkg_share_wrong_recipient_fails() {
+        let data = b"wrong-recipient-share";
+        let key = [0x11_u8; 32];
+        let aad = b"s||r1";
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let wrong_key = [0x22_u8; 32];
+        let result = aes256gcm_decrypt_dkg(&ct, &wrong_key);
+        assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");
     }
 
     #[test]

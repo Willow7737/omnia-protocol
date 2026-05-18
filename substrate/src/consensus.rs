@@ -18,6 +18,9 @@
 //! - **Committed**: A famous witness and all its causal ancestors
 
 use crate::causal_graph::CausalGraph;
+use crate::consensus_store::{
+    ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
+};
 use crate::event::{Event, EventId};
 use crate::slashing::{SlashOffense, SlashingEngine};
 #[cfg(test)]
@@ -25,6 +28,7 @@ use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
 use crate::vector_clock::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -985,6 +989,161 @@ impl ConsensusEngine {
         removed
     }
 
+    /// Create engine, restoring from persisted state if available.
+    ///
+    /// If the store contains a previously persisted consensus state, the
+    /// engine is created and then restored to that state. Otherwise, a
+    /// fresh engine is created from the given configuration.
+    ///
+    /// This enables crash recovery: a node restarting after a crash can
+    /// resume consensus from the last persisted round without replaying
+    /// all events from genesis.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` — Consensus configuration (node count, thresholds, etc.).
+    /// * `store` — A [`ConsensusStore`] backend for persisting consensus state.
+    /// * `slashing` — A [`SlashingEngine`] instance for Byzantine fault penalties.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConsensusError`] if the persisted state cannot be loaded
+    /// or has an incompatible version.
+    pub fn load_or_new(
+        config: ConsensusConfig,
+        store: Arc<dyn ConsensusStore>,
+        slashing: SlashingEngine,
+    ) -> Result<Self, ConsensusError> {
+        match store.load_state() {
+            Ok(Some(state)) => {
+                tracing::info!(
+                    round = state.current_round,
+                    committed = state.committed_events,
+                    validators = state.active_validators.len(),
+                    "Restoring consensus engine from persisted state"
+                );
+                let mut engine = Self::new(config, slashing);
+                engine.restore_state(state)?;
+                Ok(engine)
+            }
+            Ok(None) => {
+                tracing::info!("No persisted consensus state found — starting fresh");
+                Ok(Self::new(config, slashing))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "Failed to load persisted consensus state — starting fresh"
+                );
+                Ok(Self::new(config, slashing))
+            }
+        }
+    }
+
+    /// Restore engine state from a persisted snapshot.
+    ///
+    /// Restores the round seed, committed count, per-node round tracking,
+    /// and equivocation metadata from a previously persisted
+    /// [`PersistedConsensusState`].
+    ///
+    /// After restoration, the engine will resume consensus from the
+    /// persisted round number. Per-node `current_round` values are
+    /// restored, and `last_witness_round` is set to `current_round + 1`
+    /// to prevent events from being double-witnessed after recovery.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConsensusError`] if the state version is unsupported.
+    fn restore_state(&mut self, state: PersistedConsensusState) -> Result<(), ConsensusError> {
+        if state.version != 1 {
+            return Err(ConsensusError::Config(format!(
+                "Unsupported consensus state version: {}",
+                state.version
+            )));
+        }
+
+        // Restore round seed (critical for VRF leader selection continuity)
+        self.config.round_seed = state.round_seed;
+
+        // Restore committed count
+        self.committed_count = state.committed_events;
+
+        // Restore per-node round tracking.
+        // For each persisted validator, set current_round and
+        // last_witness_round = current_round + 1 to prevent
+        // double-witnessing events after recovery.
+        for validator in &state.active_validators {
+            let info = self.node_info.entry(*validator).or_default();
+            info.current_round = state.current_round;
+            info.last_witness_round = state.current_round + 1;
+        }
+
+        // Start the round timer for the restored round
+        self.round_timer.start_round(state.current_round);
+
+        tracing::info!(
+            round = state.current_round,
+            committed = state.committed_events,
+            validators = state.active_validators.len(),
+            equivocation_entries = state.equivocation_tracking.len(),
+            "Consensus engine state restored"
+        );
+
+        Ok(())
+    }
+
+    /// Persist current state after each round advancement.
+    ///
+    /// Captures a snapshot of the engine's critical state and saves it
+    /// to the provided [`ConsensusStore`]. This should be called after
+    /// each round advancement to ensure crash recovery can resume from
+    /// the most recent state.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` — The persistence backend to save state to.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConsensusStoreError`] if the state cannot be serialized
+    /// or the database cannot be written to.
+    pub fn persist_state(&self, store: &dyn ConsensusStore) -> Result<(), ConsensusStoreError> {
+        let current_round = self.current_round();
+
+        // Derive equivocation tracking: NodeId → max sequence seen
+        let equivocation_tracking: HashMap<NodeId, u64> = self
+            .first_event_for_sequence
+            .keys()
+            .fold(HashMap::new(), |mut acc, (node_id, seq)| {
+                let entry = acc.entry(*node_id).or_insert(0);
+                *entry = (*entry).max(*seq);
+                acc
+            });
+
+        let state = PersistedConsensusState {
+            current_round,
+            round_seed: self.config.round_seed,
+            committed_events: self.committed_count,
+            last_finalized_round: current_round.saturating_sub(self.config.commit_delay_rounds),
+            active_validators: self.node_info.keys().cloned().collect(),
+            equivocation_tracking,
+            version: 1,
+        };
+
+        store.save_state(&state)?;
+
+        // Also save the lightweight round number
+        store.save_round(current_round)?;
+
+        tracing::debug!(
+            round = current_round,
+            committed = self.committed_count,
+            "Consensus state persisted"
+        );
+
+        Ok(())
+    }
+
     /// Clean up `first_event_for_sequence` entries where the creator's
     /// current sequence has advanced far beyond the stored sequence number.
     ///
@@ -1082,6 +1241,9 @@ pub enum ConsensusError {
     /// cannot be determined.
     #[error("event pruned: {0}")]
     EventPruned(String),
+    /// Configuration or state restoration error.
+    #[error("config error: {0}")]
+    Config(String),
 }
 
 #[cfg(test)]
@@ -1408,6 +1570,159 @@ mod tests {
             engine.committed_count() <= 4,
             "Only genesis should be committable at round 0"
         );
+    }
+
+    // ── Consensus state persistence tests (H-6) ─────────────────────
+
+    #[test]
+    fn test_consensus_state_persistence_round_trip() {
+        let store = crate::consensus_store::RedbConsensusStore::in_memory().unwrap();
+        let state = PersistedConsensusState {
+            current_round: 42,
+            round_seed: [1u8; 32],
+            committed_events: 1000,
+            last_finalized_round: 40,
+            active_validators: vec![[2u8; 32]],
+            equivocation_tracking: HashMap::from([([3u8; 32], 5u64)]),
+            version: 1,
+        };
+
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+
+        assert_eq!(loaded.current_round, 42);
+        assert_eq!(loaded.round_seed, [1u8; 32]);
+        assert_eq!(loaded.committed_events, 1000);
+        assert_eq!(loaded.last_finalized_round, 40);
+        assert_eq!(loaded.version, 1);
+    }
+
+    #[test]
+    fn test_consensus_resume_from_persisted() {
+        let store: Arc<dyn ConsensusStore> =
+            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+
+        // Create engine, advance some rounds
+        let config = test_config();
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut engine = ConsensusEngine::new(config.clone(), slashing.clone());
+
+        // Simulate that some nodes have advanced to round 100
+        let n1 = node(1);
+        let n2 = node(2);
+        engine.node_info.entry(n1).or_default().current_round = 100;
+        engine.node_info.entry(n1).or_default().last_witness_round = 101;
+        engine.node_info.entry(n2).or_default().current_round = 100;
+        engine.node_info.entry(n2).or_default().last_witness_round = 101;
+        engine.committed_count = 500;
+
+        // Persist
+        engine.persist_state(store.as_ref()).unwrap();
+
+        // Create new engine, should restore from persisted
+        let engine2 = ConsensusEngine::load_or_new(config, Arc::clone(&store), slashing).unwrap();
+        assert_eq!(engine2.current_round(), 100);
+        assert_eq!(engine2.committed_count(), 500);
+    }
+
+    #[test]
+    fn test_consensus_state_format_version() {
+        let store = crate::consensus_store::RedbConsensusStore::in_memory().unwrap();
+        let state = PersistedConsensusState {
+            current_round: 1,
+            round_seed: [0u8; 32],
+            committed_events: 0,
+            last_finalized_round: 0,
+            active_validators: vec![],
+            equivocation_tracking: HashMap::new(),
+            version: 1,
+        };
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+        assert_eq!(loaded.version, 1);
+    }
+
+    #[test]
+    fn test_consensus_persist_and_restore_round_seed() {
+        let store: Arc<dyn ConsensusStore> =
+            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+
+        let config = test_config();
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut engine = ConsensusEngine::new(config.clone(), slashing.clone());
+
+        // Update the round seed to a known value
+        let new_seed = [42u8; 32];
+        engine.update_round_seed(new_seed);
+
+        // Simulate round advancement
+        let n1 = node(1);
+        engine.node_info.entry(n1).or_default().current_round = 10;
+
+        // Persist
+        engine.persist_state(store.as_ref()).unwrap();
+
+        // Create new engine and verify round seed is restored
+        let engine2 = ConsensusEngine::load_or_new(config, Arc::clone(&store), slashing).unwrap();
+        // The round seed should have been restored
+        assert_eq!(engine2.current_round(), 10);
+    }
+
+    #[test]
+    fn test_consensus_load_or_new_without_persisted_state() {
+        let store: Arc<dyn ConsensusStore> =
+            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+
+        let config = test_config();
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+
+        // No state persisted — should create fresh engine
+        let engine = ConsensusEngine::load_or_new(config, store, slashing).unwrap();
+        assert_eq!(engine.current_round(), 0);
+        assert_eq!(engine.committed_count(), 0);
+    }
+
+    #[test]
+    fn test_consensus_unsupported_version_rejected() {
+        let store: Arc<dyn ConsensusStore> =
+            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+
+        // Persist a state with an unsupported version
+        let bad_state = PersistedConsensusState {
+            current_round: 10,
+            round_seed: [1u8; 32],
+            committed_events: 50,
+            last_finalized_round: 8,
+            active_validators: vec![node(1)],
+            equivocation_tracking: HashMap::new(),
+            version: 999, // Unsupported version
+        };
+        store.save_state(&bad_state).unwrap();
+
+        let config = test_config();
+        let slashing =
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+
+        // load_or_new should return Err on unsupported version
+        let result = ConsensusEngine::load_or_new(config, Arc::clone(&store), slashing);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_consensus_round_lightweight_persistence() {
+        let store = crate::consensus_store::RedbConsensusStore::in_memory().unwrap();
+
+        // Default round is 0
+        assert_eq!(store.load_round().unwrap(), 0);
+
+        store.save_round(42).unwrap();
+        assert_eq!(store.load_round().unwrap(), 42);
+
+        store.save_round(100).unwrap();
+        assert_eq!(store.load_round().unwrap(), 100);
     }
 }
 

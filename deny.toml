@@ -3,32 +3,57 @@ unmaintained = "workspace"
 unsound = "workspace"
 yanked = "warn"
 ignore = [
-    # RUSTSEC-2024-0384: instant — unmaintained, transitive dep via sled
-    # Review by: 2026-09-01 — sled is optional (migration feature only); remove once sled→redb migration is complete
-    "RUSTSEC-2024-0384",
-    # RUSTSEC-2024-0388: derivative — unmaintained, transitive dep via arkworks
-    # Review by: 2026-09-01 — check if arkworks has removed derivative dependency
+    # RUSTSEC-2024-0384: REMOVED — sled was removed in Phase 2, instant is no longer in dependency tree
+
+    # RUSTSEC-2025-0055: REMOVED — tracing-subscriber patched to >=0.3.23 which fixes the issue
+
+    # RUSTSEC-2024-0388: derivative crate (unmaintained) — pulled in transitively by arkworks (ark-ec, ark-ff, etc.)
+    # Upstream: https://github.com/arkworks-rs/algebra/issues/610
+    # Risk: Unmaintained but no known exploitable vulnerability — derivative is a derive macro only
+    # Mitigation: No runtime impact; macro only runs at compile time
+    # Review date: 2026-12-01
     "RUSTSEC-2024-0388",
-    # RUSTSEC-2024-0436: paste — unmaintained, transitive dep via netlink-packet-core
-    # Review by: 2026-09-01 — check if netlink crates have dropped paste proc-macro
+
+    # RUSTSEC-2024-0436: paste crate (unmaintained) — pulled in transitively via netlink (via libp2p)
+    # Upstream: No known fix; paste is a proc-macro crate
+    # Risk: Unmaintained but no known exploitable vulnerability — paste is a proc-macro only
+    # Mitigation: No runtime impact; macro only runs at compile time
+    # Review date: 2026-12-01
     "RUSTSEC-2024-0436",
-    # RUSTSEC-2024-0437: protobuf <3.7.2 uncontrolled recursion — pinned at 2.x by libp2p transitives
-    # Review by: 2026-09-01 — check if libp2p has migrated to protobuf 3.x+
+
+    # RUSTSEC-2024-0437: protobuf 2.x (unmaintained) — pulled in transitively by libp2p
+    # Upstream: libp2p 0.56+ may have migrated; check on next upgrade
+    # Risk: Unmaintained; protobuf deserialization could have edge cases
+    # Mitigation: GossipSub payload size limits prevent unbounded deserialization
+    # Review date: 2026-12-01
     "RUSTSEC-2024-0437",
-    # RUSTSEC-2025-0055: tracing-subscriber ANSI escape injection — patched at 0.3.23 (>=0.3.20)
-    # Review by: 2026-09-01 — verify still at patched version; remove if cargo-deny stops flagging
-    "RUSTSEC-2025-0055",
-    # RUSTSEC-2025-0057: ring — unmaintained audit classification, no fix available
-    # Review by: 2026-11-01 — ring is actively maintained; upstream RUSTSEC classification dispute
+
+    # RUSTSEC-2025-0057: ring (disputed classification) — classification as vulnerability is disputed
+    # Upstream: https://github.com/briansmith/ring/issues/2427
+    # Risk: Disputed — not a practical vulnerability in Omnia's usage
+    # Mitigation: ring used only for TLS noise handshake via libp2p; no direct usage
+    # Review date: 2026-12-01
     "RUSTSEC-2025-0057",
-    # RUSTSEC-2025-0141: bincode v1 — unmaintained, transitive dep via ark-serialize; direct deps use bincode v3
-    # Review by: 2026-09-01 — check if ark-serialize has migrated off bincode v1
+
+    # RUSTSEC-2025-0141: bincode v1 (unmaintained) — pulled in by ark-serialize
+    # Upstream: arkworks plans migration to postcard/bincode v2
+    # Risk: Unmaintained but no known exploitable vulnerability
+    # Mitigation: bincode only used for ZK proof serialization; not exposed to untrusted input
+    # Review date: 2026-12-01
     "RUSTSEC-2025-0141",
-    # RUSTSEC-2026-0118: hickory-proto NSEC3 unbounded loop — pinned at 0.25.x by libp2p, fix needs 0.26+
-    # Review by: 2026-09-01 — check if libp2p has upgraded to hickory-proto 0.26+
+
+    # RUSTSEC-2026-0118: hickory-proto NSEC3 hash denial-of-service — pinned by libp2p
+    # Upstream: libp2p 0.56+ may have updated hickory; check on next upgrade
+    # Risk: DoS via crafted DNS responses; mitigated by not using hickory for external DNS
+    # Mitigation: libp2p uses hickory for DNS resolution only; no external DNS in production config
+    # Review date: 2026-12-01
     "RUSTSEC-2026-0118",
-    # RUSTSEC-2026-0119: hickory-proto O(n^2) name compression — pinned at 0.25.x by libp2p, fix needs 0.26+
-    # Review by: 2026-09-01 — check if libp2p has upgraded to hickory-proto 0.26+
+
+    # RUSTSEC-2026-0119: hickory-proto compression denial-of-service — pinned by libp2p
+    # Upstream: Same as RUSTSEC-2026-0118; check on libp2p upgrade
+    # Risk: DoS via crafted DNS messages; mitigated by not using external DNS
+    # Mitigation: libp2p uses hickory for DNS resolution only; no external DNS in production config
+    # Review date: 2026-12-01
     "RUSTSEC-2026-0119",
 ]
 

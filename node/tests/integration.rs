@@ -68,6 +68,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         snapshot_interval: 10_000,
         slashing_data_dir: None,
         nonce_data_dir: None,
+        consensus_data_dir: None,
         protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
     };
 

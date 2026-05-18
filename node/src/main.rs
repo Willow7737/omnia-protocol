@@ -120,6 +120,7 @@ async fn main() -> Result<()> {
     substrate_config.pruning_depth = config.pruning_depth;
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
+    substrate_config.consensus_data_dir = Some(config.consensus_dir());
     let substrate = Substrate::new(substrate_config);
     tracing::info!(
         path = %slashing_dir.display(),

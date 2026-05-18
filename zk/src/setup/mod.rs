@@ -72,8 +72,8 @@ pub use circuit_setup::{
     derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency, CircuitKeyPair,
 };
 pub use contribution::{
-    contribute, initial_transcript_with_generators, verify_ceremony_transcript,
-    verify_contribution, Contribution, ContributionProof,
+    contribute, initial_transcript_with_generators, initialize_transcript,
+    verify_ceremony_transcript, verify_contribution, Contribution, ContributionProof,
 };
 pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
 

@@ -15,7 +15,7 @@ pub mod solana;
 
 pub use bitcoin::BitcoinAdapter;
 pub use celestia::CelestiaAdapter;
-pub use ethereum::EthereumAdapter;
+pub use ethereum::{EthereumAdapter, EthereumConfig, EthereumMode};
 pub use solana::SolanaAdapter;
 
 /// A pluggable L1 settlement adapter.
@@ -73,4 +73,7 @@ pub enum SettlementError {
     /// The operation is not yet implemented for this chain.
     #[error("Not implemented for chain: {0}")]
     NotImplemented(String),
+    /// Configuration error (invalid parameters, missing fields, etc.).
+    #[error("Settlement config error: {0}")]
+    ConfigError(String),
 }

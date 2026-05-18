@@ -60,8 +60,8 @@ pub mod setup;
 
 // Re-export the core trait and adapters
 pub use settlement::{
-    BitcoinAdapter, CelestiaAdapter, EthereumAdapter, SettlementError, SettlementLayer,
-    SolanaAdapter,
+    BitcoinAdapter, CelestiaAdapter, EthereumAdapter, EthereumConfig, EthereumMode,
+    SettlementError, SettlementLayer, SolanaAdapter,
 };
 
 // Re-export proof bundle types

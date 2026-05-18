@@ -601,6 +601,13 @@ fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     })
 }
 
+/// Compression flag for gossip messages: uncompressed.
+const COMPRESSION_NONE: u8 = 0x00;
+/// Compression flag for gossip messages: snappy compressed.
+const COMPRESSION_SNAPPY: u8 = 0x01;
+/// Minimum payload size for compression (smaller payloads aren't worth compressing).
+const COMPRESSION_THRESHOLD: usize = 256;
+
 /// Errors from the gossip protocol
 #[derive(Error, Debug, Clone)]
 pub enum GossipError {
@@ -630,6 +637,71 @@ pub enum GossipError {
         /// Maximum allowed payload size in bytes.
         max: usize,
     },
+    /// Compression/decompression error.
+    #[error("compression error: {0}")]
+    Compression(String),
+    /// Invalid message format.
+    #[error("invalid message format: {0}")]
+    InvalidMessageFormat(String),
+}
+
+/// Serialize an event with optional snappy compression.
+///
+/// If the serialized payload exceeds `COMPRESSION_THRESHOLD` bytes and
+/// compression reduces the size, the output is prefixed with `0x01`
+/// (snappy flag). Otherwise, the output is prefixed with `0x00` (uncompressed).
+/// This flag byte ensures forward and backward compatibility.
+pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipError> {
+    let raw = postcard::to_allocvec(value)
+        .map_err(|e| GossipError::SerializationError(e.to_string()))?;
+
+    if raw.len() > COMPRESSION_THRESHOLD {
+        let mut encoder = snap::raw::Encoder::new();
+        let compressed = encoder
+            .compress_vec(&raw)
+            .map_err(|e| GossipError::Compression(e.to_string()))?;
+
+        if compressed.len() < raw.len() {
+            let mut output = Vec::with_capacity(1 + compressed.len());
+            output.push(COMPRESSION_SNAPPY);
+            output.extend_from_slice(&compressed);
+            return Ok(output);
+        }
+    }
+
+    let mut output = Vec::with_capacity(1 + raw.len());
+    output.push(COMPRESSION_NONE);
+    output.extend_from_slice(&raw);
+    Ok(output)
+}
+
+/// Deserialize an event with optional snappy decompression.
+///
+/// Reads the first byte as a compression flag:
+/// - `0x00`: uncompressed payload follows
+/// - `0x01`: snappy-compressed payload follows
+pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(data: &[u8]) -> Result<T, GossipError> {
+    let (flag, payload) = data
+        .split_first()
+        .ok_or_else(|| GossipError::InvalidMessageFormat("empty message".to_string()))?;
+
+    let raw = match *flag {
+        COMPRESSION_NONE => payload.to_vec(),
+        COMPRESSION_SNAPPY => {
+            let mut decoder = snap::raw::Decoder::new();
+            decoder
+                .decompress_vec(payload)
+                .map_err(|e| GossipError::Compression(e.to_string()))?
+        }
+        _ => {
+            return Err(GossipError::InvalidMessageFormat(format!(
+                "unknown compression flag: 0x{:02x}",
+                flag
+            )));
+        }
+    };
+
+    postcard::from_bytes(&raw).map_err(|e| GossipError::SerializationError(e.to_string()))
 }
 
 impl From<CausalGraphError> for GossipError {
@@ -1023,5 +1095,107 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
         // If this compiles, the field was successfully removed
         let _ = protocol.is_running();
+    }
+
+    // ── M-3: Message Compression Tests ─────────────────────────────────
+
+    #[test]
+    fn test_gossip_compression_round_trip() {
+        // Create a large payload that will be compressed
+        let large_data: Vec<u8> = (0..1000).map(|i| (i % 256) as u8).collect();
+        let serialized = serialize_compressed(&large_data).unwrap();
+        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
+        assert_eq!(deserialized, large_data);
+    }
+
+    #[test]
+    fn test_gossip_small_payload_uncompressed() {
+        let small_data = vec![1u8, 2, 3];
+        let serialized = serialize_compressed(&small_data).unwrap();
+        assert_eq!(
+            serialized[0],
+            COMPRESSION_NONE,
+            "Small payloads should not be compressed"
+        );
+        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
+        assert_eq!(deserialized, small_data);
+    }
+
+    #[test]
+    fn test_gossip_large_payload_compressed() {
+        // Create data that compresses well
+        let large_data: Vec<u8> = vec![0u8; 10_000];
+        let serialized = serialize_compressed(&large_data).unwrap();
+        assert_eq!(
+            serialized[0],
+            COMPRESSION_SNAPPY,
+            "Large compressible payloads should be compressed"
+        );
+        assert!(
+            serialized.len() < large_data.len() + 1,
+            "Compressed output should be smaller"
+        );
+        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
+        assert_eq!(deserialized, large_data);
+    }
+
+    #[test]
+    fn test_gossip_backward_compat_uncompressed() {
+        // Simulate an old node sending uncompressed data with no flag byte
+        // New format: 0x00 prefix + postcard-serialized data
+        let data = vec![42u8, 43, 44];
+        let serialized_inner = postcard::to_allocvec(&data).unwrap();
+        let mut new_format = vec![COMPRESSION_NONE];
+        new_format.extend_from_slice(&serialized_inner);
+
+        let deserialized: Vec<u8> = deserialize_compressed(&new_format).unwrap();
+        assert_eq!(deserialized, data);
+    }
+
+    #[test]
+    fn test_gossip_invalid_compression_flag() {
+        let data = vec![0xFF, 1, 2, 3]; // Invalid flag
+        let result: Result<Vec<u8>, _> = deserialize_compressed(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gossip_compression_empty_message() {
+        let result: Result<Vec<u8>, _> = deserialize_compressed(&[]);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            GossipError::InvalidMessageFormat(_)
+        ));
+    }
+
+    #[test]
+    fn test_gossip_compression_random_data_still_compresses() {
+        // Random data that won't compress well — should still be sent uncompressed
+        let mut large_random: Vec<u8> = (0..10_000).map(|i| ((i * 7 + 13) % 256) as u8).collect();
+        // Make it more random-looking
+        for (i, byte) in large_random.iter_mut().enumerate() {
+            *byte = (*byte).wrapping_add((i * 31) as u8);
+        }
+        let serialized = serialize_compressed(&large_random).unwrap();
+        // Either compressed or uncompressed, round-trip must work
+        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
+        assert_eq!(deserialized, large_random);
+    }
+
+    #[test]
+    fn test_compression_threshold_constant() {
+        assert_eq!(COMPRESSION_THRESHOLD, 256);
+        assert_eq!(COMPRESSION_NONE, 0x00);
+        assert_eq!(COMPRESSION_SNAPPY, 0x01);
+    }
+
+    #[test]
+    fn test_gossip_error_compression_variant() {
+        let err = GossipError::Compression("snappy failed".to_string());
+        assert!(err.to_string().contains("snappy failed"));
+
+        let err = GossipError::InvalidMessageFormat("bad flag".to_string());
+        assert!(err.to_string().contains("bad flag"));
     }
 }

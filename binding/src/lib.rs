@@ -65,7 +65,9 @@ pub use key_rotation::{KeyRotationError, PqcKeyRotationManager, PqcKeyRotationRe
 pub use keystore_bridge::{BridgeError, KeyStoreBridge, RotationState, SignatureBundle};
 pub use physical_shard::{ProvenanceTracker, ProvenanceTrackerError};
 pub use provenance::{ProvenanceEvent, ProvenanceEventType, ProvenanceLog};
-pub use quantum_commit::{BindingError, CommitmentPhase, PqPublicKey, QuantumCommitment};
+pub use quantum_commit::{
+    BindingError, CommitmentPhase, KyberError, KyberKeyPair, PqPublicKey, QuantumCommitment,
+};
 pub use rf_fingerprint::{hamming_distance, RfFingerprint};
 
 /// Semantic version of this crate

@@ -50,7 +50,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use super::contribution::{verify_contribution, Contribution};
+use super::contribution::{initialize_transcript, verify_contribution, Contribution};
 use super::SetupError;
 
 /// Default degree for the Powers of Tau ceremony.
@@ -83,6 +83,10 @@ impl PowersOfTau {
     /// have been applied. This represents τ = 1 (the multiplicative identity),
     /// so all powers of τ are 1, meaning every element is the base generator.
     ///
+    /// The transcript hash is initialized using domain-separated BLAKE3
+    /// (via [`initialize_transcript`]) instead of all-zeros, which strengthens
+    /// the Fiat-Shamir transcript binding.
+    ///
     /// # Arguments
     ///
     /// * `degree` — The maximum degree supported (number of G1 powers)
@@ -106,11 +110,17 @@ impl PowersOfTau {
         let g1_powers = vec![g1_bytes; degree];
         let g2_powers = vec![g2_bytes; 2];
 
+        // Initialize transcript hash with domain-separated BLAKE3 instead of
+        // all-zeros. This prevents the Fiat-Shamir transcript from starting
+        // in a known (zero) state, which weakens the binding guarantees.
+        // Ceremony ID 0 indicates no ceremony has been run yet.
+        let transcript_hash = initialize_transcript(0, 0);
+
         Ok(Self {
             g1_powers,
             g2_powers,
             contribution_count: 0,
-            transcript_hash: [0u8; 32],
+            transcript_hash,
         })
     }
 

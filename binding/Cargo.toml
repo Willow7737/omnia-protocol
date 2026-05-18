@@ -22,6 +22,7 @@ rand = "0.8"
 serde_bytes = "0.11"
 subtle = "2"
 hex = "0.4"
+pqc_kyber = { version = "0.7.1", features = ["rand", "zeroize"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
