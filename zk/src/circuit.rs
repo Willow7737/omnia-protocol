@@ -35,7 +35,7 @@
 //! - `intermediate_roots` — State roots after each event application
 
 use ark_bn254::Fr;
-use ark_ff::{PrimeField, Zero};
+use ark_ff::{BigInteger, PrimeField, Zero};
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
@@ -44,6 +44,65 @@ use ark_r1cs_std::select::CondSelectGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::merkle::{self, MerkleProof};
+
+// ---------------------------------------------------------------------------
+// Operation type definitions
+// ---------------------------------------------------------------------------
+
+/// Maximum valid operation type value.
+pub const MAX_OPERATION_TYPE: u8 = 7;
+/// Number of bits needed to represent operation types (ceil(log2(8))).
+pub const OP_TYPE_BITS: usize = 3;
+
+/// Operation types for rollup events.
+///
+/// Each event in a batch must have a valid operation type. The circuit
+/// enforces that operation types are in the range `[0, MAX_OPERATION_TYPE]`
+/// via bit decomposition constraints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ark_serialize::CanonicalSerialize, ark_serialize::CanonicalDeserialize)]
+#[repr(u8)]
+pub enum OperationType {
+    /// Token transfer between accounts.
+    Transfer = 0,
+    /// Stake tokens for validation.
+    Stake = 1,
+    /// Unstake previously staked tokens.
+    Unstake = 2,
+    /// Delegate stake to another validator.
+    Delegate = 3,
+    /// Slash a misbehaving validator.
+    Slash = 4,
+    /// Vote on a governance proposal.
+    GovernanceVote = 5,
+    /// Send a message to another shard.
+    CrossShardMessage = 6,
+    /// Update identity information.
+    IdentityUpdate = 7,
+}
+
+impl OperationType {
+    /// Convert to field element.
+    pub fn to_fr(&self) -> Fr {
+        Fr::from(*self as u64)
+    }
+
+    /// Try to convert a `u8` to an [`OperationType`].
+    ///
+    /// Returns `None` if the value is greater than [`MAX_OPERATION_TYPE`].
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(OperationType::Transfer),
+            1 => Some(OperationType::Stake),
+            2 => Some(OperationType::Unstake),
+            3 => Some(OperationType::Delegate),
+            4 => Some(OperationType::Slash),
+            5 => Some(OperationType::GovernanceVote),
+            6 => Some(OperationType::CrossShardMessage),
+            7 => Some(OperationType::IdentityUpdate),
+            _ => None,
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Original RollupCircuit (unchanged)

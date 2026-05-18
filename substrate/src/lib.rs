@@ -76,9 +76,9 @@ pub use network::{
 };
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
-    InMemorySlashingStore, RedbSlashingStore, SlashOffense, SlashOutcome, SlashingEngine,
-    SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
-    DEFAULT_SLASH_THRESHOLD,
+    InMemorySlashingStore, JailState, RedbSlashingStore, SlashOffense, SlashOutcome, SlashPenalty,
+    SlashingEngine, SlashingEvent, SlashingEventType, SlashingState, SlashingStore,
+    SlashingStoreError, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 pub use slashing_undo::{
     SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest,
