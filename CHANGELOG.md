@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.24](https://github.com/Willow7737/omnia-protocol/compare/v0.1.23...v0.1.24) (2026-05-18)
+
+
+### Features
+
+* Phase 3 — Critical security closure, network production readiness, and cryptographic completion ([f8285ab](https://github.com/Willow7737/omnia-protocol/commit/f8285ab6641fe385f17a81b3ffa205212b4fe2eb))
+
 ## [0.1.23](https://github.com/Willow7737/omnia-protocol/compare/v0.1.22...v0.1.23) (2026-05-18)
 
 
