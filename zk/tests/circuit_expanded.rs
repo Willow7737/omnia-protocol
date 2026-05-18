@@ -5,6 +5,11 @@
 //! trusted setup -> proof creation -> proof verification, including
 //! edge cases like tampered events, wrong intermediate roots,
 //! single-event batches, empty batches, and proof size consistency.
+//!
+//! After H-1, the circuit also enforces:
+//! - Operation types are in the valid range `[0, MAX_OPERATION_TYPE]` (bit decomposition)
+//! - Payload hashes are bound to event hash and operation type:
+//!   `payload_hash == Poseidon(event_hash, operation_type)`
 
 use ark_bn254::Fr;
 use ark_ff::Zero;
@@ -79,6 +84,21 @@ fn build_poseidon_merkle_tree(event_hashes: &[Fr], depth: usize) -> (Fr, Vec<Mer
     (root, proofs)
 }
 
+/// Compute operation types and payload hashes for a valid batch.
+///
+/// Each event uses `operation_type = Fr::zero()` (Transfer) and
+/// `payload_hash = Poseidon(event_hash, operation_type)` to satisfy the
+/// circuit's event semantics constraints (H-1).
+fn compute_event_semantics(event_hashes: &[Fr]) -> (Vec<Fr>, Vec<Fr>) {
+    let operation_types: Vec<Fr> = event_hashes.iter().map(|_| Fr::zero()).collect();
+    let payload_hashes: Vec<Fr> = event_hashes
+        .iter()
+        .zip(operation_types.iter())
+        .map(|(eh, ot)| poseidon_hash_to_fr(*eh, *ot).unwrap())
+        .collect();
+    (operation_types, payload_hashes)
+}
+
 /// Helper: build a consistent test batch for `num_events` events.
 ///
 /// Creates event hashes, Merkle proofs, intermediate roots, and a commitment
@@ -99,6 +119,8 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
             old_root,
             new_root,
             vec![],
+            vec![],
+            vec![],
             event_commitment,
             vec![],
             vec![],
@@ -114,6 +136,9 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
 
     // Build Poseidon-based Merkle tree — the root is the event_commitment
     let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
+
+    // Compute operation types and payload hashes for event semantics (H-1)
+    let (operation_types, payload_hashes) = compute_event_semantics(&event_hashes);
 
     // Compute intermediate roots using Poseidon hash:
     //   intermediate_roots[0] = old_root
@@ -132,6 +157,8 @@ fn build_valid_batch(num_events: usize) -> (ExpandedRollupCircuit, Vec<Fr>) {
         old_root,
         new_root,
         event_hashes,
+        operation_types,
+        payload_hashes,
         event_commitment,
         merkle_proofs,
         intermediate_roots,
@@ -155,6 +182,9 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
 
     let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
 
+    // Compute operation types and payload hashes for event semantics (H-1)
+    let (operation_types, payload_hashes) = compute_event_semantics(&event_hashes);
+
     let old_root = Fr::from(42u64);
     let mut intermediate_roots = vec![old_root];
     let mut current_root = old_root;
@@ -168,6 +198,8 @@ fn build_batch_with_hashes(event_hashes: Vec<Fr>) -> (ExpandedRollupCircuit, Vec
         old_root,
         new_root,
         event_hashes,
+        operation_types,
+        payload_hashes,
         event_commitment,
         merkle_proofs,
         intermediate_roots,
@@ -279,6 +311,9 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
     // Build proper Poseidon-based Merkle proofs
     let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
 
+    // Compute operation types and payload hashes for event semantics (H-1)
+    let (operation_types, payload_hashes) = compute_event_semantics(&event_hashes);
+
     let old_root = Fr::from(42u64);
 
     // Compute CORRECT intermediate roots using Poseidon hash
@@ -298,6 +333,8 @@ fn test_circuit_rejects_inconsistent_intermediate_roots() {
         old_root,
         new_root,
         event_hashes,
+        operation_types,
+        payload_hashes,
         event_commitment,
         merkle_proofs,
         wrong_roots,
@@ -447,4 +484,115 @@ fn test_expanded_proof_serialization_roundtrip() {
     let valid =
         verify_proof(&vk, &public_inputs, &restored).expect("verification should not error");
     assert!(valid, "restored proof should verify successfully");
+}
+
+// ---------------------------------------------------------------------------
+// Test 9 (H-1): Out-of-range operation type -> proof fails
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_out_of_range_operation_type_proof_fails() {
+    // Operation type 8 is out of the valid range [0, 7]. The bit
+    // decomposition constraint only has 3 bits, which can represent
+    // values 0–7. Value 8 (binary 1000) cannot be reconstructed from
+    // 3 bits, so the constraint `reconstructed == operation_type` is
+    // unsatisfiable. The prover should panic.
+    let num_events = 1;
+
+    let event_hashes: Vec<Fr> = vec![Fr::from(10u64)];
+    let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
+
+    // Use out-of-range operation type
+    let operation_types: Vec<Fr> = vec![Fr::from(8u64)]; // INVALID: > MAX_OPERATION_TYPE (7)
+
+    // Compute a payload_hash that matches the (invalid) operation_type so that
+    // the payload_hash constraint is satisfied — this isolates the failure to
+    // the bit-decomposition range check.
+    let payload_hashes: Vec<Fr> = event_hashes
+        .iter()
+        .zip(operation_types.iter())
+        .map(|(eh, ot)| poseidon_hash_to_fr(*eh, *ot).unwrap())
+        .collect();
+
+    let old_root = Fr::from(42u64);
+    let mut intermediate_roots = vec![old_root];
+    let mut current_root = old_root;
+    for event_hash in &event_hashes {
+        current_root = poseidon_hash_to_fr(current_root, *event_hash).unwrap();
+        intermediate_roots.push(current_root);
+    }
+    let new_root = intermediate_roots[num_events];
+
+    let bad_circuit = ExpandedRollupCircuit::from_batch(
+        old_root,
+        new_root,
+        event_hashes,
+        operation_types,
+        payload_hashes,
+        event_commitment,
+        merkle_proofs,
+        intermediate_roots,
+    );
+
+    let (pk, _vk) =
+        generate_trusted_setup_expanded(num_events, MERKLE_DEPTH).expect("setup should succeed");
+
+    // The prover should panic because the operation type is out of range.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = create_expanded_proof(bad_circuit, &pk);
+    }));
+    assert!(
+        result.is_err(),
+        "prover should panic when operation type is out of range [0, MAX_OPERATION_TYPE]"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 10 (H-1): Mismatched payload hash -> proof fails
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_mismatched_payload_hash_proof_fails() {
+    // The circuit enforces `payload_hash == Poseidon(event_hash, operation_type)`.
+    // A mismatched payload_hash makes this constraint unsatisfiable.
+    let num_events = 1;
+
+    let event_hashes: Vec<Fr> = vec![Fr::from(10u64)];
+    let (event_commitment, merkle_proofs) = build_poseidon_merkle_tree(&event_hashes, MERKLE_DEPTH);
+
+    // Use valid operation type but wrong payload hash
+    let operation_types: Vec<Fr> = vec![Fr::zero()]; // Valid: Transfer
+    let payload_hashes: Vec<Fr> = vec![Fr::from(999u64)]; // INVALID: should be Poseidon(10, 0)
+
+    let old_root = Fr::from(42u64);
+    let mut intermediate_roots = vec![old_root];
+    let mut current_root = old_root;
+    for event_hash in &event_hashes {
+        current_root = poseidon_hash_to_fr(current_root, *event_hash).unwrap();
+        intermediate_roots.push(current_root);
+    }
+    let new_root = intermediate_roots[num_events];
+
+    let bad_circuit = ExpandedRollupCircuit::from_batch(
+        old_root,
+        new_root,
+        event_hashes,
+        operation_types,
+        payload_hashes,
+        event_commitment,
+        merkle_proofs,
+        intermediate_roots,
+    );
+
+    let (pk, _vk) =
+        generate_trusted_setup_expanded(num_events, MERKLE_DEPTH).expect("setup should succeed");
+
+    // The prover should panic because the payload_hash constraint is violated.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = create_expanded_proof(bad_circuit, &pk);
+    }));
+    assert!(
+        result.is_err(),
+        "prover should panic when payload_hash does not equal Poseidon(event_hash, operation_type)"
+    );
 }

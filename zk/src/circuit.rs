@@ -13,6 +13,10 @@
 //!   - Each event causes a valid state transition (intermediate root updates)
 //!   - The first intermediate root equals the old state root
 //!   - The last intermediate root equals the new state root
+//!   - Each event's operation type is in the valid range `[0, MAX_OPERATION_TYPE]`
+//!     (via bit decomposition constraints)
+//!   - Each event's payload hash is bound to the event hash and operation type:
+//!     `payload_hash == Poseidon(event_hash, operation_type)`
 //!
 //! ## Hash Function
 //!
@@ -35,11 +39,12 @@
 //! - `intermediate_roots` — State roots after each event application
 
 use ark_bn254::Fr;
-use ark_ff::{BigInteger, PrimeField, Zero};
+use ark_ff::{PrimeField, Zero};
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;
 use ark_r1cs_std::fields::fp::FpVar;
+use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::select::CondSelectGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
@@ -59,7 +64,7 @@ pub const OP_TYPE_BITS: usize = 3;
 /// Each event in a batch must have a valid operation type. The circuit
 /// enforces that operation types are in the range `[0, MAX_OPERATION_TYPE]`
 /// via bit decomposition constraints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ark_serialize::CanonicalSerialize, ark_serialize::CanonicalDeserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OperationType {
     /// Token transfer between accounts.
@@ -355,6 +360,10 @@ impl ExpandedRollupCircuit {
     /// * `old_root` — Field element representing the old state root
     /// * `new_root` — Field element representing the new state root
     /// * `event_hashes` — Field element hashes for each event in the batch
+    /// * `operation_types` — Field element operation types for each event
+    ///   (must be in range `[0, MAX_OPERATION_TYPE]`; enforced by circuit)
+    /// * `payload_hashes` — Field element payload hashes for each event
+    ///   (must equal `Poseidon(event_hash, operation_type)`; enforced by circuit)
     /// * `event_commitment` — Field element for the Merkle root of all events
     /// * `merkle_proofs` — Byte-based Merkle inclusion proofs for each event
     /// * `intermediate_roots` — Field element state roots after each event
@@ -362,7 +371,9 @@ impl ExpandedRollupCircuit {
     ///
     /// # Panics
     ///
-    /// Panics if `merkle_proofs.len() != event_hashes.len()` or
+    /// Panics if `merkle_proofs.len() != event_hashes.len()`,
+    /// `operation_types.len() != event_hashes.len()`,
+    /// `payload_hashes.len() != event_hashes.len()`, or
     /// `intermediate_roots.len() != event_hashes.len() + 1` (when events is
     /// non-empty).
     ///
@@ -371,11 +382,17 @@ impl ExpandedRollupCircuit {
     /// The circuit enforces Merkle inclusion proofs using Poseidon hash,
     /// binding each event to the `event_commitment` public input. A valid
     /// proof guarantees that all events in the batch are committed to the
-    /// Merkle root, preventing inclusion of forged events.
+    /// Merkle root, preventing inclusion of forged events. Operation types
+    /// are constrained to the valid range `[0, MAX_OPERATION_TYPE]` via bit
+    /// decomposition, and payload hashes are bound to the event hash and
+    /// operation type via `payload_hash == Poseidon(event_hash, operation_type)`.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_batch(
         old_root: Fr,
         new_root: Fr,
         event_hashes: Vec<Fr>,
+        operation_types: Vec<Fr>,
+        payload_hashes: Vec<Fr>,
         event_commitment: Fr,
         merkle_proofs: Vec<MerkleProof>,
         intermediate_roots: Vec<Fr>,
@@ -385,6 +402,16 @@ impl ExpandedRollupCircuit {
             merkle_proofs.len(),
             num_events,
             "number of merkle proofs must match number of events"
+        );
+        assert_eq!(
+            operation_types.len(),
+            num_events,
+            "number of operation types must match number of events"
+        );
+        assert_eq!(
+            payload_hashes.len(),
+            num_events,
+            "number of payload hashes must match number of events"
         );
         if num_events > 0 {
             assert_eq!(
@@ -396,11 +423,13 @@ impl ExpandedRollupCircuit {
 
         let events: Vec<Option<EventWitness>> = event_hashes
             .into_iter()
-            .map(|h| {
+            .zip(operation_types)
+            .zip(payload_hashes)
+            .map(|((h, op), ph)| {
                 Some(EventWitness {
                     event_hash: Some(h),
-                    operation_type: Some(Fr::zero()),
-                    payload_hash: Some(Fr::zero()),
+                    operation_type: Some(op),
+                    payload_hash: Some(ph),
                 })
             })
             .collect();
@@ -582,6 +611,67 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
             // Enforce that the computed root equals the event commitment
             current.enforce_equal(&event_commitment)?;
 
+            // --- Event semantics constraints (H-1) ---
+
+            // Allocate operation_type witness and constrain it to a valid range
+            // using bit decomposition. Each bit is constrained to be 0 or 1
+            // (boolean constraint), and the reconstructed value must equal
+            // the allocated operation_type. This ensures operation_type is in
+            // [0, 2^OP_TYPE_BITS - 1] = [0, 7].
+            let operation_type = FpVar::<Fr>::new_witness(cs.clone(), || {
+                self.events[i]
+                    .as_ref()
+                    .and_then(|e| e.operation_type)
+                    .ok_or(SynthesisError::AssignmentMissing)
+            })?;
+
+            // Bit decomposition: allocate OP_TYPE_BITS boolean witnesses and
+            // reconstruct the value to enforce range constraint.
+            let mut reconstructed = FpVar::constant(Fr::zero());
+            for j in 0..OP_TYPE_BITS {
+                let bit = Boolean::new_witness(cs.clone(), || {
+                    let op_val = self.events[i]
+                        .as_ref()
+                        .and_then(|e| e.operation_type)
+                        .ok_or(SynthesisError::AssignmentMissing)?;
+                    let bit_val = (op_val.into_bigint().as_ref()[0] >> j) & 1;
+                    Ok(bit_val == 1)
+                })?;
+                // Boolean constraint (bit ∈ {0,1}) is already enforced by
+                // Boolean::new_witness allocation.
+                let bit_val = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(
+                    &bit,
+                    &FpVar::constant(Fr::from(1u64 << j)),
+                    &FpVar::constant(Fr::zero()),
+                )?;
+                reconstructed += bit_val;
+            }
+            // Enforce that the bit decomposition reconstructs operation_type.
+            // This proves operation_type ∈ [0, MAX_OPERATION_TYPE].
+            reconstructed.enforce_equal(&operation_type)?;
+
+            // Allocate payload_hash witness and bind it to event_hash and
+            // operation_type. This ensures the payload hash is not arbitrary —
+            // it must equal Poseidon(event_hash, operation_type), which
+            // prevents a malicious prover from submitting mismatched payload
+            // hashes.
+            //
+            // Note: future circuit versions may incorporate payload_hash into
+            // the state transition constraint directly.
+            let payload_hash = FpVar::<Fr>::new_witness(cs.clone(), || {
+                self.events[i]
+                    .as_ref()
+                    .and_then(|e| e.payload_hash)
+                    .ok_or(SynthesisError::AssignmentMissing)
+            })?;
+
+            let expected_payload_hash = crate::poseidon::poseidon_hash(
+                cs.clone(),
+                &event_hash,
+                &operation_type,
+            )?;
+            payload_hash.enforce_equal(&expected_payload_hash)?;
+
             // State transition constraint:
             // intermediate_root[i+1] = Poseidon(intermediate_root[i], event_hash[i])
             //
@@ -689,5 +779,47 @@ mod tests {
             .public_input()
             .expect("public input should be available");
         assert_eq!(public_input.len(), 3);
+    }
+
+    // --- OperationType tests ---
+
+    #[test]
+    fn test_operation_type_from_u8_valid() {
+        assert_eq!(OperationType::from_u8(0), Some(OperationType::Transfer));
+        assert_eq!(OperationType::from_u8(1), Some(OperationType::Stake));
+        assert_eq!(OperationType::from_u8(2), Some(OperationType::Unstake));
+        assert_eq!(OperationType::from_u8(3), Some(OperationType::Delegate));
+        assert_eq!(OperationType::from_u8(4), Some(OperationType::Slash));
+        assert_eq!(OperationType::from_u8(5), Some(OperationType::GovernanceVote));
+        assert_eq!(OperationType::from_u8(6), Some(OperationType::CrossShardMessage));
+        assert_eq!(OperationType::from_u8(7), Some(OperationType::IdentityUpdate));
+    }
+
+    #[test]
+    fn test_operation_type_from_u8_invalid() {
+        assert_eq!(OperationType::from_u8(8), None);
+        assert_eq!(OperationType::from_u8(255), None);
+    }
+
+    #[test]
+    fn test_operation_type_to_fr() {
+        assert_eq!(OperationType::Transfer.to_fr(), Fr::from(0u64));
+        assert_eq!(OperationType::Stake.to_fr(), Fr::from(1u64));
+        assert_eq!(OperationType::IdentityUpdate.to_fr(), Fr::from(7u64));
+    }
+
+    #[test]
+    fn test_operation_type_roundtrip() {
+        for i in 0u8..=7 {
+            let op = OperationType::from_u8(i).expect("valid operation type");
+            assert_eq!(op as u8, i);
+            assert_eq!(op.to_fr(), Fr::from(i as u64));
+        }
+    }
+
+    #[test]
+    fn test_max_operation_type_constant() {
+        assert_eq!(MAX_OPERATION_TYPE, 7);
+        assert_eq!(OP_TYPE_BITS, 3);
     }
 }
