@@ -154,7 +154,7 @@ impl PowersOfTau {
     /// G2 elements are not modified by this method.
     ///
     /// For a ceremony that updates both G1 and G2, use
-    /// [`apply_contribution_ec()`] instead.
+    /// [`Self::apply_contribution_ec`] instead.
     ///
     /// # Arguments
     ///
