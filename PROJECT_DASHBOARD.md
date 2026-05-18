@@ -2,21 +2,21 @@
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
-## Current Project Status: Phase 0 — Complete | Phase 1 — In Progress
+## Current Project Status: Phase 0 — Complete | Phase 1 — Complete | Phase 2 — In Progress
 
 | Metric | Value | Status |
 | :--- | :--- | :--- |
-| **Phase** | Phase 0: The Seed | ✅ Complete |
-| **Overall Completion** | **95%** | All layers implemented, critical security findings resolved |
+| **Phase** | Phase 2: Hardening & Security Audit | 🔄 In Progress |
+| **Overall Completion** | **92%** | Phase 2 pre-work findings identified, ADRs 010-014 added |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 295+ tests passing | Verified |
+| **Code Health** | 295+ tests passing, 0 production `unwrap()`, 34 typed error enums | Verified |
 | **Network Status** | Single-node operator | Phase 0 |
-| **Security Posture** | JWT auth, ACL, rate limiting, encrypted keys | Phase 0 resolved |
+| **Security Posture** | JWT auth, ACL, rate limiting, AES-256-GCM encrypted keys | Phase 1 resolved |
 
 ### Completion Bar
 
 ```
-[████████████████████████████░] 95%
+[████████████████████████████░] 92%
 ```
 
 ---
@@ -49,7 +49,11 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | **Physical Binding** | Implemented | Medium | Provenance log full; RF/QC are stubs (need hardware) |
 | **Fee Enforcement** | Implemented | Medium | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch |
 | **UBC Economic Model** | Implemented | Medium | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay |
-| **ZK-Rollup Settlement** | Architecture | Medium | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, needs audit) |
+| **ZK-Rollup Settlement** | Architecture | **High** | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); dummy circuit fields (see Phase 2 findings); trusted setup hash initialized to zero (stub) |
+| **Encrypted Keystore** | Implemented | Low | AES-256-GCM + HKDF-SHA256 + BLAKE3 domain separation; legacy XOR migration supported (see ADR-010) |
+| **VRF Leader Election** | Implemented | **Medium** | Non-standard VRF construction (Ed25519 + BLAKE3, not ECVRF — see ADR-012); functional for internal use but not spec-compliant |
+| **DKG / Threshold Signatures** | Implemented | **Medium** | Feldman VSS-based DKG (see ADR-013); XOR share encryption (should be AES-256-GCM); simplified polynomial (BLAKE3-derived shares) |
+| **Slashing** | Implemented | Medium | Binary slash-point model; gradual slashing designed (ADR-011) but not yet implemented |
 
 ### Shard Architecture Summary
 
@@ -89,9 +93,30 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 
 ---
 
+## Phase 2 Work Items
+
+| # | Item | Status | ADR | Notes |
+|---|------|--------|-----|-------|
+| M-4 | Architecture Decision Records 010-014 | ✅ Complete | ADR-010–014 | Encrypted keystore, gradual slashing, VRF construction, DKG selection, Poseidon migration |
+| M-5 | Project dashboard & findings update | ✅ Complete | — | Dashboard updated, PHASE_2_FINDINGS.md created |
+| — | Gradual slashing implementation (ADR-011) | 🔄 Planned | ADR-011 | 3-tier: Warning → Jail → Ejection; replace binary slash-point model |
+| — | DKG share encryption upgrade | 🔄 Planned | ADR-013 | Replace XOR with AES-256-GCM for DKG share packages |
+| — | VRF spec compliance (ADR-012) | 📋 Deferred | ADR-012 | Migrate to ECVRF (RFC 9381) or formally justify current construction |
+| — | Poseidon parameter migration (ADR-014) | 📋 Deferred | ADR-014 | Dual-hash transition to Filecoin/Neptune reference constants |
+| — | ZK circuit dummy field remediation | 🔄 Planned | — | Replace `Fr::zero()` placeholder witnesses in `ExpandedRollupCircuit::empty()` |
+| — | Trusted setup transcript hash initialization | 🔄 Planned | — | Replace `[0u8; 32]` initial transcript hash with proper initial state hash |
+| — | Identity recovery TODO in state.rs | 🔄 Planned | — | `TODO: Recovery should add the new recovered key to authentication` |
+| — | Sybil resistance / stake-weighted validator registry | 📋 Deferred | — | Phase 2 scope from PHASE_1_SUMMARY.md |
+| — | Causal graph GC with pruning | 📋 Deferred | — | Phase 2 scope from PHASE_1_SUMMARY.md |
+| — | Multi-party trusted setup ceremony | 📋 Deferred | — | Phase 2 scope from PHASE_1_SUMMARY.md |
+| — | RF fingerprint hardware integration | 📋 Deferred | — | Requires SDR hardware |
+| — | Full rustdoc coverage (`#![deny(missing_docs)]`) | 📋 Deferred | — | Phase 2 scope from PHASE_1_SUMMARY.md |
+
+---
+
 ## Roadmap and Milestones
 
-### Phase 0: The Seed (Months 0-6)
+### Phase 0: The Seed (Months 0-6) — ✅ Complete
 - [x] Architecture Whitepaper (v1.0)
 - [x] Causal Graph Consensus Prototype (Rust, 120+ tests)
 - [x] DID Registry Implementation (`did:omnia:` method with hex-encoded 32-byte public keys)
@@ -114,20 +139,59 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] BLAKE3 domain separation (context-specific hashing)
 - [x] Creator-pubkey binding (constant-time validation via subtle crate)
 
-### Phase 1: The Sprout (Months 6-12)
+### Phase 1: The Sprout (Months 6-12) — ✅ Complete
+- [x] Typed error migration (34 `thiserror` enums, zero `Result<_, String>`)
+- [x] `unwrap()` replacement (`#![deny(clippy::unwrap_used)]` on all 7 crates)
+- [x] E2E REST API Integration Tests (19 test functions, 4 auth states)
+- [x] Code Coverage Integration (`cargo llvm-cov`, 70% target)
+- [x] RUSTSEC Advisory Review (removed stale RUSTSEC-2025-0055, added review dates)
+- [x] Documentation Sprint (50+ discrepancy fixes across 12 files)
+- [x] Solidity Groth16 Verifier (production-quality, BN254 precompiles)
+- [x] Rustdoc Coverage (35 items added to 7 security-critical modules)
+
+### Phase 2: Hardening & Security Audit (Months 12-18) — 🔄 In Progress
+- [ ] Gradual slashing implementation (ADR-011)
+- [ ] DKG share encryption upgrade (XOR → AES-256-GCM)
+- [ ] ZK circuit dummy field remediation
+- [ ] Trusted setup transcript hash initialization
+- [ ] Identity recovery TODO resolution
+- [ ] VRF spec compliance evaluation (ADR-012)
+- [ ] Poseidon parameter migration planning (ADR-014)
+- [x] Architecture Decision Records 010-014 (M-4)
+- [x] Project dashboard & findings documentation (M-5)
 - [ ] Full ZK-Rollup Integration
-- [ ] Real RF Fingerprinting (SDR hardware)
 - [ ] Fee Mechanism Design (dynamic fees, EIP-1559-style)
-- [ ] Mobile Wallet
 - [ ] Validator Network (multi-node)
 - [ ] Public Testnet Launch
 - [ ] Community Governance Genesis
 
 ---
 
+## Architecture Decision Records
+
+| ADR | Title | Date | Status |
+|-----|-------|------|--------|
+| ADR-001 | Event Processor Trait | 2026-05-10 | Implemented |
+| ADR-002 | Settlement Layer Trait | 2026-05-10 | Implemented |
+| ADR-003 | Gossip Substrate Interface | 2026-05-10 | Implemented |
+| ADR-005 | ProofBundle Universal Proof Format | 2026-05-14 | Implemented |
+| ADR-006 | Shard Trait Contract | 2026-05-10 | Implemented |
+| ADR-007 | Binding Shard Interface | 2026-05-10 | Implemented |
+| ADR-008 | Crypto Dependency Audit | 2026-05-10 | Accepted |
+| ADR-009 | Poseidon Parameter Justification | 2026-05-14 | Accepted |
+| ADR-010 | Encrypted Keystore Design | 2025-05-18 | Accepted |
+| ADR-011 | Gradual Slashing Model | 2025-05-18 | Accepted |
+| ADR-012 | VRF Construction Choice | 2025-05-18 | Accepted |
+| ADR-013 | DKG Protocol Selection | 2025-05-18 | Accepted |
+| ADR-014 | Poseidon Parameter Migration Strategy | 2025-05-18 | Accepted |
+
+---
+
 ## Transparency Log
 *Every major decision and status change is logged here.*
 
+- **2025-05-18:** Phase 2 pre-work: Created ADRs 010-014 (encrypted keystore design, gradual slashing model, VRF construction choice, DKG protocol selection, Poseidon parameter migration strategy). Updated project dashboard. Documented Phase 2 findings (PHASE_2_FINDINGS.md).
+- **2026-05-18:** Phase 1 complete. All 8 deliverables verified: typed errors (34 enums), `unwrap()` elimination, E2E API tests (19 functions), code coverage integration, RUSTSEC review, documentation sprint (50+ fixes), Groth16 verifier, rustdoc coverage (35 items).
 - **2026-03-05:** Phase 0 complete. All critical and high-severity security findings resolved (JWT auth FIND-001, ACL FIND-002, creator binding FIND-003, encrypted keys FIND-010, slashing rollback FIND-011, governance quorum FIND-020, gossip limits FIND-021, BLAKE3 domain FIND-022). 295+ tests, 7 fuzz targets, TLA+ verified. Documentation sprint (FIND-034) resolved 42 discrepancies across 10 documentation files.
 - **2026-05-14:** Documentation audit (Task 3-b): All docs updated to match actual codebase. Corrected fee schedule descriptions, epoch duration (30 days not 24 hours), ShardError variant count (7 not 6), time-locked voting status (implemented not planned), DID format (hex not multi-base), fee mechanism status (implemented not "not started"). Added code references and type signatures.
 - **2026-05-13:** Documentation overhaul — all docs updated to match actual codebase. Honest labeling of stubs, planned features, and aspirational content. Visual design preserved.
@@ -136,5 +200,5 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - **2026-05-10:** Project ownership confirmed under CC0 License.
 
 ---
-*Last Updated: 2026-03-05*
-*Version: 4.0.0*
+*Last Updated: 2025-05-18*
+*Version: 5.0.0*

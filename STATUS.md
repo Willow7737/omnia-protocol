@@ -22,8 +22,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-2.1** | DID Creation (`did:omnia:` method) | P0 | ✅ Completed |
 | **REQ-2.2** | Public Key Registry | P0 | ✅ Completed |
 | **REQ-2.3** | Verifiable Credentials (VCs) | P1 | ✅ Completed |
-| **REQ-2.4** | Social Recovery Mechanism | P2 | ✅ Completed |
-| **REQ-2.5** | Shamir's Secret Sharing (GF(256)) | P1 | ✅ Completed |
+| **REQ-2.4** | Social Recovery Mechanism | P2 | ⚠️ Partial — recovery does not update DID auth (FIND-P2-001) |
+| **REQ-2.5** | Shamir's Secret Sharing (GF(256)) | P1 | ⚠️ Partial — share encryption uses XOR (FIND-P2-002) |
 | **REQ-2.6** | Biometric Anchors (BLAKE3) | P2 | ✅ Completed |
 | **REQ-2.7** | AI Agent Identity (5 capability types) | P1 | ✅ Completed |
 
@@ -55,7 +55,35 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-5.2** | Quadratic Voting + Integer Decay (PPM fixed-point) | P1 | ✅ Completed |
 | **REQ-5.3** | Proof-of-Useful-Work | P2 | 🔄 Stub |
 
-## 6. Future Requirements
+## 6. Phase 1: Hardening Sprint
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-P1.1** | Typed Error Migration (34 `thiserror` enums) | P1 | ✅ Completed |
+| **REQ-P1.2** | `unwrap()` Replacement (`#![deny(clippy::unwrap_used)]`) | P1 | ✅ Completed |
+| **REQ-P1.3** | E2E REST API Integration Tests | P1 | ✅ Completed |
+| **REQ-P1.4** | Code Coverage Integration (`cargo llvm-cov`) | P2 | ✅ Completed |
+| **REQ-P1.5** | RUSTSEC Advisory Review | P2 | ✅ Completed |
+| **REQ-P1.6** | Documentation Sprint (50+ discrepancy fixes) | P2 | ✅ Completed |
+| **REQ-P1.7** | Solidity Groth16 Verifier | P1 | ✅ Pre-existing |
+| **REQ-P1.8** | Rustdoc Coverage (35 items, 7 security modules) | P2 | ✅ Completed |
+
+## 7. Phase 2: Security Audit & Hardening
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-P2.1** | Architecture Decision Records 010-014 | P1 | ✅ Completed |
+| **REQ-P2.2** | Project Dashboard & Findings Update | P1 | ✅ Completed |
+| **REQ-P2.3** | SSS Recovery Authentication Update (FIND-P2-001) | P0 | 🔄 Open |
+| **REQ-P2.4** | SSS Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-002) | P0 | 🔄 Open |
+| **REQ-P2.5** | DKG Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-003) | P0 | 🔄 Open |
+| **REQ-P2.6** | ZK Circuit Dummy Field Remediation (FIND-P2-010) | P1 | 🔄 Open |
+| **REQ-P2.7** | Trusted Setup Transcript Hash Initialization (FIND-P2-011) | P1 | 🔄 Open |
+| **REQ-P2.8** | Gradual Slashing Implementation (ADR-011) | P1 | 📋 Planned |
+| **REQ-P2.9** | VRF Spec Compliance Evaluation (ADR-012) | P2 | 📋 Deferred |
+| **REQ-P2.10** | Poseidon Parameter Migration Planning (ADR-014) | P2 | 📋 Deferred |
+
+## 8. Future Requirements
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -68,7 +96,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.7** | Conviction Voting | P2 | 🌑 Not Started |
 | **REQ-6.8** | Delegation | P2 | 🌑 Not Started |
 
-## 7. Sprint 3: Testnet Readiness
+## 9. Sprint 3: Testnet Readiness
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -81,7 +109,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-7.7** | Security Audit Preparation | P3 | ✅ Completed |
 | **REQ-7.8** | Production ZK Hash Gadget (Pedersen/Poseidon) | P1 | ✅ Completed |
 
-## 8. Sprint 4: Push to 9
+## 10. Sprint 4: Push to 9
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -108,21 +136,24 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 ## 📊 Summary of Completion
 
-| Category | Total | ✅ Done | ⚠️ Placeholder | 🔄 Stub | 🌑 Not Started | Progress |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Core Protocol** | 8 | 8 | 0 | 0 | 0 | ██████████ 100% |
-| **Identity** | 7 | 7 | 0 | 0 | 0 | ██████████ 100% |
-| **Financial & Settlement** | 6 | 6 | 0 | 0 | 0 | ██████████ 100% |
-| **Physical Binding** | 4 | 3 | 0 | 1 | 0 | ████████░░ 75% |
-| **Economics** | 3 | 2 | 0 | 1 | 0 | ███████░░░ 67% |
-| **Future** | 8 | 4 | 0 | 0 | 4 | █████░░░░░ 50% |
-| **Sprint 3** | 8 | 8 | 0 | 0 | 0 | ██████████ 100% |
-| **Sprint 4** | 18 | 18 | 0 | 0 | 0 | ██████████ 100% |
-| **TOTAL** | **62** | **56** | **0** | **2** | **4** | █████████░ 90% |
+| Category | Total | ✅ Done | ⚠️ Partial | 🔄 Stub/Open | 🌑 Not Started | 📋 Planned | Progress |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Core Protocol** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Identity** | 7 | 5 | 2 | 0 | 0 | 0 | █████████░ 93% |
+| **Financial & Settlement** | 6 | 6 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Physical Binding** | 4 | 3 | 0 | 1 | 0 | 0 | ████████░░ 75% |
+| **Economics** | 3 | 2 | 0 | 1 | 0 | 0 | ███████░░░ 67% |
+| **Phase 1** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Phase 2** | 10 | 2 | 0 | 5 | 0 | 3 | ███░░░░░░░ 30% |
+| **Sprint 3** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Sprint 4** | 18 | 18 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
+| **TOTAL** | **80** | **64** | **2** | **6** | **4** | **3** | ████████░░ 85% |
 
 ---
 *Legend:*
 - 🌑 **Not Started:** No work done.
-- 🔄 **Stub:** Code structure exists but needs real implementation (hardware, library integration, etc.).
-- ⚠️ **Placeholder:** Implementation exists but uses a simplified/non-production approach.
+- 🔄 **Stub/Open:** Code structure exists but needs real implementation; or finding identified but not yet remediated.
+- ⚠️ **Partial:** Implementation exists but has known gaps or security findings.
+- 📋 **Planned:** Designed (ADR or spec) but not yet implemented.
 - ✅ **Completed:** Fully implemented and tested.
