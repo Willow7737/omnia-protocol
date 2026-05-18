@@ -80,7 +80,9 @@ pub use slashing::{
     SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
-pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
+pub use slashing_undo::{
+    SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest,
+};
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 pub use threshold::{

@@ -103,17 +103,17 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/node/peers", get(node::node_peers))
         // Events
         .route("/events", post(events::submit_event))
-        .route("/events/{id}", get(events::get_event))
+        .route("/events/:id", get(events::get_event))
         // Shard operations
         .route(
-            "/shards/{shard_id}/operations",
+            "/shards/:shard_id/operations",
             post(shards::submit_shard_operation),
         )
         // Governance
         .route("/governance/proposals", post(governance::create_proposal))
         .route("/governance/vote", post(governance::cast_vote))
         // Economics
-        .route("/economics/balance/{did}", get(economics::get_balance))
+        .route("/economics/balance/:did", get(economics::get_balance))
         .route("/economics/transfer", post(economics::transfer_ubc))
         // Error documentation
         .route("/errors", get(errors::error_codes))

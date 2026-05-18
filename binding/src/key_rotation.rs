@@ -59,7 +59,10 @@ impl PqcKeyRotationManager {
     }
 
     /// Submit a key rotation request.
-    pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), KeyRotationError> {
+    pub fn submit_rotation(
+        &mut self,
+        request: PqcKeyRotationRequest,
+    ) -> Result<(), KeyRotationError> {
         if (request.new_phase as u8) < (self.current_phase as u8) {
             return Err(KeyRotationError::PhaseDowngrade {
                 from: self.current_phase,

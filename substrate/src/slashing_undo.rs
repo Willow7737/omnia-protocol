@@ -218,7 +218,9 @@ impl SlashingUndoManager {
         let points_before = slashing.slash_points_of(&request.validator_id);
 
         // Apply the undo via the slashing engine
-        slashing.undo_slash(&request.validator_id).map_err(SlashingUndoError::UndoFailed)?;
+        slashing
+            .undo_slash(&request.validator_id)
+            .map_err(SlashingUndoError::UndoFailed)?;
 
         let points_after = slashing.slash_points_of(&request.validator_id);
 
@@ -501,7 +503,8 @@ mod tests {
 
     #[test]
     fn test_slashing_undo_error_from_slashing_store_error() {
-        let store_err = crate::slashing::SlashingStoreError::Serialization("serde fail".to_string());
+        let store_err =
+            crate::slashing::SlashingStoreError::Serialization("serde fail".to_string());
         let undo_err: SlashingUndoError = store_err.into();
         assert!(matches!(undo_err, SlashingUndoError::UndoFailed(_)));
     }

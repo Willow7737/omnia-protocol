@@ -154,12 +154,17 @@ The verifier at `zk/contracts/ethereum/OmniaRollup.sol` was already production-q
 | `cargo check --workspace --exclude omnia-fuzz` | ✅ Pass |
 | `cargo clippy --workspace --lib -- -D warnings -D clippy::unwrap_used` | ✅ Pass |
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --exclude omnia-fuzz` | ✅ Pass |
-| `cargo test -p omnia-node --test api_integration --no-run` | ✅ Compiles |
+| `cargo test -p omnia-node --test api_integration -- --test-threads=1` | ✅ 20/20 Pass |
+| `cargo test -p omnia-node --test integration -- --test-threads=1` | ✅ 6/6 Pass |
+| `cargo test --workspace --exclude omnia-fuzz --lib` | ✅ All Pass |
+| `cargo fmt --all -- --check` | ✅ Pass |
 | `#![deny(clippy::unwrap_used)]` on all 7 crates | ✅ Confirmed |
 | `#![forbid(unsafe_code)]` on all 7 crates | ✅ Confirmed |
 | `#![warn(missing_docs)]` on all 7 crates | ✅ Confirmed |
 
-**Note:** Full test suite execution (`cargo test --workspace --exclude omnia-fuzz`) encounters a linker bug (LLD Bus Error) in the CI sandbox environment. This is an environment-specific issue, not a code defect. The code compiles successfully and all checks pass.
+### Bug Fix: Route Path Parameter Syntax
+
+The API routes with path parameters were using `{param}` syntax (axum 0.8 format) but the project uses axum 0.7.9 which requires `:param` syntax. This caused all routes with path parameters (`/events/:id`, `/shards/:shard_id/operations`, `/economics/balance/:did`) to return 404 regardless of authentication state. Fixed by changing to `:param` syntax in `node/src/api/mod.rs`.
 
 ---
 

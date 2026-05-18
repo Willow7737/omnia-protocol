@@ -27,7 +27,7 @@ use std::time::Instant;
 
 use jsonwebtoken::{encode, EncodingKey, Header};
 use omnia_economics::EconomicsState;
-use omnia_node::api::auth::{Claims, create_token};
+use omnia_node::api::auth::{create_token, Claims};
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
 use omnia_node::state::{AppState, NodeMetrics};
@@ -287,7 +287,10 @@ async fn test_auth_node_info() {
         .unwrap();
     assert_eq!(resp.status(), 200, "Valid JWT should yield 200");
     let body: Value = resp.json().await.unwrap();
-    assert!(body["node_id"].is_string(), "Response should contain node_id");
+    assert!(
+        body["node_id"].is_string(),
+        "Response should contain node_id"
+    );
 
     // Expired JWT → 401
     let resp = client
@@ -335,7 +338,10 @@ async fn test_auth_node_peers() {
         .unwrap();
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
-    assert!(body["peers"].is_array(), "Response should contain peers array");
+    assert!(
+        body["peers"].is_array(),
+        "Response should contain peers array"
+    );
 
     // Expired JWT → 401
     let resp = client
@@ -388,9 +394,16 @@ async fn test_auth_submit_event() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 201, "Valid JWT should yield 201 for event submission");
+    assert_eq!(
+        resp.status(),
+        201,
+        "Valid JWT should yield 201 for event submission"
+    );
     let body: Value = resp.json().await.unwrap();
-    assert!(body["event_id"].is_string(), "Response should contain event_id");
+    assert!(
+        body["event_id"].is_string(),
+        "Response should contain event_id"
+    );
 
     // Expired JWT → 401
     let resp = client
@@ -504,7 +517,10 @@ async fn test_auth_shard_operation() {
 
     // No auth → 401
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .json(&op_body)
         .send()
         .await
@@ -513,7 +529,10 @@ async fn test_auth_shard_operation() {
 
     // Valid JWT → 200 (register is non-privileged, so any valid JWT works)
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&valid_token)
         .json(&op_body)
         .send()
@@ -527,7 +546,10 @@ async fn test_auth_shard_operation() {
 
     // Expired JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&expired_token)
         .json(&op_body)
         .send()
@@ -537,7 +559,10 @@ async fn test_auth_shard_operation() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&wrong_secret_token)
         .json(&op_body)
         .send()
@@ -866,7 +891,10 @@ async fn test_mint_ubc_non_admin_forbidden() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&regular_token)
         .json(&mint_body)
         .send()
@@ -879,7 +907,10 @@ async fn test_mint_ubc_non_admin_forbidden() {
         "Non-admin caller should get 403 Forbidden for MintUbc"
     );
     let body: Value = resp.json().await.unwrap();
-    assert!(body["error"].is_string(), "403 response should have 'error' field");
+    assert!(
+        body["error"].is_string(),
+        "403 response should have 'error' field"
+    );
     let error_msg = body["error"].as_str().unwrap();
     assert!(
         error_msg.contains("not authorized"),
@@ -900,7 +931,10 @@ async fn test_mint_ubc_admin_ok() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&admin_token)
         .json(&mint_body)
         .send()
@@ -929,7 +963,10 @@ async fn test_advance_epoch_non_admin_forbidden() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&regular_token)
         .json(&advance_body)
         .send()
@@ -942,7 +979,10 @@ async fn test_advance_epoch_non_admin_forbidden() {
         "Non-admin caller should get 403 Forbidden for AdvanceEpoch"
     );
     let body: Value = resp.json().await.unwrap();
-    assert!(body["error"].is_string(), "403 response should have 'error' field");
+    assert!(
+        body["error"].is_string(),
+        "403 response should have 'error' field"
+    );
     let error_msg = body["error"].as_str().unwrap();
     assert!(
         error_msg.contains("not authorized"),
@@ -963,7 +1003,10 @@ async fn test_advance_epoch_admin_ok() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&admin_token)
         .json(&advance_body)
         .send()
@@ -991,10 +1034,16 @@ async fn test_cors_preflight() {
 
     // Send an OPTIONS preflight request with CORS headers
     let resp = client
-        .request(reqwest::Method::OPTIONS, format!("{}/api/v1/node/info", server.base_url))
+        .request(
+            reqwest::Method::OPTIONS,
+            format!("{}/api/v1/node/info", server.base_url),
+        )
         .header("Origin", "http://example.com")
         .header("Access-Control-Request-Method", "GET")
-        .header("Access-Control-Request-Headers", "Authorization, Content-Type")
+        .header(
+            "Access-Control-Request-Headers",
+            "Authorization, Content-Type",
+        )
         .send()
         .await
         .unwrap();
@@ -1057,7 +1106,11 @@ async fn test_cors_cross_origin_request() {
         .await
         .unwrap();
 
-    assert_eq!(resp.status(), 200, "Cross-origin GET with auth should return 200");
+    assert_eq!(
+        resp.status(),
+        200,
+        "Cross-origin GET with auth should return 200"
+    );
 
     // Verify the response includes CORS headers
     let allow_origin = resp
@@ -1095,10 +1148,7 @@ async fn test_error_format_401_unauthorized() {
         body
     );
     let error_msg = body["error"].as_str().unwrap();
-    assert!(
-        !error_msg.is_empty(),
-        "Error message should not be empty"
-    );
+    assert!(!error_msg.is_empty(), "Error message should not be empty");
     assert!(
         error_msg.contains("authorization"),
         "Missing-auth error should mention 'authorization', got: {}",
@@ -1161,7 +1211,10 @@ async fn test_error_format_403_forbidden() {
         "params": {"did": "did:test:target", "amount": 500}
     });
     let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .post(format!(
+            "{}/api/v1/shards/economics/operations",
+            server.base_url
+        ))
         .bearer_auth(&regular_token)
         .json(&mint_body)
         .send()

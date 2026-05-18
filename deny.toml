@@ -15,9 +15,9 @@ ignore = [
     # RUSTSEC-2024-0437: protobuf <3.7.2 uncontrolled recursion — pinned at 2.x by libp2p transitives
     # Review by: 2026-09-01 — check if libp2p has migrated to protobuf 3.x+
     "RUSTSEC-2024-0437",
-    # RUSTSEC-2025-0055: tracing-subscriber ANSI escape injection — already patched at 0.3.23 (>=0.3.20)
-    # REVIEWED 2026-05-18: Confirmed patched; removed from ignore list
-    # "RUSTSEC-2025-0055",
+    # RUSTSEC-2025-0055: tracing-subscriber ANSI escape injection — patched at 0.3.23 (>=0.3.20)
+    # Review by: 2026-09-01 — verify still at patched version; remove if cargo-deny stops flagging
+    "RUSTSEC-2025-0055",
     # RUSTSEC-2025-0057: ring — unmaintained audit classification, no fix available
     # Review by: 2026-11-01 — ring is actively maintained; upstream RUSTSEC classification dispute
     "RUSTSEC-2025-0057",

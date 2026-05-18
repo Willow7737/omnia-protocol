@@ -356,14 +356,11 @@ impl ThresholdKeyManager {
         participant: &NodeId,
         message: &[u8],
     ) -> Result<PartialSignature, ThresholdError> {
-        let share = self
-            .key_shares
-            .get(participant)
-            .ok_or_else(|| {
-                let mut prefix = [0u8; 4];
-                prefix.copy_from_slice(&participant[..4]);
-                ThresholdError::ParticipantNotRegistered(prefix)
-            })?;
+        let share = self.key_shares.get(participant).ok_or_else(|| {
+            let mut prefix = [0u8; 4];
+            prefix.copy_from_slice(&participant[..4]);
+            ThresholdError::ParticipantNotRegistered(prefix)
+        })?;
         Ok(share.partial_sign(message))
     }
 }
@@ -444,7 +441,10 @@ mod tests {
         let result = mgr.combine_signatures(&partials, b"test");
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, ThresholdError::InsufficientPartials { got: 0, need: 3 }));
+        assert!(matches!(
+            err,
+            ThresholdError::InsufficientPartials { got: 0, need: 3 }
+        ));
     }
 
     #[test]
@@ -544,6 +544,9 @@ mod tests {
     fn test_threshold_error_from_bls_error() {
         let bls_err = BlsError::AggregationFailed("empty set".to_string());
         let threshold_err: ThresholdError = bls_err.into();
-        assert!(matches!(threshold_err, ThresholdError::AggregationFailed(_)));
+        assert!(matches!(
+            threshold_err,
+            ThresholdError::AggregationFailed(_)
+        ));
     }
 }
