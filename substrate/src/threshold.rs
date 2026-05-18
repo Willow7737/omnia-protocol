@@ -761,11 +761,7 @@ fn derive_dkg_aes_key(key_material: &[u8; 32]) -> [u8; 32] {
 }
 
 /// AES-256-GCM encrypt a DKG share with associated data.
-fn aes256gcm_encrypt_dkg(
-    plaintext: &[u8],
-    key_material: &[u8; 32],
-    aad: &[u8],
-) -> AeadCiphertext {
+fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) -> AeadCiphertext {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use rand::RngCore;
 

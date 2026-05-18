@@ -652,8 +652,8 @@ pub enum GossipError {
 /// (snappy flag). Otherwise, the output is prefixed with `0x00` (uncompressed).
 /// This flag byte ensures forward and backward compatibility.
 pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipError> {
-    let raw = postcard::to_allocvec(value)
-        .map_err(|e| GossipError::SerializationError(e.to_string()))?;
+    let raw =
+        postcard::to_allocvec(value).map_err(|e| GossipError::SerializationError(e.to_string()))?;
 
     if raw.len() > COMPRESSION_THRESHOLD {
         let mut encoder = snap::raw::Encoder::new();
@@ -680,7 +680,9 @@ pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipEr
 /// Reads the first byte as a compression flag:
 /// - `0x00`: uncompressed payload follows
 /// - `0x01`: snappy-compressed payload follows
-pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(data: &[u8]) -> Result<T, GossipError> {
+pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(
+    data: &[u8],
+) -> Result<T, GossipError> {
     let (flag, payload) = data
         .split_first()
         .ok_or_else(|| GossipError::InvalidMessageFormat("empty message".to_string()))?;
@@ -1113,8 +1115,7 @@ mod tests {
         let small_data = vec![1u8, 2, 3];
         let serialized = serialize_compressed(&small_data).unwrap();
         assert_eq!(
-            serialized[0],
-            COMPRESSION_NONE,
+            serialized[0], COMPRESSION_NONE,
             "Small payloads should not be compressed"
         );
         let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
@@ -1127,8 +1128,7 @@ mod tests {
         let large_data: Vec<u8> = vec![0u8; 10_000];
         let serialized = serialize_compressed(&large_data).unwrap();
         assert_eq!(
-            serialized[0],
-            COMPRESSION_SNAPPY,
+            serialized[0], COMPRESSION_SNAPPY,
             "Large compressible payloads should be compressed"
         );
         assert!(

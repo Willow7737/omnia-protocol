@@ -108,13 +108,9 @@ fn percentile(sorted_latencies: &[f64], p: f64) -> f64 {
 ///
 /// For a real deployment test with multiple nodes over the network,
 /// use the `omnia-load-test` binary with actual network nodes.
-pub async fn run_load_test(
-    config: &LoadTestConfig,
-) -> Result<LoadTestResult, LoadTestError> {
+pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, LoadTestError> {
     if config.num_nodes == 0 {
-        return Err(LoadTestError::Config(
-            "num_nodes must be > 0".to_string(),
-        ));
+        return Err(LoadTestError::Config("num_nodes must be > 0".to_string()));
     }
     if config.events_per_second == 0 {
         return Err(LoadTestError::Config(
@@ -122,15 +118,12 @@ pub async fn run_load_test(
         ));
     }
     if config.duration.as_secs() == 0 {
-        return Err(LoadTestError::Config(
-            "duration must be > 0".to_string(),
-        ));
+        return Err(LoadTestError::Config("duration must be > 0".to_string()));
     }
 
     use omnia_substrate::{
-        CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId,
-        SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
-        DEFAULT_SLASH_THRESHOLD,
+        CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, SlashingEngine,
+        VectorClock, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
     };
 
     // Set up a single consensus engine with total_nodes=1 so that
@@ -143,11 +136,7 @@ pub async fn run_load_test(
         round_seed: seed,
         ..Default::default()
     };
-    let slashing = SlashingEngine::new(
-        None,
-        DEFAULT_SLASH_THRESHOLD,
-        DEFAULT_EJECTION_THRESHOLD,
-    );
+    let slashing = SlashingEngine::new(None, DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
     let mut consensus = ConsensusEngine::new(consensus_config, slashing);
     consensus.register_validator(node_id, 10_000);
     let mut graph = CausalGraph::new();
@@ -161,18 +150,17 @@ pub async fn run_load_test(
     let warmup_end = start + config.warmup_duration;
     let test_end = start + config.duration;
 
-    let event_interval =
-        Duration::from_secs_f64(1.0 / config.events_per_second as f64);
+    let event_interval = Duration::from_secs_f64(1.0 / config.events_per_second as f64);
     let mut next_event = start;
 
     // Helper: create and submit one event
     let create_and_submit = |graph: &mut CausalGraph,
-                                 consensus: &mut ConsensusEngine,
-                                 node_id: NodeId,
-                                 sequence: &mut u64,
-                                 self_parent: &mut Option<EventId>,
-                                 vector_clock: &mut VectorClock,
-                                 payload: Vec<u8>|
+                             consensus: &mut ConsensusEngine,
+                             node_id: NodeId,
+                             sequence: &mut u64,
+                             self_parent: &mut Option<EventId>,
+                             vector_clock: &mut VectorClock,
+                             payload: Vec<u8>|
      -> (u64, u64, Vec<LatencyMeasurement>) {
         let submit_time = Instant::now();
 
@@ -230,8 +218,9 @@ pub async fn run_load_test(
 
     // Warmup phase — events are processed to warm up consensus but not counted
     while Instant::now() < warmup_end {
-        let payload: Vec<u8> =
-            (0..config.event_size_bytes).map(|i| (i % 256) as u8).collect();
+        let payload: Vec<u8> = (0..config.event_size_bytes)
+            .map(|i| (i % 256) as u8)
+            .collect();
         create_and_submit(
             &mut graph,
             &mut consensus,
@@ -256,8 +245,9 @@ pub async fn run_load_test(
 
     // Measurement phase
     while Instant::now() < test_end {
-        let payload: Vec<u8> =
-            (0..config.event_size_bytes).map(|i| (i % 256) as u8).collect();
+        let payload: Vec<u8> = (0..config.event_size_bytes)
+            .map(|i| (i % 256) as u8)
+            .collect();
         let (s, f, l) = create_and_submit(
             &mut graph,
             &mut consensus,
@@ -285,11 +275,8 @@ pub async fn run_load_test(
     };
 
     // Calculate latency statistics
-    let mut latency_values: Vec<f64> =
-        latencies.iter().map(|l| l.latency_ms()).collect();
-    latency_values.sort_by(|a, b| {
-        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    let mut latency_values: Vec<f64> = latencies.iter().map(|l| l.latency_ms()).collect();
+    latency_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let avg_latency_ms = if latency_values.is_empty() {
         0.0

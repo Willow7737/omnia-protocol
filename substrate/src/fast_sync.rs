@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::NodeId;
 use crate::blake3_domain::blake3_hash_domain;
+use crate::NodeId;
 
 /// Errors that can occur during fast sync.
 #[derive(Error, Debug)]
@@ -139,10 +139,8 @@ pub fn select_target_checkpoint(
     let mut best: Option<SyncCheckpoint> = None;
 
     for ((round, _), cps) in &agreement_map {
-        if cps.len() >= supermajority {
-            if best.is_none() || *round > best.as_ref().map(|b| b.round).unwrap_or(0) {
-                best = Some((*cps[0]).clone());
-            }
+        if cps.len() >= supermajority && (*round > best.as_ref().map(|b| b.round).unwrap_or(0)) {
+            best = Some((*cps[0]).clone());
         }
     }
 

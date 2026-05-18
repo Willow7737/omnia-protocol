@@ -58,7 +58,10 @@ pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
 pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, RoundTimer};
-pub use consensus_store::{ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError, RedbConsensusStore};
+pub use consensus_store::{
+    ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
+    RedbConsensusStore,
+};
 pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use crypto_schemes::{
@@ -68,17 +71,19 @@ pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
-pub use fast_sync::{FastSyncManager, SyncCheckpoint, SyncError, SyncRequest, SyncResponse, SyncResult,
-    select_target_checkpoint};
+pub use fast_sync::{
+    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncRequest,
+    SyncResponse, SyncResult,
+};
 pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
-pub use mempool::{Mempool, MempoolError};
 pub use gossip::{
-    serialize_compressed, deserialize_compressed, GossipConfig, GossipDigest, GossipError,
+    deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError,
     GossipEvent, GossipMessage, GossipProtocol, GossipStats,
 };
 pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
+pub use mempool::{Mempool, MempoolError};
 pub use network::{
-    configure_gossipsub_scoring, check_version_compatibility, NetworkCommand, NetworkConfig,
+    check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig,
     NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
     VersionHandshake,
 };
@@ -419,24 +424,24 @@ impl Substrate {
         );
 
         // Create consensus store if persistence is configured
-        let consensus_store: Option<Arc<dyn ConsensusStore>> =
-            config.consensus_data_dir.as_ref().and_then(|dir| {
-                match RedbConsensusStore::open(dir) {
-                    Ok(store) => {
-                        tracing::info!(
-                            path = %dir.display(),
-                            "Consensus: using persistent redb store"
-                        );
-                        Some(Arc::new(store) as Arc<dyn ConsensusStore>)
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            error = %e,
-                            path = %dir.display(),
-                            "Failed to open consensus store — consensus state will not persist"
-                        );
-                        None
-                    }
+        let consensus_store: Option<Arc<dyn ConsensusStore>> = config
+            .consensus_data_dir
+            .as_ref()
+            .and_then(|dir| match RedbConsensusStore::open(dir) {
+                Ok(store) => {
+                    tracing::info!(
+                        path = %dir.display(),
+                        "Consensus: using persistent redb store"
+                    );
+                    Some(Arc::new(store) as Arc<dyn ConsensusStore>)
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        path = %dir.display(),
+                        "Failed to open consensus store — consensus state will not persist"
+                    );
+                    None
                 }
             });
 
@@ -532,12 +537,7 @@ impl Substrate {
     /// Register a single validator candidate.
     ///
     /// Convenience method for adding validators one at a time.
-    pub fn add_validator(
-        &mut self,
-        node_id: NodeId,
-        keypair: NodeKeypair,
-        stake: u64,
-    ) {
+    pub fn add_validator(&mut self, node_id: NodeId, keypair: NodeKeypair, stake: u64) {
         self.validator_candidates.insert(node_id, (keypair, stake));
     }
 

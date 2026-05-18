@@ -1080,6 +1080,11 @@ version = "0.6.0"
 criteria = "safe-to-deploy"
 notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
 
+[[exemptions.libp2p-autonat]]
+version = "0.15.0"
+criteria = "safe-to-deploy"
+notes = "Network stack. Maintained by libp2p org. AutoNAT behaviour for NAT type detection. Production-proven in Ethereum/IPFS ecosystem."
+
 [[exemptions.libp2p-connection-limits]]
 version = "0.6.0"
 criteria = "safe-to-deploy"
@@ -1089,6 +1094,11 @@ notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/
 version = "0.43.2"
 criteria = "safe-to-deploy"
 notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
+
+[[exemptions.libp2p-dcutr]]
+version = "0.14.1"
+criteria = "safe-to-deploy"
+notes = "Network stack. Maintained by libp2p org. DCutr behaviour for direct connection upgrade after relay. Production-proven in Ethereum/IPFS ecosystem."
 
 [[exemptions.libp2p-dns]]
 version = "0.44.0"
@@ -1129,6 +1139,11 @@ notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/
 version = "0.13.0"
 criteria = "safe-to-deploy"
 notes = "Network stack. Maintained by libp2p org. Production-proven in Ethereum/IPFS ecosystem."
+
+[[exemptions.libp2p-relay]]
+version = "0.21.1"
+criteria = "safe-to-deploy"
+notes = "Network stack. Maintained by libp2p org. Relay behaviour for NAT traversal. Production-proven in Ethereum/IPFS ecosystem."
 
 [[exemptions.libp2p-request-response]]
 version = "0.29.0"
@@ -1494,6 +1509,11 @@ notes = "Cryptographic primitive. SIMD intrinsics for crypto operations. Unsafe 
 version = "0.2.0"
 criteria = "safe-to-deploy"
 notes = "Cryptographic primitive. Post-quantum Dilithium signature scheme. No unsafe in Rust wrapper."
+
+[[exemptions.pqc_kyber]]
+version = "0.7.1"
+criteria = "safe-to-deploy"
+notes = "Cryptographic primitive. Kyber768 post-quantum key encapsulation mechanism. C library with Rust wrapper. Used for PQ-secure commitment binding in omnia-binding. Known timing side-channel (RUSTSEC-2023-0079); no fixed upgrade available."
 
 [[exemptions.prettyplease]]
 version = "0.2.37"
@@ -1869,6 +1889,11 @@ notes = "Embedded database. Mature beta. Used for persistent key-value storage i
 version = "1.15.1"
 criteria = "safe-to-deploy"
 notes = "Utility crate. Maintained by servo. Production-proven small vector optimization. Minimal unsafe."
+
+[[exemptions.snap]]
+version = "1.1.1"
+criteria = "safe-to-deploy"
+notes = "Utility crate. Maintained by BurntSushi. Snappy compression/decompression. Production-proven in sled embedded database. No unsafe in safe API."
 
 [[exemptions.snow]]
 version = "0.9.6"

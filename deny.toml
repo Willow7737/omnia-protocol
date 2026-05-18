@@ -5,7 +5,19 @@ yanked = "warn"
 ignore = [
     # RUSTSEC-2024-0384: REMOVED — sled was removed in Phase 2, instant is no longer in dependency tree
 
-    # RUSTSEC-2025-0055: REMOVED — tracing-subscriber patched to >=0.3.23 which fixes the issue
+    # RUSTSEC-2023-0079: pqc_kyber (KyberSlash) — division timings depending on secrets
+    # Upstream: No fixed upgrade available for 0.7.x; migration to pqc-kyber 0.8+ or ml-kem planned
+    # Risk: High severity timing side-channel in Kyber KEM; exploitable only via local/colocated timing analysis
+    # Mitigation: Omnia uses Kyber for PQ commitment binding, not direct key exchange; rate-limited API access
+    # Review date: 2026-09-01
+    "RUSTSEC-2023-0079",
+
+    # RUSTSEC-2025-0055: tracing-subscriber 0.2.x (ANSI escape injection) — pulled in by ark-relations via arkworks
+    # Upstream: arkworks hasn't upgraded to tracing-subscriber 0.3+; see https://github.com/arkworks-rs/algebra/issues/610
+    # Risk: Low severity — ANSI escape injection in logs; only affects terminal output rendering
+    # Mitigation: omnia-node uses tracing-subscriber 0.3.x directly; 0.2.x only used in arkworks test/debug paths
+    # Review date: 2026-12-01
+    "RUSTSEC-2025-0055",
 
     # RUSTSEC-2024-0388: derivative crate (unmaintained) — pulled in transitively by arkworks (ark-ec, ark-ff, etc.)
     # Upstream: https://github.com/arkworks-rs/algebra/issues/610

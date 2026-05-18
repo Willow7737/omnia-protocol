@@ -60,7 +60,7 @@ pub enum BindingError {
 
 /// Kyber768 keypair for PQ-secure key encapsulation.
 ///
-/// Wraps the fixed-size byte arrays from `pqc_kyber` into Vec<u8> for
+/// Wraps the fixed-size byte arrays from `pqc_kyber` into `Vec<u8>` for
 /// serialization flexibility. Kyber768 provides security roughly equivalent
 /// to AES-192.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -418,7 +418,7 @@ impl QuantumCommitment {
     ///
     /// This is the KEM analog of encryption: the sender calls `encapsulate`
     /// with the recipient's public key to produce a shared secret and a
-    /// ciphertext. The recipient can then call [`kyber_decapsulate`] with
+    /// ciphertext. The recipient can then call [`QuantumCommitment::kyber_decapsulate`] with
     /// their secret key and the ciphertext to recover the same shared secret.
     ///
     /// # Returns

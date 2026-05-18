@@ -34,9 +34,11 @@ use crate::PROTOCOL_IDENTIFIER;
 #[allow(unused_imports)] // PROTOCOL_VERSION used in tests
 use crate::PROTOCOL_VERSION;
 use libp2p::{
-    gossipsub::{self, IdentTopic, MessageAuthenticity, PeerScoreParams, PeerScoreThresholds, TopicScoreParams, ValidationMode},
-    identity,
-    Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
+    gossipsub::{
+        self, IdentTopic, MessageAuthenticity, PeerScoreParams, PeerScoreThresholds,
+        TopicScoreParams, ValidationMode,
+    },
+    identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -172,12 +174,14 @@ pub fn configure_gossipsub_scoring() -> (PeerScoreParams, PeerScoreThresholds) {
         invalid_message_deliveries_decay: 0.999,
     };
 
-    let mut score_params = PeerScoreParams::default();
-    score_params.topics = HashMap::from([
-        (IdentTopic::new("omnia-events").hash(), topic_params.clone()),
-        (IdentTopic::new("omnia-consensus").hash(), topic_params),
-    ]);
-    score_params.app_specific_weight = 10.0;
+    let score_params = PeerScoreParams {
+        topics: HashMap::from([
+            (IdentTopic::new("omnia-events").hash(), topic_params.clone()),
+            (IdentTopic::new("omnia-consensus").hash(), topic_params),
+        ]),
+        app_specific_weight: 10.0,
+        ..Default::default()
+    };
 
     let thresholds = PeerScoreThresholds {
         gossip_threshold: -10.0,
@@ -431,18 +435,17 @@ impl OmniaNetwork {
 
                 // Request-response for sync operations
                 let req_res = libp2p::request_response::cbor::Behaviour::new(
-                    [(StreamProtocol::new(PROTOCOL_IDENTIFIER),
-                      libp2p::request_response::ProtocolSupport::Full)],
+                    [(
+                        StreamProtocol::new(PROTOCOL_IDENTIFIER),
+                        libp2p::request_response::ProtocolSupport::Full,
+                    )],
                     libp2p::request_response::Config::default(),
                 );
 
                 // Kademlia DHT for wide-area peer discovery
                 let store = libp2p::kad::store::MemoryStore::new(local_pid);
-                let mut kademlia = libp2p::kad::Behaviour::with_config(
-                    local_pid,
-                    store,
-                    kademlia_config,
-                );
+                let mut kademlia =
+                    libp2p::kad::Behaviour::with_config(local_pid, store, kademlia_config);
                 // Add bootstrap peers to the routing table
                 for addr in &bootstrap_peers {
                     if let Some(peer_id) = extract_peer_id_from_multiaddr(addr) {
@@ -451,10 +454,7 @@ impl OmniaNetwork {
                 }
 
                 // AutoNAT for NAT detection
-                let autonat = libp2p::autonat::Behaviour::new(
-                    local_pid,
-                    autonat_config,
-                );
+                let autonat = libp2p::autonat::Behaviour::new(local_pid, autonat_config);
 
                 // DCutr for direct connection upgrade after relay
                 let dcutr = libp2p::dcutr::Behaviour::new(local_pid);
@@ -664,13 +664,10 @@ impl OmniaNetwork {
                 }
             }
             // AutoNAT event handling — log NAT status changes
-            SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(event)) => {
-                match event {
-                    libp2p::autonat::Event::StatusChanged { old, new } => {
-                        tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
-                    }
-                    _ => {}
-                }
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(
+                libp2p::autonat::Event::StatusChanged { old, new },
+            )) => {
+                tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
             }
             // DCutr event handling — log direct connection upgrades
             SwarmEvent::Behaviour(OmniaBehaviourEvent::Dcutr(event)) => {
@@ -907,8 +904,12 @@ mod tests {
         let (params, thresholds) = configure_gossipsub_scoring();
 
         // Check that topic scoring is configured for both Omnia topics
-        assert!(params.topics.contains_key(&IdentTopic::new("omnia-events").hash()));
-        assert!(params.topics.contains_key(&IdentTopic::new("omnia-consensus").hash()));
+        assert!(params
+            .topics
+            .contains_key(&IdentTopic::new("omnia-events").hash()));
+        assert!(params
+            .topics
+            .contains_key(&IdentTopic::new("omnia-consensus").hash()));
         assert_eq!(params.app_specific_weight, 10.0);
 
         // Check thresholds

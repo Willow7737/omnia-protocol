@@ -33,10 +33,7 @@ async fn main() {
     println!("Starting Omnia Protocol load test");
     println!("  Nodes: {}", config.num_nodes);
     println!("  Duration: {:?}", config.duration);
-    println!(
-        "  Target rate: {} events/sec",
-        config.events_per_second
-    );
+    println!("  Target rate: {} events/sec", config.events_per_second);
     println!("  Event size: {} bytes", config.event_size_bytes);
 
     match run_load_test(&config).await {

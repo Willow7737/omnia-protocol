@@ -141,8 +141,7 @@ pub struct RedbConsensusStore {
 // redb table definitions
 const CONSENSUS_STATE_TABLE: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("consensus_state");
-const ROUND_TABLE: redb::TableDefinition<&str, u64> =
-    redb::TableDefinition::new("consensus_round");
+const ROUND_TABLE: redb::TableDefinition<&str, u64> = redb::TableDefinition::new("consensus_round");
 
 impl RedbConsensusStore {
     /// Open (or create) a consensus store at the given path.
@@ -312,10 +311,7 @@ mod tests {
         assert_eq!(loaded.committed_events, 1000);
         assert_eq!(loaded.last_finalized_round, 40);
         assert_eq!(loaded.active_validators, vec![[2u8; 32]]);
-        assert_eq!(
-            loaded.equivocation_tracking.get(&[3u8; 32]),
-            Some(&5u64)
-        );
+        assert_eq!(loaded.equivocation_tracking.get(&[3u8; 32]), Some(&5u64));
         assert_eq!(loaded.version, 1);
     }
 
