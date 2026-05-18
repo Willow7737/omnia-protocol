@@ -75,7 +75,9 @@ cd docker
 docker compose --profile monitoring up -d
 ```
 
-2. Access Grafana at http://localhost:3000 (admin/omnia-admin)
+2. Access Grafana at http://localhost:3000 (admin / password from `docker/.env` `GRAFANA_ADMIN_PASSWORD`)
+
+**Note:** The `GRAFANA_ADMIN_PASSWORD` environment variable is required in `docker/.env`. The Grafana container will not start without it. Copy `docker/.env.example` to `docker/.env` and set a secure password.
 
 3. The Omnia Node dashboard is pre-provisioned as the home dashboard via the `GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH` environment variable in `docker/docker-compose.yml`.
 
@@ -106,6 +108,6 @@ scrape_configs:
     metrics_path: /metrics
 ```
 
-**Port note:** The Docker compose file maps each node to a distinct port (9090-9094). These ports are set via `OMNIA_HTTP_PORT` environment variables in the compose file, which override the code's default of 8080. Each Omnia node exposes metrics at `/metrics` on its HTTP port.
+**Port note:** The Docker compose file maps each node to a distinct host port (9090-9094), with each container internally using `OMNIA_HTTP_PORT=8080`. The Prometheus scrape targets use the Docker service names and internal port 8080 for inter-container communication. Each Omnia node exposes metrics at `/metrics` on its HTTP port.
 
 When adding new nodes, add them to the appropriate `static_configs` section in `prometheus.yml`.

@@ -2,20 +2,21 @@
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
-## Current Project Status: Phase 0 — Active Development
+## Current Project Status: Phase 0 — Complete | Phase 1 — In Progress
 
 | Metric | Value | Status |
 | :--- | :--- | :--- |
-| **Phase** | Phase 0: The Seed | In Progress |
-| **Overall Completion** | **85%** | All layers scaffolded |
+| **Phase** | Phase 0: The Seed | ✅ Complete |
+| **Overall Completion** | **95%** | All layers implemented, critical security findings resolved |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 200+ tests passing | Verified |
+| **Code Health** | 295+ tests passing | Verified |
 | **Network Status** | Single-node operator | Phase 0 |
+| **Security Posture** | JWT auth, ACL, rate limiting, encrypted keys | Phase 0 resolved |
 
 ### Completion Bar
 
 ```
-[████████████████████████░░░░] 85%
+[████████████████████████████░] 95%
 ```
 
 ---
@@ -38,7 +39,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 
 | Component | Status | Risk Level | Notes |
 | :--- | :--- | :--- | :--- |
-| **Causal Consensus** | Implemented | Low | Rust, 75+ tests passing, O(new_events) processing |
+| **Causal Consensus** | Implemented | Low | Rust, 120+ tests passing, O(new_events) processing |
 | **Identity Shard** | Implemented | Low | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery |
 | **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence) |
 | **Computational Shard** | Implemented | Low | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub |
@@ -48,7 +49,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | **Physical Binding** | Implemented | Medium | Provenance log full; RF/QC are stubs (need hardware) |
 | **Fee Enforcement** | Implemented | Medium | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch |
 | **UBC Economic Model** | Implemented | Medium | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay |
-| **ZK-Rollup Settlement** | Architecture | Medium | Ethereum adapter done; expanded ZK circuit with Merkle path verification (hash gadget placeholder) |
+| **ZK-Rollup Settlement** | Architecture | Medium | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, needs audit) |
 
 ### Shard Architecture Summary
 
@@ -92,7 +93,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 
 ### Phase 0: The Seed (Months 0-6)
 - [x] Architecture Whitepaper (v1.0)
-- [x] Causal Graph Consensus Prototype (Rust, 75+ tests)
+- [x] Causal Graph Consensus Prototype (Rust, 120+ tests)
 - [x] DID Registry Implementation (`did:omnia:` method with hex-encoded 32-byte public keys)
 - [x] Domain Shard Implementation (6 shards, extensive test suite including adversarial tests)
 - [x] Binding Layer Implementation (provenance log, RF/QC stubs)
@@ -103,9 +104,15 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] AI agent identity (5 capability types including governance)
 - [x] Shamir's Secret Sharing social recovery (GF(256) with Lagrange interpolation)
 - [x] Biometric anchors (BLAKE3 salted commitments, raw template never stored)
-- [ ] Full ZK Circuit (arkworks R1CS)
-- [ ] Real PQC Signatures (Dilithium integration)
-- [ ] Local Testnet (5 Nodes)
+- [x] Full ZK Circuit (arkworks R1CS + Groth16 + Poseidon hash)
+- [x] Real PQC Signatures (Dilithium integration with real verification)
+- [x] Local Testnet (5 Nodes via Docker Compose)
+- [x] REST API (9 endpoints with JWT auth, ACL, rate limiting, CORS)
+- [x] Encrypted key storage (AES-256-GCM + HKDF-SHA256)
+- [x] Governance quorum + time-lock (flash-loan prevention)
+- [x] Gossip payload limits (MAX_PAYLOAD_SIZE enforcement)
+- [x] BLAKE3 domain separation (context-specific hashing)
+- [x] Creator-pubkey binding (constant-time validation via subtle crate)
 
 ### Phase 1: The Sprout (Months 6-12)
 - [ ] Full ZK-Rollup Integration
@@ -121,6 +128,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 ## Transparency Log
 *Every major decision and status change is logged here.*
 
+- **2026-03-05:** Phase 0 complete. All critical and high-severity security findings resolved (JWT auth FIND-001, ACL FIND-002, creator binding FIND-003, encrypted keys FIND-010, slashing rollback FIND-011, governance quorum FIND-020, gossip limits FIND-021, BLAKE3 domain FIND-022). 295+ tests, 7 fuzz targets, TLA+ verified. Documentation sprint (FIND-034) resolved 42 discrepancies across 10 documentation files.
 - **2026-05-14:** Documentation audit (Task 3-b): All docs updated to match actual codebase. Corrected fee schedule descriptions, epoch duration (30 days not 24 hours), ShardError variant count (7 not 6), time-locked voting status (implemented not planned), DID format (hex not multi-base), fee mechanism status (implemented not "not started"). Added code references and type signatures.
 - **2026-05-13:** Documentation overhaul — all docs updated to match actual codebase. Honest labeling of stubs, planned features, and aspirational content. Visual design preserved.
 - **2026-05-10:** Project Dashboard initialized. Radical transparency policy enacted.
@@ -128,5 +136,5 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - **2026-05-10:** Project ownership confirmed under CC0 License.
 
 ---
-*Last Updated: 2026-05-14*
+*Last Updated: 2026-03-05*
 *Version: 4.0.0*

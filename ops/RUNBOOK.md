@@ -68,7 +68,7 @@ EOF
 omnia-node --config omnia-node.toml
 ```
 
-**Note:** In the TOML config file, `node_id` is `Option<u16>` (max 65535). In the CLI and `NodeConfig`, `node_id` is `u64`. This means TOML config files cannot specify node IDs above 65535. This is a known inconsistency in `node/src/config.rs`.
+**Note:** In the TOML config file, `node_id` is `Option<u64>` (changed from `Option<u16>` in Phase 0, FIND-013). Both CLI and TOML now support the full `u64` range. The previous `u16` limitation (max 65535) has been removed.
 
 ### Starting with Docker Compose
 
@@ -146,9 +146,14 @@ omnia-node keygen --output-dir ./keys-new
 
 The `keygen` subcommand creates two files:
 - `validator_pubkey.txt` — hex-encoded Ed25519 public key
-- `validator_key.bin` — raw binary private key (⚠️ NOT encrypted — protect this file!)
+- `validator_key.enc` (encrypted, recommended) or `validator_key.bin` (unencrypted, ⚠️ not for production) — the private key
 
-**Security Warning:** The private key file is written as raw bytes without encryption. The code comment in `node/src/main.rs` states: "in production, this would be encrypted." Ensure the output directory has restrictive permissions (`chmod 700 ./keys-new`).
+**Encryption:** When `--passphrase` is provided (or `OMNIA_KEYGEN_PASSPHRASE` env var is set), the private key is encrypted with AES-256-GCM using a key derived from the passphrase via BLAKE3 domain-separated key derivation. The encrypted file is saved as `validator_key.enc` with magic bytes `OMNIA_KEY_ENC` for identification.
+
+**Security Warning:** Without `--passphrase`, the private key file is written as raw bytes without encryption. This is NOT suitable for production. Always use `--passphrase` for production key generation:
+```sh
+omnia-node keygen --output-dir ./keys --passphrase "your-secure-passphrase"
+```
 
 ### Step 3: Rotate Keys (Programmatic)
 
@@ -601,7 +606,14 @@ All endpoints are defined in `node/src/api/mod.rs` and organized by domain:
 | GET | `/api/v1/economics/balance/{did}` | `api::economics::get_balance` | Check UBC balance |
 | POST | `/api/v1/economics/transfer` | `api::economics::transfer_ubc` | Spend UBC tokens |
 
-**⚠️ Security Note:** The REST API has **no authentication, no rate limiting, and no authorization**. All endpoints are accessible to any network client. In production, the API should be behind a reverse proxy with TLS, authentication, and rate limiting.
+**Security Note:** The REST API has **JWT authentication, rate limiting, and ACL-based authorization** (added in Phase 0, FIND-001). These are configured via environment variables:
+- `OMNIA_JWT_SECRET` — HMAC secret for JWT token validation (required; API returns 401 if not set)
+- `OMNIA_AUTHORIZED_CALLERS` — Comma-separated list of authorized caller IDs (required; API returns 401 if caller not in list)
+- `OMNIA_RATE_LIMIT_RPS` — Maximum requests per second per IP (default: unlimited; e.g., `10` for 10 RPS)
+
+Privileged operations (mint UBC, advance epoch) require an admin JWT. Admin callers are configured via `OMNIA_AUTHORIZED_ADMINS`.
+
+**Important:** For production, the API should still be behind a reverse proxy with TLS termination.
 
 ### Example API Calls
 

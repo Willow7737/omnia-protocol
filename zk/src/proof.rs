@@ -43,6 +43,21 @@ pub fn verify_groth16_proof(
 /// This is used as a stand-in for a real ZK proof commitment.
 /// The commitment is a BLAKE3 hash of the old state root, the
 /// serialized events, and the new state root.
+///
+/// # Arguments
+///
+/// * `old_root` — The 32-byte state root before the batch
+/// * `new_root` — The 32-byte state root after the batch
+/// * `batch_data` — Serialized event data for the batch
+///
+/// # Returns
+///
+/// A 32-byte BLAKE3 digest serving as the batch commitment.
+///
+/// # Security
+///
+/// The commitment binds the old state, batch data, and new state
+/// together, preventing substitution of any component.
 pub fn compute_batch_commitment(
     old_root: &[u8; 32],
     new_root: &[u8; 32],

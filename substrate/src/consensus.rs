@@ -287,10 +287,28 @@ impl ConsensusEngine {
         }
     }
 
-    /// Process a new event through consensus
+    /// Process a new event through consensus.
     ///
     /// This assigns the event to a round, checks if it's a witness,
-    /// and determines if any events can be committed.
+    /// and determines if any events can be committed. Events from
+    /// slashed validators are rejected. Equivocation is detected
+    /// and recorded automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — The event to process.
+    /// * `graph` — The causal graph for ancestry queries.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Vec<EventId>)` — IDs of newly committed events (may be empty).
+    ///
+    /// # Errors
+    ///
+    /// - [`ConsensusError::NodeSlashed`] — the event's creator has been slashed.
+    /// - [`ConsensusError::GraphError`] — a causal graph operation failed.
+    /// - [`ConsensusError::EventPruned`] — an event on the ancestry path was pruned.
+    /// - [`ConsensusError::InvariantViolated`] — an internal invariant was broken.
     pub fn process_event(
         &mut self,
         event: &Event,
@@ -419,7 +437,15 @@ impl ConsensusEngine {
         Ok(committed)
     }
 
-    /// Record an acknowledgment for an event (from gossip)
+    /// Record an acknowledgment for an event (from gossip).
+    ///
+    /// Transitions a [`ConsensusState::Pending`] event to
+    /// [`ConsensusState::Acknowledged`] if optimistic confirmation is
+    /// enabled in the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_id` — The ID of the event to acknowledge.
     pub fn record_acknowledgment(&mut self, event_id: EventId) {
         if let Some(&state) = self.event_states.get(&event_id) {
             if state == ConsensusState::Pending && self.config.optimistic_confirmation {
@@ -429,12 +455,20 @@ impl ConsensusEngine {
         }
     }
 
-    /// Get the consensus state for an event
+    /// Get the consensus state for an event.
+    ///
+    /// # Returns
+    ///
+    /// `Some(ConsensusState)` if the event has been processed, `None` otherwise.
     pub fn get_state(&self, event_id: &EventId) -> Option<ConsensusState> {
         self.event_states.get(event_id).copied()
     }
 
-    /// Check if an event is committed (final)
+    /// Check if an event is committed (final).
+    ///
+    /// # Returns
+    ///
+    /// `true` if the event's state is [`ConsensusState::Committed`].
     pub fn is_committed(&self, event_id: &EventId) -> bool {
         matches!(
             self.event_states.get(event_id),
@@ -442,7 +476,11 @@ impl ConsensusEngine {
         )
     }
 
-    /// Get the round assigned to an event
+    /// Get the round assigned to an event.
+    ///
+    /// # Returns
+    ///
+    /// `Some(round)` if the event has been processed, `None` otherwise.
     pub fn get_round(&self, event_id: &EventId) -> Option<u64> {
         self.event_rounds.get(event_id).copied()
     }
@@ -452,7 +490,11 @@ impl ConsensusEngine {
         self.committed_count
     }
 
-    /// Get current round for a node
+    /// Get the current round for a node.
+    ///
+    /// # Returns
+    ///
+    /// The node's current round, or `0` if the node has not been seen.
     pub fn node_round(&self, node_id: &NodeId) -> u64 {
         self.node_info
             .get(node_id)
@@ -460,7 +502,12 @@ impl ConsensusEngine {
             .unwrap_or(0)
     }
 
-    /// Get consensus statistics
+    /// Get consensus statistics.
+    ///
+    /// # Returns
+    ///
+    /// A [`ConsensusStats`] snapshot with event counts by state, round
+    /// progress, and threshold information.
     pub fn stats(&self) -> ConsensusStats {
         let mut by_state: HashMap<String, usize> = HashMap::new();
         for state in self.event_states.values() {
@@ -662,7 +709,11 @@ impl ConsensusEngine {
         Ok(false)
     }
 
-    /// Get all committed events
+    /// Get all committed event IDs.
+    ///
+    /// # Returns
+    ///
+    /// A vector of [`EventId`]s for all events in [`ConsensusState::Committed`].
     pub fn get_committed(&self) -> Vec<EventId> {
         self.event_states
             .iter()
@@ -671,7 +722,11 @@ impl ConsensusEngine {
             .collect()
     }
 
-    /// Get all famous witnesses
+    /// Get all famous witnesses.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `(EventId, round)` pairs for witnesses determined to be famous.
     pub fn get_famous_witnesses(&self) -> Vec<(EventId, u64)> {
         self.fame_status
             .iter()
@@ -764,7 +819,20 @@ impl ConsensusEngine {
     }
 
     /// Called in the main consensus loop to check for round timeouts.
-    /// Returns true if the round was advanced.
+    ///
+    /// If the current round has exceeded its timeout duration, advances
+    /// to the next round with a BLAKE3-derived seed and starts the timer
+    /// for the new round. If too many consecutive timeouts occur, enters
+    /// recovery mode with a halved timeout.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the round was advanced due to a timeout, `false` otherwise.
+    ///
+    /// # Security
+    ///
+    /// The new round seed is derived as `BLAKE3(old_seed || new_round)` to
+    /// ensure leader selection remains unpredictable after a timeout.
     pub fn check_round_timeout(&mut self) -> bool {
         if self.round_timer.is_timed_out() {
             let in_recovery = self.round_timer.round_timed_out();
@@ -799,6 +867,11 @@ impl ConsensusEngine {
     }
 
     /// Get the current maximum round across all nodes.
+    ///
+    /// # Returns
+    ///
+    /// The highest `current_round` among all known nodes, or `0` if no
+    /// nodes have been seen.
     pub fn current_round(&self) -> u64 {
         self.node_info
             .values()
@@ -808,7 +881,16 @@ impl ConsensusEngine {
     }
 
     /// Advance to the next round with a new leader.
-    /// Called when the current round times out.
+    ///
+    /// Called when the current round times out. Derives a new round seed
+    /// from the current seed and the next round number to ensure VRF
+    /// leader selection remains unpredictable.
+    ///
+    /// # Security
+    ///
+    /// The round seed is updated via `BLAKE3(old_seed || new_round)` to
+    /// prevent a malicious leader from predicting or influencing future
+    /// leader selections.
     pub fn advance_round(&mut self) {
         let current = self.current_round();
         let next = current + 1;

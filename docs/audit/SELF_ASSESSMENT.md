@@ -57,9 +57,9 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 - Equivocation detection via `check_equivocation()` — compares `creator + sequence + event_id`
 - Liveness monitoring via `check_liveness()` — compares inactive rounds against a threshold
 - Point accumulation uses `saturating_add` to prevent overflow
-- Persistent storage via `SlashingStore` trait with `SledSlashingStore` backend (configured automatically in `omnia-node`)
+- Persistent storage via `SlashingStore` trait with `RedbSlashingStore` backend (configured automatically in `omnia-node`). Snapshot-and-rollback via `SlashingUndoManager` (FIND-011).
 
-**Residual risk:** `persist_state()` logs a warning on failure but does not rollback the in-memory state. `record_offense()` returns a `SlashOutcome` but does not actually confiscate stake or emit a slashing event to the network.
+**Residual risk:** `persist_state()` logs a warning on failure but does not rollback the in-memory state. `record_offense()` returns a `SlashOutcome` but does not actually confiscate stake or emit a slashing event to the network. The `SlashingUndoManager` provides snapshot-and-rollback for governance appeals (FIND-011).
 
 ### 2.5 ZK Hash-Chain Stub (Sprint 2)
 
@@ -91,22 +91,17 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 
 These risks are known but not yet mitigated. They are listed in approximate order of severity.
 
-### 3.1 REST API Has No Security Controls (Critical)
+### 3.1 REST API Security (Critical) → ✅ Resolved (FIND-001)
 
-The `omnia-node` HTTP API (`node/src/api/`) exposes 9 endpoints with no security:
-- **No authentication** — no API keys, JWT, TLS client certs, or basic auth
-- **No rate limiting** — no per-IP or per-endpoint request throttling
-- **No authorization** — any client can mint UBC, create proposals, transfer tokens, submit events
-- **No CORS** — browser-based attacks are possible
-- **No TLS** — all traffic is plaintext on the axum server
+The `omnia-node` HTTP API (`node/src/api/`) previously exposed 9 endpoints with no security controls. This has been addressed in Phase 0:
 
-An attacker with network access can:
-- Mint unlimited UBC via `POST /api/v1/shards/economics/operations` with `{"operation": "mint"}`
-- Drain any registered DID's balance via `POST /api/v1/economics/transfer`
-- Flood the network with events via `POST /api/v1/events`
-- Manipulate governance via `POST /api/v1/governance/proposals` and `POST /api/v1/governance/vote`
+- **JWT authentication** — `node/src/api/auth.rs` (645 lines) validates JWT tokens via `jsonwebtoken` crate. Configured via `OMNIA_JWT_SECRET` env var.
+- **AuthorizedCallers ACL** — Only registered caller IDs can access the API. Configured via `OMNIA_AUTHORIZED_CALLERS` env var.
+- **Rate limiting** — Per-IP token-bucket rate limiter. Configured via `OMNIA_RATE_LIMIT_RPS` env var.
+- **CORS** — Enforced via `tower-http` CORS middleware.
+- **Privileged operations** — Mint UBC and AdvanceEpoch require admin JWT (`OMNIA_AUTHORIZED_ADMINS`).
 
-**Planned mitigation:** Add API authentication (JWT or API keys), rate limiting (tower-governor or similar), HTTPS via reverse proxy, and authorization checks on privileged operations.
+**Residual risk:** No TLS termination on the node itself — a reverse proxy is still needed for production. The JWT secret must be kept secure. No token revocation mechanism.
 
 ### 3.2 ZK Circuit Is Minimal (Critical) → 🟢 Addressed
 
@@ -123,11 +118,15 @@ The original `RollupCircuit` enforced only `new_state_root == expected_new_state
 
 **Deviation from reference:** The round constants are derived via BLAKE3 rather than using the Filecoin/Neptune reference constants. The code includes warning comments documenting this deviation. This is a deliberate choice for simplicity, but auditors should verify that the BLAKE3 derivation does not introduce weaknesses in the round function.
 
-### 3.3 Unencrypted Private Key Storage (High)
+### 3.3 Unencrypted Private Key Storage (High) → ✅ Resolved (FIND-010)
 
-The `keygen` CLI subcommand (`node/src/main.rs::run_keygen()`) writes the Ed25519 private key as raw binary to `validator_key.bin` without encryption. The code comment says: "in production, this would be encrypted."
+The `keygen` CLI subcommand now supports encrypted key output:
+- With `--passphrase` (or `OMNIA_KEYGEN_PASSPHRASE` env var), the private key is encrypted with AES-256-GCM using a key derived from the passphrase via BLAKE3 domain-separated key derivation, and saved as `validator_key.enc`.
+- Without `--passphrase`, keys are written unencrypted as `validator_key.bin` with a prominent warning.
+- The `EncryptedKeyStore` module (`substrate/src/keystore.rs`, 856 lines) provides encrypted key storage with AES-256-GCM + HKDF-SHA256.
+- The `load_encrypted_key()` function in `node/src/main.rs` decrypts keys for runtime use.
 
-**Remaining gap:** No encryption of the private key file; no passphrase protection; no HSM integration; file permissions are not set by the tool.
+**Residual risk:** Without `--passphrase`, unencrypted key output is still the default behavior. No HSM integration. No automatic file permission enforcement.
 
 ### 3.4 No Formal Verification Beyond TLA+ Model Checking (High)
 
@@ -145,9 +144,9 @@ Groth16 requires a circuit-specific trusted setup (phase 2). If the setup ceremo
 
 **Current status:** The `omnia-node` binary includes `setup-contribute` and `setup-verify` subcommands for managing the Powers of Tau ceremony. These support local simulation only — no multi-party network coordination.
 
-### 3.7 Slashing Persistence Failure Handling (Medium)
+### 3.7 Slashing Persistence Failure Handling (Medium) → 🟢 Partially Addressed (FIND-011)
 
-`RedbSlashingStore::persist_state()` logs a warning on failure but does not rollback the in-memory state. A persistence failure leaves the in-memory and on-disk states inconsistent. Additionally, there is no on-chain record of slashing events for other nodes to verify.
+`RedbSlashingStore::persist_state()` logs a warning on failure but does not rollback the in-memory state. A persistence failure leaves the in-memory and on-disk states inconsistent. However, the `SlashingUndoManager` (`substrate/src/slashing_undo.rs`, 508 lines) now provides snapshot-and-rollback capability for governance appeals (FIND-011). Additionally, there is no on-chain record of slashing events for other nodes to verify.
 
 ### 3.8 Redb Database Reliability (Low)
 
@@ -155,9 +154,9 @@ Both `RedbSlashingStore` and `RedbNonceStore` use redb, which is a production-qu
 
 **Risks:** Persistence failure leaves in-memory and on-disk states inconsistent. No on-chain record of slashing events for cross-node verification. No automated backup or database repair tooling.
 
-### 3.9 TOML Config node_id Type Mismatch (Low)
+### 3.9 TOML Config node_id Type Mismatch (Low) → ✅ Resolved (FIND-013)
 
-`NodeConfigFile::node_id` is `Option<u16>` but `NodeConfig::node_id` is `u64`. TOML config files cannot specify node IDs above 65535, while CLI flags accept any u64 value. This inconsistency could cause confusion for operators.
+`NodeConfigFile::node_id` was `Option<u16>` but `NodeConfig::node_id` was `u64`. This has been fixed: `NodeConfigFile::node_id` is now `Option<u64>`, matching the CLI and `NodeConfig` types. TOML config files can now specify node IDs up to `u64::MAX`.
 
 ---
 
@@ -165,7 +164,7 @@ Both `RedbSlashingStore` and `RedbNonceStore` use redb, which is a production-qu
 
 ### 4.1 Unit and Integration Tests
 
-The protocol has 278+ tests across 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
+The protocol has 295+ tests across 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
 
 | Crate | Test categories |
 |---|---|
@@ -279,13 +278,13 @@ Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 | Consensus safety | Partially verified (TLA+ bounded, property tests, chaos tests) | Improving |
 | Cryptographic correctness | Real implementations (not stubs), Poseidon hash in ZK circuit | Improving |
 | Economic security | Fee enforcement + slashing + persistence available | Improving |
-| Network security | Gossip bounds exist, no rate limiting | Needs work |
-| **API security** | **No authentication, no rate limiting, no authorization** | **Needs urgent work** |
+| Network security | Gossip bounds exist, rate limiting on API (FIND-001) | Improving |
+| **API security** | **JWT auth + ACL + rate limiting + CORS (FIND-001)** | **Resolved** |
 | Input validation | Hash + signature checks, nonce replay protection | Good |
-| Authorization | No ACL for privileged operations | Needs work |
+| Authorization | ACL for privileged operations via AuthorizedCallers + admin JWT | Resolved (FIND-001) |
 | Persistence | RedbSlashingStore + RedbNonceStore; redb is production-quality | ✅ Resolved |
-| Key management | Unencrypted private key files | Needs work |
-| Test coverage | 278+ tests, 7 fuzz targets, chaos test framework | Adequate |
+| Key management | EncryptedKeyStore (AES-256-GCM); keygen supports --passphrase | ✅ Resolved (FIND-010) |
+| Test coverage | 295+ tests, 7 fuzz targets, chaos test framework | Adequate |
 | Dependency health | cargo-audit configured, redb is production-quality | Monitoring |
 
 ---
@@ -294,13 +293,13 @@ Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 
 Based on our self-assessment, we believe the following areas would benefit most from external scrutiny:
 
-1. **REST API security** — The HTTP API has no auth, no rate limiting, and no authorization. Is this acceptable for a development/testnet environment? What is the minimum viable security for mainnet?
-2. **ZK circuit soundness** — Is the simplified field-addition hash placeholder a fundamental design flaw or an acceptable starting point? What constraints are minimally required for rollup soundness?
+1. **REST API security implementation** — JWT auth, AuthorizedCallers ACL, rate limiting, and CORS are now implemented (FIND-001). Auditors should review the `auth.rs` implementation for correctness, edge cases, and configuration security. Is the JWT secret handling robust? Are there timing attack vectors in the authorization check?
+2. **ZK circuit soundness** — The `ExpandedRollupCircuit` now uses Poseidon hash with BLAKE3-derived round constants. Is this BLAKE3 derivation safe, or should the Filecoin/Neptune reference constants be used? Are there other constraints minimally required for rollup soundness?
 3. **Causal graph insertion invariants** — Are there edge cases where `CausalGraph::insert()` could violate the DAG invariant (e.g., orphan events, cycles, hash collisions)?
 4. **Slashing engine correctness** — Are there scenarios where slash points can be avoided, reset, or exploited (beyond the known persistence failure handling)?
 5. **Fee enforcement bypass** — Can the fee/nonce/replay protection in `ShardRouter` be circumvented through crafted events or cross-shard messages?
 6. **Hybrid PQC verification** — Is the `ClassicalOnly`/`Hybrid`/`PostQuantum` phase transition logic correct? Can a commitment that should fail in one phase be accepted in another?
 7. **Consensus engine edge cases** — What happens at threshold boundaries (exactly 2/3 of nodes, exactly f Byzantine nodes)? Are there off-by-one errors?
 8. **Redb persistence reliability** — What happens when redb databases are corrupted, disk is full, or power fails during a write? What is the blast radius? redb uses ACID transactions and a WAL, which should provide crash safety.
-9. **Key management** — Is the unencrypted keygen output acceptable for Phase 0? What key management solution is needed for production?
+9. **Key management** — The `keygen` subcommand now supports `--passphrase` for AES-256-GCM encryption, and `EncryptedKeyStore` provides encrypted storage. Is the key derivation (BLAKE3 domain-separated) robust? Should HSM integration be required for production?
 10. **Node ID derivation** — The chaos tests use `blake3(pubkey)` for node IDs, matching `Event::sign_with_keypair()`. But `NodeConfig::node_id_bytes()` uses `node_id.to_le_bytes()`. Are these consistent?

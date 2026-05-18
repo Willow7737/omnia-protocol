@@ -3,15 +3,33 @@ unmaintained = "workspace"
 unsound = "workspace"
 yanked = "warn"
 ignore = [
-    "RUSTSEC-2024-0384",  # instant — unmaintained, transitive dep via sled
-    "RUSTSEC-2024-0388",  # derivative — unmaintained, transitive dep via arkworks
-    "RUSTSEC-2024-0436",  # paste — unmaintained, transitive dep via netlink-packet-core
-    "RUSTSEC-2024-0437",  # protobuf <3.7.2 uncontrolled recursion — pinned at 2.x by libp2p transitives
-    "RUSTSEC-2025-0055",  # tracing-subscriber ANSI escape injection — already at 0.3.23 (patched >=0.3.20)
-    "RUSTSEC-2025-0057",  # ring — unmaintained audit classification, no fix available
-    "RUSTSEC-2025-0141",  # bincode v1 — unmaintained, transitive dep via ark-serialize; direct deps use bincode v3
-    "RUSTSEC-2026-0118",  # hickory-proto NSEC3 unbounded loop — pinned at 0.25.x by libp2p, fix needs 0.26+
-    "RUSTSEC-2026-0119",  # hickory-proto O(n^2) name compression — pinned at 0.25.x by libp2p, fix needs 0.26+
+    # RUSTSEC-2024-0384: instant — unmaintained, transitive dep via sled
+    # Review by: 2026-09-01 — sled is optional (migration feature only); remove once sled→redb migration is complete
+    "RUSTSEC-2024-0384",
+    # RUSTSEC-2024-0388: derivative — unmaintained, transitive dep via arkworks
+    # Review by: 2026-09-01 — check if arkworks has removed derivative dependency
+    "RUSTSEC-2024-0388",
+    # RUSTSEC-2024-0436: paste — unmaintained, transitive dep via netlink-packet-core
+    # Review by: 2026-09-01 — check if netlink crates have dropped paste proc-macro
+    "RUSTSEC-2024-0436",
+    # RUSTSEC-2024-0437: protobuf <3.7.2 uncontrolled recursion — pinned at 2.x by libp2p transitives
+    # Review by: 2026-09-01 — check if libp2p has migrated to protobuf 3.x+
+    "RUSTSEC-2024-0437",
+    # RUSTSEC-2025-0055: tracing-subscriber ANSI escape injection — already patched at 0.3.23 (>=0.3.20)
+    # REVIEWED 2026-05-18: Confirmed patched; removed from ignore list
+    # "RUSTSEC-2025-0055",
+    # RUSTSEC-2025-0057: ring — unmaintained audit classification, no fix available
+    # Review by: 2026-11-01 — ring is actively maintained; upstream RUSTSEC classification dispute
+    "RUSTSEC-2025-0057",
+    # RUSTSEC-2025-0141: bincode v1 — unmaintained, transitive dep via ark-serialize; direct deps use bincode v3
+    # Review by: 2026-09-01 — check if ark-serialize has migrated off bincode v1
+    "RUSTSEC-2025-0141",
+    # RUSTSEC-2026-0118: hickory-proto NSEC3 unbounded loop — pinned at 0.25.x by libp2p, fix needs 0.26+
+    # Review by: 2026-09-01 — check if libp2p has upgraded to hickory-proto 0.26+
+    "RUSTSEC-2026-0118",
+    # RUSTSEC-2026-0119: hickory-proto O(n^2) name compression — pinned at 0.25.x by libp2p, fix needs 0.26+
+    # Review by: 2026-09-01 — check if libp2p has upgraded to hickory-proto 0.26+
+    "RUSTSEC-2026-0119",
 ]
 
 [licenses]

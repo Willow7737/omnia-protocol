@@ -150,7 +150,32 @@ pub struct EventBatch {
 }
 
 impl Event {
-    /// Create a new event (without signature — must be signed separately)
+    /// Create a new event (without signature — must be signed separately).
+    ///
+    /// The event ID is computed as the SHA-256 hash of all fields except the
+    /// signature. The timestamp is set to the current system time. The event
+    /// is created with [`EventStatus::Pending`] and zero acknowledgment count.
+    ///
+    /// Call [`sign_with_keypair()`](Self::sign_with_keypair) after creation
+    /// to attach a cryptographic signature and derive the creator identity.
+    ///
+    /// # Arguments
+    ///
+    /// * `creator` — The node ID of the event creator (overridden by `sign_with_keypair`)
+    /// * `sequence` — Monotonic sequence number from this creator (0-indexed)
+    /// * `vector_clock` — Causal state at the time of creation
+    /// * `self_parent` — Hash of the creator's previous event (`None` for genesis)
+    /// * `other_parent` — Hash of an event received from another node (`None` for genesis)
+    /// * `payload` — Application-specific data attached to this event
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use omnia_substrate::{Event, VectorClock};
+    /// let vc = VectorClock::with_node(creator, 1);
+    /// let event = Event::new(creator, 0, vc, None, None, vec![]);
+    /// assert!(event.is_root());
+    /// ```
     pub fn new(
         creator: NodeId,
         sequence: u64,
@@ -183,7 +208,15 @@ impl Event {
         event
     }
 
-    /// Create a genesis event (first event in the network)
+    /// Create a genesis event (first event in the network).
+    ///
+    /// A genesis event has sequence 0, no parents, and a vector clock with
+    /// only the creator's entry set to 1. It is the root of the DAG.
+    ///
+    /// # Arguments
+    ///
+    /// * `creator` — The node ID of the genesis event creator
+    /// * `payload` — Application-specific data attached to this event
     pub fn genesis(creator: NodeId, payload: Payload) -> Self {
         let vector_clock = VectorClock::with_node(creator, 1);
         Self::new(creator, 0, vector_clock, None, None, payload)
@@ -248,7 +281,18 @@ impl Event {
     }
 
     /// Verify the event's Ed25519 signature.
-    /// Returns true only if the signature is cryptographically valid.
+    ///
+    /// Returns `true` only if the signature is cryptographically valid
+    /// against the stored `creator_pubkey`. Returns `false` if the public
+    /// key or signature bytes are malformed.
+    ///
+    /// # Security
+    ///
+    /// This verifies the signature over the event ID (hash). A valid
+    /// signature proves that the holder of the private key produced or
+    /// approved this event. However, this check alone does **not** verify
+    /// the creator-identity binding — use [`validate()`](Self::validate)
+    /// for full validation including the binding check.
     pub fn verify_signature(&self) -> bool {
         let Ok(pubkey) = NodePublicKey::from_bytes(&self.creator_pubkey) else {
             return false;
@@ -380,6 +424,11 @@ impl Event {
     /// The output is prefixed with a wire-format version byte to enable
     /// future format migrations. The current format uses `postcard` for
     /// deterministic, `no_std`-compatible encoding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventValidationError::SerializationError`] if postcard
+    /// serialization fails.
     pub fn to_bytes(&self) -> Result<Vec<u8>, EventValidationError> {
         crate::wire_format::serialize_with_version(self)
             .map_err(|_| EventValidationError::SerializationError)
@@ -388,6 +437,11 @@ impl Event {
     /// Deserialize event from compact binary bytes.
     ///
     /// Checks the wire-format version byte before deserializing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventValidationError::DeserializationError`] if the version
+    /// byte is unsupported or postcard deserialization fails.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EventValidationError> {
         crate::wire_format::deserialize_with_version(bytes)
             .map_err(|e| EventValidationError::DeserializationError(format!("{e}")))

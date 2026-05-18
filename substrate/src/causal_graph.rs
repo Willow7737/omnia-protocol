@@ -154,7 +154,20 @@ impl CausalGraph {
         }
     }
 
-    /// Insert a new event into the graph
+    /// Insert a new event into the graph.
+    ///
+    /// Validates the event hash, checks that parents exist (rejecting
+    /// pruned parents), checks for cycles, and updates all internal
+    /// indexes (tips, creator index, sequence tracking, frontier).
+    ///
+    /// # Errors
+    ///
+    /// - [`CausalGraphError::DuplicateEvent`] — an event with the same ID already exists.
+    /// - [`CausalGraphError::InvalidEvent`] — event hash does not match content.
+    /// - [`CausalGraphError::MissingParent`] — a referenced parent does not exist.
+    /// - [`CausalGraphError::EventPruned`] — a referenced parent has been pruned.
+    /// - [`CausalGraphError::CycleDetected`] — adding this event would create a cycle.
+    /// - [`CausalGraphError::MaxDepthExceeded`] — depth computation exceeded the limit.
     pub fn insert(&mut self, event: Event) -> Result<(), CausalGraphError> {
         let event_id = event.id;
 
@@ -616,7 +629,17 @@ impl CausalGraph {
         Ok(result)
     }
 
-    /// Find events that are in our graph but not in the given set
+    /// Find events that are in our graph but not in the given set.
+    ///
+    /// Useful for computing sync diffs between nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `known_events` — Set of event IDs the remote peer already has.
+    ///
+    /// # Returns
+    ///
+    /// References to events not in `known_events`.
     pub fn diff(&self, known_events: &HashSet<EventId>) -> Vec<&Event> {
         self.events
             .values()
@@ -624,7 +647,15 @@ impl CausalGraph {
             .collect()
     }
 
-    /// Find events newer than a given vector clock
+    /// Find events newer than a given vector clock.
+    ///
+    /// # Arguments
+    ///
+    /// * `clock` — The vector clock to compare against.
+    ///
+    /// # Returns
+    ///
+    /// References to events whose vector clock happened after `clock`.
     pub fn since(&self, clock: &VectorClock) -> Vec<&Event> {
         self.events
             .values()
@@ -729,6 +760,13 @@ impl CausalGraph {
     /// This is the state commitment posted to Ethereum L1 by the ZK-rollup.
     /// The root changes whenever a new event is inserted, providing a
     /// cryptographic fingerprint of the entire L2 state.
+    ///
+    /// # Security
+    ///
+    /// The Merkle root uses domain-separated BLAKE3 hashing (prefix
+    /// `b"omnia-state-root"`) to prevent cross-context collisions. Any
+    /// tampering with event data will produce a different root with
+    /// negligible probability of collision.
     pub fn state_root(&self) -> [u8; 32] {
         let mut ids: Vec<&EventId> = self.events.keys().collect();
         if ids.is_empty() {
@@ -765,9 +803,20 @@ impl CausalGraph {
     }
 
     /// Verify that an event is included in the current state root.
+    ///
     /// Returns the Merkle proof path (sibling hashes at each level).
+    /// Each tuple is `(sibling_hash, sibling_is_right)`.
     ///
     /// Used by ZK circuits to prove event inclusion on L1.
+    ///
+    /// # Returns
+    ///
+    /// `Some(proof)` if the event exists in the graph, `None` if not found.
+    ///
+    /// # Security
+    ///
+    /// The proof can be verified against the [`state_root()`](Self::state_root)
+    /// output to confirm event inclusion without revealing the full graph.
     pub fn merkle_proof(&self, event_id: &EventId) -> Option<Vec<([u8; 32], bool)>> {
         let mut ids: Vec<&EventId> = self.events.keys().collect();
         ids.sort();
@@ -991,7 +1040,15 @@ impl CausalGraph {
         self.events.contains_key(id) || self.pruned_events.contains_key(id)
     }
 
-    /// Verify graph integrity
+    /// Verify graph integrity.
+    ///
+    /// Checks that all parent references resolve, all event hashes are
+    /// valid, and no cycles exist in the graph.
+    ///
+    /// # Errors
+    ///
+    /// - [`CausalGraphError::IntegrityError`] — a dangling parent reference,
+    ///   invalid hash, or cycle was detected.
     pub fn verify_integrity(&self) -> Result<(), CausalGraphError> {
         for (id, event) in &self.events {
             if let Some(sp) = event.self_parent {

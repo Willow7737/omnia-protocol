@@ -7,7 +7,46 @@
 
 ## Overview
 
-This document covers the operational aspects of running Omnia Protocol nodes, including database considerations, configuration, and deployment guidance.
+This document covers the operational aspects of running Omnia Protocol nodes, including database considerations, configuration, CLI subcommands, REST API endpoints, and deployment guidance.
+
+---
+
+## CLI Subcommands
+
+The `omnia-node` binary supports the following subcommands:
+
+| Subcommand | Description | Key Flags |
+|---|---|---|
+| `run` | Run the node (default) | All `--node-id`, `--http-port`, etc. flags |
+| `keygen` | Generate validator keypair | `--output-dir`, `--passphrase` |
+| `setup-contribute` | Contribute to Powers of Tau ceremony | `--degree`, `--min-participants`, `--seed` |
+| `setup-verify` | Verify Powers of Tau ceremony | `--degree`, `--num-contributions` |
+| `snapshot` | Take a state snapshot | `--output` |
+| `restore` | Restore from a snapshot | `--input` |
+
+All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMNIA_NODE_ID=1`).
+
+---
+
+## REST API Endpoints
+
+The node exposes 9 REST API endpoints under `/api/v1/`:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Node liveness probe |
+| GET | `/metrics` | Prometheus metrics |
+| GET | `/api/v1/node/info` | Node identity and status |
+| GET | `/api/v1/node/peers` | Connected peer list |
+| POST | `/api/v1/events` | Submit a new event |
+| GET | `/api/v1/events/{id}` | Retrieve event by ID |
+| POST | `/api/v1/shards/{shard_id}/operations` | Submit shard operation |
+| POST | `/api/v1/governance/proposals` | Create governance proposal |
+| POST | `/api/v1/governance/vote` | Cast quadratic-weighted vote |
+| GET | `/api/v1/economics/balance/{did}` | Check UBC balance |
+| POST | `/api/v1/economics/transfer` | Spend UBC tokens |
+
+**Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
 ---
 

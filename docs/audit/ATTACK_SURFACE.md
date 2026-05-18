@@ -76,32 +76,32 @@ All data arriving over the network is untrusted. The libp2p gossip layer is the 
 
 User-submitted data enters the protocol through event payloads, shard operations, and the REST API. These inputs are deserialized, validated, and routed to shard handlers.
 
-### 3.1 HTTP REST API (NEW)
+### 3.1 HTTP REST API → ✅ Resolved (FIND-001)
 
-**Description:** The `omnia-node` binary exposes a REST API via axum with 9+ endpoints under `/api/v1/`. There is no authentication, no rate limiting, no CORS configuration, and no authorization on any endpoint. Any network client can submit events, mint UBC, create governance proposals, cast votes, transfer tokens, and submit shard operations.
+**Description:** The `omnia-node` binary exposes a REST API via axum with 9+ endpoints under `/api/v1/`. Phase 0 (FIND-001) added JWT authentication, AuthorizedCallers ACL, per-IP rate limiting, and CORS middleware.
 
-**Severity:** Critical
+**Previous severity:** Critical
 
-**Impact:** An attacker with network access to the HTTP port can:
+**Previous impact:** An attacker with network access to the HTTP port could:
 - Submit unlimited events (no rate limiting, no auth)
 - Mint UBC to any DID via `POST /api/v1/shards/economics/operations` with `{"operation": "mint"}`
 - Spend any registered DID's UBC via `POST /api/v1/economics/transfer`
 - Create governance proposals and cast votes with arbitrary DIDs
 - Submit shard operations for any shard
 
-**Current mitigation:**
+**Current mitigations (Phase 0):**
+- **JWT authentication** — `node/src/api/auth.rs` validates JWT tokens via `jsonwebtoken`; configured via `OMNIA_JWT_SECRET`
+- **AuthorizedCallers ACL** — Only registered caller IDs can access the API; configured via `OMNIA_AUTHORIZED_CALLERS`
+- **Rate limiting** — Per-IP token-bucket rate limiter; configured via `OMNIA_RATE_LIMIT_RPS`
+- **CORS** — Enforced via `tower-http` CORS middleware
+- **Admin JWT** — Privileged operations (MintUbc, AdvanceEpoch) require admin JWT; configured via `OMNIA_AUTHORIZED_ADMINS`
 - Payload size check against `omnia_substrate::MAX_PAYLOAD_SIZE` (413 response if exceeded)
 - Invalid hex payload returns 400
-- Economics operations return errors for unregistered DIDs or insufficient balance
-- Governance votes require registered stake
 
 **Remaining gaps:**
-- **No authentication** — no API keys, no JWT, no TLS client certs
-- **No rate limiting** — no per-IP or per-endpoint request throttling
-- **No authorization** — any client can perform any operation (including minting)
-- **No CORS headers** — browser-based attacks are possible
-- **No HTTPS** — all API traffic is plaintext (no TLS on the axum server)
-- **Mint is permissionless** — the `mint` economics operation can be called by any API client
+- **No HTTPS** — all API traffic is plaintext (no TLS on the axum server; reverse proxy required)
+- **No token revocation** — JWT tokens cannot be revoked before expiry
+- **JWT secret management** — `OMNIA_JWT_SECRET` must be kept secure; rotation not automated
 
 ### 3.2 Event Payloads
 
@@ -117,8 +117,8 @@ User-submitted data enters the protocol through event payloads, shard operations
 - Each shard's `validate()` method checks operation-specific constraints before `process_event()`
 
 **Remaining gaps:**
-- `MAX_PAYLOAD_SIZE` is enforced at the HTTP layer but not at the gossip/event level
-- No authorization checks on shard operations (e.g., only the treasury should be able to mint)
+- `MAX_PAYLOAD_SIZE` is enforced at both the HTTP layer and gossip layer (FIND-021)
+- Authorization checks on shard operations via admin JWT for privileged ops (FIND-001)
 - `postcard::from_bytes()` on cross-shard message payloads processes unvalidated data
 
 ### 3.3 Shard Operations
@@ -135,9 +135,9 @@ User-submitted data enters the protocol through event payloads, shard operations
 - Identity operations require Ed25519 signature verification via the parent event
 
 **Remaining gaps:**
-- No access control list (ACL) for privileged operations (mint, burn, governance)
+- ACL for privileged operations is now implemented via admin JWT (FIND-001/FIND-002) — mint and advance_epoch require admin authorization
 - No per-operation gas or computational limit
-- `EconomicsOp::MintUbc` has no authorization check — any event creator can trigger a mint
+- `EconomicsOp::MintUbc` requires admin JWT authorization (FIND-001/FIND-002) — only admin callers can mint
 
 ### 3.4 Governance Proposals
 
@@ -386,7 +386,7 @@ The primary data flow through the protocol is:
 
 ```
 Event (user input / API)
-  → HTTP API (no auth, no rate limit)        [NEW]
+  → HTTP API (JWT auth + ACL + rate limit + CORS)  [FIND-001]
   → Gossip (network broadcast)
     → CausalGraph::insert() (graph storage + hash/signature verification)
       → ConsensusEngine (fame decision + finality)
@@ -415,25 +415,28 @@ Each arrow represents a trust boundary crossing. Data flows from untrusted (left
 **Severity:** High
 **Description:** A shard operator (or any event creator) can submit operations that mutate shard state. Without authorization checks, a malicious operator can mint tokens, modify balances, or corrupt identity state.
 **Current mitigation:** Business rule validation in each shard's `validate()` method; signature verification on parent events.
-**Remaining gaps:** No ACL for privileged operations; no admin/superuser role separation; `EconomicsOp::MintUbc` can be triggered by any event creator.
+**Remaining gaps:** ACL for privileged operations is implemented via admin JWT (FIND-001/FIND-002); `EconomicsOp::MintUbc` requires admin authorization; `AdvanceEpoch` requires admin authorization.
 
-### 8.3 API Client → Arbitrary Operations (NEW)
+### 8.3 API Client → Arbitrary Operations → ✅ Resolved (FIND-001)
 
-**Severity:** Critical
-**Description:** Any network client that can reach the HTTP API can submit arbitrary events, mint UBC, create governance proposals, and perform shard operations. There is no authentication or authorization on any endpoint.
-**Current mitigation:** Business rule validation (e.g., insufficient balance returns error, unregistered DID returns 404).
-**Remaining gaps:** No API authentication; no rate limiting; no authorization; no TLS.
+**Previous severity:** Critical
+**Description:** Any network client that could reach the HTTP API was able to submit arbitrary events, mint UBC, create governance proposals, and perform shard operations without authentication or authorization.
+**Current mitigations (Phase 0):** JWT authentication, AuthorizedCallers ACL, per-IP rate limiting, admin JWT for privileged operations (FIND-001).
+**Remaining gaps:** No TLS on the node itself (reverse proxy needed); no JWT token revocation; JWT secret must be kept secure.
 
 ---
 
 ## 9. Key Management (NEW)
 
-### 9.1 Unencrypted Private Keys
+### 9.1 Unencrypted Private Keys → ✅ Resolved (FIND-010)
 
-**Severity:** High
-**Description:** The `keygen` CLI subcommand (`node/src/main.rs::run_keygen()`) writes the Ed25519 private key as raw binary to `validator_key.bin` without encryption. The code comment states: "in production, this would be encrypted."
-**Current mitigation:** The output directory can be set via `--output-dir`.
-**Remaining gaps:** No encryption of the private key file; no passphrase protection; no hardware security module (HSM) integration; file permissions are not set by the tool.
+**Previous severity:** High
+**Description:** The `keygen` CLI subcommand previously wrote the Ed25519 private key as raw binary to `validator_key.bin` without encryption.
+**Current mitigations (Phase 0):**
+- With `--passphrase` (or `OMNIA_KEYGEN_PASSPHRASE` env var), the private key is encrypted with AES-256-GCM using a key derived from the passphrase via BLAKE3 domain-separated key derivation, and saved as `validator_key.enc`.
+- The `EncryptedKeyStore` module (`substrate/src/keystore.rs`, 856 lines) provides encrypted key storage with AES-256-GCM + HKDF-SHA256.
+- The `load_encrypted_key()` function decrypts keys for runtime use.
+**Remaining gaps:** Without `--passphrase`, unencrypted key output is still the default (with prominent warning). No HSM integration. No automatic file permission enforcement.
 
 ### 9.2 Trusted Setup Ceremony
 
@@ -466,19 +469,19 @@ Each arrow represents a trust boundary crossing. Data flows from untrusted (left
 
 | Attack Surface | Severity | Critical Gaps |
 |---|---|---|
-| Gossip message injection | Critical | No rate limiting, no payload size limit |
+| Gossip message injection | Medium | Payload size limit enforced (FIND-021); no rate limiting |
 | Bootstrap peer eclipse | High | No peer diversity checks |
-| **HTTP REST API** | **Critical** | **No authentication, no rate limiting, no authorization** |
-| Event payload deserialization | Critical | No authorization ACL for shard ops |
-| Ed25519 signature bypass | Critical | `creator` ≠ `creator_pubkey` binding gap |
+| **HTTP REST API** | **Medium** | **JWT auth + ACL + rate limiting (FIND-001); no TLS, no token revocation** |
+| Event payload deserialization | Medium | Authorization ACL via admin JWT for privileged ops (FIND-001) |
+| Ed25519 signature bypass | Medium | `creator` ↔ `creator_pubkey` binding with constant-time validation (FIND-003) |
 | Dilithium verification | Critical | No constant-time guarantee |
-| Groth16 proof soundness | High | Circuit uses simplified hash placeholder |
+| Groth16 proof soundness | Medium | Poseidon hash with BLAKE3-derived round constants (needs audit vs Filecoin/Neptune) |
 | Causal graph insertion | Critical | No graph size limit, no GC |
 | Consensus state machine | Critical | No view change, bounded TLA+ model |
-| Slashing enforcement | High | No fund confiscation, persistence warning on failure |
-| UBC minting | High | Permissionless epoch advancement, permissionless mint API |
+| Slashing enforcement | Medium | Snapshot-and-rollback (FIND-011); no fund confiscation |
+| UBC minting | Medium | Admin JWT required for mint + epoch advance (FIND-001/FIND-002) |
 | Shard state mutation | High | No atomicity, no rollback |
 | Validator Sybil attack | Critical | No Sybil resistance, no staking |
-| **Unencrypted key files** | **High** | **No encryption, no passphrase, no HSM** |
+| **Encrypted key files** | **Medium** | **AES-256-GCM with --passphrase (FIND-010); unencrypted default without --passphrase** |
 | **Trusted setup ceremony** | **High** | **No multi-party coordination, deterministic seed risk** |
-| **Sled alpha quality** | **Medium** | **No crash consistency, no migration path** |
+| **redb persistence** | **Low** | **Production-quality redb with ACID transactions (replaced sled)** |

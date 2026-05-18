@@ -43,7 +43,7 @@ Omnia is a five-layer distributed system designed to enable trustless coordinati
 └─────────────────────────────────────────┘
 ```
 
-**Implementation status:** All five core layers are implemented and tested (278+ tests). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash function).
+**Implementation status:** All five core layers are implemented and tested (295+ tests). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash round constants).
 
 ---
 
@@ -342,7 +342,7 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 | GET | `/api/v1/economics/balance/{did}` | Check UBC balance |
 | POST | `/api/v1/economics/transfer` | Spend UBC tokens |
 
-⚠️ **Security:** No authentication, no rate limiting, no authorization on any endpoint.
+**Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Endpoints require valid JWT tokens. Privileged operations (mint UBC, advance epoch) require admin JWT. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
 ### Prometheus Metrics
 
@@ -435,7 +435,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 | ✅ Event pruning (sustainability) | Implemented |
 | ✅ Economic security (slashing with persistence) | Implemented |
 | ✅ Fee enforcement (FeeSchedule + QuotaSystem) | Implemented |
-| ❌ API security (no auth, no rate limit, no authorization) | Not implemented |
+| ✅ API security (JWT auth + ACL + rate limiting + CORS) | Implemented (FIND-001) |
 
 ### Cryptographic Primitives
 
@@ -443,18 +443,17 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 |-----------|--------|
 | ✅ Ed25519 signatures | Implemented |
 | ✅ BLAKE3 hashing | Implemented |
-| ✅ zk-SNARKs (arkworks R1CS + Groth16) | Implemented (with hash placeholder) |
+| ✅ zk-SNARKs (arkworks R1CS + Groth16 + Poseidon) | Implemented (BLAKE3-derived round constants) |
 | ✅ CRYSTALS-Dilithium (PQC signatures) | Implemented (real verification) |
 | ✅ Shamir's Secret Sharing (GF(256)) | Implemented |
 
 ### Known Security Gaps
 
-1. **REST API has no security controls** — no authentication, no rate limiting, no authorization
-2. **Unencrypted private key storage** — keygen writes raw binary
-3. **ZK circuit hash placeholder** — needs Pedersen/Poseidon for production soundness
-4. **redb is production-quality** — ACID transactions, crash-safe, no alpha-quality concerns
-5. **No Sybil resistance** — no staking requirement for validators
-6. **Creator-public key binding gap** — `Event::validate()` does not verify `creator == hash(creator_pubkey)`
+1. **ZK circuit hash round constants** — Poseidon hash uses BLAKE3-derived round constants instead of Filecoin/Neptune reference; needs audit
+2. **No Sybil resistance** — no staking requirement for validators
+3. **Groth16 trusted setup** — no multi-party ceremony coordination
+4. **Single primary developer** — bus factor of 1
+5. **No formal verification beyond bounded TLA+** — unbounded proofs are Phase 2+
 
 ---
 
@@ -462,6 +461,9 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 
 ### Quantum Resistance
 - ✅ CRYSTALS-Dilithium (signatures) — implemented
+- ✅ Creator-pubkey binding — constant-time validation (FIND-003)
+- ✅ Encrypted key storage — AES-256-GCM + HKDF-SHA256 (FIND-010)
+- ✅ BLAKE3 domain separation — context-specific hashing (FIND-022)
 - 🌑 SPHINCS+ (hash-based signatures) — not started
 - 📋 Gradual migration, no hard fork — planned
 

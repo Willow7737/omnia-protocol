@@ -109,6 +109,11 @@ impl ShardRouter {
     }
 
     /// Register a shard with the router.
+    ///
+    /// # Arguments
+    ///
+    /// * `shard` — A boxed [`Shard`] implementation. The shard's ID
+    ///   (from [`Shard::shard_id`]) is used as the routing key.
     pub fn register(&mut self, shard: Box<dyn Shard>) {
         let id = shard.shard_id();
         self.shards.insert(id, shard);
@@ -118,6 +123,17 @@ impl ShardRouter {
     ///
     /// The event's `payload` field is deserialized as a `ShardPayload`,
     /// and the `shard_id` determines which shard handles the operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — The event to route.
+    /// * `op` — The shard operation to execute.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShardError::UnknownShard`] if the target shard is not registered.
+    /// Returns [`ShardError::DeserializationError`] for cross-shard message decoding failures.
+    /// May propagate shard-specific errors from [`Shard::process_event`].
     pub fn route(&mut self, event: &Event, op: ShardOp) -> Result<(), ShardError> {
         // Handle cross-shard messages specially
         if let ShardOp::CrossShard(msg) = op {
@@ -165,6 +181,24 @@ impl ShardRouter {
     /// Convenience method that deserializes the event's payload,
     /// checks the nonce for replay protection, deducts the fee
     /// from the caller's quota, and delegates to `route()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` — The event whose payload contains the shard operation.
+    ///
+    /// # Errors
+    ///
+    /// - [`ShardError::ValidationFailed`] — payload deserialization failed,
+    ///   payload exceeds `MAX_PAYLOAD_SIZE`, or replay detected (nonce too low).
+    /// - [`ShardError::InsufficientFee`] — the caller lacks sufficient UBC quota.
+    /// - [`ShardError::UnknownShard`] — the target shard is not registered.
+    ///
+    /// # Security
+    ///
+    /// Enforces strictly increasing nonces per `creator_pubkey` to prevent
+    /// replay attacks. A nonce that is ≤ the last seen nonce for that
+    /// creator is rejected. Nonces are persisted to the backing store
+    /// for crash recovery.
     pub fn route_event(&mut self, event: &Event) -> Result<(), ShardError> {
         if event.payload.is_empty() {
             return Ok(());
@@ -217,16 +251,28 @@ impl ShardRouter {
     }
 
     /// Get a reference to a registered shard by ID.
+    ///
+    /// # Returns
+    ///
+    /// `Some(&dyn Shard)` if the shard is registered, `None` otherwise.
     pub fn get_shard(&self, id: &ShardId) -> Option<&dyn Shard> {
         self.shards.get(id).map(|s| s.as_ref())
     }
 
     /// Check whether a shard is registered.
+    ///
+    /// # Returns
+    ///
+    /// `true` if a shard with the given ID has been registered.
     pub fn has_shard(&self, id: &ShardId) -> bool {
         self.shards.contains_key(id)
     }
 
     /// Get the number of registered shards.
+    ///
+    /// # Returns
+    ///
+    /// The count of shards currently registered with the router.
     pub fn shard_count(&self) -> usize {
         self.shards.len()
     }
@@ -236,6 +282,12 @@ impl ShardRouter {
     /// Uses hex encoding of the public key bytes to form a
     /// `did:omnia:<hex>` identifier. This DID is used as the
     /// account key in the quota system.
+    ///
+    /// # Security
+    ///
+    /// The DID is derived deterministically from the public key,
+    /// making it a stable identifier that cannot be forged without
+    /// the corresponding private key.
     pub fn pubkey_to_did(pubkey: &[u8; 32]) -> String {
         format!("did:omnia:{}", hex::encode(pubkey))
     }

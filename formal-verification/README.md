@@ -202,7 +202,7 @@ The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence propertie
   - Idempotence: `LWWMerge(val, ts, val, ts) = <<val, ts>>`
   - Convergence: Values converge regardless of merge order
 
-**Note:** A dedicated `OmniaCRDT.cfg` model checker configuration file may not yet exist. The CRDT properties can be verified by creating a TLC configuration that instantiates the constants `Nodes`, `MaxVal`, `Elements`, and `MaxTags` with small finite values suitable for bounded model checking.
+**Note:** The `OmniaCRDT.cfg` model checker configuration file exists and configures TLC with `Nodes = {n1, n2, n3}`, `MaxVal = 3`, `Elements = {e1, e2}`, and `MaxTags = 3`, verifying invariants `TypeOK_GCounter`, `TypeOK_OrSet`, `TypeOK_LWW`, `GCounterConvergence`, `LWWConvergence`, and properties `GCounterCommutative`, `GCounterIdempotent`, `GCounterFinalConvergence`.
 
 ## Known Limitations
 
@@ -246,8 +246,9 @@ The model exceeds available memory. Remediation:
 | File | Lines | Description |
 |---|---|---|
 | `OmniaConsensus.tla` | 191 | TLA+ specification of the consensus protocol (with B1 fix), including CreateEvent, Equivocate, Gossip, DecideFamous, and CommitEvent actions |
-| `OmniaConsensus.cfg` | — | TLC model checker configuration for consensus |
+| `OmniaConsensus.cfg` | 10 | TLC model checker configuration for consensus |
 | `OmniaCRDT.tla` | 213 | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister) |
+| `OmniaCRDT.cfg` | 23 | TLC model checker configuration for CRDT verification |
 | `README.md` | — | This documentation |
 
 ## Cross-Reference with Code

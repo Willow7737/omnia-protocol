@@ -57,6 +57,19 @@ New dependencies MUST be reviewed for:
 
 **Migration note:** The codebase previously used sled 0.34 (alpha-quality), which has been replaced with redb. See `docs/OPERATIONS.md` for operational details.
 
+### Phase 0 Security Dependencies
+
+The following dependencies were added during Phase 0 to address critical security findings:
+
+| Dependency | Version | Purpose | Finding |
+|---|---|---|---|
+| `jsonwebtoken` | 9.x | JWT authentication for REST API | FIND-001 |
+| `aes-gcm` | 0.10.x | AES-256-GCM encryption for EncryptedKeyStore | FIND-010 |
+| `hkdf` | 0.12.x | HKDF-SHA256 key derivation from passphrases | FIND-010 |
+| `sha2` | 0.10.x | SHA-256 for HKDF key derivation | FIND-010 |
+| `tower-http` | 0.6.x | CORS middleware for REST API | FIND-001 |
+| `subtle` | 2.x | Constant-time comparisons for creator binding | FIND-003 |
+
 ## Supply Chain Auditing
 
 We use two tools for supply chain security:
@@ -105,6 +118,12 @@ The `omnia-node` crate (`node/Cargo.toml`) has these notable dependencies:
 | `chrono` | "0.4" (serde feature) | Timestamp handling | No known issues |
 | `uuid` | "1" (v4 feature) | ID generation | Cryptographically random v4 UUIDs |
 | `hex` | "0.4" | Hex encoding | No security implications |
+| `jsonwebtoken` | 9.x | JWT token creation and validation | Well-maintained; used for REST API auth (FIND-001) |
+| `aes-gcm` | 0.10.x | AES-256-GCM encryption for key storage | NIST-standardized AEAD; well-audited (FIND-010) |
+| `hkdf` | 0.12.x | HKDF-SHA256 key derivation for key encryption | RFC 5869; well-audited (FIND-010) |
+| `sha2` | 0.10.x | SHA-256 for HKDF key derivation | NIST-standardized; well-audited |
+| `tower-http` | 0.6.x | CORS middleware for REST API | Well-maintained; no security implications (FIND-001) |
+| `subtle` | 2.x | Constant-time comparisons for creator binding | Well-audited; standard constant-time library (FIND-003) |
 
 ## Exemptions
 

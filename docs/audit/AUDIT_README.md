@@ -279,9 +279,9 @@ cargo test -p omnia-chaos-tests
 
 9. **The `pqc_dilithium` crate has not been formally audited.** It is a Rust port of the NIST C reference implementation. Constant-time guarantees are not documented for the Rust version.
 
-10. **The REST API has no authentication or rate limiting.** All 9+ endpoints under `/api/v1/` are accessible to any network client. This is a known security gap.
+10. **The REST API has JWT authentication, rate limiting, and ACL-based authorization** (added in Phase 0, FIND-001). Endpoints under `/api/v1/` require valid JWT tokens. Privileged operations (mint UBC, advance epoch) require admin JWT. Rate limiting is configurable via `OMNIA_RATE_LIMIT_RPS`. CORS is enforced via `tower-http`.
 
-11. **The `keygen` subcommand writes unencrypted private keys.** The `validator_key.bin` file is raw bytes with no encryption or passphrase protection.
+11. **The `keygen` subcommand supports encrypted key output.** With `--passphrase` (or `OMNIA_KEYGEN_PASSPHRASE` env var), the private key is encrypted with AES-256-GCM and saved as `validator_key.enc`. Without `--passphrase`, keys are written unencrypted as `validator_key.bin` with a prominent warning.
 
 12. **redb is production-quality.** Both `RedbSlashingStore` and `RedbNonceStore` use redb, which provides ACID transactions, crash-safe durability, and is actively maintained.
 
@@ -296,13 +296,18 @@ omnia-protocol/
 ├── SECURITY.md                   # Security policy and reporting
 ├── substrate/                    # Core consensus layer
 │   ├── Cargo.toml
-│   └── src/
+│   ├── src/
 │       ├── lib.rs                # Crate root, re-exports
 │       ├── causal_graph.rs       # DAG-based event storage
 │       ├── consensus.rs          # BFT consensus engine
 │       ├── gossip.rs             # Epidemic gossip protocol
 │       ├── slashing.rs           # Byzantine fault detection + penalties
+│       ├── slashing_undo.rs      # Slashing snapshot-and-rollback (FIND-011)
 │       ├── event.rs              # Event model, signing, verification
+│       ├── keystore.rs           # EncryptedKeyStore (AES-256-GCM, FIND-010)
+│       ├── blake3_domain.rs      # BLAKE3 domain-separated hashing (FIND-022)
+│       ├── rate_limiter.rs       # Token-bucket rate limiter
+│       ├── threshold.rs          # Threshold signature scheme
 │       ├── vector_clock.rs       # Vector clock for causal ordering
 │       ├── network.rs            # libp2p network integration
 │       ├── crypto.rs             # Ed25519 key utilities
@@ -321,6 +326,7 @@ omnia-protocol/
 │       ├── shard.rs              # Shard trait definition
 │       ├── payload.rs            # ShardPayload + ShardOp enums
 │       ├── cross_shard.rs        # Cross-shard message passing
+│       ├── nonce_store.rs        # NonceStore trait, InMemoryNonceStore, RedbNonceStore
 │       ├── economics_shard.rs    # Economics shard adapter
 │       ├── financial/            # Financial domain
 │       ├── identity/             # Identity domain
@@ -332,10 +338,11 @@ omnia-protocol/
 │   └── src/
 │       ├── lib.rs                # Crate root, EconomicsState
 │       ├── fixed_point.rs        # Deterministic fixed-point arithmetic
-│       ├── governance.rs         # Quadratic voting with decay
+│       ├── governance.rs         # Quadratic voting with decay + quorum + time-lock (FIND-020)
 │       ├── quota.rs              # UBC quota tracking + epoch management
 │       ├── ubc.rs                # UBC token model
 │       ├── useful_work.rs        # Useful work computation + rewards
+│       ├── time_lock.rs          # Time-locked voting for flash-loan prevention (FIND-020)
 │       ├── economics_shard.rs    # Economics shard implementation
 │       └── error.rs              # Error types
 ├── zk/                           # Zero-knowledge proof system
@@ -343,11 +350,17 @@ omnia-protocol/
 │   └── src/
 │       ├── lib.rs                # Crate root
 │       ├── circuit.rs            # R1CS rollup circuit + legacy stub
+│       ├── poseidon.rs           # Poseidon hash (BLAKE3-derived round constants, FIND-022)
+│       ├── merkle.rs             # Merkle tree for state commitments
 │       ├── prover.rs             # Groth16 proof generation
 │       ├── proof.rs              # Proof verification
 │       ├── proof_bundle.rs       # Proof + state root bundle
 │       ├── operator.rs           # ZK batch operator
-│       ├── setup.rs              # Powers of Tau trusted setup ceremony
+│       ├── setup/                # Powers of Tau trusted setup ceremony
+│       │   ├── mod.rs
+│       │   ├── powers_of_tau.rs
+│       │   ├── contribution.rs
+│       │   └── circuit_setup.rs
 │       └── settlement/           # L1 settlement adapters
 │           ├── mod.rs            # SettlementLayer trait
 │           ├── ethereum.rs       # Ethereum L1 adapter
@@ -360,11 +373,12 @@ omnia-protocol/
 │       ├── lib.rs                # Crate root
 │       ├── quantum_commit.rs     # Ed25519 + Dilithium hybrid commitments
 │       ├── provenance.rs         # Provenance chain tracking
+│       ├── key_rotation.rs       # Key rotation with proof (FIND-010)
 │       ├── physical_shard.rs     # Physical shard binding
 │       ├── anchor.rs             # Asset anchoring
 │       └── rf_fingerprint.rs     # RF fingerprinting STUB
 ├── node/                         # Node binary + library
-│   ├── Cargo.toml                # Dependencies: substrate, shards, economics, binding, zk, axum, clap, redb, utoipa
+│   ├── Cargo.toml                # Dependencies: substrate, shards, economics, binding, zk, axum, clap, redb, utoipa, jsonwebtoken, aes-gcm, hkdf, tower-http
 │   └── src/
 │       ├── main.rs               # Binary entrypoint with CLI subcommands
 │       ├── lib.rs                 # Library root (api, config, http, state modules)
@@ -373,6 +387,8 @@ omnia-protocol/
 │       ├── state.rs              # AppState, NodeMetrics (6 Prometheus metrics)
 │       └── api/
 │           ├── mod.rs            # API router, OpenAPI spec (ApiDoc), route table
+│           ├── auth.rs           # JWT authentication, AuthorizedCallers ACL, RateLimiter, CORS
+│           ├── errors.rs         # API error response types
 │           ├── node.rs           # GET /node/info, GET /node/peers, PeerInfo
 │           ├── events.rs         # POST /events, GET /events/{id}, SubmitEventRequest, StoredEvent
 │           ├── shards.rs         # POST /shards/{shard_id}/operations, ShardOperationRequest
@@ -433,10 +449,9 @@ omnia-substrate  ←  omnia-shards  ←  omnia-economics
        |                 |                  |
        |                 +──────────────────┘
        |
-omnia-binding  ←  (depends on omnia-substrate for crypto + VectorClock)
-       ↑
-omnia-zk  ←  (depends on omnia-substrate for Event types)
-       ↑
+       +── omnia-binding  (depends on substrate for crypto + VectorClock)
+       +── omnia-zk       (depends on substrate for Event types)
+       |
 omnia-node  ←  (depends on substrate, shards, economics, binding, zk)
        ↑
 omnia-chaos-tests  ←  (depends on substrate, shards, economics)
@@ -447,8 +462,10 @@ Key dependency relationships:
 - `omnia-zk` depends on `omnia-substrate` (Event type for circuit)
 - `omnia-binding` depends on `omnia-substrate` (NodeKeypair, VectorClock, crypto)
 - `omnia-economics` is standalone (no dependency on other Omnia crates)
-- `omnia-node` depends on all 5 core crates (substrate, shards, economics, binding, zk)
+- `omnia-node` depends on all 5 core crates (substrate, shards, economics, binding, zk) + jsonwebtoken, aes-gcm, hkdf, tower-http for API security
 - `omnia-chaos-tests` depends on substrate, shards, economics, and blake3 (for node ID derivation)
+
+Phase 0 additions to substrate: `auth.rs` (JWT auth), `keystore.rs` (encrypted key storage), `blake3_domain.rs` (domain-separated hashing), `nonce_store.rs` (redb-backed replay protection)
 
 ---
 

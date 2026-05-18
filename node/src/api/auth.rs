@@ -184,6 +184,11 @@ fn jwt_secret() -> Option<String> {
 ///
 /// The token is valid for `ttl_secs` seconds from the current time.
 ///
+/// # Arguments
+///
+/// * `caller_id` — The identity string to embed as the JWT `sub` claim.
+/// * `ttl_secs` — Time-to-live in seconds until the token expires.
+///
 /// # Errors
 ///
 /// Returns [`AuthError::SecretNotConfigured`] if `OMNIA_JWT_SECRET` is not set.

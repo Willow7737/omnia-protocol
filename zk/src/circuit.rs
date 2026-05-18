@@ -87,6 +87,13 @@ impl RollupCircuit {
     /// * `old` — 32-byte old state root
     /// * `new` — 32-byte new state root
     /// * `event_count` — number of events in the batch
+    ///
+    /// # Security
+    ///
+    /// The `expected_new_state_root` is set from the `new` parameter,
+    /// meaning the circuit will enforce that the witness new state root
+    /// matches the public input. A proof is only valid if the prover
+    /// knows a witness that satisfies this constraint.
     pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64) -> Self {
         Self {
             old_state_root: Some(Fr::from_be_bytes_mod_order(&old)),
@@ -299,6 +306,13 @@ impl ExpandedRollupCircuit {
     /// Panics if `merkle_proofs.len() != event_hashes.len()` or
     /// `intermediate_roots.len() != event_hashes.len() + 1` (when events is
     /// non-empty).
+    ///
+    /// # Security
+    ///
+    /// The circuit enforces Merkle inclusion proofs using Poseidon hash,
+    /// binding each event to the `event_commitment` public input. A valid
+    /// proof guarantees that all events in the batch are committed to the
+    /// Merkle root, preventing inclusion of forged events.
     pub fn from_batch(
         old_root: Fr,
         new_root: Fr,

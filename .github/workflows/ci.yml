@@ -132,7 +132,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
-      - run: cargo audit --deny warnings --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
+      - run: cargo audit --deny warnings --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
 
   deny:
     name: Cargo Deny
@@ -230,23 +230,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
-      - run: cargo install cargo-tarpaulin --locked
-      - run: cargo tarpaulin --workspace --exclude omnia-fuzz --out Xml --out Html
+        with:
+          shared-key: "omnia-coverage"
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+      - name: Generate coverage report
+        run: cargo llvm-cov --workspace --exclude omnia-fuzz --lcov --output-path lcov.info
+      - name: Generate coverage summary
+        run: cargo llvm-cov --workspace --exclude omnia-fuzz --summary-only 2>&1 | tee coverage-summary.txt
       - uses: codecov/codecov-action@v4
         with:
-          files: ./cobertura.xml
+          files: ./lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: |
-            tarpaulin-report.html
-            cobertura.xml
+            lcov.info
+            coverage-summary.txt
           retention-days: 30
 
   fuzz-smoke:

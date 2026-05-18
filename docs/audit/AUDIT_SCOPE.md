@@ -55,6 +55,8 @@ The node crate provides the binary entrypoint, CLI subcommands, HTTP server, and
 | HTTP router | `node/src/http.rs` | ~78 |
 | Application state | `node/src/state.rs` | ~145 |
 | API router + OpenAPI | `node/src/api/mod.rs` | ~83 |
+| API authentication | `node/src/api/auth.rs` | ~645 |
+| API error types | `node/src/api/errors.rs` | ~70 |
 | Node API | `node/src/api/node.rs` | ~91 |
 | Events API | `node/src/api/events.rs` | ~187 |
 | Shards API | `node/src/api/shards.rs` | ~197 |
@@ -62,16 +64,16 @@ The node crate provides the binary entrypoint, CLI subcommands, HTTP server, and
 | Economics API | `node/src/api/economics.rs` | ~169 |
 
 **Audit focus areas:**
-- **No authentication on any endpoint** — all 9 API endpoints accept unauthenticated requests
-- **No rate limiting** — no per-IP or per-endpoint throttling
-- **No authorization** — any client can mint UBC, transfer tokens, create proposals
-- **Unencrypted key storage** — `run_keygen()` writes private keys as raw bytes
+- **JWT authentication** — All 9 API endpoints require valid JWT tokens; configured via `OMNIA_JWT_SECRET` (FIND-001). Review the `auth.rs` implementation for correctness and timing attacks.
+- **Rate limiting** — Per-IP token-bucket rate limiter; configured via `OMNIA_RATE_LIMIT_RPS` (FIND-001)
+- **ACL authorization** — Only authorized callers can access the API; configured via `OMNIA_AUTHORIZED_CALLERS`. Privileged operations (mint, advance_epoch) require admin JWT (FIND-001)
+- **Encrypted key storage** — `run_keygen()` supports `--passphrase` for AES-256-GCM encryption; `EncryptedKeyStore` provides encrypted storage (FIND-010)
 - **Trusted setup ceremony** — `setup-contribute` and `setup-verify` subcommands with no multi-party coordination
-- **TOML config parsing** — `node_id` type mismatch (`Option<u16>` in TOML vs `u64` in config)
-- **Sled database usage** — alpha-quality persistence for slashing and nonces
-- **Nonce persistence** — `SledNonceStore` for replay protection across restarts
-- **Slashing persistence** — `SledSlashingStore` configured automatically, but `persist_state()` failure only logs warning
-- **Payload size enforcement** — `MAX_PAYLOAD_SIZE` check at HTTP layer but not at event/gossip level
+- **TOML config parsing** — `node_id` now `Option<u64>` in both TOML and runtime config (FIND-013 fixed the previous `Option<u16>` mismatch)
+- **redb persistence** — `RedbSlashingStore` and `RedbNonceStore` provide production-quality persistence with ACID transactions
+- **Nonce persistence** — `RedbNonceStore` for replay protection across restarts
+- **Slashing persistence** — `RedbSlashingStore` configured automatically with `SlashingUndoManager` for rollback (FIND-011)
+- **Payload size enforcement** — `MAX_PAYLOAD_SIZE` check at both HTTP and gossip layers (FIND-021)
 - **Event signing** — `generate_keypair()` creates a fresh keypair for each API-submitted event; no key reuse or identity binding
 
 ### 2.3 ZK Circuit (`zk/`)
@@ -139,14 +141,14 @@ The fee enforcement system prevents spam by deducting UBC tokens from the caller
 | Fee Schedule | `shards/src/fee_schedule.rs` | ~187 |
 | Quota System | `economics/src/quota.rs` | ~141 |
 | Shard Router (fee deduction) | `shards/src/router.rs` | ~206 |
-| Nonce Store | `shards/src/lib.rs` (NonceStore trait, SledNonceStore) | — |
+| Nonce Store | `shards/src/nonce_store.rs` (NonceStore trait, RedbNonceStore) | ~289 |
 | UBC Token | `economics/src/ubc.rs` | ~84 |
 
 **Audit focus areas:**
 - Fee deduction happens before shard dispatch — cannot bypass by crashing mid-operation
 - `QuotaSystem::spend()` returns error on insufficient balance — no negative balances
 - Replay protection via nonce tracking in `ShardRouter::route_event()` — strictly increasing nonces per `creator_pubkey`
-- `SledNonceStore` provides persistent replay protection across restarts
+- `RedbNonceStore` provides persistent replay protection across restarts
 - `FeeSchedule::zero()` exists for testing — verify it cannot be used in production paths
 - Epoch reset (`advance_epoch()`) forfeits unspent balance — no balance carry-over exploits
 
@@ -200,12 +202,12 @@ The following components and artifacts are explicitly excluded from the audit sc
 The audit is conducted under the following assumptions. If any assumption is violated, the audit findings may not be valid.
 
 1. **Stable Rust toolchain**: The code is compiled with a stable Rust compiler (1.85+). Unsafe code blocks, if any, are individually reviewed.
-2. **Trusted setup for Groth16**: The Groth16 trusted setup (powers of tau and circuit-specific phase 2) is assumed to be conducted honestly. A malicious setup can generate false proofs. This is a known limitation of Groth16.
+2. **Trusted setup for Groth16**: The Groth16 trusted setup (powers of tau and circuit-specific phase 2) is assumed to be conducted honestly. A malicious setup can generate false proofs. This is a known limitation of Groth16. The `omnia-node` binary includes `setup-contribute` and `setup-verify` subcommands for local ceremony simulation, but no multi-party coordination protocol exists yet.
 3. **No hardware attacks**: Side-channel attacks (timing, power analysis, EM emanation) are out of scope. The audit assumes attackers cannot physically access validator hardware.
 4. **Dependency trust**: Third-party crates (arkworks, ed25519-dalek, pqc-dilithium, blake3, etc.) are assumed to be correctly implemented. The audit reviews how they are *used*, not their internal correctness.
 5. **Network assumptions**: The network is partially synchronous — messages are eventually delivered but may be delayed or reordered. The BFT model assumes f < n/3 Byzantine nodes.
 6. **Single-developer codebase**: The protocol has been primarily developed by a single engineer. This increases the risk of blind spots and implicit assumptions.
-7. **Docker compose is for development only**: The `docker-compose.yml` uses invalid `OMNIA_NODE_ID` string values and is not a production deployment configuration.
+7. **Docker compose is for development only**: The `docker-compose.yml` uses valid `OMNIA_NODE_ID` numeric values and `OMNIA_HTTP_PORT=8080` for all containers, with host port mapping (9090-9094 → 8080). It is not a production deployment configuration.
 
 ---
 

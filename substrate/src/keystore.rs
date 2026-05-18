@@ -402,6 +402,14 @@ impl KeyRotationProof {
     /// # Returns
     ///
     /// `true` if the signature is valid, `false` otherwise.
+    ///
+    /// # Security
+    ///
+    /// A valid proof guarantees that the holder of the old private key
+    /// authorized the rotation to the new key. Without this check, an
+    /// attacker who compromises the keystore file could replace the key
+    /// without detection. The Ed25519 signature provides strong
+    /// existential unforgeability under chosen-message attacks.
     pub fn verify(&self) -> bool {
         let Ok(old_pk) = NodePublicKey::from_bytes(&self.old_pubkey) else {
             return false;
