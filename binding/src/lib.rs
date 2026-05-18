@@ -53,6 +53,7 @@
 
 pub mod anchor;
 pub mod key_rotation;
+pub mod keystore_bridge;
 pub mod physical_shard;
 pub mod provenance;
 pub mod quantum_commit;
@@ -61,6 +62,7 @@ pub mod rf_fingerprint;
 // Re-export core types for convenience
 pub use anchor::PhysicalAnchor;
 pub use key_rotation::{KeyRotationError, PqcKeyRotationManager, PqcKeyRotationRequest};
+pub use keystore_bridge::{BridgeError, KeyStoreBridge, RotationState, SignatureBundle};
 pub use physical_shard::{ProvenanceTracker, ProvenanceTrackerError};
 pub use provenance::{ProvenanceEvent, ProvenanceEventType, ProvenanceLog};
 pub use quantum_commit::{BindingError, CommitmentPhase, PqPublicKey, QuantumCommitment};

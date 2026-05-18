@@ -11,8 +11,8 @@ use omnia_substrate::crypto::{NodeKeypair, Signer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::key_rotation::{CommitmentPhase, PqcKeyRotationManager, PqcKeyRotationRequest, KeyRotationError};
-use crate::quantum_commit::{PqPublicKey, QuantumCommitment};
+use crate::key_rotation::{PqcKeyRotationManager, PqcKeyRotationRequest, KeyRotationError};
+use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
 
 /// Errors that can occur during keystore bridge operations.
 #[derive(Error, Debug)]
@@ -113,7 +113,7 @@ impl KeyStoreBridge {
             let state_bytes = std::fs::read(&rotation_state_path)?;
             let state: RotationState = serde_json::from_slice(&state_bytes)
                 .map_err(|e| BridgeError::Serialization(e.to_string()))?;
-            let manager = PqcKeyRotationManager::new(state.current_phase.clone());
+            let manager = PqcKeyRotationManager::new(state.current_phase);
             (state, manager)
         } else {
             let state = RotationState {
@@ -194,7 +194,7 @@ impl KeyStoreBridge {
             old_key: old_pubkey,
             new_key: new_pubkey.clone(),
             authorization_sig: auth_signature.to_vec(),
-            new_phase: new_phase.clone(),
+            new_phase,
             effective_at: current_round,
             sunset_at: current_round + 1000, // 1000 round transition period
         };
@@ -205,7 +205,7 @@ impl KeyStoreBridge {
         self.rotation_manager.process_effective(current_round);
 
         // Update rotation state
-        self.rotation_state.current_phase = new_phase.clone();
+        self.rotation_state.current_phase = new_phase;
         self.rotation_state.transition_start_round = current_round;
         self.rotation_state.hybrid_key_hash = Some(blake3_hash_hex(&new_pubkey.ed25519));
         self.rotation_state.last_rotation_timestamp = now_ms;

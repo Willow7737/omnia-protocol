@@ -2944,6 +2944,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "ed25519-dalek",
+ "hex",
  "omnia-shards",
  "omnia-substrate",
  "postcard",
@@ -2951,7 +2952,9 @@ dependencies = [
  "rand 0.8.6",
  "serde",
  "serde_bytes",
+ "serde_json",
  "subtle",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio-test",
  "tracing",
