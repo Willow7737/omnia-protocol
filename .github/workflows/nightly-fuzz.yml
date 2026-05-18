@@ -43,8 +43,9 @@ jobs:
           for target in fuzz_event_deserialization fuzz_gossip_message fuzz_zk_proof_deserialization fuzz_consensus_state_transition fuzz_vector_clock_merge fuzz_rate_limiter fuzz_snapshot_deserialization; do
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
-              timeout 300 cargo fuzz run $target -- -max_total_time=300
-              ec=$?
+              # Use || true to prevent set -e from killing the script on
+              # timeout exit code 124; capture the real exit code separately.
+              timeout 300 cargo fuzz run $target -- -max_total_time=300 && ec=0 || ec=$?
               # Exit code 124 means timeout killed the process after 300s,
               # which is normal for fuzz testing (the target ran until the
               # time budget was exhausted).  Exit code 0 means the fuzz
