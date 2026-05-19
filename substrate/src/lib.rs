@@ -24,6 +24,7 @@
 #![deprecated(since = "0.2.0", note = "Use omnia-primitives, omnia-consensus, omnia-crypto, omnia-network, omnia-adapters directly")]
 
 pub mod blake3_domain;
+#[cfg(feature = "bls")]
 pub mod bls;
 pub mod causal_graph;
 pub mod consensus;
@@ -42,6 +43,7 @@ pub mod slashing;
 pub mod slashing_undo;
 pub mod snapshot;
 pub mod snapshot_replication;
+#[cfg(feature = "bls")]
 pub mod threshold;
 pub mod vector_clock;
 pub mod vrf;
@@ -51,10 +53,13 @@ pub mod wire_format;
 // via `omnia_substrate::omnia_crypto::…`, `omnia_substrate::omnia_consensus::…`, etc.
 pub use omnia_consensus;
 pub use omnia_crypto;
+#[cfg(feature = "network")]
 pub use omnia_network;
+#[cfg(feature = "zk")]
 pub use omnia_adapters;
 
 // Re-export commonly used types
+#[cfg(feature = "bls")]
 pub use bls::{
     aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
     BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
@@ -80,6 +85,8 @@ pub use omnia_primitives::{
     serialize_with_version, deserialize_with_version,
 };
 // Re-export networking types from omnia-network (backward compatibility)
+// Only available when the `network` feature is enabled.
+#[cfg(feature = "network")]
 pub use omnia_network::{
     fast_sync::{
         select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork,
@@ -111,6 +118,7 @@ pub use slashing_undo::{
 };
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
+#[cfg(feature = "bls")]
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage,
     DkgVerificationResult, KeyShare, PartialSignature, ThresholdConfig, ThresholdError,
@@ -209,6 +217,7 @@ pub enum SubstrateError {
     #[error("Event validation error: {0}")]
     /// Event validation error
     EventValidation(#[from] EventValidationError),
+    #[cfg(feature = "network")]
     #[error("Gossip error: {0}")]
     /// Gossip protocol error
     Gossip(#[from] GossipError),
@@ -229,6 +238,7 @@ pub struct SubstrateConfig {
     /// Unique identifier for this node
     pub node_id: NodeId,
     /// Gossip protocol configuration
+    #[cfg(feature = "network")]
     pub gossip: GossipConfig,
     /// Consensus engine configuration
     pub consensus: ConsensusConfig,
@@ -319,6 +329,7 @@ impl SubstrateConfig {
         seed[0] = 1; // Non-zero to avoid debug-build panic
         Self {
             node_id,
+            #[cfg(feature = "network")]
             gossip: GossipConfig::default(),
             consensus: ConsensusConfig {
                 total_nodes,
@@ -348,6 +359,7 @@ impl SubstrateConfig {
         seed[0] = 1; // Non-zero to avoid debug-build panic
         Self {
             node_id,
+            #[cfg(feature = "network")]
             gossip: GossipConfig::default(),
             consensus: ConsensusConfig {
                 total_nodes,
@@ -374,6 +386,7 @@ impl SubstrateConfig {
 pub struct Substrate {
     config: SubstrateConfig,
     graph: Arc<tokio::sync::RwLock<CausalGraph>>,
+    #[cfg(feature = "network")]
     gossip: Option<GossipProtocol>,
     consensus: ConsensusEngine<SlashingEngine>,
     running: bool,
@@ -478,6 +491,7 @@ impl Substrate {
         Self {
             config,
             graph,
+            #[cfg(feature = "network")]
             gossip: None,
             consensus,
             slashing,
@@ -492,6 +506,7 @@ impl Substrate {
     }
 
     /// Initialize the gossip protocol
+    #[cfg(feature = "network")]
     pub fn init_gossip(&mut self) {
         self.gossip = Some(GossipProtocol::new(
             self.config.node_id,
@@ -503,6 +518,7 @@ impl Substrate {
     /// Start the substrate runtime
     pub async fn start(&mut self) {
         self.running = true;
+        #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
             gossip.start().await;
         }
@@ -511,6 +527,7 @@ impl Substrate {
     /// Stop the substrate runtime
     pub fn stop(&mut self) {
         self.running = false;
+        #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
             gossip.stop();
         }
@@ -597,6 +614,7 @@ impl Substrate {
     /// run consensus, and forward committed events to shard processor.
     async fn process_consensus_round(&mut self) {
         // 1. Drain network events into graph + queue
+        #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
             match gossip.process_pending_events().await {
                 Ok(inserted) => {
@@ -657,6 +675,7 @@ impl Substrate {
     }
 
     /// Start with network and run main loop
+    #[cfg(feature = "network")]
     pub async fn start_with_network(&mut self, network: OmniaNetwork) {
         if let Some(ref mut gossip) = self.gossip {
             if let Err(e) = gossip.start_with_network(network).await {
@@ -709,6 +728,7 @@ impl Substrate {
             );
         }
 
+        #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
             gossip
                 .broadcast_event((*event_arc).clone())
@@ -730,6 +750,7 @@ impl Substrate {
     }
 
     /// Get gossip protocol statistics
+    #[cfg(feature = "network")]
     pub fn gossip_stats(&self) -> Option<&GossipStats> {
         self.gossip.as_ref().map(|g| g.stats())
     }
@@ -915,9 +936,11 @@ mod tests {
         let substrate = Substrate::new(config);
 
         assert!(!substrate.running);
+        #[cfg(feature = "network")]
         assert!(substrate.gossip.is_none());
     }
 
+    #[cfg(feature = "network")]
     #[tokio::test]
     async fn test_substrate_start_stop() {
         let config = SubstrateConfig::new(test_node(1));

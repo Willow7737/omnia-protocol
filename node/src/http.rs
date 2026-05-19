@@ -39,9 +39,11 @@ use axum::response::Response;
 use axum::routing::get;
 use axum::Extension;
 use axum::Router;
+#[cfg(feature = "metrics")]
 use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
 use utoipa::OpenApi;
+#[cfg(feature = "swagger-ui")]
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api;
@@ -57,8 +59,8 @@ use crate::state::AppState;
 /// - `/health` — backward-compatible health check (aliases `/healthz`)
 /// - `/metrics` — Prometheus metrics endpoint
 /// - `/api/v1/*` — API endpoints (with JWT auth and authorization)
-/// - `/swagger-ui` — Swagger UI for API documentation
-/// - `/api-docs/openapi.json` — OpenAPI JSON specification
+/// - `/swagger-ui` — Swagger UI for API documentation (optional, `swagger-ui` feature)
+/// - `/api-docs/openapi.json` — OpenAPI JSON specification (optional, `swagger-ui` feature)
 ///
 /// # Middleware
 ///
@@ -80,13 +82,21 @@ pub fn build_http_router() -> Router<AppState> {
     let rate_limiter = Arc::new(RateLimiter::from_env());
     let cors = default_cors_layer();
 
-    Router::new()
+    let router = Router::new()
         .route("/healthz", get(liveness_handler)) // Kubernetes livenessProbe
         .route("/readyz", get(readiness_handler)) // Kubernetes readinessProbe
         .route("/health", get(liveness_handler)) // backward compat
         .route("/metrics", get(metrics_handler))
-        .nest("/api/v1", api::build_api_router())
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .nest("/api/v1", api::build_api_router());
+
+    // Swagger UI is optional — embeds ~11MB of JS/CSS assets into the binary.
+    // Enable with --features swagger-ui for development.
+    #[cfg(feature = "swagger-ui")]
+    let router = router.merge(
+        SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi())
+    );
+
+    router
         // --- Middleware layers ---
         // Order: last added = outermost.
         // Request flow: CORS → Extension(inject) → RateLimit → Handler
@@ -173,6 +183,7 @@ pub async fn readiness_handler(State(state): State<AppState>) -> Response {
 /// Returns all registered Prometheus metrics in the standard
 /// text exposition format. This endpoint is scraped by Prometheus
 /// or compatible monitoring systems.
+#[cfg(feature = "metrics")]
 pub async fn metrics_handler() -> impl IntoResponse {
     let encoder = TextEncoder::new();
     let metric_families = prometheus::gather();
@@ -191,6 +202,15 @@ pub async fn metrics_handler() -> impl IntoResponse {
     (StatusCode::OK, body)
 }
 
+/// Handler for `GET /metrics` when metrics feature is disabled.
+#[cfg(not(feature = "metrics"))]
+pub async fn metrics_handler() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        "Metrics endpoint disabled (compile without --features metrics to enable)\n",
+    )
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -198,6 +218,7 @@ mod tests {
     use crate::api::events::StoredEvent;
     use crate::api::node::PeerInfo;
     use crate::config::NodeConfig;
+    #[cfg(feature = "metrics")]
     use crate::state::NodeMetrics;
     use axum::body::Body;
     use axum::http::{Request, StatusCode as HttpStatus};
@@ -255,6 +276,7 @@ mod tests {
             })
             .collect();
 
+        #[cfg(feature = "metrics")]
         let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
         AppState {
@@ -265,6 +287,7 @@ mod tests {
             economics: Arc::new(Mutex::new(EconomicsState::new())),
             event_store: Arc::new(RwLock::new(event_store)),
             peers: Arc::new(RwLock::new(peers)),
+            #[cfg(feature = "metrics")]
             metrics: Arc::new(metrics),
             started_at: Instant::now(),
             is_syncing: Arc::new(AtomicBool::new(is_syncing)),

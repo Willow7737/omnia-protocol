@@ -29,13 +29,15 @@ rust-version = "1.88"
 bincode = "1"
 
 # Release profile optimization — Decision 3: panic = "abort"
-# Thin LTO balances compile time vs binary size improvement
+# Fat LTO provides maximum dead-code elimination and cross-crate inlining
+# to meet the ≤12MB binary size target. Compile time is longer but
+# acceptable for release builds.
 # codegen-units = 1 maximizes optimization opportunities
 [profile.release]
 panic = "abort"
-lto = "thin"
+lto = "fat"
 codegen-units = 1
-strip = true
+strip = "symbols"
 debug = false
 
 # Bench profile inherits release but keeps debug info for profiling

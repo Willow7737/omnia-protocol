@@ -42,7 +42,7 @@ hex = "0.4"
 subtle = "2"
 
 [features]
-default = ["arkworks"]
+default = []
 arkworks = ["dep:ark-ff", "dep:ark-ec", "dep:ark-serialize", "dep:ark-groth16", "dep:ark-bn254", "dep:ark-relations", "dep:ark-r1cs-std", "dep:ark-snark", "dep:ark-crypto-primitives"]
 ethereum-live = ["dep:alloy"]
 cosmos = []

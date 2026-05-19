@@ -10,10 +10,10 @@ rust-version = { workspace = true }
 
 [dependencies]
 omnia-primitives = { path = "../omnia-primitives" }
-omnia-crypto = { path = "../omnia-crypto", features = ["bls"] }
+omnia-crypto = { path = "../omnia-crypto", default-features = false, features = ["keystore"] }
 omnia-consensus = { path = "../omnia-consensus", features = ["persistent-storage"] }
-omnia-network = { path = "../omnia-network" }
-omnia-adapters = { path = "../omnia-adapters" }
+omnia-network = { path = "../omnia-network", default-features = false, optional = true }
+omnia-adapters = { path = "../omnia-adapters", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 hex = "0.4"
@@ -51,10 +51,10 @@ redb = "2"
 
 # BLS12-381 signature aggregation — reduces N signature verifications to 1
 # Spec: Boneh-Lynn-Shacham (BLS) signatures
-blst = "0.3"
+blst = { version = "0.3", optional = true }
 
 # Efficient serialization of byte arrays in serde — needed for BLS key/sig binary fields
-serde_bytes = "0.11"
+serde_bytes = { version = "0.11", optional = true }
 
 # Constant-time comparisons for cryptographic operations — prevents timing side-channels
 subtle = "2"
@@ -63,7 +63,7 @@ subtle = "2"
 getrandom = "0.2"
 
 # Snappy compression for gossip messages — reduces bandwidth by 50-80%
-snap = "1"
+snap = { version = "1", optional = true }
 
 # Legacy sled database support for one-time migration to redb
 sled = { version = "0.34", optional = true }
@@ -74,12 +74,12 @@ bincode = { workspace = true }
 [features]
 default = []
 migration = ["sled"]
-bls = ["omnia-crypto/bls"]
+bls = ["omnia-crypto/bls", "dep:blst", "dep:serde_bytes"]
 pqc = ["omnia-crypto/pqc"]
 persistent-storage = ["omnia-consensus/persistent-storage"]
-network = ["omnia-network/network"]
-zk = ["omnia-adapters/arkworks"]
-ethereum-live = ["omnia-adapters/ethereum-live"]
+network = ["dep:omnia-network", "omnia-network/network", "dep:snap"]
+zk = ["dep:omnia-adapters", "omnia-adapters/arkworks"]
+ethereum-live = ["dep:omnia-adapters", "omnia-adapters/ethereum-live"]
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -140,6 +140,7 @@ pub async fn submit_event(
         .insert(event_id_hex.clone(), stored);
 
     // Increment the events counter
+    #[cfg(feature = "metrics")]
     state.metrics.events_submitted.inc();
 
     tracing::info!(event_id = %event_id_hex, status = %status, "Event submitted via API");
