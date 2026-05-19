@@ -1,0 +1,35 @@
+[package]
+name = "omnia-crypto"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+rust-version = "1.88"
+
+[dependencies]
+omnia-primitives = { path = "../omnia-primitives" }
+ed25519-dalek = { version = "2.1", features = ["serde"] }
+blst = { version = "0.3", optional = true }
+aes-gcm = { version = "0.10", optional = true }
+bip39 = { version = "2.0", features = ["zeroize", "rand"], optional = true }
+hkdf = { version = "0.12", optional = true }
+pqc_dilithium = { version = "0.1", optional = true }
+ml-kem = { version = "0.1", optional = true }
+getrandom = { version = "0.2", optional = true }
+rand = "0.8"
+subtle = "2.5"
+serde_bytes = "0.11"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+tracing = "0.1"
+blake3 = "1.5"
+
+[features]
+default = ["keystore"]
+bls = ["dep:blst", "dep:getrandom", "dep:aes-gcm", "dep:hkdf"]
+pqc = ["dep:pqc_dilithium", "dep:ml-kem"]
+keystore = ["dep:aes-gcm", "dep:bip39", "dep:hkdf"]
+
+[dev-dependencies]
+tempfile = "3"

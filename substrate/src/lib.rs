@@ -49,6 +49,11 @@ pub mod vector_clock;
 pub mod vrf;
 pub mod wire_format;
 
+// Re-export the migrated crates so downstream consumers can access them
+// via `omnia_substrate::omnia_crypto::…` and `omnia_substrate::omnia_consensus::…`
+pub use omnia_consensus;
+pub use omnia_crypto;
+
 // Re-export commonly used types
 pub use bls::{
     aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
@@ -57,7 +62,7 @@ pub use bls::{
 pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
-pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, RoundTimer};
+pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer};
 pub use consensus_store::{
     ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
     RedbConsensusStore,
@@ -365,7 +370,7 @@ pub struct Substrate {
     config: SubstrateConfig,
     graph: Arc<tokio::sync::RwLock<CausalGraph>>,
     gossip: Option<GossipProtocol>,
-    consensus: ConsensusEngine,
+    consensus: ConsensusEngine<SlashingEngine>,
     running: bool,
     /// The single slashing engine shared between consensus and the API layer.
     ///
