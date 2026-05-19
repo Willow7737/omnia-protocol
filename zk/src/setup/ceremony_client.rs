@@ -30,9 +30,9 @@
 
 use thiserror::Error;
 
+use super::ceremony_server::CeremonyTranscript;
 use super::contribution::{contribute, Contribution, ContributionProof};
 use super::powers_of_tau::PowersOfTau;
-use super::ceremony_server::CeremonyTranscript;
 use super::SetupError;
 
 /// Errors that can occur during ceremony client operations.
@@ -126,14 +126,12 @@ impl CeremonyClient {
             .map_err(|e| CeremonyClientError::InvalidState(e.to_string()))?;
 
         for (i, contribution) in transcript.contributions.iter().enumerate() {
-            replay_srs
-                .apply_contribution(contribution)
-                .map_err(|e| {
-                    CeremonyClientError::VerificationFailed(format!(
-                        "Contribution {} failed verification: {}",
-                        i, e
-                    ))
-                })?;
+            replay_srs.apply_contribution(contribution).map_err(|e| {
+                CeremonyClientError::VerificationFailed(format!(
+                    "Contribution {} failed verification: {}",
+                    i, e
+                ))
+            })?;
         }
 
         // Verify the final transcript hash matches
@@ -252,10 +250,7 @@ mod tests {
 
         let result = CeremonyClient::verify_transcript(&transcript, 8);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("hash mismatch"));
+        assert!(result.unwrap_err().to_string().contains("hash mismatch"));
     }
 
     #[test]

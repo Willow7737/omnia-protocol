@@ -28,8 +28,8 @@
 //! 1. **CORS** — permissive defaults for development; tighten for production
 //! 2. **Rate limiting** — per-client token-bucket rate limiter
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -212,11 +212,7 @@ mod tests {
     use tower::ServiceExt;
 
     /// Create a test `AppState` with configurable peers and syncing state.
-    fn make_test_state(
-        peers: Vec<PeerInfo>,
-        is_syncing: bool,
-        event_count: usize,
-    ) -> AppState {
+    fn make_test_state(peers: Vec<PeerInfo>, is_syncing: bool, event_count: usize) -> AppState {
         let config = NodeConfig {
             node_id: 1,
             listen_addr: "0.0.0.0:4001".to_string(),
@@ -235,8 +231,7 @@ mod tests {
             readiness_max_finalization_age: 600,
         };
 
-        let substrate_config =
-            omnia_substrate::SubstrateConfig::new(config.node_id_bytes());
+        let substrate_config = omnia_substrate::SubstrateConfig::new(config.node_id_bytes());
         let substrate = Substrate::new(substrate_config);
         let slashing_engine = substrate.slashing.clone();
 
@@ -291,7 +286,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -305,7 +305,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -326,7 +331,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -347,7 +357,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -368,7 +383,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -390,7 +410,12 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

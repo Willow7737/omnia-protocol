@@ -276,10 +276,9 @@ impl EthereumLiveClient {
             .map_err(|e| SettlementError::ConfigError(format!("Invalid contract address: {e}")))?;
 
         // Validate the operator private key can be parsed by alloy
-        let _: PrivateKeySigner = config
-            .operator_private_key
-            .parse()
-            .map_err(|e| SettlementError::ConfigError(format!("Invalid operator private key: {e}")))?;
+        let _: PrivateKeySigner = config.operator_private_key.parse().map_err(|e| {
+            SettlementError::ConfigError(format!("Invalid operator private key: {e}"))
+        })?;
 
         Ok(Self {
             rpc_url: config.rpc_url.clone(),
@@ -343,10 +342,7 @@ impl EthereumLiveClient {
     /// batch Merkle root using BLAKE3 domain separation.
     ///
     /// Returns the transaction hash as a hex string.
-    pub async fn submit_batch_live(
-        &self,
-        bundle: &ProofBundle,
-    ) -> Result<String, SettlementError> {
+    pub async fn submit_batch_live(&self, bundle: &ProofBundle) -> Result<String, SettlementError> {
         let provider = self.build_provider().await?;
         let contract = OmniaRollup::new(self.contract_address, provider);
 
@@ -419,9 +415,7 @@ impl EthereumLiveClient {
             .with_required_confirmations(self.confirmation_blocks as usize)
             .get_receipt()
             .await
-            .map_err(|e| {
-                SettlementError::TxTimedOut(self.confirmation_blocks)
-            })?;
+            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -439,11 +433,10 @@ impl EthereumLiveClient {
         let provider = self.build_provider().await?;
         let contract = OmniaRollup::new(self.contract_address, provider);
 
-        let root = contract
-            .stateRoot()
-            .call()
-            .await
-            .map_err(|e| SettlementError::ContractError(format!("stateRoot call failed: {e}")))?;
+        let root =
+            contract.stateRoot().call().await.map_err(|e| {
+                SettlementError::ContractError(format!("stateRoot call failed: {e}"))
+            })?;
 
         Ok(root.0 .0)
     }
@@ -452,11 +445,7 @@ impl EthereumLiveClient {
     ///
     /// Calls the `deposit(bytes32)` function on the OmniaRollup contract.
     /// The `amount` parameter specifies the value in wei.
-    pub async fn deposit_live(
-        &self,
-        l2_did: &str,
-        amount: u64,
-    ) -> Result<String, SettlementError> {
+    pub async fn deposit_live(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         let provider = self.build_provider().await?;
         let contract = OmniaRollup::new(self.contract_address, provider);
 
@@ -477,9 +466,7 @@ impl EthereumLiveClient {
             .with_required_confirmations(self.confirmation_blocks as usize)
             .get_receipt()
             .await
-            .map_err(|e| {
-                SettlementError::TxTimedOut(self.confirmation_blocks)
-            })?;
+            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -508,10 +495,9 @@ impl EthereumLiveClient {
 
         let builder = contract.requestWithdrawal(l2_did_bytes, U256::from(amount));
 
-        let pending_tx = builder
-            .send()
-            .await
-            .map_err(|e| SettlementError::TxFailed(format!("requestWithdrawal send failed: {e}")))?;
+        let pending_tx = builder.send().await.map_err(|e| {
+            SettlementError::TxFailed(format!("requestWithdrawal send failed: {e}"))
+        })?;
 
         let tx_hash = *pending_tx.tx_hash();
 
@@ -519,9 +505,7 @@ impl EthereumLiveClient {
             .with_required_confirmations(self.confirmation_blocks as usize)
             .get_receipt()
             .await
-            .map_err(|e| {
-                SettlementError::TxTimedOut(self.confirmation_blocks)
-            })?;
+            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -845,9 +829,7 @@ impl SettlementLayer for EthereumAdapter {
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
-                    return client
-                        .verify_proof_live(old_root, new_root, proof)
-                        .await;
+                    return client.verify_proof_live(old_root, new_root, proof).await;
                 }
 
                 #[cfg(not(feature = "ethereum-live"))]
@@ -1089,8 +1071,8 @@ mod tests {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
             contract_address: "0x0000000000000000000000000000000000000000".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         assert!(config.validate().is_ok());
@@ -1100,8 +1082,8 @@ mod tests {
     fn test_ethereum_config_validation_http_scheme() {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         assert!(config.validate().is_ok());
@@ -1111,8 +1093,8 @@ mod tests {
     fn test_ethereum_config_validation_https_scheme() {
         let config = EthereumConfig {
             rpc_url: "https://mainnet.infura.io/v3/key".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         assert!(config.validate().is_ok());
@@ -1122,8 +1104,8 @@ mod tests {
     fn test_ethereum_config_validation_wss_scheme() {
         let config = EthereumConfig {
             rpc_url: "wss://mainnet.infura.io/ws/v3/key".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         assert!(config.validate().is_ok());
@@ -1136,24 +1118,22 @@ mod tests {
             ..Default::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("Operator private key cannot be empty")
-        );
+        assert!(err
+            .to_string()
+            .contains("Operator private key cannot be empty"));
     }
 
     #[test]
     fn test_ethereum_config_validation_operator_key_no_prefix() {
         let config = EthereumConfig {
-            operator_private_key: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         let err = config.validate().unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("Operator private key must be 0x-prefixed hex")
-        );
+        assert!(err
+            .to_string()
+            .contains("Operator private key must be 0x-prefixed hex"));
     }
 
     #[test]
@@ -1267,8 +1247,8 @@ mod tests {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
             contract_address: "0x1234567890abcdef1234567890abcdef12345678".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
 
@@ -1301,12 +1281,10 @@ mod tests {
         fn anvil_config() -> EthereumConfig {
             EthereumConfig {
                 rpc_url: "http://localhost:8545".to_string(),
-                contract_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
-                    .to_string(),
+                contract_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3".to_string(),
                 // Anvil's default first account private key
                 operator_private_key:
-                    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                        .to_string(),
+                    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
                 gas_limit: 3_000_000,
                 max_fee_per_gas: None,
                 confirmation_blocks: 1,
@@ -1349,7 +1327,10 @@ mod tests {
             let input = [42u8; 16];
             let result = slice_to_array(&input);
             assert!(result.is_err());
-            assert!(matches!(result.unwrap_err(), SettlementError::ContractError(_)));
+            assert!(matches!(
+                result.unwrap_err(),
+                SettlementError::ContractError(_)
+            ));
         }
 
         #[test]
@@ -1398,13 +1379,16 @@ mod tests {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
             contract_address: "0x1234567890abcdef1234567890abcdef12345678".to_string(),
-            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                .to_string(),
+            operator_private_key:
+                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         // with_mode should fail because the feature is not enabled
         let result = EthereumAdapter::with_mode(config, EthereumMode::Live);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), SettlementError::ConfigError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            SettlementError::ConfigError(_)
+        ));
     }
 }

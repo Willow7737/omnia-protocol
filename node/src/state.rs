@@ -5,9 +5,9 @@
 //! struct that tracks Prometheus counters and gauges.
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use prometheus::{IntCounter, IntGauge};

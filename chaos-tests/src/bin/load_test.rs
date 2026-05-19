@@ -22,7 +22,11 @@ use omnia_chaos_tests::load_test::{run_load_test, LoadTestConfig};
 
 /// Omnia Protocol load test runner.
 #[derive(Parser, Debug)]
-#[command(name = "omnia-load-test", version, about = "Run load tests against the Omnia Protocol consensus engine")]
+#[command(
+    name = "omnia-load-test",
+    version,
+    about = "Run load tests against the Omnia Protocol consensus engine"
+)]
 struct Args {
     /// Number of simulated consensus nodes.
     #[arg(long, default_value_t = 4)]
@@ -82,7 +86,10 @@ async fn main() {
     let args = Args::parse();
 
     let duration = parse_duration(&args.duration).unwrap_or_else(|| {
-        eprintln!("Invalid duration '{}'. Use e.g., '60s', '2m', or a plain number of seconds.", args.duration);
+        eprintln!(
+            "Invalid duration '{}'. Use e.g., '60s', '2m', or a plain number of seconds.",
+            args.duration
+        );
         std::process::exit(1);
     });
 

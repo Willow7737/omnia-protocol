@@ -33,8 +33,8 @@ use omnia_shards::{
     IdentityShard, PhysicalShard, ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
@@ -693,10 +693,12 @@ async fn shutdown_signal() {
 /// For now, this runs a local ceremony simulation that accepts
 /// contributions from the command line. The full network ceremony
 /// server with HTTP endpoints will be implemented in a follow-up.
-fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: usize) -> Result<()> {
-    use omnia_zk::setup::{
-        CeremonyConfig, CeremonyServer, contribute,
-    };
+fn run_ceremony_serve(
+    min_participants: usize,
+    max_participants: usize,
+    degree: usize,
+) -> Result<()> {
+    use omnia_zk::setup::{contribute, CeremonyConfig, CeremonyServer};
 
     // Initialize minimal tracing
     tracing_subscriber::fmt()
@@ -721,7 +723,10 @@ fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: 
     );
 
     // Simulate contributions (in a real server, these would come over HTTP)
-    println!("\nSimulating {} participant contributions...", min_participants);
+    println!(
+        "\nSimulating {} participant contributions...",
+        min_participants
+    );
     for i in 0..min_participants {
         let (transcript, tau_size) = server.get_srs_state().context("Failed to get SRS state")?;
         let mut seed = [0u8; 32];
@@ -746,10 +751,7 @@ fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: 
 
     println!("\nCeremony finalized!");
     println!("  Total contributions: {}", server.contribution_count());
-    println!(
-        "  Proving key size: {} bytes",
-        key_pair.proving_key.len()
-    );
+    println!("  Proving key size: {} bytes", key_pair.proving_key.len());
     println!(
         "  Verifying key size: {} bytes",
         key_pair.verifying_key.len()
@@ -857,3 +859,4 @@ fn run_ceremony_verify(server_url: &str) -> Result<()> {
     println!("Use `omnia-node ceremony-serve` for local ceremony simulation");
 
     Ok(())
+}

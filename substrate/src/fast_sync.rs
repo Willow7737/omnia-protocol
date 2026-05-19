@@ -225,7 +225,10 @@ impl std::fmt::Debug for FastSyncManager {
         f.debug_struct("FastSyncManager")
             .field("node_id", &hex::encode(&self.node_id[..4]))
             .field("enabled", &self.enabled)
-            .field("network", &self.network.as_ref().map(|_| "Some(SyncNetwork)"))
+            .field(
+                "network",
+                &self.network.as_ref().map(|_| "Some(SyncNetwork)"),
+            )
             .finish()
     }
 }
@@ -301,9 +304,10 @@ impl FastSyncManager {
     /// [`SyncError::IntegrityCheckFailed`] if the snapshot is corrupt,
     /// and other variants for protocol-level failures.
     pub async fn sync_to_latest(&self) -> Result<SyncResult, SyncError> {
-        let network = self.network.as_ref().ok_or_else(|| {
-            SyncError::Network("No network configured".to_string())
-        })?;
+        let network = self
+            .network
+            .as_ref()
+            .ok_or_else(|| SyncError::Network("No network configured".to_string()))?;
 
         // Step 1: Query connected peers for their latest checkpoint
         let checkpoints = self.query_peer_checkpoints(network)?;
@@ -316,18 +320,17 @@ impl FastSyncManager {
         let target = select_target_checkpoint(&checkpoints, total_peers)?;
 
         // Step 3: Download snapshot from the target peer
-        let peer_id = target.peer_id.ok_or_else(|| {
-            SyncError::Network("Checkpoint has no peer ID".to_string())
-        })?;
+        let peer_id = target
+            .peer_id
+            .ok_or_else(|| SyncError::Network("Checkpoint has no peer ID".to_string()))?;
         let snapshot_data = self.download_snapshot_from_peer(network, peer_id, &target)?;
 
         // Step 4: Verify snapshot integrity
         target.verify_snapshot(&snapshot_data)?;
 
         // Step 5: Deserialize snapshot
-        let _snapshot: SyncSnapshot = postcard::from_bytes(&snapshot_data).map_err(|e| {
-            SyncError::Consensus(format!("Snapshot deserialization failed: {e}"))
-        })?;
+        let _snapshot: SyncSnapshot = postcard::from_bytes(&snapshot_data)
+            .map_err(|e| SyncError::Consensus(format!("Snapshot deserialization failed: {e}")))?;
 
         // Step 6: Download and replay delta events
         let delta_events = self.download_delta_events(network, peer_id, target.round)?;
@@ -425,9 +428,7 @@ impl FastSyncManager {
             Ok(SyncResponse::Snapshot(None)) => Err(SyncError::Network(
                 "Peer returned no snapshot data".to_string(),
             )),
-            Ok(_) => Err(SyncError::Network(
-                "Unexpected response type".to_string(),
-            )),
+            Ok(_) => Err(SyncError::Network("Unexpected response type".to_string())),
             Err(e) => Err(e),
         }
     }
@@ -447,9 +448,7 @@ impl FastSyncManager {
             },
         ) {
             Ok(SyncResponse::Events(events)) => Ok(events),
-            Ok(_) => Err(SyncError::Network(
-                "Unexpected response type".to_string(),
-            )),
+            Ok(_) => Err(SyncError::Network("Unexpected response type".to_string())),
             Err(e) => Err(e),
         }
     }
@@ -544,10 +543,7 @@ mod tests {
     ///
     /// The snapshot data is a properly serialized [`SyncSnapshot`] whose
     /// BLAKE3 hash matches the checkpoint's `snapshot_hash`.
-    fn make_checkpoint_and_snapshot(
-        round: u64,
-        peer_id: NodeId,
-    ) -> (SyncCheckpoint, Vec<u8>) {
+    fn make_checkpoint_and_snapshot(round: u64, peer_id: NodeId) -> (SyncCheckpoint, Vec<u8>) {
         let snapshot = SyncSnapshot {
             round,
             state_root: [1u8; 32],
@@ -774,8 +770,7 @@ mod tests {
             .with_snapshot(snapshot_data)
             .with_delta_events(delta_events);
 
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.sync_to_latest().await;
         assert!(result.is_ok(), "Full sync loop should succeed");
@@ -808,8 +803,7 @@ mod tests {
     async fn test_fast_sync_no_peers() {
         // No peers available → NoPeersAvailable error
         let network = MockSyncNetwork::new(); // No peers, no checkpoint
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.sync_to_latest().await;
         assert!(result.is_err());
@@ -834,11 +828,13 @@ mod tests {
             .with_checkpoint(checkpoint)
             .with_snapshot(tampered_data);
 
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.sync_to_latest().await;
-        assert!(result.is_err(), "Tampered snapshot should fail integrity check");
+        assert!(
+            result.is_err(),
+            "Tampered snapshot should fail integrity check"
+        );
         match result.unwrap_err() {
             SyncError::IntegrityCheckFailed { expected, actual } => {
                 assert_ne!(expected, actual, "Expected and actual hashes should differ");
@@ -870,8 +866,7 @@ mod tests {
             .with_snapshot(snapshot_data)
             .with_delta_events(delta_events);
 
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.try_sync_or_fallback().await;
         assert_eq!(result.synced_to_round, 300);
@@ -883,12 +878,10 @@ mod tests {
     async fn test_fast_sync_peer_with_no_checkpoint() {
         // Peer exists but has no checkpoint → NoPeersAvailable
         let peer_id = test_node(10);
-        let network = MockSyncNetwork::new()
-            .with_peer(peer_id);
+        let network = MockSyncNetwork::new().with_peer(peer_id);
         // No with_checkpoint() call — defaults to None
 
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         // Need multiple peers for supermajority — but even with one peer,
         // if it has no checkpoint, we get NoPeersAvailable
@@ -951,8 +944,7 @@ mod tests {
     #[test]
     fn test_with_network_constructor() {
         let network = MockSyncNetwork::new().with_peer(test_node(5));
-        let manager =
-            FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         assert!(manager.is_enabled());
     }

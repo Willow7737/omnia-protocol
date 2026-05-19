@@ -51,9 +51,9 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use super::circuit_setup::{derive_keys_from_srs, CircuitKeyPair};
 use super::contribution::{verify_contribution, Contribution, ContributionProof};
 use super::powers_of_tau::PowersOfTau;
-use super::circuit_setup::{CircuitKeyPair, derive_keys_from_srs};
 use super::SetupError;
 use crate::circuit::RollupCircuit;
 
@@ -235,10 +235,7 @@ impl CeremonyServer {
 
     /// Get the current number of contributions.
     pub fn contribution_count(&self) -> usize {
-        self.contributions
-            .read()
-            .map(|c| c.len())
-            .unwrap_or(0)
+        self.contributions.read().map(|c| c.len()).unwrap_or(0)
     }
 
     /// Get the current SRS transcript and tau_size for clients to generate contributions.
@@ -250,9 +247,7 @@ impl CeremonyServer {
             .srs
             .read()
             .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-        let srs = srs_guard
-            .as_ref()
-            .ok_or(CeremonyError::NotStarted)?;
+        let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
         Ok((srs.to_transcript(), srs.g1_powers.len()))
     }
 
@@ -295,9 +290,7 @@ impl CeremonyServer {
                 .srs
                 .read()
                 .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-            let srs = srs_guard
-                .as_ref()
-                .ok_or(CeremonyError::NotStarted)?;
+            let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
             (srs.to_transcript(), srs.g1_powers.len())
         };
 
@@ -311,9 +304,7 @@ impl CeremonyServer {
                 .srs
                 .write()
                 .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-            let srs = srs_guard
-                .as_mut()
-                .ok_or(CeremonyError::NotStarted)?;
+            let srs = srs_guard.as_mut().ok_or(CeremonyError::NotStarted)?;
             srs.apply_contribution(&contribution)
                 .map_err(|e| CeremonyError::VerificationFailed(e.to_string()))?;
         }
@@ -335,9 +326,7 @@ impl CeremonyServer {
                 .srs
                 .read()
                 .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-            let srs = srs_guard
-                .as_ref()
-                .ok_or(CeremonyError::NotStarted)?;
+            let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
             srs.transcript_hash
         };
 
@@ -373,9 +362,7 @@ impl CeremonyServer {
                 .srs
                 .read()
                 .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-            let srs = srs_guard
-                .as_ref()
-                .ok_or(CeremonyError::NotStarted)?;
+            let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
             derive_keys_from_srs(srs, circuit)
                 .map_err(|e| CeremonyError::KeyDerivationFailed(e.to_string()))?
         };
@@ -414,9 +401,7 @@ impl CeremonyServer {
             .srs
             .read()
             .map_err(|e| CeremonyError::Internal(e.to_string()))?;
-        let srs = srs_guard
-            .as_ref()
-            .ok_or(CeremonyError::NotStarted)?;
+        let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
 
         Ok(CeremonyTranscript {
             config: self.config.clone(),
@@ -460,7 +445,9 @@ mod tests {
             seed[0] = i;
             let contribution =
                 contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            let receipt = server.accept_contribution(contribution).expect("accept failed");
+            let receipt = server
+                .accept_contribution(contribution)
+                .expect("accept failed");
             assert_eq!(receipt.contribution_index, i as usize);
         }
 
@@ -554,7 +541,10 @@ mod tests {
             contribute(&transcript, tau_size, Some([2u8; 32])).expect("contribute failed");
         let result = server.accept_contribution(contribution);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CeremonyError::AlreadyFinalized));
+        assert!(matches!(
+            result.unwrap_err(),
+            CeremonyError::AlreadyFinalized
+        ));
     }
 
     #[test]
@@ -563,7 +553,10 @@ mod tests {
         server.start().expect("first start failed");
         let result = server.start();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CeremonyError::AlreadyFinalized));
+        assert!(matches!(
+            result.unwrap_err(),
+            CeremonyError::AlreadyFinalized
+        ));
     }
 
     #[test]
@@ -590,7 +583,9 @@ mod tests {
         let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
         let contribution =
             contribute(&transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
-        let receipt = server.accept_contribution(contribution).expect("accept failed");
+        let receipt = server
+            .accept_contribution(contribution)
+            .expect("accept failed");
 
         assert_eq!(receipt.contribution_index, 0);
         assert_ne!(receipt.transcript_hash, [0u8; 32]);

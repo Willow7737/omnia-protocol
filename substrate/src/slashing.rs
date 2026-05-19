@@ -1832,9 +1832,7 @@ impl SlashingEngine {
                     tracing::error!(error = %e, "Failed to persist ejection state");
                 }
 
-                SlashOutcome::Ejected {
-                    node: validator_id,
-                }
+                SlashOutcome::Ejected { node: validator_id }
             }
         }
     }
@@ -2408,16 +2406,14 @@ mod tests {
         engine.register_validator(node, 10_000);
 
         // 1st invalid attestation → Warning(2% burn = 200)
-        let outcome =
-            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 100);
+        let outcome = engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 100);
         assert!(matches!(
             outcome,
             SlashOutcome::Warned { node: n, points: 200 } if n == [9u8; 32]
         ));
 
         // 2nd invalid attestation → Jailed(10% burn = 1000, 2000 rounds)
-        let outcome =
-            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 200);
+        let outcome = engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 200);
         assert!(matches!(
             outcome,
             SlashOutcome::Slashed { node: n, amount: 1000 } if n == [9u8; 32]
@@ -2426,8 +2422,7 @@ mod tests {
         assert!(!engine.is_jailed_at(node, 2200)); // release_round = 200 + 2000 = 2200
 
         // 3rd invalid attestation → Ejected(100%)
-        let outcome =
-            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 300);
+        let outcome = engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 300);
         assert!(matches!(outcome, SlashOutcome::Ejected { .. }));
     }
 
@@ -2607,18 +2602,15 @@ mod tests {
         engine.register_validator(node, 10_000);
 
         // Warning tier emits OffenseRecorded + PenaltyApplied
-        let _outcome =
-            engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+        let _outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
 
         // Jailed tier emits OffenseRecorded (from record_offense) + JailEntered
-        let _outcome =
-            engine.record_offense_graded(node, SlashOffense::Equivocation, 200);
+        let _outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 200);
 
         // Ejected tier emits OffenseRecorded (from record_offense) + ValidatorEjected
         // (need 2 more equivocations to reach 3rd equivocation tier)
         engine.record_offense_graded(node, SlashOffense::Equivocation, 300);
-        let _outcome =
-            engine.record_offense_graded(node, SlashOffense::Equivocation, 400);
+        let _outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 400);
         // This should be Ejected
         // Events are just logged, not stored — this test verifies no panics
     }
@@ -2654,11 +2646,17 @@ mod tests {
         let history = engine.get_offense_history(node);
         assert_eq!(history.len(), 3);
         assert_eq!(
-            history.iter().filter(|&&o| o == SlashOffense::LivenessViolation).count(),
+            history
+                .iter()
+                .filter(|&&o| o == SlashOffense::LivenessViolation)
+                .count(),
             2
         );
         assert_eq!(
-            history.iter().filter(|&&o| o == SlashOffense::Equivocation).count(),
+            history
+                .iter()
+                .filter(|&&o| o == SlashOffense::Equivocation)
+                .count(),
             1
         );
     }
@@ -2673,7 +2671,10 @@ mod tests {
         let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
         assert_eq!(
             outcome,
-            SlashOutcome::Warned { node: n, points: 100 }
+            SlashOutcome::Warned {
+                node: n,
+                points: 100
+            }
         );
 
         let outcome = engine.record_offense(n, SlashOffense::Equivocation);
@@ -2972,7 +2973,9 @@ mod tests {
         let penalty = engine.compute_penalty(v, &SlashOffense::InvalidAttestation);
         assert!(matches!(
             penalty,
-            SlashPenalty::Warning { burn_percentage: 2.0 }
+            SlashPenalty::Warning {
+                burn_percentage: 2.0
+            }
         ));
 
         // But 3rd liveness should be 3rd-tier: Jailed(5%, 500 rounds)

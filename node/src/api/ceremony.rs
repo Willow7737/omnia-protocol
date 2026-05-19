@@ -53,9 +53,7 @@ pub struct CeremonyStateResponse {
 ///
 /// **Stub**: Returns placeholder data until `CeremonyServer` is
 /// integrated into `AppState`.
-pub async fn ceremony_state(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ceremony_state(State(_state): State<AppState>) -> impl IntoResponse {
     // TODO: Get ceremony state from AppState when integrated
     // For now, return a stub response
     (
@@ -99,9 +97,7 @@ pub async fn ceremony_contribute(
 /// and final transcript hash. Used for independent verification.
 ///
 /// **Stub**: Returns placeholder data.
-pub async fn ceremony_transcript(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ceremony_transcript(State(_state): State<AppState>) -> impl IntoResponse {
     // TODO: Export transcript from CeremonyServer
     // For now, return a stub response
     (
@@ -127,9 +123,7 @@ pub async fn ceremony_transcript(
 /// proving and verifying keys for the rollup circuit.
 ///
 /// **Stub**: Returns placeholder data.
-pub async fn ceremony_finalize(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ceremony_finalize(State(_state): State<AppState>) -> impl IntoResponse {
     // TODO: Finalize via CeremonyServer
     // For now, return a stub response
     (
