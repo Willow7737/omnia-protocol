@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.35](https://github.com/Willow7737/omnia-protocol/compare/v0.1.34...v0.1.35) (2026-05-19)
+
+
+### CI
+
+* rectify workflows post-restructuring (Step 6) ([857ada3](https://github.com/Willow7737/omnia-protocol/commit/857ada355497d14f4d6ce3d8665778d58e3cd150))
+* rectify workflows post-restructuring (Step 6) ([f3273b7](https://github.com/Willow7737/omnia-protocol/commit/f3273b7f4d4112b650010c72e073b1f8a426ad62))
+
 ## [0.1.34](https://github.com/Willow7737/omnia-protocol/compare/v0.1.33...v0.1.34) (2026-05-19)
 
 
