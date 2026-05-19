@@ -1,7 +1,7 @@
 # Omnia Protocol Bug Bounty Program
 
 **Version**: 1.0
-**Effective Date**: 2026-05-19
+**Effective Date**: 2026-05-21
 **Status**: Active
 
 ## Overview
