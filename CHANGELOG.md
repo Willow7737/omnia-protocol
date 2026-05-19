@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.31](https://github.com/Willow7737/omnia-protocol/compare/v0.1.30...v0.1.31) (2026-05-19)
+
+
+### Features
+
+* **phase-5:** real benchmarks, fix ECVRF, fix BFT tests, populate BASELINE.md ([d400042](https://github.com/Willow7737/omnia-protocol/commit/d400042350d5e3f7b02c692206055d4d33fadaab))
+
+
+### Documentation
+
+* **phase-5:** update summary with real benchmark data and bug fixes ([00f1ea8](https://github.com/Willow7737/omnia-protocol/commit/00f1ea8c023775b211b5e659604e8d18b88d9030))
+
 ## [0.1.30](https://github.com/Willow7737/omnia-protocol/compare/v0.1.29...v0.1.30) (2026-05-19)
 
 
