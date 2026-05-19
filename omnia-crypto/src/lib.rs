@@ -13,6 +13,9 @@ pub mod crypto;
 pub mod crypto_schemes;
 
 #[cfg(feature = "keystore")]
+pub mod aes_gcm;
+
+#[cfg(feature = "keystore")]
 pub mod keystore;
 
 #[cfg(feature = "bls")]
@@ -26,6 +29,9 @@ pub mod vrf;
 // Re-export commonly used types at crate root
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signer, Signature, SignatureError, Verifier};
 pub use crypto_schemes::{CryptoProfile, SchemeVersion, SignatureScheme, HashScheme, VrfScheme, ZkScheme};
+
+#[cfg(feature = "keystore")]
+pub use aes_gcm::{aes256gcm_decrypt_aad, aes256gcm_encrypt_aad, generate_nonce, hkdf_aes_key, AesGcmError};
 
 #[cfg(feature = "keystore")]
 pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError, KeyStoreResult};

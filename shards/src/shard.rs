@@ -104,6 +104,10 @@ pub enum ShardError {
     /// Failed to serialize shard state for a snapshot.
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
+    /// The operation type does not match this shard.
+    #[error("operation type does not match shard")]
+    TypeMismatch,
 }
 
 /// The core trait that every domain shard must implement.
