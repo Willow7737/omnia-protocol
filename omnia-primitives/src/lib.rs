@@ -11,6 +11,7 @@
 
 pub mod blake3_domain;
 pub mod event;
+pub mod state;
 pub mod vector_clock;
 pub mod wire_format;
 
@@ -20,6 +21,7 @@ pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, Payload,
 };
+pub use state::{SerializableState, StateSerializeError};
 pub use vector_clock::{CausalOrder, LogicalClock, NodeId, VectorClock, VectorClockError};
 pub use wire_format::{
     deserialize_with_version, serialize_with_version, WireFormatError, WIRE_FORMAT_VERSION,

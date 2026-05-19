@@ -4,10 +4,23 @@
 //! other shards that can use CRDTs, financial operations require **strict
 //! causal ordering** because transfers and burns are not commutative.
 //!
-//! `AccountBalance` here is intentionally different from the substrate's
-//! CRDT-based `AccountBalance` (which wraps a grow-only GCounter). This
-//! version supports decrement and tracks the last-update vector clock for
-//! conflict detection.
+//! ## AccountBalance: Intentionally different from the CRDT version
+//!
+//! `AccountBalance` here is **intentionally different** from
+//! `omnia_consensus::crdt::AccountBalance` (which wraps a grow-only GCounter).
+//! The two types serve fundamentally different purposes:
+//!
+//! | Feature              | Financial (`shards`)            | Consensus (`crdt`)           |
+//! |----------------------|---------------------------------|------------------------------|
+//! | Internal type        | `u64 balance`                   | `GCounter` (per-node counts) |
+//! | Decrement support    | ✅ Required for transfers/burns | ❌ GCounter is increment-only |
+//! | Causal tracking      | `VectorClock` per account       | Per-node `NodeId` in GCounter |
+//! | Merge semantics      | Last-write-wins (not CRDT)      | GCounter merge (commutative)  |
+//!
+//! Replacing this with the CRDT version would break `Transfer` and `Burn`
+//! operations that require balance reduction. The name collision is already
+//! resolved at the re-export level: `shards::FinancialAccountBalance` vs
+//! `consensus::crdt::AccountBalance`.
 
 use std::collections::HashMap;
 

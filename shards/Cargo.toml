@@ -11,6 +11,7 @@ repository = { workspace = true }
 omnia-substrate = { path = "../substrate" }
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-economics = { path = "../economics" }
+omnia-crypto = { path = "../omnia-crypto", features = ["keystore"] }
 serde = { version = "1.0", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
 thiserror = "2.0"
@@ -19,10 +20,7 @@ hex = "0.4"
 tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
 rand = "0.8"
 blake3 = "1.5"
-aes-gcm = "0.10"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-hkdf = "0.12"
-sha2 = "0.10"
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 
 # Persistent nonce storage — needed for replay protection that survives restarts.

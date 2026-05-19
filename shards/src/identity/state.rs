@@ -524,65 +524,43 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 }
 
 /// Derive an AES-256 key from key material using HKDF-SHA256.
+///
+/// Delegates to [`omnia_crypto::hkdf_aes_key`] to avoid duplicating the
+/// HKDF key-derivation pattern that already exists in the crypto crate.
 fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> [u8; 32] {
-    use hkdf::Hkdf;
-    use sha2::Sha256;
-    let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
-    let mut aes_key = [0u8; 32];
-    hk.expand(info.as_bytes(), &mut aes_key)
-        .expect("HKDF expand should not fail for 32 bytes");
-    aes_key
+    omnia_crypto::hkdf_aes_key(key_material, info)
 }
 
 /// Generate a random 96-bit nonce for AES-256-GCM.
+///
+/// Delegates to [`omnia_crypto::generate_nonce`].
 fn generate_nonce() -> [u8; 12] {
-    use rand::RngCore;
-    let mut nonce = [0u8; 12];
-    rand::thread_rng().fill_bytes(&mut nonce);
-    nonce
+    omnia_crypto::generate_nonce()
 }
 
 /// AES-256-GCM encrypt with associated data.
+///
+/// Delegates to [`omnia_crypto::aes256gcm_encrypt_aad`] to avoid duplicating
+/// the AES-GCM encryption pattern that already exists in the crypto crate.
 fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
-    use aes_gcm::aead::Aead;
-    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
-    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
-    let nonce = Nonce::from_slice(nonce);
-    cipher
-        .encrypt(
-            nonce,
-            aes_gcm::aead::Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
-        .expect("AES-256-GCM encryption should not fail")
+    omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad)
 }
 
 /// AES-256-GCM decrypt with associated data.
+///
+/// Delegates to [`omnia_crypto::aes256gcm_decrypt_aad`] to avoid duplicating
+/// the AES-GCM decryption pattern that already exists in the crypto crate.
 fn aes256gcm_decrypt(
     ciphertext: &[u8],
     key: &[u8; 32],
     nonce: &[u8; 12],
     aad: &[u8],
 ) -> Result<Vec<u8>, ShardError> {
-    use aes_gcm::aead::Aead;
-    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
-    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
-    let nonce = Nonce::from_slice(nonce);
-    cipher
-        .decrypt(
-            nonce,
-            aes_gcm::aead::Payload {
-                msg: ciphertext,
-                aad,
-            },
+    omnia_crypto::aes256gcm_decrypt_aad(ciphertext, key, nonce, aad).map_err(|_| {
+        ShardError::ValidationFailed(
+            "Share decryption failed: authentication error".to_string(),
         )
-        .map_err(|_| {
-            ShardError::ValidationFailed(
-                "Share decryption failed: authentication error".to_string(),
-            )
-        })
+    })
 }
 
 /// Derive a 32-byte Ed25519 public key from a reconstructed secret

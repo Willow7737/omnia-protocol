@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::biological::ops::BiologicalOp;
 use crate::computational::ops::ComputationalOp;
 use crate::cross_shard::CrossShardMessage;
-use crate::economics_shard::EconomicsOp;
+use omnia_economics::EconomicsOp;
 use crate::financial::ops::FinancialOp;
 use crate::identity::ops::IdentityOp;
 use crate::physical::ops::PhysicalOp;

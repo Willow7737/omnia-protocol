@@ -4822,11 +4822,10 @@ dependencies = [
 name = "omnia-shards"
 version = "0.1.0"
 dependencies = [
- "aes-gcm",
  "blake3",
  "ed25519-dalek",
  "hex",
- "hkdf",
+ "omnia-crypto",
  "omnia-economics",
  "omnia-primitives",
  "omnia-substrate",
@@ -4835,7 +4834,6 @@ dependencies = [
  "rand 0.8.6",
  "redb",
  "serde",
- "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
