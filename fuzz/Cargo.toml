@@ -15,7 +15,7 @@ omnia-substrate = { path = "../substrate" }
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
-omnia-zk = { path = "../zk" }
+omnia-adapters = { path = "../omnia-adapters" }
 omnia-economics = { path = "../economics" }
 postcard = { version = "1", features = ["alloc"] }
 

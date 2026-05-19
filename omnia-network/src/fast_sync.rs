@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::blake3_domain::blake3_hash_domain;
-use crate::NodeId;
+use omnia_primitives::NodeId;
 
 /// Errors that can occur during fast sync.
 #[derive(Error, Debug)]
@@ -81,9 +81,9 @@ pub trait SyncNetwork: Send + Sync {
 /// state at the checkpoint's round. Snapshots are serialized with
 /// postcard for compact storage and fast deserialization.
 ///
-/// Note: This type is distinct from [`crate::snapshot::StateSnapshot`],
-/// which is the full persistent snapshot format. [`SyncSnapshot`] is the
-/// compact P2P wire format used during fast-sync transfer.
+/// Note: This type is distinct from the full persistent snapshot format
+/// in the substrate. [`SyncSnapshot`] is the compact P2P wire format
+/// used during fast-sync transfer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncSnapshot {
     /// The round this snapshot represents.

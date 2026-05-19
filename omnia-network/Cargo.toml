@@ -1,0 +1,37 @@
+[package]
+name = "omnia-network"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "P2P networking layer — gossip, fast-sync, and snapshot replication"
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+omnia-primitives = { path = "../omnia-primitives" }
+omnia-consensus = { path = "../omnia-consensus" }
+libp2p = { version = "0.56", optional = true, features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
+tokio = { version = "1.35", features = ["sync", "rt", "time"], optional = true }
+snap = "1"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+postcard = { version = "1", features = ["alloc"] }
+blake3 = "1.5"
+thiserror = "2.0"
+hex = "0.4"
+futures = { version = "0.3", optional = true }
+
+# Snapshot replication needs these for StateSnapshot interop
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+default = ["network"]
+network = ["dep:libp2p", "dep:tokio", "dep:futures"]
+snapshot = []
+
+[dev-dependencies]
+omnia-crypto = { path = "../omnia-crypto" }
+tokio-test = "0.4"
+tempfile = "3"

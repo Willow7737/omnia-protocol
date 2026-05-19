@@ -243,13 +243,13 @@ pub enum VersionCompatibility {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::network::check_version_compatibility;
+/// use omnia_network::network::check_version_compatibility;
 ///
 /// let result = check_version_compatibility("4.0.0", "4.1.0");
-/// assert!(matches!(result, _compatible if !matches!(result, omnia_substrate::network::VersionCompatibility::Incompatible { .. })));
+/// assert!(matches!(result, _compatible if !matches!(result, omnia_network::network::VersionCompatibility::Incompatible { .. })));
 ///
 /// let result = check_version_compatibility("4.0.0", "3.0.0");
-/// assert!(matches!(result, omnia_substrate::network::VersionCompatibility::Incompatible { .. }));
+/// assert!(matches!(result, omnia_network::network::VersionCompatibility::Incompatible { .. }));
 /// ```
 pub fn check_version_compatibility(local: &str, remote: &str) -> VersionCompatibility {
     let local_parts: Vec<&str> = local.split('.').collect();

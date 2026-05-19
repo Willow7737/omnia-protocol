@@ -53,6 +53,7 @@ async fn main() -> Result<()> {
             } => {
                 return run_keygen(&output_dir, passphrase.as_deref());
             }
+            #[cfg(feature = "zk")]
             CliCommand::SetupContribute {
                 degree,
                 min_participants,
@@ -60,11 +61,20 @@ async fn main() -> Result<()> {
             } => {
                 return run_setup_contribute(degree, min_participants, seed.as_deref());
             }
+            #[cfg(feature = "zk")]
             CliCommand::SetupVerify {
                 degree,
                 num_contributions,
             } => {
                 return run_setup_verify(degree, num_contributions);
+            }
+            #[cfg(not(feature = "zk"))]
+            CliCommand::SetupContribute { .. } => {
+                anyhow::bail!("ZK feature not enabled. Rebuild with --features zk");
+            }
+            #[cfg(not(feature = "zk"))]
+            CliCommand::SetupVerify { .. } => {
+                anyhow::bail!("ZK feature not enabled. Rebuild with --features zk");
             }
             CliCommand::Snapshot { output } => {
                 return run_snapshot(&output);
@@ -73,6 +83,7 @@ async fn main() -> Result<()> {
                 return run_restore(&input);
             }
             CliCommand::Run => {}
+            #[cfg(feature = "zk")]
             CliCommand::CeremonyServe {
                 min_participants,
                 max_participants,
@@ -80,11 +91,25 @@ async fn main() -> Result<()> {
             } => {
                 return run_ceremony_serve(min_participants, max_participants, degree);
             }
+            #[cfg(feature = "zk")]
             CliCommand::CeremonyContribute { server_url, seed } => {
                 return run_ceremony_contribute(&server_url, seed.as_deref());
             }
+            #[cfg(feature = "zk")]
             CliCommand::CeremonyVerify { server_url } => {
                 return run_ceremony_verify(&server_url);
+            }
+            #[cfg(not(feature = "zk"))]
+            CliCommand::CeremonyServe { .. } => {
+                anyhow::bail!("ZK feature not enabled. Rebuild with --features zk");
+            }
+            #[cfg(not(feature = "zk"))]
+            CliCommand::CeremonyContribute { .. } => {
+                anyhow::bail!("ZK feature not enabled. Rebuild with --features zk");
+            }
+            #[cfg(not(feature = "zk"))]
+            CliCommand::CeremonyVerify { .. } => {
+                anyhow::bail!("ZK feature not enabled. Rebuild with --features zk");
             }
             CliCommand::GenesisInit { config, output } => {
                 return run_genesis_init(&config, &output);
@@ -487,12 +512,13 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
 /// * `degree` — The maximum degree for the Powers of Tau SRS
 /// * `min_participants` — Minimum participants before the ceremony can finalize
 /// * `seed_hex` — Optional hex-encoded seed for deterministic contribution
+#[cfg(feature = "zk")]
 fn run_setup_contribute(
     degree: usize,
     min_participants: usize,
     seed_hex: Option<&str>,
 ) -> Result<()> {
-    use omnia_zk::setup::{contribute, PowersOfTau};
+    use omnia_adapters::setup::{contribute, PowersOfTau};
 
     // Initialize minimal tracing for the ceremony
     tracing_subscriber::fmt()
@@ -561,8 +587,9 @@ fn run_setup_contribute(
 ///
 /// * `degree` — The maximum degree for the Powers of Tau SRS
 /// * `num_contributions` — Number of contributions to replay and verify
+#[cfg(feature = "zk")]
 fn run_setup_verify(degree: usize, num_contributions: usize) -> Result<()> {
-    use omnia_zk::setup::run_ceremony;
+    use omnia_adapters::setup::run_ceremony;
 
     // Initialize minimal tracing
     tracing_subscriber::fmt()
@@ -784,12 +811,13 @@ async fn shutdown_signal() {
 /// For now, this runs a local ceremony simulation that accepts
 /// contributions from the command line. The full network ceremony
 /// server with HTTP endpoints will be implemented in a follow-up.
+#[cfg(feature = "zk")]
 fn run_ceremony_serve(
     min_participants: usize,
     max_participants: usize,
     degree: usize,
 ) -> Result<()> {
-    use omnia_zk::setup::{contribute, CeremonyConfig, CeremonyServer};
+    use omnia_adapters::setup::{contribute, CeremonyConfig, CeremonyServer};
 
     // Initialize minimal tracing
     tracing_subscriber::fmt()
@@ -835,7 +863,7 @@ fn run_ceremony_serve(
     }
 
     // Finalize
-    let circuit = omnia_zk::circuit::RollupCircuit::empty();
+    let circuit = omnia_adapters::circuit::RollupCircuit::empty();
     let key_pair = server
         .finalize(&circuit)
         .map_err(|e| anyhow::anyhow!("Finalize failed: {}", e))?;
@@ -875,8 +903,9 @@ fn run_ceremony_serve(
 /// **Note**: The full HTTP client implementation is a placeholder.
 /// The actual network communication requires the ceremony API
 /// endpoints to be deployed on the server.
+#[cfg(feature = "zk")]
 fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<()> {
-    use omnia_zk::setup::CeremonyClient;
+    use omnia_adapters::setup::CeremonyClient;
 
     // Initialize minimal tracing
     tracing_subscriber::fmt()
@@ -926,8 +955,9 @@ fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<(
 /// contribution's Proof of Knowledge.
 ///
 /// **Note**: The full HTTP client implementation is a placeholder.
+#[cfg(feature = "zk")]
 fn run_ceremony_verify(server_url: &str) -> Result<()> {
-    use omnia_zk::setup::CeremonyClient;
+    use omnia_adapters::setup::CeremonyClient;
 
     // Initialize minimal tracing
     tracing_subscriber::fmt()

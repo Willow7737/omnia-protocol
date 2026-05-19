@@ -4643,6 +4643,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-adapters"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "ark-bn254",
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-groth16",
+ "ark-r1cs-std",
+ "ark-relations",
+ "ark-serialize 0.4.2",
+ "ark-snark",
+ "async-trait",
+ "blake3",
+ "criterion 0.5.1",
+ "hex",
+ "omnia-consensus",
+ "omnia-crypto",
+ "omnia-primitives",
+ "postcard",
+ "proptest",
+ "rand 0.8.6",
+ "rand_chacha 0.3.1",
+ "serde",
+ "serde_bytes",
+ "subtle",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+ "tracing",
+]
+
+[[package]]
 name = "omnia-binding"
 version = "0.1.0"
 dependencies = [
@@ -4752,13 +4786,36 @@ name = "omnia-fuzz"
 version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
+ "omnia-adapters",
  "omnia-binding",
  "omnia-economics",
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
- "omnia-zk",
  "postcard",
+]
+
+[[package]]
+name = "omnia-network"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "chrono",
+ "futures",
+ "hex",
+ "libp2p",
+ "omnia-consensus",
+ "omnia-crypto",
+ "omnia-primitives",
+ "postcard",
+ "serde",
+ "serde_json",
+ "snap",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+ "tracing",
 ]
 
 [[package]]
@@ -4774,12 +4831,15 @@ dependencies = [
  "hex",
  "http-body-util",
  "jsonwebtoken",
+ "omnia-adapters",
  "omnia-binding",
+ "omnia-consensus",
+ "omnia-crypto",
  "omnia-economics",
+ "omnia-network",
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
- "omnia-zk",
  "postcard",
  "prometheus",
  "rand 0.8.6",
@@ -4860,8 +4920,10 @@ dependencies = [
  "hex",
  "hkdf",
  "libp2p",
+ "omnia-adapters",
  "omnia-consensus",
  "omnia-crypto",
+ "omnia-network",
  "omnia-primitives",
  "postcard",
  "proptest",
@@ -4880,39 +4942,6 @@ dependencies = [
  "tokio-test",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "omnia-zk"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "ark-bn254",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ff 0.4.2",
- "ark-groth16",
- "ark-r1cs-std",
- "ark-relations",
- "ark-serialize 0.4.2",
- "ark-snark",
- "async-trait",
- "blake3",
- "criterion 0.5.1",
- "hex",
- "omnia-primitives",
- "omnia-substrate",
- "postcard",
- "proptest",
- "rand 0.8.6",
- "rand_chacha 0.3.1",
- "serde",
- "serde_bytes",
- "subtle",
- "thiserror 2.0.18",
- "tokio",
- "tokio-test",
- "tracing",
 ]
 
 [[package]]

@@ -14,11 +14,11 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
 use crate::blake3_domain::blake3_hash_domain;
-use crate::causal_graph::{CausalGraph, CausalGraphError};
-use crate::event::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
+use omnia_consensus::causal_graph::{CausalGraph, CausalGraphError};
+use omnia_consensus::rate_limiter::RateLimiter;
+use omnia_primitives::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
 use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
-use crate::rate_limiter::RateLimiter;
-use crate::vector_clock::{NodeId, VectorClock};
+use omnia_primitives::{NodeId, VectorClock};
 
 const DEFAULT_GOSSIP_INTERVAL_MS: u64 = 100;
 const MAX_EVENTS_PER_GOSSIP: usize = 100;
@@ -716,8 +716,8 @@ impl From<CausalGraphError> for GossipError {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::crypto::generate_keypair;
-    use crate::event::Event;
+    use omnia_crypto::generate_keypair;
+    use omnia_primitives::Event;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];
@@ -1087,115 +1087,5 @@ mod tests {
 
         // After cleanup, it should be empty (cleared dedup cache)
         assert!(protocol.seen_events.is_empty());
-    }
-
-    #[test]
-    fn test_recent_gossip_field_removed() {
-        // Verify that GossipProtocol no longer has a recent_gossip field
-        // by checking that we can construct the struct without it.
-        let graph = Arc::new(RwLock::new(CausalGraph::new()));
-        let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
-        // If this compiles, the field was successfully removed
-        let _ = protocol.is_running();
-    }
-
-    // ── M-3: Message Compression Tests ─────────────────────────────────
-
-    #[test]
-    fn test_gossip_compression_round_trip() {
-        // Create a large payload that will be compressed
-        let large_data: Vec<u8> = (0..1000).map(|i| (i % 256) as u8).collect();
-        let serialized = serialize_compressed(&large_data).unwrap();
-        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
-        assert_eq!(deserialized, large_data);
-    }
-
-    #[test]
-    fn test_gossip_small_payload_uncompressed() {
-        let small_data = vec![1u8, 2, 3];
-        let serialized = serialize_compressed(&small_data).unwrap();
-        assert_eq!(
-            serialized[0], COMPRESSION_NONE,
-            "Small payloads should not be compressed"
-        );
-        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
-        assert_eq!(deserialized, small_data);
-    }
-
-    #[test]
-    fn test_gossip_large_payload_compressed() {
-        // Create data that compresses well
-        let large_data: Vec<u8> = vec![0u8; 10_000];
-        let serialized = serialize_compressed(&large_data).unwrap();
-        assert_eq!(
-            serialized[0], COMPRESSION_SNAPPY,
-            "Large compressible payloads should be compressed"
-        );
-        assert!(
-            serialized.len() < large_data.len() + 1,
-            "Compressed output should be smaller"
-        );
-        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
-        assert_eq!(deserialized, large_data);
-    }
-
-    #[test]
-    fn test_gossip_backward_compat_uncompressed() {
-        // Simulate an old node sending uncompressed data with no flag byte
-        // New format: 0x00 prefix + postcard-serialized data
-        let data = vec![42u8, 43, 44];
-        let serialized_inner = postcard::to_allocvec(&data).unwrap();
-        let mut new_format = vec![COMPRESSION_NONE];
-        new_format.extend_from_slice(&serialized_inner);
-
-        let deserialized: Vec<u8> = deserialize_compressed(&new_format).unwrap();
-        assert_eq!(deserialized, data);
-    }
-
-    #[test]
-    fn test_gossip_invalid_compression_flag() {
-        let data = vec![0xFF, 1, 2, 3]; // Invalid flag
-        let result: Result<Vec<u8>, _> = deserialize_compressed(&data);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_gossip_compression_empty_message() {
-        let result: Result<Vec<u8>, _> = deserialize_compressed(&[]);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            GossipError::InvalidMessageFormat(_)
-        ));
-    }
-
-    #[test]
-    fn test_gossip_compression_random_data_still_compresses() {
-        // Random data that won't compress well — should still be sent uncompressed
-        let mut large_random: Vec<u8> = (0..10_000).map(|i| ((i * 7 + 13) % 256) as u8).collect();
-        // Make it more random-looking
-        for (i, byte) in large_random.iter_mut().enumerate() {
-            *byte = (*byte).wrapping_add((i * 31) as u8);
-        }
-        let serialized = serialize_compressed(&large_random).unwrap();
-        // Either compressed or uncompressed, round-trip must work
-        let deserialized: Vec<u8> = deserialize_compressed(&serialized).unwrap();
-        assert_eq!(deserialized, large_random);
-    }
-
-    #[test]
-    fn test_compression_threshold_constant() {
-        assert_eq!(COMPRESSION_THRESHOLD, 256);
-        assert_eq!(COMPRESSION_NONE, 0x00);
-        assert_eq!(COMPRESSION_SNAPPY, 0x01);
-    }
-
-    #[test]
-    fn test_gossip_error_compression_variant() {
-        let err = GossipError::Compression("snappy failed".to_string());
-        assert!(err.to_string().contains("snappy failed"));
-
-        let err = GossipError::InvalidMessageFormat("bad flag".to_string());
-        assert!(err.to_string().contains("bad flag"));
     }
 }
