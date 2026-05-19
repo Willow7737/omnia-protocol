@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.28](https://github.com/Willow7737/omnia-protocol/compare/v0.1.27...v0.1.28) (2026-05-19)
+
+
+### Bug Fixes
+
+* **ci:** resolve all failing CI workflow jobs ([7092a68](https://github.com/Willow7737/omnia-protocol/commit/7092a68372875ae61b5e90dfafb841bc50c2351d))
+
 ## [0.1.27](https://github.com/Willow7737/omnia-protocol/compare/v0.1.26...v0.1.27) (2026-05-19)
 
 
