@@ -3,7 +3,7 @@
 //! Provides two modes:
 //! - **Simulated** (default): Uses BLAKE3-based mock responses for testing
 //! - **Live** (`ethereum-live` feature): Connects to a real Ethereum RPC endpoint
-//!   via [alloy] and interacts with the OmniaRollup smart contract.
+//!   via the `alloy` crate and interacts with the OmniaRollup smart contract.
 //!
 //! # Architecture
 //!
@@ -667,7 +667,7 @@ impl EthereumAdapter {
     /// Create a new Ethereum adapter with an explicit mode.
     ///
     /// If `mode` is [`EthereumMode::Live`], the configuration is validated
-    /// and an [`EthereumLiveClient`] is created. Live mode requires the
+    /// and an `EthereumLiveClient` is created. Live mode requires the
     /// `ethereum-live` feature flag and the alloy dependency at compile time,
     /// plus a deployed contract at runtime.
     pub fn with_mode(config: EthereumConfig, mode: EthereumMode) -> Result<Self, SettlementError> {

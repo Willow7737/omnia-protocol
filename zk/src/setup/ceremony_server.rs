@@ -241,7 +241,7 @@ impl CeremonyServer {
     /// Get the current SRS transcript and tau_size for clients to generate contributions.
     ///
     /// Returns the current SRS transcript bytes and the number of G1 powers.
-    /// Clients use this to call [`contribute`] locally.
+    /// Clients use this to call `contribute` locally.
     pub fn get_srs_state(&self) -> Result<(Vec<u8>, usize), CeremonyError> {
         let srs_guard = self
             .srs
