@@ -71,12 +71,17 @@ jobs:
         continue-on-error: true  # Existing files not yet Prettier-formatted
 
   feature-matrix:
-    name: Feature Matrix (${{ matrix.profile }})
+    name: Feature Matrix (${{ matrix.features || 'default' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        profile: [full, light]
+        features:
+          - "--features full"
+          - "--features light"
+          - "--no-default-features"
+          - "--no-default-features --features full"
+          - "--all-features"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
@@ -84,11 +89,11 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "omnia-feature-${{ matrix.profile }}"
-      - name: Check with ${{ matrix.profile }} features
-        run: cargo check -p omnia-node --no-default-features --features ${{ matrix.profile }}
-      - name: Test with ${{ matrix.profile }} features
-        run: cargo test -p omnia-node --no-default-features --features ${{ matrix.profile }}
+          shared-key: "omnia-feature-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.features }}"
+      - name: Check with ${{ matrix.features || 'default' }}
+        run: cargo check -p omnia-node ${{ matrix.features }}
+      - name: Test with ${{ matrix.features || 'default' }}
+        run: cargo test -p omnia-node ${{ matrix.features }}
 
   test:
     name: Test (${{ matrix.rust }}, ${{ matrix.os }})
@@ -114,7 +119,7 @@ jobs:
           rustc --version
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "omnia-test-${{ matrix.os }}"
+          shared-key: "omnia-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}"
       - name: Verify Cargo.lock is up to date
         run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
       - run: cargo test --workspace --exclude omnia-fuzz --verbose
@@ -137,6 +142,44 @@ jobs:
       - name: Run byzantine chaos test
         run: cargo test -p omnia-chaos-tests --test byzantine --verbose
         timeout-minutes: 10
+
+  binary-size:
+    name: Release Binary Size Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-release-size"
+      - name: Build release binary (production profile)
+        run: cargo build -p omnia-node --release --no-default-features --features full
+        timeout-minutes: 20
+      - name: Verify binary size ≤ 12 MB
+        run: |
+          SIZE=$(stat --format="%s" target/release/omnia-node)
+          MAX=$((12 * 1024 * 1024))  # 12,582,912 bytes
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 / 1024 )) MB)"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "::error::Binary size $SIZE exceeds 12 MB limit ($MAX bytes)"
+            exit 1
+          fi
+          echo "::notice::Binary size check passed: $SIZE bytes ≤ $MAX bytes"
+
+  msrv:
+    name: MSRV Check (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.88.0
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: 1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-msrv"
+      - name: Check workspace compiles with MSRV
+        run: cargo +1.88.0 check --workspace --exclude omnia-fuzz
 
   audit:
     name: Security Audit
@@ -177,7 +220,7 @@ jobs:
       - name: Install cargo-udeps
         run: cargo install cargo-udeps --locked
       - name: Check for unused dependencies
-        run: cargo udeps --workspace --all-features
+        run: cargo udeps --workspace --all-features --exclude omnia-fuzz
 
   mutation-testing:
     name: Mutation Testing
@@ -205,9 +248,9 @@ jobs:
         with:
           shared-key: "omnia-bench"
       - name: Build benchmarks
-        run: cargo bench --no-run -p omnia-benches --bench throughput
+        run: cargo bench --no-run -p omnia-benches
       - name: Run quick benchmark (5s per group)
-        run: cargo bench -p omnia-benches --bench throughput -- --quick
+        run: cargo bench -p omnia-benches -- --quick --save-baseline main
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
 
@@ -271,14 +314,14 @@ jobs:
         run: |
           export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
-            cargo build --release --locked --target x86_64-unknown-linux-gnu
+            cargo build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
           sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build1.sha
       - name: Clean and rebuild
         run: |
           cargo clean
           export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
-            cargo build --release --locked --target x86_64-unknown-linux-gnu
+            cargo build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
           sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build2.sha
       - name: Compare builds
         run: |
@@ -382,16 +425,18 @@ jobs:
           retention-days: 90
       - name: Verify SBOM completeness
         run: |
-          CRATES="substrate shards binding economics zk node"
+          CRATES="omnia-primitives omnia-consensus omnia-crypto omnia-network omnia-adapters omnia-shards omnia-binding omnia-economics omnia-node"
           found=0
+          total=0
           for crate in $CRATES; do
+            total=$((total + 1))
             if ls sbom/${crate}*.json 2>/dev/null; then
               found=$((found + 1))
             else
               echo "Warning: Missing SBOM for $crate"
             fi
           done
-          echo "Found SBOM for $found/$CRATES crates"
+          echo "Found SBOM for $found/$total crates"
           if [ "$found" -eq 0 ]; then
             echo "No SBOM files found — check cargo-cyclonedx output format"
             ls -la sbom/ || true

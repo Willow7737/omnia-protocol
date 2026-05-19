@@ -5,8 +5,9 @@ on:
     - cron: '0 0 * * 0'  # Weekly on Sundays
   push:
     paths:
-      - 'zk/**'
-      - 'substrate/src/vrf.rs'
+      - 'omnia-adapters/**'
+      - 'omnia-consensus/**'
+      - 'benches/**'
     branches: [main]
   workflow_dispatch:
 
@@ -27,10 +28,11 @@ jobs:
           key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
       - name: Install gnuplot
         run: sudo apt-get update && sudo apt-get install -y gnuplot
+      - name: Run throughput benchmarks
+        run: cargo bench -p omnia-benches --bench throughput -- --save-baseline main 2>&1 | tee bench_results.txt
       - name: Run ZK benchmarks
-        run: cargo bench --bench zk_benchmarks 2>&1 | tee bench_results.txt
-      - name: Run substrate benchmarks
-        run: cargo bench --bench throughput 2>&1 | tee -a bench_results.txt
+        run: cargo bench -p omnia-benches --bench zk_benchmarks -- --save-baseline main 2>&1 | tee -a bench_results.txt
+        continue-on-error: true  # ZK benchmarks require arkworks feature
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:
