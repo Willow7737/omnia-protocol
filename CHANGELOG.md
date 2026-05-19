@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.33](https://github.com/Willow7737/omnia-protocol/compare/v0.1.32...v0.1.33) (2026-05-19)
+
+
+### Bug Fixes
+
+* escape square brackets in rustdoc comments to fix CI doc build ([0a3036e](https://github.com/Willow7737/omnia-protocol/commit/0a3036ecf007da9fdcc4a470cfb872a35fd35053))
+
 ## [0.1.32](https://github.com/Willow7737/omnia-protocol/compare/v0.1.31...v0.1.32) (2026-05-19)
 
 
