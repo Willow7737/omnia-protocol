@@ -50,7 +50,6 @@ pub mod vrf;
 pub mod wire_format;
 
 // Re-export commonly used types
-pub use blake3_domain::blake3_hash_domain;
 pub use bls::{
     aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
     BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
@@ -68,9 +67,12 @@ pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
 pub use crypto_schemes::{
     CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
 };
-pub use event::{
-    Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
-    MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
+pub use omnia_primitives::{
+    Event, EventId, EventHeader, EventRequest, EventBatch, EventStatus, EventValidationError,
+    MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, MAX_EVENT_AGE_MS,
+    VectorClock, VectorClockError, CausalOrder, NodeId, LogicalClock,
+    blake3_hash_domain, WireFormatError, WIRE_FORMAT_VERSION,
+    serialize_with_version, deserialize_with_version,
 };
 pub use fast_sync::{
     select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest,
@@ -104,11 +106,7 @@ pub use threshold::{
     DkgVerificationResult, KeyShare, PartialSignature, ThresholdConfig, ThresholdError,
     ThresholdKeyManager, ThresholdSignature,
 };
-pub use vector_clock::{CausalOrder, NodeId, VectorClock, VectorClockError};
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
-pub use wire_format::{
-    deserialize_with_version, serialize_with_version, WireFormatError, WIRE_FORMAT_VERSION,
-};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

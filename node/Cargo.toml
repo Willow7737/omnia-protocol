@@ -10,6 +10,7 @@ repository = { workspace = true }
 [dependencies]
 # Workspace crate dependencies — each provides a distinct protocol layer
 omnia-substrate = { path = "../substrate" }   # Layer 1: causal graph consensus, slashing, gossip
+omnia-primitives = { path = "../omnia-primitives" }  # Shared types: Event, VectorClock, wire format
 omnia-shards = { path = "../shards" }         # Layer 2: domain shard routing and fee enforcement
 omnia-economics = { path = "../economics" }   # Layer 5: UBC token, governance, useful-work rewards
 omnia-binding = { path = "../binding" }       # Layer 3: physical-digital binding layer

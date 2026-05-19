@@ -4638,6 +4638,7 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "ml-kem",
+ "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
  "postcard",
@@ -4662,6 +4663,7 @@ dependencies = [
  "clap",
  "hex",
  "omnia-economics",
+ "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
  "postcard",
@@ -4677,6 +4679,7 @@ dependencies = [
 name = "omnia-economics"
 version = "0.1.0"
 dependencies = [
+ "omnia-primitives",
  "omnia-substrate",
  "postcard",
  "proptest",
@@ -4693,6 +4696,7 @@ dependencies = [
  "libfuzzer-sys",
  "omnia-binding",
  "omnia-economics",
+ "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
  "omnia-zk",
@@ -4714,6 +4718,7 @@ dependencies = [
  "jsonwebtoken",
  "omnia-binding",
  "omnia-economics",
+ "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
  "omnia-zk",
@@ -4737,6 +4742,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-primitives"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "blake3",
+ "chrono",
+ "ed25519-dalek",
+ "hex",
+ "postcard",
+ "proptest",
+ "rand 0.8.6",
+ "serde",
+ "sha2",
+ "subtle",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "omnia-shards"
 version = "0.1.0"
 dependencies = [
@@ -4746,6 +4770,7 @@ dependencies = [
  "hex",
  "hkdf",
  "omnia-economics",
+ "omnia-primitives",
  "omnia-substrate",
  "postcard",
  "proptest",
@@ -4779,6 +4804,7 @@ dependencies = [
  "hex",
  "hkdf",
  "libp2p",
+ "omnia-primitives",
  "postcard",
  "proptest",
  "rand 0.8.6",
@@ -4816,6 +4842,7 @@ dependencies = [
  "blake3",
  "criterion 0.5.1",
  "hex",
+ "omnia-primitives",
  "omnia-substrate",
  "postcard",
  "proptest",

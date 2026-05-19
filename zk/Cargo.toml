@@ -18,6 +18,7 @@ ethereum-live = ["dep:alloy"]
 
 [dependencies]
 omnia-substrate = { path = "../substrate" }
+omnia-primitives = { path = "../omnia-primitives" }
 serde = { version = "1.0", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
 blake3 = "1.5"

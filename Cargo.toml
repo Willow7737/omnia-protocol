@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "omnia-primitives",
     "substrate",
     "shards",
     "binding",
