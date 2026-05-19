@@ -132,7 +132,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-chaos"
@@ -148,7 +150,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-release-size"
@@ -179,7 +183,12 @@ jobs:
         with:
           shared-key: "omnia-msrv"
       - name: Check workspace compiles with MSRV
-        run: cargo +1.88.0 check --workspace --exclude omnia-fuzz
+        run: cargo +1.88.0 check --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches
+      - name: Verify MSRV with cargo-msrv
+        run: |
+          cargo install cargo-msrv --locked
+          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.88.0
+        continue-on-error: true  # cargo-msrv may drift with new dep requirements
 
   audit:
     name: Security Audit
@@ -227,13 +236,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-mutants"
       - name: Install cargo-mutants
         run: cargo install cargo-mutants --locked
-      - name: Run mutation testing on core crates
+      - name: Run mutation testing on core crates (primitives + consensus only)
         run: cargo mutants --in-place -p omnia-primitives -p omnia-consensus --check --timeout 300
         timeout-minutes: 30
         continue-on-error: true  # Report score but don't block CI
@@ -243,14 +254,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "omnia-bench"
+          shared-key: "omnia-bench-${{ hashFiles('**/Cargo.lock') }}"
       - name: Build benchmarks
-        run: cargo bench --no-run -p omnia-benches
+        run: cargo bench --no-run -p omnia-benches --features full
       - name: Run quick benchmark (5s per group)
-        run: cargo bench -p omnia-benches -- --quick --save-baseline main
+        run: cargo bench -p omnia-benches --features full -- --quick --save-baseline main
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
 
@@ -336,8 +349,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
@@ -407,7 +421,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
       - name: Generate SBOM

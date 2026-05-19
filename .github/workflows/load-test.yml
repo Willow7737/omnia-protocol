@@ -10,9 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run load test
-        run: cargo run --bin omnia-load-test
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-load-test"
+      - name: Run load test (release mode)
+        run: cargo run --release --bin omnia-load-test
         env:
           NUM_NODES: 4
           DURATION_SECS: 30
