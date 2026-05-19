@@ -297,9 +297,7 @@ impl EthereumLiveClient {
     /// The provider includes gas estimation, nonce management, chain ID fill,
     /// and wallet signing. It connects via HTTP or WebSocket depending on the
     /// configured RPC URL scheme.
-    async fn build_provider(
-        &self,
-    ) -> Result<impl Provider, SettlementError> {
+    async fn build_provider(&self) -> Result<impl Provider, SettlementError> {
         let wallet: PrivateKeySigner = self
             .operator_private_key
             .parse()
@@ -307,13 +305,11 @@ impl EthereumLiveClient {
 
         // In alloy 1.8.x, recommended fillers (gas, nonce, chain ID) are enabled
         // by default on ProviderBuilder::new(). No need to call with_recommended_fillers().
-        let provider = ProviderBuilder::new()
-            .wallet(wallet)
-            .connect_http(
-                self.rpc_url
-                    .parse()
-                    .map_err(|e| SettlementError::ConfigError(format!("Invalid RPC URL: {e}")))?,
-            );
+        let provider = ProviderBuilder::new().wallet(wallet).connect_http(
+            self.rpc_url
+                .parse()
+                .map_err(|e| SettlementError::ConfigError(format!("Invalid RPC URL: {e}")))?,
+        );
 
         Ok(provider)
     }

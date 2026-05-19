@@ -10,7 +10,7 @@ notes = "Physical world binding — our own code."
 [[audits.ml-kem]]
 who = "omnia-protocol-ci"
 criteria = "safe-to-deploy"
-version = "0.2"
+version = "0.2.0"
 notes = "FIPS-203 standardized ML-KEM-768 implementation. Audited as replacement for pqc_kyber (RUSTSEC-2023-0079 KyberSlash). Constant-time operations, no unsafe code, active maintenance."
 
 [[audits.omnia-chaos-tests]]
