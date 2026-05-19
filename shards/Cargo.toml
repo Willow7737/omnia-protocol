@@ -8,7 +8,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-omnia-substrate = { path = "../substrate" }
+omnia-substrate = { path = "../substrate", default-features = false }
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-economics = { path = "../economics" }
 omnia-crypto = { path = "../omnia-crypto", features = ["keystore"] }

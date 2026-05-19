@@ -9,15 +9,15 @@ repository = { workspace = true }
 
 [dependencies]
 # Workspace crate dependencies — each provides a distinct protocol layer
-omnia-substrate = { path = "../substrate" }   # Layer 1: causal graph consensus, slashing, gossip
+omnia-substrate = { path = "../substrate", default-features = false }   # Layer 1: causal graph consensus, slashing, gossip
 omnia-primitives = { path = "../omnia-primitives" }  # Shared types: Event, VectorClock, wire format
 omnia-shards = { path = "../shards" }         # Layer 2: domain shard routing and fee enforcement
 omnia-economics = { path = "../economics" }   # Layer 5: UBC token, governance, useful-work rewards
 omnia-binding = { path = "../binding" }       # Layer 3: physical-digital binding layer
-omnia-network = { path = "../omnia-network", optional = true }  # P2P networking layer
-omnia-adapters = { path = "../omnia-adapters", optional = true } # ZK-rollup settlement adapters
-omnia-crypto = { path = "../omnia-crypto", optional = true }     # Crypto primitives (for light mode keygen)
-omnia-consensus = { path = "../omnia-consensus", optional = true } # Consensus engine (for pipeline)
+omnia-network = { path = "../omnia-network", default-features = false, optional = true }  # P2P networking layer
+omnia-adapters = { path = "../omnia-adapters", default-features = false, optional = true } # ZK-rollup settlement adapters
+omnia-crypto = { path = "../omnia-crypto", default-features = false, optional = true }     # Crypto primitives (for light mode keygen)
+omnia-consensus = { path = "../omnia-consensus", default-features = false, optional = true } # Consensus engine (for pipeline)
 
 # Async runtime — needed for all async I/O, signal handling, and task spawning
 tokio = { version = "1", features = ["full", "signal"] }
@@ -37,7 +37,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"  # JSON serialization for API request/response bodies
 
 # Prometheus metrics exposition — industry standard for monitoring
-prometheus = "0.13"
+prometheus = { version = "0.13", optional = true }
 
 # Ergonomic error handling — anyhow::Result with context chaining
 anyhow = "1"
@@ -80,17 +80,23 @@ chrono = { version = "0.4", features = ["serde"] }
 # UUID generation for event and proposal identifiers
 uuid = { version = "1", features = ["v4"] }
 
-utoipa = "5"             # OpenAPI spec generation — auto-documents all REST endpoints
-utoipa-swagger-ui = { version = "8", features = ["axum"] }  # Interactive API docs UI
+# OpenAPI spec generation — auto-documents all REST endpoints
+utoipa = "5"
+# Swagger UI embeds ~11MB of JS/CSS assets into the binary.
+# Make it optional so release builds can omit it and meet the ≤12MB target.
+# Enable with --features swagger-ui for development.
+utoipa-swagger-ui = { version = "8", features = ["axum"], optional = true }  # Interactive API docs UI
 
 [features]
 default = ["full"]
-full = ["network", "zk", "bls", "pqc"]
+full = ["network", "zk", "bls", "pqc", "metrics"]
 light = []  # no networking, no ZK, no heavy crypto
-network = ["omnia-network/network", "omnia-substrate/network"]
-zk = ["omnia-adapters/arkworks", "dep:omnia-adapters"]
-bls = ["omnia-crypto/bls", "dep:omnia-crypto"]
-pqc = ["omnia-crypto/pqc", "dep:omnia-crypto"]
+metrics = ["dep:prometheus"]
+swagger-ui = ["dep:utoipa-swagger-ui"]
+network = ["omnia-network/network", "omnia-substrate/network", "dep:omnia-network"]
+zk = ["omnia-adapters/arkworks", "omnia-substrate/zk", "dep:omnia-adapters"]
+bls = ["omnia-crypto/bls", "omnia-substrate/bls", "dep:omnia-crypto"]
+pqc = ["omnia-crypto/pqc", "omnia-substrate/pqc", "dep:omnia-crypto"]
 ethereum-live = ["omnia-adapters/ethereum-live", "zk"]
 
 [dev-dependencies]

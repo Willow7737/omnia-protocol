@@ -27,7 +27,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use omnia_economics::EconomicsState;
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
-use omnia_node::state::{AppState, NodeMetrics};
+use omnia_node::state::AppState;
+#[cfg(feature = "metrics")]
+use omnia_node::state::NodeMetrics;
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
@@ -184,7 +186,9 @@ async fn main() -> Result<()> {
     tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
 
     // Initialize Prometheus metrics
+    #[cfg(feature = "metrics")]
     let metrics = NodeMetrics::new().context("Failed to initialize Prometheus metrics")?;
+    #[cfg(feature = "metrics")]
     tracing::info!("Prometheus metrics initialized");
 
     // 5. Build shared application state
@@ -199,6 +203,7 @@ async fn main() -> Result<()> {
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(std::collections::HashMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
+        #[cfg(feature = "metrics")]
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(AtomicBool::new(false)),

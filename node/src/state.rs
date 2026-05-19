@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Instant;
 
+#[cfg(feature = "metrics")]
 use prometheus::{IntCounter, IntGauge};
 use tokio::sync::{Mutex, RwLock};
 
@@ -27,12 +28,14 @@ use crate::config::NodeConfig;
 /// Using `OnceLock` ensures metrics are only registered once per process,
 /// even when multiple test instances are created. Subsequent calls to
 /// `NodeMetrics::new()` return clones of the same registered metrics.
+#[cfg(feature = "metrics")]
 static NODE_METRICS: OnceLock<NodeMetrics> = OnceLock::new();
 
 /// Prometheus metrics for the node.
 ///
 /// All metrics are registered with the default Prometheus registry
 /// so they can be exposed via the `/metrics` endpoint.
+#[cfg(feature = "metrics")]
 #[derive(Debug, Clone)]
 pub struct NodeMetrics {
     /// Total number of events submitted via the API.
@@ -49,6 +52,7 @@ pub struct NodeMetrics {
     pub http_requests_total: IntCounter,
 }
 
+#[cfg(feature = "metrics")]
 impl NodeMetrics {
     /// Create and register all node metrics with the default Prometheus registry.
     ///
@@ -139,6 +143,7 @@ pub struct AppState {
     /// Known peers in the network.
     pub peers: Arc<RwLock<Vec<PeerInfo>>>,
     /// Prometheus metrics counters and gauges.
+    #[cfg(feature = "metrics")]
     pub metrics: Arc<NodeMetrics>,
     /// Time when the node was started (for uptime calculation).
     pub started_at: Instant,

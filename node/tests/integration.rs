@@ -8,7 +8,9 @@ use anyhow::Result;
 use omnia_economics::EconomicsState;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
-use omnia_node::state::{AppState, NodeMetrics};
+use omnia_node::state::AppState;
+#[cfg(feature = "metrics")]
+use omnia_node::state::NodeMetrics;
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
     IdentityShard, PhysicalShard, ShardRouter,
@@ -18,6 +20,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 
@@ -54,6 +57,8 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
     shard_router.register(Box::new(EconomicsShard::new()));
 
     let economics = EconomicsState::new();
+
+    #[cfg(feature = "metrics")]
     let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
     let config = NodeConfig {
@@ -82,9 +87,10 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(HashMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
+        #[cfg(feature = "metrics")]
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
-        is_syncing: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        is_syncing: Arc::new(AtomicBool::new(false)),
     };
 
     let app = http::build_http_router().with_state(app_state);
@@ -116,6 +122,7 @@ async fn test_health_endpoint() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg(feature = "metrics")]
 async fn test_metrics_endpoint() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
@@ -131,6 +138,20 @@ async fn test_metrics_endpoint() -> Result<()> {
         "Metrics should contain omnia_node_events_submitted_total, got: {}",
         &body[..body.len().min(500)]
     );
+
+    Ok(())
+}
+
+/// When metrics feature is disabled, /metrics should return 404
+#[tokio::test]
+#[cfg(not(feature = "metrics"))]
+async fn test_metrics_endpoint_disabled() -> Result<()> {
+    let (base_url, _handle) = start_test_server().await;
+
+    let client = reqwest::Client::new();
+    let resp = client.get(format!("{}/metrics", base_url)).send().await?;
+
+    assert_eq!(resp.status(), 404, "Metrics endpoint should be 404 when feature disabled");
 
     Ok(())
 }
@@ -185,7 +206,9 @@ async fn test_get_event_not_found() -> Result<()> {
     Ok(())
 }
 
+/// Test that Swagger UI is accessible when the feature is enabled.
 #[tokio::test]
+#[cfg(feature = "swagger-ui")]
 async fn test_swagger_ui() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
@@ -193,11 +216,27 @@ async fn test_swagger_ui() -> Result<()> {
         .get(format!("{}/swagger-ui/", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 200, "Swagger UI should be accessible");
+    assert_eq!(resp.status(), 200, "Swagger UI should be accessible when feature enabled");
     Ok(())
 }
 
+/// Test that Swagger UI returns 404 when the feature is disabled.
 #[tokio::test]
+#[cfg(not(feature = "swagger-ui"))]
+async fn test_swagger_ui_disabled() -> Result<()> {
+    let (base_url, _handle) = start_test_server().await;
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/swagger-ui/", base_url))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 404, "Swagger UI should be 404 when feature disabled");
+    Ok(())
+}
+
+/// Test that OpenAPI JSON is accessible when the feature is enabled.
+#[tokio::test]
+#[cfg(feature = "swagger-ui")]
 async fn test_openapi_json() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
@@ -205,7 +244,7 @@ async fn test_openapi_json() -> Result<()> {
         .get(format!("{}/api-docs/openapi.json", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 200, "OpenAPI JSON should be accessible");
+    assert_eq!(resp.status(), 200, "OpenAPI JSON should be accessible when feature enabled");
     let body: Value = resp.json().await?;
     // Verify the OpenAPI spec contains our paths
     let paths = body["paths"]
@@ -227,5 +266,19 @@ async fn test_openapi_json() -> Result<()> {
         paths.keys().any(|k| k.contains("node")),
         "Should contain node path"
     );
+    Ok(())
+}
+
+/// Test that OpenAPI JSON returns 404 when the feature is disabled.
+#[tokio::test]
+#[cfg(not(feature = "swagger-ui"))]
+async fn test_openapi_json_disabled() -> Result<()> {
+    let (base_url, _handle) = start_test_server().await;
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/api-docs/openapi.json", base_url))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");
     Ok(())
 }
