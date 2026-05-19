@@ -53,6 +53,10 @@ pub struct NodeConfig {
     pub consensus_data_dir: Option<PathBuf>,
     /// Protocol version to advertise on the network.
     pub protocol_version: String,
+    /// Minimum number of peers required for readiness (default: 1).
+    pub readiness_min_peers: usize,
+    /// Maximum age of last finalization in rounds for readiness (default: 600).
+    pub readiness_max_finalization_age: u64,
 }
 
 /// TOML-deserializable configuration file structure.
@@ -101,6 +105,10 @@ pub struct NodeConfigFile {
     pub nonce_data_dir: Option<String>,
     /// Directory for persistent consensus state (redb). If None, consensus state is in-memory only.
     pub consensus_data_dir: Option<String>,
+    /// Minimum number of peers required for readiness (default: 1).
+    pub readiness_min_peers: Option<usize>,
+    /// Maximum age of last finalization in rounds for readiness (default: 600).
+    pub readiness_max_finalization_age: Option<u64>,
 }
 
 impl NodeConfigFile {
@@ -276,6 +284,16 @@ impl NodeConfig {
             .and_then(|fc| fc.consensus_data_dir.clone())
             .map(PathBuf::from);
 
+        let readiness_min_peers = file_config
+            .as_ref()
+            .and_then(|fc| fc.readiness_min_peers)
+            .unwrap_or(1);
+
+        let readiness_max_finalization_age = file_config
+            .as_ref()
+            .and_then(|fc| fc.readiness_max_finalization_age)
+            .unwrap_or(600);
+
         Self {
             node_id,
             listen_addr,
@@ -290,6 +308,8 @@ impl NodeConfig {
             nonce_data_dir,
             consensus_data_dir,
             protocol_version,
+            readiness_min_peers,
+            readiness_max_finalization_age,
         }
     }
 }
@@ -392,6 +412,46 @@ pub enum CliCommand {
         /// Path to the snapshot file to restore from.
         #[arg(long)]
         input: String,
+    },
+
+    /// Start a multi-party trusted setup ceremony server.
+    ///
+    /// Coordinates contributions from multiple participants and
+    /// derives circuit-specific keys when enough participants
+    /// have contributed.
+    CeremonyServe {
+        /// Minimum number of participants required to finalize.
+        #[arg(long, default_value_t = 3)]
+        min_participants: usize,
+        /// Maximum number of participants allowed.
+        #[arg(long, default_value_t = 100)]
+        max_participants: usize,
+        /// Degree of the Powers of Tau SRS.
+        #[arg(long, default_value_t = 65536)]
+        degree: usize,
+    },
+
+    /// Contribute to a remote ceremony server.
+    ///
+    /// Generates a random secret scalar, applies it to the current
+    /// SRS, and submits the contribution with a Proof of Knowledge.
+    CeremonyContribute {
+        /// URL of the ceremony server.
+        #[arg(long)]
+        server_url: String,
+        /// Optional hex-encoded 32-byte seed for deterministic contribution (testing only).
+        #[arg(long)]
+        seed: Option<String>,
+    },
+
+    /// Verify a ceremony transcript from a remote server.
+    ///
+    /// Downloads the full transcript and independently verifies
+    /// each contribution's Proof of Knowledge.
+    CeremonyVerify {
+        /// URL of the ceremony server.
+        #[arg(long)]
+        server_url: String,
     },
 }
 
@@ -501,6 +561,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         assert!(config.validate().is_ok());
     }
@@ -521,6 +583,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -543,6 +607,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -565,6 +631,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         let result = config.validate();
         assert!(result.is_err());
@@ -587,6 +655,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("./data/slashing.redb"));
     }
@@ -607,6 +677,8 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            readiness_min_peers: 1,
+            readiness_max_finalization_age: 600,
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("/custom/slashing"));
     }

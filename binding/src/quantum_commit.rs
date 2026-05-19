@@ -26,7 +26,10 @@
 //!    A CRYSTALS-Kyber encapsulation key is stored for PQ-secure key exchange.
 
 use ed25519_dalek::{Signer, Verifier};
+use ml_kem::{MlKem768, EncapsulationKey as MlKemEncapKey, DecapsulationKey as MlKemDecapKey};
+use ml_kem::kem::{Encapsulate, Decapsulate};
 use omnia_substrate::{NodeKeypair, VectorClock};
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 
@@ -58,20 +61,20 @@ pub enum BindingError {
     Kyber(#[from] KyberError),
 }
 
-/// Kyber768 keypair for PQ-secure key encapsulation.
+/// ML-KEM-768 keypair for PQ-secure key encapsulation.
 ///
-/// Wraps the fixed-size byte arrays from `pqc_kyber` into `Vec<u8>` for
-/// serialization flexibility. Kyber768 provides security roughly equivalent
-/// to AES-192.
+/// Wraps the fixed-size byte arrays from `ml-kem` into `Vec<u8>` for
+/// serialization flexibility. ML-KEM-768 (formerly Kyber768) provides
+/// security roughly equivalent to AES-192.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KyberKeyPair {
-    /// Kyber768 encapsulation key (public key, 1184 bytes).
+    /// ML-KEM-768 encapsulation key (public key, 1184 bytes).
     pub encapsulation_key: Vec<u8>,
-    /// Kyber768 decapsulation key (secret key, 2400 bytes).
+    /// ML-KEM-768 decapsulation key (secret key, 2400 bytes).
     pub decapsulation_key: Vec<u8>,
 }
 
-/// Error type for Kyber KEM operations.
+/// Error type for ML-KEM operations.
 #[derive(Debug, thiserror::Error)]
 pub enum KyberError {
     /// Invalid encapsulation key length.
@@ -88,11 +91,15 @@ pub enum KyberError {
     KemFailed(String),
 }
 
-impl From<pqc_kyber::KyberError> for KyberError {
-    fn from(e: pqc_kyber::KyberError) -> Self {
-        KyberError::KemFailed(format!("{e:?}"))
-    }
-}
+// ML-KEM-768 key size constants (same as Kyber768)
+/// Encapsulation key size in bytes for ML-KEM-768.
+const ML_KEM_768_ENCAPSULATION_KEY_SIZE: usize = 1184;
+/// Decapsulation key size in bytes for ML-KEM-768.
+const ML_KEM_768_DECAPSULATION_KEY_SIZE: usize = 2400;
+/// Ciphertext size in bytes for ML-KEM-768.
+const ML_KEM_768_CIPHERTEXT_SIZE: usize = 1088;
+/// Shared secret size in bytes for ML-KEM-768.
+const ML_KEM_768_SHARED_SECRET_SIZE: usize = 32;
 
 /// A hybrid (classical + post-quantum) cryptographic commitment.
 ///
@@ -214,7 +221,7 @@ impl QuantumCommitment {
         let ed_sig = ed_keypair.sign(hash.as_bytes());
         let dilithium_sig = dilithium_keypair.sign(hash.as_bytes());
 
-        // Generate a Kyber768 encapsulation key for PQ-secure key exchange
+        // Generate an ML-KEM-768 encapsulation key for PQ-secure key exchange
         let kyber_kp = Self::generate_kyber_keypair()?;
 
         Ok(Self {
@@ -229,7 +236,7 @@ impl QuantumCommitment {
     /// Sign data using post-quantum Dilithium only.
     ///
     /// Creates a commitment with only a Dilithium signature over the data hash.
-    /// A CRYSTALS-Kyber encapsulation key is generated and stored in `kyber_key`
+    /// An ML-KEM-768 encapsulation key is generated and stored in `kyber_key`
     /// for PQ-secure key exchange. The classical signature field is left empty.
     /// The commitment timestamp defaults to an empty `VectorClock`.
     ///
@@ -240,7 +247,7 @@ impl QuantumCommitment {
     ///
     /// # Errors
     ///
-    /// Returns `BindingError` if signing or Kyber keypair generation fails.
+    /// Returns `BindingError` if signing or ML-KEM keypair generation fails.
     pub fn sign_post_quantum(
         data: &[u8],
         dilithium_keypair: &pqc_dilithium::Keypair,
@@ -248,7 +255,7 @@ impl QuantumCommitment {
         let hash = blake3::hash(data);
         let dilithium_sig = dilithium_keypair.sign(hash.as_bytes());
 
-        // Generate a Kyber768 encapsulation key for PQ-secure key exchange
+        // Generate an ML-KEM-768 encapsulation key for PQ-secure key exchange
         let kyber_kp = Self::generate_kyber_keypair()?;
 
         Ok(Self {
@@ -390,10 +397,10 @@ impl QuantumCommitment {
     }
 
     // -----------------------------------------------------------------------
-    // Kyber KEM operations
+    // ML-KEM KEM operations
     // -----------------------------------------------------------------------
 
-    /// Generate a Kyber768 keypair for PQ-secure key encapsulation.
+    /// Generate an ML-KEM-768 keypair for PQ-secure key encapsulation.
     ///
     /// Returns a [`KyberKeyPair`] containing the encapsulation (public) key
     /// and decapsulation (secret) key. The encapsulation key should be stored
@@ -405,16 +412,16 @@ impl QuantumCommitment {
     /// Returns [`KyberError`] if the keypair generation fails (extremely
     /// unlikely with a proper RNG).
     pub fn generate_kyber_keypair() -> Result<KyberKeyPair, KyberError> {
-        let mut rng = rand::thread_rng();
-        let kp = pqc_kyber::keypair(&mut rng)?;
+        let mut rng = OsRng;
+        let (dk, ek) = MlKem768::generate(&mut rng);
         Ok(KyberKeyPair {
-            encapsulation_key: kp.public.to_vec(),
-            decapsulation_key: kp.secret.to_vec(),
+            encapsulation_key: ek.as_bytes().to_vec(),
+            decapsulation_key: dk.as_bytes().to_vec(),
         })
     }
 
     /// Encapsulate: generate a shared secret and ciphertext using the
-    /// commitment's stored Kyber encapsulation key.
+    /// commitment's stored ML-KEM-768 encapsulation key.
     ///
     /// This is the KEM analog of encryption: the sender calls `encapsulate`
     /// with the recipient's public key to produce a shared secret and a
@@ -424,7 +431,7 @@ impl QuantumCommitment {
     /// # Returns
     ///
     /// A tuple of `(shared_secret, ciphertext)` where both are `Vec<u8>`.
-    /// The shared secret is 32 bytes; the ciphertext is 1088 bytes (Kyber768).
+    /// The shared secret is 32 bytes; the ciphertext is 1088 bytes (ML-KEM-768).
     ///
     /// # Errors
     ///
@@ -432,12 +439,16 @@ impl QuantumCommitment {
     /// - The encapsulation key stored in this commitment is invalid
     /// - The KEM operation fails (extremely unlikely with a proper RNG)
     pub fn kyber_encapsulate(&self) -> Result<(Vec<u8>, Vec<u8>), KyberError> {
-        if self.kyber_key.len() != pqc_kyber::KYBER_PUBLICKEYBYTES {
+        if self.kyber_key.len() != ML_KEM_768_ENCAPSULATION_KEY_SIZE {
             return Err(KyberError::InvalidEncapsulationKey(self.kyber_key.len()));
         }
-        let mut rng = rand::thread_rng();
-        let (ct, ss) = pqc_kyber::encapsulate(&self.kyber_key, &mut rng)?;
-        Ok((ss.to_vec(), ct.to_vec()))
+        let ek_bytes: [u8; ML_KEM_768_ENCAPSULATION_KEY_SIZE] = self.kyber_key.clone().try_into()
+            .map_err(|_| KyberError::InvalidEncapsulationKey(self.kyber_key.len()))?;
+        let ek = MlKemEncapKey::from_bytes(&ek_bytes);
+        let mut rng = OsRng;
+        let (ss, ct) = ek.encapsulate(&mut rng)
+            .map_err(|e| KyberError::KemFailed(format!("{e:?}")))?;
+        Ok((ss.as_bytes().to_vec(), ct.as_bytes().to_vec()))
     }
 
     /// Decapsulate: recover the shared secret from a ciphertext.
@@ -448,7 +459,7 @@ impl QuantumCommitment {
     ///
     /// # Arguments
     ///
-    /// * `decapsulation_key` — The Kyber768 secret key (2400 bytes)
+    /// * `decapsulation_key` — The ML-KEM-768 secret key (2400 bytes)
     /// * `ciphertext` — The KEM ciphertext (1088 bytes)
     ///
     /// # Returns
@@ -461,7 +472,7 @@ impl QuantumCommitment {
     ///
     /// # Note on Implicit Rejection
     ///
-    /// Kyber uses implicit rejection: if the ciphertext is invalid (e.g.,
+    /// ML-KEM uses implicit rejection: if the ciphertext is invalid (e.g.,
     /// modified by an attacker), decapsulation still succeeds but returns
     /// a pseudorandom shared secret instead of the original one. This is
     /// by design and prevents CCA-style attacks.
@@ -469,14 +480,21 @@ impl QuantumCommitment {
         decapsulation_key: &[u8],
         ciphertext: &[u8],
     ) -> Result<Vec<u8>, KyberError> {
-        if decapsulation_key.len() != pqc_kyber::KYBER_SECRETKEYBYTES {
+        if decapsulation_key.len() != ML_KEM_768_DECAPSULATION_KEY_SIZE {
             return Err(KyberError::InvalidDecapsulationKey(decapsulation_key.len()));
         }
-        if ciphertext.len() != pqc_kyber::KYBER_CIPHERTEXTBYTES {
+        if ciphertext.len() != ML_KEM_768_CIPHERTEXT_SIZE {
             return Err(KyberError::InvalidCiphertext(ciphertext.len()));
         }
-        let ss = pqc_kyber::decapsulate(ciphertext, decapsulation_key)?;
-        Ok(ss.to_vec())
+        let dk_bytes: [u8; ML_KEM_768_DECAPSULATION_KEY_SIZE] = decapsulation_key.try_into()
+            .map_err(|_| KyberError::InvalidDecapsulationKey(decapsulation_key.len()))?;
+        let ct_bytes: [u8; ML_KEM_768_CIPHERTEXT_SIZE] = ciphertext.try_into()
+            .map_err(|_| KyberError::InvalidCiphertext(ciphertext.len()))?;
+        let dk = MlKemDecapKey::from_bytes(&dk_bytes);
+        let ct = ml_kem::Ciphertext::from_bytes(&ct_bytes);
+        let ss = dk.decapsulate(&ct)
+            .map_err(|e| KyberError::KemFailed(format!("{e:?}")))?;
+        Ok(ss.as_bytes().to_vec())
     }
 }
 
@@ -623,24 +641,24 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Kyber KEM tests
+    // ML-KEM KEM tests
     // -----------------------------------------------------------------------
 
     #[test]
     fn test_kyber_keypair_generation() {
         let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
-        // Kyber768: encapsulation key = 1184 bytes, decapsulation key = 2400 bytes
+        // ML-KEM-768: encapsulation key = 1184 bytes, decapsulation key = 2400 bytes
         assert_eq!(
             keypair.encapsulation_key.len(),
-            pqc_kyber::KYBER_PUBLICKEYBYTES,
+            ML_KEM_768_ENCAPSULATION_KEY_SIZE,
             "encapsulation key should be {} bytes",
-            pqc_kyber::KYBER_PUBLICKEYBYTES
+            ML_KEM_768_ENCAPSULATION_KEY_SIZE
         );
         assert_eq!(
             keypair.decapsulation_key.len(),
-            pqc_kyber::KYBER_SECRETKEYBYTES,
+            ML_KEM_768_DECAPSULATION_KEY_SIZE,
             "decapsulation key should be {} bytes",
-            pqc_kyber::KYBER_SECRETKEYBYTES
+            ML_KEM_768_DECAPSULATION_KEY_SIZE
         );
     }
 
@@ -651,7 +669,7 @@ mod tests {
         // Two independently generated keypairs should differ
         assert_ne!(
             kp1.encapsulation_key, kp2.encapsulation_key,
-            "independent Kyber keypairs should have different encapsulation keys"
+            "independent ML-KEM keypairs should have different encapsulation keys"
         );
     }
 
@@ -677,27 +695,27 @@ mod tests {
         );
         assert_eq!(
             shared_secret_1.len(),
-            pqc_kyber::KYBER_SSBYTES,
+            ML_KEM_768_SHARED_SECRET_SIZE,
             "shared secret should be 32 bytes"
         );
         assert_eq!(
             ciphertext.len(),
-            pqc_kyber::KYBER_CIPHERTEXTBYTES,
+            ML_KEM_768_CIPHERTEXT_SIZE,
             "ciphertext should be {} bytes",
-            pqc_kyber::KYBER_CIPHERTEXTBYTES
+            ML_KEM_768_CIPHERTEXT_SIZE
         );
     }
 
     #[test]
     fn test_kyber_wrong_ciphertext_succeeds() {
-        // Kyber uses implicit rejection: decapsulation with a wrong ciphertext
+        // ML-KEM uses implicit rejection: decapsulation with a wrong ciphertext
         // produces a different (pseudorandom) shared secret, not an error.
         let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
-        let wrong_ct = vec![0u8; pqc_kyber::KYBER_CIPHERTEXTBYTES];
+        let wrong_ct = vec![0u8; ML_KEM_768_CIPHERTEXT_SIZE];
         let result = QuantumCommitment::kyber_decapsulate(&keypair.decapsulation_key, &wrong_ct);
         assert!(
             result.is_ok(),
-            "Kyber decapsulation always succeeds (implicit rejection)"
+            "ML-KEM decapsulation always succeeds (implicit rejection)"
         );
     }
 
@@ -746,7 +764,7 @@ mod tests {
     fn test_kyber_invalid_decapsulation_key() {
         let result = QuantumCommitment::kyber_decapsulate(
             &[0u8; 100],
-            &[0u8; pqc_kyber::KYBER_CIPHERTEXTBYTES],
+            &[0u8; ML_KEM_768_CIPHERTEXT_SIZE],
         );
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -784,8 +802,8 @@ mod tests {
             QuantumCommitment::sign_hybrid(b"hybrid data", &ed_kp, &dilithium_kp).unwrap();
         assert_eq!(
             commitment.kyber_key.len(),
-            pqc_kyber::KYBER_PUBLICKEYBYTES,
-            "hybrid mode should have a Kyber encapsulation key"
+            ML_KEM_768_ENCAPSULATION_KEY_SIZE,
+            "hybrid mode should have an ML-KEM encapsulation key"
         );
     }
 
@@ -795,8 +813,8 @@ mod tests {
         let commitment = QuantumCommitment::sign_post_quantum(b"pq data", &dilithium_kp).unwrap();
         assert_eq!(
             commitment.kyber_key.len(),
-            pqc_kyber::KYBER_PUBLICKEYBYTES,
-            "post-quantum mode should have a Kyber encapsulation key"
+            ML_KEM_768_ENCAPSULATION_KEY_SIZE,
+            "post-quantum mode should have an ML-KEM encapsulation key"
         );
     }
 
@@ -805,7 +823,7 @@ mod tests {
         let (ed_kp, _) = test_keypair_and_pk();
         let dilithium_kp = pqc_dilithium::Keypair::generate();
 
-        // Sign in hybrid mode — this generates a Kyber keypair internally
+        // Sign in hybrid mode — this generates an ML-KEM keypair internally
         let commitment =
             QuantumCommitment::sign_hybrid(b"hybrid kem test", &ed_kp, &dilithium_kp).unwrap();
 

@@ -159,7 +159,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-1: Kyber Key Encapsulation Mechanism ✅
 
 **Resolution:**
-- ML-KEM-768 (Kyber768) key encapsulation via `pqc_kyber` crate
+- ML-KEM-768 (Kyber768) key encapsulation via `ml-kem` crate (migrated from `pqc_kyber` to fix KyberSlash / RUSTSEC-2023-0079)
 - `generate_kyber_keypair()`, `kyber_encapsulate()`, `kyber_decapsulate()`
 - `kyber_key` populated in Hybrid and PostQuantum modes
 - Classical mode keeps `kyber_key: Vec::new()`

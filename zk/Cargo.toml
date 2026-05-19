@@ -9,13 +9,12 @@ repository = { workspace = true }
 
 [features]
 default = []
-## Enable live Ethereum RPC mode architecture.
+## Enable live Ethereum RPC mode using the alloy crate.
 ## Without this feature, the Ethereum adapter runs in simulated (BLAKE3-based mock) mode.
-## Note: The ethers-rs dependency is intentionally excluded from the default build
-## to keep compile times and disk usage manageable. To enable full live mode,
-## add `ethers = { version = "2", features = ["ws", "rustls"], optional = true }`
-## to [dependencies] and change this to `ethereum-live = ["ethers"]`.
-ethereum-live = []
+## The alloy dependency is intentionally excluded from the default build to keep
+## compile times and disk usage manageable. To enable full live mode, build with
+## `--features ethereum-live`.
+ethereum-live = ["dep:alloy"]
 
 [dependencies]
 omnia-substrate = { path = "../substrate" }
@@ -40,12 +39,19 @@ rand_chacha = "0.3"
 rand = "0.8"
 serde_bytes = "0.11"
 subtle = "2"
-# Optional: ethers-rs for live Ethereum settlement (enabled by 'ethereum-live' feature).
-# Note: ethers-rs 2.x is very heavy (~300 deps). To use it, add:
-#   ethers = { version = "2", features = ["ws", "rustls"], optional = true }
-# and uncomment the `ethereum-live = ["ethers"]` feature above.
-# Currently, live mode stubs are present but ethers is not included to keep
-# build times and disk usage manageable in development.
+
+# Optional: alloy for live Ethereum settlement (enabled by 'ethereum-live' feature).
+# Provides provider, signer, contract, and primitive types for interacting with
+# the OmniaRollup smart contract on a real Ethereum RPC endpoint.
+alloy = { version = "1", features = [
+    "provider-ws",
+    "provider-http",
+    "signers",
+    "signer-local",
+    "contract",
+    "network",
+    "essentials",
+], optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

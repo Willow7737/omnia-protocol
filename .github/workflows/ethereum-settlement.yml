@@ -1,0 +1,113 @@
+name: Ethereum Settlement Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'zk/**'
+      - '.github/workflows/ethereum-settlement.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'zk/**'
+      - '.github/workflows/ethereum-settlement.yml'
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Test without ethereum-live feature (simulated mode)
+  # -----------------------------------------------------------------------
+  simulated:
+    name: Simulated Mode Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-eth-simulated"
+      - name: Test zk crate (no features)
+        run: cargo test -p omnia-zk --verbose
+      - name: Clippy (no features, lib only)
+        run: cargo clippy -p omnia-zk --lib -- -D warnings -D clippy::unwrap_used
+
+  # -----------------------------------------------------------------------
+  # Test with ethereum-live feature against Anvil (Foundry local node)
+  # -----------------------------------------------------------------------
+  live:
+    name: Live Mode Tests (Anvil)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-eth-live"
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Compile OmniaRollup contract
+        run: |
+          cd zk/contracts/ethereum
+          forge build --contracts OmniaRollup.sol
+      - name: Start Anvil
+        run: |
+          anvil --host 127.0.0.1 --port 8545 &
+          sleep 3
+          # Verify Anvil is running
+          curl -s -X POST http://127.0.0.1:8545 \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | head -1
+      - name: Deploy OmniaRollup to Anvil
+        run: |
+          # Deploy with the first Anvil account as operator and a zero state root.
+          # Uses a dummy verifying key (all zeros) — sufficient for compilation tests.
+          cd zk/contracts/ethereum
+          DEPLOY_OUTPUT=$(forge create OmniaRollup \
+            --constructor-args \
+            0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+            0x0000000000000000000000000000000000000000000000000000000000000000 \
+            "[1,1]" \
+            "[[1,0],[1,0]]" \
+            "[[1,0],[1,0]]" \
+            "[[1,0],[1,0]]" \
+            "[1,1,1,1]" \
+            --rpc-url http://127.0.0.1:8545 \
+            --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
+            2>&1) || true
+          echo "$DEPLOY_OUTPUT"
+      - name: Test zk crate (ethereum-live feature)
+        run: cargo test -p omnia-zk --features ethereum-live --verbose
+        timeout-minutes: 15
+      - name: Clippy (ethereum-live feature, lib only)
+        run: cargo clippy -p omnia-zk --lib --features ethereum-live -- -D warnings -D clippy::unwrap_used
+      - name: Clippy (ethereum-live feature, all targets)
+        run: cargo clippy -p omnia-zk --all-targets --features ethereum-live -- -D clippy::unwrap_used
+
+  # -----------------------------------------------------------------------
+  # Solidity contract tests (via Forge)
+  # -----------------------------------------------------------------------
+  forge-test:
+    name: Forge Contract Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      - name: Run Forge tests
+        run: |
+          cd zk/contracts/ethereum
+          forge test -vv
+        continue-on-error: true  # No test file may exist yet

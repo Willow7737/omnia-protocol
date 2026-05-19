@@ -76,4 +76,13 @@ pub enum SettlementError {
     /// Configuration error (invalid parameters, missing fields, etc.).
     #[error("Settlement config error: {0}")]
     ConfigError(String),
+    /// A submitted transaction failed (reverted or was rejected by the node).
+    #[error("Transaction failed: {0}")]
+    TxFailed(String),
+    /// A submitted transaction timed out before receiving the required confirmations.
+    #[error("Transaction timed out after {0} confirmations")]
+    TxTimedOut(u64),
+    /// Smart contract call returned an error or unexpected data.
+    #[error("Contract error: {0}")]
+    ContractError(String),
 }

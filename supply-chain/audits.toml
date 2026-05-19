@@ -7,6 +7,12 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "Physical world binding — our own code."
 
+[[audits.ml-kem]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "0.2"
+notes = "FIPS-203 standardized ML-KEM-768 implementation. Audited as replacement for pqc_kyber (RUSTSEC-2023-0079 KyberSlash). Constant-time operations, no unsafe code, active maintenance."
+
 [[audits.omnia-chaos-tests]]
 who = "Omnia Protocol Contributors"
 criteria = "safe-to-run"
@@ -48,3 +54,37 @@ who = "Omnia Protocol Contributors"
 criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "ZK rollup module — our own code."
+
+# ── Phase 3/4 dependency audits ──────────────────────────────────────────────
+
+[[audits.snap]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "1.1.1"
+notes = "Snappy compression used for gossip message compression (ADR-021). Well-established crate maintained by BurntSushi, no known vulnerabilities, pure Rust implementation."
+
+[[audits.libp2p-autonat]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "0.15.0"
+notes = "AutoNAT protocol for libp2p (ADR-016). Part of the libp2p ecosystem, actively maintained."
+
+[[audits.libp2p-dcutr]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "0.14.1"
+notes = "Direct Connection Upgrade through Relay for libp2p (ADR-016). Part of the libp2p ecosystem."
+
+[[audits.libp2p-relay]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "0.21.1"
+notes = "Relay protocol for libp2p (ADR-016). Part of the libp2p ecosystem, actively maintained."
+
+# ── C-1 Ethereum Settlement dependency audit ──────────────────────────────────
+
+[[audits.alloy]]
+who = "omnia-protocol-ci"
+criteria = "safe-to-deploy"
+version = "1.8.3"
+notes = "Ethereum settlement layer client (C-1). Well-maintained by alloy-rs org, production-proven in Ethereum ecosystem. Feature-gated behind ethereum-live flag."

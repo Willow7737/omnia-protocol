@@ -22,8 +22,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-2.1** | DID Creation (`did:omnia:` method) | P0 | ✅ Completed |
 | **REQ-2.2** | Public Key Registry | P0 | ✅ Completed |
 | **REQ-2.3** | Verifiable Credentials (VCs) | P1 | ✅ Completed |
-| **REQ-2.4** | Social Recovery Mechanism | P2 | ⚠️ Partial — recovery does not update DID auth (FIND-P2-001) |
-| **REQ-2.5** | Shamir's Secret Sharing (GF(256)) | P1 | ⚠️ Partial — share encryption uses XOR (FIND-P2-002) |
+| **REQ-2.4** | Social Recovery Mechanism | P2 | ✅ Completed |
+| **REQ-2.5** | Shamir's Secret Sharing (GF(256)) | P1 | ✅ Completed |
 | **REQ-2.6** | Biometric Anchors (BLAKE3) | P2 | ✅ Completed |
 | **REQ-2.7** | AI Agent Identity (5 capability types) | P1 | ✅ Completed |
 
@@ -45,7 +45,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-4.1** | Provenance Log (append-only CRDT) | P0 | ✅ Completed |
 | **REQ-4.2** | Provenance Tracker (lifecycle) | P1 | ✅ Completed |
 | **REQ-4.3** | RF Fingerprint Hashing | P2 | 🔄 Stub |
-| **REQ-4.4** | Quantum Commitment (Ed25519 + Dilithium) | P2 | ✅ Completed |
+| **REQ-4.4** | Quantum Commitment (ML-KEM-768 / FIPS-203) | P2 | ✅ Completed |
 
 ## 5. Economics & Governance
 
@@ -74,12 +74,12 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | :--- | :--- | :--- | :--- |
 | **REQ-P2.1** | Architecture Decision Records 010-014 | P1 | ✅ Completed |
 | **REQ-P2.2** | Project Dashboard & Findings Update | P1 | ✅ Completed |
-| **REQ-P2.3** | SSS Recovery Authentication Update (FIND-P2-001) | P0 | 🔄 Open |
-| **REQ-P2.4** | SSS Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-002) | P0 | 🔄 Open |
-| **REQ-P2.5** | DKG Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-003) | P0 | 🔄 Open |
-| **REQ-P2.6** | ZK Circuit Dummy Field Remediation (FIND-P2-010) | P1 | 🔄 Open |
-| **REQ-P2.7** | Trusted Setup Transcript Hash Initialization (FIND-P2-011) | P1 | 🔄 Open |
-| **REQ-P2.8** | Gradual Slashing Implementation (ADR-011) | P1 | 📋 Planned |
+| **REQ-P2.3** | SSS Recovery Authentication Update (FIND-P2-001) | P0 | ✅ Completed |
+| **REQ-P2.4** | SSS Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-002) | P0 | ✅ Completed |
+| **REQ-P2.5** | DKG Share Encryption Upgrade: XOR → AES-256-GCM (FIND-P2-003) | P0 | ✅ Completed |
+| **REQ-P2.6** | ZK Circuit Dummy Field Remediation (FIND-P2-010) | P1 | ✅ Completed |
+| **REQ-P2.7** | Trusted Setup Transcript Hash Initialization (FIND-P2-011) | P1 | ✅ Completed |
+| **REQ-P2.8** | Gradual Slashing Implementation (ADR-011) | P1 | ✅ Completed |
 | **REQ-P2.9** | VRF Spec Compliance Evaluation (ADR-012) | P2 | 📋 Deferred |
 | **REQ-P2.10** | Poseidon Parameter Migration Planning (ADR-014) | P2 | 📋 Deferred |
 
@@ -92,7 +92,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.3** | Fee Mechanism (FeeSchedule + QuotaSystem) | P1 | ✅ Completed |
 | **REQ-6.4** | Mobile Wallet | P1 | 🌑 Not Started |
 | **REQ-6.5** | Validator Network | P0 | 🌑 Not Started |
-| **REQ-6.6** | Slashing (Equivocation, Liveness, InvalidAttestation) | P1 | ✅ Completed |
+| **REQ-6.6** | Slashing (3-tier Gradual: Warning → Jail → Ejection) | P1 | ✅ Completed |
 | **REQ-6.7** | Conviction Voting | P2 | 🌑 Not Started |
 | **REQ-6.8** | Delegation | P2 | 🌑 Not Started |
 
@@ -109,7 +109,36 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-7.7** | Security Audit Preparation | P3 | ✅ Completed |
 | **REQ-7.8** | Production ZK Hash Gadget (Pedersen/Poseidon) | P1 | ✅ Completed |
 
-## 10. Sprint 4: Push to 9
+## 10. Phase 3: Network Optimization & Production Deployment
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-P3.1** | Leader Selection in Consensus Loop (H-3) | P0 | ✅ Completed |
+| **REQ-P3.2** | Kademlia DHT + NAT Traversal (H-4) | P0 | ✅ Completed |
+| **REQ-P3.3** | GossipSub Peer Scoring Configuration (H-5) | P1 | ✅ Completed |
+| **REQ-P3.4** | Consensus State Persistence (H-6) | P0 | ✅ Completed |
+| **REQ-P3.5** | Real Ethereum Settlement Adapter (H-7) | P1 | ✅ Completed |
+| **REQ-P3.6** | ML-KEM-768 Key Encapsulation (M-1) | P0 | ✅ Completed |
+| **REQ-P3.7** | Fast-Sync Protocol (M-2) | P1 | ✅ Completed |
+| **REQ-P3.8** | Gossip Message Compression (M-3) | P1 | ✅ Completed |
+| **REQ-P3.9** | Load Testing Infrastructure (M-4) | P2 | ✅ Completed |
+| **REQ-P3.10** | RUSTSEC Advisory Cleanup (M-5) | P2 | ✅ Completed |
+
+## 11. Phase 4: Production Hardening & Mainnet Preparation
+
+| ID | Requirement | Priority | Status |
+| :--- | :--- | :--- | :--- |
+| **REQ-P4.1** | Bitcoin Settlement Adapter | P1 | 🔄 Stub |
+| **REQ-P4.2** | Solana Settlement Adapter | P1 | 🔄 Stub |
+| **REQ-P4.3** | Celestia Settlement Adapter | P1 | 🔄 Stub |
+| **REQ-P4.4** | Validator Network (multi-node) | P0 | 🌑 Not Started |
+| **REQ-P4.5** | Public Testnet Launch | P0 | 🌑 Not Started |
+| **REQ-P4.6** | Dynamic Fee Mechanism (EIP-1559-style) | P1 | 📋 Planned |
+| **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2 | ✅ Completed |
+| **REQ-P4.8** | VRF Spec Compliance (ADR-012) | P2 | 📋 Deferred |
+| **REQ-P4.9** | Poseidon Parameter Migration (ADR-014) | P2 | 📋 Deferred |
+
+## 12. Sprint 4: Push to 9
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -139,16 +168,18 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | Category | Total | ✅ Done | ⚠️ Partial | 🔄 Stub/Open | 🌑 Not Started | 📋 Planned | Progress |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Core Protocol** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **Identity** | 7 | 5 | 2 | 0 | 0 | 0 | █████████░ 93% |
+| **Identity** | 7 | 7 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Financial & Settlement** | 6 | 6 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Physical Binding** | 4 | 3 | 0 | 1 | 0 | 0 | ████████░░ 75% |
 | **Economics** | 3 | 2 | 0 | 1 | 0 | 0 | ███████░░░ 67% |
 | **Phase 1** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **Phase 2** | 10 | 2 | 0 | 5 | 0 | 3 | ███░░░░░░░ 30% |
+| **Phase 2** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Sprint 3** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Sprint 4** | 18 | 18 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Phase 4** | 9 | 1 | 0 | 3 | 2 | 3 | █░░░░░░░░░ 17% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **TOTAL** | **80** | **64** | **2** | **6** | **4** | **3** | ████████░░ 85% |
+| **TOTAL** | **99** | **85** | **0** | **4** | **6** | **3** | ████████░░ 89% |
 
 ---
 *Legend:*

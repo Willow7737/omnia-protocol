@@ -21,6 +21,7 @@ serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
 hex = "0.4"
 thiserror = "2.0"
+clap = { version = "4", features = ["derive"] }
 
 [[bin]]
 name = "omnia-load-test"

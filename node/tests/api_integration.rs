@@ -168,6 +168,8 @@ fn build_test_app_state(port: u16) -> AppState {
         nonce_data_dir: None,
         consensus_data_dir: None,
         protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
+        readiness_min_peers: 1,
+        readiness_max_finalization_age: 600,
     };
 
     AppState {
@@ -180,6 +182,7 @@ fn build_test_app_state(port: u16) -> AppState {
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
+        is_syncing: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     }
 }
 

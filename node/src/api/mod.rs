@@ -12,6 +12,7 @@
 //! (see [`crate::http`]).
 
 pub mod auth;
+pub mod ceremony;
 pub mod economics;
 pub mod errors;
 pub mod events;
@@ -117,6 +118,11 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/economics/transfer", post(economics::transfer_ubc))
         // Error documentation
         .route("/errors", get(errors::error_codes))
+        // Ceremony (multi-party trusted setup)
+        .route("/ceremony/state", get(ceremony::ceremony_state))
+        .route("/ceremony/contribute", post(ceremony::ceremony_contribute))
+        .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
+        .route("/ceremony/finalize", post(ceremony::ceremony_finalize))
         // --- Middleware layers (outermost = last added) ---
         // Provide AuthorizedCallers via Extension for handler-level checks
         .layer(Extension(authorized))

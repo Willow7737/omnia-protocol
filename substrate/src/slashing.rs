@@ -53,6 +53,17 @@ pub const LIVENESS_VIOLATION_POINTS: u64 = 100;
 /// Points assigned for an invalid attestation.
 pub const INVALID_ATTESTATION_POINTS: u64 = 300;
 
+/// Returns the current wall-clock time as milliseconds since the UNIX epoch.
+///
+/// Used for timestamping [`SlashingEvent`]s. Returns `0` if the system clock
+/// is earlier than the UNIX epoch (which should never happen in practice).
+fn current_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 /// Categorizes the type of Byzantine offense committed by a validator.
 ///
 /// Each offense type carries a fixed penalty in slash points:
@@ -1389,20 +1400,46 @@ impl SlashingEngine {
         state.ejection_threshold
     }
 
-    /// Compute the graded penalty based on offense type and history.
+    /// Compute the graded penalty based on offense type and same-type history.
+    ///
+    /// Per ADR-011, escalation is based on the number of **prior offenses of
+    /// the same type**, not total accumulated offenses. This ensures that a
+    /// validator with two liveness violations is not penalized as harshly for
+    /// their first equivocation.
+    ///
+    /// # Escalation tiers (ADR-011)
+    ///
+    /// | Offense              | 1st              | 2nd                        | 3rd            |
+    /// |----------------------|------------------|----------------------------|----------------|
+    /// | Equivocation         | Jailed(5%, 1000) | Jailed(25%, 5000)          | Ejected(100%)  |
+    /// | LivenessViolation    | Warning(1%)      | Warning(1%)                | Jailed(5%, 500)|
+    /// | InvalidAttestation   | Warning(2%)      | Jailed(10%, 2000)          | Ejected(100%)  |
+    ///
+    /// # Arguments
+    ///
+    /// * `validator_id` — The validator to compute a penalty for.
+    /// * `offense` — The type of offense being considered.
+    ///
+    /// # Returns
+    ///
+    /// A [`SlashPenalty`] indicating the graded penalty for this offense.
     pub fn compute_penalty(&self, validator_id: NodeId, offense: &SlashOffense) -> SlashPenalty {
+        // Count only prior offenses of the same type for escalation.
         let history = self.get_offense_history(validator_id);
-        let offense_count = history.len();
+        let same_type_count = history.iter().filter(|&&o| o == *offense).count();
 
         match offense {
             SlashOffense::Equivocation => {
-                if offense_count == 0 {
+                // 1st (0 prior) → Jailed(5%, 1000 rounds, auto-release)
+                // 2nd (1 prior) → Jailed(25%, 5000 rounds, no auto-release)
+                // 3rd+ (2+ prior) → Ejected(100%)
+                if same_type_count == 0 {
                     SlashPenalty::Jailed {
                         burn_percentage: 5.0,
                         jail_rounds: 1000,
                         auto_release: true,
                     }
-                } else if offense_count < 3 {
+                } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
                         burn_percentage: 25.0,
                         jail_rounds: 5000,
@@ -1416,25 +1453,30 @@ impl SlashingEngine {
                 }
             }
             SlashOffense::LivenessViolation => {
-                if offense_count < 2 {
+                // 1st (0 prior) → Warning(1%)
+                // 2nd (1 prior) → Warning(1%)
+                // 3rd+ (2+ prior) → Jailed(5%, 500 rounds, auto-release)
+                if same_type_count < 2 {
                     SlashPenalty::Warning {
                         burn_percentage: 1.0,
                     }
-                } else if offense_count < 5 {
+                } else {
                     SlashPenalty::Jailed {
                         burn_percentage: 5.0,
                         jail_rounds: 500,
                         auto_release: true,
                     }
-                } else {
-                    SlashPenalty::Ejected {
-                        burn_percentage: 100.0,
-                        reason: "chronic_liveness".into(),
-                    }
                 }
             }
             SlashOffense::InvalidAttestation => {
-                if offense_count == 0 {
+                // 1st (0 prior) → Warning(2%)
+                // 2nd (1 prior) → Jailed(10%, 2000 rounds, auto-release)
+                // 3rd+ (2+ prior) → Ejected(100%)
+                if same_type_count == 0 {
+                    SlashPenalty::Warning {
+                        burn_percentage: 2.0,
+                    }
+                } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
                         burn_percentage: 10.0,
                         jail_rounds: 2000,
@@ -1451,6 +1493,11 @@ impl SlashingEngine {
     }
 
     /// Check if a validator is currently in jail.
+    ///
+    /// A validator is considered jailed if they are in the jail registry
+    /// AND either:
+    /// - `auto_release` is `false` (manual release required), or
+    /// - `auto_release` is `true` and `current_round < release_round`.
     pub fn is_jailed(&self, validator_id: NodeId, current_round: u64) -> bool {
         let state = self.state.read().unwrap_or_else(|e| {
             tracing::error!(error = %e, "is_jailed — lock poisoned");
@@ -1463,6 +1510,32 @@ impl SlashingEngine {
             true
         } else {
             false
+        }
+    }
+
+    /// Check if a validator is currently jailed and cannot participate in consensus.
+    ///
+    /// Unlike [`Self::is_jailed`], this method treats `auto_release` validators
+    /// whose term has expired as **not jailed**, regardless of whether they have
+    /// been formally released from the jail registry. This is the check that
+    /// consensus should use to determine participation eligibility.
+    ///
+    /// # Arguments
+    ///
+    /// * `validator_id` — The validator to check.
+    /// * `current_round` — The current consensus round.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the validator is still serving their jail term at `current_round`.
+    pub fn is_jailed_at(&self, validator_id: NodeId, current_round: u64) -> bool {
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "is_jailed_at — lock poisoned");
+            std::process::abort()
+        });
+        match state.jail_registry.get(&validator_id) {
+            Some(jail) => current_round < jail.release_round,
+            None => false,
         }
     }
 
@@ -1514,8 +1587,324 @@ impl SlashingEngine {
     }
 
     /// Compute partial burn amount from stake and burn percentage.
+    ///
+    /// This is a pure function with no side effects. It converts a burn
+    /// percentage (e.g., `5.0` = 5%) into an absolute stake amount.
+    ///
+    /// # Arguments
+    ///
+    /// * `stake` — The validator's total staked amount.
+    /// * `burn_percentage` — Percentage of stake to burn (e.g., `5.0` = 5%).
+    ///
+    /// # Returns
+    ///
+    /// The absolute burn amount, rounded down. Returns `0` if the validator
+    /// has no stake or the percentage is zero.
     pub fn compute_burn_amount(stake: u64, burn_percentage: f64) -> u64 {
         ((stake as f64) * burn_percentage / 100.0) as u64
+    }
+
+    /// Compute the burn amount for a specific validator given a burn percentage.
+    ///
+    /// This is an instance-method convenience wrapper around
+    /// [`Self::compute_burn_amount`] that looks up the validator's stake
+    /// automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `validator_id` — The validator whose stake should be used.
+    /// * `burn_percentage` — Percentage of stake to burn (e.g., `5.0` = 5%).
+    ///
+    /// # Returns
+    ///
+    /// The absolute burn amount. Returns `0` if the validator is not
+    /// registered (has no stake).
+    fn burn_amount_for(&self, validator_id: NodeId, burn_percentage: f64) -> u64 {
+        let stake = self.stake_of(&validator_id);
+        Self::compute_burn_amount(stake, burn_percentage)
+    }
+
+    /// Compute the burn amount for a specific validator given a burn percentage.
+    ///
+    /// This is the instance-method overload of [`Self::compute_burn_amount`]
+    /// that looks up the validator's stake automatically. Returns `None` if
+    /// the validator is not registered (has no stake).
+    ///
+    /// # Arguments
+    ///
+    /// * `validator_id` — The validator whose stake should be used.
+    /// * `burn_percentage` — Percentage of stake to burn (e.g., `5.0` = 5%).
+    ///
+    /// # Returns
+    ///
+    /// `Some(burn_amount)` if the validator is registered, `None` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_substrate::SlashingEngine;
+    ///
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
+    /// let node = [1u8; 32];
+    ///
+    /// // Unregistered → None
+    /// assert!(engine.compute_burn_amount_for(node, 5.0).is_none());
+    ///
+    /// engine.register_validator(node, 10_000);
+    /// // 5% of 10_000 = 500
+    /// assert_eq!(engine.compute_burn_amount_for(node, 5.0), Some(500));
+    /// ```
+    pub fn compute_burn_amount_for(
+        &self,
+        validator_id: NodeId,
+        burn_percentage: f64,
+    ) -> Option<u64> {
+        let stake = self.stake_of(&validator_id);
+        if stake == 0 {
+            return None;
+        }
+        Some(Self::compute_burn_amount(stake, burn_percentage))
+    }
+
+    /// Record an offense and apply the graded penalty per ADR-011.
+    ///
+    /// Unlike [`Self::record_offense`] which uses the binary point model
+    /// (accumulate points → check thresholds), this method uses the 3-tier
+    /// graduated slashing model:
+    ///
+    /// - **Warning**: Small burn percentage, no jail
+    /// - **Jailed**: Partial burn + jail period (validator cannot participate)
+    /// - **Ejected**: Full slash + removal from validator set
+    ///
+    /// The penalty tier is determined by [`Self::compute_penalty`], which
+    /// escalates based on the number of **prior offenses of the same type**.
+    ///
+    /// # Arguments
+    ///
+    /// * `validator_id` — The offending validator.
+    /// * `offense` — The type of offense committed.
+    /// * `current_round` — The current consensus round (used for jail timing).
+    ///
+    /// # Returns
+    ///
+    /// A [`SlashOutcome`] indicating the consequence of this offense.
+    /// The `points` field of `Warned` contains the computed burn amount,
+    /// not accumulated slash points.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
+    ///
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
+    /// let node = [42u8; 32];
+    ///
+    /// engine.register_validator(node, 10_000);
+    ///
+    /// // First liveness violation → Warning (1% burn = 100)
+    /// let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+    /// assert!(matches!(outcome, SlashOutcome::Warned { .. }));
+    /// ```
+    pub fn record_offense_graded(
+        &mut self,
+        validator_id: NodeId,
+        offense: SlashOffense,
+        current_round: u64,
+    ) -> SlashOutcome {
+        // 1. Compute the graded penalty using compute_penalty()
+        let penalty = self.compute_penalty(validator_id, &offense);
+
+        // 2. Apply the penalty based on its tier
+        match &penalty {
+            SlashPenalty::Warning { burn_percentage } => {
+                // Record offense, emit warning event, compute small burn
+                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage);
+
+                // Record the offense (accumulates points and typed history)
+                let _outcome = self.record_offense(validator_id, offense);
+
+                // Emit events
+                self.emit_event(SlashingEvent {
+                    event_type: SlashingEventType::OffenseRecorded,
+                    validator_id,
+                    round: current_round,
+                    offense: Some(offense),
+                    penalty: Some(penalty.clone()),
+                    timestamp: current_timestamp(),
+                });
+                self.emit_event(SlashingEvent {
+                    event_type: SlashingEventType::PenaltyApplied,
+                    validator_id,
+                    round: current_round,
+                    offense: Some(offense),
+                    penalty: Some(SlashPenalty::Warning {
+                        burn_percentage: *burn_percentage,
+                    }),
+                    timestamp: current_timestamp(),
+                });
+
+                // Return Warned outcome (reusing `points` field for burn amount)
+                SlashOutcome::Warned {
+                    node: validator_id,
+                    points: burn_amount,
+                }
+            }
+
+            SlashPenalty::Jailed {
+                burn_percentage,
+                jail_rounds,
+                auto_release,
+            } => {
+                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage);
+
+                // Record the offense (accumulates points and typed history)
+                let _outcome = self.record_offense(validator_id, offense);
+
+                // Enter jail
+                let jailed_until = current_round.saturating_add(*jail_rounds);
+                {
+                    let mut state = self.state.write().unwrap_or_else(|e| {
+                        tracing::error!(error = %e, "record_offense_graded jail — lock poisoned");
+                        std::process::abort()
+                    });
+                    // Read offense_history directly from state instead of calling
+                    // self.get_offense_history() to avoid a deadlock: we already
+                    // hold the write lock, and get_offense_history() would try to
+                    // acquire the read lock on the same RwLock.
+                    let offense_history = state
+                        .typed_offense_history
+                        .get(&validator_id)
+                        .cloned()
+                        .unwrap_or_default();
+                    state.jail_registry.insert(
+                        validator_id,
+                        JailState {
+                            validator_id,
+                            jailed_at_round: current_round,
+                            release_round: jailed_until,
+                            offense_history,
+                            stake_locked: burn_amount,
+                            auto_release: *auto_release,
+                        },
+                    );
+                }
+
+                // Emit jail event
+                self.emit_event(SlashingEvent {
+                    event_type: SlashingEventType::JailEntered,
+                    validator_id,
+                    round: current_round,
+                    offense: Some(offense),
+                    penalty: Some(penalty.clone()),
+                    timestamp: current_timestamp(),
+                });
+
+                // Persist
+                if let Err(e) = self.persist_state() {
+                    tracing::error!(error = %e, "Failed to persist jail state");
+                }
+
+                SlashOutcome::Slashed {
+                    node: validator_id,
+                    amount: burn_amount,
+                }
+            }
+
+            SlashPenalty::Ejected {
+                burn_percentage: _,
+                reason: _,
+            } => {
+                // Record the offense (accumulates points and typed history)
+                let _outcome = self.record_offense(validator_id, offense);
+
+                // Emit ejection event
+                self.emit_event(SlashingEvent {
+                    event_type: SlashingEventType::ValidatorEjected,
+                    validator_id,
+                    round: current_round,
+                    offense: Some(offense),
+                    penalty: Some(penalty.clone()),
+                    timestamp: current_timestamp(),
+                });
+
+                // Persist
+                if let Err(e) = self.persist_state() {
+                    tracing::error!(error = %e, "Failed to persist ejection state");
+                }
+
+                SlashOutcome::Ejected {
+                    node: validator_id,
+                }
+            }
+        }
+    }
+
+    /// Release validators whose jail term has expired.
+    ///
+    /// Scans the jail registry and removes all validators whose
+    /// `auto_release` flag is `true` and whose `release_round` is at or
+    /// before `current_round`. A [`SlashingEventType::JailReleased`] event
+    /// is emitted for each released validator.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_round` — The current consensus round.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<NodeId>` of validators that were released from jail.
+    /// Only validators with `auto_release: true` are automatically released.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_substrate::SlashingEngine;
+    ///
+    /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
+    /// // ... after jailing a validator with auto_release = true ...
+    /// let released = engine.release_expired_jails(5000);
+    /// ```
+    pub fn release_expired_jails(&mut self, current_round: u64) -> Vec<NodeId> {
+        let released: Vec<NodeId> = {
+            let state = self.state.read().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "release_expired_jails — lock poisoned");
+                std::process::abort()
+            });
+            state
+                .jail_registry
+                .iter()
+                .filter(|(_, jail)| jail.auto_release && current_round >= jail.release_round)
+                .map(|(&id, _)| id)
+                .collect()
+        };
+
+        for id in &released {
+            {
+                let mut state = self.state.write().unwrap_or_else(|e| {
+                    tracing::error!(error = %e, "release_expired_jails write — lock poisoned");
+                    std::process::abort()
+                });
+                state.jail_registry.remove(id);
+            }
+            self.emit_event(SlashingEvent {
+                event_type: SlashingEventType::JailReleased,
+                validator_id: *id,
+                round: current_round,
+                offense: Some(SlashOffense::LivenessViolation),
+                penalty: Some(SlashPenalty::Warning {
+                    burn_percentage: 0.0,
+                }),
+                timestamp: current_timestamp(),
+            });
+        }
+
+        if !released.is_empty() {
+            if let Err(e) = self.persist_state() {
+                tracing::error!(error = %e, "Failed to persist jail release state");
+            }
+        }
+
+        released
     }
 
     /// Emit a slashing event for external monitoring.
@@ -1948,5 +2337,716 @@ mod tests {
                 burn_percentage: 1.0
             }
         ));
+    }
+
+    // ── Graded slashing (ADR-011) tests ────────────────────────────
+
+    #[test]
+    fn test_graded_equivocation_escalation() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [42u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // 1st equivocation → Jailed(5% burn, 1000 rounds)
+        let outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 100);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 500 } if n == [42u8; 32]
+        ));
+        // 5% of 10_000 = 500
+        assert!(engine.is_jailed_at(node, 100));
+        assert!(engine.is_jailed_at(node, 1099));
+        assert!(!engine.is_jailed_at(node, 1100)); // release_round = 100 + 1000 = 1100
+
+        // 2nd equivocation → Jailed(25% burn, 5000 rounds, no auto-release)
+        let outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 200);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 2500 } if n == [42u8; 32]
+        ));
+        // 25% of 10_000 = 2500
+
+        // 3rd equivocation → Ejected(100% burn)
+        let outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 300);
+        assert!(matches!(outcome, SlashOutcome::Ejected { .. }));
+    }
+
+    #[test]
+    fn test_graded_liveness_escalation() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [7u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // 1st liveness → Warning(1% burn = 100)
+        let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 100 } if n == [7u8; 32]
+        ));
+
+        // 2nd liveness → Warning(1% burn = 100)
+        let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 200);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 100 } if n == [7u8; 32]
+        ));
+
+        // 3rd liveness → Jailed(5% burn = 500, 500 rounds)
+        let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 300);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 500 } if n == [7u8; 32]
+        ));
+        assert!(engine.is_jailed_at(node, 300));
+        assert!(!engine.is_jailed_at(node, 800)); // release_round = 300 + 500 = 800
+    }
+
+    #[test]
+    fn test_graded_invalid_attestation_escalation() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [9u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // 1st invalid attestation → Warning(2% burn = 200)
+        let outcome =
+            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 100);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 200 } if n == [9u8; 32]
+        ));
+
+        // 2nd invalid attestation → Jailed(10% burn = 1000, 2000 rounds)
+        let outcome =
+            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 200);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 1000 } if n == [9u8; 32]
+        ));
+        assert!(engine.is_jailed_at(node, 200));
+        assert!(!engine.is_jailed_at(node, 2200)); // release_round = 200 + 2000 = 2200
+
+        // 3rd invalid attestation → Ejected(100%)
+        let outcome =
+            engine.record_offense_graded(node, SlashOffense::InvalidAttestation, 300);
+        assert!(matches!(outcome, SlashOutcome::Ejected { .. }));
+    }
+
+    #[test]
+    fn test_graded_same_type_escalation_independence() {
+        // Verify that offenses of different types don't affect each other's escalation.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xAA; 32];
+        engine.register_validator(node, 10_000);
+
+        // 1st liveness → Warning(1%)
+        let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+        assert!(matches!(outcome, SlashOutcome::Warned { .. }));
+
+        // 2nd liveness → Warning(1%)
+        let outcome = engine.record_offense_graded(node, SlashOffense::LivenessViolation, 200);
+        assert!(matches!(outcome, SlashOutcome::Warned { .. }));
+
+        // Now a first-time equivocation should still be 1st-tier Jailed(5%),
+        // NOT escalated because of the 2 liveness violations.
+        let penalty = engine.compute_penalty(node, &SlashOffense::Equivocation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                jail_rounds: 1000,
+                auto_release: true,
+            }
+        ));
+
+        // Similarly, first InvalidAttestation should be Warning(2%)
+        let penalty = engine.compute_penalty(node, &SlashOffense::InvalidAttestation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage: 2.0
+            }
+        ));
+    }
+
+    #[test]
+    fn test_jail_auto_release() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [1u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // Record equivocation → Jailed for 1000 rounds with auto_release
+        let outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 100);
+        assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
+        assert!(engine.is_jailed(node, 100));
+        assert!(engine.is_jailed_at(node, 100));
+
+        // Before release_round: still jailed
+        assert!(engine.is_jailed(node, 1099));
+        assert!(engine.is_jailed_at(node, 1099));
+
+        // At release_round: not jailed per is_jailed_at
+        assert!(!engine.is_jailed_at(node, 1100));
+
+        // is_jailed also returns false for auto_release at/past release_round
+        assert!(!engine.is_jailed(node, 1100));
+
+        // Release expired jails
+        let released = engine.release_expired_jails(1100);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0], node);
+
+        // After release: not in jail registry at all
+        assert!(!engine.is_jailed(node, 1100));
+        assert!(!engine.is_jailed_at(node, 1100));
+        assert!(engine.jailed_validators().is_empty());
+    }
+
+    #[test]
+    fn test_jail_no_auto_release_stays() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [2u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // First equivocation → Jailed(5%, 1000, auto_release: true)
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 100);
+
+        // Second equivocation → Jailed(25%, 5000, auto_release: false)
+        // But we need the first to not be in jail first. Let's release it.
+        engine.release_expired_jails(1100);
+
+        // Now record second equivocation
+        let outcome = engine.record_offense_graded(node, SlashOffense::Equivocation, 1200);
+        assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
+
+        // With auto_release = false, is_jailed returns true even past release_round
+        let jailed = engine.jailed_validators();
+        assert_eq!(jailed.len(), 1);
+        assert!(!jailed[0].auto_release);
+
+        // release_expired_jails won't release non-auto-release validators
+        let released = engine.release_expired_jails(20_000);
+        assert!(released.is_empty());
+    }
+
+    #[test]
+    fn test_jail_prevents_consensus_participation() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [5u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // Before jailing: not jailed
+        assert!(!engine.is_jailed_at(node, 0));
+        assert!(!engine.is_jailed_at(node, 1000));
+
+        // Jail the validator
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 100);
+
+        // During jail: is_jailed_at returns true
+        assert!(engine.is_jailed_at(node, 100));
+        assert!(engine.is_jailed_at(node, 500));
+        assert!(engine.is_jailed_at(node, 1099));
+
+        // After jail term: is_jailed_at returns false
+        assert!(!engine.is_jailed_at(node, 1100));
+    }
+
+    #[test]
+    fn test_release_expired_jails_batch() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node1 = [1u8; 32];
+        let node2 = [2u8; 32];
+        let node3 = [3u8; 32];
+        engine.register_validator(node1, 10_000);
+        engine.register_validator(node2, 10_000);
+        engine.register_validator(node3, 10_000);
+
+        // Jail node1 at round 100 → release at 1100 (auto_release)
+        engine.record_offense_graded(node1, SlashOffense::Equivocation, 100);
+
+        // Jail node2 at round 200 → release at 1200 (auto_release)
+        engine.record_offense_graded(node2, SlashOffense::Equivocation, 200);
+
+        // Manually jail node3 with auto_release = false
+        {
+            let mut state = engine.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "lock poisoned");
+                std::process::abort()
+            });
+            state.jail_registry.insert(
+                node3,
+                JailState {
+                    validator_id: node3,
+                    jailed_at_round: 100,
+                    release_round: 200,
+                    offense_history: vec![SlashOffense::LivenessViolation],
+                    stake_locked: 0,
+                    auto_release: false,
+                },
+            );
+        }
+
+        // At round 1150: node1 is released, node2 still jailed, node3 not auto-release
+        let released = engine.release_expired_jails(1150);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0], node1);
+
+        // At round 1250: node2 is released, node3 still not
+        let released = engine.release_expired_jails(1250);
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0], node2);
+
+        // node3 never auto-released
+        let released = engine.release_expired_jails(9999);
+        assert!(released.is_empty());
+    }
+
+    #[test]
+    fn test_slashing_event_emission_graded() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [2u8; 32];
+        engine.register_validator(node, 10_000);
+
+        // Warning tier emits OffenseRecorded + PenaltyApplied
+        let _outcome =
+            engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+
+        // Jailed tier emits OffenseRecorded (from record_offense) + JailEntered
+        let _outcome =
+            engine.record_offense_graded(node, SlashOffense::Equivocation, 200);
+
+        // Ejected tier emits OffenseRecorded (from record_offense) + ValidatorEjected
+        // (need 2 more equivocations to reach 3rd equivocation tier)
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 300);
+        let _outcome =
+            engine.record_offense_graded(node, SlashOffense::Equivocation, 400);
+        // This should be Ejected
+        // Events are just logged, not stored — this test verifies no panics
+    }
+
+    #[test]
+    fn test_graded_offense_still_accumulates_points() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xBB; 32];
+        engine.register_validator(node, 10_000);
+
+        // record_offense_graded delegates to record_offense internally,
+        // so slash points should still accumulate.
+        engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+        assert_eq!(engine.slash_points_of(&node), 100);
+
+        engine.record_offense_graded(node, SlashOffense::LivenessViolation, 200);
+        assert_eq!(engine.slash_points_of(&node), 200);
+
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 300);
+        assert_eq!(engine.slash_points_of(&node), 700);
+    }
+
+    #[test]
+    fn test_graded_typed_history_tracks_same_type() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xCC; 32];
+
+        engine.register_validator(node, 10_000);
+        engine.record_offense_graded(node, SlashOffense::LivenessViolation, 100);
+        engine.record_offense_graded(node, SlashOffense::LivenessViolation, 200);
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 300);
+
+        let history = engine.get_offense_history(node);
+        assert_eq!(history.len(), 3);
+        assert_eq!(
+            history.iter().filter(|&&o| o == SlashOffense::LivenessViolation).count(),
+            2
+        );
+        assert_eq!(
+            history.iter().filter(|&&o| o == SlashOffense::Equivocation).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_backward_compat_record_offense_still_works() {
+        // Ensure the original record_offense() still works as before.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+
+        let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
+        assert_eq!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 100 }
+        );
+
+        let outcome = engine.record_offense(n, SlashOffense::Equivocation);
+        assert_eq!(
+            outcome,
+            SlashOutcome::Slashed {
+                node: n,
+                amount: 10_000
+            }
+        );
+    }
+
+    #[test]
+    fn test_compute_penalty_same_type_counting() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xDD; 32];
+        engine.register_validator(node, 10_000);
+
+        // Record 2 liveness violations
+        engine.record_offense(node, SlashOffense::LivenessViolation);
+        engine.record_offense(node, SlashOffense::LivenessViolation);
+
+        // First equivocation should still be 1st tier (5%, 1000)
+        // because there are 0 prior equivocations
+        let penalty = engine.compute_penalty(node, &SlashOffense::Equivocation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                jail_rounds: 1000,
+                auto_release: true,
+            }
+        ));
+
+        // Liveness should now be 3rd tier (jailed) because there are 2 prior liveness
+        let penalty = engine.compute_penalty(node, &SlashOffense::LivenessViolation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                jail_rounds: 500,
+                auto_release: true,
+            }
+        ));
+    }
+
+    #[test]
+    fn test_burn_amount_for_helper() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xEE; 32];
+        engine.register_validator(node, 10_000);
+
+        // 5% of 10_000 = 500
+        assert_eq!(engine.burn_amount_for(node, 5.0), 500);
+        // 1% of 10_000 = 100
+        assert_eq!(engine.burn_amount_for(node, 1.0), 100);
+        // 25% of 10_000 = 2500
+        assert_eq!(engine.burn_amount_for(node, 25.0), 2500);
+
+        // Unregistered validator: 0 stake → 0 burn
+        let unregistered = [0xFF; 32];
+        assert_eq!(engine.burn_amount_for(unregistered, 5.0), 0);
+    }
+
+    #[test]
+    fn test_is_jailed_vs_is_jailed_at_semantics() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let node = [0xAB; 32];
+        engine.register_validator(node, 10_000);
+
+        // Jail with auto_release = true, release at round 1100
+        engine.record_offense_graded(node, SlashOffense::Equivocation, 100);
+
+        // At round 1100 (release round):
+        // is_jailed: auto_release && current >= release_round → false
+        assert!(!engine.is_jailed(node, 1100));
+        // is_jailed_at: current < release_round → false (1100 is not < 1100)
+        assert!(!engine.is_jailed_at(node, 1100));
+
+        // At round 1099 (still in jail):
+        assert!(engine.is_jailed(node, 1099));
+        assert!(engine.is_jailed_at(node, 1099));
+
+        // Manually add a non-auto-release jail entry
+        let node2 = [0xCD; 32];
+        engine.register_validator(node2, 10_000);
+        {
+            let mut state = engine.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "lock poisoned");
+                std::process::abort()
+            });
+            state.jail_registry.insert(
+                node2,
+                JailState {
+                    validator_id: node2,
+                    jailed_at_round: 100,
+                    release_round: 200,
+                    offense_history: vec![SlashOffense::Equivocation],
+                    stake_locked: 500,
+                    auto_release: false,
+                },
+            );
+        }
+
+        // is_jailed for non-auto-release: always true regardless of round
+        assert!(engine.is_jailed(node2, 300));
+        // is_jailed_at: based on round vs release_round
+        assert!(!engine.is_jailed_at(node2, 300)); // 300 >= 200, so not jailed_at
+    }
+
+    // ── Additional ADR-011 comprehensive tests ─────────────────────
+
+    #[test]
+    fn test_compute_burn_amount_for_public_api() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xF0; 32];
+        engine.register_validator(v, 10_000);
+
+        // Registered validator: returns Some(amount)
+        assert_eq!(engine.compute_burn_amount_for(v, 5.0), Some(500));
+        assert_eq!(engine.compute_burn_amount_for(v, 1.0), Some(100));
+        assert_eq!(engine.compute_burn_amount_for(v, 100.0), Some(10_000));
+
+        // Unregistered validator: returns None
+        let unregistered = [0xF1; 32];
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 5.0), None);
+    }
+
+    #[test]
+    fn test_graded_equivocation_full_cycle() {
+        // Full 3-tier escalation cycle for equivocation:
+        // 1st → Jailed(5%, 1000r) → 2nd → Jailed(25%, 5000r) → 3rd → Ejected(100%)
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xA1; 32];
+        engine.register_validator(v, 10_000);
+
+        // 1st equivocation → Jailed(5% burn = 500, 1000 rounds, auto_release)
+        let outcome = engine.record_offense_graded(v, SlashOffense::Equivocation, 1000);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 500 } if n == v
+        ));
+        assert!(engine.is_jailed_at(v, 1000));
+        assert!(engine.is_jailed_at(v, 1999));
+        assert!(!engine.is_jailed_at(v, 2000)); // release_round = 1000 + 1000 = 2000
+
+        // Release from jail
+        let released = engine.release_expired_jails(2000);
+        assert_eq!(released, vec![v]);
+        assert!(!engine.is_jailed_at(v, 2000));
+
+        // 2nd equivocation → Jailed(25% burn = 2500, 5000 rounds, no auto-release)
+        let outcome = engine.record_offense_graded(v, SlashOffense::Equivocation, 3000);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 2500 } if n == v
+        ));
+
+        // 2nd equivocation has auto_release = false, so release_expired_jails won't release it
+        let released = engine.release_expired_jails(9999);
+        assert!(released.is_empty());
+
+        // Must manually release via try_release_from_jail
+        let released = engine.try_release_from_jail(v, 8000).unwrap();
+        assert!(released); // 8000 >= 3000 + 5000 = 8000
+
+        // 3rd equivocation → Ejected(100%)
+        let outcome = engine.record_offense_graded(v, SlashOffense::Equivocation, 9000);
+        assert!(matches!(outcome, SlashOutcome::Ejected { node: n } if n == v));
+    }
+
+    #[test]
+    fn test_graded_liveness_full_cycle() {
+        // Full escalation for liveness:
+        // 1st → Warning(1%) → 2nd → Warning(1%) → 3rd+ → Jailed(5%, 500r)
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xB1; 32];
+        engine.register_validator(v, 10_000);
+
+        // 1st liveness → Warning(1% burn = 100)
+        let outcome = engine.record_offense_graded(v, SlashOffense::LivenessViolation, 100);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 100 } if n == v
+        ));
+        assert!(!engine.is_jailed_at(v, 100));
+
+        // 2nd liveness → Warning(1% burn = 100)
+        let outcome = engine.record_offense_graded(v, SlashOffense::LivenessViolation, 200);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 100 } if n == v
+        ));
+        assert!(!engine.is_jailed_at(v, 200));
+
+        // 3rd liveness → Jailed(5% burn = 500, 500 rounds, auto_release)
+        let outcome = engine.record_offense_graded(v, SlashOffense::LivenessViolation, 300);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 500 } if n == v
+        ));
+        assert!(engine.is_jailed_at(v, 300));
+        assert!(!engine.is_jailed_at(v, 800)); // 300 + 500 = 800
+
+        // 4th liveness (still 3rd+ tier) → Jailed again
+        let released = engine.release_expired_jails(800);
+        assert_eq!(released, vec![v]);
+        let outcome = engine.record_offense_graded(v, SlashOffense::LivenessViolation, 900);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 500 } if n == v
+        ));
+    }
+
+    #[test]
+    fn test_graded_invalid_attestation_full_cycle() {
+        // Full escalation for invalid attestation:
+        // 1st → Warning(2%) → 2nd → Jailed(10%, 2000r) → 3rd → Ejected(100%)
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xC1; 32];
+        engine.register_validator(v, 10_000);
+
+        // 1st → Warning(2% burn = 200)
+        let outcome = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 100);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Warned { node: n, points: 200 } if n == v
+        ));
+
+        // 2nd → Jailed(10% burn = 1000, 2000 rounds, auto_release)
+        let outcome = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 200);
+        assert!(matches!(
+            outcome,
+            SlashOutcome::Slashed { node: n, amount: 1000 } if n == v
+        ));
+        assert!(engine.is_jailed_at(v, 200));
+        assert!(!engine.is_jailed_at(v, 2200)); // 200 + 2000 = 2200
+
+        // Release from jail
+        let released = engine.release_expired_jails(2200);
+        assert_eq!(released, vec![v]);
+
+        // 3rd → Ejected(100%)
+        let outcome = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 3000);
+        assert!(matches!(outcome, SlashOutcome::Ejected { node: n } if n == v));
+    }
+
+    #[test]
+    fn test_graded_offense_jail_state_fields() {
+        // Verify that JailState has correct fields after graded offense
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xD1; 32];
+        engine.register_validator(v, 10_000);
+
+        // Record first equivocation → Jailed
+        engine.record_offense_graded(v, SlashOffense::Equivocation, 500);
+
+        let jailed = engine.jailed_validators();
+        assert_eq!(jailed.len(), 1);
+        let jail_state = &jailed[0];
+        assert_eq!(jail_state.validator_id, v);
+        assert_eq!(jail_state.jailed_at_round, 500);
+        assert_eq!(jail_state.release_round, 1500); // 500 + 1000
+        assert_eq!(jail_state.stake_locked, 500); // 5% of 10_000
+        assert!(jail_state.auto_release);
+        // offense_history should contain the equivocation
+        assert_eq!(jail_state.offense_history.len(), 1);
+        assert_eq!(jail_state.offense_history[0], SlashOffense::Equivocation);
+    }
+
+    #[test]
+    fn test_graded_mixed_offenses_dont_cross_escalate() {
+        // Verify that different offense types maintain independent escalation counters.
+        // A validator with 2 liveness violations should still get 1st-tier penalty
+        // for their first equivocation.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0xE1; 32];
+        engine.register_validator(v, 10_000);
+
+        // Record 2 liveness violations (Warning tier each)
+        engine.record_offense_graded(v, SlashOffense::LivenessViolation, 100);
+        engine.record_offense_graded(v, SlashOffense::LivenessViolation, 200);
+
+        // First equivocation should be 1st-tier: Jailed(5%, 1000 rounds)
+        let penalty = engine.compute_penalty(v, &SlashOffense::Equivocation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                jail_rounds: 1000,
+                auto_release: true,
+            }
+        ));
+
+        // First invalid attestation should be 1st-tier: Warning(2%)
+        let penalty = engine.compute_penalty(v, &SlashOffense::InvalidAttestation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning { burn_percentage: 2.0 }
+        ));
+
+        // But 3rd liveness should be 3rd-tier: Jailed(5%, 500 rounds)
+        let penalty = engine.compute_penalty(v, &SlashOffense::LivenessViolation);
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Jailed {
+                burn_percentage: 5.0,
+                jail_rounds: 500,
+                auto_release: true,
+            }
+        ));
+    }
+
+    #[test]
+    fn test_release_expired_jails_empty_registry() {
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        // No jailed validators → empty result
+        let released = engine.release_expired_jails(1000);
+        assert!(released.is_empty());
+    }
+
+    #[test]
+    fn test_is_jailed_at_unregistered_validator() {
+        let engine = SlashingEngine::new_in_memory(500, 2000);
+        let unregistered = [0x99; 32];
+        assert!(!engine.is_jailed_at(unregistered, 0));
+        assert!(!engine.is_jailed_at(unregistered, 1000));
+    }
+
+    #[test]
+    fn test_graded_warning_no_jail_entry() {
+        // Warning-tier offenses should NOT create jail entries
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0x88; 32];
+        engine.register_validator(v, 10_000);
+
+        engine.record_offense_graded(v, SlashOffense::LivenessViolation, 100);
+        assert!(engine.jailed_validators().is_empty());
+        assert!(!engine.is_jailed_at(v, 100));
+    }
+
+    #[test]
+    fn test_graded_ejection_persists_state() {
+        // Verify that ejection persists state (even though in-memory for this test)
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = [0x77; 32];
+        engine.register_validator(v, 10_000);
+
+        // Drive to ejection with 3 equivocations
+        engine.record_offense_graded(v, SlashOffense::Equivocation, 100);
+        engine.release_expired_jails(1100); // Release 1st jail
+        engine.record_offense_graded(v, SlashOffense::Equivocation, 1200);
+        engine.try_release_from_jail(v, 7000).unwrap(); // Release 2nd jail (no auto-release)
+        let outcome = engine.record_offense_graded(v, SlashOffense::Equivocation, 8000);
+
+        assert!(matches!(outcome, SlashOutcome::Ejected { .. }));
+
+        // Points should be accumulated from all 3 offenses
+        let points = engine.slash_points_of(&v);
+        assert_eq!(points, 1500); // 3 × 500 equivocation points
+    }
+
+    #[test]
+    fn test_compute_burn_amount_edge_cases() {
+        // Zero stake
+        assert_eq!(SlashingEngine::compute_burn_amount(0, 5.0), 0);
+        // Zero percentage
+        assert_eq!(SlashingEngine::compute_burn_amount(10_000, 0.0), 0);
+        // Very small percentage → rounds down
+        assert_eq!(SlashingEngine::compute_burn_amount(1, 0.01), 0);
+        // 100%
+        assert_eq!(SlashingEngine::compute_burn_amount(10_000, 100.0), 10_000);
+        // Fractional result rounds down
+        assert_eq!(SlashingEngine::compute_burn_amount(999, 1.0), 9); // 999 * 0.01 = 9.99 → 9
     }
 }

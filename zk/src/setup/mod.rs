@@ -61,6 +61,8 @@
 //! - Ben-Sasson, E., et al. *Scalable, transparent, and post-quantum
 //!   secure computational integrity* (IACR ePrint 2018/046)
 
+pub mod ceremony_client;
+pub mod ceremony_server;
 pub mod circuit_setup;
 pub mod contribution;
 pub mod powers_of_tau;
@@ -68,6 +70,11 @@ pub mod powers_of_tau;
 use thiserror::Error;
 
 // Re-export key types for convenience
+pub use ceremony_client::{CeremonyClient, CeremonyClientError};
+pub use ceremony_server::{
+    CeremonyConfig, CeremonyError, CeremonyPhase, CeremonyServer, CeremonyTranscript,
+    ContributionReceipt,
+};
 pub use circuit_setup::{
     derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency, CircuitKeyPair,
 };

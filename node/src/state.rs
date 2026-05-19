@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use prometheus::{IntCounter, IntGauge};
@@ -141,4 +142,9 @@ pub struct AppState {
     pub metrics: Arc<NodeMetrics>,
     /// Time when the node was started (for uptime calculation).
     pub started_at: Instant,
+    /// Whether the node is currently in fast-sync mode.
+    ///
+    /// When `true`, the node is still catching up with the network
+    /// and should not be considered ready to serve traffic.
+    pub is_syncing: Arc<AtomicBool>,
 }

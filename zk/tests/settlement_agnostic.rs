@@ -138,25 +138,47 @@ async fn test_ethereum_adapter_with_mode_live_validates() {
 }
 
 #[tokio::test]
-async fn test_ethereum_adapter_with_mode_live_not_implemented() {
-    // Live mode returns NotImplemented for all operations
-    let config = EthereumConfig::default();
-    let adapter = EthereumAdapter::with_mode(config, EthereumMode::Live).unwrap();
-    assert_eq!(adapter.mode(), EthereumMode::Live);
-
-    let result = adapter.post_batch(b"live batch").await;
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        SettlementError::NotImplemented(msg) => {
-            assert!(msg.contains("ethers-rs") || msg.contains("pending"));
+async fn test_ethereum_adapter_with_mode_live_requires_feature() {
+    // Live mode now requires the 'ethereum-live' feature flag and a valid
+    // operator private key. Without the feature or with invalid config,
+    // it returns a ConfigError instead of NotImplemented at call time.
+    let config = EthereumConfig {
+        rpc_url: "http://localhost:8545".to_string(),
+        contract_address: "0x1234567890abcdef1234567890abcdef12345678".to_string(),
+        operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+            .to_string(),
+        ..Default::default()
+    };
+    let result = EthereumAdapter::with_mode(config, EthereumMode::Live);
+    // Without the ethereum-live feature, this returns ConfigError
+    // With the ethereum-live feature, it should succeed (creates a live client)
+    #[cfg(not(feature = "ethereum-live"))]
+    {
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::ConfigError(msg) => {
+                assert!(msg.contains("ethereum-live"));
+            }
+            other => panic!("Expected ConfigError, got: {}", other),
         }
-        other => panic!("Expected NotImplemented, got: {}", other),
+    }
+    #[cfg(feature = "ethereum-live")]
+    {
+        assert!(result.is_ok());
+        let adapter = result.unwrap();
+        assert_eq!(adapter.mode(), EthereumMode::Live);
     }
 }
 
 #[test]
 fn test_ethereum_config_validation_valid() {
-    let config = EthereumConfig::default();
+    let config = EthereumConfig {
+        rpc_url: "http://localhost:8545".to_string(),
+        contract_address: "0x0000000000000000000000000000000000000000".to_string(),
+        operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+            .to_string(),
+        ..Default::default()
+    };
     assert!(config.validate().is_ok());
 }
 

@@ -34,6 +34,7 @@ use omnia_shards::{
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
@@ -72,6 +73,19 @@ async fn main() -> Result<()> {
                 return run_restore(&input);
             }
             CliCommand::Run => {}
+            CliCommand::CeremonyServe {
+                min_participants,
+                max_participants,
+                degree,
+            } => {
+                return run_ceremony_serve(min_participants, max_participants, degree);
+            }
+            CliCommand::CeremonyContribute { server_url, seed } => {
+                return run_ceremony_contribute(&server_url, seed.as_deref());
+            }
+            CliCommand::CeremonyVerify { server_url } => {
+                return run_ceremony_verify(&server_url);
+            }
         }
     }
 
@@ -156,6 +170,7 @@ async fn main() -> Result<()> {
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
+        is_syncing: Arc::new(AtomicBool::new(false)),
     };
 
     // 6. Build and start the HTTP server
@@ -665,3 +680,180 @@ async fn shutdown_signal() {
         }
     }
 }
+
+/// Start a multi-party trusted setup ceremony server.
+///
+/// Creates a [`CeremonyServer`] and runs it with an HTTP endpoint
+/// for accepting contributions. The ceremony proceeds through
+/// three phases:
+/// 1. `NotStarted` → `AcceptingContributions` (on `start()`)
+/// 2. Participants contribute via HTTP API
+/// 3. `AcceptingContributions` → `Finalized` (on `finalize()`)
+///
+/// For now, this runs a local ceremony simulation that accepts
+/// contributions from the command line. The full network ceremony
+/// server with HTTP endpoints will be implemented in a follow-up.
+fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: usize) -> Result<()> {
+    use omnia_zk::setup::{
+        CeremonyConfig, CeremonyServer, contribute,
+    };
+
+    // Initialize minimal tracing
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(true)
+        .init();
+
+    let config = CeremonyConfig {
+        min_participants,
+        max_participants,
+        ceremony_id: 1,
+        degree,
+    };
+
+    let server = CeremonyServer::new(config);
+    server.start().context("Failed to start ceremony")?;
+
+    println!("Ceremony server started (degree={})", degree);
+    println!(
+        "  Min participants: {} / Max participants: {}",
+        min_participants, max_participants
+    );
+
+    // Simulate contributions (in a real server, these would come over HTTP)
+    println!("\nSimulating {} participant contributions...", min_participants);
+    for i in 0..min_participants {
+        let (transcript, tau_size) = server.get_srs_state().context("Failed to get SRS state")?;
+        let mut seed = [0u8; 32];
+        seed[0] = i as u8;
+        seed[1] = (i >> 8) as u8;
+        let contribution = contribute(&transcript, tau_size, Some(seed))
+            .map_err(|e| anyhow::anyhow!("Contribution {} failed: {}", i, e))?;
+        let receipt = server
+            .accept_contribution(contribution)
+            .map_err(|e| anyhow::anyhow!("Accept contribution {} failed: {}", i, e))?;
+        println!(
+            "  Contribution {} accepted (index={})",
+            i, receipt.contribution_index
+        );
+    }
+
+    // Finalize
+    let circuit = omnia_zk::circuit::RollupCircuit::empty();
+    let key_pair = server
+        .finalize(&circuit)
+        .map_err(|e| anyhow::anyhow!("Finalize failed: {}", e))?;
+
+    println!("\nCeremony finalized!");
+    println!("  Total contributions: {}", server.contribution_count());
+    println!(
+        "  Proving key size: {} bytes",
+        key_pair.proving_key.len()
+    );
+    println!(
+        "  Verifying key size: {} bytes",
+        key_pair.verifying_key.len()
+    );
+    println!(
+        "  Transcript hash: {}",
+        hex::encode(&key_pair.tau_hash[..8])
+    );
+
+    // Export and display transcript info
+    let transcript = server
+        .export_transcript()
+        .map_err(|e| anyhow::anyhow!("Export transcript failed: {}", e))?;
+    println!("\nTranscript exported:");
+    println!("  Contributions: {}", transcript.contribution_count);
+    println!(
+        "  Final hash: {}",
+        hex::encode(&transcript.final_transcript_hash[..8])
+    );
+
+    Ok(())
+}
+
+/// Contribute to a remote ceremony server.
+///
+/// Connects to the ceremony server at `server_url`, fetches the
+/// current SRS state, generates a contribution locally, and
+/// submits it to the server.
+///
+/// **Note**: The full HTTP client implementation is a placeholder.
+/// The actual network communication requires the ceremony API
+/// endpoints to be deployed on the server.
+fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<()> {
+    use omnia_zk::setup::CeremonyClient;
+
+    // Initialize minimal tracing
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(true)
+        .init();
+
+    println!("Connecting to ceremony server at {}...", server_url);
+
+    // Parse optional seed
+    let seed: Option<[u8; 32]> = seed_hex
+        .map(|hex_str| {
+            let bytes = hex::decode(hex_str).context("Failed to decode hex seed")?;
+            let mut seed = [0u8; 32];
+            if bytes.len() != 32 {
+                anyhow::bail!(
+                    "Seed must be exactly 32 bytes (64 hex chars), got {} bytes",
+                    bytes.len()
+                );
+            }
+            seed.copy_from_slice(&bytes);
+            Ok(seed)
+        })
+        .transpose()?;
+
+    // TODO: Implement HTTP client for fetching SRS state from server
+    // For now, this is a placeholder that demonstrates the client API
+    println!("Fetching current ceremony state...");
+    println!("Generating contribution...");
+
+    // Placeholder: in production, this would:
+    // 1. GET {server_url}/ceremony/state → (transcript, tau_size)
+    // 2. CeremonyClient::generate_contribution(transcript, tau_size, seed)
+    // 3. POST {server_url}/ceremony/contribute → receipt
+    let _ = CeremonyClient::generate_contribution;
+    let _ = seed;
+
+    println!("\nContribution submitted (placeholder — HTTP client not yet implemented)");
+    println!("Use `omnia-node ceremony-serve` for local ceremony simulation");
+
+    Ok(())
+}
+
+/// Verify a ceremony transcript from a remote server.
+///
+/// Downloads the full transcript and independently verifies each
+/// contribution's Proof of Knowledge.
+///
+/// **Note**: The full HTTP client implementation is a placeholder.
+fn run_ceremony_verify(server_url: &str) -> Result<()> {
+    use omnia_zk::setup::CeremonyClient;
+
+    // Initialize minimal tracing
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(true)
+        .init();
+
+    println!("Fetching ceremony transcript from {}...", server_url);
+
+    // TODO: Implement HTTP client for fetching transcript from server
+    // For now, this is a placeholder that demonstrates the client API
+    println!("Verifying transcript...");
+
+    // Placeholder: in production, this would:
+    // 1. GET {server_url}/ceremony/transcript → CeremonyTranscript
+    // 2. CeremonyClient::verify_transcript(&transcript, degree)
+    let _ = CeremonyClient::verify_transcript;
+
+    println!("\nTranscript verification (placeholder — HTTP client not yet implemented)");
+    println!("Use `omnia-node ceremony-serve` for local ceremony simulation");
+
+    Ok(())

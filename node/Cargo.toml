@@ -81,3 +81,7 @@ utoipa-swagger-ui = { version = "8", features = ["axum"] }  # Interactive API do
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
 utoipa = "5"
+# Tower ServiceExt for oneshot testing of axum routers
+tower = { version = "0.5", features = ["util"] }
+# http-body for reading response bodies in tests
+http-body-util = "0.1"

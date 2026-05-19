@@ -83,8 +83,8 @@ All five core layers are implemented and tested. Phase 0 (ZK-rollup settlement) 
 | Property | Blockchain | Causal Graph (Omnia) |
 |----------|-----------|---------------------|
 | Ordering | Total (sequential) | Partial (parallel) |
-| Throughput | ~100-1000 TPS | ⚠️ Not yet benchmarked at scale |
-| Latency | ~12s block time | ⚠️ Not yet benchmarked at scale |
+| Throughput | ~100-1000 TPS | Target: 10,000+ TPS (not yet benchmarked at scale) |
+| Latency | ~12s block time | Not yet benchmarked at scale |
 | Concurrency | None (single chain) | Automatic (DAG) |
 | Finality | Probabilistic | Deterministic (BFT) |
 
@@ -117,7 +117,7 @@ Every module has comprehensive unit tests. The critical integration test simulat
 
 ### Performance Notes
 
-⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Full throughput benchmarking (targeting 10,000+ TPS) has not yet been performed.** CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
+⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Target: 10,000+ TPS (not yet benchmarked at scale).** CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed. See [`docs/performance/BASELINE.md`](./docs/performance/BASELINE.md) for the load testing plan and captured results.
 
 ---
 

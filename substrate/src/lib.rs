@@ -72,8 +72,8 @@ pub use event::{
     MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
 pub use fast_sync::{
-    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncRequest,
-    SyncResponse, SyncResult,
+    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork,
+    SyncRequest, SyncResponse, SyncResult, SyncSnapshot,
 };
 pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
 pub use gossip::{

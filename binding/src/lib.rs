@@ -41,7 +41,7 @@
 //! - **RF fingerprinting** is a stub — real implementation needs hardware
 //!   (SDR, spectrum analyzer).
 //! - **Quantum commitments** are hybrid (classical + PQC stub) — real PQC
-//!   requires `pqc_dilithium` and `pqc_kyber` crates.
+//!   requires `pqc_dilithium` and `ml-kem` crates.
 //! - **Provenance log** is append-only — no deletes, no edits.
 //! - All physical events are anchored in the causal graph — no off-chain
 //!   state.

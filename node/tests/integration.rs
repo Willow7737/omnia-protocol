@@ -70,6 +70,8 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         nonce_data_dir: None,
         consensus_data_dir: None,
         protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
+        readiness_min_peers: 1,
+        readiness_max_finalization_age: 600,
     };
 
     let app_state = AppState {
@@ -82,6 +84,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
+        is_syncing: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
     let app = http::build_http_router().with_state(app_state);
@@ -106,7 +109,7 @@ async fn test_health_endpoint() -> Result<()> {
     assert_eq!(resp.status(), 200);
 
     let body: Value = resp.json().await?;
-    assert_eq!(body["status"], "ok");
+    assert_eq!(body["status"], "alive");
     assert_eq!(body["node_id"], 42);
 
     Ok(())

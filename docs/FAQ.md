@@ -30,7 +30,7 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 ### Q: What is the current state of the project?
 
-**A:** All 5 core layers are implemented and tested (200+ tests passing). The protocol has causal graph consensus, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 proofs on BN254 with Merkle path verification. Real PQC signatures (Dilithium) and fee enforcement are implemented. Sprint 3 added a binary entrypoint (`omnia-node`), REST API with Swagger UI, persistent slashing (redb), chaos testing, and TLA+ formal verification. Fee enforcement is implemented via `FeeSchedule` and `ShardRouter` integration. Some features like real RF fingerprinting remain stubs awaiting hardware. There is no mobile wallet and no validator network yet. The ExpandedRollupCircuit uses a simplified field-addition hash placeholder (needs Pedersen/Poseidon for production).
+**A:** All 5 core layers are implemented and tested (938+ tests passing). The protocol has causal graph consensus with VRF-based leader selection, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 + Poseidon proofs on BN254 with Merkle path verification. ML-KEM-768 (FIPS-203) post-quantum cryptography and fee enforcement are implemented. Phase 3 added Kademlia DHT peer discovery, GossipSub peer scoring, consensus state persistence, fast-sync protocol, message compression, and gradual slashing. Some features like real RF fingerprinting remain stubs awaiting hardware. Bitcoin/Solana/Celestia settlement adapters are stubs. There is no mobile wallet and no validator network yet.
 
 ### Q: How do I run the tests?
 
@@ -42,7 +42,7 @@ cd omnia-protocol
 cargo test --workspace
 ```
 
-You should see 200+ tests passing.
+You should see 938+ tests passing.
 
 ---
 
@@ -80,13 +80,13 @@ You take a massive piece of paper with a small hole in it. You place it over the
 - Prove you have enough money without revealing your balance
 - Prove a medicine is authentic without revealing supply chain details
 
-**Current status:** The ZK circuit is currently a stub using hash chains. Full arkworks R1CS circuit implementation is the production target. The Biological shard's `QueryWithZkProof` operation also uses a stub verifier that checks consent but does not perform real ZK proof verification.
+**Current status:** The ZK circuit uses arkworks R1CS + Groth16 + Poseidon hash for proof generation and verification. The Biological shard's `QueryWithZkProof` operation uses a stub verifier that checks consent but does not perform real ZK proof verification.
 
 ### Q: How does physical anchoring work?
 
 **A:** The provenance log is fully implemented — it provides an append-only CRDT log for tracking the lifecycle of physical items (create, transfer, verify). This gives every tracked item a cryptographic birth certificate and ownership history. The `PhysicalState` (in `shards/src/physical/state.rs`) maintains a `HashMap<ItemId, Vec<ProvenanceEvent>>` where each entry records the owner, event type, vector clock, and optional metadata.
 
-RF fingerprinting and quantum commitments are stubs. The RF fingerprinting stub uses Hamming distance comparison but requires real SDR hardware (HackRF/USRP) for production use. The quantum commitment stub uses a hybrid classical + PQC placeholder but requires CRYSTALS-Dilithium integration for real post-quantum security.
+RF fingerprinting remains a stub requiring real SDR hardware (HackRF/USRP) for production use. The quantum commitment implementation is no longer a stub — it now uses real ML-KEM-768 (FIPS-203 standardized Kyber768) for post-quantum key encapsulation, with constant-time comparisons via `subtle::ConstantTimeEq` (see ADR-020). The hybrid mode combines classical X25519 ECDH with ML-KEM-768 for defense-in-depth.
 
 Physical time anchors (previously described as "Gravitational Timestamps") are not implemented. The protocol currently relies on logical time via vector clocks rather than physical time anchors.
 
@@ -175,7 +175,7 @@ Proof-of-useful-work is implemented with 3 work types defined in `economics/src/
 
 Verification is currently a stub (`UsefulWorkProof::verify_stub()`) that checks for non-zero result hash and positive compute units. Reward amount equals compute units consumed (1:1 ratio).
 
-There is no validator reward mechanism or staking system yet. Slashing is not implemented.
+There is no validator reward mechanism or staking system yet. Gradual slashing is implemented (ADR-011) with a 3-tier model: Warning → Jail → Ejection.
 
 ### Q: What's the fee structure?
 
@@ -226,15 +226,16 @@ A `ShardRouter::new_without_fees()` constructor is available for testing.
 | Time-locked voting (flash loan prevention) | Implemented |
 | Shamir's Secret Sharing social recovery (GF(256)) | Implemented |
 | Biometric anchors (BLAKE3 salted commitments) | Implemented |
-| Post-quantum cryptography (Dilithium) | Stub |
-| Economic security (slashing, staking) | Not started |
-| Real ZK proofs | Stub (hash chain) |
+| Post-quantum cryptography (ML-KEM-768 / FIPS-203) | Implemented |
+| Gradual slashing (3-tier: Warning → Jail → Ejection) | Implemented |
+| Economic security (staking rewards) | Not started |
+| Real ZK proofs | Implemented (arkworks R1CS + Groth16 + Poseidon) |
 
 ### Q: What if my private key is compromised?
 
 **A:** You can use social recovery via Shamir's Secret Sharing to reconstruct your key from guardian shares. The implementation (in `shards/src/identity/recovery.rs`) supports configurable thresholds (minimum K=2, with configurable N total shares). The `IdentityOp::ConfigureRecovery` operation splits the secret and stores the threshold/total configuration. The `IdentityOp::RecoverDid` operation reconstructs the secret from K+ shares.
 
-Note: The reconstructed secret should be used to rotate the DID's public key and authentication methods. This key rotation is currently a TODO in `IdentityState::apply()`.
+The reconstructed secret is used to rotate the DID's public key and authentication methods via `complete_recovery()`, which adds the recovered key to DID authentication (rotation, not replacement). A `recovery_count` is incremented to prevent replay attacks.
 
 ---
 
@@ -260,6 +261,42 @@ Note: The reconstructed secret should be used to rotate the DID's public key and
 ### Q: How long does a transaction take?
 
 **A:** Performance has not been benchmarked at scale yet. The consensus engine processes only new events each round (O(new_events)), which is designed for low latency, but specific TPS and finality numbers have not been measured.
+
+### Q: How does fast-sync work for new nodes?
+
+**A:** Fast-sync (implemented in `substrate/src/fast_sync.rs`) allows new nodes to skip full genesis replay by downloading a verified state snapshot from peers:
+
+1. **Query peers** for their latest checkpoint (round, state root, event count)
+2. **Select a target** checkpoint via supermajority agreement (2/3+ stake must agree)
+3. **Download the snapshot** from a peer via P2P request-response
+4. **Verify integrity** using BLAKE3 domain-separated hashes (`OMNIA-FAST-SYNC-V1`)
+5. **Replay delta events** since the snapshot to reach the current state
+
+If fast-sync fails (no peers, insufficient agreement), the node falls back to genesis replay via `try_sync_or_fallback()`. Fast-sync is enabled when `config.fast_sync && !config.is_genesis`.
+
+### Q: What are the liveness and readiness probes?
+
+**A:** The `omnia-node` binary exposes separate Kubernetes liveness (`/healthz`) and readiness (`/readyz`) endpoints:
+
+- **Liveness** (`/healthz`): Always returns 200 with `{"status": "alive", "node_id", "uptime_seconds"}`. Indicates the process is running. If this fails, Kubernetes restarts the pod.
+- **Readiness** (`/readyz`): Returns 200 when the node has peers, is not syncing, and has recent finalization. Returns 503 with `{"status": "not_ready", "reason": "no_peers"|"syncing"|"no_finalization"}` otherwise. If this fails, Kubernetes removes the pod from service but does not restart it.
+- **Legacy** (`/health`): Maps to the liveness handler for backward compatibility.
+
+Configuration: `readiness_min_peers` (default: 1) and `readiness_max_finalization_age` (default: 600 rounds) can be tuned via TOML config.
+
+### Q: How can I participate in the trusted setup ceremony?
+
+**A:** The Omnia Protocol uses a Powers of Tau style trusted setup ceremony for the Groth16 ZK circuit. The ceremony is multi-party: each participant contributes randomness to the transcript, and only one honest participant is needed for security. The transcript hash is initialized using BLAKE3 domain separation (`OMNIA-SETUP-TRANSCRIPT-V1`) and includes Fiat-Shamir Proof of Knowledge on BN254 G1 with real EC operations. See `zk/src/setup/contribution.rs` for the implementation.
+
+### Q: How does gradual slashing work?
+
+**A:** The gradual slashing model (ADR-011) replaces the previous binary slash-point system with a 3-tier escalation:
+
+1. **Warning**: Minor offenses (e.g., brief liveness failure). The validator is flagged but remains active.
+2. **Jail**: Repeated or moderate offenses. The validator is temporarily suspended from consensus and cannot produce blocks or earn rewards. Auto-release occurs after a configurable jail period.
+3. **Ejection**: Severe or persistent offenses (e.g., equivocation). The validator is permanently removed and their stake is partially burned.
+
+This approach avoids the "nothing to lose" perverse incentive of binary slashing, where a validator close to the threshold has no reason not to cause maximum damage.
 
 ---
 
@@ -297,4 +334,4 @@ AI agents can currently have identities on the network with these capabilities. 
 ---
 
 **Last Updated:** May 2026
-**Version:** 4.0.0
+**Version:** 5.0.0
