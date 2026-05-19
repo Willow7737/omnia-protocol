@@ -4357,6 +4357,18 @@ dependencies = [
 
 [[package]]
 name = "ml-kem"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "860a7986a65e8b6c965082dfeba382302ddad057c21e0830373463e612e67217"
+dependencies = [
+ "hybrid-array 0.2.3",
+ "kem",
+ "rand_core 0.6.4",
+ "sha3 0.10.9",
+]
+
+[[package]]
+name = "ml-kem"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8de49b3df74c35498c0232031bb7e85f9389f913e2796169c8ab47a53993a18f"
@@ -4637,12 +4649,12 @@ dependencies = [
  "blake3",
  "ed25519-dalek",
  "hex",
- "ml-kem",
+ "ml-kem 0.2.3",
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
  "postcard",
- "pqc_dilithium",
+ "pqc_dilithium 0.2.0",
  "rand 0.8.6",
  "serde",
  "serde_bytes",
@@ -4673,6 +4685,52 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.23",
+]
+
+[[package]]
+name = "omnia-consensus"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "getrandom 0.2.17",
+ "hex",
+ "omnia-crypto",
+ "omnia-primitives",
+ "postcard",
+ "proptest",
+ "redb",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "omnia-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "bip39",
+ "blake3",
+ "blst",
+ "ed25519-dalek",
+ "getrandom 0.2.17",
+ "hex",
+ "hkdf",
+ "ml-kem 0.1.1",
+ "omnia-primitives",
+ "pqc_dilithium 0.1.1",
+ "rand 0.8.6",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -4804,6 +4862,8 @@ dependencies = [
  "hex",
  "hkdf",
  "libp2p",
+ "omnia-consensus",
+ "omnia-crypto",
  "omnia-primitives",
  "postcard",
  "proptest",
@@ -5216,6 +5276,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "pqc_dilithium"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d5159b14299f166bfb0fc37046c66e1ec0d4e8f108251a930c8b62e802f1710"
+dependencies = [
+ "rand 0.8.6",
 ]
 
 [[package]]

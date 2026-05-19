@@ -10,6 +10,8 @@ rust-version = { workspace = true }
 
 [dependencies]
 omnia-primitives = { path = "../omnia-primitives" }
+omnia-crypto = { path = "../omnia-crypto", features = ["bls"] }
+omnia-consensus = { path = "../omnia-consensus", features = ["persistent-storage"] }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 hex = "0.4"
@@ -71,6 +73,9 @@ bincode = { workspace = true }
 [features]
 default = []
 migration = ["sled"]
+bls = ["omnia-crypto/bls"]
+pqc = ["omnia-crypto/pqc"]
+persistent-storage = ["omnia-consensus/persistent-storage"]
 
 [dev-dependencies]
 tokio-test = "0.4"
