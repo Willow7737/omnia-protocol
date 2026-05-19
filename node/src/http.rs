@@ -192,6 +192,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::api::events::StoredEvent;
@@ -202,7 +203,6 @@ mod tests {
     use axum::http::{Request, StatusCode as HttpStatus};
     use omnia_economics::EconomicsState;
     use omnia_shards::ShardRouter;
-    use omnia_substrate::SlashingEngine;
     use omnia_substrate::Substrate;
     use std::collections::HashMap;
     use std::path::PathBuf;

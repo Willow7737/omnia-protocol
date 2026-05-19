@@ -1706,7 +1706,7 @@ criteria = "safe-to-deploy"
 notes = "Cryptographic primitive. Post-quantum Dilithium signature scheme. No unsafe in Rust wrapper."
 
 [[exemptions.ml-kem]]
-version = "0.2"
+version = "0.2.0"
 criteria = "safe-to-deploy"
 notes = "Cryptographic primitive. ML-KEM-768 (FIPS 203) post-quantum key encapsulation mechanism. Pure Rust implementation with zeroize support. Replaces pqc_kyber to fix KyberSlash (RUSTSEC-2023-0079)."
 

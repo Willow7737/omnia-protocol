@@ -41,18 +41,16 @@ use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::providers::{Provider, ProviderBuilder};
 #[cfg(feature = "ethereum-live")]
 use alloy::signers::local::PrivateKeySigner;
-#[cfg(feature = "ethereum-live")]
-use alloy::sol;
 
 // ---------------------------------------------------------------------------
 // OmniaRollup contract bindings (feature-gated)
 // ---------------------------------------------------------------------------
 
-/// Generate typed contract bindings from the OmniaRollup ABI via the `sol!` macro.
-///
-/// The ABI matches the Solidity contract at `zk/contracts/ethereum/OmniaRollup.sol`.
-/// The `#[sol(rpc)]` attribute generates a `new` constructor that takes a provider
-/// and returns a contract instance that can make RPC calls.
+// Generate typed contract bindings from the OmniaRollup ABI via the `sol!` macro.
+//
+// The ABI matches the Solidity contract at `zk/contracts/ethereum/OmniaRollup.sol`.
+// The `#[sol(rpc)]` attribute generates a `new` constructor that takes a provider
+// and returns a contract instance that can make RPC calls.
 #[cfg(feature = "ethereum-live")]
 alloy::sol! {
     #[sol(rpc)]
@@ -110,7 +108,8 @@ alloy::sol! {
                 {"name": "oldRoot", "type": "bytes32", "indexed": true},
                 {"name": "newRoot", "type": "bytes32", "indexed": true},
                 {"name": "batchIndex", "type": "uint256", "indexed": false}
-            ]
+            ],
+            "anonymous": false
         },
         {
             "type": "event",
@@ -119,7 +118,8 @@ alloy::sol! {
                 {"name": "sender", "type": "address", "indexed": true},
                 {"name": "l2Did", "type": "bytes32", "indexed": true},
                 {"name": "amount", "type": "uint256", "indexed": false}
-            ]
+            ],
+            "anonymous": false
         },
         {
             "type": "event",
@@ -128,7 +128,8 @@ alloy::sol! {
                 {"name": "recipient", "type": "address", "indexed": true},
                 {"name": "l2Did", "type": "bytes32", "indexed": true},
                 {"name": "amount", "type": "uint256", "indexed": false}
-            ]
+            ],
+            "anonymous": false
         }
     ]"#
 }
@@ -258,6 +259,7 @@ pub struct EthereumLiveClient {
     operator_private_key: String,
     contract_address: Address,
     gas_limit: u64,
+    #[allow(dead_code)]
     max_fee_per_gas: Option<String>,
     confirmation_blocks: u64,
 }
@@ -297,33 +299,17 @@ impl EthereumLiveClient {
     /// configured RPC URL scheme.
     async fn build_provider(
         &self,
-    ) -> Result<
-        alloy::providers::fillers::FillProvider<
-            alloy::providers::fillers::JoinFill<
-                alloy::providers::fillers::JoinFill<
-                    alloy::providers::fillers::JoinFill<
-                        alloy::providers::fillers::JoinFill<
-                            alloy::providers::fillers::GasFiller,
-                            alloy::providers::fillers::NonceFiller,
-                        >,
-                        alloy::providers::fillers::ChainIdFiller,
-                    >,
-                    alloy::providers::fillers::WalletFiller<PrivateKeySigner>,
-                >,
-                alloy::providers::fillers::BlobGasFiller,
-            >,
-        >,
-        SettlementError,
-    > {
+    ) -> Result<impl Provider, SettlementError> {
         let wallet: PrivateKeySigner = self
             .operator_private_key
             .parse()
             .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
 
+        // In alloy 1.8.x, recommended fillers (gas, nonce, chain ID) are enabled
+        // by default on ProviderBuilder::new(). No need to call with_recommended_fillers().
         let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
             .wallet(wallet)
-            .on_http(
+            .connect_http(
                 self.rpc_url
                     .parse()
                     .map_err(|e| SettlementError::ConfigError(format!("Invalid RPC URL: {e}")))?,
@@ -412,10 +398,10 @@ impl EthereumLiveClient {
 
         // Wait for confirmations
         let receipt = pending_tx
-            .with_required_confirmations(self.confirmation_blocks as usize)
+            .with_required_confirmations(self.confirmation_blocks)
             .get_receipt()
             .await
-            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
+            .map_err(|_e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -438,7 +424,7 @@ impl EthereumLiveClient {
                 SettlementError::ContractError(format!("stateRoot call failed: {e}"))
             })?;
 
-        Ok(root.0 .0)
+        Ok(root.0)
     }
 
     /// Deposit ETH into the rollup, credited to an L2 identity.
@@ -463,10 +449,10 @@ impl EthereumLiveClient {
         let tx_hash = *pending_tx.tx_hash();
 
         let receipt = pending_tx
-            .with_required_confirmations(self.confirmation_blocks as usize)
+            .with_required_confirmations(self.confirmation_blocks)
             .get_receipt()
             .await
-            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
+            .map_err(|_e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -502,10 +488,10 @@ impl EthereumLiveClient {
         let tx_hash = *pending_tx.tx_hash();
 
         let receipt = pending_tx
-            .with_required_confirmations(self.confirmation_blocks as usize)
+            .with_required_confirmations(self.confirmation_blocks)
             .get_receipt()
             .await
-            .map_err(|e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
+            .map_err(|_e| SettlementError::TxTimedOut(self.confirmation_blocks))?;
 
         if receipt.status() {
             Ok(format!("0x{tx_hash:x}"))
@@ -1065,7 +1051,7 @@ mod tests {
 
     #[test]
     fn test_ethereum_config_validation_valid() {
-        let config = EthereumConfig::default();
+        let _config = EthereumConfig::default();
         // Default config has empty operator key, so validation should fail
         // in live mode. But let's test the individual field validations.
         let config = EthereumConfig {
