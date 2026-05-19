@@ -16,8 +16,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-network-tests"
-      - name: Run ignored (real-network) tests
-        run: cargo test -p omnia-substrate -- --ignored
+      - name: Run omnia-network tests
+        run: cargo test -p omnia-network --verbose
+      - name: Run omnia-consensus tests
+        run: cargo test -p omnia-consensus --verbose
+      - name: Run substrate network tests (legacy)
+        run: cargo test -p omnia-substrate --features network -- --ignored
         continue-on-error: true
-      - name: Run regular integration tests
-        run: cargo test -p omnia-substrate

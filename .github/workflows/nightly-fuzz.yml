@@ -45,7 +45,7 @@ jobs:
             exit 0
           fi
           FAILED=0
-          for target in fuzz_event_deserialization fuzz_gossip_message fuzz_zk_proof_deserialization fuzz_consensus_state_transition fuzz_vector_clock_merge fuzz_rate_limiter fuzz_snapshot_deserialization; do
+          for target in fuzz_event_deserialization fuzz_gossip_message fuzz_zk_proof_deserialization fuzz_consensus_state_transition fuzz_vector_clock_merge fuzz_rate_limiter fuzz_snapshot_deserialization fuzz_primitives_event; do
             if [ -f "fuzz/fuzz_targets/$target.rs" ]; then
               echo "=== Fuzzing $target ==="
               # Run fuzz target with a time budget.  Exit code 124 from timeout

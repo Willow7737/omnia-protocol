@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'zk/**'
+      - 'omnia-adapters/**'
       - '.github/workflows/ethereum-settlement.yml'
   pull_request:
     branches: [main]
     paths:
       - 'zk/**'
+      - 'omnia-adapters/**'
       - '.github/workflows/ethereum-settlement.yml'
   # Allow manual trigger
   workflow_dispatch:
@@ -33,10 +35,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-eth-simulated"
-      - name: Test zk crate (no features)
-        run: cargo test -p omnia-zk --verbose
+      - name: Test omnia-adapters crate (no features)
+        run: cargo test -p omnia-adapters --verbose
       - name: Clippy (no features, lib only)
-        run: cargo clippy -p omnia-zk --lib -- -D warnings -D clippy::unwrap_used
+        run: cargo clippy -p omnia-adapters --lib -- -D warnings -D clippy::unwrap_used
 
   # -----------------------------------------------------------------------
   # Test with ethereum-live feature against Anvil (Foundry local node)
@@ -86,13 +88,13 @@ jobs:
             --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
             2>&1) || true
           echo "$DEPLOY_OUTPUT"
-      - name: Test zk crate (ethereum-live feature)
-        run: cargo test -p omnia-zk --features ethereum-live --verbose
+      - name: Test omnia-adapters crate (ethereum-live feature)
+        run: cargo test -p omnia-adapters --features ethereum-live --verbose
         timeout-minutes: 15
       - name: Clippy (ethereum-live feature, lib only)
-        run: cargo clippy -p omnia-zk --lib --features ethereum-live -- -D warnings -D clippy::unwrap_used
+        run: cargo clippy -p omnia-adapters --lib --features ethereum-live -- -D warnings -D clippy::unwrap_used
       - name: Clippy (ethereum-live feature, all targets)
-        run: cargo clippy -p omnia-zk --all-targets --features ethereum-live -- -D clippy::unwrap_used
+        run: cargo clippy -p omnia-adapters --all-targets --features ethereum-live -- -D clippy::unwrap_used
 
   # -----------------------------------------------------------------------
   # Solidity contract tests (via Forge)
