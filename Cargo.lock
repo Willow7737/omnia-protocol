@@ -4717,6 +4717,7 @@ dependencies = [
  "omnia-shards",
  "omnia-substrate",
  "omnia-zk",
+ "postcard",
  "prometheus",
  "rand 0.8.6",
  "redb",

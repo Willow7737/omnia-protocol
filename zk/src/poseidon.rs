@@ -194,32 +194,40 @@ fn generate_round_constants() -> Vec<Fr> {
 pub mod reference {
     use ark_bn254::Fr;
     use ark_ff::Zero;
+    use std::sync::LazyLock;
 
     /// Standard MDS matrix for t=3, BN254.
     /// Values from the Filecoin/Neptune reference implementation.
     /// Generated via Grain LFSR, not BLAKE3.
     ///
     /// Reference: https://github.com/filecoin-project/neptune
-    pub const MDS_MATRIX: [[Fr; 3]; 3] = [
-        // Placeholder: actual reference values must be populated from
-        // the Filecoin/Neptune repository or the Poseidon paper's
-        // published test vectors. The structure is correct; the values
-        // will be verified against the reference during the dual-hash
-        // transition Phase B.
-        //
-        // For now, we use a different Cauchy construction than the
-        // custom module to demonstrate that both parameter sets can
-        // coexist. The reference values will be populated from the
-        // Neptune repository in Phase 5B.
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-    ];
+    ///
+    /// Placeholder: actual reference values must be populated from
+    /// the Filecoin/Neptune repository or the Poseidon paper's
+    /// published test vectors. The structure is correct; the values
+    /// will be verified against the reference during the dual-hash
+    /// transition Phase B.
+    ///
+    /// For now, we use a different Cauchy construction than the
+    /// custom module to demonstrate that both parameter sets can
+    /// coexist. The reference values will be populated from the
+    /// Neptune repository in Phase 5B.
+    ///
+    /// `LazyLock` is used instead of `const` because `Fr::zero()`
+    /// is not const-evaluable on stable Rust.
+    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
+        [
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+        ]
+    });
 
     /// Standard round constants for t=3, R_F=8, R_P=57, BN254.
     /// Placeholder: actual Grain LFSR-derived values will be populated
     /// from the Filecoin/Neptune reference implementation.
-    pub const ROUND_CONSTANTS: [Fr; 195] = [Fr::zero(); 195];
+    pub static ROUND_CONSTANTS: LazyLock<[Fr; 195]> =
+        LazyLock::new(|| [(); 195].map(|_| Fr::zero()));
 }
 
 /// Custom Omnia parameters (current, deprecated).
@@ -230,21 +238,26 @@ pub mod reference {
 pub mod custom {
     use ark_bn254::Fr;
     use ark_ff::Zero;
+    use std::sync::LazyLock;
 
     /// Custom MDS matrix — same as the current `generate_mds_matrix()`.
     /// Uses Cauchy construction with x=[1,2,3], y=[5,6,7].
-    pub const MDS_MATRIX: [[Fr; 3]; 3] = [
-        // Placeholder: populated at runtime by `generate_mds_matrix()`.
-        // Const evaluation requires hardcoded values, which will be
-        // computed from the Cauchy construction in a build script.
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-        [Fr::zero(), Fr::zero(), Fr::zero()],
-    ];
+    ///
+    /// Placeholder: populated at runtime by `generate_mds_matrix()`.
+    /// `LazyLock` is used instead of `const` because `Fr::zero()`
+    /// is not const-evaluable on stable Rust.
+    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
+        [
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+            [Fr::zero(), Fr::zero(), Fr::zero()],
+        ]
+    });
 
     /// Custom round constants — same as current `generate_round_constants()`.
     /// Generated via BLAKE3 in counter mode.
-    pub const ROUND_CONSTANTS: [Fr; 195] = [Fr::zero(); 195];
+    pub static ROUND_CONSTANTS: LazyLock<[Fr; 195]> =
+        LazyLock::new(|| [(); 195].map(|_| Fr::zero()));
 }
 
 // ---------------------------------------------------------------------------
@@ -749,7 +762,11 @@ mod tests {
         let b = Fr::from(2u64);
         let hash = poseidon_hash_offchain(a, b).expect("hash should succeed");
         // Verify it's still producing the same output as before Phase 5
-        assert_ne!(hash, Fr::zero(), "Custom Poseidon hash should produce non-zero output");
+        assert_ne!(
+            hash,
+            Fr::zero(),
+            "Custom Poseidon hash should produce non-zero output"
+        );
         // Re-run to verify determinism
         let hash2 = poseidon_hash_offchain(a, b).expect("hash should succeed");
         assert_eq!(hash, hash2, "Custom Poseidon hash must be deterministic");
@@ -766,7 +783,11 @@ mod tests {
             .expect("Reference version should work");
         // Both produce valid (non-zero) outputs
         assert_ne!(custom, Fr::zero(), "Custom hash output should be non-zero");
-        assert_ne!(reference, Fr::zero(), "Reference hash output should be non-zero");
+        assert_ne!(
+            reference,
+            Fr::zero(),
+            "Reference hash output should be non-zero"
+        );
         // Once reference constants are populated, these will differ:
         // assert_ne!(custom, reference, "Different parameter sets should produce different outputs");
     }

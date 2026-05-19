@@ -20,7 +20,7 @@ fn test_node_id(id: u8) -> NodeId {
 }
 
 /// Helper: create a ConsensusEngine for a specific node.
-fn create_consensus_node(node_id: NodeId, total_nodes: usize) -> ConsensusEngine {
+fn create_consensus_node(_node_id: NodeId, total_nodes: usize) -> ConsensusEngine {
     let mut seed = [0u8; 32];
     seed[0] = 1; // deterministic seed for test reproducibility
     let config = ConsensusConfig {
@@ -82,7 +82,9 @@ fn test_multi_node_bft_finality() {
 
         // Insert and process on all nodes (simulating gossip)
         for (i, engine) in engines.iter_mut().enumerate() {
-            graphs[i].insert(event.clone()).expect("graph insert should succeed");
+            graphs[i]
+                .insert(event.clone())
+                .expect("graph insert should succeed");
             let committed = engine.process_event(&event, &graphs[i]);
             // Processing should not error on honest events
             assert!(
@@ -152,7 +154,9 @@ fn test_bft_safety_with_byzantine_node() {
 
         // Process on all honest nodes
         for (i, engine) in engines.iter_mut().enumerate() {
-            graphs[i].insert(event.clone()).expect("graph insert should succeed");
+            graphs[i]
+                .insert(event.clone())
+                .expect("graph insert should succeed");
             let committed = engine.process_event(&event, &graphs[i]);
             assert!(
                 committed.is_ok(),
@@ -178,56 +182,76 @@ fn test_bft_safety_with_byzantine_node() {
 
 /// Test that consensus makes progress when fewer than 1/3 of nodes are faulty.
 ///
-/// With 7 nodes, BFT tolerates f=2 faulty nodes. We simulate 1 faulty
-/// node and verify the 6 honest nodes continue to make progress.
+/// With 4 nodes (3 honest + 1 faulty), BFT tolerates f=1 faulty node.
+/// All 3 honest nodes create events and cross-reference each other's
+/// events via other-parent links, simulating real gossip. This ensures
+/// enough witnesses accumulate per round to reach supermajority.
 #[test]
 #[allow(clippy::unwrap_used)]
 fn test_consensus_progress_with_minority_faults() {
-    let num_nodes = 7;
+    // Use 4 total nodes (1 faulty, 3 honest) so supermajority = 3,
+    // which is achievable when all 3 honest nodes create events.
+    let num_nodes = 4;
     let node_ids: Vec<NodeId> = (1..=num_nodes).map(|i| test_node_id(i as u8)).collect();
 
-    // Create engines for the 6 honest nodes
-    let honest_node_ids = &node_ids[..6];
+    // Create engines for the 3 honest nodes
+    let honest_node_ids = &node_ids[..3];
     let mut engines: Vec<ConsensusEngine> = honest_node_ids
         .iter()
         .map(|&id| create_consensus_node(id, num_nodes))
         .collect();
-    let mut graphs: Vec<CausalGraph> = (0..6).map(|_| CausalGraph::new()).collect();
+    let mut graphs: Vec<CausalGraph> = (0..3).map(|_| CausalGraph::new()).collect();
 
-    // Submit events through the first honest node
-    let creator = node_ids[0];
-    let mut self_parent: Option<[u8; 32]> = None;
-    let mut vector_clock = VectorClock::new();
+    // Track per-node event chains
+    let mut self_parents: Vec<Option<[u8; 32]>> = vec![None; 3];
+    let mut vector_clocks: Vec<VectorClock> = (0..3).map(|_| VectorClock::new()).collect();
 
-    for seq in 0..20u64 {
-        vector_clock.set(creator, seq + 1);
+    // Simulate multiple rounds of events from all honest nodes
+    // Each round, every honest node creates an event that references
+    // the previous event from another honest node as other-parent.
+    for round in 0..10u64 {
+        for node_idx in 0..3usize {
+            let creator = honest_node_ids[node_idx];
+            vector_clocks[node_idx].set(creator, round + 1);
 
-        let event = if self_parent.is_none() {
-            Event::genesis(creator, format!("event-{}", seq).into_bytes())
-        } else {
-            Event::new(
-                creator,
-                seq,
-                vector_clock.clone(),
-                self_parent,
-                None,
-                format!("event-{}", seq).into_bytes(),
-            )
-        };
+            // Find another honest node's latest event to use as other-parent
+            let other_idx = (node_idx + 1) % 3;
+            let other_parent = self_parents[other_idx];
 
-        let event_id = event.id;
-        self_parent = Some(event_id);
+            let event = if self_parents[node_idx].is_none() {
+                Event::genesis(
+                    creator,
+                    format!("round-{}-node-{}", round, node_idx).into_bytes(),
+                )
+            } else {
+                Event::new(
+                    creator,
+                    round,
+                    vector_clocks[node_idx].clone(),
+                    self_parents[node_idx],
+                    other_parent,
+                    format!("round-{}-node-{}", round, node_idx).into_bytes(),
+                )
+            };
 
-        for (i, engine) in engines.iter_mut().enumerate() {
-            graphs[i].insert(event.clone()).expect("graph insert should succeed");
-            let committed = engine.process_event(&event, &graphs[i]);
-            assert!(
-                committed.is_ok(),
-                "Honest node {} failed to process event {}: {:?}",
-                i,
-                seq,
-                committed.err()
-            );
+            let event_id = event.id;
+            self_parents[node_idx] = Some(event_id);
+
+            // Process this event on all honest nodes (simulating gossip)
+            for (i, engine) in engines.iter_mut().enumerate() {
+                graphs[i]
+                    .insert(event.clone())
+                    .expect("graph insert should succeed");
+                let committed = engine.process_event(&event, &graphs[i]);
+                assert!(
+                    committed.is_ok(),
+                    "Honest node {} failed to process event from node {} round {}: {:?}",
+                    i,
+                    node_idx,
+                    round,
+                    committed.err()
+                );
+            }
         }
     }
 

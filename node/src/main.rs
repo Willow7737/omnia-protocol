@@ -684,7 +684,10 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Genesis generation failed: {}", e))?;
 
     println!("\nGenesis block generated successfully!");
-    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
+    println!(
+        "  State root: {}",
+        hex::encode(&genesis_block.state_root[..8])
+    );
     println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
     println!("  Validators: {}", genesis_block.validators.len());
 
@@ -724,7 +727,10 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
     println!("  Chain ID: {}", genesis_block.chain_id);
     println!("  Validators: {}", genesis_block.validators.len());
     println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
-    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
+    println!(
+        "  State root: {}",
+        hex::encode(&genesis_block.state_root[..8])
+    );
 
     validate_genesis(&genesis_block)
         .map_err(|e| anyhow::anyhow!("Genesis validation failed: {}", e))?;
