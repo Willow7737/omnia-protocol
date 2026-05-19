@@ -67,6 +67,9 @@ rand = "0.8"
 # TOML configuration file parsing — industry-standard format for node configuration
 toml = "0.8"
 
+# Compact binary serialization for genesis block files
+postcard = { version = "1", features = ["alloc"] }
+
 # Timestamp handling for API responses
 chrono = { version = "0.4", features = ["serde"] }
 

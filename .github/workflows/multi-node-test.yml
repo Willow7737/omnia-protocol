@@ -1,0 +1,30 @@
+name: Multi-Node BFT Test
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6AM UTC
+  workflow_dispatch:
+
+jobs:
+  bft-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85.0"
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bft-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-bft-
+      - name: Run multi-node BFT tests
+        run: cargo test --test multi_node_test -- --nocapture
+      - name: Run network integration tests
+        run: cargo test --test network_integration -- --ignored --nocapture

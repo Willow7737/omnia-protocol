@@ -2,19 +2,19 @@
 
 ## Status
 
-Accepted
+Accepted — Updated in Phase 5 (dual-hash foundation added)
 
 ## Date
 
-2025-05-18
+2025-05-18 (original), 2026-05-19 (Phase 5 update)
 
 ## Version
 
-1.0.0
+2.0.0
 
 ## Decision
 
-Maintain current non-standard Poseidon hash parameters with a documented migration plan to Filecoin/Neptune reference constants, requiring a hard fork to implement.
+Implement a dual-hash transition from custom BLAKE3-derived Poseidon parameters to Filecoin/Neptune reference parameters, with both versions available during the migration period.
 
 ## Context
 
@@ -24,48 +24,55 @@ The Omnia protocol uses Poseidon as the SNARK-friendly hash function for Merkle 
 - Round constants: BLAKE3-derived (not Grain LFSR as in the reference specification)
 - Parameters: R_F=8, R_P=57, alpha=5, t=3
 
-The Filecoin and Neptune projects have established reference Poseidon parameters that are widely audited and interoperable. Using non-standard parameters means:
-- Omnia proofs are not compatible with other Poseidon-based systems
-- The security of the non-standard parameters has not been independently audited
-- Any cross-chain verification or proof aggregation with other protocols would be impossible
+Phase 5 adds the `PoseidonVersion` enum with `Custom` (current, default) and `Reference` (target) options, enabling the dual-hash transition.
+
+## Migration Timeline
+
+### Phase A: Both Versions Available, Custom is Default (Phase 5 — Current)
+- `PoseidonVersion::Custom` is the default for all hash operations
+- `PoseidonVersion::Reference` available via `poseidon_hash_with_version(_, Reference)`
+- Reference parameters are placeholder (zero-filled) until populated from Filecoin/Neptune
+- All existing proofs use Custom parameters and continue to work
+
+### Phase B: Both Versions Available, Reference is Default for New Proofs (Phase 6 — Testnet)
+- Reference constants populated from Filecoin/Neptune repository
+- New proofs default to `PoseidonVersion::Reference`
+- Custom parameters still accepted for verification of existing proofs
+- ZK circuit updated to support both versions
+- Trusted setup keys regenerated for Reference parameters
+
+### Phase C: Custom Deprecated, Only Reference Accepted (Phase 7 — Mainnet)
+- Only `PoseidonVersion::Reference` accepted for new proofs
+- Custom parameters kept for historical verification only
+- All existing Custom proofs must be regenerated with Reference parameters
+- Migration tooling provided for batch proof regeneration
 
 ## Alternatives Considered
 
 ### Immediate Migration
-Immediately switch to Filecoin/Neptune reference parameters. This would:
-- Break all existing proofs (every proof generated under current params becomes invalid)
-- Require all circuits to be re-generated with new parameters
-- Require all operators to update simultaneously
-- Be equivalent to a hard fork
+Breaks all existing proofs immediately. Rejected due to deployment disruption.
 
-### Dual-Hash Transition Period
-Run both hash functions in parallel for a transition period:
-- Old proofs use current parameters
-- New proofs use reference parameters
-- Validators accept both during transition
-- After transition, only reference parameters accepted
-This is the safest but most complex approach.
+### Dual-Hash Transition (Chosen)
+Safest approach: both versions coexist during transition. Allows gradual migration with no network downtime.
 
-### Keep Current Parameters (Chosen)
-Document the deviation and plan migration for a future hard fork:
-- Current parameters are mathematically sound (Cauchy MDS, proper round count)
-- Migration is deferred to avoid breaking existing deployments
-- ADR documents the risk and migration path
+### Keep Current Parameters (Previous Decision)
+Retained as Phase A of the dual-hash transition. Now has a concrete migration timeline.
 
 ## Consequences
 
 ### Positive
-- No immediate disruption to existing proofs and deployments
-- Current parameters are mathematically valid (just non-standard)
-- Migration can be planned and coordinated with operators
+- Concrete migration plan with defined phases
+- No immediate disruption to existing proofs
+- Reference parameters will provide interoperability with Filecoin/Neptune
+- Phase 5 infrastructure (`PoseidonVersion`, `poseidon_hash_with_version`) ready for Phase B
 
 ### Negative
-- Existing proofs are not interoperable with Filecoin/Neptune
-- No independent security audit of the Cauchy MDS matrix construction
-- BLAKE3-derived round constants may not have the same security margin as Grain LFSR-derived constants
-- A future hard fork will be required to migrate, which is disruptive
+- Three-phase migration requires coordination across multiple releases
+- Trusted setup keys must be regenerated for Reference parameters
+- All existing ZK proofs must eventually be regenerated
+- Dual-hash period increases code complexity
 
 ### Trade-offs
-- Chose deployment stability over spec compliance
-- The deviation is documented and tracked for future resolution
-- Phase 3 should prioritize Poseidon parameter migration with a dual-hash transition
+- Migration complexity traded for long-term interoperability and auditability
+- Phased approach reduces risk compared to immediate migration
+- Phase 5 lays the foundation; Phases 6-7 complete the transition

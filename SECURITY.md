@@ -139,13 +139,27 @@ Fuzzing is integrated into CI and runs on every merge to the main branch. New fu
 
 All cryptographic comparison operations in the substrate crate use constant-time
 comparisons via the `subtle` crate. See [`docs/security/SIDE_CHANNEL_AUDIT.md`](docs/security/SIDE_CHANNEL_AUDIT.md)
-for the full audit report.
+for the full audit report covering the substrate crate.
 
-**Note**: The ZK and binding crates have not yet undergone a dedicated
-side-channel audit. Priority areas for future audit include:
-- Poseidon hash field-element comparisons in `zk/src/poseidon.rs`
+The ZK and binding crates have been audited for side-channel resistance in Phase 5.
+See [`docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md`](docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md)
+for the full audit report covering:
+- Poseidon hash field-element operations in `zk/src/poseidon.rs`
 - Ed25519 and Dilithium signature verification paths in `binding/src/quantum_commit.rs`
-- `PqPublicKey` comparison in `binding/src/key_rotation.rs`
+- ML-KEM key encapsulation operations in `binding/src/quantum_commit.rs`
+- Trusted setup contribution operations in `zk/src/setup/contribution.rs`
+
+**Remaining concern**: The `pqc-dilithium` crate has not been formally audited for timing
+side-channels. Monitor upstream updates and consider switching to a formally verified
+implementation (e.g., `liboqs` bindings) for mainnet.
+
+## Bug Bounty Program
+
+Omnia Protocol operates a bug bounty program that rewards security researchers for
+responsible disclosure of vulnerabilities. See [`SECURITY_BOUNTY.md`](SECURITY_BOUNTY.md)
+for full details including scope, reward tiers, and reporting guidelines.
+
+**Reward range**: $100 – $50,000 depending on severity.
 
 ## Responsible Disclosure
 

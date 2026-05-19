@@ -86,6 +86,12 @@ async fn main() -> Result<()> {
             CliCommand::CeremonyVerify { server_url } => {
                 return run_ceremony_verify(&server_url);
             }
+            CliCommand::GenesisInit { config, output } => {
+                return run_genesis_init(&config, &output);
+            }
+            CliCommand::GenesisValidate { block } => {
+                return run_genesis_validate(&block);
+            }
         }
     }
 
@@ -645,6 +651,85 @@ fn run_restore(input_path: &str) -> Result<()> {
     println!("  Timestamp: {}", snapshot.timestamp);
     println!("  Integrity: OK");
 
+    Ok(())
+}
+
+/// Generate a genesis block from a TOML configuration file.
+///
+/// Reads the genesis configuration, validates it (minimum 3 validators,
+/// unique node IDs, non-zero stakes), generates a deterministic genesis
+/// block, and writes it to the output path.
+fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
+    use omnia_substrate::genesis::{generate_genesis, GenesisConfig};
+
+    // Initialize minimal tracing
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(true)
+        .init();
+
+    println!("Loading genesis configuration from {}", config_path);
+
+    let config_content = std::fs::read_to_string(config_path)
+        .with_context(|| format!("Failed to read genesis config: {}", config_path))?;
+
+    let genesis_config: GenesisConfig = toml::from_str(&config_content)
+        .with_context(|| "Failed to parse genesis configuration TOML")?;
+
+    println!("  Chain ID: {}", genesis_config.chain_id);
+    println!("  Network: {}", genesis_config.network_name);
+    println!("  Validators: {}", genesis_config.initial_validators.len());
+
+    let genesis_block = generate_genesis(&genesis_config)
+        .map_err(|e| anyhow::anyhow!("Genesis generation failed: {}", e))?;
+
+    println!("\nGenesis block generated successfully!");
+    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
+    println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
+    println!("  Validators: {}", genesis_block.validators.len());
+
+    // Serialize and write
+    let bytes = postcard::to_allocvec(&genesis_block)
+        .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
+    std::fs::write(output_path, &bytes)
+        .with_context(|| format!("Failed to write genesis block to {}", output_path))?;
+
+    println!("\nGenesis block written to {}", output_path);
+    println!("  Size: {} bytes", bytes.len());
+
+    Ok(())
+}
+
+/// Validate a genesis block file.
+///
+/// Reads the genesis block, verifies its integrity by re-deriving the
+/// expected hash, and prints summary information.
+fn run_genesis_validate(block_path: &str) -> Result<()> {
+    use omnia_substrate::genesis::{validate_genesis, GenesisBlock};
+
+    // Initialize minimal tracing
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(true)
+        .init();
+
+    println!("Loading genesis block from {}", block_path);
+
+    let bytes = std::fs::read(block_path)
+        .with_context(|| format!("Failed to read genesis block: {}", block_path))?;
+
+    let genesis_block: GenesisBlock = postcard::from_bytes(&bytes)
+        .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
+
+    println!("  Chain ID: {}", genesis_block.chain_id);
+    println!("  Validators: {}", genesis_block.validators.len());
+    println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
+    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
+
+    validate_genesis(&genesis_block)
+        .map_err(|e| anyhow::anyhow!("Genesis validation failed: {}", e))?;
+
+    println!("\nGenesis block is VALID");
     Ok(())
 }
 

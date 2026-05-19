@@ -32,6 +32,7 @@ pub mod crypto;
 pub mod crypto_schemes;
 pub mod event;
 pub mod fast_sync;
+pub mod genesis;
 pub mod genesis_replay;
 pub mod gossip;
 pub mod keystore;

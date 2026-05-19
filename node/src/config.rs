@@ -453,6 +453,32 @@ pub enum CliCommand {
         #[arg(long)]
         server_url: String,
     },
+
+    /// Generate a genesis block from a TOML configuration file.
+    ///
+    /// Creates a deterministic genesis block containing the initial
+    /// validator set, economic parameters, and governance configuration.
+    /// The genesis block hash is computed from BLAKE3 of the configuration,
+    /// ensuring all nodes produce the same block from the same config.
+    GenesisInit {
+        /// Path to the genesis configuration TOML file.
+        #[arg(long)]
+        config: String,
+        /// Output path for the serialized genesis block.
+        #[arg(long, default_value = "genesis.bin")]
+        output: String,
+    },
+
+    /// Validate a genesis block file.
+    ///
+    /// Reads a genesis block, re-derives the expected hash from the
+    /// embedded validator set, and verifies integrity. Useful for
+    /// ensuring all nodes have the same genesis block before launch.
+    GenesisValidate {
+        /// Path to the genesis block file to validate.
+        #[arg(long)]
+        block: String,
+    },
 }
 
 #[cfg(test)]

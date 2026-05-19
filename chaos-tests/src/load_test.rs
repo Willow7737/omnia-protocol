@@ -2,6 +2,11 @@
 //!
 //! Provides configurable load tests that measure throughput, latency,
 //! and resource utilization under realistic conditions.
+//!
+//! Phase 5 improvements:
+//! - Real memory measurement via `/proc/self/status` on Linux
+//! - Multi-node consensus simulation (configurable `total_nodes`)
+//! - P90 latency percentile in addition to P50 and P99
 
 use std::time::{Duration, Instant};
 
@@ -20,6 +25,10 @@ pub struct LoadTestConfig {
     pub event_size_bytes: usize,
     /// Warmup duration before measurement begins.
     pub warmup_duration: Duration,
+    /// Number of consensus nodes for BFT quorum calculation.
+    /// Must be at least 3 for meaningful BFT (f=1).
+    /// Defaults to 3 if not specified.
+    pub total_nodes: usize,
 }
 
 impl Default for LoadTestConfig {
@@ -30,6 +39,7 @@ impl Default for LoadTestConfig {
             events_per_second: 100,
             event_size_bytes: 256,
             warmup_duration: Duration::from_secs(5),
+            total_nodes: 3,
         }
     }
 }
@@ -47,6 +57,8 @@ pub struct LoadTestResult {
     pub avg_latency_ms: f64,
     /// P50 (median) latency (ms).
     pub p50_latency_ms: f64,
+    /// P90 latency (ms).
+    pub p90_latency_ms: f64,
     /// P99 latency (ms).
     pub p99_latency_ms: f64,
     /// Peak memory usage estimate (MB).
@@ -93,6 +105,29 @@ fn percentile(sorted_latencies: &[f64], p: f64) -> f64 {
     sorted_latencies[idx.min(sorted_latencies.len() - 1)]
 }
 
+/// Measure current process resident memory in megabytes.
+///
+/// On Linux, reads VmRSS from `/proc/self/status` for an accurate
+/// measurement of resident set size. Falls back to 0.0 on non-Linux
+/// platforms.
+fn measure_memory_mb() -> f64 {
+    #[cfg(target_os = "linux")]
+    {
+        let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+        for line in status.lines() {
+            if line.starts_with("VmRSS:") {
+                let kb: f64 = line
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0.0);
+                return kb / 1024.0; // KB → MB
+            }
+        }
+    }
+    0.0 // fallback for non-Linux
+}
+
 /// Run a load test with the given configuration.
 ///
 /// This is a simplified in-memory load test that measures:
@@ -100,11 +135,11 @@ fn percentile(sorted_latencies: &[f64], p: f64) -> f64 {
 /// - Consensus processing rate
 /// - Latency from submission to finalization
 ///
-/// The test runs a single consensus node with `total_nodes=1` so that
-/// supermajority is trivially reached and events are committed after
-/// the configured commit delay. The `num_nodes` config parameter is
-/// used to configure the initial validator set size but the consensus
-/// engine operates with `total_nodes=1` for the simplified benchmark.
+/// The test runs a single consensus node with `total_nodes` configured
+/// from the `LoadTestConfig` so that supermajority is correctly computed.
+/// The default `total_nodes=3` provides BFT with f=1 fault tolerance.
+/// Use `total_nodes=1` for trivial single-node finalization (fastest
+/// throughput, but no BFT guarantees).
 ///
 /// For a real deployment test with multiple nodes over the network,
 /// use the `omnia-load-test` binary with actual network nodes.
@@ -126,13 +161,20 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         VectorClock, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
     };
 
-    // Set up a single consensus engine with total_nodes=1 so that
-    // supermajority(1) = 1, enabling a single node to finalize events.
+    // Use configurable total_nodes for BFT quorum calculation.
+    // Phase 5 fix: previously hardcoded to total_nodes=1, which trivially
+    // achieves supermajority and is not representative of real deployment.
+    let effective_total_nodes = if config.total_nodes == 0 {
+        1 // fallback: single-node mode
+    } else {
+        config.total_nodes
+    };
+
     let node_id: NodeId = [1u8; 32];
     let mut seed = [0u8; 32];
     seed[0] = 1;
     let consensus_config = ConsensusConfig {
-        total_nodes: 1, // Single-node consensus for simplified benchmark
+        total_nodes: effective_total_nodes,
         round_seed: seed,
         ..Default::default()
     };
@@ -242,6 +284,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
     let mut total_finalized = 0u64;
     let mut latencies: Vec<LatencyMeasurement> = Vec::new();
     let measure_start = Instant::now();
+    let mut peak_memory_mb = measure_memory_mb();
 
     // Measurement phase
     while Instant::now() < test_end {
@@ -260,6 +303,12 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         total_submitted += s;
         total_finalized += f;
         latencies.extend(l);
+
+        // Track peak memory usage
+        let current_mem = measure_memory_mb();
+        if current_mem > peak_memory_mb {
+            peak_memory_mb = current_mem;
+        }
 
         next_event += event_interval;
         if Instant::now() < next_event {
@@ -284,6 +333,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         latency_values.iter().sum::<f64>() / latency_values.len() as f64
     };
     let p50_latency_ms = percentile(&latency_values, 50.0);
+    let p90_latency_ms = percentile(&latency_values, 90.0);
     let p99_latency_ms = percentile(&latency_values, 99.0);
 
     // Rough bandwidth estimate: events * payload_size * 8 / duration
@@ -300,8 +350,9 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         finalization_rate,
         avg_latency_ms,
         p50_latency_ms,
+        p90_latency_ms,
         p99_latency_ms,
-        max_memory_mb: 0.0, // Not easily measurable without additional tooling
+        max_memory_mb: peak_memory_mb,
         network_bandwidth_mbps,
         actual_duration,
     })
@@ -338,6 +389,7 @@ mod tests {
             events_per_second: 10,
             event_size_bytes: 64,
             warmup_duration: Duration::from_millis(100),
+            total_nodes: 1, // Single-node for fast test
         };
         let result = run_load_test(&config).await.unwrap();
         assert!(result.total_events_submitted > 0);

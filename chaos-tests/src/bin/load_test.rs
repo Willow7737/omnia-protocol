@@ -47,6 +47,11 @@ struct Args {
     /// Warmup duration before measurement begins (e.g., "5s").
     #[arg(long, default_value = "5s")]
     warmup: String,
+
+    /// Number of consensus nodes for BFT quorum calculation (default: 3).
+    /// Use 1 for single-node trivial finalization, 3+ for BFT.
+    #[arg(long, default_value_t = 3)]
+    total_nodes: usize,
 }
 
 /// Parse a duration string like "60s", "2m", "1h", or a plain number of seconds.
@@ -104,10 +109,12 @@ async fn main() {
         events_per_second: args.rate,
         event_size_bytes: args.event_size,
         warmup_duration: warmup,
+        total_nodes: args.total_nodes,
     };
 
     println!("Starting Omnia Protocol load test");
     println!("  Nodes: {}", config.num_nodes);
+    println!("  BFT total_nodes: {}", config.total_nodes);
     println!("  Duration: {:?}", config.duration);
     println!("  Warmup: {:?}", config.warmup_duration);
     println!("  Target rate: {} events/sec", config.events_per_second);
@@ -124,7 +131,9 @@ async fn main() {
             );
             println!("Avg latency: {:.2} ms", result.avg_latency_ms);
             println!("P50 latency: {:.2} ms", result.p50_latency_ms);
+            println!("P90 latency: {:.2} ms", result.p90_latency_ms);
             println!("P99 latency: {:.2} ms", result.p99_latency_ms);
+            println!("Peak memory: {:.1} MB", result.max_memory_mb);
             println!("Bandwidth: {:.2} Mbps", result.network_bandwidth_mbps);
             println!("Actual duration: {:?}", result.actual_duration);
         }
