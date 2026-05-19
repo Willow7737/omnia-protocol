@@ -9,6 +9,7 @@ repository = { workspace = true }
 
 [dependencies]
 omnia-substrate = { path = "../substrate" }
+omnia-primitives = { path = "../omnia-primitives" }
 omnia-economics = { path = "../economics" }
 serde = { version = "1.0", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }

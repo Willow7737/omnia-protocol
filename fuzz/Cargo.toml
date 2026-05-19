@@ -12,6 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 omnia-substrate = { path = "../substrate" }
+omnia-primitives = { path = "../omnia-primitives" }
 omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
 omnia-zk = { path = "../zk" }

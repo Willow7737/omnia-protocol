@@ -11,6 +11,7 @@ repository = { workspace = true }
 omnia-substrate = { path = "../substrate" }
 omnia-shards = { path = "../shards" }
 omnia-economics = { path = "../economics" }
+omnia-primitives = { path = "../omnia-primitives" }
 # BLAKE3 hash for deriving node IDs from public keys (matches Event::sign_with_keypair)
 blake3 = "1"
 tokio = { version = "1", features = ["full"] }

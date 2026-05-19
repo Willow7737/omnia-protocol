@@ -1,0 +1,23 @@
+[package]
+name = "omnia-primitives"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+rust-version = "1.88"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+sha2 = "0.10"
+blake3 = "1.5"
+hex = "0.4"
+subtle = "2.5"
+thiserror = "2.0"
+chrono = { version = "0.4", features = ["serde"], default-features = false }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
+bincode = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.4"
+rand = "0.8"
