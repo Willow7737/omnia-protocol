@@ -12,6 +12,7 @@ members = [
     "node",
     "chaos-tests",
     "fuzz",
+    "benches",
 ]
 resolver = "2"
 
@@ -26,3 +27,19 @@ rust-version = "1.88"
 [workspace.dependencies]
 # bincode 1.x for legacy wire format deserialization (v0 fallback)
 bincode = "1"
+
+# Release profile optimization — Decision 3: panic = "abort"
+# Thin LTO balances compile time vs binary size improvement
+# codegen-units = 1 maximizes optimization opportunities
+[profile.release]
+panic = "abort"
+lto = "thin"
+codegen-units = 1
+strip = true
+debug = false
+
+# Bench profile inherits release but keeps debug info for profiling
+[profile.bench]
+inherits = "release"
+debug = true
+strip = false

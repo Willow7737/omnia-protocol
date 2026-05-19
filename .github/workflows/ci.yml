@@ -60,15 +60,35 @@ jobs:
           if in_exemption and not has_notes:
               missing.append(current_name)
           if missing:
-              print(f'❌ Missing notes for {len(missing)} exemptions')
+              print(f'Missing notes for {len(missing)} exemptions')
               sys.exit(1)
-          print('✅ All exemptions have notes')
+          print('All exemptions have notes')
           "
       - name: Check Prettier formatting
         run: |
           npm install -g prettier
           npx prettier --check "**/*.md" "**/*.json" "!**/node_modules/**" "!target/**" "!**/Cargo.lock" "!supply-chain/**"
         continue-on-error: true  # Existing files not yet Prettier-formatted
+
+  feature-matrix:
+    name: Feature Matrix (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, light]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-feature-${{ matrix.profile }}"
+      - name: Check with ${{ matrix.profile }} features
+        run: cargo check -p omnia-node --no-default-features --features ${{ matrix.profile }}
+      - name: Test with ${{ matrix.profile }} features
+        run: cargo test -p omnia-node --no-default-features --features ${{ matrix.profile }}
 
   test:
     name: Test (${{ matrix.rust }}, ${{ matrix.os }})
@@ -83,10 +103,6 @@ jobs:
       - name: Remove conflicting Homebrew rustup (macOS)
         if: runner.os == 'macOS'
         run: |
-          # The macOS runner ships a Homebrew rustup whose 'cargo' wrapper
-          # is actually rustup-init and cannot proxy subcommands like
-          # 'cargo test'.  Remove it so dtolnay/rust-toolchain can install
-          # its own working rustup without conflicts.
           brew unlink rustup 2>/dev/null || true
           rm -f /usr/local/bin/cargo /opt/homebrew/bin/cargo
       - uses: dtolnay/rust-toolchain@v1
@@ -147,6 +163,54 @@ jobs:
       - name: Run cargo-deny
         run: cargo deny check
 
+  udeps:
+    name: Unused Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-udeps"
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+      - name: Check for unused dependencies
+        run: cargo udeps --workspace --all-features
+
+  mutation-testing:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-mutants"
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+      - name: Run mutation testing on core crates
+        run: cargo mutants --in-place -p omnia-primitives -p omnia-consensus --check --timeout 300
+        timeout-minutes: 30
+        continue-on-error: true  # Report score but don't block CI
+
+  benchmark-comparison:
+    name: Benchmark Comparison
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-bench"
+      - name: Build benchmarks
+        run: cargo bench --no-run -p omnia-benches --bench throughput
+      - name: Run quick benchmark (5s per group)
+        run: cargo bench -p omnia-benches --bench throughput -- --quick
+        timeout-minutes: 10
+        continue-on-error: true  # Benchmarks are informational
+
   supply-chain:
     name: Supply Chain Audit
     runs-on: ubuntu-latest
@@ -160,15 +224,13 @@ jobs:
         run: cargo install cargo-vet --locked
       - name: Run cargo-vet
         run: cargo vet
-        continue-on-error: true  # 165 unvetted deps — track progress without blocking CI
+        continue-on-error: true  # Track progress without blocking CI
       - name: Verify exemption notes
         run: |
           python3 -c "
           import sys
-          # Parse TOML without external dependency
           with open('supply-chain/config.toml') as f:
               content = f.read()
-          # Simple check: every exemption block should have a notes field
           in_exemption = False
           has_notes = False
           current_name = ''
@@ -190,9 +252,9 @@ jobs:
           if in_exemption and not has_notes:
               missing.append(current_name)
           if missing:
-              print(f'❌ Missing notes for {len(missing)} exemptions')
+              print(f'Missing notes for {len(missing)} exemptions')
               sys.exit(1)
-          print('✅ All exemptions have notes')
+          print('All exemptions have notes')
           "
 
   reproducibility:
@@ -268,9 +330,6 @@ jobs:
         run: rustup override set nightly
       - name: Install cargo-fuzz
         run: |
-          # Try without --locked first so cargo resolves compatible transitive
-          # deps for the current nightly.  Fall back to a known-good nightly
-          # if the default latest nightly breaks (e.g. rustix incompatibility).
           if ! cargo install cargo-fuzz 2>/dev/null; then
             echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-03-15"
             rustup toolchain install nightly-2026-03-15 --component rust-src
@@ -289,6 +348,7 @@ jobs:
             fuzz_vector_clock_merge
             fuzz_rate_limiter
             fuzz_snapshot_deserialization
+            fuzz_primitives_event
           )
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
@@ -312,7 +372,6 @@ jobs:
           mkdir -p sbom
           cargo cyclonedx --all --format json
           cargo cyclonedx --all --format xml
-          # Move generated SBOM files to sbom/ directory
           find . -name '*.bom.json' -exec mv {} sbom/ \; || true
           find . -name '*.bom.xml' -exec mv {} sbom/ \; || true
       - name: Upload SBOM artifacts

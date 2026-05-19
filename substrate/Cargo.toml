@@ -84,7 +84,7 @@ ethereum-live = ["omnia-adapters/ethereum-live"]
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
-criterion = { version = "0.8", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
 
 # FIX 6: Property-based testing
@@ -93,6 +93,5 @@ proptest = "1.4"
 # sled is needed for integration tests of migration utility
 sled = "0.34"
 
-[[bench]]
-name = "throughput"
-harness = false
+# Benchmarks have been consolidated into the omnia-benches crate
+# (benches/ directory at workspace root)

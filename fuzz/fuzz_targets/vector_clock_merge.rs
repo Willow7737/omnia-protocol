@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::VectorClock;
+use omnia_primitives::VectorClock;
 
 fuzz_target!(|data: &[u8]| {
     let mut clock1 = VectorClock::new();

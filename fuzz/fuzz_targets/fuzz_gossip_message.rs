@@ -7,7 +7,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::GossipMessage;
+use omnia_network::gossip::GossipMessage;
 
 fuzz_target!(|data: &[u8]| {
     // Test gossip message deserialization never panics

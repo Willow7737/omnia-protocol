@@ -1,0 +1,39 @@
+[package]
+name = "omnia-benches"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+publish = false
+
+[dependencies]
+omnia-primitives = { path = "../omnia-primitives" }
+omnia-consensus = { path = "../omnia-consensus" }
+omnia-crypto = { path = "../omnia-crypto" }
+omnia-network = { path = "../omnia-network" }
+omnia-economics = { path = "../economics" }
+omnia-shards = { path = "../shards" }
+omnia-binding = { path = "../binding" }
+omnia-adapters = { path = "../omnia-adapters" }
+omnia-node = { path = "../node" }
+omnia-substrate = { path = "../substrate" }
+
+criterion = { version = "0.5", features = ["html_reports"] }
+iai-callgrind = "0.13"
+tokio = { version = "1.38", features = ["full"] }
+rand = "0.8"
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "zk_benchmarks"
+harness = false
+
+[[bench]]
+name = "hot_path_iai"
+harness = false
+
+[features]
+default = []
+full = ["omnia-node/full", "omnia-adapters/arkworks"]

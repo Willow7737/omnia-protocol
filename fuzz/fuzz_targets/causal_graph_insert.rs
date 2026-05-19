@@ -1,6 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::{CausalGraph, Event, VectorClock};
+use omnia_consensus::CausalGraph;
+use omnia_primitives::{Event, VectorClock};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 64 {

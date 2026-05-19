@@ -12,7 +12,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::{CausalGraph, ConsensusConfig, ConsensusEngine, Event, SlashingEngine};
+use omnia_consensus::{CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine};
+use omnia_primitives::Event;
 
 fuzz_target!(|data: &[u8]| {
     // Deserialize a sequence of events and feed them to consensus

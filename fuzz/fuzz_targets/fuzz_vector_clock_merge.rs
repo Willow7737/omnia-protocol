@@ -8,7 +8,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::VectorClock;
+use omnia_primitives::VectorClock;
 
 fuzz_target!(|data: &[u8]| {
     // Try to deserialize two vector clocks and merge them

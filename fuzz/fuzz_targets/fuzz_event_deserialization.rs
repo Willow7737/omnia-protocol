@@ -7,7 +7,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::Event;
+use omnia_primitives::Event;
 
 fuzz_target!(|data: &[u8]| {
     // Test that event deserialization never panics on arbitrary input

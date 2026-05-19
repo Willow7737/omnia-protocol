@@ -1,4 +1,7 @@
-//! ZK-SNARK Benchmark Suite for the Omnia Protocol (H-2).
+//! ZK-SNARK Benchmark Suite for the Omnia Protocol.
+//!
+//! Consolidated from zk/benches/zk_benchmarks.rs into the shared
+//! omnia-benches crate. Uses omnia-adapters for ZK operations.
 //!
 //! Benchmarks for:
 //! - Poseidon hash (off-chain)
@@ -10,10 +13,10 @@
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use omnia_zk::circuit::{ExpandedRollupCircuit, RollupCircuit};
-use omnia_zk::merkle::build_merkle_tree;
-use omnia_zk::poseidon::poseidon_hash_offchain;
-use omnia_zk::prover::{
+use omnia_adapters::circuit::{ExpandedRollupCircuit, RollupCircuit};
+use omnia_adapters::merkle::build_merkle_tree;
+use omnia_adapters::poseidon::poseidon_hash_offchain;
+use omnia_adapters::prover::{
     create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded,
     verify_proof,
 };
