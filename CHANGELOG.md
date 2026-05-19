@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.30](https://github.com/Willow7737/omnia-protocol/compare/v0.1.29...v0.1.30) (2026-05-19)
+
+
+### Features
+
+* **phase-5:** testnet launch, performance validation & audit preparation ([c57f281](https://github.com/Willow7737/omnia-protocol/commit/c57f28160cbb1b73b91de41efbc409523996393e))
+
 ## [0.1.29](https://github.com/Willow7737/omnia-protocol/compare/v0.1.28...v0.1.29) (2026-05-19)
 
 
