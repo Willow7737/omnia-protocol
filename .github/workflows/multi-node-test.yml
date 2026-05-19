@@ -11,20 +11,19 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.88.0"
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-bft-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-bft-
+          shared-key: "omnia-bft-${{ hashFiles('**/Cargo.lock') }}"
       - name: Run multi-node BFT tests
+        # TODO(migration): multi_node_test.rs lives in substrate/tests/ importing
+        # from omnia-substrate (deprecated facade). Migrate to omnia-consensus or
+        # omnia-node and update -p target accordingly.
         run: cargo test -p omnia-substrate --test multi_node_test -- --nocapture
       - name: Run network integration tests
+        # TODO(migration): network_integration.rs lives in substrate/tests/ importing
+        # from omnia-substrate (deprecated facade). Migrate to omnia-network or
+        # omnia-node and update -p target accordingly.
         run: cargo test -p omnia-substrate --test network_integration -- --ignored --nocapture

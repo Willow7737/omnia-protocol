@@ -20,6 +20,9 @@ jobs:
         run: cargo test -p omnia-network --verbose
       - name: Run omnia-consensus tests
         run: cargo test -p omnia-consensus --verbose
-      - name: Run substrate network tests (legacy)
+      - name: Run substrate network tests (legacy facade)
+        # TODO(migration): network_integration.rs lives in substrate/tests/ importing
+        # from omnia-substrate (deprecated facade). Migrate to omnia-network or
+        # omnia-node and update -p target accordingly.
         run: cargo test -p omnia-substrate --features network -- --ignored
         continue-on-error: true

@@ -60,6 +60,7 @@ jobs:
           version: nightly
       - name: Compile OmniaRollup contract
         run: |
+          # NOTE: zk/ is not a workspace member but still contains Solidity contracts
           cd zk/contracts/ethereum
           forge build --contracts OmniaRollup.sol
       - name: Start Anvil
