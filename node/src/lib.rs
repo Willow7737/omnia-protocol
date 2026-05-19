@@ -18,4 +18,5 @@
 pub mod api;
 pub mod config;
 pub mod http;
+pub mod pipeline;
 pub mod state;

@@ -31,14 +31,11 @@ pub mod crdt;
 pub mod crypto;
 pub mod crypto_schemes;
 pub mod event;
-pub mod fast_sync;
 pub mod genesis;
 pub mod genesis_replay;
-pub mod gossip;
 pub mod keystore;
 pub mod mempool;
 pub mod migration;
-pub mod network;
 pub mod rate_limiter;
 pub mod slashing;
 pub mod slashing_undo;
@@ -50,9 +47,11 @@ pub mod vrf;
 pub mod wire_format;
 
 // Re-export the migrated crates so downstream consumers can access them
-// via `omnia_substrate::omnia_crypto::…` and `omnia_substrate::omnia_consensus::…`
+// via `omnia_substrate::omnia_crypto::…`, `omnia_substrate::omnia_consensus::…`, etc.
 pub use omnia_consensus;
 pub use omnia_crypto;
+pub use omnia_network;
+pub use omnia_adapters;
 
 // Re-export commonly used types
 pub use bls::{
@@ -79,22 +78,27 @@ pub use omnia_primitives::{
     blake3_hash_domain, WireFormatError, WIRE_FORMAT_VERSION,
     serialize_with_version, deserialize_with_version,
 };
-pub use fast_sync::{
-    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest,
-    SyncResponse, SyncResult, SyncSnapshot,
+// Re-export networking types from omnia-network (backward compatibility)
+pub use omnia_network::{
+    fast_sync::{
+        select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork,
+        SyncRequest, SyncResponse, SyncResult, SyncSnapshot,
+    },
+    gossip::{
+        deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError,
+        GossipEvent, GossipMessage, GossipProtocol, GossipStats,
+    },
+    network::{
+        check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig,
+        NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
+        VersionHandshake,
+    },
+    PROTOCOL_IDENTIFIER as NET_PROTOCOL_IDENTIFIER,
+    PROTOCOL_VERSION as NET_PROTOCOL_VERSION,
 };
 pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
-pub use gossip::{
-    deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError,
-    GossipEvent, GossipMessage, GossipProtocol, GossipStats,
-};
 pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
 pub use mempool::{Mempool, MempoolError};
-pub use network::{
-    check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig,
-    NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
-    VersionHandshake,
-};
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
     InMemorySlashingStore, JailState, RedbSlashingStore, SlashOffense, SlashOutcome, SlashPenalty,
@@ -612,7 +616,7 @@ impl Substrate {
             {
                 if leader == self.config.node_id {
                     // We are the leader — produce a block proposal
-                    self.propose_block(current_round);
+                    self.propose_block(current_round).await;
                 }
             }
         }
@@ -668,37 +672,45 @@ impl Substrate {
     /// for potential block proposal. If the mempool is full, the event
     /// is still processed through consensus but a warning is logged and
     /// it will not be available for block proposals.
+    ///
+    /// FIND-HIGH-005 FIX: The event is wrapped in `Arc<Event>` to avoid
+    /// triple cloning in the hot path (graph insert, mempool insert, gossip
+    /// broadcast). Each consumer receives an `Arc::clone` instead of a full
+    /// `Event` clone.
     pub async fn submit_event(&mut self, event: Event) -> Result<()> {
         event.validate().map_err(SubstrateError::from)?;
 
+        // Wrap in Arc to avoid triple clone (FIND-HIGH-005)
+        let event_arc = Arc::new(event);
+
         {
             let mut graph = self.graph.write().await;
-            graph.insert(event.clone()).map_err(SubstrateError::from)?;
+            graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
         }
 
         // Track for consensus processing
-        self.unprocessed_events.push(event.id);
+        self.unprocessed_events.push(event_arc.id);
 
         let graph = self.graph.read().await;
         self.consensus
-            .process_event(&event, &graph)
+            .process_event(&event_arc, &graph)
             .map_err(SubstrateError::from)?;
         drop(graph);
 
         // Also add to mempool for block proposal when we are the leader.
         // If the mempool is full, log a warning but do not fail — the event
         // has already been processed through consensus.
-        if let Err(e) = self.mempool.insert(event.clone()) {
+        if let Err(e) = self.mempool.insert((*event_arc).clone()) {
             tracing::warn!(
                 "Mempool full, event {} not queued for proposal: {}",
-                hex::encode(&event.id[..4]),
+                hex::encode(&event_arc.id[..4]),
                 e
             );
         }
 
         if let Some(ref mut gossip) = self.gossip {
             gossip
-                .broadcast_event(event)
+                .broadcast_event((*event_arc).clone())
                 .await
                 .map_err(SubstrateError::from)?;
         }
@@ -782,7 +794,10 @@ impl Substrate {
     /// for consensus. Events that are already in the graph (e.g., submitted
     /// via `submit_event()`) are skipped gracefully since `CausalGraph::insert()`
     /// returns `DuplicateEvent` for already-inserted events.
-    fn propose_block(&mut self, round: u64) -> Vec<EventId> {
+    ///
+    /// FIND-CRIT-001 FIX: This method is now async to avoid `blocking_write()`
+    /// inside an async context, which can deadlock the Tokio runtime.
+    async fn propose_block(&mut self, round: u64) -> Vec<EventId> {
         let pending = self.mempool.drain_up_to(self.max_block_events);
         if pending.is_empty() {
             return Vec::new();
@@ -795,8 +810,11 @@ impl Substrate {
             // If the event was already inserted (e.g., via submit_event),
             // CausalGraph::insert returns DuplicateEvent and we skip it —
             // it has already been processed.
+            //
+            // Uses `.write().await` instead of `blocking_write()` to avoid
+            // blocking the async runtime (FIND-CRIT-001).
             {
-                let mut graph = self.graph.blocking_write();
+                let mut graph = self.graph.write().await;
                 if let Ok(()) = graph.insert(event.clone()) {
                     self.unprocessed_events.push(event_id);
                 }

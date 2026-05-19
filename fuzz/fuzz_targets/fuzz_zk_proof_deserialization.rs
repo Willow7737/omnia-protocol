@@ -10,7 +10,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_zk::ProofBundle;
+use omnia_adapters::ProofBundle;
 
 fuzz_target!(|data: &[u8]| {
     // Test that ProofBundle deserialization never panics on arbitrary input

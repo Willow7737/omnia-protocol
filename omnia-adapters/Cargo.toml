@@ -1,0 +1,58 @@
+[package]
+name = "omnia-adapters"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "ZK-rollup proof system and settlement adapters for L1 bridges"
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+omnia-primitives = { path = "../omnia-primitives" }
+omnia-crypto = { path = "../omnia-crypto" }
+omnia-consensus = { path = "../omnia-consensus" }
+# ZK deps (feature-gated)
+ark-relations = { version = "0.4", optional = true }
+ark-r1cs-std = { version = "0.4", optional = true }
+ark-groth16 = { version = "0.4", optional = true }
+ark-snark = { version = "0.4", optional = true }
+ark-bn254 = { version = "0.4", optional = true }
+ark-ec = { version = "0.4", optional = true }
+ark-ff = { version = "0.4", optional = true }
+ark-serialize = { version = "0.4", optional = true }
+ark-crypto-primitives = { version = "0.4", optional = true }
+# Settlement deps
+alloy = { version = "1", optional = true, features = [
+    "provider-ws", "provider-http", "signers", "signer-local",
+    "contract", "network", "essentials",
+] }
+# Common
+async-trait = "0.1"
+tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
+blake3 = "1.5"
+thiserror = "2.0"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+postcard = { version = "1", features = ["alloc"] }
+rand = "0.8"
+rand_chacha = "0.3"
+hex = "0.4"
+subtle = "2"
+
+[features]
+default = ["arkworks"]
+arkworks = ["dep:ark-ff", "dep:ark-ec", "dep:ark-serialize", "dep:ark-groth16", "dep:ark-bn254", "dep:ark-relations", "dep:ark-r1cs-std", "dep:ark-snark", "dep:ark-crypto-primitives"]
+ethereum-live = ["dep:alloy"]
+cosmos = []
+ceremony = []
+
+[dev-dependencies]
+tokio-test = "0.4"
+proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "zk_benchmarks"
+harness = false

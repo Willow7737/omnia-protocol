@@ -12,6 +12,8 @@ rust-version = { workspace = true }
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-crypto = { path = "../omnia-crypto", features = ["bls"] }
 omnia-consensus = { path = "../omnia-consensus", features = ["persistent-storage"] }
+omnia-network = { path = "../omnia-network" }
+omnia-adapters = { path = "../omnia-adapters" }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 hex = "0.4"
@@ -27,12 +29,11 @@ postcard = { version = "1", features = ["alloc"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 rand = "0.8"
 
-# FIX 4: Async runtime and libp2p networking
+# FIX 4: Async runtime
 tokio = { version = "1.35", features = ["full"] }
-libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
-futures = "0.3"
 async-trait = "0.1"
 blake3 = "1.5"
+futures = "0.3"
 
 # AES-256-GCM authenticated encryption for keystore
 aes-gcm = "0.10"
@@ -76,11 +77,15 @@ migration = ["sled"]
 bls = ["omnia-crypto/bls"]
 pqc = ["omnia-crypto/pqc"]
 persistent-storage = ["omnia-consensus/persistent-storage"]
+network = ["omnia-network/network"]
+zk = ["omnia-adapters/arkworks"]
+ethereum-live = ["omnia-adapters/ethereum-live"]
 
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"
 criterion = { version = "0.8", features = ["html_reports"] }
+libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
 
 # FIX 6: Property-based testing
 proptest = "1.4"
