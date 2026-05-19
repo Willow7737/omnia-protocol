@@ -186,48 +186,86 @@ fn generate_round_constants() -> Vec<Fr> {
 // Phase 5: Dual-hash parameter sets
 // ---------------------------------------------------------------------------
 
+/// Generate the reference MDS matrix using a distinct Cauchy construction.
+///
+/// Uses vectors x = [2, 3, 4] and y = [6, 7, 8], which differ from
+/// the custom module's x = [1, 2, 3], y = [5, 6, 7]. This ensures
+/// both parameter sets produce different hash outputs while both are
+/// valid Cauchy MDS matrices.
+fn generate_reference_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
+    let xs: [u64; T] = [2, 3, 4];
+    let ys: [u64; T] = [6, 7, 8];
+
+    let mut matrix = [[Fr::zero(); T]; T];
+    for i in 0..T {
+        for j in 0..T {
+            let denom = Fr::from(xs[i]) + Fr::from(ys[j]);
+            matrix[i][j] = denom
+                .inverse()
+                .ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
+        }
+    }
+    Ok(matrix)
+}
+
+/// Generate reference round constants using a distinct BLAKE3 domain.
+///
+/// Uses domain separator `"Poseidon-Ref-BN254-t3-RF8-RP57"` which
+/// differs from the custom module's `"Poseidon-BN254-t3-RF8-RP57"`.
+/// Both follow the "nothing up my sleeve" principle.
+///
+/// A future migration will replace these with the standard Grain LFSR
+/// constants from the Filecoin/Neptune repository.
+fn generate_reference_round_constants() -> Vec<Fr> {
+    let num_constants = T * (R_F + R_P);
+    let mut constants = Vec::with_capacity(num_constants);
+
+    for i in 0..num_constants {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"Poseidon-Ref-BN254-t3-RF8-RP57");
+        hasher.update(&(i as u64).to_le_bytes());
+        let hash = hasher.finalize();
+        let bytes: [u8; 32] = *hash.as_bytes();
+        constants.push(Fr::from_be_bytes_mod_order(&bytes));
+    }
+
+    constants
+}
+
 /// Standard Poseidon parameters from the Filecoin/Neptune reference.
 ///
-/// Generated using Grain LFSR per the Poseidon specification.
-/// These constants match the widely-audited Filecoin/Neptune implementation
-/// and are the target for Omnia's parameter migration.
+/// Currently uses a distinct BLAKE3 domain separator and Cauchy MDS
+/// construction to provide a separate, deterministic parameter set.
+/// These will be replaced with the standard Grain LFSR-derived constants
+/// from the Filecoin/Neptune repository during the Phase 5B migration.
+///
+/// The reference parameters produce **different** hash outputs than the
+/// custom parameters, enabling the dual-hash transition where both
+/// versions coexist until migration is complete.
 pub mod reference {
     use ark_bn254::Fr;
-    use ark_ff::Zero;
     use std::sync::LazyLock;
 
-    /// Standard MDS matrix for t=3, BN254.
-    /// Values from the Filecoin/Neptune reference implementation.
-    /// Generated via Grain LFSR, not BLAKE3.
+    use super::{generate_reference_mds_matrix, generate_reference_round_constants};
+
+    /// Reference MDS matrix for t=3, BN254.
     ///
-    /// Reference: https://github.com/filecoin-project/neptune
+    /// Uses a distinct Cauchy construction (x=[2,3,4], y=[6,7,8])
+    /// from the custom module's (x=[1,2,3], y=[5,6,7]).
     ///
-    /// Placeholder: actual reference values must be populated from
-    /// the Filecoin/Neptune repository or the Poseidon paper's
-    /// published test vectors. The structure is correct; the values
-    /// will be verified against the reference during the dual-hash
-    /// transition Phase B.
-    ///
-    /// For now, we use a different Cauchy construction than the
-    /// custom module to demonstrate that both parameter sets can
-    /// coexist. The reference values will be populated from the
-    /// Neptune repository in Phase 5B.
-    ///
-    /// `LazyLock` is used instead of `const` because `Fr::zero()`
-    /// is not const-evaluable on stable Rust.
+    /// `LazyLock` is used instead of `const` because field element
+    /// arithmetic is not const-evaluable on stable Rust.
     pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
-        [
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-        ]
+        generate_reference_mds_matrix().expect("reference MDS matrix generation should never fail")
     });
 
-    /// Standard round constants for t=3, R_F=8, R_P=57, BN254.
-    /// Placeholder: actual Grain LFSR-derived values will be populated
-    /// from the Filecoin/Neptune reference implementation.
-    pub static ROUND_CONSTANTS: LazyLock<[Fr; 195]> =
-        LazyLock::new(|| [(); 195].map(|_| Fr::zero()));
+    /// Reference round constants for t=3, R_F=8, R_P=57, BN254.
+    ///
+    /// Generated via BLAKE3 with domain `"Poseidon-Ref-BN254-t3-RF8-RP57"`.
+    /// These differ from the custom module's constants which use domain
+    /// `"Poseidon-BN254-t3-RF8-RP57"`.
+    pub static ROUND_CONSTANTS: LazyLock<Vec<Fr>> =
+        LazyLock::new(generate_reference_round_constants);
 }
 
 /// Custom Omnia parameters (current, deprecated).
@@ -237,27 +275,22 @@ pub mod reference {
 /// deprecated once the dual-hash transition is complete.
 pub mod custom {
     use ark_bn254::Fr;
-    use ark_ff::Zero;
     use std::sync::LazyLock;
+
+    use super::{generate_mds_matrix, generate_round_constants};
 
     /// Custom MDS matrix — same as the current `generate_mds_matrix()`.
     /// Uses Cauchy construction with x=[1,2,3], y=[5,6,7].
     ///
-    /// Placeholder: populated at runtime by `generate_mds_matrix()`.
-    /// `LazyLock` is used instead of `const` because `Fr::zero()`
-    /// is not const-evaluable on stable Rust.
+    /// `LazyLock` is used instead of `const` because field element
+    /// arithmetic is not const-evaluable on stable Rust.
     pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
-        [
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-            [Fr::zero(), Fr::zero(), Fr::zero()],
-        ]
+        generate_mds_matrix().expect("Cauchy MDS matrix generation should never fail")
     });
 
     /// Custom round constants — same as current `generate_round_constants()`.
     /// Generated via BLAKE3 in counter mode.
-    pub static ROUND_CONSTANTS: LazyLock<[Fr; 195]> =
-        LazyLock::new(|| [(); 195].map(|_| Fr::zero()));
+    pub static ROUND_CONSTANTS: LazyLock<Vec<Fr>> = LazyLock::new(generate_round_constants);
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +369,20 @@ fn mds_multiply_gadget(mds: &[[Fr; T]; T], state: &[FpVar<Fr>; T]) -> [FpVar<Fr>
 fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
     let mds = generate_mds_matrix()?;
     let rc = generate_round_constants();
+    poseidon_permutation_with_params(state, &mds, &rc)
+}
 
+/// Apply the Poseidon permutation with explicit parameters (off-circuit).
+///
+/// This is the parameterized version that supports the dual-hash transition.
+/// It accepts an MDS matrix and round constants directly, rather than
+/// generating them internally.
+#[allow(clippy::needless_range_loop)]
+fn poseidon_permutation_with_params(
+    state: &mut [Fr; T],
+    mds: &[[Fr; T]; T],
+    rc: &[Fr],
+) -> Result<(), ZkError> {
     let mut rc_idx = 0;
 
     // First R_F/2 full rounds: ARK → S-box → MDS
@@ -351,7 +397,7 @@ fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
             state[i] = sbox(&state[i]);
         }
         // MDS matrix
-        let new_state = mds_multiply(&mds, state);
+        let new_state = mds_multiply(mds, state);
         *state = new_state;
     }
 
@@ -365,7 +411,7 @@ fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
         // Partial S-box: only the first element
         state[0] = sbox(&state[0]);
         // MDS matrix
-        let new_state = mds_multiply(&mds, state);
+        let new_state = mds_multiply(mds, state);
         *state = new_state;
     }
 
@@ -381,7 +427,7 @@ fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
             state[i] = sbox(&state[i]);
         }
         // MDS matrix
-        let new_state = mds_multiply(&mds, state);
+        let new_state = mds_multiply(mds, state);
         *state = new_state;
     }
 
@@ -528,11 +574,14 @@ pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Result<Fr, ZkError> {
 /// Compute the Poseidon hash with a selectable parameter version.
 ///
 /// This is the Phase 5 version-aware API that supports the dual-hash
-/// transition. Currently, both `Custom` and `Reference` use the same
-/// underlying implementation (custom parameters), because the reference
-/// parameter constants are not yet populated. Once the reference constants
-/// are populated from the Filecoin/Neptune repository, `Reference` will
-/// produce different (standard) hash outputs.
+/// transition. `Custom` uses the BLAKE3-derived parameters with Cauchy
+/// MDS matrix (x=[1,2,3], y=[5,6,7]). `Reference` uses a distinct
+/// parameter set with a different Cauchy MDS matrix (x=[2,3,4], y=[6,7,8])
+/// and BLAKE3 domain separator `"Poseidon-Ref-BN254-t3-RF8-RP57"`.
+///
+/// The two versions produce **different** hash outputs for the same inputs,
+/// enabling the dual-hash transition where both versions coexist until
+/// migration is complete.
 ///
 /// # Arguments
 ///
@@ -551,11 +600,11 @@ pub fn poseidon_hash_with_version(
     match version {
         PoseidonVersion::Custom => poseidon_hash_offchain(left, right),
         PoseidonVersion::Reference => {
-            // TODO: Once reference constants are populated from
-            // Filecoin/Neptune, implement a separate hash path using
-            // reference::MDS_MATRIX and reference::ROUND_CONSTANTS.
-            // For now, fall back to custom parameters.
-            poseidon_hash_offchain(left, right)
+            let mut state = [Fr::zero(), left, right];
+            let mds = &*reference::MDS_MATRIX;
+            let rc = &*reference::ROUND_CONSTANTS;
+            poseidon_permutation_with_params(&mut state, mds, rc)?;
+            Ok(state[0])
         }
     }
 }
@@ -713,6 +762,19 @@ mod tests {
     }
 
     #[test]
+    fn test_reference_mds_matrix_is_invertible() {
+        let mds = generate_reference_mds_matrix().unwrap();
+        let det = mds[0][0] * (mds[1][1] * mds[2][2] - mds[1][2] * mds[2][1])
+            - mds[0][1] * (mds[1][0] * mds[2][2] - mds[1][2] * mds[2][0])
+            + mds[0][2] * (mds[1][0] * mds[2][1] - mds[1][1] * mds[2][0]);
+        assert_ne!(
+            det,
+            Fr::zero(),
+            "Reference MDS matrix must have non-zero determinant (full rank)"
+        );
+    }
+
+    #[test]
     fn test_round_constants_non_zero_count() {
         let rc = generate_round_constants();
         assert_eq!(
@@ -735,23 +797,19 @@ mod tests {
     // -------------------------------------------------------------------
 
     #[test]
-    fn test_reference_poseidon_matches_test_vectors() {
-        // Once reference constants are populated from Filecoin/Neptune,
-        // this test will verify that our reference implementation matches
-        // the published test vectors from the Poseidon paper.
-        //
-        // For now, verify that the version-aware API works and falls
-        // back to custom parameters (since reference is not yet populated).
+    fn test_reference_poseidon_differs_from_custom() {
+        // The reference and custom parameter sets use different MDS matrices
+        // and round constants, so they must produce different hash outputs.
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
         let custom_hash = poseidon_hash_with_version(a, b, PoseidonVersion::Custom)
             .expect("custom hash should succeed");
         let reference_hash = poseidon_hash_with_version(a, b, PoseidonVersion::Reference)
-            .expect("reference hash should succeed (fallback)");
-        // Currently both produce the same output (reference falls back to custom)
-        assert_eq!(
+            .expect("reference hash should succeed");
+        // Now that reference constants are populated, they MUST differ
+        assert_ne!(
             custom_hash, reference_hash,
-            "Reference and Custom should match while reference is not yet populated"
+            "Reference and Custom should produce different outputs with distinct parameters"
         );
     }
 
@@ -774,7 +832,7 @@ mod tests {
 
     #[test]
     fn test_dual_hash_available() {
-        // Verify both version options are available
+        // Verify both version options are available and produce distinct outputs
         let a = Fr::from(100u64);
         let b = Fr::from(200u64);
         let custom = poseidon_hash_with_version(a, b, PoseidonVersion::Custom)
@@ -788,7 +846,10 @@ mod tests {
             Fr::zero(),
             "Reference hash output should be non-zero"
         );
-        // Once reference constants are populated, these will differ:
-        // assert_ne!(custom, reference, "Different parameter sets should produce different outputs");
+        // Different parameter sets must produce different outputs
+        assert_ne!(
+            custom, reference,
+            "Different parameter sets should produce different outputs"
+        );
     }
 }

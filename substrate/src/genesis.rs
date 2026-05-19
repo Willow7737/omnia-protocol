@@ -215,8 +215,8 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
     };
 
     // Compute genesis hash from serialized block
-    let genesis_bytes = postcard::to_allocvec(&genesis)
-        .map_err(|e| GenesisError::Serialization(e.to_string()))?;
+    let genesis_bytes =
+        postcard::to_allocvec(&genesis).map_err(|e| GenesisError::Serialization(e.to_string()))?;
     let genesis_hash: [u8; 32] = blake3_hash_domain(b"omnia-genesis-block", &genesis_bytes);
 
     Ok(GenesisBlock {
@@ -293,7 +293,10 @@ mod tests {
 
         let block1 = generate_genesis(&config).unwrap();
         let block2 = generate_genesis(&config).unwrap();
-        assert_eq!(block1.hash, block2.hash, "same config must produce same genesis hash");
+        assert_eq!(
+            block1.hash, block2.hash,
+            "same config must produce same genesis hash"
+        );
     }
 
     #[test]
@@ -342,7 +345,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             GenesisError::DuplicateNodeId(msg) => {
-                assert!(msg.contains("node_id 1"), "error should mention the duplicate ID");
+                assert!(
+                    msg.contains("node_id 1"),
+                    "error should mention the duplicate ID"
+                );
             }
             other => panic!("Expected DuplicateNodeId, got: {:?}", other),
         }
@@ -393,7 +399,10 @@ mod tests {
         // Generate genesis from both — should produce identical hashes
         let block1 = generate_genesis(&config).unwrap();
         let block2 = generate_genesis(&deserialized).unwrap();
-        assert_eq!(block1.hash, block2.hash, "round-trip serialized config must produce same genesis");
+        assert_eq!(
+            block1.hash, block2.hash,
+            "round-trip serialized config must produce same genesis"
+        );
     }
 
     #[test]

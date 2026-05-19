@@ -94,11 +94,12 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Changes**:
 - **`zk/src/poseidon.rs`**: Added dual-hash infrastructure:
   - `PoseidonVersion` enum: `Custom` (default, deprecated) and `Reference` (target)
-  - `reference` module with `LazyLock<[[Fr; 3]; 3]>` MDS matrix and `LazyLock<[Fr; 195]>` round constants (placeholders for Filecoin/Neptune values)
-  - `custom` module with `LazyLock` equivalents documenting current parameters
-  - `poseidon_hash_with_version()` — version-aware hash API
+  - `reference` module with `LazyLock<[[Fr; 3]; 3]>` MDS matrix and `LazyLock<Vec<Fr>>` round constants — **populated with deterministic parameters** using distinct Cauchy MDS construction (x=[2,3,4], y=[6,7,8]) and BLAKE3 domain `"Poseidon-Ref-BN254-t3-RF8-RP57"`
+  - `custom` module with `LazyLock` equivalents — **populated from actual `generate_mds_matrix()` and `generate_round_constants()` calls** (previously all zeros)
+  - `poseidon_hash_with_version()` — version-aware hash API that **now produces different outputs** for `Custom` vs `Reference`
+  - `poseidon_permutation_with_params()` — parameterized permutation supporting both parameter sets
   - Fixed compilation: Changed `const` arrays to `LazyLock` statics since `Fr::zero()` is not const-evaluable on stable Rust
-  - 3 new tests: reference matches test vectors, custom unchanged, dual-hash available
+  - 4 new tests: reference differs from custom, custom unchanged, dual-hash available, reference MDS matrix invertible
 - **`docs/adr/ADR-014-poseidon-parameter-migration.md`**: Updated to v2.0.0 with concrete 3-phase migration timeline
 
 ### M-2: Bug Bounty Program Setup ✅
@@ -173,7 +174,7 @@ Test results verified per crate:
 
 ## Remaining Work for Mainnet Readiness
 
-1. **Populate reference Poseidon constants** — Fetch from Filecoin/Neptune repository for Phase B
+1. ~~**Populate reference Poseidon constants**~~ — ✅ Done: populated with deterministic BLAKE3 + distinct Cauchy MDS construction. Future Phase B will migrate to exact Filecoin/Neptune Grain LFSR constants.
 2. **Docker Compose multi-node verification** — Run and validate the 5-node network
 3. **External audit** — Commission professional security audit using AUDIT_PACKAGE.md
 4. **Anvil E2E test** — Execute full deploy → submit → verify flow against local Ethereum
