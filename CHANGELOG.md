@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.29](https://github.com/Willow7737/omnia-protocol/compare/v0.1.28...v0.1.29) (2026-05-19)
+
+
+### Bug Fixes
+
+* **ci:** fix cargo fmt and cargo-vet remaining issues ([759a675](https://github.com/Willow7737/omnia-protocol/commit/759a675c1908a9a79cc8ecb2bf5897655356305f))
+* **ci:** resolve broken doc links and cargo-vet unvetted deps ([bf32351](https://github.com/Willow7737/omnia-protocol/commit/bf32351c595734b4b6abc175a10971564d814be5))
+
 ## [0.1.28](https://github.com/Willow7737/omnia-protocol/compare/v0.1.27...v0.1.28) (2026-05-19)
 
 
