@@ -318,7 +318,7 @@ impl EthereumLiveClient {
     ///
     /// The proof bytes from the [`ProofBundle`] are decomposed into the
     /// structured calldata parameters that the Solidity contract expects:
-    /// `proofA` (uint256[2]), `proofB` (uint256[2][2]), `proofC` (uint256[2]).
+    /// `proofA` (`uint256[2]`), `proofB` (`uint256[2][2]`), `proofC` (`uint256[2]`).
     ///
     /// The public inputs are extracted from the proof bundle's state roots and
     /// batch Merkle root using BLAKE3 domain separation.

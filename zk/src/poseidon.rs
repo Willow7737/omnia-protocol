@@ -250,8 +250,8 @@ pub mod reference {
 
     /// Reference MDS matrix for t=3, BN254.
     ///
-    /// Uses a distinct Cauchy construction (x=[2,3,4], y=[6,7,8])
-    /// from the custom module's (x=[1,2,3], y=[5,6,7]).
+    /// Uses a distinct Cauchy construction (x=\[2,3,4\], y=\[6,7,8\])
+    /// from the custom module's (x=\[1,2,3\], y=\[5,6,7\]).
     ///
     /// `LazyLock` is used instead of `const` because field element
     /// arithmetic is not const-evaluable on stable Rust.
@@ -280,7 +280,7 @@ pub mod custom {
     use super::{generate_mds_matrix, generate_round_constants};
 
     /// Custom MDS matrix — same as the current `generate_mds_matrix()`.
-    /// Uses Cauchy construction with x=[1,2,3], y=[5,6,7].
+    /// Uses Cauchy construction with x=\[1,2,3\], y=\[5,6,7\].
     ///
     /// `LazyLock` is used instead of `const` because field element
     /// arithmetic is not const-evaluable on stable Rust.
@@ -575,8 +575,8 @@ pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Result<Fr, ZkError> {
 ///
 /// This is the Phase 5 version-aware API that supports the dual-hash
 /// transition. `Custom` uses the BLAKE3-derived parameters with Cauchy
-/// MDS matrix (x=[1,2,3], y=[5,6,7]). `Reference` uses a distinct
-/// parameter set with a different Cauchy MDS matrix (x=[2,3,4], y=[6,7,8])
+/// MDS matrix (x=\[1,2,3\], y=\[5,6,7\]). `Reference` uses a distinct
+/// parameter set with a different Cauchy MDS matrix (x=\[2,3,4\], y=\[6,7,8\])
 /// and BLAKE3 domain separator `"Poseidon-Ref-BN254-t3-RF8-RP57"`.
 ///
 /// The two versions produce **different** hash outputs for the same inputs,
