@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.32](https://github.com/Willow7737/omnia-protocol/compare/v0.1.31...v0.1.32) (2026-05-19)
+
+
+### Bug Fixes
+
+* **phase-5:** populate Poseidon reference constants, implement dual-hash, fix formatting ([3bd9bd7](https://github.com/Willow7737/omnia-protocol/commit/3bd9bd7dcab4604de31a22f433134a1dec603d8b))
+
 ## [0.1.31](https://github.com/Willow7737/omnia-protocol/compare/v0.1.30...v0.1.31) (2026-05-19)
 
 
