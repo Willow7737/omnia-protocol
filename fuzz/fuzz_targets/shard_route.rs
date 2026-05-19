@@ -1,7 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 use omnia_shards::ShardRouter;
-use omnia_substrate::{Event, VectorClock};
+use omnia_primitives::{Event, VectorClock};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 64 {

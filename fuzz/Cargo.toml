@@ -11,12 +11,15 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-omnia-substrate = { path = "../substrate" }
 omnia-primitives = { path = "../omnia-primitives" }
+omnia-consensus = { path = "../omnia-consensus" }
+omnia-crypto = { path = "../omnia-crypto" }
+omnia-network = { path = "../omnia-network" }
 omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
 omnia-adapters = { path = "../omnia-adapters" }
 omnia-economics = { path = "../economics" }
+omnia-substrate = { path = "../substrate" }
 postcard = { version = "1", features = ["alloc"] }
 
 [[bin]]
@@ -46,3 +49,7 @@ path = "fuzz_targets/fuzz_rate_limiter.rs"
 [[bin]]
 name = "fuzz_snapshot_deserialization"
 path = "fuzz_targets/fuzz_snapshot_deserialization.rs"
+
+[[bin]]
+name = "fuzz_primitives_event"
+path = "fuzz_targets/fuzz_primitives_event.rs"

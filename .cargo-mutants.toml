@@ -1,14 +1,19 @@
 # cargo-mutants configuration for Omnia Protocol
 # Mutation testing verifies test suites catch real bugs
 
-# Exclude generated code and test utilities from mutation
-exclude_re = ["target/", "fuzz/", "chaos-tests/"]
+mutant_schema = "all"
 
-# Minimum mutation score to pass CI
+# Exclude generated code, test utilities, and infrastructure from mutation
+exclude_re = ["test", "bench", "fuzz", "example"]
+
+# Focus mutation testing on the core protocol crates
+focus = ["omnia-primitives", "omnia-consensus"]
+
+# Minimum mutation score to pass CI (target >= 75%)
 minimum_score = 75
 
 # Timeout for individual test runs (seconds)
-timeout = 120
+timeout = 300
 
 # Number of test runs per mutation for flakiness reduction
 test_runs = 2

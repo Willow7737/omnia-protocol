@@ -1,7 +1,6 @@
 [advisories]
 unmaintained = "workspace"
-unsound = "workspace"
-yanked = "warn"
+yanked = "deny"
 ignore = [
     # RUSTSEC-2024-0384: instant crate (unmaintained) — pulled in by parking_lot 0.11.x via parking_lot_core 0.8.x
     # sled was removed in Phase 2 but instant remains in the tree via parking_lot 0.11.x
@@ -89,11 +88,17 @@ name = "omnia-fuzz"
 expression = "CC0-1.0"
 license-files = []
 
+[[licenses.clarify]]
+name = "omnia-benches"
+expression = "CC0-1.0"
+license-files = []
+
 [bans]
 multiple-versions = "warn"
 wildcards = "warn"   # workspace-internal path deps lack version keys — not a real risk
 highlight = "all"
 
 [sources]
-unknown-registry = "warn"
+unknown-registry = "deny"
 unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

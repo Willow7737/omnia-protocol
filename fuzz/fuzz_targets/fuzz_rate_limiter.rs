@@ -6,7 +6,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_substrate::RateLimiter;
+use omnia_consensus::RateLimiter;
 
 fuzz_target!(|data: &[u8]| {
     let mut limiter = RateLimiter::new(200, 100);

@@ -21,6 +21,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
+#![deprecated(since = "0.2.0", note = "Use omnia-primitives, omnia-consensus, omnia-crypto, omnia-network, omnia-adapters directly")]
 
 pub mod blake3_domain;
 pub mod bls;
