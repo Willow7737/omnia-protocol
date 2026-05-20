@@ -2194,7 +2194,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -4669,7 +4669,7 @@ dependencies = [
  "postcard",
  "proptest",
  "rand 0.8.6",
- "rand_chacha 0.3.1",
+ "rand_chacha 0.9.0",
  "rustc_version 0.4.1",
  "semver 1.0.28",
  "serde",
