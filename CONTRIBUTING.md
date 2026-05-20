@@ -1,4 +1,7 @@
 # 🤝 Contributing to Omnia Protocol
+> 🎯 Audience: Developers
+> 🔗 Context: Contribution guidelines, CI gates, and code review process for the Rust-only codebase
+> 📅 Last Updated: 2026-05-20
 
 Thank you for your interest in contributing to Omnia! Whether you're a cryptographer, Rust developer, or visionary, there's a place for you.
 
@@ -314,3 +317,7 @@ By contributing to Omnia Protocol, you agree that your contributions will be lic
 ---
 
 **Last Updated:** May 2026
+
+---
+🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/architecture/](./docs/architecture/)  
+🚀 **Next**: [docs/building/](./docs/building/) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)

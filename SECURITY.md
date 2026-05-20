@@ -1,4 +1,7 @@
 # Security Policy
+> 🎯 Audience: Operators, Architects
+> 🔗 Context: Vulnerability disclosure policy, security review process, and threat model references
+> 📅 Last Updated: 2026-05-20
 
 **Document version**: 4.0
 **Last Updated**: 2026-05-16
@@ -170,3 +173,7 @@ We follow a coordinated disclosure process:
 3. **Coordinated disclosure**: When a fix is ready, we coordinate with the reporter on the disclosure timeline. We prefer to publish a security advisory (CVE) alongside the patch release.
 4. **Credit**: Reporters who follow responsible disclosure receive credit in our security advisories, unless they request anonymity.
 5. **No legal action**: We will not pursue legal action against security researchers who act in good faith, follow our reporting process, and avoid unnecessary harm to users or systems.
+
+---
+🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/reference/security-audit.md](./docs/reference/security-audit.md)  
+🚀 **Next**: [SECURITY_BOUNTY.md](./SECURITY_BOUNTY.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)

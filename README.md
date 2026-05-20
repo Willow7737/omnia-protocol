@@ -24,6 +24,18 @@
 
 ---
 
+## 🚪 Choose Your Path
+
+| If you are... | Start Here | Next Step |
+|---------------|------------|-----------|
+| 🌱 New to Omnia | [docs/use-cases/](docs/use-cases/) | [Quick Start](#-quick-start) |
+| 💻 Contributor | [CONTRIBUTING.md](CONTRIBUTING.md) | [docs/architecture/](docs/architecture/) |
+| 🏗️ Systems Architect | [docs/reference/blueprint-reference.md](docs/reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](docs/architecture/trait-boundaries.md) |
+| 📦 Validator Operator | [docs/building/feature-matrix.md](docs/building/feature-matrix.md) | [docs/operations/validator-setup.md](docs/operations/validator-setup.md) |
+| 📊 Performance Engineer | [docs/reference/benchmark-gates.md](docs/reference/benchmark-gates.md) | [docs/architecture/pipeline-design.md](docs/architecture/pipeline-design.md) |
+
+---
+
 ## 🏗️ The Omnia Architecture
 
 ```
@@ -222,12 +234,18 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 ## 📚 Documentation
 
-- [**Architecture**](./ARCHITECTURE.md) - Technical deep-dives and layer specifications.
-- [**Implementation**](./docs/specifications/IMPLEMENTATION.md) - Protocol specifications.
-- [**Governance**](./docs/GOVERNANCE.md) - Community and decision-making.
-- [**Use Cases**](./docs/USE_CASES.md) - Real-world applications.
-- [**FAQ**](./docs/FAQ.md) - Common questions.
-- [**Research**](./substrate/RESEARCH.md) - Consensus research and implementation results.
+Full documentation is organized in [docs/](docs/):
+
+- [**docs/architecture/**](docs/architecture/) — Layer specifications, trait boundaries, pipeline design, CRDT proofs
+- [**docs/building/**](docs/building/) — Feature flags, cross-compilation, binary optimization
+- [**docs/operations/**](docs/operations/) — Validator setup, monitoring, deployment, runbook
+- [**docs/reference/**](docs/reference/) — Roadmap, benchmarks, ADR index, security audit, dependency policy
+- [**docs/use-cases/**](docs/use-cases/) — Real-world scenarios, FAQ, governance
+
+Quick links:
+- [**Architecture (legacy)**](./ARCHITECTURE.md) — Being superseded by docs/architecture/
+- [**Implementation Spec**](./docs/specifications/IMPLEMENTATION.md) — Protocol specifications
+- [**Research**](./substrate/RESEARCH.md) — Consensus research and implementation results
 
 ---
 
