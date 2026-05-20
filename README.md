@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="actions/workflows/ci.yml">
+  <a href=".github/workflows/ci.yml">
     <img src="actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
