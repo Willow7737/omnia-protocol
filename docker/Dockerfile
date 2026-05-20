@@ -22,12 +22,10 @@ COPY substrate/Cargo.toml substrate/
 COPY benches/Cargo.toml benches/
 COPY fuzz/Cargo.toml fuzz/
 COPY chaos-tests/Cargo.toml chaos-tests/
-# ZK contracts directory (not a workspace member but contains Solidity sources)
-COPY zk/Cargo.toml zk/
 RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     omnia-network/src omnia-adapters/src shards/src binding/src \
     economics/src node/src substrate/src benches/src fuzz/src \
-    chaos-tests/src zk/src && \
+    chaos-tests/src && \
     echo "" > omnia-primitives/src/lib.rs && \
     echo "" > omnia-consensus/src/lib.rs && \
     echo "" > omnia-crypto/src/lib.rs && \
@@ -40,7 +38,6 @@ RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     echo "" > substrate/src/lib.rs && \
     echo "" > benches/src/lib.rs && \
     echo "" > chaos-tests/src/lib.rs && \
-    echo "" > zk/src/lib.rs && \
     cargo fetch
 COPY . .
 # Production profile: --no-default-features --features full (excludes swagger-ui to meet ≤12MB target)

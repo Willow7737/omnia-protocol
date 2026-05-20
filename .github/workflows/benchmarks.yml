@@ -19,16 +19,26 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-bench-${{ hashFiles('**/Cargo.lock') }}"
       - name: Install gnuplot
         run: sudo apt-get update && sudo apt-get install -y gnuplot
       - name: Run throughput benchmarks
-        run: cargo bench -p omnia-benches --bench throughput -- --save-baseline main 2>&1 | tee bench_results.txt
+        run: |
+          if [ ! -d target/criterion ]; then
+            cargo bench -p omnia-benches --bench throughput -- --save-baseline main 2>&1 | tee bench_results.txt
+          else
+            cargo bench -p omnia-benches --bench throughput -- --baseline main 2>&1 | tee bench_results.txt
+          fi
       - name: Run ZK benchmarks
-        run: cargo bench -p omnia-benches --bench zk_benchmarks --features full -- --save-baseline main 2>&1 | tee -a bench_results.txt
+        run: |
+          if [ ! -d target/criterion ]; then
+            cargo bench -p omnia-benches --bench zk_benchmarks --features full -- --save-baseline main 2>&1 | tee -a bench_results.txt
+          else
+            cargo bench -p omnia-benches --bench zk_benchmarks --features full -- --baseline main 2>&1 | tee -a bench_results.txt
+          fi
         continue-on-error: true  # ZK benchmarks require arkworks deps via --features full
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4

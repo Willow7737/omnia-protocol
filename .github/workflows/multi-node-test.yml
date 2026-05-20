@@ -18,12 +18,6 @@ jobs:
         with:
           shared-key: "omnia-bft-${{ hashFiles('**/Cargo.lock') }}"
       - name: Run multi-node BFT tests
-        # TODO(migration): multi_node_test.rs lives in substrate/tests/ importing
-        # from omnia-substrate (deprecated facade). Migrate to omnia-consensus or
-        # omnia-node and update -p target accordingly.
-        run: cargo test -p omnia-substrate --test multi_node_test -- --nocapture
+        run: cargo test -p omnia-consensus --test multi_node_test -- --nocapture
       - name: Run network integration tests
-        # TODO(migration): network_integration.rs lives in substrate/tests/ importing
-        # from omnia-substrate (deprecated facade). Migrate to omnia-network or
-        # omnia-node and update -p target accordingly.
-        run: cargo test -p omnia-substrate --test network_integration -- --ignored --nocapture
+        run: cargo test -p omnia-network --test network_integration_test --features network -- --ignored --nocapture

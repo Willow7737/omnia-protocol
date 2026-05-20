@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-feature-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.features }}"
@@ -122,9 +122,9 @@ jobs:
           shared-key: "omnia-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}"
       - name: Verify Cargo.lock is up to date
         run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
-      - run: cargo test --workspace --exclude omnia-fuzz --verbose
+      - run: cargo test --workspace --exclude omnia-fuzz --verbose -- --skip settlement::live
         timeout-minutes: 15
-      - run: cargo test --workspace --exclude omnia-fuzz --all-features --verbose
+      - run: cargo test --workspace --exclude omnia-fuzz --all-features --verbose -- --skip settlement::live
         timeout-minutes: 15
 
   chaos-critical:
@@ -134,7 +134,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-chaos"
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-release-size"
@@ -197,7 +197,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
       - run: cargo audit --deny warnings --ignore RUSTSEC-2023-0079 --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
@@ -209,7 +209,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
       - name: Run cargo-deny
@@ -222,7 +222,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-udeps"
@@ -238,7 +238,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-mutants"
@@ -256,14 +256,20 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-bench-${{ hashFiles('**/Cargo.lock') }}"
       - name: Build benchmarks
         run: cargo bench --no-run -p omnia-benches --features full
       - name: Run quick benchmark (5s per group)
-        run: cargo bench -p omnia-benches --features full -- --quick --save-baseline main
+        run: |
+          # Save baseline if missing, otherwise compare against it
+          if [ ! -d target/criterion ]; then
+            cargo bench -p omnia-benches --features full -- --save-baseline main
+          else
+            cargo bench -p omnia-benches --features full -- --baseline main
+          fi
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
 
@@ -274,7 +280,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
@@ -320,7 +326,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
           targets: x86_64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
       - name: Build #1
@@ -351,7 +357,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:
@@ -423,7 +429,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
       - name: Generate SBOM

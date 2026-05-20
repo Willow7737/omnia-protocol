@@ -33,5 +33,6 @@ snapshot = []
 
 [dev-dependencies]
 omnia-crypto = { path = "../omnia-crypto" }
+tokio = { version = "1.35", features = ["macros", "rt", "time"] }
 tokio-test = "0.4"
 tempfile = "3"
