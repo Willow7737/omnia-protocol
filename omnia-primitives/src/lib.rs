@@ -19,7 +19,7 @@ pub mod wire_format;
 pub use blake3_domain::blake3_hash_domain;
 pub use event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
-    MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, Payload,
+    Payload, MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };
 pub use state::{SerializableState, StateSerializeError};
 pub use vector_clock::{CausalOrder, LogicalClock, NodeId, VectorClock, VectorClockError};

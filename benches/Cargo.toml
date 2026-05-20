@@ -22,6 +22,10 @@ iai-callgrind = "0.13"
 tokio = { version = "1.38", features = ["full"] }
 rand = "0.8"
 
+# ZK benchmark deps (feature-gated under 'full' to match omnia-adapters/arkworks)
+ark-bn254 = { version = "0.4", optional = true }
+ark-ff = { version = "0.4", optional = true }
+
 [[bench]]
 name = "throughput"
 harness = false
@@ -37,4 +41,4 @@ harness = false
 
 [features]
 default = []
-full = ["omnia-node/full", "omnia-adapters/arkworks"]
+full = ["omnia-node/full", "omnia-adapters/arkworks", "ark-bn254", "ark-ff"]

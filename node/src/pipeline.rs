@@ -99,12 +99,26 @@ impl PipelineRouter {
     /// Returns the router and the three receivers for worker tasks.
     /// The hot channel has a capacity of 1024, the warm channel 256,
     /// and the cold channel is unbounded.
-    pub fn new() -> (Self, mpsc::Receiver<HotWork>, mpsc::Receiver<WarmWork>, mpsc::Receiver<ColdWork>) {
+    pub fn new() -> (
+        Self,
+        mpsc::Receiver<HotWork>,
+        mpsc::Receiver<WarmWork>,
+        mpsc::Receiver<ColdWork>,
+    ) {
         let (hot_tx, hot_rx) = mpsc::channel(1024);
         let (warm_tx, warm_rx) = mpsc::channel(256);
         let (cold_tx, cold_rx) = mpsc::channel(1024);
 
-        (Self { hot_tx, warm_tx, cold_tx }, hot_rx, warm_rx, cold_rx)
+        (
+            Self {
+                hot_tx,
+                warm_tx,
+                cold_tx,
+            },
+            hot_rx,
+            warm_rx,
+            cold_rx,
+        )
     }
 
     /// Create a new pipeline router with custom channel sizes.
@@ -112,12 +126,26 @@ impl PipelineRouter {
         hot_capacity: usize,
         warm_capacity: usize,
         cold_capacity: usize,
-    ) -> (Self, mpsc::Receiver<HotWork>, mpsc::Receiver<WarmWork>, mpsc::Receiver<ColdWork>) {
+    ) -> (
+        Self,
+        mpsc::Receiver<HotWork>,
+        mpsc::Receiver<WarmWork>,
+        mpsc::Receiver<ColdWork>,
+    ) {
         let (hot_tx, hot_rx) = mpsc::channel(hot_capacity);
         let (warm_tx, warm_rx) = mpsc::channel(warm_capacity);
         let (cold_tx, cold_rx) = mpsc::channel(cold_capacity);
 
-        (Self { hot_tx, warm_tx, cold_tx }, hot_rx, warm_rx, cold_rx)
+        (
+            Self {
+                hot_tx,
+                warm_tx,
+                cold_tx,
+            },
+            hot_rx,
+            warm_rx,
+            cold_rx,
+        )
     }
 
     /// Submit hot-path work.
@@ -135,12 +163,18 @@ impl PipelineRouter {
     }
 
     /// Submit warm-path work.
-    pub async fn submit_warm(&self, work: WarmWork) -> Result<(), mpsc::error::SendError<WarmWork>> {
+    pub async fn submit_warm(
+        &self,
+        work: WarmWork,
+    ) -> Result<(), mpsc::error::SendError<WarmWork>> {
         self.warm_tx.send(work).await
     }
 
     /// Submit cold-path work.
-    pub async fn submit_cold(&self, work: ColdWork) -> Result<(), mpsc::error::SendError<ColdWork>> {
+    pub async fn submit_cold(
+        &self,
+        work: ColdWork,
+    ) -> Result<(), mpsc::error::SendError<ColdWork>> {
         self.cold_tx.send(work).await
     }
 
@@ -166,7 +200,11 @@ impl Default for PipelineRouter {
         let (hot_tx, _) = mpsc::channel(1024);
         let (warm_tx, _) = mpsc::channel(256);
         let (cold_tx, _) = mpsc::channel(1024);
-        Self { hot_tx, warm_tx, cold_tx }
+        Self {
+            hot_tx,
+            warm_tx,
+            cold_tx,
+        }
     }
 }
 
@@ -177,7 +215,11 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_creation() {
         let (router, hot_rx, warm_rx, cold_rx) = PipelineRouter::new();
-        assert!(router.try_submit_hot(HotWork { event_bytes: vec![] }).is_ok());
+        assert!(router
+            .try_submit_hot(HotWork {
+                event_bytes: vec![]
+            })
+            .is_ok());
         drop(hot_rx);
         drop(warm_rx);
         drop(cold_rx);
@@ -186,7 +228,12 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_submit_warm() {
         let (router, _hot_rx, mut warm_rx, _cold_rx) = PipelineRouter::new();
-        router.submit_warm(WarmWork { event_id: [1u8; 32] }).await.unwrap();
+        router
+            .submit_warm(WarmWork {
+                event_id: [1u8; 32],
+            })
+            .await
+            .unwrap();
         let work = warm_rx.recv().await.unwrap();
         assert_eq!(work.event_id, [1u8; 32]);
     }
@@ -194,7 +241,10 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_submit_cold() {
         let (router, _hot_rx, _warm_rx, mut cold_rx) = PipelineRouter::new();
-        router.submit_cold(ColdWork::SnapshotReplication { round: 42 }).await.unwrap();
+        router
+            .submit_cold(ColdWork::SnapshotReplication { round: 42 })
+            .await
+            .unwrap();
         let work = cold_rx.recv().await.unwrap();
         match work {
             ColdWork::SnapshotReplication { round } => assert_eq!(round, 42),
@@ -204,15 +254,21 @@ mod tests {
 
     #[test]
     fn test_hot_work_debug() {
-        let work = HotWork { event_bytes: vec![1, 2, 3] };
+        let work = HotWork {
+            event_bytes: vec![1, 2, 3],
+        };
         assert!(format!("{:?}", work).contains("HotWork"));
     }
 
     #[test]
     fn test_cold_work_variants() {
-        let proof = ColdWork::GenerateProof { event_ids: vec![[0u8; 32]] };
+        let proof = ColdWork::GenerateProof {
+            event_ids: vec![[0u8; 32]],
+        };
         let snapshot = ColdWork::SnapshotReplication { round: 100 };
-        let settlement = ColdWork::SettlementSubmit { batch_data: vec![4, 5, 6] };
+        let settlement = ColdWork::SettlementSubmit {
+            batch_data: vec![4, 5, 6],
+        };
         assert!(format!("{:?}", proof).contains("GenerateProof"));
         assert!(format!("{:?}", snapshot).contains("SnapshotReplication"));
         assert!(format!("{:?}", settlement).contains("SettlementSubmit"));

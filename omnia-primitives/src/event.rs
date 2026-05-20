@@ -12,7 +12,10 @@
 
 use crate::blake3_domain::blake3_hash_domain;
 use crate::vector_clock::{NodeId, VectorClock};
-use ed25519_dalek::{Signature as EdSignature, Signer, SigningKey as NodeKeypair, Verifier, VerifyingKey as NodePublicKey};
+use ed25519_dalek::{
+    Signature as EdSignature, Signer, SigningKey as NodeKeypair, Verifier,
+    VerifyingKey as NodePublicKey,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;

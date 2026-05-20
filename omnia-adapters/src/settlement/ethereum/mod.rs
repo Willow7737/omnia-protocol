@@ -356,9 +356,10 @@ impl EthereumLiveClient {
         let provider = self.build_provider().await?;
         let contract = OmniaRollupLegacy::new(self.contract_address, provider);
 
-        let root = contract.stateRoot().call().await.map_err(|e| {
-            SettlementError::ContractError(format!("stateRoot call failed: {e}"))
-        })?;
+        let root =
+            contract.stateRoot().call().await.map_err(|e| {
+                SettlementError::ContractError(format!("stateRoot call failed: {e}"))
+            })?;
 
         Ok(root.0)
     }
@@ -750,9 +751,7 @@ impl SettlementLayer for EthereumAdapter {
 
     async fn deposit(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         match self.mode {
-            EthereumMode::Simulated => {
-                Ok(format!("0xdeposit_{}_{}", l2_did, amount))
-            }
+            EthereumMode::Simulated => Ok(format!("0xdeposit_{}_{}", l2_did, amount)),
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
@@ -782,9 +781,7 @@ impl SettlementLayer for EthereumAdapter {
         amount: u64,
     ) -> Result<String, SettlementError> {
         match self.mode {
-            EthereumMode::Simulated => {
-                Ok(format!("0xwithdraw_{}_{}", l2_did, amount))
-            }
+            EthereumMode::Simulated => Ok(format!("0xwithdraw_{}_{}", l2_did, amount)),
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
@@ -908,8 +905,14 @@ mod tests {
     #[tokio::test]
     async fn test_ethereum_simulated_verify_proof() {
         let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
-        assert!(adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA]).await.unwrap());
-        assert!(!adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[]).await.unwrap());
+        assert!(adapter
+            .verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA])
+            .await
+            .unwrap());
+        assert!(!adapter
+            .verify_proof(&[0u8; 32], &[1u8; 32], &[])
+            .await
+            .unwrap());
     }
 
     #[tokio::test]

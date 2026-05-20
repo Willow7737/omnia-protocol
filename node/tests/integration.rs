@@ -19,8 +19,8 @@ use omnia_substrate::{Substrate, SubstrateConfig};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 
@@ -152,7 +152,11 @@ async fn test_metrics_endpoint_disabled() -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client.get(format!("{}/metrics", base_url)).send().await?;
 
-    assert_eq!(resp.status(), 404, "Metrics endpoint should be 404 when feature disabled");
+    assert_eq!(
+        resp.status(),
+        404,
+        "Metrics endpoint should be 404 when feature disabled"
+    );
 
     Ok(())
 }
@@ -217,7 +221,11 @@ async fn test_swagger_ui() -> Result<()> {
         .get(format!("{}/swagger-ui/", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 200, "Swagger UI should be accessible when feature enabled");
+    assert_eq!(
+        resp.status(),
+        200,
+        "Swagger UI should be accessible when feature enabled"
+    );
     Ok(())
 }
 
@@ -231,7 +239,11 @@ async fn test_swagger_ui_disabled() -> Result<()> {
         .get(format!("{}/swagger-ui/", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 404, "Swagger UI should be 404 when feature disabled");
+    assert_eq!(
+        resp.status(),
+        404,
+        "Swagger UI should be 404 when feature disabled"
+    );
     Ok(())
 }
 
@@ -245,7 +257,11 @@ async fn test_openapi_json() -> Result<()> {
         .get(format!("{}/api-docs/openapi.json", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 200, "OpenAPI JSON should be accessible when feature enabled");
+    assert_eq!(
+        resp.status(),
+        200,
+        "OpenAPI JSON should be accessible when feature enabled"
+    );
     let body: Value = resp.json().await?;
     // Verify the OpenAPI spec contains our paths
     let paths = body["paths"]
@@ -280,6 +296,10 @@ async fn test_openapi_json_disabled() -> Result<()> {
         .get(format!("{}/api-docs/openapi.json", base_url))
         .send()
         .await?;
-    assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");
+    assert_eq!(
+        resp.status(),
+        404,
+        "OpenAPI JSON should be 404 when feature disabled"
+    );
     Ok(())
 }

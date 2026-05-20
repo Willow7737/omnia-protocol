@@ -92,9 +92,8 @@ pub fn build_http_router() -> Router<AppState> {
     // Swagger UI is optional — embeds ~11MB of JS/CSS assets into the binary.
     // Enable with --features swagger-ui for development.
     #[cfg(feature = "swagger-ui")]
-    let router = router.merge(
-        SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi())
-    );
+    let router = router
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
     router
         // --- Middleware layers ---

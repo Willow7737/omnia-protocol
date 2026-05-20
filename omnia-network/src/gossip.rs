@@ -14,10 +14,10 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
 use crate::blake3_domain::blake3_hash_domain;
+use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use omnia_consensus::causal_graph::{CausalGraph, CausalGraphError};
 use omnia_consensus::rate_limiter::RateLimiter;
 use omnia_primitives::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
-use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
 use omnia_primitives::{NodeId, VectorClock};
 
 const DEFAULT_GOSSIP_INTERVAL_MS: u64 = 100;

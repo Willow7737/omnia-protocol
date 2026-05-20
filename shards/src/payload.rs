@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use crate::biological::ops::BiologicalOp;
 use crate::computational::ops::ComputationalOp;
 use crate::cross_shard::CrossShardMessage;
-use omnia_economics::EconomicsOp;
 use crate::financial::ops::FinancialOp;
 use crate::identity::ops::IdentityOp;
 use crate::physical::ops::PhysicalOp;
 use crate::shard::ShardId;
+use omnia_economics::EconomicsOp;
 
 /// The top-level payload that wraps every shard operation.
 ///

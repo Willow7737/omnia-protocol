@@ -32,10 +32,10 @@
 //! - Buterin, V., Griffith, V. *Casper the Friendly Finality Gadget*.
 //!   arXiv:1710.09437, 2017.
 
-use omnia_primitives::blake3_hash_domain;
 use crate::crypto::{NodeKeypair, NodePublicKey};
-use omnia_primitives::NodeId;
 use ed25519_dalek::{Signature, Signer, Verifier};
+use omnia_primitives::blake3_hash_domain;
+use omnia_primitives::NodeId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

@@ -6,9 +6,9 @@
 //! results ideal for CI regression detection.
 
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
-use omnia_primitives::{Event, NodeId, VectorClock};
 use omnia_consensus::CausalGraph;
 use omnia_crypto::generate_keypair;
+use omnia_primitives::{Event, NodeId, VectorClock};
 
 /// Helper to create a minimal valid (signed) Event for benchmarking.
 fn create_signed_event(creator: NodeId, seq: u64, parent: Option<[u8; 32]>) -> Event {
@@ -50,7 +50,7 @@ fn bench_causal_graph_insert() {
     let genesis = create_signed_event(creator, 0, None);
     let _ = graph.insert(genesis.clone());
     let event = create_signed_event(creator, 1, Some(genesis.id));
-    black_box(graph.insert(event));
+    let _ = black_box(graph.insert(event));
 }
 
 library_benchmark_group!(

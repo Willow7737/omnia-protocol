@@ -7,13 +7,11 @@
 //! - omnia-crypto: NodeKeypair, VRF operations
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use omnia_consensus::{
-    CausalGraph, SlashingEngine,
-    slashing::SlashOffense,
-};
+use omnia_consensus::{slashing::SlashOffense, CausalGraph, SlashingEngine};
 use omnia_crypto::{
-    generate_keypair, NodeKeypair,
+    generate_keypair,
     vrf::{select_leader, vrf_compute, vrf_verify},
+    NodeKeypair,
 };
 use omnia_primitives::{Event, NodeId, VectorClock};
 use rand::rngs::OsRng;
