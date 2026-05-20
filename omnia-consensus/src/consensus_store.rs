@@ -77,7 +77,7 @@ pub struct ConsensusState {
 /// # Example
 ///
 /// ```ignore
-/// use omnia_substrate::consensus_store::{ConsensusStore, RedbConsensusStore};
+/// use omnia_consensus::consensus_store::{ConsensusStore, RedbConsensusStore};
 /// use std::path::Path;
 ///
 /// let store = RedbConsensusStore::open(Path::new("/data/consensus.redb")).unwrap();
@@ -127,7 +127,7 @@ pub trait ConsensusStore: Send + Sync {
 /// # Example
 ///
 /// ```ignore
-/// use omnia_substrate::consensus_store::RedbConsensusStore;
+/// use omnia_consensus::consensus_store::RedbConsensusStore;
 /// use std::path::Path;
 ///
 /// let store = RedbConsensusStore::open(Path::new("/data/consensus.redb")).unwrap();

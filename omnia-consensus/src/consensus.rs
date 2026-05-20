@@ -755,7 +755,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// # Example
     ///
     /// ```ignore
-    /// use omnia_substrate::{ConsensusEngine, SlashingEngine};
+    /// use omnia_consensus::{ConsensusEngine, SlashingEngine};
     /// let slashing = SlashingEngine::new_in_memory(500, 2000);
     /// let mut engine = ConsensusEngine::new(config, slashing);
     /// engine.register_validator(node_id, 10_000);

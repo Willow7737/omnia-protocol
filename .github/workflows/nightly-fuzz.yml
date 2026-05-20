@@ -41,9 +41,9 @@ jobs:
           # if the default latest nightly breaks due to rustc attribute
           # reservation (e.g. rustix incompatibility).
           if ! cargo install cargo-fuzz 2>/dev/null; then
-            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-05-01"
-            rustup toolchain install nightly-2026-05-01 --component llvm-tools-preview
-            rustup override set nightly-2026-05-01
+            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2025-12-01"
+            rustup toolchain install nightly-2025-12-01 --component llvm-tools-preview
+            rustup override set nightly-2025-12-01
             cargo install cargo-fuzz --locked
           fi
       - uses: Swatinem/rust-cache@v2

@@ -15,7 +15,7 @@ use std::time::Instant;
 ///
 /// # Examples
 /// ```
-/// use omnia_substrate::rate_limiter::RateLimiter;
+/// use omnia_consensus::rate_limiter::RateLimiter;
 ///
 /// let mut limiter = RateLimiter::new(200, 100);
 /// let peer_id = [0u8; 32];

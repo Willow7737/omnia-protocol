@@ -91,7 +91,7 @@ impl SlashOffense {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::SlashOffense;
+    /// use omnia_consensus::SlashOffense;
     /// assert_eq!(SlashOffense::Equivocation.points(), 500);
     /// assert_eq!(SlashOffense::LivenessViolation.points(), 100);
     /// assert_eq!(SlashOffense::InvalidAttestation.points(), 300);
@@ -239,7 +239,7 @@ pub enum SlashingStoreError {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::slashing::SlashingState;
+/// use omnia_consensus::slashing::SlashingState;
 ///
 /// let state = SlashingState::default();
 /// assert!(state.slash_points.is_empty());
@@ -288,7 +288,7 @@ impl Default for SlashingState {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
+/// use omnia_consensus::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
 ///
 /// let store = InMemorySlashingStore::new();
 /// let state = store.load().unwrap();
@@ -358,7 +358,7 @@ pub trait SlashingStore: Send + Sync {
 /// # Example
 ///
 /// ```no_run
-/// use omnia_substrate::slashing::{RedbSlashingStore, SlashingStore};
+/// use omnia_consensus::slashing::{RedbSlashingStore, SlashingStore};
 /// use std::path::Path;
 ///
 /// let store = RedbSlashingStore::open(Path::new("/tmp/omnia-slashing.redb")).unwrap();
@@ -388,7 +388,7 @@ impl RedbSlashingStore {
     /// # Example
     ///
     /// ```no_run
-    /// use omnia_substrate::slashing::{RedbSlashingStore, SlashingStore};
+    /// use omnia_consensus::slashing::{RedbSlashingStore, SlashingStore};
     /// use std::path::Path;
     ///
     /// let store = RedbSlashingStore::open(Path::new("/tmp/omnia-slashing.redb")).unwrap();
@@ -487,7 +487,7 @@ impl SlashingStore for RedbSlashingStore {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
+/// use omnia_consensus::slashing::{InMemorySlashingStore, SlashingStore, SlashingState};
 ///
 /// let store = InMemorySlashingStore::new();
 /// let state = store.load().unwrap();
@@ -505,7 +505,7 @@ impl InMemorySlashingStore {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::slashing::InMemorySlashingStore;
+    /// use omnia_consensus::slashing::InMemorySlashingStore;
     ///
     /// let store = InMemorySlashingStore::new();
     /// ```
@@ -593,7 +593,7 @@ impl SlashingStore for InMemorySlashingStore {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
+/// use omnia_consensus::{SlashingEngine, SlashOffense, SlashOutcome};
 ///
 /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
 /// let mut node = [0u8; 32];
@@ -677,7 +677,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```no_run
-    /// use omnia_substrate::slashing::SlashingEngine;
+    /// use omnia_consensus::slashing::SlashingEngine;
     /// use std::path::PathBuf;
     ///
     /// // Production: persistent slashing
@@ -763,7 +763,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```no_run
-    /// use omnia_substrate::slashing::{RedbSlashingStore, SlashingEngine};
+    /// use omnia_consensus::slashing::{RedbSlashingStore, SlashingEngine};
     /// use std::path::Path;
     /// use std::sync::Arc;
     ///
@@ -857,7 +857,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::SlashingEngine;
+    /// use omnia_consensus::SlashingEngine;
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -920,7 +920,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense, SlashOutcome};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1029,7 +1029,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```ignore
-    /// use omnia_substrate::SlashingEngine;
+    /// use omnia_consensus::SlashingEngine;
     /// // event_a and event_b have same creator & sequence, different hashes
     /// assert!(SlashingEngine::check_equivocation(&event_a, &event_b));
     /// ```
@@ -1066,7 +1066,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOutcome};
+    /// use omnia_consensus::{SlashingEngine, SlashOutcome};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1123,7 +1123,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1161,7 +1161,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1201,7 +1201,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::SlashingEngine;
+    /// use omnia_consensus::SlashingEngine;
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1232,7 +1232,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1290,7 +1290,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let mut node = [0u8; 32];
@@ -1642,7 +1642,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::SlashingEngine;
+    /// use omnia_consensus::SlashingEngine;
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let node = [1u8; 32];
@@ -1694,7 +1694,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::{SlashingEngine, SlashOffense, SlashOutcome};
+    /// use omnia_consensus::{SlashingEngine, SlashOffense, SlashOutcome};
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// let node = [42u8; 32];
@@ -1856,7 +1856,7 @@ impl SlashingEngine {
     /// # Example
     ///
     /// ```
-    /// use omnia_substrate::SlashingEngine;
+    /// use omnia_consensus::SlashingEngine;
     ///
     /// let mut engine = SlashingEngine::new_in_memory(500, 2000);
     /// // ... after jailing a validator with auto_release = true ...

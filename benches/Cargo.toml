@@ -29,6 +29,7 @@ harness = false
 [[bench]]
 name = "zk_benchmarks"
 harness = false
+required-features = ["full"]
 
 [[bench]]
 name = "hot_path_iai"
