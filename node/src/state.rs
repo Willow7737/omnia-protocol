@@ -19,6 +19,8 @@ use omnia_shards::ShardRouter;
 use omnia_substrate::SlashingEngine;
 use omnia_substrate::Substrate;
 
+use omnia_adapters::SettlementAdapter;
+
 use crate::api::events::StoredEvent;
 use crate::api::node::PeerInfo;
 use crate::config::NodeConfig;
@@ -152,4 +154,10 @@ pub struct AppState {
     /// When `true`, the node is still catching up with the network
     /// and should not be considered ready to serve traffic.
     pub is_syncing: Arc<AtomicBool>,
+    /// Settlement adapter for L1 batch submissions.
+    ///
+    /// Uses [`MockSettlementAdapter`] by default (zero alloy, MSRV 1.88).
+    /// When the `ethereum-live` feature is enabled and a valid config is
+    /// provided, uses [`EthereumSettlementAdapter`] instead (requires rustc >= 1.91).
+    pub settlement: Arc<dyn SettlementAdapter>,
 }
