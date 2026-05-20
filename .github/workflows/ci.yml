@@ -427,7 +427,7 @@ jobs:
           files: ./lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: |
@@ -509,7 +509,7 @@ jobs:
           find . -name '*.bom.json' -exec mv {} sbom/ \; || true
           find . -name '*.bom.xml' -exec mv {} sbom/ \; || true
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-sbom
           path: sbom/

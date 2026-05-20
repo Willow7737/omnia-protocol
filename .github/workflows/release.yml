@@ -132,7 +132,7 @@ jobs:
           "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ascii "${{ matrix.artifact }}.sha256"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -214,7 +214,7 @@ jobs:
           cat contract-output/checksums.txt
 
       - name: Upload contract artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-rollup-contract
           path: contract-output/
@@ -245,7 +245,7 @@ jobs:
           find . -name '*.bom.xml' -exec mv {} sbom-output/ \; 2>/dev/null || true
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: omnia-sbom
           path: sbom-output/
@@ -268,7 +268,7 @@ jobs:
           cargo audit
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-audit
           path: audit-report.json

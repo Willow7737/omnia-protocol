@@ -76,7 +76,7 @@ jobs:
           echo "All mutation scores meet ≥75% threshold"
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutants-report
           path: |
