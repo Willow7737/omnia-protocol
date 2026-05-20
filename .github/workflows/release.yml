@@ -82,7 +82,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -158,23 +158,23 @@ jobs:
       - name: Compile OmniaRollup.sol
         run: |
           mkdir -p contract-output
-          # NOTE: zk/ is not a workspace member but still contains Solidity contracts
+          # Ethereum contracts relocated to omnia-adapters/contracts/ethereum/
           solc --combined-json abi,bin,metadata \
             --optimize --optimize-runs 200 \
             --overwrite \
             -o contract-output \
-            zk/contracts/ethereum/OmniaRollup.sol
+            omnia-adapters/contracts/ethereum/OmniaRollup.sol
 
           # Also produce standalone ABI and bytecode files
           solc --abi \
             --optimize --optimize-runs 200 \
             -o contract-output \
-            zk/contracts/ethereum/OmniaRollup.sol
+            omnia-adapters/contracts/ethereum/OmniaRollup.sol
 
           solc --bin \
             --optimize --optimize-runs 200 \
             -o contract-output \
-            zk/contracts/ethereum/OmniaRollup.sol
+            omnia-adapters/contracts/ethereum/OmniaRollup.sol
 
           # Rename for clarity
           mv contract-output/OmniaRollup.abi contract-output/OmniaRollup.json 2>/dev/null || true
@@ -228,7 +228,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-release-sbom"
@@ -259,7 +259,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
 
       - name: Run cargo audit
         run: |

@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: stable
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-mutants"
@@ -23,50 +23,57 @@ jobs:
       - name: Run mutation testing on omnia-primitives
         run: |
           cargo mutants -p omnia-primitives --in-place --no-times \
-            --timeout 300 --output mutants-out-primitives
+            --timeout 300 --output mutants-out-primitives 2>&1 | tee mutants-primitives.log
         timeout-minutes: 45
       - name: Run mutation testing on omnia-consensus
         run: |
           cargo mutants -p omnia-consensus --in-place --no-times \
-            --timeout 300 --output mutants-out-consensus
+            --timeout 300 --output mutants-out-consensus 2>&1 | tee mutants-consensus.log
         timeout-minutes: 45
-      - name: Check mutation score ≥ 75% (Blueprint gate)
+      - name: Enforce Mutation Score ≥75%
         run: |
-          # Enforce Blueprint gate: cargo-mutants score ≥ 75% for primitives + consensus
+          # Parse mutation score from cargo-mutants stdout output
           FAILED=0
-          for crate_dir in mutants-out-primitives mutants-out-consensus; do
-            if [ -f "${crate_dir}/mutants.json" ]; then
-              # Parse score from cargo-mutants JSON output
-              SCORE=$(python3 -c "
-          import json, sys
-          with open('${crate_dir}/mutants.json') as f:
+          for crate_name in primitives consensus; do
+            LOG_FILE="mutants-${crate_name}.log"
+            if [ -f "$LOG_FILE" ]; then
+              SCORE=$(grep -oP 'Mutation score: \K\d+' "$LOG_FILE" | tail -1 || true)
+              if [ -z "$SCORE" ]; then
+                # Fallback: try parsing from mutants.json
+                JSON_FILE="mutants-out-${crate_name}/mutants.json"
+                if [ -f "$JSON_FILE" ]; then
+                  SCORE=$(python3 -c "
+          import json
+          with open('$JSON_FILE') as f:
               data = json.load(f)
-          total = len(data.get('mutants', data)) if isinstance(data, list) else data.get('total', 0)
-          killed = sum(1 for m in (data.get('mutants', data) if isinstance(data, dict) else data)
-                       if (m.get('status', m.get('outcome', '')) in ('killed', 'timeout', 'error')
-                           if isinstance(m, dict) else False))
-          if total > 0:
-              print(round(killed / total * 100, 1))
+          mutants = data.get('mutants', data) if isinstance(data, dict) else data
+          if isinstance(mutants, list):
+              total = len(mutants)
+              killed = sum(1 for m in mutants if isinstance(m, dict) and m.get('status', m.get('outcome', '')) in ('killed', 'timeout', 'error'))
+              print(round(killed / total * 100) if total > 0 else 'N/A')
           else:
               print('N/A')
           " 2>/dev/null || echo "N/A")
-              echo "${crate_dir}: mutation score = ${SCORE}%"
-              if [ "$SCORE" != "N/A" ]; then
-                INT_SCORE=${SCORE%.*}
-                if [ "$INT_SCORE" -lt 75 ] 2>/dev/null; then
-                  echo "::warning::${crate_dir} mutation score ${SCORE}% < 75% threshold"
-                  FAILED=1
                 fi
               fi
+              echo "omnia-${crate_name}: mutation score = ${SCORE}%"
+              if [ "$SCORE" != "N/A" ] && [ -n "$SCORE" ]; then
+                if [ "$SCORE" -lt 75 ] 2>/dev/null; then
+                  echo "::error::omnia-${crate_name} mutation score ${SCORE}% < 75% threshold"
+                  FAILED=1
+                fi
+              else
+                echo "::warning::Could not determine mutation score for omnia-${crate_name}"
+              fi
             else
-              echo "::warning::No mutants.json found in ${crate_dir}"
+              echo "::warning::No log file found for omnia-${crate_name}"
             fi
           done
           if [ "$FAILED" -eq 1 ]; then
-            echo "::warning::Mutation score below 75% threshold — not blocking CI per current policy"
-            # For now, mutation score is informational and doesn't block CI
-            # To enforce as a hard gate, replace the above warning with: exit 1
+            echo "Mutation score below 75% threshold — failing job."
+            exit 1
           fi
+          echo "All mutation scores meet ≥75% threshold"
       - name: Upload mutants report
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,4 +82,6 @@ jobs:
           path: |
             mutants-out-primitives/
             mutants-out-consensus/
+            mutants-primitives.log
+            mutants-consensus.log
           retention-days: 30

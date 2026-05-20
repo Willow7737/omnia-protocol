@@ -7,7 +7,7 @@
 //! marked `#[ignore]` by default.** Run with:
 //!
 //! ```bash
-//! cargo test --test network_integration -- --ignored --nocapture
+//! cargo test -p omnia-network --test network_integration_test -- --ignored --nocapture
 //! ```
 //!
 //! Prerequisites:
@@ -24,7 +24,7 @@
 /// - Network connectivity between all nodes
 /// - The bootstrap node's HTTP API to be accessible
 ///
-/// Run with: `cargo test --test network_integration -- --ignored`
+/// Run with: `cargo test -p omnia-network --test network_integration_test -- --ignored`
 #[tokio::test]
 #[ignore]
 async fn test_docker_compose_bft() {
@@ -50,5 +50,5 @@ async fn test_docker_compose_bft() {
     println!("Docker Compose BFT integration test - requires running network");
     println!("To run this test:");
     println!("  1. docker compose up -d");
-    println!("  2. cargo test --test network_integration -- --ignored --nocapture");
+    println!("  2. cargo test -p omnia-network --test network_integration_test -- --ignored --nocapture");
 }

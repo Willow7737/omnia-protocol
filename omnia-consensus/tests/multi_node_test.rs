@@ -7,10 +7,11 @@
 //! `ConsensusEngine` instances per node, each with their own `CausalGraph`,
 //! and verify that all honest nodes agree on finalized state.
 
-use omnia_substrate::{
-    CausalGraph, ConsensusConfig, ConsensusEngine, Event, NodeId, SlashingEngine, VectorClock,
+use omnia_consensus::{
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine,
     DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
+use omnia_primitives::{Event, NodeId, VectorClock};
 
 /// Helper: create a NodeId from a small integer.
 fn test_node_id(id: u8) -> NodeId {
