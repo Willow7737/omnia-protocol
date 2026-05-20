@@ -53,3 +53,19 @@ path = "fuzz_targets/fuzz_snapshot_deserialization.rs"
 [[bin]]
 name = "fuzz_primitives_event"
 path = "fuzz_targets/fuzz_primitives_event.rs"
+
+[[bin]]
+name = "fuzz_causal_graph_insert"
+path = "fuzz_targets/causal_graph_insert.rs"
+
+[[bin]]
+name = "fuzz_shard_route"
+path = "fuzz_targets/shard_route.rs"
+
+[[bin]]
+name = "fuzz_event_validate"
+path = "fuzz_targets/event_validate.rs"
+
+[[bin]]
+name = "fuzz_vector_clock_raw"
+path = "fuzz_targets/vector_clock_merge.rs"

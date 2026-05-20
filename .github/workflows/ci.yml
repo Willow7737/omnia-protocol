@@ -228,7 +228,11 @@ jobs:
           toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
-      - run: cargo audit --deny warnings --ignore RUSTSEC-2023-0079 --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
+      - run: cargo audit --deny warnings --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
+        # NOTE: RUSTSEC-2023-0079 (KyberSlash / pqc_kyber) was removed from
+        # the ignore list after migrating to ml-kem (ADR-020).  The pqc_kyber
+        # crate no longer appears in Cargo.lock, so the advisory should not
+        # be triggered.  If it reappears, that indicates a regression.
 
   deny:
     name: Cargo Deny
@@ -430,9 +434,9 @@ jobs:
       - name: Install cargo-fuzz
         run: |
           if ! cargo install cargo-fuzz 2>/dev/null; then
-            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-03-15"
-            rustup toolchain install nightly-2026-03-15 --component rust-src
-            rustup override set nightly-2026-03-15
+            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2026-05-01"
+            rustup toolchain install nightly-2026-05-01 --component rust-src
+            rustup override set nightly-2026-05-01
             cargo install cargo-fuzz --locked
           fi
       - name: Build fuzz targets
@@ -448,6 +452,10 @@ jobs:
             fuzz_rate_limiter
             fuzz_snapshot_deserialization
             fuzz_primitives_event
+            fuzz_causal_graph_insert
+            fuzz_shard_route
+            fuzz_event_validate
+            fuzz_vector_clock_raw
           )
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
