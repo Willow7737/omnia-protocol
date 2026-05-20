@@ -1,4 +1,7 @@
 # ADR-006: Shard Trait Contract
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Proposed
 **Date**: 2026-05-14
@@ -155,3 +158,7 @@ The Financial shard (`shards/src/financial/`) uses strict causal ordering for ba
 - **Negative**: The determinism contract prohibits `HashMap` in serialized state. All shard states currently use `HashMap` and must be migrated to `BTreeMap` before mainnet.
 - **Negative**: Strict causal ordering for the Financial shard means that concurrent transfers from the same account are serialized, which limits parallelism. This is a necessary trade-off for financial correctness.
 - **Trade-off**: The `ShardError` enum is shared across all shard types, which means some error variants may not apply to all shards. This is simpler than per-shard error types but reduces type safety at the router level.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

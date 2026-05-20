@@ -1,4 +1,7 @@
 # ADR-001: EventProcessor Trait Contract
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Accepted
 **Date:** 2026-05-14
@@ -67,3 +70,7 @@ The `omnia-node` binary does not use the `EventProcessor` trait directly for its
 - **Negative**: `String` errors lose type information at the boundary. Downstream consumers cannot programmatically match on error variants from the `EventProcessor` trait. This is acceptable because the substrate never acts on the error content.
 - **Negative**: Sequential processing within a single `Box<dyn EventProcessor>`. If parallel shard processing is needed in the future, the substrate would need to support multiple processors or a processor router that fans out internally.
 - **Trade-off**: The `&mut self` receiver means the processor cannot be called concurrently from multiple threads without external synchronization. This is intentional — the substrate processes events in causal order, and concurrent processing would violate ordering guarantees.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

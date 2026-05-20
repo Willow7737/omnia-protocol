@@ -1,4 +1,7 @@
 # ADR-005: ProofBundle Universal Proof Format
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Implemented
 **Date**: 2026-05-14
@@ -173,3 +176,7 @@ Any L1 verifier that can check these five things can settle Omnia state transiti
 - **Negative**: The `transition_proof: Vec<u8>` is untyped — the verifier must know the proof system from the `version` field. Misaligned version/proof-type pairs would cause verification failures.
 - **Negative**: The `L1Anchor` uses a fixed EIP-155 chain ID model. Chains without EIP-155 chain IDs need a mapping convention.
 - **Trade-off**: The `L1Anchor` is a structured type rather than a fixed 32 bytes, which is more flexible but requires each adapter to understand the structure.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

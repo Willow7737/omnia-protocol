@@ -1,4 +1,7 @@
 # ADR-014: Poseidon Parameter Migration Strategy
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -76,3 +79,7 @@ Retained as Phase A of the dual-hash transition. Now has a concrete migration ti
 - Migration complexity traded for long-term interoperability and auditability
 - Phased approach reduces risk compared to immediate migration
 - Phase 5 lays the foundation; Phases 6-7 complete the transition
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

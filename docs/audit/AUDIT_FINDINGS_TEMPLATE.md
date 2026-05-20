@@ -1,4 +1,7 @@
 # Audit Findings Template
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version**: 1.0
 **Date**: 2026-05-19
@@ -95,3 +98,7 @@ Use this template for reporting all audit findings. Each finding should be a sep
 | **Medium** | Information leak, authentication bypass on non-critical endpoints, degraded performance. Fix before or shortly after mainnet. |
 | **Low** | Minor bugs, code quality issues, documentation errors with security implications. Fix in next release. |
 | **Informational** | Best practice suggestions, style issues, non-security observations. Consider for future improvements. |
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

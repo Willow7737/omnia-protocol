@@ -1,4 +1,7 @@
 # ADR-003: Gossip → Substrate Event Flow
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Accepted
 **Date:** 2026-05-14
@@ -145,3 +148,7 @@ This design ensures that network events land in the graph where `Substrate::proc
 - **Negative**: Backpressure via dropping oldest events means that under extreme load, events may be silently lost. For a BFT system, this is acceptable because events are gossiped to multiple nodes — another node will process them.
 - **Negative**: The REST API event path creates a fresh keypair per submission, which means each API-submitted event has a unique creator. This prevents equivocation detection for API-submitted events (since each uses a different key), but also means these events cannot be attributed to a persistent identity.
 - **Trade-off**: The `Arc<RwLock<CausalGraph>>` pattern means that graph insertion requires an async write lock. Under high contention (many concurrent insertions), this could become a bottleneck. However, the lock is held only for the duration of `insert()`, which is O(1) for the HashMap lookup plus O(k) for ancestry checks.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

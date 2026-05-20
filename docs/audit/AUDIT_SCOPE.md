@@ -1,4 +1,7 @@
 # Omnia Protocol — Security Audit Scope
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version:** v4.0.0
 **Date:** 2026-03-05
@@ -275,3 +278,7 @@ Data persisted to redb databases crosses from volatile to durable storage. redb 
 2. **Code quality observations** — architectural concerns, unsafe patterns, missing error handling
 3. **Formal verification cross-reference** — comparison of TLA+ model assumptions with Rust implementation
 4. **Summary assessment** — overall security posture and recommended next steps
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

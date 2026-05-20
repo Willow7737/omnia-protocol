@@ -1,4 +1,7 @@
 # Consensus Queue Invariants
+> 🎯 Audience: Developers
+> 🔗 Context: Documents the consensus queue invariants and O(new_events) processing guarantee
+> 📅 Last Updated: 2026-05-20
 
 **Task**: 1.1 — Document the consensus queue invariants
 **Date**: 2026-05-14
@@ -146,3 +149,7 @@ In both cases, the event is in the graph before its ID is added to the queue. Th
 | Total per iteration | O(k) | Dominated by consensus, not queue management |
 
 The queue ensures that consensus processing scales with the rate of new events, not with the total history size. For a protocol targeting 10,000 TPS with a 100ms consensus interval, k ≈ 1,000 events per iteration — a manageable workload.
+
+---
+🔙 **Back**: [Architecture Index](./) | 🔄 **Related**: [Pipeline Design](./pipeline-design.md)
+🚀 **Next**: [CRDT Convergence](./crdt-convergence.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

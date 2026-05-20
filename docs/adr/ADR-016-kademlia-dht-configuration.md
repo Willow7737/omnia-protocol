@@ -1,4 +1,7 @@
 # ADR-016: Kademlia DHT Configuration
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -61,3 +64,7 @@ Build a custom peer discovery protocol. Allows tailoring to specific needs but i
 - Periodic bootstrap interval of 5 minutes balances freshness with network overhead
 - Memory store is sufficient for peer discovery; persistent store not needed
 - AutoNAT + Relay + DCutr provides maximum NAT traversal compatibility
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

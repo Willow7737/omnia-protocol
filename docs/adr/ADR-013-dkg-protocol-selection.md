@@ -1,4 +1,7 @@
 # ADR-013: DKG Protocol Selection
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -55,3 +58,7 @@ Keep the existing manual key share registration. This is simpler but creates a s
 - Chose Feldman VSS over Rosario-Gennaro for simplicity
 - Synchronous model is acceptable for initial deployment
 - Future phases should add complaint resolution and asynchronous support
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

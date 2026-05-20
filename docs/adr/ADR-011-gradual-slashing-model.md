@@ -1,4 +1,7 @@
 # ADR-011: Gradual Slashing Model
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -55,3 +58,7 @@ Keep the existing binary system. Simple but creates the perverse incentives desc
 - Chose economic fairness over simplicity
 - 3 tiers provide clear escalation without excessive granularity
 - Auto-release for first offenses balances automation with safety
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

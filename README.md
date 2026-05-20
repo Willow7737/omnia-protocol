@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml">
-    <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  <a href="actions/workflows/ci.yml">
+    <img src="actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
   <img src="https://img.shields.io/badge/Tests-300%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
@@ -175,8 +175,8 @@ cargo bench --no-run
 
 To uphold our commitment to radical transparency, we maintain a live dashboard of our progress, requirements, and team health.
 
-- [**Project Dashboard**](./PROJECT_DASHBOARD.md) - High-level overview, team status, and risk assessment.
-- [**Requirements & Status**](./STATUS.md) - Granular tracking of technical requirements and completion.
+- [**Project Dashboard**](docs/reference/project-dashboard.md) - High-level overview, team status, and risk assessment.
+- [**Requirements & Status**](docs/reference/status.md) - Granular tracking of technical requirements and completion.
 
 ---
 
@@ -236,15 +236,15 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 Full documentation is organized in [docs/](docs/):
 
-- [**docs/architecture/**](docs/architecture/) — Layer specifications, trait boundaries, pipeline design, CRDT proofs
+- [**docs/architecture/**](docs/architecture/) — Layer specifications, trait boundaries, pipeline design, CRDT proofs, consensus queue
 - [**docs/building/**](docs/building/) — Feature flags, cross-compilation, binary optimization
-- [**docs/operations/**](docs/operations/) — Validator setup, monitoring, deployment, runbook
-- [**docs/reference/**](docs/reference/) — Roadmap, benchmarks, ADR index, security audit, dependency policy
+- [**docs/operations/**](docs/operations/) — Validator setup, monitoring, deployment, runbook, CLI & API
+- [**docs/reference/**](docs/reference/) — Roadmap, benchmarks, ADR index, security audit, dependency policy, economic analysis, phase reports
 - [**docs/use-cases/**](docs/use-cases/) — Real-world scenarios, FAQ, governance
 
 Quick links:
-- [**Architecture (legacy)**](./ARCHITECTURE.md) — Being superseded by docs/architecture/
-- [**Implementation Spec**](./docs/specifications/IMPLEMENTATION.md) — Protocol specifications
+- [**Architecture**](docs/architecture/) — Links to canonical architecture docs
+- [**Implementation Spec**](docs/reference/implementation-spec.md) — Protocol specifications
 - [**Research**](./substrate/RESEARCH.md) — Consensus research and implementation results
 
 ---
@@ -265,10 +265,10 @@ cargo fmt --check         # Check formatting
 
 Omnia is a public-interest protocol. Join the conversation:
 
-- **[GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)** - Questions, ideas, and general community interaction.
-- **[GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)** - Bug reports, feature requests, and technical research proposals.
-- **[Project Dashboard](./PROJECT_DASHBOARD.md)** - Real-time project health and status updates.
-- **[Requirements & Status](./STATUS.md)** - Granular tracking of technical requirements.
+- **[GitHub Discussions](discussions)** - Questions, ideas, and general community interaction.
+- **[GitHub Issues](issues)** - Bug reports, feature requests, and technical research proposals.
+- **[Project Dashboard](docs/reference/project-dashboard.md)** - Real-time project health and status updates.
+- **[Requirements & Status](docs/reference/status.md)** - Granular tracking of technical requirements.
 - **[Discord](https://discord.gg/qYkpAeSYR)** - Real-time chat and community.
 - **Email:** `conduct@omnia.protocol` (for conduct-related issues)
 

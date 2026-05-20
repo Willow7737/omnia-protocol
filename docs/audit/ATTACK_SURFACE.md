@@ -1,4 +1,7 @@
 # Omnia Protocol — Attack Surface Map
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version:** v4.0.0
 **Date:** 2026-03-05
@@ -485,3 +488,7 @@ Each arrow represents a trust boundary crossing. Data flows from untrusted (left
 | **Encrypted key files** | **Medium** | **AES-256-GCM with --passphrase (FIND-010); unencrypted default without --passphrase** |
 | **Trusted setup ceremony** | **High** | **No multi-party coordination, deterministic seed risk** |
 | **redb persistence** | **Low** | **Production-quality redb with ACID transactions (replaced sled)** |
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

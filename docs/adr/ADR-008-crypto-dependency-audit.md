@@ -1,4 +1,7 @@
 # ADR-008: Cryptographic Dependency Audit
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Accepted
 **Date**: 2026-03-04
@@ -178,3 +181,7 @@ Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementEr
 4. **Future sprint**: Consider switching from uncompressed to compressed ark-serialize for reduced proof wire size.
 5. **Ongoing**: Subscribe to RustSec advisories for all crypto crates; integrate `cargo audit` into CI when available.
 6. **Ongoing**: Monitor NIST for updates to CRYSTALS-Dilithium standard (FIPS 204) and watch for `pqc_dilithium` crate updates.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

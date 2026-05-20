@@ -1,4 +1,7 @@
 # ADR-017: GossipSub Peer Scoring Thresholds
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -63,3 +66,7 @@ Manually maintain lists of allowed and denied peers. Provides absolute control b
 - Chose graduated scoring over binary lists for self-healing capability
 - Penalty weights are asymmetric (heavier for invalid messages than for delivery failures) to prioritize network integrity
 - Decay interval of 1 minute provides fast recovery without erasing recent behavior too quickly
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,7 @@
 # ADR-015: Leader Selection in Consensus Loop
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -58,3 +61,7 @@ Use a commit-reveal scheme (like Ethereum's RANDAO) to generate randomness for l
 - Chose VRF over RANDAO for single-round determinism without commit-reveal latency
 - Chose stake-weighted over round-robin for economic fairness
 - Mempool with bounded size trades potential transaction drops for memory safety
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

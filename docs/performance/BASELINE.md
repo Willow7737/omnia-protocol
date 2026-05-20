@@ -1,4 +1,7 @@
 # Omnia Protocol — Performance Baseline
+> 🎯 Audience: Performance Engineers
+> 🔗 Context: Part of the performance documentation section
+> 📅 Last Updated: 2026-05-20
 
 > **Status**: Phase 5 — Real benchmark numbers captured.
 > **Last Updated**: 2026-05-19
@@ -128,3 +131,7 @@ To reach higher throughput, consider:
 | Date | Test | Throughput | Notes |
 |------|------|-----------|-------|
 | Phase 5 (2026-05-19) | Load test, single-node, release build | ~527 events/sec peak | First real benchmark capture |
+
+---
+🔙 **Back**: [Docs](../) | 🔄 **Related**: [Benchmarks](../reference/benchmark-gates.md)
+🚀 **Next**: [Benchmark Gates](../reference/benchmark-gates.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

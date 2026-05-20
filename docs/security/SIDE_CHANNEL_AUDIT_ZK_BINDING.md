@@ -1,4 +1,7 @@
 # Side-Channel Audit — ZK and Binding Crates
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the security documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version**: 1.0
 **Date**: 2026-05-19
@@ -155,3 +158,7 @@ fn test_poseidon_constant_time() {
     );
 }
 ```
+
+---
+🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
+🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

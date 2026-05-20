@@ -1,4 +1,7 @@
-# Omnia Protocol — Operations Guide
+# CLI and REST API Reference
+> 🎯 Audience: Operators
+> 🔗 Context: Node CLI subcommands and REST API endpoint reference
+> 📅 Last Updated: 2026-05-20
 
 **Version:** v4.0.0
 **Last Updated:** 2026-03-05
@@ -128,3 +131,7 @@ systemctl start omnia-node
 ```
 
 **Warning:** Without backup or snapshot restoration, all slashing state and nonce tracking will be lost. Validators with accumulated slash points would effectively be "reset" to zero offenses. Nonce replay protection would also be lost, potentially allowing replay of previously processed operations.
+
+---
+🔙 **Back**: [Operations Index](./) | 🔄 **Related**: [Validator Setup](./validator-setup.md)
+🚀 **Next**: [Runbook](./runbook.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

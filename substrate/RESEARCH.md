@@ -1,6 +1,6 @@
 # 🧪 Layer 1: The Substrate — Research Document
 
-[← Back to Architecture](../ARCHITECTURE.md)
+[← Back to Architecture](../docs/architecture/full-spec.md)
 
 ## Comparative Analysis of Causal Graph Consensus Implementations
 

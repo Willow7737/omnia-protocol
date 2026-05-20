@@ -327,10 +327,10 @@ AI agents can currently have identities on the network with these capabilities. 
 ### Q: I have a question not answered here
 
 **A:**
-- Check the documentation: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Check the documentation: [ARCHITECTURE.md](../architecture/full-spec.md)
 - Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
-- Open an issue: [GitHub Issues](https://github.com/Willow7737/omnia-protocol/issues)
-- Start a discussion: [GitHub Discussions](https://github.com/Willow7737/omnia-protocol/discussions)
+- Open an issue: [GitHub Issues](issues)
+- Start a discussion: [GitHub Discussions](discussions)
 
 ---
 🔙 **Back**: [use-cases/](./) | 🔄 **Related**: [governance.md](./governance.md)  

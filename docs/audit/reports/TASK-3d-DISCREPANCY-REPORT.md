@@ -1,4 +1,7 @@
 # Task 3-d Discrepancy Report: Node/Ops/Monitoring/FV/Audit/ADRs
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Auditor:** Technical Documentation Auditor (Task 3-d)
 **Date:** 2026-03-05
@@ -156,3 +159,7 @@
 | 9 | Version wrong | "Version: 2.0" | Should be v4.0.0 |
 | 10 | Missing Swagger/OpenAPI | Not mentioned | `utoipa` + `utoipa-swagger-ui` provide interactive API docs at `/swagger-ui` |
 | 11 | Missing Docker deployment | Not mentioned | Dockerfile + docker-compose with 5-node testnet + monitoring stack |
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](../ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](../SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../../reference/blueprint-reference.md)
