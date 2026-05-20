@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.40](https://github.com/Willow7737/omnia-protocol/compare/v0.1.39...v0.1.40) (2026-05-20)
+
+
+### Documentation
+
+* consolidate & eliminate duplication ([63beef3](https://github.com/Willow7737/omnia-protocol/commit/63beef33fa739ef4fec7d6dc28d1d2eefcae31fc))
+* consolidate & eliminate duplication ([8c6a2b5](https://github.com/Willow7737/omnia-protocol/commit/8c6a2b5e758d95ab9ee65832ab969ed3e7fd7af8))
+
 ## [0.1.39](compare/v0.1.38...v0.1.39) (2026-05-20)
 
 
