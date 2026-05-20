@@ -58,4 +58,4 @@ library_benchmark_group!(
     benchmarks = bench_vector_clock_merge_100, bench_event_validate, bench_causal_graph_insert
 );
 
-main!(library_benchmark_groups = (hot_path_group));
+main!(library_benchmark_groups = hot_path_group);

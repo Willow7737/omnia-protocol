@@ -111,8 +111,8 @@ pub struct SlashingUndoRecord {
 /// # Example
 ///
 /// ```
-/// use omnia_substrate::slashing_undo::{SlashingUndoManager, SlashingUndoRequest};
-/// use omnia_substrate::slashing::{SlashingEngine, SlashOffense};
+/// use omnia_consensus::slashing_undo::{SlashingUndoManager, SlashingUndoRequest};
+/// use omnia_consensus::slashing::{SlashingEngine, SlashOffense};
 ///
 /// let mut slashing = SlashingEngine::new_in_memory(500, 2000);
 /// let mut undo_mgr = SlashingUndoManager::new();

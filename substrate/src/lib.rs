@@ -21,7 +21,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
-#![deprecated(since = "0.2.0", note = "Use omnia-primitives, omnia-consensus, omnia-crypto, omnia-network, omnia-adapters directly")]
+#![deprecated(
+    since = "0.2.0",
+    note = "Use omnia-primitives, omnia-consensus, omnia-crypto, omnia-network, omnia-adapters directly"
+)]
 
 pub mod blake3_domain;
 #[cfg(feature = "bls")]
@@ -67,7 +70,10 @@ pub use bls::{
 pub use causal_graph::{
     CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
 };
-pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer};
+pub use consensus::{
+    ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine,
+    RoundTimer,
+};
 pub use consensus_store::{
     ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
     RedbConsensusStore,

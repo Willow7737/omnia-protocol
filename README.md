@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="actions/workflows/ci.yml">
-    <img src="actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  <a href="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml">
+    <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
   <img src="https://img.shields.io/badge/Tests-300%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
