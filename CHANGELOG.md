@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.36](https://github.com/Willow7737/omnia-protocol/compare/v0.1.35...v0.1.36) (2026-05-20)
+
+
+### Bug Fixes
+
+* **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([93c0d29](https://github.com/Willow7737/omnia-protocol/commit/93c0d2963e966752e1c0a7f24adba5600c419048))
+* **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([0edae16](https://github.com/Willow7737/omnia-protocol/commit/0edae16326405b0296f219afcc8cf8effdb8175f))
+
 ## [0.1.35](https://github.com/Willow7737/omnia-protocol/compare/v0.1.34...v0.1.35) (2026-05-19)
 
 
