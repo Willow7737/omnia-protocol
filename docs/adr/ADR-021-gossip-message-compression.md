@@ -1,4 +1,7 @@
 # ADR-021: Gossip Message Compression
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -58,3 +61,7 @@ Zstandard provides the best compression ratios, especially at higher compression
 - Chose Snappy over zstd for lower latency at the cost of slightly worse compression
 - 256-byte threshold balances compression benefit against overhead
 - Flag byte prefix trades 1 byte per message for clean backward compatibility without version negotiation
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

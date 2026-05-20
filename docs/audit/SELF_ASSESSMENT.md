@@ -1,4 +1,7 @@
 # Omnia Protocol — Security Self-Assessment
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version:** v4.0.0
 **Date:** 2026-03-05
@@ -303,3 +306,7 @@ Based on our self-assessment, we believe the following areas would benefit most 
 8. **Redb persistence reliability** — What happens when redb databases are corrupted, disk is full, or power fails during a write? What is the blast radius? redb uses ACID transactions and a WAL, which should provide crash safety.
 9. **Key management** — The `keygen` subcommand now supports `--passphrase` for AES-256-GCM encryption, and `EncryptedKeyStore` provides encrypted storage. Is the key derivation (BLAKE3 domain-separated) robust? Should HSM integration be required for production?
 10. **Node ID derivation** — The chaos tests use `blake3(pubkey)` for node IDs, matching `Event::sign_with_keypair()`. But `NodeConfig::node_id_bytes()` uses `node_id.to_le_bytes()`. Are these consistent?
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

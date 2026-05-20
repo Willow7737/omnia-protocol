@@ -1,4 +1,7 @@
 # ADR-007: Binding Shard Interface — PhysicalShard and ProvenanceTracker
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Status**: Proposed
 **Date**: 2026-05-14
@@ -181,3 +184,7 @@ The `ShardRouter::route_cross_shard()` method deserializes the inner `ShardOp` f
 - **Negative**: State consistency between `ProvenanceTracker` and `PhysicalState` is not enforced by the type system — it relies on the `ShardRouter` calling both in sequence. A bug in the router could lead to state divergence.
 - **Negative**: The sidecar pattern means that physical operations involve two state mutations (Physical Shard + ProvenanceTracker), which doubles the risk of partial failures.
 - **Trade-off**: Using stub RF fingerprints and quantum commitments for Phase 0 means that the Binding Layer provides no real physical security until real hardware integration is complete. The stubs are deterministic placeholders that will be replaced with real measurements in later phases.
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

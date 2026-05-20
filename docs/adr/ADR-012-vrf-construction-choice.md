@@ -1,4 +1,7 @@
 # ADR-012: VRF Construction Choice
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -75,3 +78,7 @@ The V1 construction remains supported for backward compatibility but is deprecat
 - V1 simplicity preserved for existing deployments
 - V2 spec compliance available for new deployments
 - Migration timeline allows testnet validation before mainnet switch
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

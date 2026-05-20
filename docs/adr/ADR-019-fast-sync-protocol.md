@@ -1,4 +1,7 @@
 # ADR-019: Fast-Sync Protocol
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -65,3 +68,7 @@ Use a trusted external service (e.g., cloud storage) to provide snapshots. Simpl
 - Chose P2P download over external service for decentralization
 - `SyncNetwork` trait allows testing without real P2P infrastructure
 - `try_sync_or_fallback()` trades a small amount of complexity for robust startup behavior
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

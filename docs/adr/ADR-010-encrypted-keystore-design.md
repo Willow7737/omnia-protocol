@@ -1,4 +1,7 @@
 # ADR-010: Encrypted Keystore Design
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -55,3 +58,7 @@ ChaCha20-Poly1305 is a viable alternative AEAD cipher that performs better on pl
 - Chose simplicity and auditability over HSM-level security
 - Chose AES-256-GCM over ChaCha20-Poly1305 for hardware acceleration support
 - Backward compatibility adds complexity but is necessary for migration
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

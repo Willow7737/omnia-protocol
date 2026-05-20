@@ -1,4 +1,7 @@
 # ADR-009: Poseidon Hash Parameter Generation Justification
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 Accepted
@@ -25,3 +28,7 @@ We justify this deviation on the following grounds:
 ## References
 - Grassi, L., Khovratovich, D., Rechberger, C., Roy, A., & Schofnegger, M. (2021). Poseidon: A New Hash Function for Zero-Knowledge Proof Systems. USENIX Security.
 - Cauchy MDS matrix generation: https://github.com/arkworks-rs/algebra
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

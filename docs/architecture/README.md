@@ -38,7 +38,9 @@ Omnia Protocol is a five-layer distributed system designed to enable trustless c
 | [trait-boundaries.md](trait-boundaries.md) | Cross-cutting | EventProcessor, SettlementLayer, Shard trait contracts, ADRs 001–007 |
 | [pipeline-design.md](pipeline-design.md) | Cross-cutting | Consensus pipeline, mempool, leader selection, queue invariants |
 | [crdt-convergence.md](crdt-convergence.md) | Cross-cutting | CRDT convergence proofs for GCounter, OrSet, LWWRegister |
-| [vector-clock-reconciliation.md](vector-clock-reconciliation.md) | Cross-cutting | Vector clock reconciliation strategy, partition recovery |
+| [vector-clock-reconciliation.md](vector-clock-reconciliation.md) | Vector clock reconciliation strategy |
+| [consensus-queue.md](consensus-queue.md) | Consensus queue invariants |
+| [full-spec.md](full-spec.md) | Comprehensive architecture specification | | Consensus queue invariants | | Cross-cutting | Vector clock reconciliation strategy, partition recovery |
 
 ## Workspace Crates
 

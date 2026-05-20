@@ -1,4 +1,7 @@
 # Side-Channel Resistance Audit
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the security documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Date:** 2026-05-16
 **Auditor:** Automated + Manual Review (Task 3-C)
@@ -508,3 +511,7 @@ future secret-handling code in the binding crate.
 5. **Future work**: Implement `ConstantTimeEq` directly on `EventId`,
    `NodeId`, and `PqPublicKey` type aliases/newtypes, so that `==`
    automatically uses constant-time comparison.
+
+---
+🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
+🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

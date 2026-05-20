@@ -1,4 +1,7 @@
 # Omnia Protocol — External Audit Package
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the audit documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version**: 1.0
 **Prepared**: 2026-05-19
@@ -181,3 +184,7 @@ We request the following from the audit firm:
 5. **Remediation Plan** — Prioritized list of required changes before mainnet launch
 
 Use the findings template at `docs/audit/AUDIT_FINDINGS_TEMPLATE.md` for consistent formatting.
+
+---
+🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
+🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

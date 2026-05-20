@@ -11,11 +11,12 @@ Welcome to the Omnia Protocol documentation hub. This index provides structured 
 
 | If you are... | Start Here | Next Step |
 |---------------|------------|-----------|
-| 🌱 New to Omnia | [docs/use-cases/](use-cases/) | [Quickstart](#quick-start) |
-| 💻 Contributor | [CONTRIBUTING.md](../CONTRIBUTING.md) | [docs/architecture/](architecture/) |
-| 🏗️ Systems Architect | [docs/reference/blueprint-reference.md](reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](architecture/trait-boundaries.md) |
-| 📦 Validator Operator | [docs/building/feature-matrix.md](building/feature-matrix.md) | [docs/operations/validator-setup.md](operations/validator-setup.md) |
-| 📊 Performance Engineer | [docs/reference/benchmark-gates.md](reference/benchmark-gates.md) | [docs/architecture/pipeline-design.md](architecture/pipeline-design.md) |
+| 🌱 New to Omnia | [use-cases/](use-cases/) | [Quickstart](#quick-start) |
+| 💻 Contributor | [CONTRIBUTING.md](../CONTRIBUTING.md) | [architecture/](architecture/) |
+| 🏗️ Systems Architect | [reference/blueprint-reference.md](reference/blueprint-reference.md) | [architecture/trait-boundaries.md](architecture/trait-boundaries.md) |
+| 📦 Validator Operator | [building/feature-matrix.md](building/feature-matrix.md) | [operations/validator-setup.md](operations/validator-setup.md) |
+| 📊 Performance Engineer | [reference/benchmark-gates.md](reference/benchmark-gates.md) | [architecture/pipeline-design.md](architecture/pipeline-design.md) |
+| 🔒 Security Researcher | [reference/security-audit.md](reference/security-audit.md) | [reference/crypto-migration.md](reference/crypto-migration.md) |
 
 ---
 
@@ -49,6 +50,8 @@ Deep technical documentation on the protocol's layered architecture, trait contr
 | [pipeline-design.md](architecture/pipeline-design.md) | Consensus pipeline, mempool, leader selection |
 | [crdt-convergence.md](architecture/crdt-convergence.md) | CRDT convergence proofs |
 | [vector-clock-reconciliation.md](architecture/vector-clock-reconciliation.md) | Vector clock reconciliation strategy |
+| [consensus-queue.md](architecture/consensus-queue.md) | Consensus queue invariants and O(new_events) processing |
+| [full-spec.md](architecture/full-spec.md) | Comprehensive architecture specification (all layers) |
 
 ### [building/](building/) — Feature Profiles, Cross-Compilation, Binary Optimization
 
@@ -73,10 +76,11 @@ Operational runbooks and deployment guides for running Omnia nodes.
 | [deployment.md](operations/deployment.md) | Deployment procedures — Docker, Kubernetes |
 | [runbook.md](operations/runbook.md) | Operations runbook — startup, key rotation, slashing, partition recovery |
 | [feature-flags.md](operations/feature-flags.md) | Feature flag reference |
+| [cli-and-api.md](operations/cli-and-api.md) | CLI subcommands and REST API endpoint reference |
 
 ### [reference/](reference/) — Roadmap, Benchmarks, Blueprint, Metrics Glossary
 
-Reference documentation including roadmaps, benchmark data, and policy documents.
+Reference documentation including roadmaps, benchmark data, policy documents, and phase reports.
 
 | Document | Description |
 |----------|-------------|
@@ -89,6 +93,19 @@ Reference documentation including roadmaps, benchmark data, and policy documents
 | [security-audit.md](reference/security-audit.md) | Security audit package — findings, validated audits |
 | [dependency-policy.md](reference/dependency-policy.md) | Dependency policy — pinning, audits, exemptions |
 | [crypto-migration.md](reference/crypto-migration.md) | Cryptographic migration playbook |
+| [economic-analysis.md](reference/economic-analysis.md) | Economic parameter analysis for mainnet readiness |
+| [implementation-spec.md](reference/implementation-spec.md) | Protocol implementation specifications |
+| [phase-0-findings.md](reference/phase-0-findings.md) | Phase 0 audit findings |
+| [phase-0-validated-audit.md](reference/phase-0-validated-audit.md) | Phase 0 validated audit results |
+| [phase-1-summary.md](reference/phase-1-summary.md) | Phase 1 summary |
+| [phase-2-findings.md](reference/phase-2-findings.md) | Phase 2 audit findings |
+| [phase-2-summary.md](reference/phase-2-summary.md) | Phase 2 summary |
+| [phase-3-summary.md](reference/phase-3-summary.md) | Phase 3 summary |
+| [phase-4-summary.md](reference/phase-4-summary.md) | Phase 4 summary |
+| [phase-5-summary.md](reference/phase-5-summary.md) | Phase 5 summary |
+| [project-dashboard.md](reference/project-dashboard.md) | Project dashboard — health, status, risks |
+| [status.md](reference/status.md) | Requirements and status tracking |
+| [security-bounty.md](reference/security-bounty.md) | Security bounty program |
 
 ### [use-cases/](use-cases/) — Real-World Scenarios, Phase Alignment, User Impact
 
@@ -102,6 +119,15 @@ Use case documentation and user-facing guides.
 | [faq.md](use-cases/faq.md) | Frequently asked questions |
 | [governance.md](use-cases/governance.md) | Governance system — voting, treasury, reputation |
 
+### Additional Sections
+
+| Section | Description |
+|---------|-------------|
+| [adr/](adr/) | Architecture Decision Records (ADR-001 through ADR-021) |
+| [audit/](audit/) | Security audit reports, attack surface, and self-assessment |
+| [security/](security/) | Threat model and side-channel audit documentation |
+| [performance/](performance/) | Performance baseline measurements |
+
 ---
 
 ## 🔗 Key Root Documents
@@ -109,11 +135,11 @@ Use case documentation and user-facing guides.
 | Document | Description |
 |----------|-------------|
 | [README.md](../README.md) | Project landing page with workspace overview |
-| [ARCHITECTURE.md](../ARCHITECTURE.md) | Architecture documentation (legacy, being superseded by docs/architecture/) |
+| [ARCHITECTURE.md](architecture/full-spec.md) | Architecture overview (links to docs/architecture/) |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution guidelines |
 | [SECURITY.md](../SECURITY.md) | Security policy and reporting |
 | [CHANGELOG.md](../CHANGELOG.md) | Version changelog |
 
 ---
-🔙 **Back**: [README.md](../) | 🔄 **Related**: [ARCHITECTURE.md](../ARCHITECTURE.md)
+🔙 **Back**: [README.md](../) | 🔄 **Related**: [ARCHITECTURE.md](architecture/full-spec.md)
 🚀 **Next**: [architecture/](architecture/) | 📜 **Source of Truth**: [Restructuring Blueprint](reference/blueprint-reference.md)

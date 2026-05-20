@@ -1,4 +1,7 @@
 # ADR-018: Consensus State Persistence
+> 🎯 Audience: Architects
+> 🔗 Context: Part of the adr documentation section
+> 📅 Last Updated: 2026-05-20
 
 ## Status
 
@@ -62,3 +65,7 @@ Implement a custom binary serialization format with `std::fs` writes. Maximum co
 - Chose redb over custom format for ACID guarantees
 - `load_or_new()` pattern trades a small amount of startup complexity for robust crash recovery
 - Per-round persistence trades I/O overhead for minimal data loss window
+
+---
+🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
+🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

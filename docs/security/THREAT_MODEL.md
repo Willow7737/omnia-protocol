@@ -1,4 +1,7 @@
 # Omnia Protocol — Threat Model
+> 🎯 Audience: Security Researchers
+> 🔗 Context: Part of the security documentation section
+> 📅 Last Updated: 2026-05-20
 
 **Version**: 4.0.0
 **Date**: 2026-05-16
@@ -570,3 +573,7 @@ Spoofing attacks involve an adversary pretending to be another entity — a node
 7. **MEDIUM — Strengthen `links_to()` verification**: Verify cryptographic embedding of previous commitment hash.
 8. **MEDIUM — Verify rotation authorization signatures**: Add cryptographic verification in `PqcKeyRotationManager`.
 9. **MEDIUM — ZK proving DoS protection**: Add circuit size limits and proving timeouts.
+
+---
+🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
+🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)
