@@ -14,7 +14,7 @@ omnia-crypto = { path = "../omnia-crypto" }
 omnia-consensus = { path = "../omnia-consensus" }
 # ZK deps (feature-gated: arkworks)
 ark-relations = { version = "0.4", optional = true }
-ark-r1cs-std = { version = "0.4", optional = true }
+ark-r1cs-std = { version = "0.6", optional = true }
 ark-groth16 = { version = "0.4", optional = true }
 ark-snark = { version = "0.4", optional = true }
 ark-bn254 = { version = "0.4", optional = true }
