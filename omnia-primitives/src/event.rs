@@ -889,14 +889,14 @@ mod tests {
     #[test]
     fn test_circular_parent_reference_error_variant() {
         let err = EventValidationError::CircularParentReference;
-        assert_eq!(format!("{}", err), "Event parent references form a cycle");
+        assert_eq!(format!("{err}"), "Event parent references form a cycle");
     }
 
     /// Test that the new MissingParent error variant exists and is constructible.
     #[test]
     fn test_missing_parent_error_variant() {
         let err = EventValidationError::MissingParent;
-        assert_eq!(format!("{}", err), "Event references a non-existent parent");
+        assert_eq!(format!("{err}"), "Event references a non-existent parent");
     }
 
     /// Test that the new ZeroAmount error variant exists and is constructible.
@@ -904,7 +904,7 @@ mod tests {
     fn test_zero_amount_error_variant() {
         let err = EventValidationError::ZeroAmount;
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "Event has obviously invalid data (zero amount)"
         );
     }
@@ -972,8 +972,7 @@ mod tests {
                 result,
                 Err(EventValidationError::CreatorPubkeyMismatch { .. })
             ),
-            "Expected CreatorPubkeyMismatch, got {:?}",
-            result
+            "Expected CreatorPubkeyMismatch, got {result:?}"
         );
     }
 
@@ -1029,8 +1028,7 @@ mod tests {
         let result = event.validate();
         assert!(
             result.is_ok(),
-            "Payload at exactly MAX_PAYLOAD_SIZE should accept, got {:?}",
-            result
+            "Payload at exactly MAX_PAYLOAD_SIZE should accept, got {result:?}"
         );
     }
 
@@ -1048,8 +1046,7 @@ mod tests {
         let result = event.validate();
         assert!(
             matches!(result, Err(EventValidationError::PayloadTooLarge { size, max }) if size == MAX_PAYLOAD_SIZE + 1 && max == MAX_PAYLOAD_SIZE),
-            "Expected PayloadTooLarge, got {:?}",
-            result
+            "Expected PayloadTooLarge, got {result:?}"
         );
     }
 
@@ -1060,7 +1057,7 @@ mod tests {
             claimed: "aa".to_string(),
             derived: "bb".to_string(),
         };
-        let msg = format!("{}", err);
+        let msg = format!("{err}");
         assert!(
             msg.contains("aa"),
             "Error message should contain claimed value"
@@ -1078,7 +1075,7 @@ mod tests {
             size: 2_000_000,
             max: MAX_PAYLOAD_SIZE,
         };
-        let msg = format!("{}", err);
+        let msg = format!("{err}");
         assert!(msg.contains("2000000"), "Error message should contain size");
         assert!(
             msg.contains(&MAX_PAYLOAD_SIZE.to_string()),

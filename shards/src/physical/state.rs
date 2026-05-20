@@ -50,8 +50,7 @@ impl PhysicalState {
             } => {
                 if self.provenance.contains_key(item_id) {
                     return Err(ShardError::StateConflict(format!(
-                        "Item already anchored: {:?}",
-                        item_id
+                        "Item already anchored: {item_id:?}"
                     )));
                 }
                 self.provenance.insert(

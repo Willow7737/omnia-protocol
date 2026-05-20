@@ -161,7 +161,7 @@ impl NodeConfig {
         }
         match self.log_level.as_str() {
             "trace" | "debug" | "info" | "warn" | "error" => {}
-            other => anyhow::bail!("invalid log_level: '{}'", other),
+            other => anyhow::bail!("invalid log_level: '{other}'"),
         }
         Ok(())
     }

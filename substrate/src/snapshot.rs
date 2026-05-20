@@ -285,7 +285,7 @@ mod tests {
         if let Err(SnapshotError::IntegrityCheckFailed { .. }) = result {
             // expected
         } else {
-            panic!("expected IntegrityCheckFailed, got {:?}", result);
+            panic!("expected IntegrityCheckFailed, got {result:?}");
         }
     }
 

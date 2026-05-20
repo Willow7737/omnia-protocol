@@ -105,8 +105,7 @@ fn test_multi_node_bft_finality() {
     for (i, &count) in committed_counts.iter().enumerate() {
         assert_eq!(
             count, first,
-            "Node {} committed {} events, expected {}",
-            i, count, first
+            "Node {i} committed {count} events, expected {first}"
         );
     }
 }
@@ -175,8 +174,7 @@ fn test_bft_safety_with_byzantine_node() {
     for (i, &count) in committed_counts.iter().enumerate() {
         assert_eq!(
             count, first,
-            "Honest node {} committed {} events, expected {}",
-            i, count, first
+            "Honest node {i} committed {count} events, expected {first}"
         );
     }
 }
@@ -222,7 +220,7 @@ fn test_consensus_progress_with_minority_faults() {
             let event = if self_parents[node_idx].is_none() {
                 Event::genesis(
                     creator,
-                    format!("round-{}-node-{}", round, node_idx).into_bytes(),
+                    format!("round-{round}-node-{node_idx}").into_bytes(),
                 )
             } else {
                 Event::new(
@@ -231,7 +229,7 @@ fn test_consensus_progress_with_minority_faults() {
                     vector_clocks[node_idx].clone(),
                     self_parents[node_idx],
                     other_parent,
-                    format!("round-{}-node-{}", round, node_idx).into_bytes(),
+                    format!("round-{round}-node-{node_idx}").into_bytes(),
                 )
             };
 
@@ -260,8 +258,7 @@ fn test_consensus_progress_with_minority_faults() {
     for (i, engine) in engines.iter().enumerate() {
         assert!(
             engine.committed_count() > 0,
-            "Honest node {} should have committed events, got 0",
-            i
+            "Honest node {i} should have committed events, got 0"
         );
     }
 
@@ -271,8 +268,7 @@ fn test_consensus_progress_with_minority_faults() {
     for (i, &count) in committed_counts.iter().enumerate() {
         assert_eq!(
             count, first,
-            "Honest node {} committed {} events, expected {}",
-            i, count, first
+            "Honest node {i} committed {count} events, expected {first}"
         );
     }
 }

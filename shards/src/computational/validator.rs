@@ -17,8 +17,7 @@ impl ComputationalValidator {
             ComputationalOp::SubmitTask { task_id, .. } => {
                 if state.tasks.contains_key(task_id) {
                     return Err(ShardError::StateConflict(format!(
-                        "Task already exists: {:?}",
-                        task_id
+                        "Task already exists: {task_id:?}"
                     )));
                 }
                 Ok(())

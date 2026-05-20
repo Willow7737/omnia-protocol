@@ -31,7 +31,7 @@ static DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn temp_dir(prefix: &str) -> PathBuf {
     let count = DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = tempfile::tempdir().expect("failed to create temp dir");
-    let path = dir.path().join(format!("{}-{}.redb", prefix, count));
+    let path = dir.path().join(format!("{prefix}-{count}.redb"));
     // Leak the TempDir so it is not cleaned up while the test uses it.
     // The OS will reclaim on process exit.
     std::mem::forget(dir);
@@ -113,7 +113,7 @@ fn test_corrupted_redb_data_starts_fresh() {
                     "Serialization error message should not be empty"
                 );
             }
-            other => panic!("Expected Serialization error, got: {:?}", other),
+            other => panic!("Expected Serialization error, got: {other:?}"),
         }
     }
 }

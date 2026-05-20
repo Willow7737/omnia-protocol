@@ -42,13 +42,11 @@ use axum::Router;
 #[cfg(feature = "metrics")]
 use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
-use utoipa::OpenApi;
 #[cfg(feature = "swagger-ui")]
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api;
 use crate::api::auth::{self as api_auth, default_cors_layer, RateLimiter};
-use crate::api::ApiDoc;
 use crate::state::AppState;
 
 /// Build the complete HTTP router with all routes, CORS, and rate limiting.

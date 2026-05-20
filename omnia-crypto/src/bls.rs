@@ -254,11 +254,11 @@ impl BlsPublicKey {
         }
 
         let pk = BlstPublicKey::from_bytes(bytes)
-            .map_err(|e| BlsError::InvalidPublicKey(format!("{:?}", e)))?;
+            .map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
 
         // Validate the public key (group check)
         pk.validate()
-            .map_err(|e| BlsError::InvalidPublicKey(format!("validation failed: {:?}", e)))?;
+            .map_err(|e| BlsError::InvalidPublicKey(format!("validation failed: {e:?}")))?;
 
         Ok(BlsPublicKey(bytes.to_vec()))
     }
@@ -300,10 +300,10 @@ impl BlsPublicKey {
     /// ```
     pub fn verify(&self, message: &[u8], signature: &BlsSignature) -> Result<(), BlsError> {
         let pk = BlstPublicKey::from_bytes(&self.0)
-            .map_err(|e| BlsError::InvalidPublicKey(format!("{:?}", e)))?;
+            .map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
 
         let sig = BlstSignature::from_bytes(&signature.0)
-            .map_err(|e| BlsError::InvalidSignature(format!("{:?}", e)))?;
+            .map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
 
         let result = sig.verify(true, message, BLS_DST, &[], &pk, false);
 
@@ -315,8 +315,7 @@ impl BlsPublicKey {
 
     /// Convert to the underlying blst public key type.
     fn to_blst(&self) -> Result<BlstPublicKey, BlsError> {
-        BlstPublicKey::from_bytes(&self.0)
-            .map_err(|e| BlsError::InvalidPublicKey(format!("{:?}", e)))
+        BlstPublicKey::from_bytes(&self.0).map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))
     }
 }
 
@@ -342,7 +341,7 @@ impl BlsSignature {
 
         // Validate by attempting to deserialize
         let _sig = BlstSignature::from_bytes(bytes)
-            .map_err(|e| BlsError::InvalidSignature(format!("{:?}", e)))?;
+            .map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
 
         Ok(BlsSignature(bytes.to_vec()))
     }
@@ -358,8 +357,7 @@ impl BlsSignature {
 
     /// Convert to the underlying blst signature type.
     fn to_blst(&self) -> Result<BlstSignature, BlsError> {
-        BlstSignature::from_bytes(&self.0)
-            .map_err(|e| BlsError::InvalidSignature(format!("{:?}", e)))
+        BlstSignature::from_bytes(&self.0).map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))
     }
 }
 
@@ -452,13 +450,13 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
         .iter()
         .map(|s| s.to_blst())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {}", e)))?;
+        .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {e}")))?;
 
     // Create references for the blst aggregate function
     let sig_refs: Vec<&BlstSignature> = blst_sigs.iter().collect();
 
     let agg = AggregateSignature::aggregate(&sig_refs, false)
-        .map_err(|e| BlsError::AggregationFailed(format!("blst aggregation: {:?}", e)))?;
+        .map_err(|e| BlsError::AggregationFailed(format!("blst aggregation: {e:?}")))?;
 
     let compressed = agg.to_signature().compress();
     Ok(BlsSignature(compressed.to_vec()))
@@ -504,13 +502,13 @@ pub fn aggregate_public_keys(public_keys: &[BlsPublicKey]) -> Result<BlsPublicKe
         .iter()
         .map(|pk| pk.to_blst())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {}", e)))?;
+        .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {e}")))?;
 
     // Create references for the blst aggregate function
     let pk_refs: Vec<&BlstPublicKey> = blst_pks.iter().collect();
 
     let agg = AggregatePublicKey::aggregate(&pk_refs, false)
-        .map_err(|e| BlsError::AggregationFailed(format!("blst pk aggregation: {:?}", e)))?;
+        .map_err(|e| BlsError::AggregationFailed(format!("blst pk aggregation: {e:?}")))?;
 
     let compressed = agg.to_public_key().compress();
     Ok(BlsPublicKey(compressed.to_vec()))

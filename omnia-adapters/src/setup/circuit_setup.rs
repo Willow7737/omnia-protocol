@@ -431,7 +431,7 @@ mod tests {
             let mut slice = g1_bytes.as_slice();
             let g1_point = ark_bn254::G1Affine::deserialize_uncompressed(&mut slice)
                 .expect("G1 deserialization failed");
-            assert!(!g1_point.is_zero(), "G1 power {} is identity", i);
+            assert!(!g1_point.is_zero(), "G1 power {i} is identity");
         }
 
         // All G2 powers should be non-identity
@@ -439,7 +439,7 @@ mod tests {
             let mut slice = g2_bytes.as_slice();
             let g2_point = ark_bn254::G2Affine::deserialize_uncompressed(&mut slice)
                 .expect("G2 deserialization failed");
-            assert!(!g2_point.is_zero(), "G2 power {} is identity", i);
+            assert!(!g2_point.is_zero(), "G2 power {i} is identity");
         }
 
         // 3. Derive circuit keys from the SRS

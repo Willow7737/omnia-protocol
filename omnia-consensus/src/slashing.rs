@@ -1918,6 +1918,29 @@ impl SlashingEngine {
     }
 }
 
+// ── SlashingBackend implementation ──────────────────────────────────
+
+impl crate::SlashingBackend for SlashingEngine {
+    fn is_slashed(&self, node: &NodeId) -> bool {
+        SlashingEngine::is_slashed(self, node)
+    }
+
+    fn record_offense(&mut self, node: NodeId, offense: SlashOffense) -> SlashOutcome {
+        SlashingEngine::record_offense(self, node, offense)
+    }
+
+    fn register_validator(&mut self, node: NodeId, stake: u64) {
+        SlashingEngine::register_validator(self, node, stake)
+    }
+}
+
+/// Type alias for the default slashing backend.
+///
+/// This wraps the existing [`SlashingEngine`] as the canonical
+/// implementation of [`SlashingBackend`]. Consumers that do not
+/// need a custom slashing backend can use this type directly.
+pub type DefaultSlashingBackend = SlashingEngine;
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -3053,26 +3076,3 @@ mod tests {
         assert_eq!(SlashingEngine::compute_burn_amount(999, 1.0), 9); // 999 * 0.01 = 9.99 → 9
     }
 }
-
-// ── SlashingBackend implementation ──────────────────────────────────
-
-impl crate::SlashingBackend for SlashingEngine {
-    fn is_slashed(&self, node: &NodeId) -> bool {
-        SlashingEngine::is_slashed(self, node)
-    }
-
-    fn record_offense(&mut self, node: NodeId, offense: SlashOffense) -> SlashOutcome {
-        SlashingEngine::record_offense(self, node, offense)
-    }
-
-    fn register_validator(&mut self, node: NodeId, stake: u64) {
-        SlashingEngine::register_validator(self, node, stake)
-    }
-}
-
-/// Type alias for the default slashing backend.
-///
-/// This wraps the existing [`SlashingEngine`] as the canonical
-/// implementation of [`SlashingBackend`]. Consumers that do not
-/// need a custom slashing backend can use this type directly.
-pub type DefaultSlashingBackend = SlashingEngine;

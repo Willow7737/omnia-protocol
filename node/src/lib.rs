@@ -14,6 +14,10 @@
 #![deny(clippy::unwrap_used)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+// omnia-substrate is deprecated but omnia-node still uses its Substrate
+// runtime and re-exported types extensively. Allow deprecated until the
+// node is migrated to use the split crates directly.
+#![allow(deprecated)]
 
 pub mod api;
 pub mod config;

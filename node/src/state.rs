@@ -4,6 +4,11 @@
 //! all HTTP handlers via `axum::extract::State`, and the [`NodeMetrics`]
 //! struct that tracks Prometheus counters and gauges.
 
+// omnia-substrate is deprecated but omnia-node still uses its Substrate
+// runtime and SlashingEngine types. Allow deprecated at crate level.
+use omnia_substrate::SlashingEngine;
+use omnia_substrate::Substrate;
+
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -16,8 +21,6 @@ use tokio::sync::{Mutex, RwLock};
 
 use omnia_economics::EconomicsState;
 use omnia_shards::ShardRouter;
-use omnia_substrate::SlashingEngine;
-use omnia_substrate::Substrate;
 
 use omnia_adapters::SettlementAdapter;
 

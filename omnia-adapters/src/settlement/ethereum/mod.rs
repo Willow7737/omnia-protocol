@@ -751,7 +751,7 @@ impl SettlementLayer for EthereumAdapter {
 
     async fn deposit(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         match self.mode {
-            EthereumMode::Simulated => Ok(format!("0xdeposit_{}_{}", l2_did, amount)),
+            EthereumMode::Simulated => Ok(format!("0xdeposit_{l2_did}_{amount}")),
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
@@ -781,7 +781,7 @@ impl SettlementLayer for EthereumAdapter {
         amount: u64,
     ) -> Result<String, SettlementError> {
         match self.mode {
-            EthereumMode::Simulated => Ok(format!("0xwithdraw_{}_{}", l2_did, amount)),
+            EthereumMode::Simulated => Ok(format!("0xwithdraw_{l2_did}_{amount}")),
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {

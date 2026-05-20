@@ -257,7 +257,7 @@ impl ChaosNetwork {
 
             // Insert into the node's own graph (graph only needs &mut graph)
             if let Err(e) = nodes[i].graph.insert(event.clone()) {
-                panic!("Genesis insert failed for node {}: {e}", i);
+                panic!("Genesis insert failed for node {i}: {e}");
             }
 
             // Track state — use event.creator (which is blake3(pubkey) after signing)
@@ -345,10 +345,10 @@ impl ChaosNetwork {
     /// already crashed.
     pub fn crash_node(&mut self, id: usize) -> anyhow::Result<()> {
         if id >= self.nodes.len() {
-            return Err(anyhow::anyhow!("Node {} does not exist", id));
+            return Err(anyhow::anyhow!("Node {id} does not exist"));
         }
         if self.nodes[id].crashed {
-            return Err(anyhow::anyhow!("Node {} is already crashed", id));
+            return Err(anyhow::anyhow!("Node {id} is already crashed"));
         }
         self.nodes[id].crashed = true;
         tracing::info!(node = id, "Node crashed");
@@ -370,10 +370,10 @@ impl ChaosNetwork {
     /// not crashed.
     pub fn restart_node(&mut self, id: usize) -> anyhow::Result<()> {
         if id >= self.nodes.len() {
-            return Err(anyhow::anyhow!("Node {} does not exist", id));
+            return Err(anyhow::anyhow!("Node {id} does not exist"));
         }
         if !self.nodes[id].crashed {
-            return Err(anyhow::anyhow!("Node {} is not crashed", id));
+            return Err(anyhow::anyhow!("Node {id} is not crashed"));
         }
         self.nodes[id].crashed = false;
         tracing::info!(node = id, "Node restarted, syncing missed events");
@@ -444,10 +444,10 @@ impl ChaosNetwork {
     /// inserted into the graph.
     pub fn submit_event(&mut self, node_id: usize, payload: Vec<u8>) -> anyhow::Result<()> {
         if node_id >= self.nodes.len() {
-            return Err(anyhow::anyhow!("Node {} does not exist", node_id));
+            return Err(anyhow::anyhow!("Node {node_id} does not exist"));
         }
         if self.nodes[node_id].crashed {
-            return Err(anyhow::anyhow!("Node {} is crashed", node_id));
+            return Err(anyhow::anyhow!("Node {node_id} is crashed"));
         }
 
         // Phase 1: Create the event (immutable reads)
@@ -523,10 +523,10 @@ impl ChaosNetwork {
     /// be inserted.
     pub fn inject_event(&mut self, target_idx: usize, event: Event) -> anyhow::Result<()> {
         if target_idx >= self.nodes.len() {
-            return Err(anyhow::anyhow!("Node {} does not exist", target_idx));
+            return Err(anyhow::anyhow!("Node {target_idx} does not exist"));
         }
         if self.nodes[target_idx].crashed {
-            return Err(anyhow::anyhow!("Node {} is crashed", target_idx));
+            return Err(anyhow::anyhow!("Node {target_idx} is crashed"));
         }
 
         // Propagate any missing parents first
@@ -934,7 +934,7 @@ impl ChaosNetwork {
         self.nodes[target_idx]
             .graph
             .insert(event.clone())
-            .map_err(|e| anyhow::anyhow!("Graph insert failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Graph insert failed: {e}"))?;
 
         // Process through consensus and update tracking
         {

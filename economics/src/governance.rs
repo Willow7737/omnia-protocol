@@ -619,7 +619,7 @@ mod tests {
         // 10 eligible voters, each with weight 10 (isqrt(100))
         // total_possible_weight = 100
         for i in 0..10 {
-            gov.set_weight(&format!("voter{}", i), 100);
+            gov.set_weight(&format!("voter{i}"), 100);
         }
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
@@ -761,8 +761,7 @@ mod proptests {
             let effective = gov.effective_weight("test", epoch);
             assert!(
                 effective <= base_weight,
-                "Effective weight {} exceeds base weight {} at epoch {}",
-                effective, base_weight, epoch
+                "Effective weight {effective} exceeds base weight {base_weight} at epoch {epoch}"
             );
         }
     }

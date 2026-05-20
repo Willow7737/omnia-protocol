@@ -128,8 +128,7 @@ impl CeremonyClient {
         for (i, contribution) in transcript.contributions.iter().enumerate() {
             replay_srs.apply_contribution(contribution).map_err(|e| {
                 CeremonyClientError::VerificationFailed(format!(
-                    "Contribution {} failed verification: {}",
-                    i, e
+                    "Contribution {i} failed verification: {e}"
                 ))
             })?;
         }

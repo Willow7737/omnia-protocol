@@ -40,7 +40,7 @@ impl SettlementLayer for NoopSettlementAdapter {
     }
 
     async fn deposit(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
-        Ok(format!("noop-deposit-{}-{}", l2_did, amount))
+        Ok(format!("noop-deposit-{l2_did}-{amount}"))
     }
 
     async fn request_withdrawal(
@@ -48,7 +48,7 @@ impl SettlementLayer for NoopSettlementAdapter {
         l2_did: &str,
         amount: u64,
     ) -> Result<String, SettlementError> {
-        Ok(format!("noop-withdrawal-{}-{}", l2_did, amount))
+        Ok(format!("noop-withdrawal-{l2_did}-{amount}"))
     }
 
     async fn submit_batch(&self, _bundle: &ProofBundle) -> Result<String, SettlementError> {

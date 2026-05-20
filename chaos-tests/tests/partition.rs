@@ -32,8 +32,7 @@ fn test_partition_and_heal() {
     let committed_before = network.committed_count();
     assert!(
         committed_before > 0,
-        "Should have committed genesis events, got {}",
-        committed_before
+        "Should have committed genesis events, got {committed_before}"
     );
 
     // Create partition: {0,1} cannot communicate with {2,3}
@@ -45,16 +44,14 @@ fn test_partition_and_heal() {
             let result = network.submit_event(i, vec![0xAA]);
             assert!(
                 result.is_ok(),
-                "Node {} should be able to submit events during partition",
-                i
+                "Node {i} should be able to submit events during partition"
             );
         }
         for &i in &[2, 3] {
             let result = network.submit_event(i, vec![0xBB]);
             assert!(
                 result.is_ok(),
-                "Node {} should be able to submit events during partition",
-                i
+                "Node {i} should be able to submit events during partition"
             );
         }
     }
@@ -88,9 +85,7 @@ fn test_partition_and_heal() {
         let count = network.node_committed_count(i);
         assert!(
             count > 0,
-            "Node {} should have committed events after healing, got {}",
-            i,
-            count
+            "Node {i} should have committed events after healing, got {count}"
         );
     }
 

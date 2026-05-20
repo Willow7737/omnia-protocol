@@ -30,8 +30,7 @@ impl IdentityValidator {
             IdentityOp::UpdateDid { did, .. } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {}",
-                        did
+                        "DID not found: {did}"
                     )));
                 }
                 Ok(())
@@ -45,8 +44,7 @@ impl IdentityValidator {
                     }
                 } else {
                     return Err(ShardError::ValidationFailed(format!(
-                        "No recovery config for DID: {}",
-                        did
+                        "No recovery config for DID: {did}"
                     )));
                 }
                 Ok(())
@@ -54,8 +52,7 @@ impl IdentityValidator {
             IdentityOp::VerifyDid { did } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {}",
-                        did
+                        "DID not found: {did}"
                     )));
                 }
                 Ok(())
@@ -63,8 +60,7 @@ impl IdentityValidator {
             IdentityOp::AddAgent { did, agent } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "Owner DID not found: {}",
-                        did
+                        "Owner DID not found: {did}"
                     )));
                 }
                 if state.agent_registry.contains_key(&agent.did) {
@@ -78,8 +74,7 @@ impl IdentityValidator {
             IdentityOp::EnrollBiometric { did, .. } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {}",
-                        did
+                        "DID not found: {did}"
                     )));
                 }
                 Ok(())
@@ -87,8 +82,7 @@ impl IdentityValidator {
             IdentityOp::VerifyBiometric { did, .. } => {
                 if !state.biometric_registry.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "No biometric enrolled for DID: {}",
-                        did
+                        "No biometric enrolled for DID: {did}"
                     )));
                 }
                 Ok(())
@@ -96,8 +90,7 @@ impl IdentityValidator {
             IdentityOp::RevokeAgent { agent_did } => {
                 if !state.agent_registry.contains_key(agent_did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "Agent not found: {}",
-                        agent_did
+                        "Agent not found: {agent_did}"
                     )));
                 }
                 Ok(())
@@ -110,8 +103,7 @@ impl IdentityValidator {
             } => {
                 if !state.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {}",
-                        did
+                        "DID not found: {did}"
                     )));
                 }
                 if *threshold < 2 {

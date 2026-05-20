@@ -220,7 +220,7 @@ mod tests {
         for (i, item) in items.iter().enumerate() {
             let leaf = *blake3::hash(item).as_bytes();
             let computed = compute_root_from_proof(&leaf, &proofs[i]);
-            assert_eq!(root, computed, "proof for item {} should verify", i);
+            assert_eq!(root, computed, "proof for item {i} should verify");
         }
     }
 

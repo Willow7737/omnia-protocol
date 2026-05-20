@@ -280,8 +280,7 @@ impl PowersOfTau {
             let mut slice = g1_bytes.as_slice();
             let _g1 = G1Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
                 SetupError::InvalidContribution(format!(
-                    "G1 power {} is not a valid curve point: {}",
-                    i, e
+                    "G1 power {i} is not a valid curve point: {e}"
                 ))
             })?;
         }
@@ -291,8 +290,7 @@ impl PowersOfTau {
             let mut slice = g2_bytes.as_slice();
             let _g2 = G2Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
                 SetupError::InvalidContribution(format!(
-                    "G2 power {} is not a valid curve point: {}",
-                    i, e
+                    "G2 power {i} is not a valid curve point: {e}"
                 ))
             })?;
         }
@@ -416,14 +414,14 @@ mod tests {
         for (i, g1_bytes) in pot.g1_powers.iter().enumerate() {
             let mut slice = g1_bytes.as_slice();
             let point = G1Affine::deserialize_uncompressed(&mut slice).unwrap();
-            assert_eq!(point, g1_gen, "G1 power {} should be generator", i);
+            assert_eq!(point, g1_gen, "G1 power {i} should be generator");
         }
 
         // All G2 powers should be the generator
         for (i, g2_bytes) in pot.g2_powers.iter().enumerate() {
             let mut slice = g2_bytes.as_slice();
             let point = G2Affine::deserialize_uncompressed(&mut slice).unwrap();
-            assert_eq!(point, g2_gen, "G2 power {} should be generator", i);
+            assert_eq!(point, g2_gen, "G2 power {i} should be generator");
         }
     }
 
@@ -505,14 +503,14 @@ mod tests {
         for (i, g1_bytes) in pot.g1_powers.iter().enumerate() {
             let mut slice = g1_bytes.as_slice();
             let point = G1Affine::deserialize_uncompressed(&mut slice).unwrap();
-            assert!(!point.is_zero(), "G1 power {} should be non-identity", i);
+            assert!(!point.is_zero(), "G1 power {i} should be non-identity");
         }
 
         // All G2 powers should be non-identity after contributions
         for (i, g2_bytes) in pot.g2_powers.iter().enumerate() {
             let mut slice = g2_bytes.as_slice();
             let point = G2Affine::deserialize_uncompressed(&mut slice).unwrap();
-            assert!(!point.is_zero(), "G2 power {} should be non-identity", i);
+            assert!(!point.is_zero(), "G2 power {i} should be non-identity");
         }
     }
 }

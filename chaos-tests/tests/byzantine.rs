@@ -160,8 +160,7 @@ fn test_equivocation_detected_by_multiple_observers() {
     for observer in &[1, 2, 3] {
         assert!(
             network.is_node_slashed(*observer, &node0_id),
-            "Observer node {} should have slashed node 0 for equivocation",
-            observer
+            "Observer node {observer} should have slashed node 0 for equivocation"
         );
     }
 
@@ -298,13 +297,11 @@ fn test_repeated_liveness_violations_lead_to_slashing() {
 
     assert!(
         violation_count >= 5,
-        "Should have at least 5 liveness violations, got {}",
-        violation_count
+        "Should have at least 5 liveness violations, got {violation_count}"
     );
     assert!(
         is_slashed,
-        "Node should be slashed after {} violations with 100 points each (threshold 500)",
-        violation_count
+        "Node should be slashed after {violation_count} violations with 100 points each (threshold 500)"
     );
 
     tracing::info!(
@@ -342,8 +339,7 @@ fn test_honest_node_never_slashed() {
     for observer in 1..4 {
         assert!(
             !network.is_node_slashed(observer, &honest_node_id),
-            "Honest node should not be slashed on observer {}",
-            observer
+            "Honest node should not be slashed on observer {observer}"
         );
     }
 }

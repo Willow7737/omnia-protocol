@@ -166,7 +166,7 @@ pub fn vrf_verify(
     // Verify the signature against the input
     public_key
         .verify(input, &signature)
-        .map_err(|e| VrfError::VerificationFailed(format!("Signature verification: {}", e)))?;
+        .map_err(|e| VrfError::VerificationFailed(format!("Signature verification: {e}")))?;
 
     // Recompute the expected VRF output
     let mut preimage = Vec::new();
@@ -448,7 +448,7 @@ pub fn ecvrf_verify(
         );
     public_key
         .verify(&transcript, &signature)
-        .map_err(|e| VrfError::VerificationFailed(format!("Signature verification: {}", e)))?;
+        .map_err(|e| VrfError::VerificationFailed(format!("Signature verification: {e}")))?;
 
     // Step 5: Derive the VRF output from Gamma
     Ok(ecvrf_proof_to_hash(&proof.gamma))
@@ -805,18 +805,15 @@ mod tests {
         // Allow 500 bps (5%) tolerance for statistical variance
         assert!(
             freq_1_bps > 500 && freq_1_bps < 1500,
-            "Node 1 frequency {} bps not ~1000 bps (10%)",
-            freq_1_bps
+            "Node 1 frequency {freq_1_bps} bps not ~1000 bps (10%)"
         );
         assert!(
             freq_2_bps > 3500 && freq_2_bps < 4500,
-            "Node 2 frequency {} bps not ~4000 bps (40%)",
-            freq_2_bps
+            "Node 2 frequency {freq_2_bps} bps not ~4000 bps (40%)"
         );
         assert!(
             freq_3_bps > 4500 && freq_3_bps < 5500,
-            "Node 3 frequency {} bps not ~5000 bps (50%)",
-            freq_3_bps
+            "Node 3 frequency {freq_3_bps} bps not ~5000 bps (50%)"
         );
     }
 
@@ -964,18 +961,15 @@ mod tests {
 
         assert!(
             freq_1_bps > 500 && freq_1_bps < 1500,
-            "Node 1 V2 frequency {} bps not ~1000 bps (10%)",
-            freq_1_bps
+            "Node 1 V2 frequency {freq_1_bps} bps not ~1000 bps (10%)"
         );
         assert!(
             freq_2_bps > 3500 && freq_2_bps < 4500,
-            "Node 2 V2 frequency {} bps not ~4000 bps (40%)",
-            freq_2_bps
+            "Node 2 V2 frequency {freq_2_bps} bps not ~4000 bps (40%)"
         );
         assert!(
             freq_3_bps > 4500 && freq_3_bps < 5500,
-            "Node 3 V2 frequency {} bps not ~5000 bps (50%)",
-            freq_3_bps
+            "Node 3 V2 frequency {freq_3_bps} bps not ~5000 bps (50%)"
         );
     }
 

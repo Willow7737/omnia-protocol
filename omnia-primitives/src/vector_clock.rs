@@ -390,7 +390,7 @@ mod tests {
         let n1 = nid(1);
         let mut vc = VectorClock::new();
         vc.set(n1, 5);
-        let s = format!("{}", vc);
+        let s = format!("{vc}");
         assert!(s.contains("01"));
         assert!(s.contains(":5"));
     }
@@ -521,9 +521,7 @@ mod tests {
         // The happened_before relationship must still hold after merge
         assert!(
             merged_a.happened_before(&merged_b),
-            "happened_before not preserved after merge: {:?} vs {:?}",
-            merged_a,
-            merged_b
+            "happened_before not preserved after merge: {merged_a:?} vs {merged_b:?}"
         );
     }
 

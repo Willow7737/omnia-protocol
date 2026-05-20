@@ -113,11 +113,10 @@ fn test_zero_quota_operations_fail() {
         ShardError::InsufficientFee(msg) => {
             assert!(
                 msg.contains("Quota exceeded"),
-                "Expected 'Quota exceeded' in error, got: {}",
-                msg
+                "Expected 'Quota exceeded' in error, got: {msg}"
             );
         }
-        other => panic!("Expected InsufficientFee, got: {:?}", other),
+        other => panic!("Expected InsufficientFee, got: {other:?}"),
     }
 }
 
@@ -181,7 +180,7 @@ fn test_partial_balance_some_succeed_then_fail() {
     );
     match result.unwrap_err() {
         ShardError::InsufficientFee(_) => {}
-        other => panic!("Expected InsufficientFee, got: {:?}", other),
+        other => panic!("Expected InsufficientFee, got: {other:?}"),
     }
 }
 
@@ -281,11 +280,10 @@ fn test_cross_shard_insufficient_balance() {
         ShardError::InsufficientFee(msg) => {
             assert!(
                 msg.contains("Quota exceeded"),
-                "Expected 'Quota exceeded', got: {}",
-                msg
+                "Expected 'Quota exceeded', got: {msg}"
             );
         }
-        other => panic!("Expected InsufficientFee, got: {:?}", other),
+        other => panic!("Expected InsufficientFee, got: {other:?}"),
     }
 }
 
@@ -351,9 +349,7 @@ fn test_identity_fee_is_lower_than_financial() {
 
     assert!(
         identity_fee < financial_fee,
-        "Identity fee ({}) should be less than financial fee ({})",
-        identity_fee,
-        financial_fee
+        "Identity fee ({identity_fee}) should be less than financial fee ({financial_fee})"
     );
 }
 
@@ -383,11 +379,10 @@ fn test_unregistered_did_fails_with_insufficient_fee() {
         ShardError::InsufficientFee(msg) => {
             assert!(
                 msg.contains("Quota exceeded"),
-                "Expected 'Quota exceeded', got: {}",
-                msg
+                "Expected 'Quota exceeded', got: {msg}"
             );
         }
-        other => panic!("Expected InsufficientFee, got: {:?}", other),
+        other => panic!("Expected InsufficientFee, got: {other:?}"),
     }
 }
 

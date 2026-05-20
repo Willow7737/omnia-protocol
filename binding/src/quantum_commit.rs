@@ -663,14 +663,12 @@ mod tests {
         assert_eq!(
             keypair.encapsulation_key.len(),
             ML_KEM_768_ENCAPSULATION_KEY_SIZE,
-            "encapsulation key should be {} bytes",
-            ML_KEM_768_ENCAPSULATION_KEY_SIZE
+            "encapsulation key should be {ML_KEM_768_ENCAPSULATION_KEY_SIZE} bytes"
         );
         assert_eq!(
             keypair.decapsulation_key.len(),
             ML_KEM_768_DECAPSULATION_KEY_SIZE,
-            "decapsulation key should be {} bytes",
-            ML_KEM_768_DECAPSULATION_KEY_SIZE
+            "decapsulation key should be {ML_KEM_768_DECAPSULATION_KEY_SIZE} bytes"
         );
     }
 
@@ -713,8 +711,7 @@ mod tests {
         assert_eq!(
             ciphertext.len(),
             ML_KEM_768_CIPHERTEXT_SIZE,
-            "ciphertext should be {} bytes",
-            ML_KEM_768_CIPHERTEXT_SIZE
+            "ciphertext should be {ML_KEM_768_CIPHERTEXT_SIZE} bytes"
         );
     }
 
@@ -768,7 +765,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             KyberError::InvalidEncapsulationKey(len) => assert_eq!(len, 100),
-            other => panic!("Expected InvalidEncapsulationKey, got: {:?}", other),
+            other => panic!("Expected InvalidEncapsulationKey, got: {other:?}"),
         }
     }
 
@@ -779,7 +776,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             KyberError::InvalidDecapsulationKey(len) => assert_eq!(len, 100),
-            other => panic!("Expected InvalidDecapsulationKey, got: {:?}", other),
+            other => panic!("Expected InvalidDecapsulationKey, got: {other:?}"),
         }
     }
 
@@ -790,7 +787,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             KyberError::InvalidCiphertext(len) => assert_eq!(len, 100),
-            other => panic!("Expected InvalidCiphertext, got: {:?}", other),
+            other => panic!("Expected InvalidCiphertext, got: {other:?}"),
         }
     }
 

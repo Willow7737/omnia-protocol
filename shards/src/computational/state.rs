@@ -66,8 +66,7 @@ impl ComputationalState {
             } => {
                 if self.tasks.contains_key(task_id) {
                     return Err(ShardError::StateConflict(format!(
-                        "Task already exists: {:?}",
-                        task_id
+                        "Task already exists: {task_id:?}"
                     )));
                 }
                 self.tasks.insert(

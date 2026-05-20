@@ -110,11 +110,7 @@ async fn test_three_node_event_propagation() {
     for (i, node_arc) in network.nodes.iter().enumerate() {
         let node = node_arc.read().await;
         let graph = node.graph().await;
-        assert!(
-            graph.contains(&event_id),
-            "Node {} should have the event",
-            i
-        );
+        assert!(graph.contains(&event_id), "Node {i} should have the event");
     }
 }
 
@@ -315,20 +311,18 @@ fn test_crdt_100_percent_convergence() {
         alt2.merge(&c2);
         alt2.merge(&c1);
 
-        assert_eq!(merged.value(), expected, "Main merge failed for {}", desc);
-        assert_eq!(alt1.value(), expected, "Alt1 merge failed for {}", desc);
-        assert_eq!(alt2.value(), expected, "Alt2 merge failed for {}", desc);
+        assert_eq!(merged.value(), expected, "Main merge failed for {desc}");
+        assert_eq!(alt1.value(), expected, "Alt1 merge failed for {desc}");
+        assert_eq!(alt2.value(), expected, "Alt2 merge failed for {desc}");
         assert_eq!(
             merged.state_hash(),
             alt1.state_hash(),
-            "Hash mismatch for {}",
-            desc
+            "Hash mismatch for {desc}"
         );
         assert_eq!(
             alt1.state_hash(),
             alt2.state_hash(),
-            "Hash mismatch for {}",
-            desc
+            "Hash mismatch for {desc}"
         );
     }
 }
@@ -368,7 +362,7 @@ async fn test_network_event_processed_through_consensus() {
         let node = node_arc.read().await;
         let graph = node.graph().await;
         for id in &event_ids {
-            assert!(graph.contains(id), "Node {} missing event", i);
+            assert!(graph.contains(id), "Node {i} missing event");
         }
     }
 

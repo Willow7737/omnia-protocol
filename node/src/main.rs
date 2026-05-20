@@ -250,7 +250,7 @@ async fn main() -> Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&listen_addr)
         .await
-        .with_context(|| format!("Failed to bind HTTP server to {}", listen_addr))?;
+        .with_context(|| format!("Failed to bind HTTP server to {listen_addr}"))?;
 
     tracing::info!(listen_addr = %listen_addr, "HTTP server starting");
 
@@ -367,7 +367,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
 
     let dir = std::path::Path::new(output_dir);
     std::fs::create_dir_all(dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir))?;
+        .with_context(|| format!("Failed to create output directory: {output_dir}"))?;
 
     let keypair = generate_keypair();
     let pubkey_bytes = keypair.verifying_key().to_bytes();
@@ -375,7 +375,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
     // Write public key as hex
     let pubkey_path = dir.join("validator_pubkey.txt");
     std::fs::write(&pubkey_path, hex::encode(pubkey_bytes))
-        .with_context(|| format!("Failed to write public key to {:?}", pubkey_path))?;
+        .with_context(|| format!("Failed to write public key to {pubkey_path:?}"))?;
 
     let privkey_bytes = keypair.to_bytes();
 
@@ -393,7 +393,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
         // Encrypt: ciphertext includes the 16-byte GCM authentication tag appended
         let ciphertext = cipher
             .encrypt(nonce, privkey_bytes.as_slice())
-            .map_err(|e| anyhow::anyhow!("AES-256-GCM encryption failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("AES-256-GCM encryption failed: {e}"))?;
 
         // Build the file: magic + nonce + ciphertext+tag
         let mut file_bytes = Vec::with_capacity(10 + 12 + ciphertext.len());
@@ -403,10 +403,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
 
         let privkey_path = dir.join("validator_key.enc");
         std::fs::write(&privkey_path, &file_bytes).with_context(|| {
-            format!(
-                "Failed to write encrypted private key to {:?}",
-                privkey_path
-            )
+            format!("Failed to write encrypted private key to {privkey_path:?}")
         })?;
 
         // Set file permissions to 0600 (owner read/write only) on Unix
@@ -415,7 +412,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o600);
             std::fs::set_permissions(&privkey_path, perms)
-                .with_context(|| format!("Failed to set permissions on {:?}", privkey_path))?;
+                .with_context(|| format!("Failed to set permissions on {privkey_path:?}"))?;
         }
 
         tracing::info!(
@@ -427,12 +424,12 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
 
         println!("Validator keypair generated in {}", dir.display());
         println!("  Public key: {}", hex::encode(pubkey_bytes));
-        println!("  Private key: {:?} (AES-256-GCM encrypted)", privkey_path);
+        println!("  Private key: {privkey_path:?} (AES-256-GCM encrypted)");
     } else {
         // ---- Unencrypted path (NOT recommended for production) ----
         let privkey_path = dir.join("validator_key.bin");
         std::fs::write(&privkey_path, privkey_bytes)
-            .with_context(|| format!("Failed to write private key to {:?}", privkey_path))?;
+            .with_context(|| format!("Failed to write private key to {privkey_path:?}"))?;
 
         // Set file permissions to 0600 (owner read/write only) on Unix
         #[cfg(unix)]
@@ -440,7 +437,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
             use std::os::unix::fs::PermissionsExt;
             let perms = std::fs::Permissions::from_mode(0o600);
             std::fs::set_permissions(&privkey_path, perms)
-                .with_context(|| format!("Failed to set permissions on {:?}", privkey_path))?;
+                .with_context(|| format!("Failed to set permissions on {privkey_path:?}"))?;
         }
 
         tracing::warn!(
@@ -456,7 +453,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
         println!("║     to encrypt the key with AES-256-GCM.                  ║");
         println!("║     Unencrypted keys are NOT suitable for production.     ║");
         println!("╚══════════════════════════════════════════════════════════════╝");
-        println!("  Private key: {:?}", privkey_path);
+        println!("  Private key: {privkey_path:?}");
     }
 
     Ok(())
@@ -487,7 +484,7 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
     use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 
     let file_bytes =
-        std::fs::read(path).with_context(|| format!("Failed to read key file: {:?}", path))?;
+        std::fs::read(path).with_context(|| format!("Failed to read key file: {path:?}"))?;
 
     // Validate minimum length: magic(10) + nonce(12) + tag(16) = 38 bytes minimum
     // (ciphertext must be at least 0 bytes + 16-byte tag, but Ed25519 keypair is 64 bytes,
@@ -567,7 +564,7 @@ fn run_setup_contribute(
         .init();
 
     let mut srs = PowersOfTau::new(degree).context("Failed to initialize Powers of Tau")?;
-    println!("Powers of Tau ceremony initialized (degree={})", degree);
+    println!("Powers of Tau ceremony initialized (degree={degree})");
 
     // Parse optional seed
     let seed: Option<[u8; 32]> = seed_hex
@@ -589,10 +586,10 @@ fn run_setup_contribute(
     let transcript = srs.to_transcript();
     let tau_size = srs.g1_powers.len() + srs.g2_powers.len();
     let contribution = contribute(&transcript, tau_size, seed)
-        .map_err(|e| anyhow::anyhow!("Contribution failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Contribution failed: {e}"))?;
 
     srs.apply_contribution(&contribution)
-        .map_err(|e| anyhow::anyhow!("Failed to apply contribution: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to apply contribution: {e}"))?;
 
     println!("Contribution accepted!");
     println!(
@@ -638,12 +635,11 @@ fn run_setup_verify(degree: usize, num_contributions: usize) -> Result<()> {
         .init();
 
     println!(
-        "Verifying Powers of Tau ceremony (degree={}, contributions={})...",
-        degree, num_contributions
+        "Verifying Powers of Tau ceremony (degree={degree}, contributions={num_contributions})..."
     );
 
     let srs = run_ceremony(degree, num_contributions)
-        .map_err(|e| anyhow::anyhow!("Ceremony verification failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Ceremony verification failed: {e}"))?;
 
     println!("Ceremony verification successful!");
     println!("  Total contributions: {}", srs.contribution_count);
@@ -676,13 +672,13 @@ fn run_snapshot(output_path: &str) -> Result<()> {
     let nonces = std::collections::HashMap::new();
 
     let snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 0)
-        .map_err(|e| anyhow::anyhow!("Snapshot failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Snapshot failed: {e}"))?;
 
     snapshot
         .write_to_file(std::path::Path::new(output_path))
-        .map_err(|e| anyhow::anyhow!("Failed to write snapshot: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to write snapshot: {e}"))?;
 
-    println!("Snapshot written to {}", output_path);
+    println!("Snapshot written to {output_path}");
     println!("  Height: {}", snapshot.height);
     println!("  Event count: {}", snapshot.event_count);
     println!("  State root: {}", hex::encode(&snapshot.state_root[..8]));
@@ -704,13 +700,13 @@ fn run_restore(input_path: &str) -> Result<()> {
         .init();
 
     let snapshot = StateSnapshot::read_from_file(std::path::Path::new(input_path))
-        .map_err(|e| anyhow::anyhow!("Failed to read snapshot: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to read snapshot: {e}"))?;
 
     snapshot
         .verify()
-        .map_err(|e| anyhow::anyhow!("Snapshot integrity check failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Snapshot integrity check failed: {e}"))?;
 
-    println!("Snapshot restored from {}", input_path);
+    println!("Snapshot restored from {input_path}");
     println!("  Version: {}", snapshot.version);
     println!("  Height: {}", snapshot.height);
     println!("  Event count: {}", snapshot.event_count);
@@ -735,10 +731,10 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
         .with_target(true)
         .init();
 
-    println!("Loading genesis configuration from {}", config_path);
+    println!("Loading genesis configuration from {config_path}");
 
     let config_content = std::fs::read_to_string(config_path)
-        .with_context(|| format!("Failed to read genesis config: {}", config_path))?;
+        .with_context(|| format!("Failed to read genesis config: {config_path}"))?;
 
     let genesis_config: GenesisConfig = toml::from_str(&config_content)
         .with_context(|| "Failed to parse genesis configuration TOML")?;
@@ -748,7 +744,7 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
     println!("  Validators: {}", genesis_config.initial_validators.len());
 
     let genesis_block = generate_genesis(&genesis_config)
-        .map_err(|e| anyhow::anyhow!("Genesis generation failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Genesis generation failed: {e}"))?;
 
     println!("\nGenesis block generated successfully!");
     println!(
@@ -760,11 +756,11 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
 
     // Serialize and write
     let bytes = postcard::to_allocvec(&genesis_block)
-        .map_err(|e| anyhow::anyhow!("Serialization failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Serialization failed: {e}"))?;
     std::fs::write(output_path, &bytes)
-        .with_context(|| format!("Failed to write genesis block to {}", output_path))?;
+        .with_context(|| format!("Failed to write genesis block to {output_path}"))?;
 
-    println!("\nGenesis block written to {}", output_path);
+    println!("\nGenesis block written to {output_path}");
     println!("  Size: {} bytes", bytes.len());
 
     Ok(())
@@ -783,13 +779,13 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
         .with_target(true)
         .init();
 
-    println!("Loading genesis block from {}", block_path);
+    println!("Loading genesis block from {block_path}");
 
     let bytes = std::fs::read(block_path)
-        .with_context(|| format!("Failed to read genesis block: {}", block_path))?;
+        .with_context(|| format!("Failed to read genesis block: {block_path}"))?;
 
-    let genesis_block: GenesisBlock = postcard::from_bytes(&bytes)
-        .map_err(|e| anyhow::anyhow!("Deserialization failed: {}", e))?;
+    let genesis_block: GenesisBlock =
+        postcard::from_bytes(&bytes).map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
 
     println!("  Chain ID: {}", genesis_block.chain_id);
     println!("  Validators: {}", genesis_block.validators.len());
@@ -800,7 +796,7 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
     );
 
     validate_genesis(&genesis_block)
-        .map_err(|e| anyhow::anyhow!("Genesis validation failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Genesis validation failed: {e}"))?;
 
     println!("\nGenesis block is VALID");
     Ok(())
@@ -920,27 +916,21 @@ fn run_ceremony_serve(
     let server = CeremonyServer::new(config);
     server.start().context("Failed to start ceremony")?;
 
-    println!("Ceremony server started (degree={})", degree);
-    println!(
-        "  Min participants: {} / Max participants: {}",
-        min_participants, max_participants
-    );
+    println!("Ceremony server started (degree={degree})");
+    println!("  Min participants: {min_participants} / Max participants: {max_participants}");
 
     // Simulate contributions (in a real server, these would come over HTTP)
-    println!(
-        "\nSimulating {} participant contributions...",
-        min_participants
-    );
+    println!("\nSimulating {min_participants} participant contributions...");
     for i in 0..min_participants {
         let (transcript, tau_size) = server.get_srs_state().context("Failed to get SRS state")?;
         let mut seed = [0u8; 32];
         seed[0] = i as u8;
         seed[1] = (i >> 8) as u8;
         let contribution = contribute(&transcript, tau_size, Some(seed))
-            .map_err(|e| anyhow::anyhow!("Contribution {} failed: {}", i, e))?;
+            .map_err(|e| anyhow::anyhow!("Contribution {i} failed: {e}"))?;
         let receipt = server
             .accept_contribution(contribution)
-            .map_err(|e| anyhow::anyhow!("Accept contribution {} failed: {}", i, e))?;
+            .map_err(|e| anyhow::anyhow!("Accept contribution {i} failed: {e}"))?;
         println!(
             "  Contribution {} accepted (index={})",
             i, receipt.contribution_index
@@ -951,7 +941,7 @@ fn run_ceremony_serve(
     let circuit = omnia_adapters::circuit::RollupCircuit::empty();
     let key_pair = server
         .finalize(&circuit)
-        .map_err(|e| anyhow::anyhow!("Finalize failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Finalize failed: {e}"))?;
 
     println!("\nCeremony finalized!");
     println!("  Total contributions: {}", server.contribution_count());
@@ -968,7 +958,7 @@ fn run_ceremony_serve(
     // Export and display transcript info
     let transcript = server
         .export_transcript()
-        .map_err(|e| anyhow::anyhow!("Export transcript failed: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Export transcript failed: {e}"))?;
     println!("\nTranscript exported:");
     println!("  Contributions: {}", transcript.contribution_count);
     println!(
@@ -998,7 +988,7 @@ fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<(
         .with_target(true)
         .init();
 
-    println!("Connecting to ceremony server at {}...", server_url);
+    println!("Connecting to ceremony server at {server_url}...");
 
     // Parse optional seed
     let seed: Option<[u8; 32]> = seed_hex
@@ -1050,7 +1040,7 @@ fn run_ceremony_verify(server_url: &str) -> Result<()> {
         .with_target(true)
         .init();
 
-    println!("Fetching ceremony transcript from {}...", server_url);
+    println!("Fetching ceremony transcript from {server_url}...");
 
     // TODO: Implement HTTP client for fetching transcript from server
     // For now, this is a placeholder that demonstrates the client API

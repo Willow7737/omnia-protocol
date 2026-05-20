@@ -154,7 +154,7 @@ impl ShardRouter {
         if let Some(shard) = self.shards.get_mut(&shard_id) {
             shard.process_event(event, op)
         } else {
-            Err(ShardError::UnknownShard(format!("{}", shard_id)))
+            Err(ShardError::UnknownShard(format!("{shard_id}")))
         }
     }
 
@@ -172,7 +172,7 @@ impl ShardRouter {
         if let Some(shard) = self.shards.get_mut(&target_id) {
             shard.process_event(event, inner_op)
         } else {
-            Err(ShardError::UnknownShard(format!("{}", target_id)))
+            Err(ShardError::UnknownShard(format!("{target_id}")))
         }
     }
 
@@ -214,7 +214,7 @@ impl ShardRouter {
         }
 
         let payload = ShardPayload::from_bytes(&event.payload)
-            .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {}", e)))?;
+            .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {e}")))?;
 
         // Replay protection — check nonce
         let creator = event.creator_pubkey;
@@ -243,7 +243,7 @@ impl ShardRouter {
                     error = %e,
                     "Fee deduction failed — insufficient quota"
                 );
-                ShardError::InsufficientFee(format!("Quota exceeded: {}", e))
+                ShardError::InsufficientFee(format!("Quota exceeded: {e}"))
             })?;
         }
 

@@ -138,7 +138,7 @@ async fn main() {
             println!("Actual duration: {:?}", result.actual_duration);
         }
         Err(e) => {
-            eprintln!("Load test failed: {}", e);
+            eprintln!("Load test failed: {e}");
             std::process::exit(1);
         }
     }

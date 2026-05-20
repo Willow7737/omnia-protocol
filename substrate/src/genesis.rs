@@ -267,10 +267,10 @@ mod tests {
     fn test_validator(node_id: u64, stake: u64) -> ValidatorInfo {
         ValidatorInfo {
             node_id,
-            ed25519_public_key: format!("{:064x}", node_id),
-            dilithium_public_key: format!("{:0256x}", node_id),
+            ed25519_public_key: format!("{node_id:064x}"),
+            dilithium_public_key: format!("{node_id:0256x}"),
             initial_stake: stake,
-            network_address: format!("/ip4/127.0.0.{}/udp/4001/quic-v1", node_id),
+            network_address: format!("/ip4/127.0.0.{node_id}/udp/4001/quic-v1"),
         }
     }
 
@@ -320,7 +320,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             GenesisError::InsufficientValidators(n) => assert_eq!(n, 2),
-            other => panic!("Expected InsufficientValidators, got: {:?}", other),
+            other => panic!("Expected InsufficientValidators, got: {other:?}"),
         }
     }
 
@@ -350,7 +350,7 @@ mod tests {
                     "error should mention the duplicate ID"
                 );
             }
-            other => panic!("Expected DuplicateNodeId, got: {:?}", other),
+            other => panic!("Expected DuplicateNodeId, got: {other:?}"),
         }
     }
 
@@ -426,7 +426,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             GenesisError::ZeroStake(id) => assert_eq!(id, 2),
-            other => panic!("Expected ZeroStake, got: {:?}", other),
+            other => panic!("Expected ZeroStake, got: {other:?}"),
         }
     }
 }
