@@ -422,7 +422,7 @@ jobs:
         run: cargo llvm-cov --workspace --exclude omnia-fuzz --lcov --output-path lcov.info --ignore-run-fail
       - name: Generate coverage summary
         run: cargo llvm-cov --workspace --exclude omnia-fuzz --summary-only --ignore-run-fail 2>&1 | tee coverage-summary.txt
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v6
         with:
           files: ./lcov.info
           fail_ci_if_error: false
