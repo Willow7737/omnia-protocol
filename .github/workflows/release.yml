@@ -369,7 +369,7 @@ jobs:
           cat SHA256SUMS
 
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: Omnia Protocol ${{ needs.validate.outputs.tag }}
