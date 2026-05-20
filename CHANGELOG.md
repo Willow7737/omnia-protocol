@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.37](https://github.com/Willow7737/omnia-protocol/compare/v0.1.36...v0.1.37) (2026-05-20)
+
+
+### Features
+
+* implement Hybrid Settlement Architecture ([67ce911](https://github.com/Willow7737/omnia-protocol/commit/67ce911a9919fc39bef513bfc1c1ff1f1f6d78cb))
+* implement Hybrid Settlement Architecture ([c260daf](https://github.com/Willow7737/omnia-protocol/commit/c260dafaa1d72098961617d92cb2bfccdbb2a9e5))
+
 ## [0.1.36](https://github.com/Willow7737/omnia-protocol/compare/v0.1.35...v0.1.36) (2026-05-20)
 
 
