@@ -46,7 +46,7 @@ pub fn validate_did(did: &str) -> Result<(), DidError> {
 
 /// Construct a `did:omnia` DID from a 32-byte public key.
 pub fn format_did(public_key: &[u8; 32]) -> String {
-    format!("{}{}", DID_PREFIX, hex::encode(public_key))
+    format!("{DID_PREFIX}{}", hex::encode(public_key))
 }
 
 /// Errors that can occur during DID validation.
@@ -91,19 +91,18 @@ mod tests {
     #[test]
     fn test_invalid_identifier_length() {
         // Too short
-        let short = format!("{}{}", DID_PREFIX, "abcdef");
+        let short = format!("{DID_PREFIX}abcdef");
         assert!(validate_did(&short).is_err());
 
         // Too long
-        let long = format!("{}{}", DID_PREFIX, "abcdef1234".repeat(10));
+        let long = format!("{DID_PREFIX}{}", "abcdef1234".repeat(10));
         assert!(validate_did(&long).is_err());
     }
 
     #[test]
     fn test_invalid_hex() {
         let invalid = format!(
-            "{}{}",
-            DID_PREFIX, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+            "{DID_PREFIX}ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"
         );
         assert!(validate_did(&invalid).is_err());
     }
@@ -112,6 +111,6 @@ mod tests {
     fn test_format_did() {
         let pubkey = [0x01u8; 32];
         let did = format_did(&pubkey);
-        assert_eq!(did, format!("{}{}", DID_PREFIX, "01".repeat(32)));
+        assert_eq!(did, format!("{DID_PREFIX}{}", "01".repeat(32)));
     }
 }

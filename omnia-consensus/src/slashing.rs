@@ -225,7 +225,7 @@ pub enum SlashingStoreError {
     #[error("serialization error: {0}")]
     Serialization(String),
     /// An undo operation failed because the validator has no offense history.
-    #[error("validator {:?} has no offense history to undo", .0)]
+    #[error("validator {.0:?} has no offense history to undo")]
     UndoNoOffenseHistory([u8; 4]),
 }
 

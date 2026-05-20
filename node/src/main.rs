@@ -246,7 +246,7 @@ async fn main() -> Result<()> {
 
     // 6. Build and start the HTTP server
     let app = omnia_node::http::build_http_router().with_state(app_state);
-    let listen_addr = format!("0.0.0.0:{}", config.http_port);
+    let listen_addr = format!("0.0.0.0:{config.http_port}");
 
     let listener = tokio::net::TcpListener::bind(&listen_addr)
         .await
@@ -596,7 +596,7 @@ fn run_setup_contribute(
         "  Participant ID: {}",
         hex::encode(&contribution.participant_id[..4])
     );
-    println!("  Contribution count: {}", srs.contribution_count);
+    println!("  Contribution count: {srs.contribution_count}");
     println!(
         "  Transcript hash: {}",
         hex::encode(&srs.transcript_hash[..8])
@@ -642,7 +642,7 @@ fn run_setup_verify(degree: usize, num_contributions: usize) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Ceremony verification failed: {e}"))?;
 
     println!("Ceremony verification successful!");
-    println!("  Total contributions: {}", srs.contribution_count);
+    println!("  Total contributions: {srs.contribution_count}");
     println!(
         "  Transcript hash: {}",
         hex::encode(&srs.transcript_hash[..8])
@@ -679,8 +679,8 @@ fn run_snapshot(output_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to write snapshot: {e}"))?;
 
     println!("Snapshot written to {output_path}");
-    println!("  Height: {}", snapshot.height);
-    println!("  Event count: {}", snapshot.event_count);
+    println!("  Height: {snapshot.height}");
+    println!("  Event count: {snapshot.event_count}");
     println!("  State root: {}", hex::encode(&snapshot.state_root[..8]));
 
     Ok(())
@@ -707,11 +707,11 @@ fn run_restore(input_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Snapshot integrity check failed: {e}"))?;
 
     println!("Snapshot restored from {input_path}");
-    println!("  Version: {}", snapshot.version);
-    println!("  Height: {}", snapshot.height);
-    println!("  Event count: {}", snapshot.event_count);
+    println!("  Version: {snapshot.version}");
+    println!("  Height: {snapshot.height}");
+    println!("  Event count: {snapshot.event_count}");
     println!("  State root: {}", hex::encode(&snapshot.state_root[..8]));
-    println!("  Timestamp: {}", snapshot.timestamp);
+    println!("  Timestamp: {snapshot.timestamp}");
     println!("  Integrity: OK");
 
     Ok(())
@@ -739,8 +739,8 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
     let genesis_config: GenesisConfig = toml::from_str(&config_content)
         .with_context(|| "Failed to parse genesis configuration TOML")?;
 
-    println!("  Chain ID: {}", genesis_config.chain_id);
-    println!("  Network: {}", genesis_config.network_name);
+    println!("  Chain ID: {genesis_config.chain_id}");
+    println!("  Network: {genesis_config.network_name}");
     println!("  Validators: {}", genesis_config.initial_validators.len());
 
     let genesis_block = generate_genesis(&genesis_config)
@@ -787,7 +787,7 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
     let genesis_block: GenesisBlock =
         postcard::from_bytes(&bytes).map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
 
-    println!("  Chain ID: {}", genesis_block.chain_id);
+    println!("  Chain ID: {genesis_block.chain_id}");
     println!("  Validators: {}", genesis_block.validators.len());
     println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
     println!(
@@ -932,8 +932,7 @@ fn run_ceremony_serve(
             .accept_contribution(contribution)
             .map_err(|e| anyhow::anyhow!("Accept contribution {i} failed: {e}"))?;
         println!(
-            "  Contribution {} accepted (index={})",
-            i, receipt.contribution_index
+            "  Contribution {i} accepted (index={receipt.contribution_index})"
         );
     }
 
@@ -960,7 +959,7 @@ fn run_ceremony_serve(
         .export_transcript()
         .map_err(|e| anyhow::anyhow!("Export transcript failed: {e}"))?;
     println!("\nTranscript exported:");
-    println!("  Contributions: {}", transcript.contribution_count);
+    println!("  Contributions: {transcript.contribution_count}");
     println!(
         "  Final hash: {}",
         hex::encode(&transcript.final_transcript_hash[..8])

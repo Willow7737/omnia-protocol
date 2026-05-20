@@ -111,7 +111,7 @@ pub async fn submit_shard_operation(
         "identity" => handle_generic_shard_op(&state, &shard_id, &body).await,
         _ => Err((
             StatusCode::NOT_FOUND,
-            Json(json!({"error": format!("Unknown shard: {}", shard_id)})),
+            Json(json!({"error": format!("Unknown shard: {shard_id}")})),
         )),
     }
 }
@@ -152,7 +152,7 @@ async fn handle_economics_op(
             Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
-                    "error": format!("Operation failed: {}", e),
+                    "error": format!("Operation failed: {e}"),
                     "shard_id": "economics",
                     "operation": body.operation,
                 })),

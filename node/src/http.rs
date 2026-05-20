@@ -31,6 +31,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+#[cfg(feature = "swagger-ui")]
+use crate::api::ApiDoc;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::middleware;
@@ -43,9 +45,9 @@ use axum::Router;
 use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
 #[cfg(feature = "swagger-ui")]
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa::OpenApi;
 #[cfg(feature = "swagger-ui")]
-use crate::api::ApiDoc;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api;
 use crate::api::auth::{self as api_auth, default_cors_layer, RateLimiter};

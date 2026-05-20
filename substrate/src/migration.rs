@@ -164,7 +164,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
     // Rename sled directory to .sled.bak
     let backup_path = {
         let base = sled_path.to_string_lossy().to_string();
-        format!("{}.sled.bak", base)
+        format!("{base}.sled.bak")
     };
     let backup_path = Path::new(&backup_path);
 

@@ -40,7 +40,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum SlashingUndoError {
     /// The rate limit for undos on this validator has been exceeded.
-    #[error("rate limit: last undo for validator {:?} was at round {last_round}, current round {current_round}, minimum interval {min_interval}", .validator_prefix, last_round = last_round, current_round = current_round, min_interval = min_interval)]
+    #[error("rate limit: last undo for validator {.validator_prefix:?} was at round {last_round}, current round {current_round}, minimum interval {min_interval}", last_round = last_round, current_round = current_round, min_interval = min_interval)]
     RateLimitExceeded {
         /// First 4 bytes of the validator ID (for display).
         validator_prefix: [u8; 4],
@@ -52,7 +52,7 @@ pub enum SlashingUndoError {
         min_interval: u64,
     },
     /// The validator has no offense history to undo.
-    #[error("validator {:?} has no offense history to undo", .0)]
+    #[error("validator {.0:?} has no offense history to undo"])
     NoOffenseHistory([u8; 4]),
     /// The underlying slashing engine failed to undo the slash.
     #[error("slashing undo failed: {0}")]

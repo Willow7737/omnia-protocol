@@ -43,7 +43,7 @@ impl SchemeVersion {
 
 impl fmt::Display for SchemeVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "v{}", self.0)
+        write!(f, "v{self.0}")
     }
 }
 

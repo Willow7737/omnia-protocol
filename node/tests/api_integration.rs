@@ -277,7 +277,7 @@ async fn test_auth_node_info() {
 
     // No auth → 401
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .send()
         .await
         .unwrap();
@@ -285,7 +285,7 @@ async fn test_auth_node_info() {
 
     // Valid JWT → 200
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .bearer_auth(&valid_token)
         .send()
         .await
@@ -299,7 +299,7 @@ async fn test_auth_node_info() {
 
     // Expired JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .bearer_auth(&expired_token)
         .send()
         .await
@@ -308,7 +308,7 @@ async fn test_auth_node_info() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .bearer_auth(&wrong_secret_token)
         .send()
         .await
@@ -328,7 +328,7 @@ async fn test_auth_node_peers() {
 
     // No auth → 401
     let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/peers"))
         .send()
         .await
         .unwrap();
@@ -336,7 +336,7 @@ async fn test_auth_node_peers() {
 
     // Valid JWT → 200
     let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/peers"))
         .bearer_auth(&valid_token)
         .send()
         .await
@@ -350,7 +350,7 @@ async fn test_auth_node_peers() {
 
     // Expired JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/peers"))
         .bearer_auth(&expired_token)
         .send()
         .await
@@ -359,7 +359,7 @@ async fn test_auth_node_peers() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/peers"))
         .bearer_auth(&wrong_secret_token)
         .send()
         .await
@@ -384,7 +384,7 @@ async fn test_auth_submit_event() {
 
     // No auth → 401
     let resp = client
-        .post(format!("{}/api/v1/events", server.base_url))
+        .post(format!("{server.base_url}/api/v1/events"))
         .json(&event_body)
         .send()
         .await
@@ -393,7 +393,7 @@ async fn test_auth_submit_event() {
 
     // Valid JWT → 201
     let resp = client
-        .post(format!("{}/api/v1/events", server.base_url))
+        .post(format!("{server.base_url}/api/v1/events"))
         .bearer_auth(&valid_token)
         .json(&event_body)
         .send()
@@ -412,7 +412,7 @@ async fn test_auth_submit_event() {
 
     // Expired JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/events", server.base_url))
+        .post(format!("{server.base_url}/api/v1/events"))
         .bearer_auth(&expired_token)
         .json(&event_body)
         .send()
@@ -422,7 +422,7 @@ async fn test_auth_submit_event() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/events", server.base_url))
+        .post(format!("{server.base_url}/api/v1/events"))
         .bearer_auth(&wrong_secret_token)
         .json(&event_body)
         .send()
@@ -447,7 +447,7 @@ async fn test_auth_get_event() {
         "event_type": "test"
     });
     let resp = client
-        .post(format!("{}/api/v1/events", server.base_url))
+        .post(format!("{server.base_url}/api/v1/events"))
         .bearer_auth(&valid_token)
         .json(&event_body)
         .send()
@@ -459,7 +459,7 @@ async fn test_auth_get_event() {
 
     // No auth → 401
     let resp = client
-        .get(format!("{}/api/v1/events/{}", server.base_url, event_id))
+        .get(format!("{server.base_url}/api/v1/events/{event_id}"))
         .send()
         .await
         .unwrap();
@@ -467,7 +467,7 @@ async fn test_auth_get_event() {
 
     // Valid JWT → 200 (event found)
     let resp = client
-        .get(format!("{}/api/v1/events/{}", server.base_url, event_id))
+        .get(format!("{server.base_url}/api/v1/events/{event_id}"))
         .bearer_auth(&valid_token)
         .send()
         .await
@@ -478,7 +478,7 @@ async fn test_auth_get_event() {
 
     // Valid JWT + nonexistent event → 404
     let resp = client
-        .get(format!("{}/api/v1/events/nonexistent", server.base_url))
+        .get(format!("{server.base_url}/api/v1/events/nonexistent"))
         .bearer_auth(&valid_token)
         .send()
         .await
@@ -487,7 +487,7 @@ async fn test_auth_get_event() {
 
     // Expired JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/events/{}", server.base_url, event_id))
+        .get(format!("{server.base_url}/api/v1/events/{event_id}"))
         .bearer_auth(&expired_token)
         .send()
         .await
@@ -496,7 +496,7 @@ async fn test_auth_get_event() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .get(format!("{}/api/v1/events/{}", server.base_url, event_id))
+        .get(format!("{server.base_url}/api/v1/events/{event_id}"))
         .bearer_auth(&wrong_secret_token)
         .send()
         .await
@@ -594,7 +594,7 @@ async fn test_auth_create_proposal() {
 
     // No auth → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/proposals"))
         .json(&proposal_body)
         .send()
         .await
@@ -603,7 +603,7 @@ async fn test_auth_create_proposal() {
 
     // Valid JWT → 201
     let resp = client
-        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/proposals"))
         .bearer_auth(&valid_token)
         .json(&proposal_body)
         .send()
@@ -619,7 +619,7 @@ async fn test_auth_create_proposal() {
 
     // Expired JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/proposals"))
         .bearer_auth(&expired_token)
         .json(&json!({
             "id": "proposal-expired",
@@ -633,7 +633,7 @@ async fn test_auth_create_proposal() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/proposals"))
         .bearer_auth(&wrong_secret_token)
         .json(&json!({
             "id": "proposal-wrong",
@@ -666,7 +666,7 @@ async fn test_auth_cast_vote() {
 
     // No auth → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/vote"))
         .json(&vote_body)
         .send()
         .await
@@ -675,7 +675,7 @@ async fn test_auth_cast_vote() {
 
     // Valid JWT → 400 (auth passed, but voter has no registered stake)
     let resp = client
-        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/vote"))
         .bearer_auth(&valid_token)
         .json(&vote_body)
         .send()
@@ -689,7 +689,7 @@ async fn test_auth_cast_vote() {
 
     // Expired JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/vote"))
         .bearer_auth(&expired_token)
         .json(&vote_body)
         .send()
@@ -699,7 +699,7 @@ async fn test_auth_cast_vote() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .post(format!("{server.base_url}/api/v1/governance/vote"))
         .bearer_auth(&wrong_secret_token)
         .json(&vote_body)
         .send()
@@ -788,7 +788,7 @@ async fn test_auth_transfer() {
 
     // No auth → 401
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{server.base_url}/api/v1/economics/transfer"))
         .json(&transfer_body)
         .send()
         .await
@@ -797,7 +797,7 @@ async fn test_auth_transfer() {
 
     // Valid JWT → 404 (sender not registered — auth passed, handler returned 404)
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{server.base_url}/api/v1/economics/transfer"))
         .bearer_auth(&valid_token)
         .json(&transfer_body)
         .send()
@@ -811,7 +811,7 @@ async fn test_auth_transfer() {
 
     // Expired JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{server.base_url}/api/v1/economics/transfer"))
         .bearer_auth(&expired_token)
         .json(&transfer_body)
         .send()
@@ -821,7 +821,7 @@ async fn test_auth_transfer() {
 
     // Wrong-secret JWT → 401
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{server.base_url}/api/v1/economics/transfer"))
         .bearer_auth(&wrong_secret_token)
         .json(&transfer_body)
         .send()
@@ -849,7 +849,7 @@ async fn test_rate_limit_events_endpoint() {
     let mut got_429 = false;
     for _ in 0..10 {
         let resp = client
-            .post(format!("{}/api/v1/events", server.base_url))
+            .post(format!("{server.base_url}/api/v1/events"))
             .bearer_auth(&token)
             .json(&event_body)
             .send()
@@ -1038,7 +1038,7 @@ async fn test_cors_preflight() {
     let resp = client
         .request(
             reqwest::Method::OPTIONS,
-            format!("{}/api/v1/node/info", server.base_url),
+            format!("{server.base_url}/api/v1/node/info"),
         )
         .header("Origin", "http://example.com")
         .header("Access-Control-Request-Method", "GET")
@@ -1099,7 +1099,7 @@ async fn test_cors_cross_origin_request() {
 
     // Send a regular GET request with an Origin header
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .header("Origin", "http://example.com")
         .bearer_auth(&token)
         .send()
@@ -1136,7 +1136,7 @@ async fn test_error_format_401_unauthorized() {
 
     // --- Missing auth header ---
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .send()
         .await
         .unwrap();
@@ -1156,7 +1156,7 @@ async fn test_error_format_401_unauthorized() {
     // --- Expired token ---
     let expired_token = make_expired_token(JWT_SECRET);
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .bearer_auth(&expired_token)
         .send()
         .await
@@ -1176,7 +1176,7 @@ async fn test_error_format_401_unauthorized() {
     // --- Invalid (wrong-secret) token ---
     let wrong_token = make_wrong_secret_token();
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(format!("{server.base_url}/api/v1/node/info"))
         .bearer_auth(&wrong_token)
         .send()
         .await
@@ -1240,7 +1240,7 @@ async fn test_error_format_404_not_found() {
 
     // Request a nonexistent event
     let resp = client
-        .get(format!("{}/api/v1/events/nonexistent-id", server.base_url))
+        .get(format!("{server.base_url}/api/v1/events/nonexistent-id"))
         .bearer_auth(&token)
         .send()
         .await
@@ -1260,10 +1260,7 @@ async fn test_error_format_404_not_found() {
 
     // Also test 404 from economics balance (unregistered DID)
     let resp = client
-        .get(format!(
-            "{}/api/v1/economics/balance/did:test:noone",
-            server.base_url
-        ))
+        .get(format!("{server.base_url}/api/v1/economics/balance/did:test:noone"))
         .bearer_auth(&token)
         .send()
         .await
@@ -1289,7 +1286,7 @@ async fn test_error_format_429_rate_limited() {
     let mut got_429 = false;
     for _ in 0..10 {
         let resp = client
-            .get(format!("{}/api/v1/node/info", server.base_url))
+            .get(format!("{server.base_url}/api/v1/node/info"))
             .bearer_auth(&token)
             .send()
             .await
