@@ -40,13 +40,13 @@
 //! let proof = loaded.rotate("my-secure-passphrase", "new-secure-passphrase")?;
 //! ```
 
-use omnia_primitives::blake3_hash_domain;
 use crate::crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signer, Verifier};
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use hkdf::Hkdf;
+use omnia_primitives::blake3_hash_domain;
 use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::Sha256;

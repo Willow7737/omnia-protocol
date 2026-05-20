@@ -27,14 +27,22 @@ pub mod threshold;
 pub mod vrf;
 
 // Re-export commonly used types at crate root
-pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signer, Signature, SignatureError, Verifier};
-pub use crypto_schemes::{CryptoProfile, SchemeVersion, SignatureScheme, HashScheme, VrfScheme, ZkScheme};
+pub use crypto::{
+    generate_keypair, NodeKeypair, NodePublicKey, Signature, SignatureError, Signer, Verifier,
+};
+pub use crypto_schemes::{
+    CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
+};
 
 #[cfg(feature = "keystore")]
-pub use aes_gcm::{aes256gcm_decrypt_aad, aes256gcm_encrypt_aad, generate_nonce, hkdf_aes_key, AesGcmError};
+pub use aes_gcm::{
+    aes256gcm_decrypt_aad, aes256gcm_encrypt_aad, generate_nonce, hkdf_aes_key, AesGcmError,
+};
 
 #[cfg(feature = "keystore")]
-pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError, KeyStoreResult};
+pub use keystore::{
+    EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError, KeyStoreResult,
+};
 
 #[cfg(feature = "bls")]
 pub use bls::{

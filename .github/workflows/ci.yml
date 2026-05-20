@@ -258,13 +258,16 @@ jobs:
         with:
           # cargo-udeps v0.1.61+ depends on cargo v0.96+ which requires rustc ≥1.93
           toolchain: "1.93.0"
+      # Override rust-toolchain.toml which pins 1.88 — cargo-udeps needs 1.93+
+      - name: Override toolchain for cargo-udeps
+        run: rustup override set 1.93.0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-udeps"
       - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked
+        run: cargo +1.93.0 install cargo-udeps --locked
       - name: Check for unused dependencies
-        run: cargo udeps --workspace --all-features --exclude omnia-fuzz
+        run: cargo +1.93.0 udeps --workspace --all-features --exclude omnia-fuzz
         continue-on-error: true  # cargo-udeps may require newer rustc than stable
       # NOTE: omnia-adapters with --all-features includes ethereum-live
       # which requires rustc ≥1.91. The udeps check runs on stable.
@@ -429,21 +432,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pin to a known-good nightly. Latest nightly often has regressions with
+      # ASAN + SanitizerCoverage (e.g. __sancov_gen_ linker errors).  The
+      # nightly-2025-12-01 toolchain is known to work with cargo-fuzz + ASAN.
       - uses: dtolnay/rust-toolchain@nightly
         with:
+          toolchain: nightly-2025-12-01
           components: rust-src, llvm-tools-preview
       - name: Override toolchain for fuzz
-        run: rustup override set nightly
+        run: rustup override set nightly-2025-12-01
       - name: Install cargo-fuzz
-        run: |
-          if ! cargo install cargo-fuzz 2>/dev/null; then
-            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2025-12-01"
-            rustup toolchain install nightly-2025-12-01 --component rust-src --component llvm-tools-preview
-            rustup override set nightly-2025-12-01
-            cargo install cargo-fuzz --locked
-          fi
-      - name: Build fuzz targets
-        run: cargo fuzz build --fuzz-dir fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets (no ASAN for smoke test)
+        # Build with --sanitizer none to avoid ASAN+sancov linker errors on
+        # some nightly toolchains.  Coverage instrumentation still works for
+        # smoke testing; full ASAN fuzzing runs in the nightly-fuzz workflow.
+        run: cargo fuzz build --fuzz-dir fuzz --sanitizer none
       - name: Smoke test each target (10s each)
         run: |
           TARGETS=(
@@ -462,7 +466,7 @@ jobs:
           )
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
-            timeout 10 cargo fuzz run "$target" --fuzz-dir fuzz -- -runs=1000 2>&1 || {
+            timeout 10 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -runs=1000 2>&1 || {
               echo "Fuzz target $target crashed!"
               exit 1
             }

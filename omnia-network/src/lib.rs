@@ -16,8 +16,8 @@ pub mod network;
 
 // Re-export commonly used types
 pub use fast_sync::{
-    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork,
-    SyncRequest, SyncResponse, SyncResult, SyncSnapshot,
+    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest,
+    SyncResponse, SyncResult, SyncSnapshot,
 };
 #[cfg(feature = "network")]
 pub use gossip::{

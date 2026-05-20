@@ -557,9 +557,7 @@ fn aes256gcm_decrypt(
     aad: &[u8],
 ) -> Result<Vec<u8>, ShardError> {
     omnia_crypto::aes256gcm_decrypt_aad(ciphertext, key, nonce, aad).map_err(|_| {
-        ShardError::ValidationFailed(
-            "Share decryption failed: authentication error".to_string(),
-        )
+        ShardError::ValidationFailed("Share decryption failed: authentication error".to_string())
     })
 }
 

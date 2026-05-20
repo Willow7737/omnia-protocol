@@ -54,12 +54,12 @@ pub mod wire_format;
 
 // Re-export the migrated crates so downstream consumers can access them
 // via `omnia_substrate::omnia_crypto::…`, `omnia_substrate::omnia_consensus::…`, etc.
+#[cfg(feature = "zk")]
+pub use omnia_adapters;
 pub use omnia_consensus;
 pub use omnia_crypto;
 #[cfg(feature = "network")]
 pub use omnia_network;
-#[cfg(feature = "zk")]
-pub use omnia_adapters;
 
 // Re-export commonly used types
 #[cfg(feature = "bls")]
@@ -84,14 +84,16 @@ pub use crypto_schemes::{
     CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
 };
 pub use omnia_primitives::{
-    Event, EventId, EventHeader, EventRequest, EventBatch, EventStatus, EventValidationError,
-    MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, MAX_EVENT_AGE_MS,
-    VectorClock, VectorClockError, CausalOrder, NodeId, LogicalClock,
-    blake3_hash_domain, WireFormatError, WIRE_FORMAT_VERSION,
-    serialize_with_version, deserialize_with_version,
+    blake3_hash_domain, deserialize_with_version, serialize_with_version, CausalOrder, Event,
+    EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
+    LogicalClock, NodeId, VectorClock, VectorClockError, WireFormatError, MAX_EVENT_AGE_MS,
+    MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, WIRE_FORMAT_VERSION,
 };
 // Re-export networking types from omnia-network (backward compatibility)
 // Only available when the `network` feature is enabled.
+pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
+pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
+pub use mempool::{Mempool, MempoolError};
 #[cfg(feature = "network")]
 pub use omnia_network::{
     fast_sync::{
@@ -107,12 +109,8 @@ pub use omnia_network::{
         NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
         VersionHandshake,
     },
-    PROTOCOL_IDENTIFIER as NET_PROTOCOL_IDENTIFIER,
-    PROTOCOL_VERSION as NET_PROTOCOL_VERSION,
+    PROTOCOL_IDENTIFIER as NET_PROTOCOL_IDENTIFIER, PROTOCOL_VERSION as NET_PROTOCOL_VERSION,
 };
-pub use genesis_replay::{replay_genesis, ReplayConfig, ReplayResult};
-pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreError};
-pub use mempool::{Mempool, MempoolError};
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
     InMemorySlashingStore, JailState, RedbSlashingStore, SlashOffense, SlashOutcome, SlashPenalty,
@@ -711,7 +709,9 @@ impl Substrate {
 
         {
             let mut graph = self.graph.write().await;
-            graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
+            graph
+                .insert((*event_arc).clone())
+                .map_err(SubstrateError::from)?;
         }
 
         // Track for consensus processing

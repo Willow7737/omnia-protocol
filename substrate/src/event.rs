@@ -5,5 +5,5 @@
 
 pub use omnia_primitives::event::{
     Event, EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
-    MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, Payload,
+    Payload, MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS,
 };

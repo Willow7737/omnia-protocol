@@ -27,25 +27,16 @@ jobs:
             targets: "fuzz_zk_proof_deserialization fuzz_snapshot_deserialization fuzz_shard_route"
     steps:
       - uses: actions/checkout@v4
+      # Pin to a known-good nightly to avoid ASAN+sancov regressions.
+      # Latest nightly frequently breaks with __sancov_gen_ linker errors.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly
-          components: llvm-tools-preview
+          toolchain: nightly-2025-12-01
+          components: rust-src, llvm-tools-preview
       - name: Override toolchain for fuzz
-        run: rustup override set nightly
+        run: rustup override set nightly-2025-12-01
       - name: Install cargo-fuzz
-        run: |
-          # Try installing the latest cargo-fuzz first (without --locked
-          # so cargo resolves compatible transitive deps for the current
-          # nightly toolchain).  Fall back to pinning a known-good nightly
-          # if the default latest nightly breaks due to rustc attribute
-          # reservation (e.g. rustix incompatibility).
-          if ! cargo install cargo-fuzz 2>/dev/null; then
-            echo "::warning::cargo-fuzz install failed on latest nightly; trying nightly-2025-12-01"
-            rustup toolchain install nightly-2025-12-01 --component llvm-tools-preview
-            rustup override set nightly-2025-12-01
-            cargo install cargo-fuzz --locked
-          fi
+        run: cargo install cargo-fuzz --locked
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-fuzz-${{ matrix.group }}"

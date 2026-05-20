@@ -26,15 +26,20 @@ pub mod slashing_undo;
 pub mod consensus_store;
 
 // Re-export commonly used types at crate root
-pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
-pub use consensus::{ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer};
+pub use causal_graph::{
+    CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
+};
+pub use consensus::{
+    ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine,
+    RoundTimer,
+};
 pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
 pub use mempool::{Mempool, MempoolError};
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
-    InMemorySlashingStore, JailState, SlashOffense, SlashOutcome, SlashPenalty,
-    SlashingEngine, SlashingEvent, SlashingEventType, SlashingState, SlashingStore,
-    SlashingStoreError, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    InMemorySlashingStore, JailState, SlashOffense, SlashOutcome, SlashPenalty, SlashingEngine,
+    SlashingEvent, SlashingEventType, SlashingState, SlashingStore, SlashingStoreError,
+    DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 pub use slashing_undo::{
     SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest,

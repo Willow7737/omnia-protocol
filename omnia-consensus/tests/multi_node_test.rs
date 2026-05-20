@@ -8,8 +8,8 @@
 //! and verify that all honest nodes agree on finalized state.
 
 use omnia_consensus::{
-    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine,
-    DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 use omnia_primitives::{Event, NodeId, VectorClock};
 

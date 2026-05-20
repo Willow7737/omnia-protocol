@@ -50,5 +50,7 @@ async fn test_docker_compose_bft() {
     println!("Docker Compose BFT integration test - requires running network");
     println!("To run this test:");
     println!("  1. docker compose up -d");
-    println!("  2. cargo test -p omnia-network --test network_integration_test -- --ignored --nocapture");
+    println!(
+        "  2. cargo test -p omnia-network --test network_integration_test -- --ignored --nocapture"
+    );
 }

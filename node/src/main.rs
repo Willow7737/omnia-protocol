@@ -196,7 +196,9 @@ async fn main() -> Result<()> {
             // Falls back to MockSettlementAdapter if config is missing or invalid.
             match create_ethereum_settlement_adapter() {
                 Ok(adapter) => {
-                    tracing::info!("Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)");
+                    tracing::info!(
+                        "Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)"
+                    );
                     adapter
                 }
                 Err(e) => {
@@ -210,7 +212,9 @@ async fn main() -> Result<()> {
         }
         #[cfg(not(feature = "ethereum-live"))]
         {
-            tracing::info!("Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)");
+            tracing::info!(
+                "Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)"
+            );
             Arc::new(omnia_adapters::MockSettlementAdapter::new())
         }
     };

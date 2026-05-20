@@ -22,11 +22,11 @@ use crate::causal_graph::CausalGraph;
 use crate::consensus_store::{
     ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
 };
-use omnia_primitives::{Event, EventId};
 use crate::slashing::{SlashOffense, SlashingEngine};
-use crate::SlashingBackend;
 #[cfg(test)]
 use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
+use crate::SlashingBackend;
+use omnia_primitives::{Event, EventId};
 use omnia_primitives::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

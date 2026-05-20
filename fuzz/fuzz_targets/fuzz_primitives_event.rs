@@ -8,7 +8,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use omnia_primitives::{Event, deserialize_with_version, serialize_with_version};
+use omnia_primitives::{deserialize_with_version, serialize_with_version, Event};
 
 fuzz_target!(|data: &[u8]| {
     // Test versioned wire-format deserialization never panics
