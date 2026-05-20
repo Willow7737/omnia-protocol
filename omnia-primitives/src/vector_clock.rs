@@ -248,7 +248,7 @@ impl fmt::Display for VectorClock {
                 write!(f, ", ")?;
             }
             let short_id = hex::encode(&node[..4]);
-            write!(f, "{}:{}", short_id, clock)?;
+            write!(f, "{short_id}:{clock}")?;
             first = false;
         }
         write!(f, "]")
