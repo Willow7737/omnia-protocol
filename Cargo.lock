@@ -2194,7 +2194,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -4753,7 +4753,7 @@ name = "omnia-consensus"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "getrandom 0.2.17",
+ "getrandom 0.4.2",
  "hex",
  "omnia-crypto",
  "omnia-primitives",
@@ -4778,7 +4778,7 @@ dependencies = [
  "blake3",
  "blst",
  "ed25519-dalek",
- "getrandom 0.2.17",
+ "getrandom 0.4.2",
  "hex",
  "hkdf",
  "ml-kem 0.1.1",
@@ -4947,7 +4947,7 @@ dependencies = [
  "criterion",
  "ed25519-dalek",
  "futures",
- "getrandom 0.2.17",
+ "getrandom 0.4.2",
  "hex",
  "hkdf",
  "libp2p",

@@ -60,7 +60,7 @@ serde_bytes = { version = "0.11", optional = true }
 subtle = "2"
 
 # Cryptographic random number generation — needed for secure round seed generation
-getrandom = "0.2"
+getrandom = "0.4"
 
 # Snappy compression for gossip messages — reduces bandwidth by 50-80%
 snap = { version = "1", optional = true }
