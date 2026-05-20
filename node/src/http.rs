@@ -44,6 +44,8 @@ use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
 #[cfg(feature = "swagger-ui")]
 use utoipa_swagger_ui::SwaggerUi;
+#[cfg(feature = "swagger-ui")]
+use crate::api::ApiDoc;
 
 use crate::api;
 use crate::api::auth::{self as api_auth, default_cors_layer, RateLimiter};

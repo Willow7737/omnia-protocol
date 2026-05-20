@@ -1350,7 +1350,7 @@ impl SlashingEngine {
 
     /// Export the current slashing state as a [`SlashingState`] snapshot.
     ///
-    /// Used by genesis replay (see [`crate::genesis_replay`]) to capture
+    /// Used by genesis replay to capture
     /// the final slashing state after replaying the event history.
     pub fn to_state(&self) -> SlashingState {
         let state = self.state.read().unwrap_or_else(|e| {
@@ -1937,7 +1937,7 @@ impl crate::SlashingBackend for SlashingEngine {
 /// Type alias for the default slashing backend.
 ///
 /// This wraps the existing [`SlashingEngine`] as the canonical
-/// implementation of [`SlashingBackend`]. Consumers that do not
+/// implementation of [`crate::SlashingBackend`]. Consumers that do not
 /// need a custom slashing backend can use this type directly.
 pub type DefaultSlashingBackend = SlashingEngine;
 

@@ -19,7 +19,7 @@ use crate::settlement::{FinalityProof, SettlementAdapter, SettlementError, TxHas
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ethereum-live")]
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{Address, B256};
 #[cfg(feature = "ethereum-live")]
 use alloy::providers::{Provider, ProviderBuilder};
 #[cfg(feature = "ethereum-live")]
