@@ -299,7 +299,12 @@ impl Default for ShardRouter {
     }
 }
 
+// The EventProcessor trait lives in the deprecated omnia-substrate crate.
+// Allow deprecated usage here since this impl provides backward compatibility
+// for consumers that still reference the substrate layer.
+#[allow(deprecated)]
 impl omnia_substrate::EventProcessor for ShardRouter {
+    #[allow(deprecated)]
     fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
         self.route_event(event).map_err(|e| match e {
             ShardError::DeserializationError(msg) => {
