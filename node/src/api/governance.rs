@@ -107,7 +107,7 @@ pub async fn create_proposal(
             Err((
                 StatusCode::CONFLICT,
                 Json(json!({
-                    "error": format!("Failed to create proposal: {}", e),
+                    "error": format!("Failed to create proposal: {e}"),
                     "proposal_id": body.id,
                 })),
             ))
@@ -188,7 +188,7 @@ pub async fn cast_vote(
             Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
-                    "error": format!("Failed to cast vote: {}", e),
+                    "error": format!("Failed to cast vote: {e}"),
                     "proposal_id": body.proposal_id,
                     "did": body.did,
                 })),

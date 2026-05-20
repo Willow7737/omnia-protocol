@@ -150,7 +150,7 @@ async fn test_metrics_endpoint_disabled() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
     let client = reqwest::Client::new();
-    let resp = client.get(format!("{}/metrics", base_url)).send().await?;
+    let resp = client.get(format!("{base_url}/metrics")).send().await?;
 
     assert_eq!(
         resp.status(),
@@ -218,7 +218,7 @@ async fn test_swagger_ui() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/swagger-ui/", base_url))
+        .get(format!("{base_url}/swagger-ui/"))
         .send()
         .await?;
     assert_eq!(
@@ -251,7 +251,7 @@ async fn test_openapi_json() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/api-docs/openapi.json", base_url))
+        .get(format!("{base_url}/api-docs/openapi.json"))
         .send()
         .await?;
     assert_eq!(

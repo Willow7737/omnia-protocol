@@ -134,7 +134,7 @@ pub fn replicate_snapshot(
         }
 
         // Write snapshot to file
-        let filename = format!("snapshot-{}.bin", snapshot.height);
+        let filename = format!("snapshot-{snapshot.height}.bin");
         let path = dir.join(&filename);
         snapshot.write_to_file(&path)?;
 

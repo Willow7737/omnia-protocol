@@ -80,7 +80,7 @@ pub async fn submit_event(
         hex::decode(&body.payload).map_err(|e| {
             (
                 StatusCode::BAD_REQUEST,
-                Json(json!({"error": format!("Invalid hex payload: {}", e)})),
+                Json(json!({"error": format!("Invalid hex payload: {e}")})),
             )
         })?
     };
@@ -181,7 +181,7 @@ pub async fn get_event(
         )),
         None => Err((
             StatusCode::NOT_FOUND,
-            Json(json!({"error": format!("Event not found: {}", id)})),
+            Json(json!({"error": format!("Event not found: {id}")})),
         )),
     }
 }

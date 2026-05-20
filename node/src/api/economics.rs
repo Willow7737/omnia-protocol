@@ -60,7 +60,7 @@ pub async fn get_balance(
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("DID not registered: {}", did),
+                "error": format!("DID not registered: {did}"),
                 "did": did,
             })),
         ));
@@ -108,7 +108,7 @@ pub async fn transfer_ubc(
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("Sender DID not registered: {}", body.from_did),
+                "error": format!("Sender DID not registered: {body.from_did}"),
             })),
         ));
     }
@@ -118,7 +118,7 @@ pub async fn transfer_ubc(
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("Recipient DID not registered: {}", body.to_did),
+                "error": format!("Recipient DID not registered: {body.to_did}"),
             })),
         ));
     }
@@ -158,7 +158,7 @@ pub async fn transfer_ubc(
             Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
-                    "error": format!("Transfer failed: {}", e),
+                    "error": format!("Transfer failed: {e}"),
                     "from_did": body.from_did,
                     "amount": body.amount,
                 })),

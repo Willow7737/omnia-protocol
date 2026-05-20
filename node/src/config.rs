@@ -181,7 +181,7 @@ impl NodeConfig {
     /// Returns the canonical path to the data directory.
     pub fn ensure_data_dir(&self) -> Result<PathBuf> {
         std::fs::create_dir_all(&self.data_dir)
-            .with_context(|| format!("Failed to create data directory: {:?}", self.data_dir))?;
+            .with_context(|| format!("Failed to create data directory: {self.data_dir:?}"))?;
         self.data_dir
             .canonicalize()
             .context("Failed to canonicalize data directory path")

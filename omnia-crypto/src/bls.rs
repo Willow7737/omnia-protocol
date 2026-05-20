@@ -247,8 +247,7 @@ impl BlsPublicKey {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, BlsError> {
         if bytes.len() != PUBLIC_KEY_SIZE {
             return Err(BlsError::InvalidPublicKey(format!(
-                "expected {} bytes, got {}",
-                PUBLIC_KEY_SIZE,
+                "expected {PUBLIC_KEY_SIZE} bytes, got {}",
                 bytes.len()
             )));
         }
@@ -333,8 +332,7 @@ impl BlsSignature {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, BlsError> {
         if bytes.len() != SIGNATURE_SIZE {
             return Err(BlsError::InvalidSignature(format!(
-                "expected {} bytes, got {}",
-                SIGNATURE_SIZE,
+                "expected {SIGNATURE_SIZE} bytes, got {}",
                 bytes.len()
             )));
         }

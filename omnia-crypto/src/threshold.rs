@@ -56,7 +56,7 @@ pub enum ThresholdError {
     #[error("threshold signature verification failed: {0}")]
     VerificationFailed(String),
     /// The participant is not registered in the key manager.
-    #[error("participant {:?} not registered", .0)]
+    #[error("participant {.0:?} not registered")]
     ParticipantNotRegistered([u8; 4]),
 }
 
@@ -526,7 +526,7 @@ impl DkgSession {
         if self.phase != DkgPhase::Init {
             return Err(DkgError::WrongPhase {
                 expected: "Init".to_string(),
-                actual: format!("{:?}", self.phase),
+                actual: format!("{self.phase:?}"),
             });
         }
 
@@ -601,7 +601,7 @@ impl DkgSession {
         if self.phase != DkgPhase::ShareDistribution && self.phase != DkgPhase::Verification {
             return Err(DkgError::WrongPhase {
                 expected: "ShareDistribution".to_string(),
-                actual: format!("{:?}", self.phase),
+                actual: format!("{self.phase:?}"),
             });
         }
 
@@ -673,7 +673,7 @@ impl DkgSession {
         if self.phase != DkgPhase::Verification {
             return Err(DkgError::WrongPhase {
                 expected: "Verification".to_string(),
-                actual: format!("{:?}", self.phase),
+                actual: format!("{self.phase:?}"),
             });
         }
 
