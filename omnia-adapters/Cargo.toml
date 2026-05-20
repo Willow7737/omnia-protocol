@@ -22,7 +22,10 @@ ark-ec = { version = "0.4", optional = true }
 ark-ff = { version = "0.4", optional = true }
 ark-serialize = { version = "0.4", optional = true }
 ark-crypto-primitives = { version = "0.4", optional = true }
-# Settlement deps
+# Settlement deps — alloy for live Ethereum RPC interaction
+# NOTE: alloy ≥1.7 requires rustc ≥1.91, so the ethereum-live feature is
+# exempted from the MSRV 1.88 check. The CI runs ethereum-live tests only
+# with the latest stable toolchain, not with MSRV.
 alloy = { version = "1", optional = true, features = [
     "provider-ws", "provider-http", "signers", "signer-local",
     "contract", "network", "essentials",
