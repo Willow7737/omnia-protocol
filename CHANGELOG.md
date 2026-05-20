@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.42](https://github.com/Willow7737/omnia-protocol/compare/v0.1.41...v0.1.42) (2026-05-20)
+
+
+### Bug Fixes
+
+* **ci:** resolve all CI workflow failures and broken README badge ([80ff258](https://github.com/Willow7737/omnia-protocol/commit/80ff2585fb59e4a0feed8792722e61fe636a2dfd))
+* **ci:** resolve all CI workflow failures and broken README badge ([a68d2c8](https://github.com/Willow7737/omnia-protocol/commit/a68d2c8549dfa4dbff819a68ac61636a2c070f56))
+
 ## [0.1.41](https://github.com/Willow7737/omnia-protocol/compare/v0.1.40...v0.1.41) (2026-05-20)
 
 
