@@ -30,6 +30,7 @@ use omnia_primitives::{Event, EventId};
 use omnia_primitives::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "persistent-storage")]
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
