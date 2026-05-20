@@ -1,4 +1,7 @@
 # Contributor Covenant Code of Conduct
+> 🎯 Audience: All
+> 🔗 Context: Community standards and enforcement guidelines for all participants
+> 📅 Last Updated: 2026-05-20
 
 ## Our Pledge
 
@@ -74,3 +77,7 @@ This Code of Conduct is adapted from the [Contributor Covenant][homepage], versi
 
 [homepage]: https://www.contributor-covenant.org
 [v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+
+---
+🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [CONTRIBUTING.md](./CONTRIBUTING.md)  
+🚀 **Next**: [CONTRIBUTING.md](./CONTRIBUTING.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)

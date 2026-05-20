@@ -1,4 +1,7 @@
 # Changelog
+> 🎯 Audience: Developers, Operators
+> 🔗 Context: Version history and migration notes for all releases
+> 📅 Last Updated: 2026-05-20
 
 All notable changes to this project will be documented in this file.
 
@@ -547,3 +550,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implementation roadmap (Phase 0 to Phase 3).
 - Basic README.md, CONTRIBUTING.md, LICENSE, SECURITY.md.
 - Initial diagrams for architecture, governance, supply chain, consensus comparison, and identity system.
+
+---
+🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/reference/roadmap.md](./docs/reference/roadmap.md)  
+🚀 **Next**: [docs/reference/roadmap.md](./docs/reference/roadmap.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)
