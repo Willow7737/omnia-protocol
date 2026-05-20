@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.43](https://github.com/Willow7737/omnia-protocol/compare/v0.1.42...v0.1.43) (2026-05-20)
+
+
+### Bug Fixes
+
+* **ci:** resolve all 7 CI failures ([47ff783](https://github.com/Willow7737/omnia-protocol/commit/47ff7837f2d1610195dc889382e1eeaff1a6ed89))
+* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([c80b325](https://github.com/Willow7737/omnia-protocol/commit/c80b3251e30f1e548507ad686f32a3cd2c1f3e21))
+* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([a9db9f9](https://github.com/Willow7737/omnia-protocol/commit/a9db9f96da785d5fa1c2647e8e9e51aa3cc989cd))
+
 ## [0.1.42](https://github.com/Willow7737/omnia-protocol/compare/v0.1.41...v0.1.42) (2026-05-20)
 
 
