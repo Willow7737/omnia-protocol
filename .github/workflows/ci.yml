@@ -127,9 +127,10 @@ jobs:
         with:
           shared-key: "omnia-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}"
       - name: Verify Cargo.lock is up to date
-        run: cargo test --locked --workspace --exclude omnia-fuzz --exclude omnia-adapters --no-run
+        run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
       # Skip settlement::live tests on all PRs — they require a live Ethereum
       # endpoint which is only available on main branch with secrets.
+      # Mock settlement tests always pass (MSRV 1.88, zero alloy).
       - name: Test workspace (skip live settlement)
         run: cargo test --workspace --exclude omnia-fuzz --verbose -- --skip settlement::live
         timeout-minutes: 15
@@ -236,18 +237,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          # Use stable since --all-features includes ethereum-live (needs rustc ≥1.91)
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-udeps"
       - name: Install cargo-udeps
         run: cargo install cargo-udeps --locked
       - name: Check for unused dependencies
-        run: cargo udeps --workspace --all-features --exclude omnia-fuzz --exclude omnia-adapters
-      # NOTE: omnia-adapters excluded because --all-features includes ethereum-live
-      # which requires rustc ≥1.91. Unused-dep check runs on MSRV toolchain.
-      - name: Check omnia-adapters unused deps (no ethereum-live)
-        run: cargo udeps -p omnia-adapters
+        run: cargo udeps --workspace --all-features --exclude omnia-fuzz
+      # NOTE: omnia-adapters with --all-features includes ethereum-live
+      # which requires rustc ≥1.91. The udeps check runs on stable.
 
   mutation-testing:
     name: Mutation Testing

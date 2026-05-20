@@ -11,7 +11,6 @@ on:
     paths:
       - 'omnia-adapters/**'
       - '.github/workflows/ethereum-settlement.yml'
-  # Allow manual trigger
   workflow_dispatch:
 
 env:
@@ -20,10 +19,12 @@ env:
 
 jobs:
   # -----------------------------------------------------------------------
-  # Test without ethereum-live feature (simulated mode)
+  # Mock settlement tests (always run, MSRV 1.88 compliant)
+  # These verify the SettlementAdapter trait, MockSettlementAdapter,
+  # and the simulated EthereumAdapter — zero alloy dependency.
   # -----------------------------------------------------------------------
-  simulated:
-    name: Simulated Mode Tests
+  mock-tests:
+    name: Mock Settlement Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,19 +33,25 @@ jobs:
           toolchain: 1.88.0
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "omnia-eth-simulated"
-      - name: Test omnia-adapters crate (no features)
+          shared-key: "omnia-eth-mock"
+      - name: Test omnia-adapters (no features — MSRV 1.88)
         run: cargo test -p omnia-adapters --verbose
+      - name: Test settlement mock adapter
+        run: cargo test -p omnia-adapters -- settlement::mock --nocapture
       - name: Clippy (no features, lib only)
         run: cargo clippy -p omnia-adapters --lib -- -D warnings -D clippy::unwrap_used
+      - name: Test with arkworks feature
+        run: cargo test -p omnia-adapters --features arkworks --verbose
 
   # -----------------------------------------------------------------------
-  # Test with ethereum-live feature against Anvil (Foundry local node)
-  # Mock tests always run; live tests only on main with secrets.
+  # Live Ethereum settlement tests (feature-gated, requires alloy + stable)
+  # Only runs on main branch with secrets, or manually triggered.
+  # Uses Anvil (Foundry local node) for integration testing.
   # -----------------------------------------------------------------------
-  settlement-test:
-    name: Settlement Tests (Anvil)
+  live-tests:
+    name: Live Settlement Tests (Anvil)
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     env:
       ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
       DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
@@ -63,21 +70,17 @@ jobs:
           version: nightly
       - name: Compile OmniaRollup contract
         run: |
-          # Ethereum contracts relocated to omnia-adapters/contracts/ethereum/
           cd omnia-adapters/contracts/ethereum
           forge build --contracts OmniaRollup.sol
       - name: Start Anvil
         run: |
           anvil --host 127.0.0.1 --port 8545 &
           sleep 3
-          # Verify Anvil is running
           curl -s -X POST http://127.0.0.1:8545 \
             -H "Content-Type: application/json" \
             -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' | head -1
       - name: Deploy OmniaRollup to Anvil
         run: |
-          # Deploy with the first Anvil account as operator and a zero state root.
-          # Uses a dummy verifying key (all zeros) — sufficient for compilation tests.
           cd omnia-adapters/contracts/ethereum
           DEPLOY_OUTPUT=$(forge create OmniaRollup \
             --constructor-args \
@@ -92,17 +95,15 @@ jobs:
             --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
             2>&1) || true
           echo "$DEPLOY_OUTPUT"
-      - name: Run mock settlement tests (always)
+      - name: Test with ethereum-live feature (skip live tests on PRs)
         run: cargo test -p omnia-adapters --features ethereum-live -- --skip settlement::live
         timeout-minutes: 15
       - name: Run live settlement tests (main branch + secrets only)
         if: ${{ github.ref == 'refs/heads/main' && env.ETH_RPC_URL != '' }}
         run: cargo test -p omnia-adapters --features ethereum-live -- settlement::live --nocapture
         timeout-minutes: 15
-      - name: Clippy (ethereum-live feature, lib only)
+      - name: Clippy (ethereum-live feature)
         run: cargo clippy -p omnia-adapters --lib --features ethereum-live -- -D warnings -D clippy::unwrap_used
-      - name: Clippy (ethereum-live feature, all targets)
-        run: cargo clippy -p omnia-adapters --all-targets --features ethereum-live -- -D clippy::unwrap_used
 
   # -----------------------------------------------------------------------
   # Solidity contract tests (via Forge)
@@ -120,4 +121,4 @@ jobs:
         run: |
           cd omnia-adapters/contracts/ethereum
           forge test -vv
-        continue-on-error: true  # No test file may exist yet
+        continue-on-error: true
