@@ -25,6 +25,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 use omnia_node::state::AppState;
@@ -185,6 +186,35 @@ async fn main() -> Result<()> {
     let economics = EconomicsState::new();
     tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
 
+    // Construct the settlement adapter based on enabled features.
+    // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
+    // When ethereum-live is enabled, uses EthereumSettlementAdapter (requires rustc >= 1.91).
+    let settlement: Arc<dyn SettlementAdapter> = {
+        #[cfg(feature = "ethereum-live")]
+        {
+            // Try to create a live Ethereum adapter from environment config.
+            // Falls back to MockSettlementAdapter if config is missing or invalid.
+            match create_ethereum_settlement_adapter() {
+                Ok(adapter) => {
+                    tracing::info!("Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)");
+                    adapter
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "Settlement: Falling back to MockSettlementAdapter — Ethereum live config invalid or missing"
+                    );
+                    Arc::new(omnia_adapters::MockSettlementAdapter::new())
+                }
+            }
+        }
+        #[cfg(not(feature = "ethereum-live"))]
+        {
+            tracing::info!("Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)");
+            Arc::new(omnia_adapters::MockSettlementAdapter::new())
+        }
+    };
+
     // Initialize Prometheus metrics
     #[cfg(feature = "metrics")]
     let metrics = NodeMetrics::new().context("Failed to initialize Prometheus metrics")?;
@@ -207,6 +237,7 @@ async fn main() -> Result<()> {
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(AtomicBool::new(false)),
+        settlement,
     };
 
     // 6. Build and start the HTTP server
@@ -769,6 +800,51 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
 
     println!("\nGenesis block is VALID");
     Ok(())
+}
+
+/// Create a live Ethereum settlement adapter from environment configuration.
+///
+/// Reads the following environment variables:
+/// - `OMNIA_ETH_RPC_URL`: Ethereum JSON-RPC endpoint (required)
+/// - `OMNIA_ETH_CONTRACT_ADDRESS`: OmniaRollup contract address (required)
+/// - `OMNIA_ETH_OPERATOR_KEY`: Operator private key (required)
+/// - `OMNIA_ETH_GAS_LIMIT`: Gas limit for transactions (optional, default 1M)
+/// - `OMNIA_ETH_CONFIRMATION_BLOCKS`: Blocks to wait for finality (optional, default 3)
+///
+/// Returns an error if any required variable is missing or invalid.
+#[cfg(feature = "ethereum-live")]
+fn create_ethereum_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>> {
+    use omnia_adapters::{EthereumConfig, EthereumSettlementAdapter};
+
+    let rpc_url = std::env::var("OMNIA_ETH_RPC_URL")
+        .context("OMNIA_ETH_RPC_URL environment variable not set")?;
+    let contract_address = std::env::var("OMNIA_ETH_CONTRACT_ADDRESS")
+        .context("OMNIA_ETH_CONTRACT_ADDRESS environment variable not set")?;
+    let operator_key = std::env::var("OMNIA_ETH_OPERATOR_KEY")
+        .context("OMNIA_ETH_OPERATOR_KEY environment variable not set")?;
+
+    let gas_limit = std::env::var("OMNIA_ETH_GAS_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1_000_000);
+    let confirmation_blocks = std::env::var("OMNIA_ETH_CONFIRMATION_BLOCKS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
+
+    let config = EthereumConfig {
+        rpc_url,
+        contract_address,
+        operator_private_key: operator_key,
+        gas_limit,
+        max_fee_per_gas: None,
+        confirmation_blocks,
+    };
+
+    let adapter = EthereumSettlementAdapter::new(config)
+        .map_err(|e| anyhow::anyhow!("Failed to create Ethereum settlement adapter: {}", e))?;
+
+    Ok(Arc::new(adapter))
 }
 
 /// Wait for SIGINT (Ctrl+C) or SIGTERM for graceful shutdown.

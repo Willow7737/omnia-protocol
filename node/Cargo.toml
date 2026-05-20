@@ -15,7 +15,7 @@ omnia-shards = { path = "../shards" }         # Layer 2: domain shard routing an
 omnia-economics = { path = "../economics" }   # Layer 5: UBC token, governance, useful-work rewards
 omnia-binding = { path = "../binding" }       # Layer 3: physical-digital binding layer
 omnia-network = { path = "../omnia-network", default-features = false, optional = true }  # P2P networking layer
-omnia-adapters = { path = "../omnia-adapters", default-features = false, optional = true } # ZK-rollup settlement adapters
+omnia-adapters = { path = "../omnia-adapters", default-features = false } # ZK-rollup settlement adapters (required for SettlementAdapter trait)
 omnia-crypto = { path = "../omnia-crypto", default-features = false, optional = true }     # Crypto primitives (for light mode keygen)
 omnia-consensus = { path = "../omnia-consensus", default-features = false, optional = true } # Consensus engine (for pipeline)
 
@@ -94,7 +94,7 @@ light = []  # no networking, no ZK, no heavy crypto
 metrics = ["dep:prometheus"]
 swagger-ui = ["dep:utoipa-swagger-ui"]
 network = ["omnia-network/network", "omnia-substrate/network", "dep:omnia-network"]
-zk = ["omnia-adapters/arkworks", "omnia-substrate/zk", "dep:omnia-adapters"]
+zk = ["omnia-adapters/arkworks", "omnia-substrate/zk"]
 bls = ["omnia-crypto/bls", "omnia-substrate/bls", "dep:omnia-crypto"]
 pqc = ["omnia-crypto/pqc", "omnia-substrate/pqc", "dep:omnia-crypto"]
 ethereum-live = ["omnia-adapters/ethereum-live", "zk"]

@@ -1,0 +1,9 @@
+# cargo-msrv configuration
+#
+# The ethereum-live feature requires rustc >=1.91 (alloy dependency).
+# This config tells cargo-msrv to skip that feature during MSRV verification,
+# ensuring the core protocol's MSRV of 1.88 is correctly validated.
+
+[msrv]
+# Do not test the ethereum-live feature — it requires a newer compiler
+ignore-features = ["ethereum-live"]

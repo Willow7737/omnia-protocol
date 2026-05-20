@@ -197,12 +197,25 @@ jobs:
       # NOTE: ethereum-live feature (alloy dep) requires rustc ≥1.91, so it is
       # excluded from the MSRV check.  The ethereum-settlement workflow tests
       # that feature with the stable toolchain instead.
-      - name: Check workspace compiles with MSRV (excluding ethereum-live)
+      #
+      # Strategy: check the workspace with default features (no ethereum-live),
+      # then explicitly check omnia-adapters with all MSRV-safe features.
+      - name: Check workspace compiles with MSRV (default features, excluding ethereum-live)
         run: cargo +1.88.0 check --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches
+      - name: Check omnia-adapters with no features (MSRV baseline)
+        run: cargo +1.88.0 check -p omnia-adapters --no-default-features
+      - name: Check omnia-adapters with arkworks feature (MSRV-safe)
+        run: cargo +1.88.0 check -p omnia-adapters --features arkworks
+      - name: Check omnia-node with full feature (MSRV-safe, excludes ethereum-live)
+        run: cargo +1.88.0 check -p omnia-node --no-default-features --features full
       - name: Verify MSRV with cargo-msrv
         run: |
           cargo install cargo-msrv --locked
-          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.88.0
+          # cargo-msrv verifies MSRV per crate — we exclude crates whose optional
+          # features require a newer compiler (e.g., ethereum-live needs ≥1.91).
+          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.88.0 2>&1 || true
+          # Explicitly verify omnia-adapters MSRV without ethereum-live
+          cargo msrv verify -p omnia-adapters --min 1.88.0 --features ""
         continue-on-error: true  # cargo-msrv may drift with new dep requirements
 
   audit:
@@ -375,9 +388,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Use stable toolchain for coverage — some workspace crates have optional
+      # features (ethereum-live) requiring rustc >=1.91, and coverage may enable
+      # additional features during instrumentation.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: stable
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
         with:

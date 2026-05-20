@@ -91,6 +91,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(AtomicBool::new(false)),
+        settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
     };
 
     let app = http::build_http_router().with_state(app_state);
