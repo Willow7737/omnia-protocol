@@ -300,7 +300,7 @@ jobs:
           echo "tags=ghcr.io/${{ github.repository }}/omnia-node:$VERSION,ghcr.io/${{ github.repository }}/omnia-node:latest" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
