@@ -391,10 +391,7 @@ pub fn verify_ceremony_transcript(
     let mut transcript = initial_transcript.to_vec();
     for (i, contribution) in contributions.iter().enumerate() {
         verify_contribution(contribution, &transcript, tau_size).map_err(|e| {
-            SetupError::InvalidContribution(format!(
-                "Contribution {} failed verification: {}",
-                i, e
-            ))
+            SetupError::InvalidContribution(format!("Contribution {i} failed verification: {e}"))
         })?;
         transcript = contribution.transcript.clone();
     }
@@ -805,8 +802,7 @@ mod tests {
             assert_eq!(
                 &transcript[offset..offset + 64],
                 g1_bytes.as_slice(),
-                "G1 power {} should be the generator",
-                i
+                "G1 power {i} should be the generator"
             );
         }
     }

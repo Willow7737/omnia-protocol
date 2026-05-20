@@ -84,14 +84,11 @@ impl ThresholdConfig {
     pub fn new(total_participants: usize, threshold: usize) -> Self {
         assert!(
             threshold >= 2,
-            "Threshold must be at least 2, got {}",
-            threshold
+            "Threshold must be at least 2, got {threshold}"
         );
         assert!(
             threshold <= total_participants,
-            "Threshold {} exceeds total participants {}",
-            threshold,
-            total_participants
+            "Threshold {threshold} exceeds total participants {total_participants}"
         );
         Self {
             total_participants,

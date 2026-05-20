@@ -5,6 +5,8 @@
 //! Unlike criterion (statistical), iai-callgrind produces reproducible
 //! results ideal for CI regression detection.
 
+#![allow(clippy::unwrap_used)]
+
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use omnia_consensus::CausalGraph;
 use omnia_crypto::generate_keypair;
@@ -40,7 +42,8 @@ fn bench_vector_clock_merge_100() {
 fn bench_event_validate() {
     let creator: NodeId = [0u8; 32];
     let event = create_signed_event(creator, 0, None);
-    black_box(event.validate().unwrap());
+    event.validate().unwrap();
+    black_box(());
 }
 
 #[library_benchmark]

@@ -82,17 +82,10 @@ fn test_isqrt_key_values() {
         let r = isqrt(n);
         let r_sq: u128 = (r as u128) * (r as u128);
         let n128: u128 = n as u128;
-        assert!(r_sq <= n128, "isqrt({}) = {}, but {}^2 > {}", n, r, r, n);
+        assert!(r_sq <= n128, "isqrt({n}) = {r}, but {r}^2 > {n}");
         if r < u64::MAX {
             let r_plus_1_sq: u128 = ((r + 1) as u128) * ((r + 1) as u128);
-            assert!(
-                n128 < r_plus_1_sq,
-                "isqrt({}) = {}, but {} >= ({}+1)^2",
-                n,
-                r,
-                n,
-                r
-            );
+            assert!(n128 < r_plus_1_sq, "isqrt({n}) = {r}, but {n} >= ({r}+1)^2");
         }
     }
 }

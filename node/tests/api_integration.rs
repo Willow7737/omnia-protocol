@@ -208,7 +208,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
     // Give the server a moment to start accepting connections
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    (format!("http://127.0.0.1:{}", port), handle)
+    (format!("http://127.0.0.1:{port}"), handle)
 }
 
 /// Holds a running test server together with the RAII guards that ensure
@@ -867,8 +867,7 @@ async fn test_rate_limit_events_endpoint() {
             let error_msg = body["error"].as_str().unwrap();
             assert!(
                 error_msg.contains("rate limit"),
-                "Error message should mention rate limit, got: {}",
-                error_msg
+                "Error message should mention rate limit, got: {error_msg}"
             );
             break;
         }
@@ -919,8 +918,7 @@ async fn test_mint_ubc_non_admin_forbidden() {
     let error_msg = body["error"].as_str().unwrap();
     assert!(
         error_msg.contains("not authorized"),
-        "Error message should mention authorization, got: {}",
-        error_msg
+        "Error message should mention authorization, got: {error_msg}"
     );
 }
 
@@ -991,8 +989,7 @@ async fn test_advance_epoch_non_admin_forbidden() {
     let error_msg = body["error"].as_str().unwrap();
     assert!(
         error_msg.contains("not authorized"),
-        "Error message should mention authorization, got: {}",
-        error_msg
+        "Error message should mention authorization, got: {error_msg}"
     );
 }
 
@@ -1074,8 +1071,7 @@ async fn test_cors_preflight() {
     let methods_str = allow_methods.to_str().unwrap();
     assert!(
         methods_str.contains("GET") && methods_str.contains("POST"),
-        "Allowed methods should include GET and POST, got: {}",
-        methods_str
+        "Allowed methods should include GET and POST, got: {methods_str}"
     );
 
     let allow_headers = resp
@@ -1085,8 +1081,7 @@ async fn test_cors_preflight() {
     let headers_str = allow_headers.to_str().unwrap();
     assert!(
         headers_str.contains("authorization") && headers_str.contains("content-type"),
-        "Allowed headers should include Authorization and Content-Type, got: {}",
-        headers_str
+        "Allowed headers should include Authorization and Content-Type, got: {headers_str}"
     );
 
     let max_age = resp
@@ -1149,15 +1144,13 @@ async fn test_error_format_401_unauthorized() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "401 response should have 'error' string field, got: {:?}",
-        body
+        "401 response should have 'error' string field, got: {body:?}"
     );
     let error_msg = body["error"].as_str().unwrap();
     assert!(!error_msg.is_empty(), "Error message should not be empty");
     assert!(
         error_msg.contains("authorization"),
-        "Missing-auth error should mention 'authorization', got: {}",
-        error_msg
+        "Missing-auth error should mention 'authorization', got: {error_msg}"
     );
 
     // --- Expired token ---
@@ -1172,8 +1165,7 @@ async fn test_error_format_401_unauthorized() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "401 response should have 'error' string field, got: {:?}",
-        body
+        "401 response should have 'error' string field, got: {body:?}"
     );
     assert!(
         body["error"].as_str().unwrap().contains("expired"),
@@ -1193,8 +1185,7 @@ async fn test_error_format_401_unauthorized() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "401 response should have 'error' string field, got: {:?}",
-        body
+        "401 response should have 'error' string field, got: {body:?}"
     );
     assert!(
         !body["error"].as_str().unwrap().is_empty(),
@@ -1230,14 +1221,12 @@ async fn test_error_format_403_forbidden() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "403 response should have 'error' string field, got: {:?}",
-        body
+        "403 response should have 'error' string field, got: {body:?}"
     );
     let error_msg = body["error"].as_str().unwrap();
     assert!(
         error_msg.contains("not authorized"),
-        "403 error should mention 'not authorized', got: {}",
-        error_msg
+        "403 error should mention 'not authorized', got: {error_msg}"
     );
 }
 
@@ -1261,8 +1250,7 @@ async fn test_error_format_404_not_found() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "404 response should have 'error' string field, got: {:?}",
-        body
+        "404 response should have 'error' string field, got: {body:?}"
     );
     let error_msg = body["error"].as_str().unwrap();
     assert!(
@@ -1285,8 +1273,7 @@ async fn test_error_format_404_not_found() {
     let body: Value = resp.json().await.unwrap();
     assert!(
         body["error"].is_string(),
-        "Economics 404 response should have 'error' string field, got: {:?}",
-        body
+        "Economics 404 response should have 'error' string field, got: {body:?}"
     );
 }
 
@@ -1312,14 +1299,12 @@ async fn test_error_format_429_rate_limited() {
             let body: Value = resp.json().await.unwrap();
             assert!(
                 body["error"].is_string(),
-                "429 response should have 'error' string field, got: {:?}",
-                body
+                "429 response should have 'error' string field, got: {body:?}"
             );
             let error_msg = body["error"].as_str().unwrap();
             assert!(
                 error_msg.contains("rate limit"),
-                "429 error should mention 'rate limit', got: {}",
-                error_msg
+                "429 error should mention 'rate limit', got: {error_msg}"
             );
             got_429 = true;
             break;

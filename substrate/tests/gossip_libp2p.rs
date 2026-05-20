@@ -62,7 +62,7 @@ impl TestNode {
                 data,
             })
             .await
-            .map_err(|e| format!("Failed to send publish command: {}", e))
+            .map_err(|e| format!("Failed to send publish command: {e}"))
     }
 
     /// Wait for a [`NetworkEvent::GossipReceived`] event containing the
@@ -208,9 +208,9 @@ async fn spawn_node(
     bootstrap_peers: Vec<(PeerId, Multiaddr)>,
 ) -> Result<TestNode, Box<dyn std::error::Error + Send + Sync>> {
     // Build the listen address for QUIC transport on localhost
-    let listen_addr: Multiaddr = format!("/ip4/127.0.0.1/udp/{}/quic-v1", port)
+    let listen_addr: Multiaddr = format!("/ip4/127.0.0.1/udp/{port}/quic-v1")
         .parse()
-        .map_err(|e| format!("Invalid listen address for port {}: {}", port, e))?;
+        .map_err(|e| format!("Invalid listen address for port {port}: {e}"))?;
 
     // Create OmniaNetwork — generates a fresh Ed25519 keypair internally
     let mut network = OmniaNetwork::new(listen_addr).await?;
@@ -221,7 +221,7 @@ async fn spawn_node(
     // the swarm starts polling and connections are established.
     network
         .subscribe("omnia_events")
-        .map_err(|e| format!("Subscribe failed: {:?}", e))?;
+        .map_err(|e| format!("Subscribe failed: {e:?}"))?;
 
     // Create command channel for external control of the network task
     let (cmd_tx, cmd_rx) = mpsc::channel(256);
@@ -239,7 +239,7 @@ async fn spawn_node(
     // the bootstrap peer may not be listening yet.
     for (pid, addr) in bootstrap_peers {
         if let Err(e) = network.dial(pid, addr) {
-            eprintln!("Warning: failed to dial bootstrap peer {}: {:?}", pid, e);
+            eprintln!("Warning: failed to dial bootstrap peer {pid}: {e:?}");
         }
     }
 
@@ -336,8 +336,7 @@ async fn event_propagation() -> Result<(), Box<dyn std::error::Error + Send + Sy
         .await;
     assert!(
         result_b.is_ok(),
-        "Node B should receive the event from A: {:?}",
-        result_b
+        "Node B should receive the event from A: {result_b:?}"
     );
 
     // Wait for C to receive the event (timeout 10s)
@@ -346,8 +345,7 @@ async fn event_propagation() -> Result<(), Box<dyn std::error::Error + Send + Sy
         .await;
     assert!(
         result_c.is_ok(),
-        "Node C should receive the event from A: {:?}",
-        result_c
+        "Node C should receive the event from A: {result_c:?}"
     );
 
     // Verify the event can be deserialized and its ID matches
@@ -409,8 +407,7 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
         .await;
     assert!(
         result_b.is_ok(),
-        "Node B should receive the first event: {:?}",
-        result_b
+        "Node B should receive the first event: {result_b:?}"
     );
 
     // --- D joins the network ---
@@ -434,8 +431,7 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
         .await;
     assert!(
         result_d.is_ok(),
-        "Node D (late joiner) should receive the event from A: {:?}",
-        result_d
+        "Node D (late joiner) should receive the event from A: {result_d:?}"
     );
 
     // Verify the event can be deserialized and matches
@@ -496,8 +492,7 @@ async fn multi_event_propagation() -> Result<(), Box<dyn std::error::Error + Sen
         .await;
     assert!(
         result1.is_ok(),
-        "Node B should receive event 1: {:?}",
-        result1
+        "Node B should receive event 1: {result1:?}"
     );
 
     let result2 = node_b
@@ -505,8 +500,7 @@ async fn multi_event_propagation() -> Result<(), Box<dyn std::error::Error + Sen
         .await;
     assert!(
         result2.is_ok(),
-        "Node B should receive event 2: {:?}",
-        result2
+        "Node B should receive event 2: {result2:?}"
     );
 
     let result3 = node_b
@@ -514,8 +508,7 @@ async fn multi_event_propagation() -> Result<(), Box<dyn std::error::Error + Sen
         .await;
     assert!(
         result3.is_ok(),
-        "Node B should receive event 3: {:?}",
-        result3
+        "Node B should receive event 3: {result3:?}"
     );
 
     // Verify all events deserialize correctly and have valid signatures

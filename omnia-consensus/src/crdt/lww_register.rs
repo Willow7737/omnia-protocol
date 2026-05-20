@@ -174,7 +174,7 @@ impl<T: Clone + Serialize + Default> Default for LwwRegister<T> {
 impl<T: Clone + Serialize + fmt::Display> fmt::Display for LwwRegister<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.value {
-            Some(v) => write!(f, "LWW({})", v),
+            Some(v) => write!(f, "LWW({v})"),
             None => write!(f, "LWW(<empty>)"),
         }
     }

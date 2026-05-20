@@ -622,7 +622,7 @@ mod tests {
         for (i, contribution) in transcript.contributions.iter().enumerate() {
             replay_srs
                 .apply_contribution(contribution)
-                .unwrap_or_else(|e| panic!("Contribution {} failed verification: {}", i, e));
+                .unwrap_or_else(|e| panic!("Contribution {i} failed verification: {e}"));
         }
 
         // Verify the final transcript hash matches

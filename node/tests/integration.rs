@@ -103,7 +103,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
     // Give the server a moment to start
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    (format!("http://127.0.0.1:{}", port), handle)
+    (format!("http://127.0.0.1:{port}"), handle)
 }
 
 #[tokio::test]
@@ -111,7 +111,7 @@ async fn test_health_endpoint() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
     let client = reqwest::Client::new();
-    let resp = client.get(format!("{}/health", base_url)).send().await?;
+    let resp = client.get(format!("{base_url}/health")).send().await?;
 
     assert_eq!(resp.status(), 200);
 
@@ -128,7 +128,7 @@ async fn test_metrics_endpoint() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
 
     let client = reqwest::Client::new();
-    let resp = client.get(format!("{}/metrics", base_url)).send().await?;
+    let resp = client.get(format!("{base_url}/metrics")).send().await?;
 
     assert_eq!(resp.status(), 200);
 
@@ -167,7 +167,7 @@ async fn test_submit_event() -> Result<()> {
 
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{}/api/v1/events", base_url))
+        .post(format!("{base_url}/api/v1/events"))
         .json(&json!({
             "payload": hex::encode(b"hello omnia"),
             "event_type": "test"
@@ -193,7 +193,7 @@ async fn test_get_event_not_found() -> Result<()> {
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/api/v1/events/nonexistent", base_url))
+        .get(format!("{base_url}/api/v1/events/nonexistent"))
         .send()
         .await?;
 
@@ -235,10 +235,7 @@ async fn test_swagger_ui() -> Result<()> {
 async fn test_swagger_ui_disabled() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{}/swagger-ui/", base_url))
-        .send()
-        .await?;
+    let resp = client.get(format!("{base_url}/swagger-ui/")).send().await?;
     assert_eq!(
         resp.status(),
         404,
@@ -293,7 +290,7 @@ async fn test_openapi_json_disabled() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/api-docs/openapi.json", base_url))
+        .get(format!("{base_url}/api-docs/openapi.json"))
         .send()
         .await?;
     assert_eq!(

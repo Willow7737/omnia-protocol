@@ -518,7 +518,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     pub fn stats(&self) -> ConsensusStats {
         let mut by_state: HashMap<String, usize> = HashMap::new();
         for state in self.event_states.values() {
-            let key = format!("{:?}", state);
+            let key = format!("{state:?}");
             *by_state.entry(key).or_insert(0) += 1;
         }
 

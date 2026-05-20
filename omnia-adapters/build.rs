@@ -18,7 +18,7 @@ fn main() {
             println!("cargo:rustc-cfg=rustc_version_compatible");
         }
         // Print version for debugging
-        println!("cargo:rustc-env=OMNIA_RUSTC_VERSION={}", version);
+        println!("cargo:rustc-env=OMNIA_RUSTC_VERSION={version}");
     }
 
     // Enable FFI if pre-compiled library exists

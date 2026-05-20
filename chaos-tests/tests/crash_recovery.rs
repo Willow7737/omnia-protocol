@@ -69,8 +69,7 @@ fn test_crash_recovery() {
     let node2_events = network.nodes[2].graph.event_ids().len();
     assert!(
         node2_events > 0,
-        "Node 2 should have events after restart, got {}",
-        node2_events
+        "Node 2 should have events after restart, got {node2_events}"
     );
 
     // Submit events from node 2 after recovery
@@ -95,9 +94,7 @@ fn test_crash_recovery() {
     let final_committed = network.committed_count();
     assert!(
         final_committed >= committed_during_crash,
-        "Committed count should not decrease: before={}, after={}",
-        committed_during_crash,
-        final_committed
+        "Committed count should not decrease: before={committed_during_crash}, after={final_committed}"
     );
 
     tracing::info!(

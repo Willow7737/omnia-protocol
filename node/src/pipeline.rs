@@ -209,6 +209,7 @@ impl Default for PipelineRouter {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -257,7 +258,7 @@ mod tests {
         let work = HotWork {
             event_bytes: vec![1, 2, 3],
         };
-        assert!(format!("{:?}", work).contains("HotWork"));
+        assert!(format!("{work:?}").contains("HotWork"));
     }
 
     #[test]
@@ -269,8 +270,8 @@ mod tests {
         let settlement = ColdWork::SettlementSubmit {
             batch_data: vec![4, 5, 6],
         };
-        assert!(format!("{:?}", proof).contains("GenerateProof"));
-        assert!(format!("{:?}", snapshot).contains("SnapshotReplication"));
-        assert!(format!("{:?}", settlement).contains("SettlementSubmit"));
+        assert!(format!("{proof:?}").contains("GenerateProof"));
+        assert!(format!("{snapshot:?}").contains("SnapshotReplication"));
+        assert!(format!("{settlement:?}").contains("SettlementSubmit"));
     }
 }

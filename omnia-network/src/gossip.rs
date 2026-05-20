@@ -697,8 +697,7 @@ pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(
         }
         _ => {
             return Err(GossipError::InvalidMessageFormat(format!(
-                "unknown compression flag: 0x{:02x}",
-                flag
+                "unknown compression flag: 0x{flag:02x}"
             )));
         }
     };
@@ -782,8 +781,7 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("unsigned"),
-            "Expected unsigned error, got: {}",
-            err_msg
+            "Expected unsigned error, got: {err_msg}"
         );
     }
 

@@ -61,9 +61,7 @@ fn test_low_message_loss_liveness() {
     let committed_after = network.committed_count();
     assert!(
         committed_after >= committed_before,
-        "Committed count should not decrease: before={}, after={}",
-        committed_before,
-        committed_after
+        "Committed count should not decrease: before={committed_before}, after={committed_after}"
     );
 
     tracing::info!(

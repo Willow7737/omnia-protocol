@@ -80,11 +80,10 @@ fn test_double_spend_attack() {
         ShardError::ValidationFailed(msg) => {
             assert!(
                 msg.contains("Insufficient balance"),
-                "expected 'Insufficient balance', got '{}'",
-                msg
+                "expected 'Insufficient balance', got '{msg}'"
             );
         }
-        other => panic!("expected ValidationFailed, got {:?}", other),
+        other => panic!("expected ValidationFailed, got {other:?}"),
     }
 
     // Verify balances unchanged after failed transfer
@@ -122,11 +121,10 @@ fn test_negative_balance_prevention() {
         ShardError::ValidationFailed(msg) => {
             assert!(
                 msg.contains("Insufficient balance"),
-                "expected 'Insufficient balance', got '{}'",
-                msg
+                "expected 'Insufficient balance', got '{msg}'"
             );
         }
-        other => panic!("expected ValidationFailed, got {:?}", other),
+        other => panic!("expected ValidationFailed, got {other:?}"),
     }
 
     // A's balance should be untouched
@@ -255,11 +253,10 @@ fn test_zero_amount_transfer_rejected() {
         ShardError::InvalidOperation(msg) => {
             assert!(
                 msg.contains("greater than zero"),
-                "expected 'greater than zero', got '{}'",
-                msg
+                "expected 'greater than zero', got '{msg}'"
             );
         }
-        other => panic!("expected InvalidOperation, got {:?}", other),
+        other => panic!("expected InvalidOperation, got {other:?}"),
     }
 }
 
@@ -281,11 +278,10 @@ fn test_zero_amount_mint_rejected() {
         ShardError::InvalidOperation(msg) => {
             assert!(
                 msg.contains("greater than zero"),
-                "expected 'greater than zero', got '{}'",
-                msg
+                "expected 'greater than zero', got '{msg}'"
             );
         }
-        other => panic!("expected InvalidOperation, got {:?}", other),
+        other => panic!("expected InvalidOperation, got {other:?}"),
     }
 }
 
@@ -311,11 +307,10 @@ fn test_zero_amount_burn_rejected() {
         ShardError::InvalidOperation(msg) => {
             assert!(
                 msg.contains("greater than zero"),
-                "expected 'greater than zero', got '{}'",
-                msg
+                "expected 'greater than zero', got '{msg}'"
             );
         }
-        other => panic!("expected InvalidOperation, got {:?}", other),
+        other => panic!("expected InvalidOperation, got {other:?}"),
     }
 }
 
@@ -352,11 +347,10 @@ fn test_burn_insufficient_balance() {
         ShardError::ValidationFailed(msg) => {
             assert!(
                 msg.contains("Insufficient balance"),
-                "expected 'Insufficient balance', got '{}'",
-                msg
+                "expected 'Insufficient balance', got '{msg}'"
             );
         }
-        other => panic!("expected ValidationFailed, got {:?}", other),
+        other => panic!("expected ValidationFailed, got {other:?}"),
     }
 
     // apply() should also catch it

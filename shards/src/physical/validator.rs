@@ -18,8 +18,7 @@ impl PhysicalValidator {
             PhysicalOp::AnchorItem { item_id, .. } => {
                 if state.provenance.contains_key(item_id) {
                     return Err(ShardError::StateConflict(format!(
-                        "Item already anchored: {:?}",
-                        item_id
+                        "Item already anchored: {item_id:?}"
                     )));
                 }
                 Ok(())

@@ -155,11 +155,10 @@ mod tests {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("insufficient"),
-                    "Error should mention insufficient balance, got: {}",
-                    msg
+                    "Error should mention insufficient balance, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected ValidationFailed, got: {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got: {other:?}"),
             Ok(()) => panic!("Second transfer should have failed"),
         }
 
@@ -194,11 +193,10 @@ mod tests {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("insufficient"),
-                    "Error should mention insufficient balance, got: {}",
-                    msg
+                    "Error should mention insufficient balance, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected ValidationFailed, got: {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got: {other:?}"),
             Ok(()) => panic!("Transfer should have failed"),
         }
 
@@ -241,8 +239,7 @@ mod tests {
         let result = state.apply(&mint_op, &event1);
         assert!(
             result.is_ok(),
-            "Replayed Mint should be handled gracefully (idempotent or rejected), got: {:?}",
-            result
+            "Replayed Mint should be handled gracefully (idempotent or rejected), got: {result:?}"
         );
 
         // Balance should be 100 (credited twice) — the state layer doesn't
@@ -274,11 +271,10 @@ mod tests {
                 assert!(
                     msg.to_lowercase().contains("zero")
                         || msg.to_lowercase().contains("greater than zero"),
-                    "Error should mention zero amount, got: {}",
-                    msg
+                    "Error should mention zero amount, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected InvalidOperation, got: {:?}", other),
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
             Ok(()) => panic!("Zero-amount transfer should have been rejected"),
         }
     }
@@ -332,11 +328,10 @@ mod tests {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("insufficient"),
-                    "Error should mention insufficient balance, got: {}",
-                    msg
+                    "Error should mention insufficient balance, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected ValidationFailed, got: {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got: {other:?}"),
             Ok(()) => panic!("Burn should have been rejected"),
         }
 
@@ -432,11 +427,10 @@ mod tests {
             Err(ShardError::InvalidOperation(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("greater than zero"),
-                    "Error should mention zero amount, got: {}",
-                    msg
+                    "Error should mention zero amount, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected InvalidOperation, got: {:?}", other),
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
             Ok(()) => panic!("Zero-amount mint should have been rejected"),
         }
     }
@@ -458,11 +452,10 @@ mod tests {
             Err(ShardError::InvalidOperation(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("greater than zero"),
-                    "Error should mention zero amount, got: {}",
-                    msg
+                    "Error should mention zero amount, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected InvalidOperation, got: {:?}", other),
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
             Ok(()) => panic!("Zero-amount burn should have been rejected"),
         }
     }
@@ -492,11 +485,10 @@ mod tests {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
                     msg.to_lowercase().contains("not found"),
-                    "Error should mention account not found, got: {}",
-                    msg
+                    "Error should mention account not found, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected ValidationFailed, got: {:?}", other),
+            Err(other) => panic!("Expected ValidationFailed, got: {other:?}"),
             Ok(()) => panic!("Transfer from non-existent account should fail"),
         }
     }
@@ -535,11 +527,10 @@ mod tests {
             Err(ShardError::InvalidOperation(msg)) => {
                 assert!(
                     msg.contains("Financial"),
-                    "Error should mention Financial, got: {}",
-                    msg
+                    "Error should mention Financial, got: {msg}"
                 );
             }
-            Err(other) => panic!("Expected InvalidOperation, got: {:?}", other),
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
             Ok(()) => panic!("Non-Financial ShardOp should have been rejected"),
         }
     }

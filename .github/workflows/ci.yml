@@ -133,7 +133,6 @@ jobs:
           shared-key: "omnia-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}"
       - name: Verify Cargo.lock is up to date
         run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
-        continue-on-error: true  # Lockfile drift is caught by the build-reproducibility job
       # Skip settlement::live tests on all PRs — they require a live Ethereum
       # endpoint which is only available on main branch with secrets.
       # Mock settlement tests always pass (MSRV 1.88, zero alloy).
@@ -261,23 +260,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # cargo-udeps requires -Z binary-dep-depinfo which is nightly-only.
+      # Use a pinned nightly to avoid regressions with the latest nightly.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          # cargo-udeps v0.1.61+ depends on cargo v0.96+ which requires rustc ≥1.93
-          toolchain: "1.93.0"
-      # Override rust-toolchain.toml which pins 1.88 — cargo-udeps needs 1.93+
+          toolchain: nightly-2025-12-01
+          components: rust-src
       - name: Override toolchain for cargo-udeps
-        run: rustup override set 1.93.0
+        run: rustup override set nightly-2025-12-01
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-udeps"
       - name: Install cargo-udeps
-        run: cargo +1.93.0 install cargo-udeps --locked
+        run: cargo +nightly-2025-12-01 install cargo-udeps --locked
       - name: Check for unused dependencies
-        run: cargo +1.93.0 udeps --workspace --all-features --exclude omnia-fuzz
-        continue-on-error: true  # cargo-udeps may require newer rustc than stable
+        run: cargo +nightly-2025-12-01 udeps --workspace --all-features --exclude omnia-fuzz
+        continue-on-error: true  # cargo-udeps may report false positives
       # NOTE: omnia-adapters with --all-features includes ethereum-live
-      # which requires rustc ≥1.91. The udeps check runs on stable.
+      # which requires rustc ≥1.91. The udeps check runs on nightly which
+      # satisfies this requirement.
 
   mutation-testing:
     name: Mutation Testing

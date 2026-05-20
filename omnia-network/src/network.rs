@@ -826,7 +826,7 @@ mod tests {
     fn test_network_config_custom_bootstrap_peers() {
         // Use a PeerId to generate a valid multiaddr for testing
         let peer_id = PeerId::random();
-        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{}", peer_id)
+        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{peer_id}")
             .parse()
             .expect("valid multiaddr");
         let config = NetworkConfig {
@@ -934,7 +934,7 @@ mod tests {
     fn test_extract_peer_id_from_multiaddr() {
         // Multiaddr with /p2p suffix — use a generated PeerId for a valid address
         let peer_id = PeerId::random();
-        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{}", peer_id)
+        let addr: Multiaddr = format!("/ip4/1.2.3.4/udp/4001/quic-v1/p2p/{peer_id}")
             .parse()
             .expect("valid multiaddr");
         let extracted = extract_peer_id_from_multiaddr(&addr);

@@ -486,7 +486,7 @@ impl EncryptedKeyStore {
             .to_bytes();
 
         let purpose_index = purpose as u32;
-        let derivation_info = format!("OMNIA-SLIP0010-{}-{}-V1", purpose_index, index);
+        let derivation_info = format!("OMNIA-SLIP0010-{purpose_index}-{index}-V1");
 
         let hkdf = Hkdf::<Sha256>::new(Some(&purpose_index.to_be_bytes()), &secret_bytes);
         let mut derived_key = [0u8; 32];

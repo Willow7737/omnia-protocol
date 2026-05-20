@@ -126,6 +126,7 @@ const ALPHA: u64 = 5;
 ///
 /// A 3×3 MDS matrix of field elements, or [`ZkError::MdsMatrixInversionFailed`]
 /// if a Cauchy denominator is unexpectedly zero.
+#[allow(clippy::needless_range_loop)]
 fn generate_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
     let xs: [u64; T] = [1, 2, 3];
     let ys: [u64; T] = [5, 6, 7];
@@ -192,6 +193,7 @@ fn generate_round_constants() -> Vec<Fr> {
 /// the custom module's x = [1, 2, 3], y = [5, 6, 7]. This ensures
 /// both parameter sets produce different hash outputs while both are
 /// valid Cauchy MDS matrices.
+#[allow(clippy::needless_range_loop)]
 fn generate_reference_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
     let xs: [u64; T] = [2, 3, 4];
     let ys: [u64; T] = [6, 7, 8];
@@ -325,6 +327,7 @@ fn sbox_gadget(x: &FpVar<Fr>) -> FpVar<Fr> {
 // ---------------------------------------------------------------------------
 
 /// Multiply a state vector by the MDS matrix (off-circuit).
+#[allow(clippy::needless_range_loop)]
 fn mds_multiply(mds: &[[Fr; T]; T], state: &[Fr; T]) -> [Fr; T] {
     let mut result = [Fr::zero(); T];
     for i in 0..T {

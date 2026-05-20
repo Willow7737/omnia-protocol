@@ -211,8 +211,7 @@ mod tests {
         let err = bundle.verify_integrity().unwrap_err();
         assert!(
             matches!(err, ProofBundleError::InvalidVersion(99)),
-            "expected InvalidVersion(99), got {:?}",
-            err
+            "expected InvalidVersion(99), got {err:?}"
         );
     }
 
@@ -223,8 +222,7 @@ mod tests {
         let err = bundle.verify_integrity().unwrap_err();
         assert!(
             matches!(err, ProofBundleError::EmptyProof),
-            "expected EmptyProof, got {:?}",
-            err
+            "expected EmptyProof, got {err:?}"
         );
     }
 
@@ -237,8 +235,7 @@ mod tests {
         let err = bundle.verify_integrity().unwrap_err();
         assert!(
             matches!(err, ProofBundleError::SameStateRoots),
-            "expected SameStateRoots, got {:?}",
-            err
+            "expected SameStateRoots, got {err:?}"
         );
     }
 
