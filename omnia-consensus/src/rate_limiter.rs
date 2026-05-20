@@ -81,8 +81,8 @@ impl RateLimiter {
         let elapsed_secs = elapsed.as_secs() as u32;
         let elapsed_nanos = elapsed.subsec_nanos();
         // Fractional refill: add refill_rate * elapsed_secs + (refill_rate * elapsed_nanos / 1_000_000_000)
-        let refill = elapsed_secs * self.refill_rate
-            + (self.refill_rate as u64 * elapsed_nanos as u64 / 1_000_000_000) as u32;
+        let refill =
+            elapsed_secs * self.refill_rate + (self.refill_rate as u64 * elapsed_nanos as u64 / 1_000_000_000) as u32;
         if refill > 0 {
             bucket.tokens = (bucket.tokens + refill).min(self.max_tokens);
             bucket.last_refill = now;
@@ -168,10 +168,7 @@ mod tests {
 
         // Should allow up to 200 events (burst capacity)
         for _ in 0..200 {
-            assert!(
-                limiter.allow(&peer_id),
-                "Should allow within burst capacity"
-            );
+            assert!(limiter.allow(&peer_id), "Should allow within burst capacity");
         }
     }
 
@@ -183,17 +180,11 @@ mod tests {
 
         // Exhaust the 5 tokens
         for _ in 0..5 {
-            assert!(
-                limiter.allow(&peer_id),
-                "Should allow within burst capacity"
-            );
+            assert!(limiter.allow(&peer_id), "Should allow within burst capacity");
         }
 
         // 6th event should be dropped
-        assert!(
-            !limiter.allow(&peer_id),
-            "Should reject after burst capacity exhausted"
-        );
+        assert!(!limiter.allow(&peer_id), "Should reject after burst capacity exhausted");
     }
 
     /// Test: rate limit resets after refill interval.
@@ -212,10 +203,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(1100));
 
         // Should now allow one more event
-        assert!(
-            limiter.allow(&peer_id),
-            "Should allow after refill interval"
-        );
+        assert!(limiter.allow(&peer_id), "Should allow after refill interval");
     }
 
     /// Test: different peers have independent rate limits.

@@ -94,8 +94,7 @@ pub fn build_http_router() -> Router<AppState> {
     // Swagger UI is optional — embeds ~11MB of JS/CSS assets into the binary.
     // Enable with --features swagger-ui for development.
     #[cfg(feature = "swagger-ui")]
-    let router = router
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
+    let router = router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
     router
         // --- Middleware layers ---
@@ -311,12 +310,7 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/healthz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -330,20 +324,13 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/readyz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["status"], "not_ready");
         assert_eq!(body["reason"], "no_peers");
@@ -356,20 +343,13 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/readyz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["status"], "not_ready");
         assert_eq!(body["reason"], "syncing");
@@ -382,20 +362,13 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/readyz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["status"], "not_ready");
         assert_eq!(body["reason"], "no_finalization");
@@ -408,20 +381,13 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/readyz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["status"], "ready");
         assert_eq!(body["peers"], 1);
@@ -435,20 +401,13 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024)
-            .await
-            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["status"], "alive");
     }

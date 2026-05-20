@@ -8,8 +8,7 @@
 //! and verify that all honest nodes agree on finalized state.
 
 use omnia_consensus::{
-    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, DEFAULT_EJECTION_THRESHOLD,
-    DEFAULT_SLASH_THRESHOLD,
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 use omnia_primitives::{Event, NodeId, VectorClock};
 
@@ -68,14 +67,7 @@ fn test_multi_node_bft_finality() {
         let event = if self_parent.is_none() {
             Event::genesis(creator, vec![seq as u8])
         } else {
-            Event::new(
-                creator,
-                seq,
-                vector_clock.clone(),
-                self_parent,
-                None,
-                vec![seq as u8],
-            )
+            Event::new(creator, seq, vector_clock.clone(), self_parent, None, vec![seq as u8])
         };
 
         let event_id = event.id;
@@ -83,9 +75,7 @@ fn test_multi_node_bft_finality() {
 
         // Insert and process on all nodes (simulating gossip)
         for (i, engine) in engines.iter_mut().enumerate() {
-            graphs[i]
-                .insert(event.clone())
-                .expect("graph insert should succeed");
+            graphs[i].insert(event.clone()).expect("graph insert should succeed");
             let committed = engine.process_event(&event, &graphs[i]);
             // Processing should not error on honest events
             assert!(
@@ -103,10 +93,7 @@ fn test_multi_node_bft_finality() {
     // All nodes should have committed the same number of events
     let first = committed_counts[0];
     for (i, &count) in committed_counts.iter().enumerate() {
-        assert_eq!(
-            count, first,
-            "Node {i} committed {count} events, expected {first}"
-        );
+        assert_eq!(count, first, "Node {i} committed {count} events, expected {first}");
     }
 }
 
@@ -154,9 +141,7 @@ fn test_bft_safety_with_byzantine_node() {
 
         // Process on all honest nodes
         for (i, engine) in engines.iter_mut().enumerate() {
-            graphs[i]
-                .insert(event.clone())
-                .expect("graph insert should succeed");
+            graphs[i].insert(event.clone()).expect("graph insert should succeed");
             let committed = engine.process_event(&event, &graphs[i]);
             assert!(
                 committed.is_ok(),
@@ -218,10 +203,7 @@ fn test_consensus_progress_with_minority_faults() {
             let other_parent = self_parents[other_idx];
 
             let event = if self_parents[node_idx].is_none() {
-                Event::genesis(
-                    creator,
-                    format!("round-{round}-node-{node_idx}").into_bytes(),
-                )
+                Event::genesis(creator, format!("round-{round}-node-{node_idx}").into_bytes())
             } else {
                 Event::new(
                     creator,
@@ -238,9 +220,7 @@ fn test_consensus_progress_with_minority_faults() {
 
             // Process this event on all honest nodes (simulating gossip)
             for (i, engine) in engines.iter_mut().enumerate() {
-                graphs[i]
-                    .insert(event.clone())
-                    .expect("graph insert should succeed");
+                graphs[i].insert(event.clone()).expect("graph insert should succeed");
                 let committed = engine.process_event(&event, &graphs[i]);
                 assert!(
                     committed.is_ok(),

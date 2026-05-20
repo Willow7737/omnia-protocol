@@ -89,10 +89,7 @@ struct LatencyMeasurement {
 
 impl LatencyMeasurement {
     fn latency_ms(&self) -> f64 {
-        self.finalize_time
-            .duration_since(self.submit_time)
-            .as_secs_f64()
-            * 1000.0
+        self.finalize_time.duration_since(self.submit_time).as_secs_f64() * 1000.0
     }
 }
 
@@ -148,17 +145,15 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         return Err(LoadTestError::Config("num_nodes must be > 0".to_string()));
     }
     if config.events_per_second == 0 {
-        return Err(LoadTestError::Config(
-            "events_per_second must be > 0".to_string(),
-        ));
+        return Err(LoadTestError::Config("events_per_second must be > 0".to_string()));
     }
     if config.duration.as_secs() == 0 {
         return Err(LoadTestError::Config("duration must be > 0".to_string()));
     }
 
     use omnia_substrate::{
-        CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, SlashingEngine,
-        VectorClock, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+        CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, SlashingEngine, VectorClock,
+        DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
     };
 
     // Use configurable total_nodes for BFT quorum calculation.
@@ -260,9 +255,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
 
     // Warmup phase — events are processed to warm up consensus but not counted
     while Instant::now() < warmup_end {
-        let payload: Vec<u8> = (0..config.event_size_bytes)
-            .map(|i| (i % 256) as u8)
-            .collect();
+        let payload: Vec<u8> = (0..config.event_size_bytes).map(|i| (i % 256) as u8).collect();
         create_and_submit(
             &mut graph,
             &mut consensus,
@@ -288,9 +281,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
 
     // Measurement phase
     while Instant::now() < test_end {
-        let payload: Vec<u8> = (0..config.event_size_bytes)
-            .map(|i| (i % 256) as u8)
-            .collect();
+        let payload: Vec<u8> = (0..config.event_size_bytes).map(|i| (i % 256) as u8).collect();
         let (s, f, l) = create_and_submit(
             &mut graph,
             &mut consensus,
@@ -338,8 +329,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
 
     // Rough bandwidth estimate: events * payload_size * 8 / duration
     let network_bandwidth_mbps = if actual_duration.as_secs_f64() > 0.0 {
-        (total_submitted as f64 * config.event_size_bytes as f64 * 8.0)
-            / (actual_duration.as_secs_f64() * 1_000_000.0)
+        (total_submitted as f64 * config.event_size_bytes as f64 * 8.0) / (actual_duration.as_secs_f64() * 1_000_000.0)
     } else {
         0.0
     };

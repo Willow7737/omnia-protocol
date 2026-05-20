@@ -141,12 +141,7 @@ impl ProvenanceLog {
     /// # Returns
     ///
     /// The newly created `ProvenanceEvent`.
-    pub fn transfer(
-        &mut self,
-        to: String,
-        rf_proof: RfFingerprint,
-        commitment: QuantumCommitment,
-    ) -> ProvenanceEvent {
+    pub fn transfer(&mut self, to: String, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Transferred,
             from: Some(self.current_holder.clone()),
@@ -164,11 +159,7 @@ impl ProvenanceLog {
     ///
     /// Verification checks that the item's current RF signature matches
     /// its registered fingerprint and that all commitments are valid.
-    pub fn verify(
-        &mut self,
-        rf_proof: RfFingerprint,
-        commitment: QuantumCommitment,
-    ) -> ProvenanceEvent {
+    pub fn verify(&mut self, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Verified,
             from: None,
@@ -184,11 +175,7 @@ impl ProvenanceLog {
     /// Record a destruction event for the item.
     ///
     /// Once an item is destroyed, no further transfers are possible.
-    pub fn destroy(
-        &mut self,
-        rf_proof: RfFingerprint,
-        commitment: QuantumCommitment,
-    ) -> ProvenanceEvent {
+    pub fn destroy(&mut self, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Destroyed,
             from: Some(self.current_holder.clone()),
@@ -444,11 +431,7 @@ mod tests {
             test_anchor(),
         );
 
-        let holders = [
-            "did:omnia:distributor",
-            "did:omnia:retailer",
-            "did:omnia:customer",
-        ];
+        let holders = ["did:omnia:distributor", "did:omnia:retailer", "did:omnia:customer"];
 
         for (i, holder) in holders.iter().enumerate() {
             log.transfer(

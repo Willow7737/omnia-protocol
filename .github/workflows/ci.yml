@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -78,13 +78,13 @@ jobs:
       matrix:
         include:
           - features: "--features full"
-            toolchain: "1.88.0"
+            toolchain: "1.91.0"
           - features: "--features light"
-            toolchain: "1.88.0"
+            toolchain: "1.91.0"
           - features: "--no-default-features"
-            toolchain: "1.88.0"
+            toolchain: "1.91.0"
           - features: "--no-default-features --features full"
-            toolchain: "1.88.0"
+            toolchain: "1.91.0"
           # all-features includes ethereum-live (alloy) which needs rustc ≥1.91
           - features: "--all-features"
             toolchain: "1.91.0"
@@ -93,10 +93,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-      # rust-toolchain.toml pins 1.88.0; override it when the matrix
+      # rust-toolchain.toml pins 1.91.0; override it when the matrix
       # specifies a different toolchain (e.g. 1.91.0 for --all-features).
-      - name: Override toolchain for non-1.88 builds
-        if: matrix.toolchain != '1.88.0'
+      - name: Override toolchain for non-1.91 builds
+        if: matrix.toolchain != '1.91.0'
         run: rustup override set ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
         with:
@@ -135,7 +135,7 @@ jobs:
         run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
       # Skip settlement::live tests on all PRs — they require a live Ethereum
       # endpoint which is only available on main branch with secrets.
-      # Mock settlement tests always pass (MSRV 1.88, zero alloy).
+      # Mock settlement tests always pass (MSRV 1.91, zero alloy).
       - name: Test workspace (skip live settlement)
         run: cargo test --workspace --exclude omnia-fuzz --lib --bins --tests --verbose -- --skip settlement::live
         timeout-minutes: 15
@@ -154,7 +154,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-chaos"
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-release-size"
@@ -191,14 +191,14 @@ jobs:
           echo "::notice::Binary size check passed: $SIZE bytes ≤ $MAX bytes"
 
   msrv:
-    name: MSRV Check (1.88)
+    name: MSRV Check (1.91)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust 1.88.0
+      - name: Install Rust 1.91.0
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.88.0
+          toolchain: 1.91.0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-msrv"
@@ -209,21 +209,21 @@ jobs:
       # Strategy: check the workspace with default features (no ethereum-live),
       # then explicitly check omnia-adapters with all MSRV-safe features.
       - name: Check workspace compiles with MSRV (default features, excluding ethereum-live)
-        run: cargo +1.88.0 check --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches
+        run: cargo +1.91.0 check --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches
       - name: Check omnia-adapters with no features (MSRV baseline)
-        run: cargo +1.88.0 check -p omnia-adapters --no-default-features
+        run: cargo +1.91.0 check -p omnia-adapters --no-default-features
       - name: Check omnia-adapters with arkworks feature (MSRV-safe)
-        run: cargo +1.88.0 check -p omnia-adapters --features arkworks
+        run: cargo +1.91.0 check -p omnia-adapters --features arkworks
       - name: Check omnia-node with full feature (MSRV-safe, excludes ethereum-live)
-        run: cargo +1.88.0 check -p omnia-node --no-default-features --features full
+        run: cargo +1.91.0 check -p omnia-node --no-default-features --features full
       - name: Verify MSRV with cargo-msrv
         run: |
           cargo install cargo-msrv --locked
           # cargo-msrv verifies MSRV per crate — we exclude crates whose optional
           # features require a newer compiler (e.g., ethereum-live needs ≥1.91).
-          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.88.0 2>&1 || true
+          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.91.0 2>&1 || true
           # Explicitly verify omnia-adapters MSRV without ethereum-live
-          cargo msrv verify -p omnia-adapters --min 1.88.0 --features ""
+          cargo msrv verify -p omnia-adapters --min 1.91.0 --features ""
         continue-on-error: true  # cargo-msrv may drift with new dep requirements
 
   audit:
@@ -233,7 +233,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
       - run: cargo audit --deny warnings --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
@@ -249,7 +249,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
       - name: Run cargo-deny
@@ -287,7 +287,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-mutants"
@@ -305,7 +305,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-bench-${{ hashFiles('**/Cargo.lock') }}"
@@ -331,7 +331,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
@@ -377,7 +377,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
           targets: x86_64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
       - name: Build #1
@@ -498,7 +498,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.91.0"
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx --locked
       - name: Generate SBOM

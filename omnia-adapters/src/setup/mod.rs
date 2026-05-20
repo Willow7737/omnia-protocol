@@ -72,15 +72,14 @@ use thiserror::Error;
 // Re-export key types for convenience
 pub use ceremony_client::{CeremonyClient, CeremonyClientError};
 pub use ceremony_server::{
-    CeremonyConfig, CeremonyError, CeremonyPhase, CeremonyServer, CeremonyTranscript,
-    ContributionReceipt,
+    CeremonyConfig, CeremonyError, CeremonyPhase, CeremonyServer, CeremonyTranscript, ContributionReceipt,
 };
 pub use circuit_setup::{
     derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency, CircuitKeyPair,
 };
 pub use contribution::{
-    contribute, initial_transcript_with_generators, initialize_transcript,
-    verify_ceremony_transcript, verify_contribution, Contribution, ContributionProof,
+    contribute, initial_transcript_with_generators, initialize_transcript, verify_ceremony_transcript,
+    verify_contribution, Contribution, ContributionProof,
 };
 pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
 
@@ -131,8 +130,7 @@ impl SetupCeremony {
     /// A new [`SetupCeremony`] ready to accept contributions.
     pub fn new(degree: usize, min_participants: usize) -> Self {
         Self {
-            srs: PowersOfTau::new(degree)
-                .expect("PowersOfTau initialization should not fail with valid degree"),
+            srs: PowersOfTau::new(degree).expect("PowersOfTau initialization should not fail with valid degree"),
             min_participants,
             completed: false,
         }
@@ -177,10 +175,7 @@ impl SetupCeremony {
     ///
     /// A [`CircuitKeyPair`] if the ceremony has enough participants,
     /// or [`SetupError::InsufficientParticipants`] otherwise.
-    pub fn finalize_basic(
-        &mut self,
-        circuit: &crate::circuit::RollupCircuit,
-    ) -> Result<CircuitKeyPair, SetupError> {
+    pub fn finalize_basic(&mut self, circuit: &crate::circuit::RollupCircuit) -> Result<CircuitKeyPair, SetupError> {
         if self.srs.contribution_count < self.min_participants {
             return Err(SetupError::InsufficientParticipants(
                 self.min_participants,
@@ -205,11 +200,7 @@ impl SetupCeremony {
     ///
     /// A [`CircuitKeyPair`] if the ceremony has enough participants,
     /// or [`SetupError::InsufficientParticipants`] otherwise.
-    pub fn finalize_expanded(
-        &mut self,
-        num_events: usize,
-        merkle_depth: usize,
-    ) -> Result<CircuitKeyPair, SetupError> {
+    pub fn finalize_expanded(&mut self, num_events: usize, merkle_depth: usize) -> Result<CircuitKeyPair, SetupError> {
         if self.srs.contribution_count < self.min_participants {
             return Err(SetupError::InsufficientParticipants(
                 self.min_participants,
@@ -276,9 +267,7 @@ mod tests {
             .accept_contribution(Some([42u8; 32]))
             .expect("contribution failed");
 
-        let keypair = ceremony
-            .finalize_expanded(2, 4)
-            .expect("finalize expanded failed");
+        let keypair = ceremony.finalize_expanded(2, 4).expect("finalize expanded failed");
         assert!(ceremony.completed);
         assert!(!keypair.proving_key.is_empty());
     }

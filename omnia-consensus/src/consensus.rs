@@ -19,9 +19,7 @@
 
 use crate::causal_graph::CausalGraph;
 #[cfg(feature = "persistent-storage")]
-use crate::consensus_store::{
-    ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
-};
+use crate::consensus_store::{ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError};
 use crate::slashing::{SlashOffense, SlashingEngine};
 #[cfg(test)]
 use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
@@ -88,8 +86,7 @@ impl ConsensusConfig {
     /// Create a config with a cryptographically random round seed.
     pub fn with_random_seed(total_nodes: usize) -> Result<Self, ConsensusError> {
         let mut seed = [0u8; 32];
-        getrandom::getrandom(&mut seed)
-            .map_err(|e| ConsensusError::EntropyFailed(e.to_string()))?;
+        getrandom::getrandom(&mut seed).map_err(|e| ConsensusError::EntropyFailed(e.to_string()))?;
         Ok(Self {
             total_nodes,
             commit_delay_rounds: 1,
@@ -317,11 +314,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// - [`ConsensusError::GraphError`] — a causal graph operation failed.
     /// - [`ConsensusError::EventPruned`] — an event on the ancestry path was pruned.
     /// - [`ConsensusError::InvariantViolated`] — an internal invariant was broken.
-    pub fn process_event(
-        &mut self,
-        event: &Event,
-        graph: &CausalGraph,
-    ) -> Result<Vec<EventId>, ConsensusError> {
+    pub fn process_event(&mut self, event: &Event, graph: &CausalGraph) -> Result<Vec<EventId>, ConsensusError> {
         let event_id = event.id;
         let creator = event.creator;
 
@@ -349,9 +342,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                     Ok(first_event) => {
                         // Existing equivocation check using full Event data
                         if SlashingEngine::check_equivocation(first_event, event) {
-                            let outcome = self
-                                .slashing
-                                .record_offense(creator, SlashOffense::Equivocation);
+                            let outcome = self.slashing.record_offense(creator, SlashOffense::Equivocation);
                             tracing::warn!(
                                 node = ?&creator[..4],
                                 sequence = event.sequence,
@@ -370,9 +361,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                 && metadata.sequence == event.sequence
                                 && metadata.event_id != event_id
                             {
-                                let outcome = self
-                                    .slashing
-                                    .record_offense(creator, SlashOffense::Equivocation);
+                                let outcome = self.slashing.record_offense(creator, SlashOffense::Equivocation);
                                 tracing::warn!(
                                     node = ?&creator[..4],
                                     sequence = event.sequence,
@@ -386,10 +375,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                     }
                     Err(_) => {
                         // Event not found at all — should not happen
-                        tracing::error!(
-                            ?first_id,
-                            "first_event_for_sequence references non-existent event"
-                        );
+                        tracing::error!(?first_id, "first_event_for_sequence references non-existent event");
                     }
                 }
             }
@@ -410,15 +396,12 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let is_witness = self.is_witness(event_id, creator, round);
 
         if is_witness {
-            self.event_states
-                .insert(event_id, ConsensusState::Witness { round });
-            self.round_witnesses
-                .entry(round)
-                .or_default()
-                .insert(event_id);
-            let info = self.node_info.get_mut(&creator).ok_or_else(|| {
-                ConsensusError::InvariantViolated("creator not in node_info".to_string())
-            })?;
+            self.event_states.insert(event_id, ConsensusState::Witness { round });
+            self.round_witnesses.entry(round).or_default().insert(event_id);
+            let info = self
+                .node_info
+                .get_mut(&creator)
+                .ok_or_else(|| ConsensusError::InvariantViolated("creator not in node_info".to_string()))?;
             info.current_round = info.current_round.max(round);
             // FIX 3: update last witness round to round+1 to prevent
             // subsequent events in the same round from also being witnesses
@@ -436,8 +419,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let committed = self.check_commitments(event_id, round, graph)?;
 
         for &committed_id in &committed {
-            self.event_states
-                .insert(committed_id, ConsensusState::Committed);
+            self.event_states.insert(committed_id, ConsensusState::Committed);
         }
 
         self.committed_count += committed.len() as u64;
@@ -457,8 +439,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     pub fn record_acknowledgment(&mut self, event_id: EventId) {
         if let Some(&state) = self.event_states.get(&event_id) {
             if state == ConsensusState::Pending && self.config.optimistic_confirmation {
-                self.event_states
-                    .insert(event_id, ConsensusState::Acknowledged);
+                self.event_states.insert(event_id, ConsensusState::Acknowledged);
             }
         }
     }
@@ -478,10 +459,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     ///
     /// `true` if the event's state is [`ConsensusState::Committed`].
     pub fn is_committed(&self, event_id: &EventId) -> bool {
-        matches!(
-            self.event_states.get(event_id),
-            Some(ConsensusState::Committed)
-        )
+        matches!(self.event_states.get(event_id), Some(ConsensusState::Committed))
     }
 
     /// Get the round assigned to an event.
@@ -504,10 +482,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     ///
     /// The node's current round, or `0` if the node has not been seen.
     pub fn node_round(&self, node_id: &NodeId) -> u64 {
-        self.node_info
-            .get(node_id)
-            .map(|i| i.current_round)
-            .unwrap_or(0)
+        self.node_info.get(node_id).map(|i| i.current_round).unwrap_or(0)
     }
 
     /// Get consensus statistics.
@@ -526,12 +501,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         ConsensusStats {
             total_tracked: self.event_states.len(),
             committed: self.committed_count,
-            current_max_round: self
-                .node_info
-                .values()
-                .map(|i| i.current_round)
-                .max()
-                .unwrap_or(0),
+            current_max_round: self.node_info.values().map(|i| i.current_round).max().unwrap_or(0),
             by_state,
             total_nodes: self.config.total_nodes,
             threshold: supermajority(self.config.total_nodes),
@@ -617,8 +587,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// Check for optimistic confirmation (fast path)
     fn check_optimistic_confirmation(&mut self, event: &Event) {
         if event.ack_count >= self.config.optimistic_threshold {
-            self.event_states
-                .insert(event.id, ConsensusState::Acknowledged);
+            self.event_states.insert(event.id, ConsensusState::Acknowledged);
         }
     }
 
@@ -633,10 +602,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let mut committed = HashSet::new();
 
         // Only witnesses can trigger commitments
-        if !matches!(
-            self.event_states.get(&event_id),
-            Some(ConsensusState::Witness { .. })
-        ) {
+        if !matches!(self.event_states.get(&event_id), Some(ConsensusState::Witness { .. })) {
             return Ok(committed.into_iter().collect());
         }
 
@@ -687,12 +653,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     }
 
     /// Determine if a witness is famous
-    fn is_famous(
-        &self,
-        witness_id: EventId,
-        witness_round: u64,
-        graph: &CausalGraph,
-    ) -> Result<bool, ConsensusError> {
+    fn is_famous(&self, witness_id: EventId, witness_round: u64, graph: &CausalGraph) -> Result<bool, ConsensusError> {
         let check_round = witness_round + self.config.commit_delay_rounds;
 
         if let Some(witnesses) = self.round_witnesses.get(&check_round) {
@@ -854,10 +815,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                     self.round_timer.consecutive_timeouts
                 );
             } else {
-                tracing::warn!(
-                    "Round {} timed out. Advancing to next round.",
-                    current_round
-                );
+                tracing::warn!("Round {} timed out. Advancing to next round.", current_round);
             }
 
             self.advance_round();
@@ -881,11 +839,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// The highest `current_round` among all known nodes, or `0` if no
     /// nodes have been seen.
     pub fn current_round(&self) -> u64 {
-        self.node_info
-            .values()
-            .map(|i| i.current_round)
-            .max()
-            .unwrap_or(0)
+        self.node_info.values().map(|i| i.current_round).max().unwrap_or(0)
     }
 
     /// Advance to the next round with a new leader.
@@ -905,11 +859,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
 
         self.update_round_seed_from_timeout(next);
 
-        tracing::warn!(
-            "Advanced from round {} to round {} due to timeout",
-            current,
-            next
-        );
+        tracing::warn!("Advanced from round {} to round {} due to timeout", current, next);
     }
 
     /// Derive a new round seed from the current seed and round number
@@ -1118,14 +1068,14 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let current_round = self.current_round();
 
         // Derive equivocation tracking: NodeId → max sequence seen
-        let equivocation_tracking: HashMap<NodeId, u64> = self
-            .first_event_for_sequence
-            .keys()
-            .fold(HashMap::new(), |mut acc, (node_id, seq)| {
-                let entry = acc.entry(*node_id).or_insert(0);
-                *entry = (*entry).max(*seq);
-                acc
-            });
+        let equivocation_tracking: HashMap<NodeId, u64> =
+            self.first_event_for_sequence
+                .keys()
+                .fold(HashMap::new(), |mut acc, (node_id, seq)| {
+                    let entry = acc.entry(*node_id).or_insert(0);
+                    *entry = (*entry).max(*seq);
+                    acc
+                });
 
         let state = PersistedConsensusState {
             current_round,
@@ -1331,8 +1281,7 @@ mod tests {
     #[test]
     fn test_consensus_engine_creation() {
         let config = test_config();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let engine = ConsensusEngine::new(config, slashing);
 
         assert_eq!(engine.committed_count(), 0);
@@ -1614,13 +1563,11 @@ mod tests {
     #[test]
     #[cfg(feature = "persistent-storage")]
     fn test_consensus_resume_from_persisted() {
-        let store: Arc<dyn ConsensusStore> =
-            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+        let store: Arc<dyn ConsensusStore> = Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
 
         // Create engine, advance some rounds
         let config = test_config();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut engine = ConsensusEngine::new(config.clone(), slashing.clone());
 
         // Simulate that some nodes have advanced to round 100
@@ -1662,12 +1609,10 @@ mod tests {
     #[test]
     #[cfg(feature = "persistent-storage")]
     fn test_consensus_persist_and_restore_round_seed() {
-        let store: Arc<dyn ConsensusStore> =
-            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+        let store: Arc<dyn ConsensusStore> = Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
 
         let config = test_config();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut engine = ConsensusEngine::new(config.clone(), slashing.clone());
 
         // Update the round seed to a known value
@@ -1690,12 +1635,10 @@ mod tests {
     #[test]
     #[cfg(feature = "persistent-storage")]
     fn test_consensus_load_or_new_without_persisted_state() {
-        let store: Arc<dyn ConsensusStore> =
-            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+        let store: Arc<dyn ConsensusStore> = Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
 
         let config = test_config();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
 
         // No state persisted — should create fresh engine
         let engine = ConsensusEngine::load_or_new(config, store, slashing).unwrap();
@@ -1706,8 +1649,7 @@ mod tests {
     #[test]
     #[cfg(feature = "persistent-storage")]
     fn test_consensus_unsupported_version_rejected() {
-        let store: Arc<dyn ConsensusStore> =
-            Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
+        let store: Arc<dyn ConsensusStore> = Arc::new(crate::consensus_store::RedbConsensusStore::in_memory().unwrap());
 
         // Persist a state with an unsupported version
         let bad_state = PersistedConsensusState {
@@ -1722,8 +1664,7 @@ mod tests {
         store.save_state(&bad_state).unwrap();
 
         let config = test_config();
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
 
         // load_or_new should return Err on unsupported version
         let result = ConsensusEngine::load_or_new(config, Arc::clone(&store), slashing);
@@ -2031,12 +1972,8 @@ mod timeout_tests {
 
         // Add entries for sequences 0..5 for n1 and n2
         for seq in 0..5u64 {
-            engine
-                .first_event_for_sequence
-                .insert((n1, seq), [seq as u8; 32]);
-            engine
-                .first_event_for_sequence
-                .insert((n2, seq), [seq as u8; 32]);
+            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
+            engine.first_event_for_sequence.insert((n2, seq), [seq as u8; 32]);
         }
 
         // Set n1's events_created to 2000 (far ahead of seq 0-4)
@@ -2074,9 +2011,7 @@ mod timeout_tests {
 
         // Add entries for sequences 95..100
         for seq in 95..100u64 {
-            engine
-                .first_event_for_sequence
-                .insert((n1, seq), [seq as u8; 32]);
+            engine.first_event_for_sequence.insert((n1, seq), [seq as u8; 32]);
         }
 
         // n1 has created 100 events — distance from seq 95 is only 5

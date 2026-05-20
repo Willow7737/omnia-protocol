@@ -56,11 +56,7 @@ impl RollupOperator {
     /// * `graph` — The causal graph (wrapped in `Arc<RwLock<>>` for async access)
     /// * `settlement` — The L1 settlement adapter (any `SettlementLayer` implementor)
     /// * `batch_size` — Maximum number of events per batch
-    pub fn new(
-        graph: Arc<RwLock<CausalGraph>>,
-        settlement: Box<dyn SettlementLayer>,
-        batch_size: usize,
-    ) -> Self {
+    pub fn new(graph: Arc<RwLock<CausalGraph>>, settlement: Box<dyn SettlementLayer>, batch_size: usize) -> Self {
         Self {
             graph,
             settlement,
@@ -113,15 +109,9 @@ impl RollupOperator {
         );
 
         // 7. Verify proof on L1 (for monitoring)
-        let valid = self
-            .settlement
-            .verify_proof(&old_root, &new_root, &proof_bytes)
-            .await?;
+        let valid = self.settlement.verify_proof(&old_root, &new_root, &proof_bytes).await?;
         if !valid {
-            tracing::warn!(
-                "[{}] Proof verification returned false",
-                self.settlement.chain_id()
-            );
+            tracing::warn!("[{}] Proof verification returned false", self.settlement.chain_id());
         }
 
         self.last_batched_index += events.len();

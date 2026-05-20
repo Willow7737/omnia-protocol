@@ -55,10 +55,7 @@ fn test_equivocation_detection() {
     event_b.sign_with_keypair(&node0_keypair);
 
     // Verify these are indeed equivocating events
-    assert_ne!(
-        event_a.id, event_b.id,
-        "Equivocating events must have different IDs"
-    );
+    assert_ne!(event_a.id, event_b.id, "Equivocating events must have different IDs");
     assert_eq!(
         event_a.creator, event_b.creator,
         "Equivocating events must have the same creator"
@@ -122,26 +119,12 @@ fn test_equivocation_detected_by_multiple_observers() {
     // Create equivocating events
     let mut vc1 = node0_vc.clone();
     vc1.set(node0_id, node0_sequence.saturating_add(1));
-    let mut event_a = Event::new(
-        node0_id,
-        node0_sequence,
-        vc1,
-        node0_self_parent,
-        None,
-        vec![1],
-    );
+    let mut event_a = Event::new(node0_id, node0_sequence, vc1, node0_self_parent, None, vec![1]);
     event_a.sign_with_keypair(&node0_keypair);
 
     let mut vc2 = node0_vc.clone();
     vc2.set(node0_id, node0_sequence.saturating_add(1));
-    let mut event_b = Event::new(
-        node0_id,
-        node0_sequence,
-        vc2,
-        node0_self_parent,
-        None,
-        vec![2],
-    );
+    let mut event_b = Event::new(node0_id, node0_sequence, vc2, node0_self_parent, None, vec![2]);
     event_b.sign_with_keypair(&node0_keypair);
 
     assert!(SlashingEngine::check_equivocation(&event_a, &event_b));
@@ -207,13 +190,7 @@ fn test_silent_node_liveness_slashing() {
     let current_round: u64 = 10;
     let threshold: u64 = 3; // 3 rounds of inactivity triggers violation
 
-    let outcome = network.check_node_liveness(
-        0,
-        silent_node_id,
-        silent_last_round,
-        current_round,
-        threshold,
-    );
+    let outcome = network.check_node_liveness(0, silent_node_id, silent_last_round, current_round, threshold);
 
     assert!(
         outcome.is_some(),
@@ -285,10 +262,7 @@ fn test_repeated_liveness_violations_lead_to_slashing() {
                 "Liveness violation recorded"
             );
 
-            if matches!(
-                result,
-                SlashOutcome::Slashed { .. } | SlashOutcome::Ejected { .. }
-            ) {
+            if matches!(result, SlashOutcome::Slashed { .. } | SlashOutcome::Ejected { .. }) {
                 is_slashed = true;
                 break;
             }

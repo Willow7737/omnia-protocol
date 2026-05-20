@@ -16,19 +16,18 @@ pub mod network;
 
 // Re-export commonly used types
 pub use fast_sync::{
-    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest,
-    SyncResponse, SyncResult, SyncSnapshot,
+    select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest, SyncResponse,
+    SyncResult, SyncSnapshot,
 };
 #[cfg(feature = "network")]
 pub use gossip::{
-    deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError,
-    GossipEvent, GossipMessage, GossipProtocol, GossipStats,
+    deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError, GossipEvent, GossipMessage,
+    GossipProtocol, GossipStats,
 };
 #[cfg(feature = "network")]
 pub use network::{
-    check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig,
-    NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
-    VersionHandshake,
+    check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig, NetworkEvent,
+    OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility, VersionHandshake,
 };
 
 /// Protocol version identifier

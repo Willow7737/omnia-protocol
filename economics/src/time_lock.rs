@@ -284,13 +284,7 @@ impl TimeLockVoting {
     pub fn total_locked(&self, owner: &NodeId) -> u64 {
         self.stakes
             .get(owner)
-            .map(|stakes| {
-                stakes
-                    .iter()
-                    .filter(|s| !s.released)
-                    .map(|s| s.amount)
-                    .sum()
-            })
+            .map(|stakes| stakes.iter().filter(|s| !s.released).map(|s| s.amount).sum())
             .unwrap_or(0)
     }
 

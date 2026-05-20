@@ -64,30 +64,23 @@ pub use omnia_network;
 // Re-export commonly used types
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop,
-    BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
+    aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop, BlsError, BlsKeypair,
+    BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
-pub use causal_graph::{
-    CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata,
-};
+pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
 pub use consensus::{
-    ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine,
-    RoundTimer,
+    ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer,
 };
 pub use consensus_store::{
-    ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError,
-    RedbConsensusStore,
+    ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError, RedbConsensusStore,
 };
 pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey};
-pub use crypto_schemes::{
-    CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme,
-};
+pub use crypto_schemes::{CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme};
 pub use omnia_primitives::{
-    blake3_hash_domain, deserialize_with_version, serialize_with_version, CausalOrder, Event,
-    EventBatch, EventHeader, EventId, EventRequest, EventStatus, EventValidationError,
-    LogicalClock, NodeId, VectorClock, VectorClockError, WireFormatError, MAX_EVENT_AGE_MS,
-    MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, WIRE_FORMAT_VERSION,
+    blake3_hash_domain, deserialize_with_version, serialize_with_version, CausalOrder, Event, EventBatch, EventHeader,
+    EventId, EventRequest, EventStatus, EventValidationError, LogicalClock, NodeId, VectorClock, VectorClockError,
+    WireFormatError, MAX_EVENT_AGE_MS, MAX_PAYLOAD_SIZE, MAX_TIMESTAMP_DRIFT_MS, WIRE_FORMAT_VERSION,
 };
 // Re-export networking types from omnia-network (backward compatibility)
 // Only available when the `network` feature is enabled.
@@ -97,36 +90,32 @@ pub use mempool::{Mempool, MempoolError};
 #[cfg(feature = "network")]
 pub use omnia_network::{
     fast_sync::{
-        select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork,
-        SyncRequest, SyncResponse, SyncResult, SyncSnapshot,
+        select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest, SyncResponse,
+        SyncResult, SyncSnapshot,
     },
     gossip::{
-        deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError,
-        GossipEvent, GossipMessage, GossipProtocol, GossipStats,
+        deserialize_compressed, serialize_compressed, GossipConfig, GossipDigest, GossipError, GossipEvent,
+        GossipMessage, GossipProtocol, GossipStats,
     },
     network::{
-        check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig,
-        NetworkEvent, OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility,
-        VersionHandshake,
+        check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig, NetworkEvent,
+        OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility, VersionHandshake,
     },
     PROTOCOL_IDENTIFIER as NET_PROTOCOL_IDENTIFIER, PROTOCOL_VERSION as NET_PROTOCOL_VERSION,
 };
 pub use rate_limiter::RateLimiter;
 pub use slashing::{
-    InMemorySlashingStore, JailState, RedbSlashingStore, SlashOffense, SlashOutcome, SlashPenalty,
-    SlashingEngine, SlashingEvent, SlashingEventType, SlashingState, SlashingStore,
-    SlashingStoreError, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    InMemorySlashingStore, JailState, RedbSlashingStore, SlashOffense, SlashOutcome, SlashPenalty, SlashingEngine,
+    SlashingEvent, SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
-pub use slashing_undo::{
-    SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest,
-};
+pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage,
-    DkgVerificationResult, KeyShare, PartialSignature, ThresholdConfig, ThresholdError,
-    ThresholdKeyManager, ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
+    PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
 pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
 
@@ -450,41 +439,38 @@ impl Substrate {
         );
 
         // Create consensus store if persistence is configured
-        let consensus_store: Option<Arc<dyn ConsensusStore>> = config
-            .consensus_data_dir
-            .as_ref()
-            .and_then(|dir| match RedbConsensusStore::open(dir) {
-                Ok(store) => {
-                    tracing::info!(
-                        path = %dir.display(),
-                        "Consensus: using persistent redb store"
-                    );
-                    Some(Arc::new(store) as Arc<dyn ConsensusStore>)
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        path = %dir.display(),
-                        "Failed to open consensus store — consensus state will not persist"
-                    );
-                    None
-                }
-            });
+        let consensus_store: Option<Arc<dyn ConsensusStore>> =
+            config
+                .consensus_data_dir
+                .as_ref()
+                .and_then(|dir| match RedbConsensusStore::open(dir) {
+                    Ok(store) => {
+                        tracing::info!(
+                            path = %dir.display(),
+                            "Consensus: using persistent redb store"
+                        );
+                        Some(Arc::new(store) as Arc<dyn ConsensusStore>)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            path = %dir.display(),
+                            "Failed to open consensus store — consensus state will not persist"
+                        );
+                        None
+                    }
+                });
 
         // Create consensus engine, restoring from persisted state if available
         let consensus = match &consensus_store {
-            Some(store) => ConsensusEngine::load_or_new(
-                config.consensus.clone(),
-                Arc::clone(store),
-                slashing.clone(),
-            )
-            .unwrap_or_else(|e| {
-                tracing::warn!(
-                    error = %e,
-                    "Failed to restore consensus state — starting fresh"
-                );
-                ConsensusEngine::new(config.consensus.clone(), slashing.clone())
-            }),
+            Some(store) => ConsensusEngine::load_or_new(config.consensus.clone(), Arc::clone(store), slashing.clone())
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        error = %e,
+                        "Failed to restore consensus state — starting fresh"
+                    );
+                    ConsensusEngine::new(config.consensus.clone(), slashing.clone())
+                }),
             None => ConsensusEngine::new(config.consensus.clone(), slashing.clone()),
         };
 
@@ -556,10 +542,7 @@ impl Substrate {
     ///
     /// If this method is not called, the run loop will skip the leader
     /// check and no blocks will be proposed.
-    pub fn with_validator_candidates(
-        mut self,
-        candidates: HashMap<NodeId, (NodeKeypair, u64)>,
-    ) -> Self {
+    pub fn with_validator_candidates(mut self, candidates: HashMap<NodeId, (NodeKeypair, u64)>) -> Self {
         self.validator_candidates = candidates;
         self
     }
@@ -599,9 +582,8 @@ impl Substrate {
         // Round timer: fires at the consensus round interval (default 1 second).
         // This replaces the previous 100ms sleep poll loop with an event-driven
         // approach that only wakes when necessary.
-        let round_duration = tokio::time::Duration::from_millis(
-            self.config.consensus.round_timeout_ms.clamp(100, 10_000),
-        );
+        let round_duration =
+            tokio::time::Duration::from_millis(self.config.consensus.round_timeout_ms.clamp(100, 10_000));
         let mut round_timer = tokio::time::interval(round_duration);
 
         while self.running {
@@ -633,10 +615,7 @@ impl Substrate {
         // 2. Check if we are the leader for this round
         let current_round = self.consensus.current_round();
         if !self.validator_candidates.is_empty() {
-            if let Ok(leader) = self
-                .consensus
-                .compute_leader(&self.validator_candidates, current_round)
-            {
+            if let Ok(leader) = self.consensus.compute_leader(&self.validator_candidates, current_round) {
                 if leader == self.config.node_id {
                     // We are the leader — produce a block proposal
                     self.propose_block(current_round).await;
@@ -654,11 +633,7 @@ impl Substrate {
                 match graph.get_checked(event_id) {
                     Ok(event) => {
                         if let Err(e) = processor.process_event(event) {
-                            tracing::warn!(
-                                "Shard processor error for event {}: {}",
-                                hex::encode(&event_id[..4]),
-                                e
-                            );
+                            tracing::warn!("Shard processor error for event {}: {}", hex::encode(&event_id[..4]), e);
                         }
                     }
                     Err(CausalGraphError::EventPruned(_)) => {
@@ -709,9 +684,7 @@ impl Substrate {
 
         {
             let mut graph = self.graph.write().await;
-            graph
-                .insert((*event_arc).clone())
-                .map_err(SubstrateError::from)?;
+            graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
         }
 
         // Track for consensus processing
@@ -887,10 +860,7 @@ impl Substrate {
                     );
                 }
                 Err(_) => {
-                    tracing::warn!(
-                        "Event {} not found in graph for consensus",
-                        hex::encode(&id[..4])
-                    );
+                    tracing::warn!("Event {} not found in graph for consensus", hex::encode(&id[..4]));
                 }
             }
         }

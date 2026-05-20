@@ -204,11 +204,7 @@ fn generate_pok(
 /// # Returns
 ///
 /// `true` if the proof is valid, `false` otherwise.
-fn verify_pok(
-    proof: &ContributionProof,
-    old_transcript_hash: &[u8],
-    new_transcript_hash: &[u8],
-) -> bool {
+fn verify_pok(proof: &ContributionProof, old_transcript_hash: &[u8], new_transcript_hash: &[u8]) -> bool {
     // Recompute challenge
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"OMNIA-POK-V1");
@@ -302,11 +298,7 @@ pub fn verify_contribution(
     let new_hash = blake3::hash(&contribution.transcript);
 
     // Verify the Proof of Knowledge
-    if !verify_pok(
-        &contribution.proof,
-        old_hash.as_bytes(),
-        new_hash.as_bytes(),
-    ) {
+    if !verify_pok(&contribution.proof, old_hash.as_bytes(), new_hash.as_bytes()) {
         return Err(SetupError::InvalidContribution(
             "Proof of Knowledge verification failed".to_string(),
         ));
@@ -390,9 +382,8 @@ pub fn verify_ceremony_transcript(
 ) -> Result<(), SetupError> {
     let mut transcript = initial_transcript.to_vec();
     for (i, contribution) in contributions.iter().enumerate() {
-        verify_contribution(contribution, &transcript, tau_size).map_err(|e| {
-            SetupError::InvalidContribution(format!("Contribution {i} failed verification: {e}"))
-        })?;
+        verify_contribution(contribution, &transcript, tau_size)
+            .map_err(|e| SetupError::InvalidContribution(format!("Contribution {i} failed verification: {e}")))?;
         transcript = contribution.transcript.clone();
     }
     Ok(())
@@ -557,8 +548,7 @@ mod tests {
         let tau_size = 8;
         let initial_transcript = make_initial_transcript(tau_size);
 
-        let contribution =
-            contribute(&initial_transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
+        let contribution = contribute(&initial_transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
 
         assert_eq!(contribution.transcript.len(), tau_size * 64);
         assert!(!contribution.proof.commitment.is_empty());
@@ -568,8 +558,7 @@ mod tests {
         assert!(!contribution.public_key.is_empty());
 
         // Verify should succeed with the correct previous transcript
-        verify_contribution(&contribution, &initial_transcript, tau_size)
-            .expect("verification failed");
+        verify_contribution(&contribution, &initial_transcript, tau_size).expect("verification failed");
     }
 
     #[test]
@@ -577,8 +566,7 @@ mod tests {
         let tau_size = 4;
         let initial_transcript = make_initial_transcript(tau_size);
 
-        let contribution =
-            contribute(&initial_transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
+        let contribution = contribute(&initial_transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
 
         // Verify that the new transcript contains actual EC points (not hash outputs).
         // The first G1 point should be the generator * secret, which is non-identity
@@ -592,10 +580,7 @@ mod tests {
 
         // The new point should be different from the generator (since secret != 1)
         let generator = G1Affine::generator();
-        assert_ne!(
-            new_point, generator,
-            "Contribution should change the G1 points"
-        );
+        assert_ne!(new_point, generator, "Contribution should change the G1 points");
     }
 
     #[test]
@@ -603,8 +588,7 @@ mod tests {
         let tau_size = 4;
         let initial_transcript = make_initial_transcript(tau_size);
 
-        let contribution =
-            contribute(&initial_transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
+        let contribution = contribute(&initial_transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
 
         // Verify with wrong previous transcript should fail
         let wrong_transcript = make_initial_transcript(tau_size);
@@ -621,8 +605,7 @@ mod tests {
         let tau_size = 4;
         let initial_transcript = make_initial_transcript(tau_size);
 
-        let contribution =
-            contribute(&initial_transcript, tau_size, Some([2u8; 32])).expect("contribute failed");
+        let contribution = contribute(&initial_transcript, tau_size, Some([2u8; 32])).expect("contribute failed");
 
         // Verify with wrong tau_size should fail
         assert!(verify_contribution(&contribution, &initial_transcript, 8).is_err());
@@ -636,8 +619,7 @@ mod tests {
         for i in 0u8..3 {
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
             verify_contribution(&contribution, &transcript, tau_size).expect("verification failed");
             transcript = contribution.transcript;
         }
@@ -661,8 +643,7 @@ mod tests {
         let tau_size = 4;
         let initial = make_initial_transcript(tau_size);
 
-        let contribution =
-            contribute(&initial, tau_size, Some([77u8; 32])).expect("contribute failed");
+        let contribution = contribute(&initial, tau_size, Some([77u8; 32])).expect("contribute failed");
 
         // PoK should verify
         let old_hash = blake3::hash(&initial);
@@ -679,8 +660,7 @@ mod tests {
         let tau_size = 4;
         let initial = make_initial_transcript(tau_size);
 
-        let mut contribution =
-            contribute(&initial, tau_size, Some([88u8; 32])).expect("contribute failed");
+        let mut contribution = contribute(&initial, tau_size, Some([88u8; 32])).expect("contribute failed");
 
         // Tamper with the commitment
         if !contribution.proof.commitment.is_empty() {
@@ -701,8 +681,7 @@ mod tests {
         let tau_size = 4;
         let initial = make_initial_transcript(tau_size);
 
-        let mut contribution =
-            contribute(&initial, tau_size, Some([99u8; 32])).expect("contribute failed");
+        let mut contribution = contribute(&initial, tau_size, Some([99u8; 32])).expect("contribute failed");
 
         // Tamper with the response (simulates wrong secret)
         if !contribution.proof.response.is_empty() {
@@ -723,8 +702,7 @@ mod tests {
         let tau_size = 4;
         let initial = make_initial_transcript(tau_size);
 
-        let mut contribution =
-            contribute(&initial, tau_size, Some([100u8; 32])).expect("contribution failed");
+        let mut contribution = contribute(&initial, tau_size, Some([100u8; 32])).expect("contribution failed");
 
         // Tamper with the public key (simulates wrong PK)
         if !contribution.proof.public_key.is_empty() {
@@ -750,8 +728,7 @@ mod tests {
         for i in 0u8..3 {
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
             transcript = contribution.transcript.clone();
             contributions.push(contribution);
         }
@@ -771,8 +748,7 @@ mod tests {
         for i in 0u8..2 {
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribution failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribution failed");
             transcript = contribution.transcript.clone();
             contributions.push(contribution);
         }
@@ -810,17 +786,11 @@ mod tests {
     #[test]
     fn test_transcript_hash_not_zero_initialized() {
         let hash = initialize_transcript(1, 3);
-        assert_ne!(
-            hash, [0u8; 32],
-            "Transcript hash should not be zero-initialized"
-        );
+        assert_ne!(hash, [0u8; 32], "Transcript hash should not be zero-initialized");
 
         // Different ceremony IDs should produce different hashes
         let hash2 = initialize_transcript(2, 3);
-        assert_ne!(
-            hash, hash2,
-            "Different ceremony IDs must produce different hashes"
-        );
+        assert_ne!(hash, hash2, "Different ceremony IDs must produce different hashes");
 
         // Different participant counts should produce different hashes
         let hash3 = initialize_transcript(1, 5);

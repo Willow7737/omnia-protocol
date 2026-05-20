@@ -77,24 +77,16 @@ impl NodeMetrics {
                     "Total events finalized by consensus",
                 )
                 .expect("Failed to create events_finalized counter");
-                let peers_connected = IntGauge::new(
-                    "omnia_node_peers_connected",
-                    "Current number of connected peers",
-                )
-                .expect("Failed to create peers_connected gauge");
-                let consensus_round =
-                    IntGauge::new("omnia_node_consensus_round", "Current consensus round")
-                        .expect("Failed to create consensus_round gauge");
-                let shard_ops_total = IntCounter::new(
-                    "omnia_node_shard_operations_total",
-                    "Total shard operations processed",
-                )
-                .expect("Failed to create shard_ops_total counter");
-                let http_requests_total = IntCounter::new(
-                    "omnia_node_http_requests_total",
-                    "Total HTTP requests served",
-                )
-                .expect("Failed to create http_requests_total counter");
+                let peers_connected = IntGauge::new("omnia_node_peers_connected", "Current number of connected peers")
+                    .expect("Failed to create peers_connected gauge");
+                let consensus_round = IntGauge::new("omnia_node_consensus_round", "Current consensus round")
+                    .expect("Failed to create consensus_round gauge");
+                let shard_ops_total =
+                    IntCounter::new("omnia_node_shard_operations_total", "Total shard operations processed")
+                        .expect("Failed to create shard_ops_total counter");
+                let http_requests_total =
+                    IntCounter::new("omnia_node_http_requests_total", "Total HTTP requests served")
+                        .expect("Failed to create http_requests_total counter");
 
                 let registry = prometheus::default_registry();
                 // Ignore AlreadyReg errors — metrics may have been registered
@@ -116,10 +108,7 @@ impl NodeMetrics {
                 }
             })
             .clone();
-        Ok(NODE_METRICS
-            .get()
-            .expect("metrics just initialized")
-            .clone())
+        Ok(NODE_METRICS.get().expect("metrics just initialized").clone())
     }
 }
 

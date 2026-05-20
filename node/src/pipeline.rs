@@ -163,18 +163,12 @@ impl PipelineRouter {
     }
 
     /// Submit warm-path work.
-    pub async fn submit_warm(
-        &self,
-        work: WarmWork,
-    ) -> Result<(), mpsc::error::SendError<WarmWork>> {
+    pub async fn submit_warm(&self, work: WarmWork) -> Result<(), mpsc::error::SendError<WarmWork>> {
         self.warm_tx.send(work).await
     }
 
     /// Submit cold-path work.
-    pub async fn submit_cold(
-        &self,
-        work: ColdWork,
-    ) -> Result<(), mpsc::error::SendError<ColdWork>> {
+    pub async fn submit_cold(&self, work: ColdWork) -> Result<(), mpsc::error::SendError<ColdWork>> {
         self.cold_tx.send(work).await
     }
 
@@ -216,11 +210,7 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_creation() {
         let (router, hot_rx, warm_rx, cold_rx) = PipelineRouter::new();
-        assert!(router
-            .try_submit_hot(HotWork {
-                event_bytes: vec![]
-            })
-            .is_ok());
+        assert!(router.try_submit_hot(HotWork { event_bytes: vec![] }).is_ok());
         drop(hot_rx);
         drop(warm_rx);
         drop(cold_rx);
@@ -229,12 +219,7 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_submit_warm() {
         let (router, _hot_rx, mut warm_rx, _cold_rx) = PipelineRouter::new();
-        router
-            .submit_warm(WarmWork {
-                event_id: [1u8; 32],
-            })
-            .await
-            .unwrap();
+        router.submit_warm(WarmWork { event_id: [1u8; 32] }).await.unwrap();
         let work = warm_rx.recv().await.unwrap();
         assert_eq!(work.event_id, [1u8; 32]);
     }

@@ -82,13 +82,11 @@ pub use validator::DomainValidator;
 // Re-export shard-specific types for convenience
 pub use biological::{BiologicalOp, BiologicalState, BiologicalValidator, ConsentRecord};
 pub use computational::{ComputationalOp, ComputationalState, ComputationalValidator, TaskStatus};
-pub use financial::{
-    AccountBalance as FinancialAccountBalance, FinancialOp, FinancialState, FinancialValidator,
-};
+pub use financial::{AccountBalance as FinancialAccountBalance, FinancialOp, FinancialState, FinancialValidator};
 pub use identity::{
-    format_did, AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError,
-    DidUpdate, EncryptedShare, IdentityOp, IdentityState, IdentityValidator, RecoveryConfig,
-    RecoveryShare, ShamirRecovery, DID_METHOD, DID_PREFIX,
+    format_did, AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError, DidUpdate, EncryptedShare,
+    IdentityOp, IdentityState, IdentityValidator, RecoveryConfig, RecoveryShare, ShamirRecovery, DID_METHOD,
+    DID_PREFIX,
 };
 pub use physical::{PhysicalOp, PhysicalState, PhysicalValidator, ProvenanceEvent};
 
@@ -183,12 +181,12 @@ impl EconomicsValidator {
         op: &omnia_economics::EconomicsOp,
     ) -> Result<(), ShardError> {
         match op {
-            omnia_economics::EconomicsOp::SpendUbc { amount, .. } if *amount == 0 => Err(
-                ShardError::ValidationFailed("Spend amount must be > 0".into()),
-            ),
-            omnia_economics::EconomicsOp::MintUbc { amount, .. } if *amount == 0 => Err(
-                ShardError::ValidationFailed("Mint amount must be > 0".into()),
-            ),
+            omnia_economics::EconomicsOp::SpendUbc { amount, .. } if *amount == 0 => {
+                Err(ShardError::ValidationFailed("Spend amount must be > 0".into()))
+            }
+            omnia_economics::EconomicsOp::MintUbc { amount, .. } if *amount == 0 => {
+                Err(ShardError::ValidationFailed("Mint amount must be > 0".into()))
+            }
             _ => Ok(()),
         }
     }

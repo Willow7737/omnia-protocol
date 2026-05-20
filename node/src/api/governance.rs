@@ -133,8 +133,7 @@ pub async fn cast_vote(
     State(state): State<AppState>,
     Json(body): Json<CastVoteRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let choice = parse_vote_choice(&body.choice)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+    let choice = parse_vote_choice(&body.choice).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     let mut economics = state.economics.lock().await;
     let current_epoch = economics.current_epoch();
@@ -149,9 +148,7 @@ pub async fn cast_vote(
         ));
     }
 
-    let effective_weight = economics
-        .governance
-        .effective_weight(&body.did, current_epoch);
+    let effective_weight = economics.governance.effective_weight(&body.did, current_epoch);
 
     let result = economics
         .governance

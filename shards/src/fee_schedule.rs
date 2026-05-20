@@ -139,9 +139,7 @@ mod tests {
     #[test]
     fn test_fee_for_op_financial() {
         let schedule = FeeSchedule::standard();
-        let op = ShardOp::Financial(crate::financial::ops::FinancialOp::BalanceQuery {
-            account: [0u8; 32],
-        });
+        let op = ShardOp::Financial(crate::financial::ops::FinancialOp::BalanceQuery { account: [0u8; 32] });
         assert_eq!(schedule.fee_for_op(&op), 10);
     }
 
@@ -155,9 +153,7 @@ mod tests {
     #[test]
     fn test_fee_for_op_zero_schedule() {
         let schedule = FeeSchedule::zero();
-        let op = ShardOp::Financial(crate::financial::ops::FinancialOp::BalanceQuery {
-            account: [0u8; 32],
-        });
+        let op = ShardOp::Financial(crate::financial::ops::FinancialOp::BalanceQuery { account: [0u8; 32] });
         assert_eq!(schedule.fee_for_op(&op), 0);
     }
 
@@ -172,17 +168,11 @@ mod tests {
     fn test_default_is_standard() {
         let default_schedule = FeeSchedule::default();
         let standard_schedule = FeeSchedule::standard();
-        assert_eq!(
-            default_schedule.financial_op_fee,
-            standard_schedule.financial_op_fee
-        );
+        assert_eq!(default_schedule.financial_op_fee, standard_schedule.financial_op_fee);
         assert_eq!(
             default_schedule.computational_op_fee,
             standard_schedule.computational_op_fee
         );
-        assert_eq!(
-            default_schedule.cross_shard_fee,
-            standard_schedule.cross_shard_fee
-        );
+        assert_eq!(default_schedule.cross_shard_fee, standard_schedule.cross_shard_fee);
     }
 }

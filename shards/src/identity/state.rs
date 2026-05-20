@@ -156,10 +156,7 @@ impl IdentityState {
                         DidUpdate::RemoveAuthentication { public_key } => {
                             doc.authentication.retain(|pk| pk != public_key);
                         }
-                        DidUpdate::AddService {
-                            service_id,
-                            endpoint,
-                        } => {
+                        DidUpdate::AddService { service_id, endpoint } => {
                             doc.services.insert(service_id.clone(), endpoint.clone());
                         }
                     }
@@ -168,20 +165,18 @@ impl IdentityState {
                 Ok(())
             }
             IdentityOp::RecoverDid { did, shares } => {
-                let config = self.recovery_registry.get(did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!("No recovery config for DID: {did}"))
-                })?;
+                let config = self
+                    .recovery_registry
+                    .get(did)
+                    .ok_or_else(|| ShardError::ValidationFailed(format!("No recovery config for DID: {did}")))?;
 
                 if shares.len() < config.threshold as usize {
-                    return Err(ShardError::ValidationFailed(
-                        "Insufficient recovery shares".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Insufficient recovery shares".into()));
                 }
 
                 // Reconstruct the secret from the provided shares
-                let reconstructed = ShamirRecovery::reconstruct(shares).map_err(|e| {
-                    ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}"))
-                })?;
+                let reconstructed = ShamirRecovery::reconstruct(shares)
+                    .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}")))?;
 
                 // Derive a new Ed25519 public key from the reconstructed secret
                 // using BLAKE3 domain separation. The derived key is deterministic:
@@ -195,17 +190,13 @@ impl IdentityState {
             }
             IdentityOp::VerifyDid { did } => {
                 if !self.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 Ok(())
             }
             IdentityOp::AddAgent { did, agent } => {
                 if !self.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "Owner DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("Owner DID not found: {did}")));
                 }
                 if self.agent_registry.contains_key(&agent.did) {
                     return Err(ShardError::StateConflict(format!(
@@ -222,29 +213,27 @@ impl IdentityState {
                 algorithm,
             } => {
                 if !self.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 let anchor = BiometricAnchor::enroll(template, algorithm);
                 self.biometric_registry.insert(did.clone(), anchor);
                 Ok(())
             }
             IdentityOp::VerifyBiometric { did, template } => {
-                let anchor = self.biometric_registry.get(did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!("No biometric enrolled for DID: {did}"))
-                })?;
+                let anchor = self
+                    .biometric_registry
+                    .get(did)
+                    .ok_or_else(|| ShardError::ValidationFailed(format!("No biometric enrolled for DID: {did}")))?;
                 if !anchor.verify(template) {
-                    return Err(ShardError::ValidationFailed(
-                        "Biometric verification failed".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Biometric verification failed".into()));
                 }
                 Ok(())
             }
             IdentityOp::RevokeAgent { agent_did } => {
-                let agent = self.agent_registry.get_mut(agent_did).ok_or_else(|| {
-                    ShardError::ValidationFailed(format!("Agent not found: {agent_did}"))
-                })?;
+                let agent = self
+                    .agent_registry
+                    .get_mut(agent_did)
+                    .ok_or_else(|| ShardError::ValidationFailed(format!("Agent not found: {agent_did}")))?;
                 agent.revoke();
                 Ok(())
             }
@@ -255,9 +244,7 @@ impl IdentityState {
                 total_shares,
             } => {
                 if !self.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 let shares = ShamirRecovery::split(secret, *threshold, *total_shares);
                 self.recovery_registry.insert(
@@ -278,16 +265,9 @@ impl IdentityState {
     ///
     /// Convenience method that creates a `BiometricAnchor` without going
     /// through the `apply` pipeline.
-    pub fn enroll_biometric(
-        &mut self,
-        did: &str,
-        template: &[u8],
-        algorithm: &str,
-    ) -> Result<(), ShardError> {
+    pub fn enroll_biometric(&mut self, did: &str, template: &[u8], algorithm: &str) -> Result<(), ShardError> {
         if !self.dids.contains_key(did) {
-            return Err(ShardError::ValidationFailed(format!(
-                "DID not found: {did}"
-            )));
+            return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
         }
         let anchor = BiometricAnchor::enroll(template, algorithm);
         self.biometric_registry.insert(did.to_string(), anchor);
@@ -296,9 +276,10 @@ impl IdentityState {
 
     /// Verify a biometric template against the stored commitment.
     pub fn verify_biometric(&self, did: &str, fresh_template: &[u8]) -> Result<bool, ShardError> {
-        let anchor = self.biometric_registry.get(did).ok_or_else(|| {
-            ShardError::ValidationFailed(format!("No biometric enrolled for DID: {did}"))
-        })?;
+        let anchor = self
+            .biometric_registry
+            .get(did)
+            .ok_or_else(|| ShardError::ValidationFailed(format!("No biometric enrolled for DID: {did}")))?;
         Ok(anchor.verify(fresh_template))
     }
 
@@ -311,9 +292,7 @@ impl IdentityState {
         total: u8,
     ) -> Result<Vec<RecoveryShare>, ShardError> {
         if !self.dids.contains_key(did) {
-            return Err(ShardError::ValidationFailed(format!(
-                "DID not found: {did}"
-            )));
+            return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
         }
         let shares = ShamirRecovery::split(secret, threshold, total);
         self.recovery_registry.insert(
@@ -328,9 +307,10 @@ impl IdentityState {
 
     /// Recover a DID secret using Shamir's Secret Sharing.
     pub fn recover_did(&self, did: &str, shares: &[RecoveryShare]) -> Result<Vec<u8>, ShardError> {
-        let config = self.recovery_registry.get(did).ok_or_else(|| {
-            ShardError::ValidationFailed(format!("No recovery config for DID: {did}"))
-        })?;
+        let config = self
+            .recovery_registry
+            .get(did)
+            .ok_or_else(|| ShardError::ValidationFailed(format!("No recovery config for DID: {did}")))?;
         if shares.len() < config.threshold as usize {
             return Err(ShardError::ValidationFailed(format!(
                 "Insufficient shares: have {}, need {}",
@@ -338,9 +318,8 @@ impl IdentityState {
                 config.threshold
             )));
         }
-        ShamirRecovery::reconstruct(shares).map_err(|e| {
-            ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}"))
-        })
+        ShamirRecovery::reconstruct(shares)
+            .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}")))
     }
 
     /// Complete the recovery process by adding the recovered key to DID authentication.
@@ -401,11 +380,7 @@ impl IdentityState {
     /// authenticated encryption — any tampering with the ciphertext will be
     /// detected on decryption. In production, a higher layer would re-encrypt
     /// with the custodian's actual public key.
-    pub fn persist_shares(
-        &mut self,
-        did: &str,
-        shares: &[RecoveryShare],
-    ) -> Result<(), ShardError> {
+    pub fn persist_shares(&mut self, did: &str, shares: &[RecoveryShare]) -> Result<(), ShardError> {
         let mut encrypted: Vec<EncryptedShare> = Vec::with_capacity(shares.len());
 
         for share in shares {
@@ -442,9 +417,10 @@ impl IdentityState {
     /// - v1 (legacy): XOR decryption with BLAKE3-derived keys
     /// - v2 (current): AES-256-GCM authenticated decryption
     pub fn decrypt_shares(&self, did: &str) -> Result<Vec<RecoveryShare>, ShardError> {
-        let encrypted_shares = self.shares.get(did).ok_or_else(|| {
-            ShardError::ValidationFailed(format!("No encrypted shares for DID: {did}"))
-        })?;
+        let encrypted_shares = self
+            .shares
+            .get(did)
+            .ok_or_else(|| ShardError::ValidationFailed(format!("No encrypted shares for DID: {did}")))?;
 
         let mut decrypted = Vec::with_capacity(encrypted_shares.len());
 
@@ -512,10 +488,7 @@ impl Default for IdentityState {
 /// for both encryption and decryption. Retained for backward compatibility
 /// with v1 encrypted shares.
 fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
-    data.iter()
-        .enumerate()
-        .map(|(i, byte)| byte ^ key[i % 32])
-        .collect()
+    data.iter().enumerate().map(|(i, byte)| byte ^ key[i % 32]).collect()
 }
 
 /// Derive an AES-256 key from key material using HKDF-SHA256.
@@ -545,15 +518,9 @@ fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[
 ///
 /// Delegates to [`omnia_crypto::aes256gcm_decrypt_aad`] to avoid duplicating
 /// the AES-GCM decryption pattern that already exists in the crypto crate.
-fn aes256gcm_decrypt(
-    ciphertext: &[u8],
-    key: &[u8; 32],
-    nonce: &[u8; 12],
-    aad: &[u8],
-) -> Result<Vec<u8>, ShardError> {
-    omnia_crypto::aes256gcm_decrypt_aad(ciphertext, key, nonce, aad).map_err(|_| {
-        ShardError::ValidationFailed("Share decryption failed: authentication error".to_string())
-    })
+fn aes256gcm_decrypt(ciphertext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, ShardError> {
+    omnia_crypto::aes256gcm_decrypt_aad(ciphertext, key, nonce, aad)
+        .map_err(|_| ShardError::ValidationFailed("Share decryption failed: authentication error".to_string()))
 }
 
 /// Derive a 32-byte Ed25519 public key from a reconstructed secret
@@ -589,9 +556,7 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:abcd1234".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-            .unwrap();
+        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
         // Step 2: Configure recovery with 5 custodians, threshold=3
         let secret = b"my-super-secret-recovery-key";
@@ -625,11 +590,8 @@ mod tests {
         assert_eq!(all_shares.len(), 5);
 
         // Pick 3 out of 5 shares (e.g., custodians 1, 3, 5)
-        let recovering_shares: Vec<RecoveryShare> = vec![
-            all_shares[0].clone(),
-            all_shares[2].clone(),
-            all_shares[4].clone(),
-        ];
+        let recovering_shares: Vec<RecoveryShare> =
+            vec![all_shares[0].clone(), all_shares[2].clone(), all_shares[4].clone()];
 
         // Step 4: Reconstruct the secret
         let reconstructed = ShamirRecovery::reconstruct(&recovering_shares).unwrap();
@@ -706,10 +668,7 @@ mod tests {
         // Different secrets should produce different keys
         let key_a = derive_identity_key(b"secret-a");
         let key_b = derive_identity_key(b"secret-b");
-        assert_ne!(
-            key_a, key_b,
-            "Different secrets must produce different keys"
-        );
+        assert_ne!(key_a, key_b, "Different secrets must produce different keys");
 
         // Same secret should produce the same key
         let key_1 = derive_identity_key(b"same-secret");
@@ -785,10 +744,7 @@ mod tests {
 
         // Decryption should fail (AEAD authentication)
         let result = state.decrypt_shares(&did);
-        assert!(
-            result.is_err(),
-            "Tampered share should fail AES-GCM authentication"
-        );
+        assert!(result.is_err(), "Tampered share should fail AES-GCM authentication");
     }
 
     #[test]
@@ -864,9 +820,7 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:recovery-auth-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-            .unwrap();
+        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
         // Configure recovery with 5 custodians, threshold=3
         let secret = b"recovery-auth-secret";
@@ -884,11 +838,8 @@ mod tests {
 
         // Recover with 3 shares
         let all_shares = state.decrypt_shares(&did).unwrap();
-        let recovering_shares: Vec<RecoveryShare> = vec![
-            all_shares[0].clone(),
-            all_shares[2].clone(),
-            all_shares[4].clone(),
-        ];
+        let recovering_shares: Vec<RecoveryShare> =
+            vec![all_shares[0].clone(), all_shares[2].clone(), all_shares[4].clone()];
 
         // Perform recovery
         state
@@ -927,9 +878,7 @@ mod tests {
         let original_pk: [u8; 32] = [0xCC; 32];
         let did = "did:omnia:replay-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-            .unwrap();
+        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
         let secret = b"replay-prevention-secret";
         state
@@ -975,14 +924,7 @@ mod tests {
         assert_eq!(doc_after_second.recovery_count, 2);
         // The same key should not be duplicated
         let key = derive_identity_key(secret);
-        let key_count = doc_after_second
-            .authentication
-            .iter()
-            .filter(|k| **k == key)
-            .count();
-        assert_eq!(
-            key_count, 1,
-            "Same key should not be duplicated in authentication"
-        );
+        let key_count = doc_after_second.authentication.iter().filter(|k| **k == key).count();
+        assert_eq!(key_count, 1, "Same key should not be duplicated in authentication");
     }
 }

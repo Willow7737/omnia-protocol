@@ -2,6 +2,19 @@
 //!
 //! Detects the Rust compiler version and enables conditional compilation
 //! for feature-gated code that requires a newer compiler than the MSRV.
+//!
+//! # Why build.rs instead of Cargo features?
+//!
+//! Cargo features are resolved at the *workspace* level — if any crate in the
+//! workspace enables a feature, every crate sees it as enabled. This makes it
+//! impossible to conditionally compile code based on the *host* compiler
+//! version, because feature resolution cannot inspect `rustc --version`.
+//! A build script, by contrast, runs on the host before compilation and can
+//! probe the compiler version (or the filesystem for pre-compiled libraries)
+//! and emit `cargo:rustc-cfg=…` directives that are scoped to *this* crate
+//! only. This is the only reliable way to gate code on rustc version or the
+//! presence of an external static library without polluting the workspace-wide
+//! feature graph.
 
 fn main() {
     // Detect rustc version for conditional compilation.

@@ -5,9 +5,8 @@
 //! nonces for the same creator pubkey (replay attack prevention).
 
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, EconomicsOp, EconomicsShard, FinancialOp, FinancialShard,
-    IdentityShard, NonceStore, PhysicalShard, RedbNonceStore, ShardId, ShardOp, ShardPayload,
-    ShardRouter,
+    BiologicalShard, ComputationalShard, EconomicsOp, EconomicsShard, FinancialOp, FinancialShard, IdentityShard,
+    NonceStore, PhysicalShard, RedbNonceStore, ShardId, ShardOp, ShardPayload, ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, NodeKeypair, VectorClock};
 use std::sync::Arc;
@@ -19,11 +18,7 @@ fn test_node(id: u8) -> NodeId {
 }
 
 /// Create a signed event with the given payload, creator, and keypair.
-fn create_test_event_with_keypair(
-    creator: NodeId,
-    payload: Vec<u8>,
-    keypair: &NodeKeypair,
-) -> Event {
+fn create_test_event_with_keypair(creator: NodeId, payload: Vec<u8>, keypair: &NodeKeypair) -> Event {
     let vc = VectorClock::with_node(creator, 1);
     let mut event = Event::new(creator, 0, vc, None, None, payload);
     event.sign_with_keypair(keypair);
@@ -44,8 +39,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 =
-        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(router.route_event(&event1).is_ok());
 
     // Same nonce 1 again — should fail (replay)
@@ -54,8 +48,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event2 =
-        create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event2);
     assert!(result.is_err());
     assert!(
@@ -69,8 +62,7 @@ fn test_replay_protection() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event3 =
-        create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
+    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
     assert!(router.route_event(&event3).is_ok());
 }
 
@@ -91,8 +83,7 @@ fn test_replay_protection_different_creators() {
         }),
         nonce: 1,
     };
-    let event1 =
-        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair1);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair1);
     assert!(router.route_event(&event1).is_ok());
 
     let payload2 = ShardPayload {
@@ -103,8 +94,7 @@ fn test_replay_protection_different_creators() {
         }),
         nonce: 1,
     };
-    let event2 =
-        create_test_event_with_keypair(test_node(2), payload2.to_bytes().unwrap(), &keypair2);
+    let event2 = create_test_event_with_keypair(test_node(2), payload2.to_bytes().unwrap(), &keypair2);
     assert!(router.route_event(&event2).is_ok());
 }
 
@@ -165,8 +155,7 @@ fn test_all_six_shards_registered() {
 fn test_nonce_persistence_across_router_restart() {
     let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
     let db_path = tmp_dir.path().join("nonces.redb");
-    let store: Arc<dyn NonceStore> =
-        Arc::new(RedbNonceStore::open(&db_path).expect("nonce store open should succeed"));
+    let store: Arc<dyn NonceStore> = Arc::new(RedbNonceStore::open(&db_path).expect("nonce store open should succeed"));
 
     let keypair = generate_keypair();
     let creator = keypair.verifying_key().to_bytes();
@@ -185,12 +174,8 @@ fn test_nonce_persistence_across_router_restart() {
             operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
             nonce: 1,
         };
-        let event =
-            create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
-        assert!(
-            router1.route_event(&event).is_ok(),
-            "First event should succeed"
-        );
+        let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
+        assert!(router1.route_event(&event).is_ok(), "First event should succeed");
     }
 
     // Router 2: create with same store — replay nonce 1 should be rejected
@@ -208,16 +193,9 @@ fn test_nonce_persistence_across_router_restart() {
             operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
             nonce: 1,
         };
-        let replay_event = create_test_event_with_keypair(
-            test_node(1),
-            replay_payload.to_bytes().unwrap(),
-            &keypair,
-        );
+        let replay_event = create_test_event_with_keypair(test_node(1), replay_payload.to_bytes().unwrap(), &keypair);
         let result = router2.route_event(&replay_event);
-        assert!(
-            result.is_err(),
-            "Replayed nonce should be rejected after restart"
-        );
+        assert!(result.is_err(), "Replayed nonce should be rejected after restart");
         assert!(
             result.unwrap_err().to_string().contains("Replay detected"),
             "Expected replay detection error after restart"
@@ -229,8 +207,7 @@ fn test_nonce_persistence_across_router_restart() {
             operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
             nonce: 2,
         };
-        let new_event =
-            create_test_event_with_keypair(test_node(1), new_payload.to_bytes().unwrap(), &keypair);
+        let new_event = create_test_event_with_keypair(test_node(1), new_payload.to_bytes().unwrap(), &keypair);
         assert!(
             router2.route_event(&new_event).is_ok(),
             "New nonce should succeed after restart"

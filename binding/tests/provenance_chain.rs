@@ -7,8 +7,7 @@
 //! Layer's ProvenanceTracker works alongside the existing PhysicalShard.
 
 use omnia_binding::{
-    CommitmentPhase, PhysicalAnchor, PqPublicKey, ProvenanceLog, ProvenanceTracker,
-    QuantumCommitment, RfFingerprint,
+    CommitmentPhase, PhysicalAnchor, PqPublicKey, ProvenanceLog, ProvenanceTracker, QuantumCommitment, RfFingerprint,
 };
 use omnia_substrate::{generate_keypair, NodeKeypair, VectorClock};
 
@@ -178,11 +177,7 @@ fn test_physical_anchor_verification() {
     // Create commitment over the provenance log bytes (as verify() expects)
     let commitment = make_commitment(&provenance.to_bytes(), &kp);
 
-    let anchor = PhysicalAnchor::new(
-        make_rf("did:omnia:creator", rf_hash),
-        commitment,
-        provenance,
-    );
+    let anchor = PhysicalAnchor::new(make_rf("did:omnia:creator", rf_hash), commitment, provenance);
 
     // Verification with correct RF and public key should succeed
     assert!(anchor.verify(&rf_hash, &pk));

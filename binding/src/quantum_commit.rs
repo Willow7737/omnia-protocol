@@ -26,9 +26,12 @@
 //!    A CRYSTALS-Kyber encapsulation key is stored for PQ-secure key exchange.
 
 use ed25519_dalek::{Signer, Verifier};
+#[cfg(feature = "pqc")]
 use ml_kem::kem::{Decapsulate, Encapsulate};
+#[cfg(feature = "pqc")]
 use ml_kem::{EncodedSizeUser, KemCore, MlKem768};
 use omnia_substrate::{NodeKeypair, VectorClock};
+#[cfg(feature = "pqc")]
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
@@ -57,6 +60,7 @@ pub enum BindingError {
     #[error("Signing failed: {0}")]
     SigningFailed(String),
     /// Kyber KEM operation failed.
+    #[cfg(feature = "pqc")]
     #[error("Kyber KEM error: {0}")]
     Kyber(#[from] KyberError),
 }
@@ -66,6 +70,7 @@ pub enum BindingError {
 /// Wraps the fixed-size byte arrays from `ml-kem` into `Vec<u8>` for
 /// serialization flexibility. ML-KEM-768 (formerly Kyber768) provides
 /// security roughly equivalent to AES-192.
+#[cfg(feature = "pqc")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KyberKeyPair {
     /// ML-KEM-768 encapsulation key (public key, 1184 bytes).
@@ -75,6 +80,7 @@ pub struct KyberKeyPair {
 }
 
 /// Error type for ML-KEM operations.
+#[cfg(feature = "pqc")]
 #[derive(Debug, thiserror::Error)]
 pub enum KyberError {
     /// Invalid encapsulation key length.
@@ -92,12 +98,16 @@ pub enum KyberError {
 }
 
 // ML-KEM-768 key size constants (same as Kyber768)
+#[cfg(feature = "pqc")]
 /// Encapsulation key size in bytes for ML-KEM-768.
 const ML_KEM_768_ENCAPSULATION_KEY_SIZE: usize = 1184;
+#[cfg(feature = "pqc")]
 /// Decapsulation key size in bytes for ML-KEM-768.
 const ML_KEM_768_DECAPSULATION_KEY_SIZE: usize = 2400;
+#[cfg(feature = "pqc")]
 /// Ciphertext size in bytes for ML-KEM-768.
 const ML_KEM_768_CIPHERTEXT_SIZE: usize = 1088;
+#[cfg(feature = "pqc")]
 /// Shared secret size in bytes for ML-KEM-768.
 #[allow(dead_code)]
 const ML_KEM_768_SHARED_SECRET_SIZE: usize = 32;
@@ -213,6 +223,7 @@ impl QuantumCommitment {
     /// # Errors
     ///
     /// Returns `BindingError` if signing or Kyber keypair generation fails.
+    #[cfg(feature = "pqc")]
     pub fn sign_hybrid(
         data: &[u8],
         ed_keypair: &NodeKeypair,
@@ -234,6 +245,20 @@ impl QuantumCommitment {
         })
     }
 
+    /// Sign data using both Ed25519 and Dilithium (hybrid mode).
+    ///
+    /// **Stub**: Returns an error when the `pqc` feature is not enabled.
+    #[cfg(not(feature = "pqc"))]
+    pub fn sign_hybrid(
+        _data: &[u8],
+        _ed_keypair: &NodeKeypair,
+        _dilithium_keypair: &[u8],
+    ) -> Result<Self, BindingError> {
+        Err(BindingError::SigningFailed(
+            "PQC feature not enabled: hybrid signing requires the 'pqc' feature".to_string(),
+        ))
+    }
+
     /// Sign data using post-quantum Dilithium only.
     ///
     /// Creates a commitment with only a Dilithium signature over the data hash.
@@ -249,10 +274,8 @@ impl QuantumCommitment {
     /// # Errors
     ///
     /// Returns `BindingError` if signing or ML-KEM keypair generation fails.
-    pub fn sign_post_quantum(
-        data: &[u8],
-        dilithium_keypair: &pqc_dilithium::Keypair,
-    ) -> Result<Self, BindingError> {
+    #[cfg(feature = "pqc")]
+    pub fn sign_post_quantum(data: &[u8], dilithium_keypair: &pqc_dilithium::Keypair) -> Result<Self, BindingError> {
         let hash = blake3::hash(data);
         let dilithium_sig = dilithium_keypair.sign(hash.as_bytes());
 
@@ -266,6 +289,16 @@ impl QuantumCommitment {
             data_hash: *hash.as_bytes(),
             committed_at: VectorClock::new(),
         })
+    }
+
+    /// Sign data using post-quantum Dilithium only.
+    ///
+    /// **Stub**: Returns an error when the `pqc` feature is not enabled.
+    #[cfg(not(feature = "pqc"))]
+    pub fn sign_post_quantum(_data: &[u8], _dilithium_keypair: &[u8]) -> Result<Self, BindingError> {
+        Err(BindingError::SigningFailed(
+            "PQC feature not enabled: post-quantum signing requires the 'pqc' feature".to_string(),
+        ))
     }
 
     /// Create a stub commitment that doesn't require real signing.
@@ -359,6 +392,7 @@ impl QuantumCommitment {
     ///
     /// Returns `false` on any verification failure or if the
     /// signature/public key is empty.
+    #[cfg(feature = "pqc")]
     fn verify_dilithium(&self, public_key: &PqPublicKey, hash: &blake3::Hash) -> bool {
         if public_key.dilithium.is_empty() {
             tracing::warn!("Dilithium public key is empty");
@@ -375,6 +409,16 @@ impl QuantumCommitment {
                 false
             }
         }
+    }
+
+    /// Verify the Dilithium signature against the data hash.
+    ///
+    /// **Stub**: Returns `false` when the `pqc` feature is not enabled,
+    /// since Dilithium verification requires PQC libraries.
+    #[cfg(not(feature = "pqc"))]
+    fn verify_dilithium(&self, _public_key: &PqPublicKey, _hash: &blake3::Hash) -> bool {
+        tracing::warn!("Dilithium verification skipped: PQC feature not enabled");
+        false
     }
 
     /// Check whether this commitment links to (references) a previous
@@ -412,6 +456,7 @@ impl QuantumCommitment {
     ///
     /// Returns [`KyberError`] if the keypair generation fails (extremely
     /// unlikely with a proper RNG).
+    #[cfg(feature = "pqc")]
     pub fn generate_kyber_keypair() -> Result<KyberKeyPair, KyberError> {
         let mut rng = OsRng;
         let (dk, ek) = <MlKem768 as KemCore>::generate(&mut rng);
@@ -439,16 +484,17 @@ impl QuantumCommitment {
     /// Returns [`KyberError`] if:
     /// - The encapsulation key stored in this commitment is invalid
     /// - The KEM operation fails (extremely unlikely with a proper RNG)
+    #[cfg(feature = "pqc")]
     pub fn kyber_encapsulate(&self) -> Result<(Vec<u8>, Vec<u8>), KyberError> {
         if self.kyber_key.len() != ML_KEM_768_ENCAPSULATION_KEY_SIZE {
             return Err(KyberError::InvalidEncapsulationKey(self.kyber_key.len()));
         }
         type EncapKey = <MlKem768 as KemCore>::EncapsulationKey;
-        let ek_bytes: [u8; ML_KEM_768_ENCAPSULATION_KEY_SIZE] =
-            self.kyber_key
-                .clone()
-                .try_into()
-                .map_err(|_| KyberError::InvalidEncapsulationKey(self.kyber_key.len()))?;
+        let ek_bytes: [u8; ML_KEM_768_ENCAPSULATION_KEY_SIZE] = self
+            .kyber_key
+            .clone()
+            .try_into()
+            .map_err(|_| KyberError::InvalidEncapsulationKey(self.kyber_key.len()))?;
         let ek_encoded: ml_kem::Encoded<EncapKey> = ek_bytes.into();
         let ek = EncapKey::from_bytes(&ek_encoded);
         let mut rng = OsRng;
@@ -483,10 +529,8 @@ impl QuantumCommitment {
     /// modified by an attacker), decapsulation still succeeds but returns
     /// a pseudorandom shared secret instead of the original one. This is
     /// by design and prevents CCA-style attacks.
-    pub fn kyber_decapsulate(
-        decapsulation_key: &[u8],
-        ciphertext: &[u8],
-    ) -> Result<Vec<u8>, KyberError> {
+    #[cfg(feature = "pqc")]
+    pub fn kyber_decapsulate(decapsulation_key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, KyberError> {
         if decapsulation_key.len() != ML_KEM_768_DECAPSULATION_KEY_SIZE {
             return Err(KyberError::InvalidDecapsulationKey(decapsulation_key.len()));
         }
@@ -602,38 +646,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_hybrid_verify_hybrid() {
-        let (ed_kp, _) = test_keypair_and_pk();
-        let dilithium_kp = pqc_dilithium::Keypair::generate();
-        let data = b"hybrid signed data";
-
-        let pk = PqPublicKey {
-            ed25519: ed_kp.verifying_key().to_bytes(),
-            dilithium: dilithium_kp.public.to_vec(),
-        };
-
-        let commitment = QuantumCommitment::sign_hybrid(data, &ed_kp, &dilithium_kp).unwrap();
-        assert!(commitment.verify(&pk, data, CommitmentPhase::Hybrid));
-        assert!(commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly));
-    }
-
-    #[test]
-    fn test_sign_post_quantum_verify() {
-        let dilithium_kp = pqc_dilithium::Keypair::generate();
-        let data = b"post-quantum data";
-
-        let pk = PqPublicKey {
-            ed25519: [0u8; 32], // Not used in PostQuantum phase
-            dilithium: dilithium_kp.public.to_vec(),
-        };
-
-        let commitment = QuantumCommitment::sign_post_quantum(data, &dilithium_kp).unwrap();
-        assert!(commitment.verify(&pk, data, CommitmentPhase::PostQuantum));
-        // ClassicalOnly should fail (no Ed25519 signature)
-        assert!(!commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly));
-    }
-
-    #[test]
     fn test_links_to() {
         let data1 = b"first commitment";
         let data2 = b"second commitment";
@@ -653,9 +665,44 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // ML-KEM KEM tests
+    // PQC-dependent tests (only compiled with 'pqc' feature)
     // -----------------------------------------------------------------------
 
+    #[cfg(feature = "pqc")]
+    #[test]
+    fn test_sign_hybrid_verify_hybrid() {
+        let (ed_kp, _) = test_keypair_and_pk();
+        let dilithium_kp = pqc_dilithium::Keypair::generate();
+        let data = b"hybrid signed data";
+
+        let pk = PqPublicKey {
+            ed25519: ed_kp.verifying_key().to_bytes(),
+            dilithium: dilithium_kp.public.to_vec(),
+        };
+
+        let commitment = QuantumCommitment::sign_hybrid(data, &ed_kp, &dilithium_kp).unwrap();
+        assert!(commitment.verify(&pk, data, CommitmentPhase::Hybrid));
+        assert!(commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly));
+    }
+
+    #[cfg(feature = "pqc")]
+    #[test]
+    fn test_sign_post_quantum_verify() {
+        let dilithium_kp = pqc_dilithium::Keypair::generate();
+        let data = b"post-quantum data";
+
+        let pk = PqPublicKey {
+            ed25519: [0u8; 32], // Not used in PostQuantum phase
+            dilithium: dilithium_kp.public.to_vec(),
+        };
+
+        let commitment = QuantumCommitment::sign_post_quantum(data, &dilithium_kp).unwrap();
+        assert!(commitment.verify(&pk, data, CommitmentPhase::PostQuantum));
+        // ClassicalOnly should fail (no Ed25519 signature)
+        assert!(!commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly));
+    }
+
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_keypair_generation() {
         let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
@@ -672,6 +719,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_keypair_unique() {
         let kp1 = QuantumCommitment::generate_kyber_keypair().unwrap();
@@ -683,6 +731,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_encapsulate_decapsulate() {
         let keypair = QuantumCommitment::generate_kyber_keypair().unwrap();
@@ -696,13 +745,9 @@ mod tests {
         };
 
         let (shared_secret_1, ciphertext) = commitment.kyber_encapsulate().unwrap();
-        let shared_secret_2 =
-            QuantumCommitment::kyber_decapsulate(&keypair.decapsulation_key, &ciphertext).unwrap();
+        let shared_secret_2 = QuantumCommitment::kyber_decapsulate(&keypair.decapsulation_key, &ciphertext).unwrap();
 
-        assert_eq!(
-            shared_secret_1, shared_secret_2,
-            "shared secrets must match"
-        );
+        assert_eq!(shared_secret_1, shared_secret_2, "shared secrets must match");
         assert_eq!(
             shared_secret_1.len(),
             ML_KEM_768_SHARED_SECRET_SIZE,
@@ -715,6 +760,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_wrong_ciphertext_succeeds() {
         // ML-KEM uses implicit rejection: decapsulation with a wrong ciphertext
@@ -728,6 +774,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_wrong_key_different_secret() {
         let kp1 = QuantumCommitment::generate_kyber_keypair().unwrap();
@@ -744,14 +791,14 @@ mod tests {
         let (shared_secret_1, ciphertext) = commitment.kyber_encapsulate().unwrap();
         // Decapsulating with the WRONG key should succeed (implicit rejection)
         // but produce a DIFFERENT shared secret
-        let shared_secret_2 =
-            QuantumCommitment::kyber_decapsulate(&kp2.decapsulation_key, &ciphertext).unwrap();
+        let shared_secret_2 = QuantumCommitment::kyber_decapsulate(&kp2.decapsulation_key, &ciphertext).unwrap();
         assert_ne!(
             shared_secret_1, shared_secret_2,
             "wrong decapsulation key should produce a different shared secret"
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_invalid_encapsulation_key() {
         let commitment = QuantumCommitment {
@@ -769,10 +816,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_invalid_decapsulation_key() {
-        let result =
-            QuantumCommitment::kyber_decapsulate(&[0u8; 100], &[0u8; ML_KEM_768_CIPHERTEXT_SIZE]);
+        let result = QuantumCommitment::kyber_decapsulate(&[0u8; 100], &[0u8; ML_KEM_768_CIPHERTEXT_SIZE]);
         assert!(result.is_err());
         match result.unwrap_err() {
             KyberError::InvalidDecapsulationKey(len) => assert_eq!(len, 100),
@@ -780,6 +827,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_invalid_ciphertext() {
         let kp = QuantumCommitment::generate_kyber_keypair().unwrap();
@@ -801,12 +849,12 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_key_present_in_hybrid_mode() {
         let (ed_kp, _) = test_keypair_and_pk();
         let dilithium_kp = pqc_dilithium::Keypair::generate();
-        let commitment =
-            QuantumCommitment::sign_hybrid(b"hybrid data", &ed_kp, &dilithium_kp).unwrap();
+        let commitment = QuantumCommitment::sign_hybrid(b"hybrid data", &ed_kp, &dilithium_kp).unwrap();
         assert_eq!(
             commitment.kyber_key.len(),
             ML_KEM_768_ENCAPSULATION_KEY_SIZE,
@@ -814,6 +862,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_key_present_in_post_quantum_mode() {
         let dilithium_kp = pqc_dilithium::Keypair::generate();
@@ -825,14 +874,14 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "pqc")]
     #[test]
     fn test_kyber_hybrid_encapsulate_decapsulate() {
         let (ed_kp, _) = test_keypair_and_pk();
         let dilithium_kp = pqc_dilithium::Keypair::generate();
 
         // Sign in hybrid mode — this generates an ML-KEM keypair internally
-        let commitment =
-            QuantumCommitment::sign_hybrid(b"hybrid kem test", &ed_kp, &dilithium_kp).unwrap();
+        let commitment = QuantumCommitment::sign_hybrid(b"hybrid kem test", &ed_kp, &dilithium_kp).unwrap();
 
         // We can't get the decapsulation key back from sign_hybrid (it's dropped),
         // so generate a separate keypair and manually set the encapsulation key

@@ -111,8 +111,8 @@ impl KeyStoreBridge {
         let rotation_state_path = data_dir.join("rotation_state.json");
         let (rotation_state, rotation_manager) = if rotation_state_path.exists() {
             let state_bytes = std::fs::read(&rotation_state_path)?;
-            let state: RotationState = serde_json::from_slice(&state_bytes)
-                .map_err(|e| BridgeError::Serialization(e.to_string()))?;
+            let state: RotationState =
+                serde_json::from_slice(&state_bytes).map_err(|e| BridgeError::Serialization(e.to_string()))?;
             let manager = PqcKeyRotationManager::new(state.current_phase);
             (state, manager)
         } else {
@@ -173,11 +173,16 @@ impl KeyStoreBridge {
 
         // Generate new key material for the target phase
         let ed25519_keypair = omnia_substrate::crypto::generate_keypair();
+
+        #[cfg(feature = "pqc")]
         let dilithium_keypair = pqc_dilithium::Keypair::generate();
 
         let new_pubkey = PqPublicKey {
             ed25519: ed25519_keypair.verifying_key().to_bytes(),
+            #[cfg(feature = "pqc")]
             dilithium: dilithium_keypair.public.to_vec(),
+            #[cfg(not(feature = "pqc"))]
+            dilithium: Vec::new(),
         };
 
         let old_pubkey = PqPublicKey {
@@ -295,10 +300,7 @@ mod tests {
     fn test_load_creates_new_bridge() {
         let dir = TempDir::new().expect("temp dir");
         let bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
-        assert!(matches!(
-            bridge.current_phase(),
-            CommitmentPhase::ClassicalOnly
-        ));
+        assert!(matches!(bridge.current_phase(), CommitmentPhase::ClassicalOnly));
     }
 
     #[test]
@@ -309,9 +311,7 @@ mod tests {
         {
             let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
             let sig = vec![1u8; 64]; // Mock signature
-            bridge
-                .rotate(&sig, CommitmentPhase::Hybrid, 100)
-                .expect("rotate");
+            bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
         }
 
         // Reload
@@ -360,9 +360,6 @@ mod tests {
         let json = serde_json::to_string(&state).expect("serialize");
         let deserialized: RotationState = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(state.version, deserialized.version);
-        assert!(matches!(
-            deserialized.current_phase,
-            CommitmentPhase::Hybrid
-        ));
+        assert!(matches!(deserialized.current_phase, CommitmentPhase::Hybrid));
     }
 }

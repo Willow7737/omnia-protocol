@@ -12,8 +12,8 @@ use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
-    IdentityShard, PhysicalShard, ShardRouter,
+    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
+    ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use serde_json::{json, Value};
@@ -178,10 +178,7 @@ async fn test_submit_event() -> Result<()> {
     assert_eq!(resp.status(), 201);
 
     let body: Value = resp.json().await?;
-    assert!(
-        body["event_id"].is_string(),
-        "Response should contain event_id"
-    );
+    assert!(body["event_id"].is_string(), "Response should contain event_id");
     assert_eq!(body["status"], "submitted");
 
     Ok(())
@@ -217,10 +214,7 @@ async fn test_get_event_not_found() -> Result<()> {
 async fn test_swagger_ui() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{base_url}/swagger-ui/"))
-        .send()
-        .await?;
+    let resp = client.get(format!("{base_url}/swagger-ui/")).send().await?;
     assert_eq!(
         resp.status(),
         200,
@@ -236,11 +230,7 @@ async fn test_swagger_ui_disabled() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/swagger-ui/")).send().await?;
-    assert_eq!(
-        resp.status(),
-        404,
-        "Swagger UI should be 404 when feature disabled"
-    );
+    assert_eq!(resp.status(), 404, "Swagger UI should be 404 when feature disabled");
     Ok(())
 }
 
@@ -250,10 +240,7 @@ async fn test_swagger_ui_disabled() -> Result<()> {
 async fn test_openapi_json() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{base_url}/api-docs/openapi.json"))
-        .send()
-        .await?;
+    let resp = client.get(format!("{base_url}/api-docs/openapi.json")).send().await?;
     assert_eq!(
         resp.status(),
         200,
@@ -261,13 +248,8 @@ async fn test_openapi_json() -> Result<()> {
     );
     let body: Value = resp.json().await?;
     // Verify the OpenAPI spec contains our paths
-    let paths = body["paths"]
-        .as_object()
-        .expect("paths should be an object");
-    assert!(
-        paths.keys().any(|k| k.contains("events")),
-        "Should contain events path"
-    );
+    let paths = body["paths"].as_object().expect("paths should be an object");
+    assert!(paths.keys().any(|k| k.contains("events")), "Should contain events path");
     assert!(
         paths.keys().any(|k| k.contains("governance")),
         "Should contain governance path"
@@ -276,10 +258,7 @@ async fn test_openapi_json() -> Result<()> {
         paths.keys().any(|k| k.contains("economics")),
         "Should contain economics path"
     );
-    assert!(
-        paths.keys().any(|k| k.contains("node")),
-        "Should contain node path"
-    );
+    assert!(paths.keys().any(|k| k.contains("node")), "Should contain node path");
     Ok(())
 }
 
@@ -289,14 +268,7 @@ async fn test_openapi_json() -> Result<()> {
 async fn test_openapi_json_disabled() -> Result<()> {
     let (base_url, _handle) = start_test_server().await;
     let client = reqwest::Client::new();
-    let resp = client
-        .get(format!("{base_url}/api-docs/openapi.json"))
-        .send()
-        .await?;
-    assert_eq!(
-        resp.status(),
-        404,
-        "OpenAPI JSON should be 404 when feature disabled"
-    );
+    let resp = client.get(format!("{base_url}/api-docs/openapi.json")).send().await?;
+    assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");
     Ok(())
 }

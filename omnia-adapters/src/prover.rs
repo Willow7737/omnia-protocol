@@ -77,16 +77,13 @@ pub type Proof = ark_groth16::Proof<Bn254>;
 /// # Errors
 ///
 /// Returns [`ProverError::SetupFailed`] if the key generation fails.
-pub fn generate_trusted_setup(
-    circuit: &RollupCircuit,
-) -> Result<(ProvingKey, VerifyingKey), ProverError> {
+pub fn generate_trusted_setup(circuit: &RollupCircuit) -> Result<(ProvingKey, VerifyingKey), ProverError> {
     let mut rng = ChaCha8Rng::from_entropy();
     let dummy_circuit = RollupCircuit::empty();
 
     // Use the dummy circuit for setup since only the structure matters
     let _ = circuit; // suppress unused variable warning
-    Groth16::<Bn254>::setup(dummy_circuit, &mut rng)
-        .map_err(|e| ProverError::SetupFailed(e.to_string()))
+    Groth16::<Bn254>::setup(dummy_circuit, &mut rng).map_err(|e| ProverError::SetupFailed(e.to_string()))
 }
 
 /// Create a Groth16 proof for the given circuit instance.
@@ -106,8 +103,7 @@ pub fn generate_trusted_setup(
 /// or [`ProverError::CircuitError`] if the public inputs cannot be extracted.
 pub fn create_proof(circuit: RollupCircuit, pk: &ProvingKey) -> Result<Proof, ProverError> {
     let mut rng = ChaCha8Rng::from_entropy();
-    Groth16::<Bn254>::prove(pk, circuit, &mut rng)
-        .map_err(|e| ProverError::ProofCreationFailed(e.to_string()))
+    Groth16::<Bn254>::prove(pk, circuit, &mut rng).map_err(|e| ProverError::ProofCreationFailed(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -143,8 +139,7 @@ pub fn generate_trusted_setup_expanded(
     let mut rng = ChaCha8Rng::from_entropy();
     let setup_circuit = ExpandedRollupCircuit::for_setup(num_events, merkle_depth);
 
-    Groth16::<Bn254>::setup(setup_circuit, &mut rng)
-        .map_err(|e| ProverError::SetupFailed(e.to_string()))
+    Groth16::<Bn254>::setup(setup_circuit, &mut rng).map_err(|e| ProverError::SetupFailed(e.to_string()))
 }
 
 /// Create a Groth16 proof for the given expanded circuit instance.
@@ -161,13 +156,9 @@ pub fn generate_trusted_setup_expanded(
 /// # Errors
 ///
 /// Returns [`ProverError::ProofCreationFailed`] if proof generation fails.
-pub fn create_expanded_proof(
-    circuit: ExpandedRollupCircuit,
-    pk: &ProvingKey,
-) -> Result<Proof, ProverError> {
+pub fn create_expanded_proof(circuit: ExpandedRollupCircuit, pk: &ProvingKey) -> Result<Proof, ProverError> {
     let mut rng = ChaCha8Rng::from_entropy();
-    Groth16::<Bn254>::prove(pk, circuit, &mut rng)
-        .map_err(|e| ProverError::ProofCreationFailed(e.to_string()))
+    Groth16::<Bn254>::prove(pk, circuit, &mut rng).map_err(|e| ProverError::ProofCreationFailed(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -187,13 +178,8 @@ pub fn create_expanded_proof(
 ///
 /// Returns [`ProverError::VerificationFailed`] if the verification algorithm
 /// fails (not if the proof is invalid — an invalid proof returns `Ok(false)`).
-pub fn verify_proof(
-    vk: &VerifyingKey,
-    public_inputs: &[ark_bn254::Fr],
-    proof: &Proof,
-) -> Result<bool, ProverError> {
-    Groth16::<Bn254>::verify(vk, public_inputs, proof)
-        .map_err(|e| ProverError::VerificationFailed(e.to_string()))
+pub fn verify_proof(vk: &VerifyingKey, public_inputs: &[ark_bn254::Fr], proof: &Proof) -> Result<bool, ProverError> {
+    Groth16::<Bn254>::verify(vk, public_inputs, proof).map_err(|e| ProverError::VerificationFailed(e.to_string()))
 }
 
 /// Serialize a Groth16 proof to bytes.
@@ -219,8 +205,7 @@ pub fn serialize_proof(proof: &Proof) -> Result<Vec<u8>, ProverError> {
 ///
 /// Returns [`ProverError::SerializationError`] if deserialization fails.
 pub fn deserialize_proof(bytes: &[u8]) -> Result<Proof, ProverError> {
-    Proof::deserialize_uncompressed(bytes)
-        .map_err(|e| ProverError::SerializationError(e.to_string()))
+    Proof::deserialize_uncompressed(bytes).map_err(|e| ProverError::SerializationError(e.to_string()))
 }
 
 /// Serialize a verifying key to bytes.
@@ -245,8 +230,7 @@ pub fn serialize_verifying_key(vk: &VerifyingKey) -> Result<Vec<u8>, ProverError
 ///
 /// Returns [`ProverError::SerializationError`] if deserialization fails.
 pub fn deserialize_verifying_key(bytes: &[u8]) -> Result<VerifyingKey, ProverError> {
-    VerifyingKey::deserialize_uncompressed(bytes)
-        .map_err(|e| ProverError::SerializationError(e.to_string()))
+    VerifyingKey::deserialize_uncompressed(bytes).map_err(|e| ProverError::SerializationError(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------

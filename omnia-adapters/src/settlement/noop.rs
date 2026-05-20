@@ -43,11 +43,7 @@ impl SettlementLayer for NoopSettlementAdapter {
         Ok(format!("noop-deposit-{l2_did}-{amount}"))
     }
 
-    async fn request_withdrawal(
-        &self,
-        l2_did: &str,
-        amount: u64,
-    ) -> Result<String, SettlementError> {
+    async fn request_withdrawal(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         Ok(format!("noop-withdrawal-{l2_did}-{amount}"))
     }
 
@@ -79,15 +75,9 @@ mod tests {
     async fn test_noop_verify_proof() {
         let adapter = NoopSettlementAdapter;
         // Non-empty proof → true
-        assert!(adapter
-            .verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA])
-            .await
-            .unwrap());
+        assert!(adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA]).await.unwrap());
         // Empty proof → false
-        assert!(!adapter
-            .verify_proof(&[0u8; 32], &[1u8; 32], &[])
-            .await
-            .unwrap());
+        assert!(!adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[]).await.unwrap());
     }
 
     #[tokio::test]

@@ -52,11 +52,7 @@ impl SettlementLayer for SolanaAdapter {
         ))
     }
 
-    async fn request_withdrawal(
-        &self,
-        _l2_did: &str,
-        _amount: u64,
-    ) -> Result<String, SettlementError> {
+    async fn request_withdrawal(&self, _l2_did: &str, _amount: u64) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Solana bridging requires SPL token program".into(),
         ))

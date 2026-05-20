@@ -231,14 +231,11 @@ impl EncryptedKeyStore {
         // Read and parse public key
         let pubkey_bytes = std::fs::read(&pubkey_path)?;
         if pubkey_bytes.len() != 32 {
-            return Err(KeyStoreError::InvalidFormat(
-                "Public key must be 32 bytes".to_string(),
-            ));
+            return Err(KeyStoreError::InvalidFormat("Public key must be 32 bytes".to_string()));
         }
         let mut pk_arr = [0u8; 32];
         pk_arr.copy_from_slice(&pubkey_bytes);
-        let public_key = NodePublicKey::from_bytes(&pk_arr)
-            .map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
+        let public_key = NodePublicKey::from_bytes(&pk_arr).map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
 
         // Read and decrypt secret key
         // Try AES-256-GCM first (new format), then fall back to legacy XOR
@@ -317,11 +314,7 @@ impl EncryptedKeyStore {
     ///
     /// - [`KeyStoreError::IncorrectPassphrase`] if the old passphrase is wrong.
     /// - [`KeyStoreError::Io`] if key files cannot be written.
-    pub fn rotate(
-        &self,
-        old_passphrase: &str,
-        new_passphrase: &str,
-    ) -> KeyStoreResult<KeyRotationProof> {
+    pub fn rotate(&self, old_passphrase: &str, new_passphrase: &str) -> KeyStoreResult<KeyRotationProof> {
         // Ensure we have the keypair loaded
         let old_keypair = self
             .keypair
@@ -473,11 +466,7 @@ impl EncryptedKeyStore {
     /// # Errors
     ///
     /// Returns [`KeyStoreError`] if key derivation fails.
-    pub fn derive_child_key(
-        &self,
-        purpose: KeyPurpose,
-        index: u32,
-    ) -> KeyStoreResult<ed25519_dalek::SigningKey> {
+    pub fn derive_child_key(&self, purpose: KeyPurpose, index: u32) -> KeyStoreResult<ed25519_dalek::SigningKey> {
         // SLIP-0010 Ed25519 derivation path: m/44'/6061'/{purpose}'/{index}'
         // Simplified: derive from the stored secret key using HKDF
         let secret_bytes = self
@@ -595,8 +584,8 @@ fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
 
 /// Encrypt data using AES-256-GCM with a pre-derived key.
 fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u8>> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(key).map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
@@ -662,26 +651,17 @@ fn generate_salt() -> [u8; 32] {
 ///
 /// **Deprecated**: Use [`aes_gcm_encrypt`] instead. This function provides
 /// no authentication, no salt, and no IV — it is not suitable for production.
-#[deprecated(
-    since = "0.2.0",
-    note = "Use aes_gcm_encrypt instead — XOR encryption is not secure"
-)]
+#[deprecated(since = "0.2.0", note = "Use aes_gcm_encrypt instead — XOR encryption is not secure")]
 #[allow(deprecated)]
 fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     let key = derive_key(passphrase);
-    data.iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect()
+    data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
 }
 
 /// Simple XOR-based decryption (symmetric with encryption).
 ///
 /// **Deprecated**: Use [`aes_gcm_decrypt`] instead.
-#[deprecated(
-    since = "0.2.0",
-    note = "Use aes_gcm_decrypt instead — XOR encryption is not secure"
-)]
+#[deprecated(since = "0.2.0", note = "Use aes_gcm_decrypt instead — XOR encryption is not secure")]
 #[allow(deprecated)]
 fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     xor_encrypt(data, passphrase)
@@ -707,8 +687,7 @@ mod tests {
     #[test]
     fn test_create_key_store() {
         let dir = TempDir::new().expect("temp dir");
-        let store =
-            EncryptedKeyStore::create(dir.path(), "test-passphrase").expect("create key store");
+        let store = EncryptedKeyStore::create(dir.path(), "test-passphrase").expect("create key store");
         assert!(dir.path().join("pubkey").exists());
         assert!(dir.path().join("seckey.enc").exists());
         assert!(store.keypair.is_some());
@@ -723,10 +702,7 @@ mod tests {
         assert!(loaded.keypair.is_some());
         // The public key should match the file on disk
         let pubkey_bytes = std::fs::read(dir.path().join("pubkey")).expect("read pubkey");
-        assert_eq!(
-            loaded.public_key.to_bytes().as_slice(),
-            pubkey_bytes.as_slice()
-        );
+        assert_eq!(loaded.public_key.to_bytes().as_slice(), pubkey_bytes.as_slice());
     }
 
     #[test]
@@ -764,8 +740,7 @@ mod tests {
         assert!(proof.verify(), "Rotation proof should be valid");
 
         // Load with new passphrase should work
-        let loaded =
-            EncryptedKeyStore::load(dir.path(), "new-pass").expect("load with new passphrase");
+        let loaded = EncryptedKeyStore::load(dir.path(), "new-pass").expect("load with new passphrase");
         assert_eq!(loaded.public_key.to_bytes(), proof.new_pubkey);
 
         // Load with old passphrase should fail
@@ -832,10 +807,7 @@ mod tests {
         let data = b"hello world";
         let encrypted = aes_gcm_encrypt(data, "correct").unwrap();
         let result = aes_gcm_decrypt(&encrypted, "wrong");
-        assert!(
-            result.is_err(),
-            "Wrong passphrase should fail AES-256-GCM decryption"
-        );
+        assert!(result.is_err(), "Wrong passphrase should fail AES-256-GCM decryption");
     }
 
     #[test]
@@ -879,10 +851,7 @@ mod tests {
     fn test_aes_gcm_decrypt_too_short() {
         let short_data = [0u8; 43]; // Less than 44 bytes
         let result = aes_gcm_decrypt(&short_data, "pass");
-        assert!(
-            result.is_err(),
-            "Data shorter than 44 bytes should be rejected"
-        );
+        assert!(result.is_err(), "Data shorter than 44 bytes should be rejected");
     }
 
     #[test]
@@ -925,10 +894,7 @@ mod tests {
         let salt2 = [2u8; 32];
         let key1 = derive_key_hkdf(passphrase, &salt1);
         let key2 = derive_key_hkdf(passphrase, &salt2);
-        assert_ne!(
-            key1, key2,
-            "Different salts must produce different keys from HKDF"
-        );
+        assert_ne!(key1, key2, "Different salts must produce different keys from HKDF");
     }
 
     #[test]
@@ -937,10 +903,7 @@ mod tests {
         let salt = [42u8; 32];
         let key1 = derive_key_hkdf(passphrase, &salt);
         let key2 = derive_key_hkdf(passphrase, &salt);
-        assert_eq!(
-            key1, key2,
-            "Same passphrase and salt must produce the same key"
-        );
+        assert_eq!(key1, key2, "Same passphrase and salt must produce the same key");
     }
 
     // ----- Backward compatibility tests -----
@@ -960,8 +923,7 @@ mod tests {
         std::fs::write(dir.path().join("seckey.enc"), encrypted).expect("write seckey");
 
         // Loading with the correct passphrase should succeed (fallback to XOR)
-        let loaded =
-            EncryptedKeyStore::load(dir.path(), "legacy-pass").expect("load legacy keystore");
+        let loaded = EncryptedKeyStore::load(dir.path(), "legacy-pass").expect("load legacy keystore");
         assert_eq!(
             loaded.public_key.to_bytes(),
             public_key.to_bytes(),
@@ -985,10 +947,7 @@ mod tests {
 
         // Loading with wrong passphrase should fail
         let result = EncryptedKeyStore::load(dir.path(), "wrong-pass");
-        assert!(
-            result.is_err(),
-            "Wrong passphrase should fail even for legacy keystore"
-        );
+        assert!(result.is_err(), "Wrong passphrase should fail even for legacy keystore");
     }
 
     // ----- Legacy XOR tests (deprecated but still tested) -----
@@ -1035,8 +994,8 @@ mod tests {
         let dir = TempDir::new().expect("temp dir");
 
         // Generate keystore with mnemonic
-        let (keystore, mnemonic) = EncryptedKeyStore::generate_with_mnemonic(None, dir.path())
-            .expect("generate with mnemonic");
+        let (keystore, mnemonic) =
+            EncryptedKeyStore::generate_with_mnemonic(None, dir.path()).expect("generate with mnemonic");
 
         // Get the mnemonic phrase
         let phrase = mnemonic.words().collect::<Vec<&str>>().join(" ");
@@ -1048,16 +1007,15 @@ mod tests {
         // Recreate from the same mnemonic
         let dir2 = TempDir::new().expect("temp dir 2");
         let restored_mnemonic = bip39::Mnemonic::parse_normalized(&phrase).expect("parse mnemonic");
-        let _restored = EncryptedKeyStore::from_mnemonic(&restored_mnemonic, None, dir2.path())
-            .expect("restore from mnemonic");
+        let _restored =
+            EncryptedKeyStore::from_mnemonic(&restored_mnemonic, None, dir2.path()).expect("restore from mnemonic");
     }
 
     #[test]
     fn test_mnemonic_with_passphrase() {
         let dir = TempDir::new().expect("temp dir");
-        let (keystore, _mnemonic) =
-            EncryptedKeyStore::generate_with_mnemonic(Some("my-bip39-passphrase"), dir.path())
-                .expect("generate with mnemonic and passphrase");
+        let (keystore, _mnemonic) = EncryptedKeyStore::generate_with_mnemonic(Some("my-bip39-passphrase"), dir.path())
+            .expect("generate with mnemonic and passphrase");
 
         assert!(keystore.keypair.is_some());
     }

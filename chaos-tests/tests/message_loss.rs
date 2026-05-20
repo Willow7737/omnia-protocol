@@ -53,10 +53,7 @@ fn test_low_message_loss_liveness() {
     );
 
     // The network should still be live (have committed events)
-    assert!(
-        network.check_liveness(),
-        "Network should be live with 20% message loss"
-    );
+    assert!(network.check_liveness(), "Network should be live with 20% message loss");
 
     let committed_after = network.committed_count();
     assert!(
@@ -64,11 +61,7 @@ fn test_low_message_loss_liveness() {
         "Committed count should not decrease: before={committed_before}, after={committed_after}"
     );
 
-    tracing::info!(
-        committed_before,
-        committed_after,
-        "Low message loss test passed"
-    );
+    tracing::info!(committed_before, committed_after, "Low message loss test passed");
 }
 
 /// Test: 80% message drop rate → events may not finalize within timeout.
@@ -173,11 +166,7 @@ fn test_asymmetric_message_loss() {
         "Committed count should not decrease after recovery"
     );
 
-    tracing::info!(
-        committed_before,
-        committed_after,
-        "Asymmetric message loss test passed"
-    );
+    tracing::info!(committed_before, committed_after, "Asymmetric message loss test passed");
 }
 
 /// Test: Intermittent message loss — drop rate changes over time.

@@ -88,18 +88,14 @@ pub struct CircuitKeyPair {
 /// let circuit = RollupCircuit::empty();
 /// let keypair = derive_keys(&srs, &circuit)?;
 /// ```
-pub fn derive_keys(
-    srs: &PowersOfTau,
-    circuit: &RollupCircuit,
-) -> Result<CircuitKeyPair, SetupError> {
+pub fn derive_keys(srs: &PowersOfTau, circuit: &RollupCircuit) -> Result<CircuitKeyPair, SetupError> {
     tracing::info!(
         tau_contributions = srs.contribution_count,
         "Deriving circuit-specific keys from Phase 1 SRS (deprecated: ignores SRS)"
     );
 
     // Generate the trusted setup for this specific circuit
-    let (pk, vk) = generate_trusted_setup(circuit)
-        .map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
+    let (pk, vk) = generate_trusted_setup(circuit).map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
 
     // Serialize the proving key
     let mut pk_bytes = Vec::new();
@@ -236,10 +232,7 @@ pub fn derive_keys_expanded(
 /// let circuit = RollupCircuit::empty();
 /// let keypair = derive_keys_from_srs(&srs, &circuit)?;
 /// ```
-pub fn derive_keys_from_srs(
-    srs: &PowersOfTau,
-    circuit: &RollupCircuit,
-) -> Result<CircuitKeyPair, SetupError> {
+pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Result<CircuitKeyPair, SetupError> {
     // Verify the SRS has contributions
     if srs.contribution_count == 0 {
         return Err(SetupError::SrsNotReady(
@@ -257,8 +250,7 @@ pub fn derive_keys_from_srs(
     );
 
     // Generate the trusted setup for this specific circuit
-    let (pk, vk) = generate_trusted_setup(circuit)
-        .map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
+    let (pk, vk) = generate_trusted_setup(circuit).map_err(|e| SetupError::KeyDerivationFailed(e.to_string()))?;
 
     // Serialize the proving key
     let mut pk_bytes = Vec::new();
@@ -368,8 +360,7 @@ mod tests {
 
         let keypair = derive_keys(&srs, &circuit).expect("derive_keys failed");
 
-        verify_key_consistency(&keypair.proving_key, &keypair.verifying_key)
-            .expect("key consistency check failed");
+        verify_key_consistency(&keypair.proving_key, &keypair.verifying_key).expect("key consistency check failed");
     }
 
     #[test]
@@ -411,8 +402,7 @@ mod tests {
 
         let keypair = derive_keys_from_srs(&srs, &circuit).expect("derive_keys_from_srs failed");
 
-        verify_key_consistency(&keypair.proving_key, &keypair.verifying_key)
-            .expect("key consistency check failed");
+        verify_key_consistency(&keypair.proving_key, &keypair.verifying_key).expect("key consistency check failed");
     }
 
     #[test]
@@ -429,16 +419,16 @@ mod tests {
         // All G1 powers should be non-identity (they are G * s1 * s2 * s3)
         for (i, g1_bytes) in srs.g1_powers.iter().enumerate() {
             let mut slice = g1_bytes.as_slice();
-            let g1_point = ark_bn254::G1Affine::deserialize_uncompressed(&mut slice)
-                .expect("G1 deserialization failed");
+            let g1_point =
+                ark_bn254::G1Affine::deserialize_uncompressed(&mut slice).expect("G1 deserialization failed");
             assert!(!g1_point.is_zero(), "G1 power {i} is identity");
         }
 
         // All G2 powers should be non-identity
         for (i, g2_bytes) in srs.g2_powers.iter().enumerate() {
             let mut slice = g2_bytes.as_slice();
-            let g2_point = ark_bn254::G2Affine::deserialize_uncompressed(&mut slice)
-                .expect("G2 deserialization failed");
+            let g2_point =
+                ark_bn254::G2Affine::deserialize_uncompressed(&mut slice).expect("G2 deserialization failed");
             assert!(!g2_point.is_zero(), "G2 power {i} is identity");
         }
 
@@ -447,8 +437,8 @@ mod tests {
         let keypair = derive_keys_from_srs(&srs, &circuit).expect("derive_keys_from_srs failed");
 
         // 4. Generate a proof using derived keys
-        let pk = ProvingKey::deserialize_uncompressed(keypair.proving_key.as_slice())
-            .expect("PK deserialization failed");
+        let pk =
+            ProvingKey::deserialize_uncompressed(keypair.proving_key.as_slice()).expect("PK deserialization failed");
         let vk = VerifyingKey::deserialize_uncompressed(keypair.verifying_key.as_slice())
             .expect("VK deserialization failed");
 

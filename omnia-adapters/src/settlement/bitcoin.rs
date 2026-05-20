@@ -57,11 +57,7 @@ impl SettlementLayer for BitcoinAdapter {
         ))
     }
 
-    async fn request_withdrawal(
-        &self,
-        _l2_did: &str,
-        _amount: u64,
-    ) -> Result<String, SettlementError> {
+    async fn request_withdrawal(&self, _l2_did: &str, _amount: u64) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Bitcoin bridging requires Lightning or atomic swaps".into(),
         ))

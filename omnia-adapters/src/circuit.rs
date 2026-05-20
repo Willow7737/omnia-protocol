@@ -200,15 +200,13 @@ impl RollupCircuit {
 impl ConstraintSynthesizer<Fr> for RollupCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
         // Allocate witnesses (private inputs)
-        let old_state_root =
-            FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "old_state_root"), || {
-                self.old_state_root.ok_or(SynthesisError::AssignmentMissing)
-            })?;
+        let old_state_root = FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "old_state_root"), || {
+            self.old_state_root.ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        let new_state_root =
-            FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "new_state_root"), || {
-                self.new_state_root.ok_or(SynthesisError::AssignmentMissing)
-            })?;
+        let new_state_root = FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "new_state_root"), || {
+            self.new_state_root.ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
         let event_count = FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "event_count"), || {
             self.event_count.ok_or(SynthesisError::AssignmentMissing)
@@ -217,8 +215,7 @@ impl ConstraintSynthesizer<Fr> for RollupCircuit {
         // Allocate public input
         let expected_new_state_root =
             FpVar::<Fr>::new_input(ark_relations::ns!(cs, "expected_new_state_root"), || {
-                self.expected_new_state_root
-                    .ok_or(SynthesisError::AssignmentMissing)
+                self.expected_new_state_root.ok_or(SynthesisError::AssignmentMissing)
             })?;
 
         // Constraint 1: new_state_root == expected_new_state_root
@@ -254,11 +251,7 @@ pub struct RollupCircuitLegacy {
 #[cfg(test)]
 impl RollupCircuitLegacy {
     /// Create a new legacy circuit with the given state roots and events.
-    pub fn new(
-        old_state_root: [u8; 32],
-        new_state_root: [u8; 32],
-        events: Vec<omnia_primitives::Event>,
-    ) -> Self {
+    pub fn new(old_state_root: [u8; 32], new_state_root: [u8; 32], events: Vec<omnia_primitives::Event>) -> Self {
         Self {
             old_state_root,
             new_state_root,
@@ -438,18 +431,13 @@ impl ExpandedRollupCircuit {
             .into_iter()
             .map(|proof| {
                 Some(MerklePathWitness {
-                    siblings: proof
-                        .siblings
-                        .iter()
-                        .map(|s| Some(merkle::hash_to_fr(s)))
-                        .collect(),
+                    siblings: proof.siblings.iter().map(|s| Some(merkle::hash_to_fr(s))).collect(),
                     directions: proof.directions.iter().map(|d| Some(*d)).collect(),
                 })
             })
             .collect();
 
-        let intermediate_roots_opt: Vec<Option<Fr>> =
-            intermediate_roots.into_iter().map(Some).collect();
+        let intermediate_roots_opt: Vec<Option<Fr>> = intermediate_roots.into_iter().map(Some).collect();
 
         Self {
             old_state_root: Some(old_root),
@@ -503,8 +491,7 @@ impl ExpandedRollupCircuit {
             })
             .collect();
 
-        let intermediate_roots: Vec<Option<Fr>> =
-            (0..=num_events).map(|_| Some(Fr::zero())).collect();
+        let intermediate_roots: Vec<Option<Fr>> = (0..=num_events).map(|_| Some(Fr::zero())).collect();
 
         Self {
             old_state_root: Some(Fr::zero()),
@@ -547,17 +534,13 @@ impl ExpandedRollupCircuit {
         let merkle_proofs: Vec<Option<MerklePathWitness>> = (0..num_events)
             .map(|_| {
                 Some(MerklePathWitness {
-                    siblings: (0..merkle_depth)
-                        .map(|j| Some(Fr::from(j as u64 + 1)))
-                        .collect(),
+                    siblings: (0..merkle_depth).map(|j| Some(Fr::from(j as u64 + 1))).collect(),
                     directions: (0..merkle_depth).map(|_| Some(true)).collect(),
                 })
             })
             .collect();
 
-        let intermediate_roots: Vec<Option<Fr>> = (0..=num_events)
-            .map(|i| Some(Fr::from(i as u64 + 1)))
-            .collect();
+        let intermediate_roots: Vec<Option<Fr>> = (0..=num_events).map(|i| Some(Fr::from(i as u64 + 1))).collect();
 
         Self {
             old_state_root: Some(Fr::from(1u64)),
@@ -580,15 +563,9 @@ impl ExpandedRollupCircuit {
     /// Returns [`SynthesisError::AssignmentMissing`] if any public input
     /// has not been assigned.
     pub fn public_input(&self) -> Result<Vec<Fr>, SynthesisError> {
-        let old = self
-            .old_state_root
-            .ok_or(SynthesisError::AssignmentMissing)?;
-        let new = self
-            .new_state_root
-            .ok_or(SynthesisError::AssignmentMissing)?;
-        let commitment = self
-            .event_commitment
-            .ok_or(SynthesisError::AssignmentMissing)?;
+        let old = self.old_state_root.ok_or(SynthesisError::AssignmentMissing)?;
+        let new = self.new_state_root.ok_or(SynthesisError::AssignmentMissing)?;
+        let commitment = self.event_commitment.ok_or(SynthesisError::AssignmentMissing)?;
         Ok(vec![old, new, commitment])
     }
 }
@@ -604,22 +581,16 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
         let new_root = FpVar::<Fr>::new_input(ark_relations::ns!(cs, "new_state_root"), || {
             self.new_state_root.ok_or(SynthesisError::AssignmentMissing)
         })?;
-        let event_commitment =
-            FpVar::<Fr>::new_input(ark_relations::ns!(cs, "event_commitment"), || {
-                self.event_commitment
-                    .ok_or(SynthesisError::AssignmentMissing)
-            })?;
+        let event_commitment = FpVar::<Fr>::new_input(ark_relations::ns!(cs, "event_commitment"), || {
+            self.event_commitment.ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
         // Allocate all intermediate root witnesses upfront so they are shared
         // across boundary constraints and state-transition constraints.
         let intermediate_root_vars: Vec<FpVar<Fr>> = self
             .intermediate_roots
             .iter()
-            .map(|root| {
-                FpVar::<Fr>::new_witness(cs.clone(), || {
-                    root.ok_or(SynthesisError::AssignmentMissing)
-                })
-            })
+            .map(|root| FpVar::<Fr>::new_witness(cs.clone(), || root.ok_or(SynthesisError::AssignmentMissing)))
             .collect::<Result<Vec<_>, _>>()?;
 
         // First intermediate root must equal old_state_root
@@ -652,12 +623,9 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
                     // Conditional swap based on direction.
                     // If go_left (sibling is on the left): left = sibling, right = current
                     // If !go_left (current is on the left): left = current, right = sibling
-                    let left = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(
-                        &go_left, &sibling, &current,
-                    )?;
-                    let right = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(
-                        &go_left, &current, &sibling,
-                    )?;
+                    let left = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(&go_left, &sibling, &current)?;
+                    let right =
+                        <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(&go_left, &current, &sibling)?;
 
                     // Poseidon SNARK-friendly hash: replaces the previous field-addition
                     // placeholder with a cryptographically sound hash function.
@@ -725,8 +693,7 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
                     .ok_or(SynthesisError::AssignmentMissing)
             })?;
 
-            let expected_payload_hash =
-                crate::poseidon::poseidon_hash(cs.clone(), &event_hash, &operation_type)?;
+            let expected_payload_hash = crate::poseidon::poseidon_hash(cs.clone(), &event_hash, &operation_type)?;
             payload_hash.enforce_equal(&expected_payload_hash)?;
 
             // State transition constraint:
@@ -738,11 +705,7 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
             //
             // Reference: Grassi et al. (2019), "Poseidon: A New Hash Function
             // for Zero-Knowledge Proof Systems", https://eprint.iacr.org/2019/458
-            let expected_next = crate::poseidon::poseidon_hash(
-                cs.clone(),
-                &intermediate_root_vars[i],
-                &event_hash,
-            )?;
+            let expected_next = crate::poseidon::poseidon_hash(cs.clone(), &intermediate_root_vars[i], &event_hash)?;
             intermediate_root_vars[i + 1].enforce_equal(&expected_next)?;
         }
 
@@ -778,9 +741,7 @@ mod tests {
         let new = [2u8; 32];
         let circuit = RollupCircuit::from_state_roots(old, new, 5);
 
-        let public_input = circuit
-            .public_input()
-            .expect("public input should be available");
+        let public_input = circuit.public_input().expect("public input should be available");
         assert_eq!(public_input.len(), 1);
         assert_eq!(public_input[0], Fr::from_be_bytes_mod_order(&new));
     }
@@ -788,9 +749,7 @@ mod tests {
     #[test]
     fn test_circuit_empty_public_input() {
         let circuit = RollupCircuit::empty();
-        let public_input = circuit
-            .public_input()
-            .expect("public input should be available");
+        let public_input = circuit.public_input().expect("public input should be available");
         assert_eq!(public_input.len(), 1);
         assert_eq!(public_input[0], Fr::zero());
     }
@@ -820,9 +779,7 @@ mod tests {
     #[test]
     fn test_expanded_circuit_public_input() {
         let circuit = ExpandedRollupCircuit::empty(2, 3);
-        let public_input = circuit
-            .public_input()
-            .expect("public input should be available");
+        let public_input = circuit.public_input().expect("public input should be available");
         assert_eq!(public_input.len(), 3);
         assert_eq!(public_input[0], Fr::zero());
         assert_eq!(public_input[1], Fr::zero());
@@ -832,9 +789,7 @@ mod tests {
     #[test]
     fn test_expanded_circuit_empty_batch_public_input() {
         let circuit = ExpandedRollupCircuit::empty(0, 0);
-        let public_input = circuit
-            .public_input()
-            .expect("public input should be available");
+        let public_input = circuit.public_input().expect("public input should be available");
         assert_eq!(public_input.len(), 3);
     }
 
@@ -847,18 +802,9 @@ mod tests {
         assert_eq!(OperationType::from_u8(2), Some(OperationType::Unstake));
         assert_eq!(OperationType::from_u8(3), Some(OperationType::Delegate));
         assert_eq!(OperationType::from_u8(4), Some(OperationType::Slash));
-        assert_eq!(
-            OperationType::from_u8(5),
-            Some(OperationType::GovernanceVote)
-        );
-        assert_eq!(
-            OperationType::from_u8(6),
-            Some(OperationType::CrossShardMessage)
-        );
-        assert_eq!(
-            OperationType::from_u8(7),
-            Some(OperationType::IdentityUpdate)
-        );
+        assert_eq!(OperationType::from_u8(5), Some(OperationType::GovernanceVote));
+        assert_eq!(OperationType::from_u8(6), Some(OperationType::CrossShardMessage));
+        assert_eq!(OperationType::from_u8(7), Some(OperationType::IdentityUpdate));
     }
 
     #[test]
@@ -896,30 +842,22 @@ mod tests {
         for w in &circuit.events {
             let witness = w.as_ref().expect("event witness should be Some");
             let event_hash = witness.event_hash.expect("event_hash should be Some");
-            let operation_type = witness
-                .operation_type
-                .expect("operation_type should be Some");
+            let operation_type = witness.operation_type.expect("operation_type should be Some");
             let payload_hash = witness.payload_hash.expect("payload_hash should be Some");
             assert_ne!(event_hash, Fr::zero());
             assert_ne!(operation_type, Fr::zero());
             assert_ne!(payload_hash, Fr::zero());
         }
         assert_ne!(
-            circuit
-                .old_state_root
-                .expect("old_state_root should be Some"),
+            circuit.old_state_root.expect("old_state_root should be Some"),
             Fr::zero()
         );
         assert_ne!(
-            circuit
-                .new_state_root
-                .expect("new_state_root should be Some"),
+            circuit.new_state_root.expect("new_state_root should be Some"),
             Fr::zero()
         );
         assert_ne!(
-            circuit
-                .event_commitment
-                .expect("event_commitment should be Some"),
+            circuit.event_commitment.expect("event_commitment should be Some"),
             Fr::zero()
         );
     }

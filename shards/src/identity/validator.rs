@@ -29,18 +29,14 @@ impl IdentityValidator {
             }
             IdentityOp::UpdateDid { did, .. } => {
                 if !state.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 Ok(())
             }
             IdentityOp::RecoverDid { did, shares } => {
                 if let Some(config) = state.recovery_registry.get(did) {
                     if shares.len() < config.threshold as usize {
-                        return Err(ShardError::ValidationFailed(
-                            "Insufficient recovery shares".into(),
-                        ));
+                        return Err(ShardError::ValidationFailed("Insufficient recovery shares".into()));
                     }
                 } else {
                     return Err(ShardError::ValidationFailed(format!(
@@ -51,17 +47,13 @@ impl IdentityValidator {
             }
             IdentityOp::VerifyDid { did } => {
                 if !state.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 Ok(())
             }
             IdentityOp::AddAgent { did, agent } => {
                 if !state.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "Owner DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("Owner DID not found: {did}")));
                 }
                 if state.agent_registry.contains_key(&agent.did) {
                     return Err(ShardError::StateConflict(format!(
@@ -73,9 +65,7 @@ impl IdentityValidator {
             }
             IdentityOp::EnrollBiometric { did, .. } => {
                 if !state.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 Ok(())
             }
@@ -89,9 +79,7 @@ impl IdentityValidator {
             }
             IdentityOp::RevokeAgent { agent_did } => {
                 if !state.agent_registry.contains_key(agent_did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "Agent not found: {agent_did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("Agent not found: {agent_did}")));
                 }
                 Ok(())
             }
@@ -102,9 +90,7 @@ impl IdentityValidator {
                 ..
             } => {
                 if !state.dids.contains_key(did) {
-                    return Err(ShardError::ValidationFailed(format!(
-                        "DID not found: {did}"
-                    )));
+                    return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 if *threshold < 2 {
                     return Err(ShardError::InvalidOperation(
@@ -125,9 +111,7 @@ impl IdentityValidator {
     pub fn validate_shard_op(state: &IdentityState, op: &ShardOp) -> Result<(), ShardError> {
         match op {
             ShardOp::Identity(id_op) => Self::validate(state, id_op),
-            _ => Err(ShardError::InvalidOperation(
-                "Not an Identity operation".into(),
-            )),
+            _ => Err(ShardError::InvalidOperation("Not an Identity operation".into())),
         }
     }
 }

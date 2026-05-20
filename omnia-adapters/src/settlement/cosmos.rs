@@ -53,11 +53,7 @@ impl SettlementLayer for CosmosAdapter {
         ))
     }
 
-    async fn request_withdrawal(
-        &self,
-        _l2_did: &str,
-        _amount: u64,
-    ) -> Result<String, SettlementError> {
+    async fn request_withdrawal(&self, _l2_did: &str, _amount: u64) -> Result<String, SettlementError> {
         Err(SettlementError::NotImplemented(
             "Cosmos bridging requires IBC transfer".into(),
         ))

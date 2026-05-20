@@ -30,24 +30,16 @@ impl BiologicalValidator {
             BiologicalOp::RevokeAccess { subject, consumer } => {
                 let key = (*subject, *consumer);
                 if !state.consent_registry.contains_key(&key) {
-                    return Err(ShardError::ValidationFailed(
-                        "Consent record not found".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Consent record not found".into()));
                 }
                 Ok(())
             }
-            BiologicalOp::QueryWithZkProof {
-                subject, consumer, ..
-            } => {
+            BiologicalOp::QueryWithZkProof { subject, consumer, .. } => {
                 let key = (*subject, *consumer);
                 match state.consent_registry.get(&key) {
                     Some(record) if !record.revoked => Ok(()),
-                    Some(_) => Err(ShardError::ValidationFailed(
-                        "Consent has been revoked".into(),
-                    )),
-                    None => Err(ShardError::ValidationFailed(
-                        "No consent for this query".into(),
-                    )),
+                    Some(_) => Err(ShardError::ValidationFailed("Consent has been revoked".into())),
+                    None => Err(ShardError::ValidationFailed("No consent for this query".into())),
                 }
             }
         }
@@ -57,9 +49,7 @@ impl BiologicalValidator {
     pub fn validate_shard_op(state: &BiologicalState, op: &ShardOp) -> Result<(), ShardError> {
         match op {
             ShardOp::Biological(bio_op) => Self::validate(state, bio_op),
-            _ => Err(ShardError::InvalidOperation(
-                "Not a Biological operation".into(),
-            )),
+            _ => Err(ShardError::InvalidOperation("Not a Biological operation".into())),
         }
     }
 }

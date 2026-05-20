@@ -76,10 +76,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
     pub fn remove(&mut self, element: &T) {
         if let Some(tokens) = self.adds.get(element) {
             let observed = tokens.clone();
-            self.removes
-                .entry(element.clone())
-                .or_default()
-                .extend(observed);
+            self.removes.entry(element.clone()).or_default().extend(observed);
         }
     }
 
@@ -87,10 +84,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
     ///
     /// This is useful when you know the exact token to remove.
     pub fn remove_token(&mut self, element: &T, token: &Token) {
-        self.removes
-            .entry(element.clone())
-            .or_default()
-            .insert(*token);
+        self.removes.entry(element.clone()).or_default().insert(*token);
     }
 
     /// Check if an element is in the set

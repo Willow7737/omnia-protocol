@@ -166,9 +166,7 @@ pub struct GenesisBlock {
 pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisError> {
     // Validate: at least 3 validators for BFT safety
     if config.initial_validators.len() < 3 {
-        return Err(GenesisError::InsufficientValidators(
-            config.initial_validators.len(),
-        ));
+        return Err(GenesisError::InsufficientValidators(config.initial_validators.len()));
     }
 
     // Validate: unique node IDs
@@ -215,8 +213,7 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
     };
 
     // Compute genesis hash from serialized block
-    let genesis_bytes =
-        postcard::to_allocvec(&genesis).map_err(|e| GenesisError::Serialization(e.to_string()))?;
+    let genesis_bytes = postcard::to_allocvec(&genesis).map_err(|e| GenesisError::Serialization(e.to_string()))?;
     let genesis_hash: [u8; 32] = blake3_hash_domain(b"omnia-genesis-block", &genesis_bytes);
 
     Ok(GenesisBlock {
@@ -293,10 +290,7 @@ mod tests {
 
         let block1 = generate_genesis(&config).unwrap();
         let block2 = generate_genesis(&config).unwrap();
-        assert_eq!(
-            block1.hash, block2.hash,
-            "same config must produce same genesis hash"
-        );
+        assert_eq!(block1.hash, block2.hash, "same config must produce same genesis hash");
     }
 
     #[test]
@@ -345,10 +339,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             GenesisError::DuplicateNodeId(msg) => {
-                assert!(
-                    msg.contains("node_id 1"),
-                    "error should mention the duplicate ID"
-                );
+                assert!(msg.contains("node_id 1"), "error should mention the duplicate ID");
             }
             other => panic!("Expected DuplicateNodeId, got: {other:?}"),
         }

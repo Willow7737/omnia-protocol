@@ -93,10 +93,7 @@ impl ShamirRecovery {
 
         for byte_pos in 0..secret_len {
             // Lagrange interpolation at x = 0 to recover the constant term
-            let points: Vec<(u8, u8)> = shares
-                .iter()
-                .map(|s| (s.index, s.value[byte_pos]))
-                .collect();
+            let points: Vec<(u8, u8)> = shares.iter().map(|s| (s.index, s.value[byte_pos])).collect();
             let byte = Self::lagrange_interpolate(&points, 0)?;
             secret.push(byte);
         }

@@ -77,8 +77,7 @@ pub mod setup;
 
 // Core settlement trait and mock (always available)
 pub use settlement::{
-    FinalityProof, MockSettlementAdapter, SettlementAdapter, SettlementError, SettlementLayer,
-    StateRoot, TxHash,
+    FinalityProof, MockSettlementAdapter, SettlementAdapter, SettlementError, SettlementLayer, StateRoot, TxHash,
 };
 
 // Legacy settlement adapters (always available)

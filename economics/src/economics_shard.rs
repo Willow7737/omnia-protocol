@@ -131,19 +131,14 @@ impl EconomicsState {
                 id,
                 description,
                 expires_at_epoch,
-            } => self.governance.create_proposal(
-                id.clone(),
-                description.clone(),
-                *expires_at_epoch,
-                current_epoch,
-            ),
+            } => self
+                .governance
+                .create_proposal(id.clone(), description.clone(), *expires_at_epoch, current_epoch),
             EconomicsOp::Vote {
                 did,
                 proposal_id,
                 choice,
-            } => self
-                .governance
-                .vote(did, proposal_id, choice.clone(), current_epoch),
+            } => self.governance.vote(did, proposal_id, choice.clone(), current_epoch),
             EconomicsOp::RegisterDid { did } => {
                 self.quota.register_did(did);
                 Ok(())

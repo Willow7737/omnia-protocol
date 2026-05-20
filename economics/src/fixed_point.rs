@@ -432,10 +432,7 @@ mod tests {
             let n = hasher.finish();
 
             let r = isqrt(n);
-            assert!(
-                r.saturating_mul(r) <= n,
-                "isqrt({n}) = {r}, but {r}^2 > {n}"
-            );
+            assert!(r.saturating_mul(r) <= n, "isqrt({n}) = {r}, but {r}^2 > {n}");
             if r < u64::MAX {
                 assert!(
                     n < (r + 1).saturating_mul(r + 1),

@@ -98,8 +98,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
     let mut total_migrated = 0usize;
 
     // Open redb database
-    let redb_db =
-        redb::Database::create(redb_path).map_err(|e| MigrationError::RedbOpen(e.to_string()))?;
+    let redb_db = redb::Database::create(redb_path).map_err(|e| MigrationError::RedbOpen(e.to_string()))?;
 
     // Iterate over all sled trees
     let tree_names: Vec<String> = sled_db
@@ -116,10 +115,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
             .map_err(|e| MigrationError::SledRead(e.to_string()))?;
 
         // Create a redb table definition for this tree
-        let table_key = format!(
-            "migrated_{}",
-            tree_name.replace(|c: char| !c.is_alphanumeric(), "_")
-        );
+        let table_key = format!("migrated_{}", tree_name.replace(|c: char| !c.is_alphanumeric(), "_"));
         let table_def: TableDefinition<&[u8], &[u8]> = TableDefinition::new(&table_key);
 
         let write_txn = redb_db
@@ -168,8 +164,7 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
     };
     let backup_path = Path::new(&backup_path);
 
-    std::fs::rename(sled_path, backup_path)
-        .map_err(|e| MigrationError::RenameFailed(e.to_string()))?;
+    std::fs::rename(sled_path, backup_path).map_err(|e| MigrationError::RenameFailed(e.to_string()))?;
 
     tracing::info!(
         total_migrated,

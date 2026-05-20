@@ -7,8 +7,7 @@
 //! - AI agent identity with capability-based access control
 
 use omnia_shards::{
-    AgentCapability, AgentIdentity, BiometricAnchor, DidDocument, IdentityOp, IdentityState,
-    ShamirRecovery,
+    AgentCapability, AgentIdentity, BiometricAnchor, DidDocument, IdentityOp, IdentityState, ShamirRecovery,
 };
 use omnia_substrate::{crypto::generate_keypair, VectorClock};
 
@@ -98,9 +97,7 @@ fn test_full_identity_lifecycle() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-        .unwrap();
+    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
     // 2. Enroll biometric
     state
@@ -163,9 +160,7 @@ fn test_biometric_verification_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-        .unwrap();
+    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
     // Enroll
     state
@@ -209,9 +204,7 @@ fn test_configure_recovery_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-        .unwrap();
+    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
     // Configure recovery
     state
@@ -242,9 +235,7 @@ fn test_agent_revocation_disables_capabilities() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-        .unwrap();
+    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
     let agent = AgentIdentity {
         did: "did:omnia:agent:compute1".to_string(),
@@ -268,13 +259,8 @@ fn test_agent_revocation_disables_capabilities() {
         .unwrap();
 
     // Agent should have capability before revocation
-    let agent = state
-        .agent_registry
-        .get("did:omnia:agent:compute1")
-        .unwrap();
-    assert!(agent.has_capability(&AgentCapability::ComputeProof {
-        max_compute_units: 500,
-    }));
+    let agent = state.agent_registry.get("did:omnia:agent:compute1").unwrap();
+    assert!(agent.has_capability(&AgentCapability::ComputeProof { max_compute_units: 500 }));
 
     // Revoke
     state
@@ -287,13 +273,8 @@ fn test_agent_revocation_disables_capabilities() {
         .unwrap();
 
     // Agent should NOT have capability after revocation
-    let agent = state
-        .agent_registry
-        .get("did:omnia:agent:compute1")
-        .unwrap();
-    assert!(!agent.has_capability(&AgentCapability::ComputeProof {
-        max_compute_units: 500,
-    }));
+    let agent = state.agent_registry.get("did:omnia:agent:compute1").unwrap();
+    assert!(!agent.has_capability(&AgentCapability::ComputeProof { max_compute_units: 500 }));
     assert!(agent.revoked);
 }
 
@@ -306,9 +287,7 @@ fn test_duplicate_agent_rejected() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc)
-        .unwrap();
+    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
 
     let agent1 = AgentIdentity {
         did: "did:omnia:agent:dup".to_string(),

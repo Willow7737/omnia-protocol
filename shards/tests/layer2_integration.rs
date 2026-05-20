@@ -13,8 +13,8 @@
 use std::sync::{Arc, Mutex};
 
 use omnia_shards::{
-    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState, ShardId,
-    ShardOp, ShardPayload, ShardRouter,
+    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState, ShardId, ShardOp,
+    ShardPayload, ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, Substrate, SubstrateConfig};
 
@@ -52,15 +52,10 @@ async fn test_financial_shard_wired_into_substrate() {
 
     // 2. Create shard router with financial shard, shared via Arc<Mutex>
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
-    router
-        .lock()
-        .unwrap()
-        .register(Box::new(FinancialShard::new()));
+    router.lock().unwrap().register(Box::new(FinancialShard::new()));
 
     // 3. Attach router to substrate via SharedShardProcessor
-    let processor = SharedShardProcessor {
-        inner: router.clone(),
-    };
+    let processor = SharedShardProcessor { inner: router.clone() };
     substrate = substrate.with_shard_processor(Box::new(processor));
 
     // 4. Mint some tokens to an account
@@ -92,10 +87,7 @@ async fn test_financial_shard_wired_into_substrate() {
     assert!(!finalized_ids.is_empty(), "Event should be finalized");
     let finalized_events: Vec<Event> = {
         let graph = substrate.graph().await;
-        finalized_ids
-            .iter()
-            .filter_map(|id| graph.get(id).cloned())
-            .collect()
+        finalized_ids.iter().filter_map(|id| graph.get(id).cloned()).collect()
     };
     if let Some(ref mut proc) = substrate.shard_processor {
         for event in &finalized_events {
@@ -124,15 +116,10 @@ async fn test_identity_shard_wired_into_substrate() {
 
     // 2. Create shard router with identity shard, shared via Arc<Mutex>
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
-    router
-        .lock()
-        .unwrap()
-        .register(Box::new(IdentityShard::new()));
+    router.lock().unwrap().register(Box::new(IdentityShard::new()));
 
     // 3. Attach router to substrate
-    let processor = SharedShardProcessor {
-        inner: router.clone(),
-    };
+    let processor = SharedShardProcessor { inner: router.clone() };
     substrate = substrate.with_shard_processor(Box::new(processor));
 
     // 4. Create a DID
@@ -163,10 +150,7 @@ async fn test_identity_shard_wired_into_substrate() {
     assert!(!finalized_ids.is_empty(), "Event should be finalized");
     let finalized_events: Vec<Event> = {
         let graph = substrate.graph().await;
-        finalized_ids
-            .iter()
-            .filter_map(|id| graph.get(id).cloned())
-            .collect()
+        finalized_ids.iter().filter_map(|id| graph.get(id).cloned()).collect()
     };
     if let Some(ref mut proc) = substrate.shard_processor {
         for event in &finalized_events {

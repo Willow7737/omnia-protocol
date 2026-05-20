@@ -12,9 +12,8 @@
 
 use omnia_economics::QuotaSystem;
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, CrossShardMessage, FeeSchedule, FinancialOp,
-    FinancialShard, IdentityShard, PhysicalShard, ShardError, ShardId, ShardOp, ShardPayload,
-    ShardRouter,
+    BiologicalShard, ComputationalShard, CrossShardMessage, FeeSchedule, FinancialOp, FinancialShard, IdentityShard,
+    PhysicalShard, ShardError, ShardId, ShardOp, ShardPayload, ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, NodeKeypair, VectorClock};
 
@@ -25,11 +24,7 @@ fn test_node(id: u8) -> NodeId {
 }
 
 /// Create a signed event with the given payload, creator, and keypair.
-fn create_test_event_with_keypair(
-    creator: NodeId,
-    payload: Vec<u8>,
-    keypair: &NodeKeypair,
-) -> Event {
+fn create_test_event_with_keypair(creator: NodeId, payload: Vec<u8>, keypair: &NodeKeypair) -> Event {
     let vc = VectorClock::with_node(creator, 1);
     let mut event = Event::new(creator, 0, vc, None, None, payload);
     event.sign_with_keypair(keypair);
@@ -75,10 +70,7 @@ fn test_funded_quota_operations_succeed() {
         nonce: 1,
     };
     let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
-    assert!(
-        router.route_event(&event).is_ok(),
-        "Funded operation should succeed"
-    );
+    assert!(router.route_event(&event).is_ok(), "Funded operation should succeed");
 }
 
 // ---------------------------------------------------------------------------
@@ -145,12 +137,8 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 =
-        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
-    assert!(
-        router.route_event(&event1).is_ok(),
-        "First op should succeed"
-    );
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
+    assert!(router.route_event(&event1).is_ok(), "First op should succeed");
 
     // Op 2 — should succeed (balance: 15 → 5)
     let payload2 = ShardPayload {
@@ -158,12 +146,8 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 =
-        create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
-    assert!(
-        router.route_event(&event2).is_ok(),
-        "Second op should succeed"
-    );
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
+    assert!(router.route_event(&event2).is_ok(), "Second op should succeed");
 
     // Op 3 — should fail (balance: 5, need 10)
     let payload3 = ShardPayload {
@@ -171,13 +155,9 @@ fn test_partial_balance_some_succeed_then_fail() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 3,
     };
-    let event3 =
-        create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
+    let event3 = create_test_event_with_keypair(test_node(1), payload3.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event3);
-    assert!(
-        result.is_err(),
-        "Third op should fail due to insufficient balance"
-    );
+    assert!(result.is_err(), "Third op should fail due to insufficient balance");
     match result.unwrap_err() {
         ShardError::InsufficientFee(_) => {}
         other => panic!("Expected InsufficientFee, got: {other:?}"),
@@ -272,16 +252,10 @@ fn test_cross_shard_insufficient_balance() {
     };
     let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
     let result = router.route_event(&event);
-    assert!(
-        result.is_err(),
-        "Cross-shard with insufficient balance should fail"
-    );
+    assert!(result.is_err(), "Cross-shard with insufficient balance should fail");
     match result.unwrap_err() {
         ShardError::InsufficientFee(msg) => {
-            assert!(
-                msg.contains("Quota exceeded"),
-                "Expected 'Quota exceeded', got: {msg}"
-            );
+            assert!(msg.contains("Quota exceeded"), "Expected 'Quota exceeded', got: {msg}");
         }
         other => panic!("Expected InsufficientFee, got: {other:?}"),
     }
@@ -294,9 +268,7 @@ fn test_cross_shard_insufficient_balance() {
 #[test]
 fn test_fee_deduction_matches_schedule() {
     let schedule = FeeSchedule::standard();
-    let financial_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery {
-        account: [0u8; 32],
-    }));
+    let financial_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: [0u8; 32] }));
 
     // Set the DID's balance to exactly the financial fee
     let mut quota = QuotaSystem::new(financial_fee, 30 * 24 * 60 * 60 * 1000);
@@ -315,8 +287,7 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 1,
     };
-    let event1 =
-        create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
+    let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event1).is_ok(),
         "Op with exact fee balance should succeed"
@@ -328,8 +299,7 @@ fn test_fee_deduction_matches_schedule() {
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
         nonce: 2,
     };
-    let event2 =
-        create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
+    let event2 = create_test_event_with_keypair(test_node(1), payload2.to_bytes().unwrap(), &keypair);
     assert!(
         router.route_event(&event2).is_err(),
         "Op after balance exhausted should fail"
@@ -339,13 +309,10 @@ fn test_fee_deduction_matches_schedule() {
 #[test]
 fn test_identity_fee_is_lower_than_financial() {
     let schedule = FeeSchedule::standard();
-    let identity_fee =
-        schedule.fee_for_op(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
-            document: omnia_shards::DidDocument::new("did:omnia:test".to_string(), [0u8; 32], 0),
-        }));
-    let financial_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery {
-        account: [0u8; 32],
+    let identity_fee = schedule.fee_for_op(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
+        document: omnia_shards::DidDocument::new("did:omnia:test".to_string(), [0u8; 32], 0),
     }));
+    let financial_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: [0u8; 32] }));
 
     assert!(
         identity_fee < financial_fee,
@@ -377,10 +344,7 @@ fn test_unregistered_did_fails_with_insufficient_fee() {
     assert!(result.is_err(), "Unregistered DID should fail fee check");
     match result.unwrap_err() {
         ShardError::InsufficientFee(msg) => {
-            assert!(
-                msg.contains("Quota exceeded"),
-                "Expected 'Quota exceeded', got: {msg}"
-            );
+            assert!(msg.contains("Quota exceeded"), "Expected 'Quota exceeded', got: {msg}");
         }
         other => panic!("Expected InsufficientFee, got: {other:?}"),
     }

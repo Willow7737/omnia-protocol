@@ -13,8 +13,7 @@
 use crate::blake3_domain::blake3_hash_domain;
 use crate::vector_clock::{NodeId, VectorClock};
 use ed25519_dalek::{
-    Signature as EdSignature, Signer, SigningKey as NodeKeypair, Verifier,
-    VerifyingKey as NodePublicKey,
+    Signature as EdSignature, Signer, SigningKey as NodeKeypair, Verifier, VerifyingKey as NodePublicKey,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -433,8 +432,7 @@ impl Event {
     /// Returns [`EventValidationError::SerializationError`] if postcard
     /// serialization fails.
     pub fn to_bytes(&self) -> Result<Vec<u8>, EventValidationError> {
-        crate::wire_format::serialize_with_version(self)
-            .map_err(|_| EventValidationError::SerializationError)
+        crate::wire_format::serialize_with_version(self).map_err(|_| EventValidationError::SerializationError)
     }
 
     /// Deserialize event from compact binary bytes.
@@ -903,10 +901,7 @@ mod tests {
     #[test]
     fn test_zero_amount_error_variant() {
         let err = EventValidationError::ZeroAmount;
-        assert_eq!(
-            format!("{err}"),
-            "Event has obviously invalid data (zero amount)"
-        );
+        assert_eq!(format!("{err}"), "Event has obviously invalid data (zero amount)");
     }
 
     /// Test that an event whose payload was tampered after signing fails validation
@@ -968,10 +963,7 @@ mod tests {
 
         let result = tampered.validate();
         assert!(
-            matches!(
-                result,
-                Err(EventValidationError::CreatorPubkeyMismatch { .. })
-            ),
+            matches!(result, Err(EventValidationError::CreatorPubkeyMismatch { .. })),
             "Expected CreatorPubkeyMismatch, got {result:?}"
         );
     }
@@ -1058,14 +1050,8 @@ mod tests {
             derived: "bb".to_string(),
         };
         let msg = format!("{err}");
-        assert!(
-            msg.contains("aa"),
-            "Error message should contain claimed value"
-        );
-        assert!(
-            msg.contains("bb"),
-            "Error message should contain derived value"
-        );
+        assert!(msg.contains("aa"), "Error message should contain claimed value");
+        assert!(msg.contains("bb"), "Error message should contain derived value");
     }
 
     /// Test that the PayloadTooLarge error variant has the correct display message.

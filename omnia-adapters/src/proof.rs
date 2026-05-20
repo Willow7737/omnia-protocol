@@ -58,11 +58,7 @@ pub fn verify_groth16_proof(
 ///
 /// The commitment binds the old state, batch data, and new state
 /// together, preventing substitution of any component.
-pub fn compute_batch_commitment(
-    old_root: &[u8; 32],
-    new_root: &[u8; 32],
-    batch_data: &[u8],
-) -> [u8; 32] {
+pub fn compute_batch_commitment(old_root: &[u8; 32], new_root: &[u8; 32], batch_data: &[u8]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(old_root);
     hasher.update(batch_data);

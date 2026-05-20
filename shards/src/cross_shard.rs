@@ -32,12 +32,7 @@ pub struct CrossShardMessage {
 
 impl CrossShardMessage {
     /// Create a new cross-shard message.
-    pub fn new(
-        source_shard: ShardId,
-        target_shard: ShardId,
-        payload: Vec<u8>,
-        causal_proof: VectorClock,
-    ) -> Self {
+    pub fn new(source_shard: ShardId, target_shard: ShardId, payload: Vec<u8>, causal_proof: VectorClock) -> Self {
         Self {
             source_shard,
             target_shard,

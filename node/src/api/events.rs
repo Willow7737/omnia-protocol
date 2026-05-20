@@ -133,11 +133,7 @@ pub async fn submit_event(
         status: status.clone(),
     };
 
-    state
-        .event_store
-        .write()
-        .await
-        .insert(event_id_hex.clone(), stored);
+    state.event_store.write().await.insert(event_id_hex.clone(), stored);
 
     // Increment the events counter
     #[cfg(feature = "metrics")]
@@ -176,8 +172,7 @@ pub async fn get_event(
     let store = state.event_store.read().await;
     match store.get(&id) {
         Some(event) => Ok(Json(
-            serde_json::to_value(event)
-                .unwrap_or_else(|_| json!({"error": "Serialization failed"})),
+            serde_json::to_value(event).unwrap_or_else(|_| json!({"error": "Serialization failed"})),
         )),
         None => Err((
             StatusCode::NOT_FOUND,

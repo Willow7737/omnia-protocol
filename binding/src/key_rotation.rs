@@ -59,10 +59,7 @@ impl PqcKeyRotationManager {
     }
 
     /// Submit a key rotation request.
-    pub fn submit_rotation(
-        &mut self,
-        request: PqcKeyRotationRequest,
-    ) -> Result<(), KeyRotationError> {
+    pub fn submit_rotation(&mut self, request: PqcKeyRotationRequest) -> Result<(), KeyRotationError> {
         if (request.new_phase as u8) < (self.current_phase as u8) {
             return Err(KeyRotationError::PhaseDowngrade {
                 from: self.current_phase,
@@ -80,10 +77,8 @@ impl PqcKeyRotationManager {
 
     /// Process rotations that have become effective.
     pub fn process_effective(&mut self, current_round: u64) -> Vec<PqcKeyRotationRequest> {
-        let (effective, remaining): (Vec<_>, Vec<_>) = self
-            .pending
-            .drain(..)
-            .partition(|r| current_round >= r.effective_at);
+        let (effective, remaining): (Vec<_>, Vec<_>) =
+            self.pending.drain(..).partition(|r| current_round >= r.effective_at);
 
         self.pending = remaining;
 

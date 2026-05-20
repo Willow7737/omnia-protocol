@@ -68,11 +68,7 @@ pub trait SyncNetwork: Send + Sync {
     fn connected_peers(&self) -> Vec<NodeId>;
 
     /// Send a sync request to a specific peer and get a response.
-    fn send_request(
-        &self,
-        peer_id: NodeId,
-        request: SyncRequest,
-    ) -> Result<SyncResponse, SyncError>;
+    fn send_request(&self, peer_id: NodeId, request: SyncRequest) -> Result<SyncResponse, SyncError>;
 }
 
 /// A serializable snapshot of consensus state at a given round.
@@ -225,10 +221,7 @@ impl std::fmt::Debug for FastSyncManager {
         f.debug_struct("FastSyncManager")
             .field("node_id", &hex::encode(&self.node_id[..4]))
             .field("enabled", &self.enabled)
-            .field(
-                "network",
-                &self.network.as_ref().map(|_| "Some(SyncNetwork)"),
-            )
+            .field("network", &self.network.as_ref().map(|_| "Some(SyncNetwork)"))
             .finish()
     }
 }
@@ -382,10 +375,7 @@ impl FastSyncManager {
     }
 
     /// Query all connected peers for their latest checkpoint.
-    fn query_peer_checkpoints(
-        &self,
-        network: &Arc<dyn SyncNetwork>,
-    ) -> Result<Vec<SyncCheckpoint>, SyncError> {
+    fn query_peer_checkpoints(&self, network: &Arc<dyn SyncNetwork>) -> Result<Vec<SyncCheckpoint>, SyncError> {
         let peers = network.connected_peers();
         let mut checkpoints = Vec::new();
 
@@ -425,9 +415,7 @@ impl FastSyncManager {
             },
         ) {
             Ok(SyncResponse::Snapshot(Some(data))) => Ok(data),
-            Ok(SyncResponse::Snapshot(None)) => Err(SyncError::Network(
-                "Peer returned no snapshot data".to_string(),
-            )),
+            Ok(SyncResponse::Snapshot(None)) => Err(SyncError::Network("Peer returned no snapshot data".to_string())),
             Ok(_) => Err(SyncError::Network("Unexpected response type".to_string())),
             Err(e) => Err(e),
         }
@@ -513,16 +501,10 @@ impl SyncNetwork for MockSyncNetwork {
         self.peers.clone()
     }
 
-    fn send_request(
-        &self,
-        _peer_id: NodeId,
-        request: SyncRequest,
-    ) -> Result<SyncResponse, SyncError> {
+    fn send_request(&self, _peer_id: NodeId, request: SyncRequest) -> Result<SyncResponse, SyncError> {
         match request {
             SyncRequest::GetCheckpoint => Ok(SyncResponse::Checkpoint(self.checkpoint.clone())),
-            SyncRequest::GetSnapshot { .. } => {
-                Ok(SyncResponse::Snapshot(self.snapshot_data.clone()))
-            }
+            SyncRequest::GetSnapshot { .. } => Ok(SyncResponse::Snapshot(self.snapshot_data.clone())),
             SyncRequest::GetEvents { .. } => Ok(SyncResponse::Events(self.delta_events.clone())),
         }
     }
@@ -551,8 +533,7 @@ mod tests {
             consensus_data: vec![0xCC, 0xDD],
             event_count: round * 100,
         };
-        let snapshot_data =
-            postcard::to_allocvec(&snapshot).expect("snapshot serialization should not fail");
+        let snapshot_data = postcard::to_allocvec(&snapshot).expect("snapshot serialization should not fail");
         let snapshot_hash = blake3_hash_domain(b"OMNIA-FAST-SYNC-V1", &snapshot_data);
 
         let checkpoint = SyncCheckpoint {
@@ -641,10 +622,7 @@ mod tests {
 
         let result = select_target_checkpoint(&checkpoints, 5);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SyncError::InsufficientAgreement { .. }
-        ));
+        assert!(matches!(result.unwrap_err(), SyncError::InsufficientAgreement { .. }));
     }
 
     #[test]
@@ -831,10 +809,7 @@ mod tests {
         let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.sync_to_latest().await;
-        assert!(
-            result.is_err(),
-            "Tampered snapshot should fail integrity check"
-        );
+        assert!(result.is_err(), "Tampered snapshot should fail integrity check");
         match result.unwrap_err() {
             SyncError::IntegrityCheckFailed { expected, actual } => {
                 assert_ne!(expected, actual, "Expected and actual hashes should differ");

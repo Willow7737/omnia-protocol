@@ -148,11 +148,7 @@ pub fn vrf_compute(keypair: &NodeKeypair, input: &[u8]) -> VrfOutput {
 /// let vrf_output = vrf_compute(&keypair, input);
 /// vrf_verify(&keypair.verifying_key(), input, &vrf_output)?;
 /// ```
-pub fn vrf_verify(
-    public_key: &NodePublicKey,
-    input: &[u8],
-    vrf_output: &VrfOutput,
-) -> Result<(), VrfError> {
+pub fn vrf_verify(public_key: &NodePublicKey, input: &[u8], vrf_output: &VrfOutput) -> Result<(), VrfError> {
     // Deserialize the proof back into an Ed25519 signature
     let proof_bytes: [u8; 64] = vrf_output
         .proof
@@ -243,10 +239,7 @@ pub fn select_leader(
     round_number: u64,
 ) -> Result<NodeId, VrfError> {
     // Filter out zero-stake candidates
-    let valid_candidates: Vec<_> = candidates
-        .iter()
-        .filter(|(_, (_, stake))| *stake > 0)
-        .collect();
+    let valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
 
     if valid_candidates.is_empty() {
         return Err(VrfError::NoCandidates(round_number));
@@ -440,12 +433,13 @@ pub fn ecvrf_verify(
     transcript.extend_from_slice(&proof.gamma);
     transcript.extend_from_slice(&proof.c);
 
-    let signature =
-        Signature::from_bytes(
-            &proof.s.as_slice().try_into().map_err(|_| {
-                VrfError::VerificationFailed("Signature must be 64 bytes".to_string())
-            })?,
-        );
+    let signature = Signature::from_bytes(
+        &proof
+            .s
+            .as_slice()
+            .try_into()
+            .map_err(|_| VrfError::VerificationFailed("Signature must be 64 bytes".to_string()))?,
+    );
     public_key
         .verify(&transcript, &signature)
         .map_err(|e| VrfError::VerificationFailed(format!("Signature verification: {e}")))?;
@@ -494,11 +488,7 @@ fn ecvrf_compute_gamma(secret_key: &ed25519_dalek::SigningKey, h_point: &[u8; 32
 ///
 /// This binds the challenge to all public values that both the prover
 /// and verifier can compute, preventing transcript manipulation.
-fn ecvrf_hash_challenge(
-    public_key: &ed25519_dalek::VerifyingKey,
-    h_point: &[u8; 32],
-    gamma: &[u8; 32],
-) -> [u8; 16] {
+fn ecvrf_hash_challenge(public_key: &ed25519_dalek::VerifyingKey, h_point: &[u8; 32], gamma: &[u8; 32]) -> [u8; 16] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"OMNIA-ECVRF-CHALLENGE-V2");
     hasher.update(public_key.to_bytes().as_slice());
@@ -533,10 +523,7 @@ pub fn select_leader_v2(
     vrf_version: VrfVersion,
 ) -> Result<NodeId, VrfError> {
     // Filter out zero-stake candidates
-    let valid_candidates: Vec<_> = candidates
-        .iter()
-        .filter(|(_, (_, stake))| *stake > 0)
-        .collect();
+    let valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
 
     if valid_candidates.is_empty() {
         return Err(VrfError::NoCandidates(round_number));
@@ -619,8 +606,7 @@ mod tests {
         assert_eq!(vrf_output.proof.len(), 64);
 
         // Verification should succeed
-        vrf_verify(&keypair.verifying_key(), input, &vrf_output)
-            .expect("VRF verification should succeed");
+        vrf_verify(&keypair.verifying_key(), input, &vrf_output).expect("VRF verification should succeed");
     }
 
     #[test]
@@ -795,12 +781,9 @@ mod tests {
         // Each candidate should be selected approximately proportional to stake.
         // Use basis-point (BPS) arithmetic instead of f64: frequency_bps = count * 10_000 / total.
         // 10% = 1000 bps, 40% = 4000 bps, 50% = 5000 bps.
-        let freq_1_bps =
-            (*counts.get(&test_node(1)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
-        let freq_2_bps =
-            (*counts.get(&test_node(2)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
-        let freq_3_bps =
-            (*counts.get(&test_node(3)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_1_bps = (*counts.get(&test_node(1)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_2_bps = (*counts.get(&test_node(2)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_3_bps = (*counts.get(&test_node(3)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
 
         // Allow 500 bps (5%) tolerance for statistical variance
         assert!(
@@ -858,10 +841,7 @@ mod tests {
 
         let proof = ecvrf_prove(&keypair, alpha);
         let result = ecvrf_verify(&keypair.verifying_key(), alpha, &proof);
-        assert!(
-            result.is_ok(),
-            "ECVRF verify should succeed for valid proof"
-        );
+        assert!(result.is_ok(), "ECVRF verify should succeed for valid proof");
     }
 
     #[test]
@@ -873,10 +853,7 @@ mod tests {
         let proof2 = ecvrf_prove(&keypair, alpha);
 
         // Same keypair + same input → same output (deterministic)
-        assert_eq!(
-            proof1.gamma, proof2.gamma,
-            "ECVRF output must be deterministic"
-        );
+        assert_eq!(proof1.gamma, proof2.gamma, "ECVRF output must be deterministic");
         assert_eq!(proof1.c, proof2.c, "ECVRF challenge must be deterministic");
         assert_eq!(proof1.s, proof2.s, "ECVRF response must be deterministic");
     }
@@ -909,10 +886,7 @@ mod tests {
                     break;
                 }
             }
-            assert!(
-                !sk_match,
-                "Proof should not contain secret key bytes verbatim"
-            );
+            assert!(!sk_match, "Proof should not contain secret key bytes verbatim");
         }
     }
 
@@ -922,10 +896,7 @@ mod tests {
         let proof = ecvrf_prove(&keypair, b"correct-input");
 
         let result = ecvrf_verify(&keypair.verifying_key(), b"wrong-input", &proof);
-        assert!(
-            result.is_err(),
-            "ECVRF verify should fail with wrong alpha_string"
-        );
+        assert!(result.is_err(), "ECVRF verify should fail with wrong alpha_string");
     }
 
     #[test]
@@ -946,18 +917,14 @@ mod tests {
             for (id, (kp, stake)) in &candidates {
                 map.insert(*id, (kp.clone(), *stake));
             }
-            let leader =
-                select_leader_v2(&map, &seed, round, VrfVersion::V2).expect("should select leader");
+            let leader = select_leader_v2(&map, &seed, round, VrfVersion::V2).expect("should select leader");
             *counts.entry(leader).or_insert(0) += 1;
         }
 
         // Check stake-proportional selection (same BPS logic as V1 test)
-        let freq_1_bps =
-            (*counts.get(&test_node(1)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
-        let freq_2_bps =
-            (*counts.get(&test_node(2)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
-        let freq_3_bps =
-            (*counts.get(&test_node(3)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_1_bps = (*counts.get(&test_node(1)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_2_bps = (*counts.get(&test_node(2)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
+        let freq_3_bps = (*counts.get(&test_node(3)).unwrap_or(&0) as u128 * 10_000 / rounds as u128) as u64;
 
         assert!(
             freq_1_bps > 500 && freq_1_bps < 1500,
@@ -984,8 +951,8 @@ mod tests {
         candidates.insert(test_node(2), (kp2, 100));
 
         let leader_v1 = select_leader(&candidates, b"seed", 5).expect("V1 should work");
-        let leader_v2_compat = select_leader_v2(&candidates, b"seed", 5, VrfVersion::V1)
-            .expect("V1 via select_leader_v2 should work");
+        let leader_v2_compat =
+            select_leader_v2(&candidates, b"seed", 5, VrfVersion::V1).expect("V1 via select_leader_v2 should work");
 
         assert_eq!(
             leader_v1, leader_v2_compat,

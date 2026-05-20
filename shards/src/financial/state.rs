@@ -131,9 +131,10 @@ impl FinancialState {
                 let vc = &event.vector_clock;
 
                 // Debit the sender
-                let from_balance = self.balances.get_mut(&from).ok_or_else(|| {
-                    ShardError::ValidationFailed("Sender account not found".into())
-                })?;
+                let from_balance = self
+                    .balances
+                    .get_mut(&from)
+                    .ok_or_else(|| ShardError::ValidationFailed("Sender account not found".into()))?;
 
                 if from_balance.value() < *amount {
                     return Err(ShardError::ValidationFailed("Insufficient balance".into()));

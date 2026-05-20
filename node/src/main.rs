@@ -32,8 +32,8 @@ use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard,
-    IdentityShard, PhysicalShard, ShardRouter,
+    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
+    ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use std::sync::atomic::AtomicBool;
@@ -50,10 +50,7 @@ async fn main() -> Result<()> {
     // Handle subcommands before starting the node
     if let Some(command) = cli.command {
         match command {
-            CliCommand::Keygen {
-                output_dir,
-                passphrase,
-            } => {
+            CliCommand::Keygen { output_dir, passphrase } => {
                 return run_keygen(&output_dir, passphrase.as_deref());
             }
             #[cfg(feature = "zk")]
@@ -177,10 +174,7 @@ async fn main() -> Result<()> {
 
     // Create the shard router with standard fees and nonce persistence
     let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
-    tracing::info!(
-        shard_count = 6,
-        "Shard router initialized with all shard types"
-    );
+    tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
     // Create the economics state
     let economics = EconomicsState::new();
@@ -196,9 +190,7 @@ async fn main() -> Result<()> {
             // Falls back to MockSettlementAdapter if config is missing or invalid.
             match create_ethereum_settlement_adapter() {
                 Ok(adapter) => {
-                    tracing::info!(
-                        "Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)"
-                    );
+                    tracing::info!("Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)");
                     adapter
                 }
                 Err(e) => {
@@ -212,9 +204,7 @@ async fn main() -> Result<()> {
         }
         #[cfg(not(feature = "ethereum-live"))]
         {
-            tracing::info!(
-                "Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)"
-            );
+            tracing::info!("Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)");
             Arc::new(omnia_adapters::MockSettlementAdapter::new())
         }
     };
@@ -246,7 +236,7 @@ async fn main() -> Result<()> {
 
     // 6. Build and start the HTTP server
     let app = omnia_node::http::build_http_router().with_state(app_state);
-    let listen_addr = format!("0.0.0.0:{config.http_port}");
+    let listen_addr = format!("0.0.0.0:{}", config.http_port);
 
     let listener = tokio::net::TcpListener::bind(&listen_addr)
         .await
@@ -274,10 +264,7 @@ fn init_tracing(log_level: &str) {
 
     let format = std::env::var("RUST_LOG_FORMAT").unwrap_or_default();
     if format == "json" {
-        tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .json()
-            .init();
+        tracing_subscriber::fmt().with_env_filter(filter).json().init();
     } else {
         tracing_subscriber::fmt()
             .with_env_filter(filter)
@@ -300,9 +287,8 @@ fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<Shard
         Some(db_path) => {
             // Ensure the parent directory exists
             if let Some(parent) = db_path.parent() {
-                std::fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create nonce directory: {}", parent.display())
-                })?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create nonce directory: {}", parent.display()))?;
             }
             let nonce_store: Arc<dyn omnia_shards::NonceStore> = Arc::new(
                 omnia_shards::RedbNonceStore::open(db_path)
@@ -366,8 +352,7 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
     use omnia_substrate::crypto::generate_keypair;
 
     let dir = std::path::Path::new(output_dir);
-    std::fs::create_dir_all(dir)
-        .with_context(|| format!("Failed to create output directory: {output_dir}"))?;
+    std::fs::create_dir_all(dir).with_context(|| format!("Failed to create output directory: {output_dir}"))?;
 
     let keypair = generate_keypair();
     let pubkey_bytes = keypair.verifying_key().to_bytes();
@@ -402,9 +387,8 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
         file_bytes.extend_from_slice(&ciphertext);
 
         let privkey_path = dir.join("validator_key.enc");
-        std::fs::write(&privkey_path, &file_bytes).with_context(|| {
-            format!("Failed to write encrypted private key to {privkey_path:?}")
-        })?;
+        std::fs::write(&privkey_path, &file_bytes)
+            .with_context(|| format!("Failed to write encrypted private key to {privkey_path:?}"))?;
 
         // Set file permissions to 0600 (owner read/write only) on Unix
         #[cfg(unix)]
@@ -483,8 +467,7 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
     use aes_gcm::aead::Aead;
     use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 
-    let file_bytes =
-        std::fs::read(path).with_context(|| format!("Failed to read key file: {path:?}"))?;
+    let file_bytes = std::fs::read(path).with_context(|| format!("Failed to read key file: {path:?}"))?;
 
     // Validate minimum length: magic(10) + nonce(12) + tag(16) = 38 bytes minimum
     // (ciphertext must be at least 0 bytes + 16-byte tag, but Ed25519 keypair is 64 bytes,
@@ -550,11 +533,7 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
 /// * `min_participants` — Minimum participants before the ceremony can finalize
 /// * `seed_hex` — Optional hex-encoded seed for deterministic contribution
 #[cfg(feature = "zk")]
-fn run_setup_contribute(
-    degree: usize,
-    min_participants: usize,
-    seed_hex: Option<&str>,
-) -> Result<()> {
+fn run_setup_contribute(degree: usize, min_participants: usize, seed_hex: Option<&str>) -> Result<()> {
     use omnia_adapters::setup::{contribute, PowersOfTau};
 
     // Initialize minimal tracing for the ceremony
@@ -585,22 +564,16 @@ fn run_setup_contribute(
     // Make the contribution
     let transcript = srs.to_transcript();
     let tau_size = srs.g1_powers.len() + srs.g2_powers.len();
-    let contribution = contribute(&transcript, tau_size, seed)
-        .map_err(|e| anyhow::anyhow!("Contribution failed: {e}"))?;
+    let contribution =
+        contribute(&transcript, tau_size, seed).map_err(|e| anyhow::anyhow!("Contribution failed: {e}"))?;
 
     srs.apply_contribution(&contribution)
         .map_err(|e| anyhow::anyhow!("Failed to apply contribution: {e}"))?;
 
     println!("Contribution accepted!");
-    println!(
-        "  Participant ID: {}",
-        hex::encode(&contribution.participant_id[..4])
-    );
-    println!("  Contribution count: {srs.contribution_count}");
-    println!(
-        "  Transcript hash: {}",
-        hex::encode(&srs.transcript_hash[..8])
-    );
+    println!("  Participant ID: {}", hex::encode(&contribution.participant_id[..4]));
+    println!("  Contribution count: {}", srs.contribution_count);
+    println!("  Transcript hash: {}", hex::encode(&srs.transcript_hash[..8]));
 
     if srs.contribution_count >= min_participants {
         println!("  Ceremony has enough participants to proceed to Phase 2.");
@@ -634,19 +607,14 @@ fn run_setup_verify(degree: usize, num_contributions: usize) -> Result<()> {
         .with_target(true)
         .init();
 
-    println!(
-        "Verifying Powers of Tau ceremony (degree={degree}, contributions={num_contributions})..."
-    );
+    println!("Verifying Powers of Tau ceremony (degree={degree}, contributions={num_contributions})...");
 
-    let srs = run_ceremony(degree, num_contributions)
-        .map_err(|e| anyhow::anyhow!("Ceremony verification failed: {e}"))?;
+    let srs =
+        run_ceremony(degree, num_contributions).map_err(|e| anyhow::anyhow!("Ceremony verification failed: {e}"))?;
 
     println!("Ceremony verification successful!");
-    println!("  Total contributions: {srs.contribution_count}");
-    println!(
-        "  Transcript hash: {}",
-        hex::encode(&srs.transcript_hash[..8])
-    );
+    println!("  Total contributions: {}", srs.contribution_count);
+    println!("  Transcript hash: {}", hex::encode(&srs.transcript_hash[..8]));
     println!("  G1 powers: {}", srs.g1_powers.len());
     println!("  G2 powers: {}", srs.g2_powers.len());
 
@@ -671,16 +639,16 @@ fn run_snapshot(output_path: &str) -> Result<()> {
     let slashing = omnia_substrate::SlashingState::default();
     let nonces = std::collections::HashMap::new();
 
-    let snapshot = StateSnapshot::take(&graph, &slashing, &nonces, 0)
-        .map_err(|e| anyhow::anyhow!("Snapshot failed: {e}"))?;
+    let snapshot =
+        StateSnapshot::take(&graph, &slashing, &nonces, 0).map_err(|e| anyhow::anyhow!("Snapshot failed: {e}"))?;
 
     snapshot
         .write_to_file(std::path::Path::new(output_path))
         .map_err(|e| anyhow::anyhow!("Failed to write snapshot: {e}"))?;
 
     println!("Snapshot written to {output_path}");
-    println!("  Height: {snapshot.height}");
-    println!("  Event count: {snapshot.event_count}");
+    println!("  Height: {}", snapshot.height);
+    println!("  Event count: {}", snapshot.event_count);
     println!("  State root: {}", hex::encode(&snapshot.state_root[..8]));
 
     Ok(())
@@ -707,11 +675,11 @@ fn run_restore(input_path: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Snapshot integrity check failed: {e}"))?;
 
     println!("Snapshot restored from {input_path}");
-    println!("  Version: {snapshot.version}");
-    println!("  Height: {snapshot.height}");
-    println!("  Event count: {snapshot.event_count}");
+    println!("  Version: {}", snapshot.version);
+    println!("  Height: {}", snapshot.height);
+    println!("  Event count: {}", snapshot.event_count);
     println!("  State root: {}", hex::encode(&snapshot.state_root[..8]));
-    println!("  Timestamp: {snapshot.timestamp}");
+    println!("  Timestamp: {}", snapshot.timestamp);
     println!("  Integrity: OK");
 
     Ok(())
@@ -736,29 +704,24 @@ fn run_genesis_init(config_path: &str, output_path: &str) -> Result<()> {
     let config_content = std::fs::read_to_string(config_path)
         .with_context(|| format!("Failed to read genesis config: {config_path}"))?;
 
-    let genesis_config: GenesisConfig = toml::from_str(&config_content)
-        .with_context(|| "Failed to parse genesis configuration TOML")?;
+    let genesis_config: GenesisConfig =
+        toml::from_str(&config_content).with_context(|| "Failed to parse genesis configuration TOML")?;
 
-    println!("  Chain ID: {genesis_config.chain_id}");
-    println!("  Network: {genesis_config.network_name}");
+    println!("  Chain ID: {}", genesis_config.chain_id);
+    println!("  Network: {}", genesis_config.network_name);
     println!("  Validators: {}", genesis_config.initial_validators.len());
 
-    let genesis_block = generate_genesis(&genesis_config)
-        .map_err(|e| anyhow::anyhow!("Genesis generation failed: {e}"))?;
+    let genesis_block =
+        generate_genesis(&genesis_config).map_err(|e| anyhow::anyhow!("Genesis generation failed: {e}"))?;
 
     println!("\nGenesis block generated successfully!");
-    println!(
-        "  State root: {}",
-        hex::encode(&genesis_block.state_root[..8])
-    );
+    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
     println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
     println!("  Validators: {}", genesis_block.validators.len());
 
     // Serialize and write
-    let bytes = postcard::to_allocvec(&genesis_block)
-        .map_err(|e| anyhow::anyhow!("Serialization failed: {e}"))?;
-    std::fs::write(output_path, &bytes)
-        .with_context(|| format!("Failed to write genesis block to {output_path}"))?;
+    let bytes = postcard::to_allocvec(&genesis_block).map_err(|e| anyhow::anyhow!("Serialization failed: {e}"))?;
+    std::fs::write(output_path, &bytes).with_context(|| format!("Failed to write genesis block to {output_path}"))?;
 
     println!("\nGenesis block written to {output_path}");
     println!("  Size: {} bytes", bytes.len());
@@ -781,22 +744,17 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
 
     println!("Loading genesis block from {block_path}");
 
-    let bytes = std::fs::read(block_path)
-        .with_context(|| format!("Failed to read genesis block: {block_path}"))?;
+    let bytes = std::fs::read(block_path).with_context(|| format!("Failed to read genesis block: {block_path}"))?;
 
     let genesis_block: GenesisBlock =
         postcard::from_bytes(&bytes).map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))?;
 
-    println!("  Chain ID: {genesis_block.chain_id}");
+    println!("  Chain ID: {}", genesis_block.chain_id);
     println!("  Validators: {}", genesis_block.validators.len());
     println!("  Hash: {}", hex::encode(&genesis_block.hash[..8]));
-    println!(
-        "  State root: {}",
-        hex::encode(&genesis_block.state_root[..8])
-    );
+    println!("  State root: {}", hex::encode(&genesis_block.state_root[..8]));
 
-    validate_genesis(&genesis_block)
-        .map_err(|e| anyhow::anyhow!("Genesis validation failed: {e}"))?;
+    validate_genesis(&genesis_block).map_err(|e| anyhow::anyhow!("Genesis validation failed: {e}"))?;
 
     println!("\nGenesis block is VALID");
     Ok(())
@@ -816,12 +774,11 @@ fn run_genesis_validate(block_path: &str) -> Result<()> {
 fn create_ethereum_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>> {
     use omnia_adapters::{EthereumConfig, EthereumSettlementAdapter};
 
-    let rpc_url = std::env::var("OMNIA_ETH_RPC_URL")
-        .context("OMNIA_ETH_RPC_URL environment variable not set")?;
+    let rpc_url = std::env::var("OMNIA_ETH_RPC_URL").context("OMNIA_ETH_RPC_URL environment variable not set")?;
     let contract_address = std::env::var("OMNIA_ETH_CONTRACT_ADDRESS")
         .context("OMNIA_ETH_CONTRACT_ADDRESS environment variable not set")?;
-    let operator_key = std::env::var("OMNIA_ETH_OPERATOR_KEY")
-        .context("OMNIA_ETH_OPERATOR_KEY environment variable not set")?;
+    let operator_key =
+        std::env::var("OMNIA_ETH_OPERATOR_KEY").context("OMNIA_ETH_OPERATOR_KEY environment variable not set")?;
 
     let gas_limit = std::env::var("OMNIA_ETH_GAS_LIMIT")
         .ok()
@@ -854,9 +811,7 @@ fn create_ethereum_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>> {
 /// serving in-flight requests.
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
+        tokio::signal::ctrl_c().await.expect("Failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]
@@ -893,11 +848,7 @@ async fn shutdown_signal() {
 /// contributions from the command line. The full network ceremony
 /// server with HTTP endpoints will be implemented in a follow-up.
 #[cfg(feature = "zk")]
-fn run_ceremony_serve(
-    min_participants: usize,
-    max_participants: usize,
-    degree: usize,
-) -> Result<()> {
+fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: usize) -> Result<()> {
     use omnia_adapters::setup::{contribute, CeremonyConfig, CeremonyServer};
 
     // Initialize minimal tracing
@@ -931,9 +882,7 @@ fn run_ceremony_serve(
         let receipt = server
             .accept_contribution(contribution)
             .map_err(|e| anyhow::anyhow!("Accept contribution {i} failed: {e}"))?;
-        println!(
-            "  Contribution {i} accepted (index={receipt.contribution_index})"
-        );
+        println!("  Contribution {i} accepted (index={})", receipt.contribution_index);
     }
 
     // Finalize
@@ -945,25 +894,16 @@ fn run_ceremony_serve(
     println!("\nCeremony finalized!");
     println!("  Total contributions: {}", server.contribution_count());
     println!("  Proving key size: {} bytes", key_pair.proving_key.len());
-    println!(
-        "  Verifying key size: {} bytes",
-        key_pair.verifying_key.len()
-    );
-    println!(
-        "  Transcript hash: {}",
-        hex::encode(&key_pair.tau_hash[..8])
-    );
+    println!("  Verifying key size: {} bytes", key_pair.verifying_key.len());
+    println!("  Transcript hash: {}", hex::encode(&key_pair.tau_hash[..8]));
 
     // Export and display transcript info
     let transcript = server
         .export_transcript()
         .map_err(|e| anyhow::anyhow!("Export transcript failed: {e}"))?;
     println!("\nTranscript exported:");
-    println!("  Contributions: {transcript.contribution_count}");
-    println!(
-        "  Final hash: {}",
-        hex::encode(&transcript.final_transcript_hash[..8])
-    );
+    println!("  Contributions: {}", transcript.contribution_count);
+    println!("  Final hash: {}", hex::encode(&transcript.final_transcript_hash[..8]));
 
     Ok(())
 }

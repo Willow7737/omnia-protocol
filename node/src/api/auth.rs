@@ -87,12 +87,8 @@ pub enum AuthError {
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
-            AuthError::MissingAuthHeader | AuthError::InvalidAuthFormat => {
-                (StatusCode::UNAUTHORIZED, self.to_string())
-            }
-            AuthError::TokenExpired | AuthError::InvalidToken(_) => {
-                (StatusCode::UNAUTHORIZED, self.to_string())
-            }
+            AuthError::MissingAuthHeader | AuthError::InvalidAuthFormat => (StatusCode::UNAUTHORIZED, self.to_string()),
+            AuthError::TokenExpired | AuthError::InvalidToken(_) => (StatusCode::UNAUTHORIZED, self.to_string()),
             AuthError::Unauthorized(_) => (StatusCode::FORBIDDEN, self.to_string()),
             AuthError::SecretNotConfigured => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             AuthError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
@@ -218,16 +214,12 @@ pub fn validate_token(token: &str) -> Result<Claims, AuthError> {
     let secret = jwt_secret().ok_or(AuthError::SecretNotConfigured)?;
     let validation = Validation::default();
     // `validate_exp` is true by default; leeway is 60 s.
-    decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map(|data| data.claims)
-    .map_err(|e| match e.kind() {
-        jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired,
-        other => AuthError::InvalidToken(format!("{other:?}")),
-    })
+    decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)
+        .map(|data| data.claims)
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired,
+            other => AuthError::InvalidToken(format!("{other:?}")),
+        })
 }
 
 /// Return the current Unix timestamp in seconds.
@@ -267,10 +259,7 @@ pub async fn require_auth(mut req: Request, next: Next) -> Response {
         }
     };
 
-    let auth_header = req
-        .headers()
-        .get(AUTHORIZATION)
-        .and_then(|v| v.to_str().ok());
+    let auth_header = req.headers().get(AUTHORIZATION).and_then(|v| v.to_str().ok());
 
     let token = match auth_header {
         None => return AuthError::MissingAuthHeader.into_response(),
@@ -284,11 +273,7 @@ pub async fn require_auth(mut req: Request, next: Next) -> Response {
     };
 
     let validation = Validation::default();
-    match decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    ) {
+    match decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation) {
         Ok(token_data) => {
             req.extensions_mut().insert(CallerIdentity {
                 caller_id: token_data.claims.sub,
@@ -296,9 +281,7 @@ pub async fn require_auth(mut req: Request, next: Next) -> Response {
             next.run(req).await
         }
         Err(e) => match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                AuthError::TokenExpired.into_response()
-            }
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired.into_response(),
             other => AuthError::InvalidToken(format!("{other:?}")).into_response(),
         },
     }
@@ -507,8 +490,7 @@ mod tests {
 
     #[test]
     fn test_authorized_callers_from_caller_ids() {
-        let callers =
-            AuthorizedCallers::from_caller_ids(vec!["node-1".to_string(), "node-2".to_string()]);
+        let callers = AuthorizedCallers::from_caller_ids(vec!["node-1".to_string(), "node-2".to_string()]);
         assert!(callers.is_authorized("node-1"));
         assert!(callers.is_authorized("node-2"));
         assert!(!callers.is_authorized("node-3"));
@@ -516,8 +498,7 @@ mod tests {
 
     #[test]
     fn test_authorized_callers_from_iterator_trait() {
-        let callers: AuthorizedCallers =
-            vec!["a".to_string(), "b".to_string()].into_iter().collect();
+        let callers: AuthorizedCallers = vec!["a".to_string(), "b".to_string()].into_iter().collect();
         assert!(callers.is_authorized("a"));
         assert!(callers.is_authorized("b"));
         assert!(!callers.is_authorized("c"));

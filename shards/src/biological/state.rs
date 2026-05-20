@@ -78,9 +78,10 @@ impl BiologicalState {
             }
             BiologicalOp::RevokeAccess { subject, consumer } => {
                 let key = (*subject, *consumer);
-                let record = self.consent_registry.get_mut(&key).ok_or_else(|| {
-                    ShardError::ValidationFailed("Consent record not found".into())
-                })?;
+                let record = self
+                    .consent_registry
+                    .get_mut(&key)
+                    .ok_or_else(|| ShardError::ValidationFailed("Consent record not found".into()))?;
                 record.revoked = true;
                 Ok(())
             }
@@ -91,14 +92,13 @@ impl BiologicalState {
                 ..
             } => {
                 let key = (*subject, *consumer);
-                let record = self.consent_registry.get(&key).ok_or_else(|| {
-                    ShardError::ValidationFailed("No consent for this query".into())
-                })?;
+                let record = self
+                    .consent_registry
+                    .get(&key)
+                    .ok_or_else(|| ShardError::ValidationFailed("No consent for this query".into()))?;
 
                 if record.revoked {
-                    return Err(ShardError::ValidationFailed(
-                        "Consent has been revoked".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Consent has been revoked".into()));
                 }
 
                 // In a real implementation, verify the ZK proof here.

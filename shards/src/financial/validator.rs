@@ -50,9 +50,7 @@ impl FinancialValidator {
                 }
                 let balance = state.balance_of(from);
                 if balance < *amount {
-                    return Err(ShardError::ValidationFailed(
-                        "Insufficient balance for burn".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Insufficient balance for burn".into()));
                 }
                 Ok(())
             }
@@ -67,9 +65,7 @@ impl FinancialValidator {
     pub fn validate_shard_op(state: &FinancialState, op: &ShardOp) -> Result<(), ShardError> {
         match op {
             ShardOp::Financial(fin_op) => Self::validate(state, fin_op),
-            _ => Err(ShardError::InvalidOperation(
-                "Not a Financial operation".into(),
-            )),
+            _ => Err(ShardError::InvalidOperation("Not a Financial operation".into())),
         }
     }
 }
@@ -91,10 +87,7 @@ mod tests {
     }
 
     /// Helper: create a signed event from the given keypair with the given payload.
-    fn make_signed_event(
-        keypair: &omnia_substrate::crypto::NodeKeypair,
-        payload: Vec<u8>,
-    ) -> Event {
+    fn make_signed_event(keypair: &omnia_substrate::crypto::NodeKeypair, payload: Vec<u8>) -> Event {
         let creator = keypair.verifying_key().to_bytes();
         let vc = VectorClock::with_node(creator, 1);
         let mut event = Event::new(creator, 0, vc, None, None, payload);
@@ -105,9 +98,7 @@ mod tests {
     /// Helper: create a FinancialState with a single account having the given balance.
     fn state_with_balance(account: AccountId, balance: u64) -> FinancialState {
         let mut state = FinancialState::new();
-        state
-            .balances
-            .insert(account, AccountBalance::with_balance(balance));
+        state.balances.insert(account, AccountBalance::with_balance(balance));
         state.total_supply = balance;
         state
     }
@@ -185,10 +176,7 @@ mod tests {
         let event = make_signed_event(&sender_keypair, vec![1]);
 
         let result = state.apply(&transfer, &event);
-        assert!(
-            result.is_err(),
-            "Transfer of 100 from 50-balance account should fail"
-        );
+        assert!(result.is_err(), "Transfer of 100 from 50-balance account should fail");
         match result {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
@@ -216,20 +204,14 @@ mod tests {
         let target = test_account(0xCC);
         let mut state = FinancialState::new();
 
-        let mint_op = FinancialOp::Mint {
-            to: target,
-            amount: 50,
-        };
+        let mint_op = FinancialOp::Mint { to: target, amount: 50 };
 
         // Create two identical events (same keypair, same sequence — simulating replay)
         let keypair = generate_keypair();
         let event1 = make_signed_event(&keypair, vec![1]);
 
         // First Mint — should succeed
-        assert!(
-            state.apply(&mint_op, &event1).is_ok(),
-            "First Mint should succeed"
-        );
+        assert!(state.apply(&mint_op, &event1).is_ok(), "First Mint should succeed");
         assert_eq!(state.balance_of(&target), 50);
         assert_eq!(state.total_supply, 50);
 
@@ -262,15 +244,11 @@ mod tests {
 
         // Validator should reject it
         let result = FinancialValidator::validate(&state, &transfer);
-        assert!(
-            result.is_err(),
-            "Zero-amount transfer should be rejected by validator"
-        );
+        assert!(result.is_err(), "Zero-amount transfer should be rejected by validator");
         match result {
             Err(ShardError::InvalidOperation(msg)) => {
                 assert!(
-                    msg.to_lowercase().contains("zero")
-                        || msg.to_lowercase().contains("greater than zero"),
+                    msg.to_lowercase().contains("zero") || msg.to_lowercase().contains("greater than zero"),
                     "Error should mention zero amount, got: {msg}"
                 );
             }
@@ -416,10 +394,7 @@ mod tests {
         let state = FinancialState::new();
         let target = test_account(0x11);
 
-        let mint = FinancialOp::Mint {
-            to: target,
-            amount: 0,
-        };
+        let mint = FinancialOp::Mint { to: target, amount: 0 };
 
         let result = FinancialValidator::validate(&state, &mint);
         assert!(result.is_err(), "Zero-amount mint should be rejected");
@@ -477,10 +452,7 @@ mod tests {
         let event = make_signed_event(&sender_keypair, vec![1]);
 
         let result = state.apply(&transfer, &event);
-        assert!(
-            result.is_err(),
-            "Transfer from non-existent account should fail"
-        );
+        assert!(result.is_err(), "Transfer from non-existent account should fail");
         match result {
             Err(ShardError::ValidationFailed(msg)) => {
                 assert!(
@@ -525,10 +497,7 @@ mod tests {
         assert!(result.is_err(), "Non-Financial ShardOp should be rejected");
         match result {
             Err(ShardError::InvalidOperation(msg)) => {
-                assert!(
-                    msg.contains("Financial"),
-                    "Error should mention Financial, got: {msg}"
-                );
+                assert!(msg.contains("Financial"), "Error should mention Financial, got: {msg}");
             }
             Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
             Ok(()) => panic!("Non-Financial ShardOp should have been rejected"),
@@ -566,10 +535,7 @@ mod tests {
         // For Burn, the event's creator_pubkey doesn't matter — Burn takes `from` from the op
         let keypair2 = generate_keypair();
         let burn_event = make_signed_event(&keypair2, vec![1]);
-        assert!(
-            state.apply(&burn, &burn_event).is_ok(),
-            "Burn should succeed"
-        );
+        assert!(state.apply(&burn, &burn_event).is_ok(), "Burn should succeed");
         assert_eq!(state.balance_of(&sender_pubkey), 20);
 
         // Now try to transfer 50 — should fail (only 20 left)

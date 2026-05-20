@@ -16,13 +16,6 @@ fuzz_target!(|data: &[u8]| {
     // Event with parents
     let mut self_parent = [0u8; 32];
     self_parent.copy_from_slice(&data[32..64]);
-    let event2 = Event::new(
-        creator,
-        1,
-        clock,
-        Some(self_parent),
-        None,
-        data[0..32].to_vec(),
-    );
+    let event2 = Event::new(creator, 1, clock, Some(self_parent), None, data[0..32].to_vec());
     let _ = event2.validate();
 });

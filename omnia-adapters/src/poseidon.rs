@@ -137,9 +137,7 @@ fn generate_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
             let denom = Fr::from(xs[i]) + Fr::from(ys[j]);
             // denom is non-zero by construction (all sums are distinct and non-zero),
             // but we return an error instead of panicking.
-            matrix[i][j] = denom
-                .inverse()
-                .ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
+            matrix[i][j] = denom.inverse().ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
         }
     }
     Ok(matrix)
@@ -202,9 +200,7 @@ fn generate_reference_mds_matrix() -> Result<[[Fr; T]; T], ZkError> {
     for i in 0..T {
         for j in 0..T {
             let denom = Fr::from(xs[i]) + Fr::from(ys[j]);
-            matrix[i][j] = denom
-                .inverse()
-                .ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
+            matrix[i][j] = denom.inverse().ok_or(ZkError::MdsMatrixInversionFailed(i, j))?;
         }
     }
     Ok(matrix)
@@ -257,17 +253,15 @@ pub mod reference {
     ///
     /// `LazyLock` is used instead of `const` because field element
     /// arithmetic is not const-evaluable on stable Rust.
-    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
-        generate_reference_mds_matrix().expect("reference MDS matrix generation should never fail")
-    });
+    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> =
+        LazyLock::new(|| generate_reference_mds_matrix().expect("reference MDS matrix generation should never fail"));
 
     /// Reference round constants for t=3, R_F=8, R_P=57, BN254.
     ///
     /// Generated via BLAKE3 with domain `"Poseidon-Ref-BN254-t3-RF8-RP57"`.
     /// These differ from the custom module's constants which use domain
     /// `"Poseidon-BN254-t3-RF8-RP57"`.
-    pub static ROUND_CONSTANTS: LazyLock<Vec<Fr>> =
-        LazyLock::new(generate_reference_round_constants);
+    pub static ROUND_CONSTANTS: LazyLock<Vec<Fr>> = LazyLock::new(generate_reference_round_constants);
 }
 
 /// Custom Omnia parameters (current, deprecated).
@@ -286,9 +280,8 @@ pub mod custom {
     ///
     /// `LazyLock` is used instead of `const` because field element
     /// arithmetic is not const-evaluable on stable Rust.
-    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> = LazyLock::new(|| {
-        generate_mds_matrix().expect("Cauchy MDS matrix generation should never fail")
-    });
+    pub static MDS_MATRIX: LazyLock<[[Fr; 3]; 3]> =
+        LazyLock::new(|| generate_mds_matrix().expect("Cauchy MDS matrix generation should never fail"));
 
     /// Custom round constants — same as current `generate_round_constants()`.
     /// Generated via BLAKE3 in counter mode.
@@ -381,11 +374,7 @@ fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
 /// It accepts an MDS matrix and round constants directly, rather than
 /// generating them internally.
 #[allow(clippy::needless_range_loop)]
-fn poseidon_permutation_with_params(
-    state: &mut [Fr; T],
-    mds: &[[Fr; T]; T],
-    rc: &[Fr],
-) -> Result<(), ZkError> {
+fn poseidon_permutation_with_params(state: &mut [Fr; T], mds: &[[Fr; T]; T], rc: &[Fr]) -> Result<(), ZkError> {
     let mut rc_idx = 0;
 
     // First R_F/2 full rounds: ARK → S-box → MDS
@@ -434,11 +423,7 @@ fn poseidon_permutation_with_params(
         *state = new_state;
     }
 
-    debug_assert_eq!(
-        rc_idx,
-        T * (R_F + R_P),
-        "all round constants must be consumed"
-    );
+    debug_assert_eq!(rc_idx, T * (R_F + R_P), "all round constants must be consumed");
 
     Ok(())
 }
@@ -453,10 +438,7 @@ fn poseidon_permutation_with_params(
 ///
 /// Uses approximately 243 multiplication constraints (see module-level docs).
 #[allow(clippy::needless_range_loop)]
-fn poseidon_permutation_gadget(
-    _cs: ConstraintSystemRef<Fr>,
-    state: &mut [FpVar<Fr>; T],
-) -> Result<(), ZkError> {
+fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<Fr>; T]) -> Result<(), ZkError> {
     let mds = generate_mds_matrix()?;
     let rc = generate_round_constants();
 
@@ -510,11 +492,7 @@ fn poseidon_permutation_gadget(
         let _ = r;
     }
 
-    debug_assert_eq!(
-        rc_idx,
-        T * (R_F + R_P),
-        "all round constants must be consumed"
-    );
+    debug_assert_eq!(rc_idx, T * (R_F + R_P), "all round constants must be consumed");
 
     Ok(())
 }
@@ -595,11 +573,7 @@ pub fn poseidon_hash_offchain(left: Fr, right: Fr) -> Result<Fr, ZkError> {
 /// # Returns
 ///
 /// The Poseidon hash using the specified parameter version.
-pub fn poseidon_hash_with_version(
-    left: Fr,
-    right: Fr,
-    version: PoseidonVersion,
-) -> Result<Fr, ZkError> {
+pub fn poseidon_hash_with_version(left: Fr, right: Fr, version: PoseidonVersion) -> Result<Fr, ZkError> {
     match version {
         PoseidonVersion::Custom => poseidon_hash_offchain(left, right),
         PoseidonVersion::Reference => {
@@ -644,11 +618,7 @@ pub fn poseidon_hash_with_version(
 ///
 /// Grassi et al. (2019), "Poseidon: A New Hash Function for
 /// Zero-Knowledge Proof Systems", <https://eprint.iacr.org/2019/458>
-pub fn poseidon_hash(
-    cs: ConstraintSystemRef<Fr>,
-    left: &FpVar<Fr>,
-    right: &FpVar<Fr>,
-) -> Result<FpVar<Fr>, ZkError> {
+pub fn poseidon_hash(cs: ConstraintSystemRef<Fr>, left: &FpVar<Fr>, right: &FpVar<Fr>) -> Result<FpVar<Fr>, ZkError> {
     let mut state: [FpVar<Fr>; T] = [FpVar::constant(Fr::zero()), left.clone(), right.clone()];
 
     poseidon_permutation_gadget(cs, &mut state)?;
@@ -673,11 +643,7 @@ mod tests {
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
         let hash = poseidon_hash_offchain(a, b).unwrap();
-        assert_ne!(
-            hash,
-            Fr::zero(),
-            "Poseidon hash of non-zero inputs should be non-zero"
-        );
+        assert_ne!(hash, Fr::zero(), "Poseidon hash of non-zero inputs should be non-zero");
     }
 
     #[test]
@@ -734,10 +700,8 @@ mod tests {
         let left_val = Fr::from(42u64);
         let right_val = Fr::from(123u64);
 
-        let left_var =
-            FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "left"), || Ok(left_val)).unwrap();
-        let right_var =
-            FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "right"), || Ok(right_val)).unwrap();
+        let left_var = FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "left"), || Ok(left_val)).unwrap();
+        let right_var = FpVar::<Fr>::new_witness(ark_relations::ns!(cs, "right"), || Ok(right_val)).unwrap();
 
         let on_circuit_result = poseidon_hash(cs, &left_var, &right_var).unwrap();
         let off_circuit_result = poseidon_hash_offchain(left_val, right_val).unwrap();
@@ -757,11 +721,7 @@ mod tests {
         let det = mds[0][0] * (mds[1][1] * mds[2][2] - mds[1][2] * mds[2][1])
             - mds[0][1] * (mds[1][0] * mds[2][2] - mds[1][2] * mds[2][0])
             + mds[0][2] * (mds[1][0] * mds[2][1] - mds[1][1] * mds[2][0]);
-        assert_ne!(
-            det,
-            Fr::zero(),
-            "MDS matrix must have non-zero determinant (full rank)"
-        );
+        assert_ne!(det, Fr::zero(), "MDS matrix must have non-zero determinant (full rank)");
     }
 
     #[test]
@@ -805,10 +765,10 @@ mod tests {
         // and round constants, so they must produce different hash outputs.
         let a = Fr::from(42u64);
         let b = Fr::from(123u64);
-        let custom_hash = poseidon_hash_with_version(a, b, PoseidonVersion::Custom)
-            .expect("custom hash should succeed");
-        let reference_hash = poseidon_hash_with_version(a, b, PoseidonVersion::Reference)
-            .expect("reference hash should succeed");
+        let custom_hash =
+            poseidon_hash_with_version(a, b, PoseidonVersion::Custom).expect("custom hash should succeed");
+        let reference_hash =
+            poseidon_hash_with_version(a, b, PoseidonVersion::Reference).expect("reference hash should succeed");
         // Now that reference constants are populated, they MUST differ
         assert_ne!(
             custom_hash, reference_hash,
@@ -823,11 +783,7 @@ mod tests {
         let b = Fr::from(2u64);
         let hash = poseidon_hash_offchain(a, b).expect("hash should succeed");
         // Verify it's still producing the same output as before Phase 5
-        assert_ne!(
-            hash,
-            Fr::zero(),
-            "Custom Poseidon hash should produce non-zero output"
-        );
+        assert_ne!(hash, Fr::zero(), "Custom Poseidon hash should produce non-zero output");
         // Re-run to verify determinism
         let hash2 = poseidon_hash_offchain(a, b).expect("hash should succeed");
         assert_eq!(hash, hash2, "Custom Poseidon hash must be deterministic");
@@ -838,17 +794,12 @@ mod tests {
         // Verify both version options are available and produce distinct outputs
         let a = Fr::from(100u64);
         let b = Fr::from(200u64);
-        let custom = poseidon_hash_with_version(a, b, PoseidonVersion::Custom)
-            .expect("Custom version should work");
-        let reference = poseidon_hash_with_version(a, b, PoseidonVersion::Reference)
-            .expect("Reference version should work");
+        let custom = poseidon_hash_with_version(a, b, PoseidonVersion::Custom).expect("Custom version should work");
+        let reference =
+            poseidon_hash_with_version(a, b, PoseidonVersion::Reference).expect("Reference version should work");
         // Both produce valid (non-zero) outputs
         assert_ne!(custom, Fr::zero(), "Custom hash output should be non-zero");
-        assert_ne!(
-            reference,
-            Fr::zero(),
-            "Reference hash output should be non-zero"
-        );
+        assert_ne!(reference, Fr::zero(), "Reference hash output should be non-zero");
         // Different parameter sets must produce different outputs
         assert_ne!(
             custom, reference,

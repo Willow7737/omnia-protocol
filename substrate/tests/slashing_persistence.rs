@@ -6,9 +6,8 @@
 //! [`InMemorySlashingStore`] maintains backward compatibility.
 
 use omnia_substrate::{
-    InMemorySlashingStore, RedbSlashingStore, SlashOffense, SlashOutcome, SlashingEngine,
-    SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
-    DEFAULT_SLASH_THRESHOLD,
+    InMemorySlashingStore, RedbSlashingStore, SlashOffense, SlashOutcome, SlashingEngine, SlashingState, SlashingStore,
+    SlashingStoreError, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -48,8 +47,7 @@ fn test_redb_slash_history_preserved_across_restart() {
     // First engine instance: register validator and record offense
     {
         let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
-        let mut engine =
-            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
+        let mut engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 10_000);
         engine.record_offense(n1, SlashOffense::InvalidAttestation); // 300 points
         assert_eq!(engine.slash_points_of(&n1), 300);
@@ -78,8 +76,7 @@ fn test_corrupted_redb_data_starts_fresh() {
     // First, write some valid state
     {
         let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
-        let mut engine =
-            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
+        let mut engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 5_000);
         engine.record_offense(n1, SlashOffense::Equivocation); // 500 points
     }
@@ -91,9 +88,7 @@ fn test_corrupted_redb_data_starts_fresh() {
         let db = Database::create(&db_path).expect("failed to open redb db");
         let write_txn = db.begin_write().expect("failed to begin write");
         {
-            let mut table = write_txn
-                .open_table(SLASHING_TABLE)
-                .expect("failed to open table");
+            let mut table = write_txn.open_table(SLASHING_TABLE).expect("failed to open table");
             table
                 .insert("state", b"this is not valid postcard data".as_slice())
                 .expect("failed to insert corrupt data");
@@ -108,10 +103,7 @@ fn test_corrupted_redb_data_starts_fresh() {
         assert!(result.is_err());
         match result.unwrap_err() {
             SlashingStoreError::Serialization(msg) => {
-                assert!(
-                    !msg.is_empty(),
-                    "Serialization error message should not be empty"
-                );
+                assert!(!msg.is_empty(), "Serialization error message should not be empty");
             }
             other => panic!("Expected Serialization error, got: {other:?}"),
         }
@@ -131,13 +123,7 @@ fn test_in_memory_store_backward_compatibility() {
     engine.register_validator(n2, 25_000);
 
     let outcome = engine.record_offense(n1, SlashOffense::LivenessViolation);
-    assert_eq!(
-        outcome,
-        SlashOutcome::Warned {
-            node: n1,
-            points: 100
-        }
-    );
+    assert_eq!(outcome, SlashOutcome::Warned { node: n1, points: 100 });
 
     let outcome = engine.record_offense(n1, SlashOffense::Equivocation); // 600 total
     assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
@@ -194,8 +180,7 @@ fn test_persistent_state_includes_stakes() {
     // First engine: register two validators with different stakes
     {
         let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
-        let mut engine =
-            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
+        let mut engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 50_000);
         engine.register_validator(n2, 75_000);
         engine.record_offense(n1, SlashOffense::Equivocation); // 500 points
@@ -226,8 +211,7 @@ fn test_multiple_offenses_persisted_across_restart() {
     // First engine: accumulate points across multiple offenses
     {
         let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
-        let mut engine =
-            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
+        let mut engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         engine.register_validator(n1, 20_000);
         engine.record_offense(n1, SlashOffense::LivenessViolation); // 100
         engine.record_offense(n1, SlashOffense::InvalidAttestation); // 400
@@ -239,8 +223,7 @@ fn test_multiple_offenses_persisted_across_restart() {
     // Second engine: verify accumulated state and continue
     {
         let store = RedbSlashingStore::open(&db_path).expect("failed to open redb store");
-        let mut engine =
-            SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
+        let mut engine = SlashingEngine::with_store(Arc::new(store)).expect("failed to create engine");
         assert_eq!(engine.slash_points_of(&n1), 500);
         assert_eq!(engine.stake_of(&n1), 20_000);
         assert!(engine.is_slashed(&n1));

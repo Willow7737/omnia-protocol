@@ -1,6 +1,7 @@
 [package]
 name = "omnia-binding"
 version = { workspace = true }
+rust-version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
 description = "Layer 3: The Binding Layer — Cryptographic self-proof for physical reality (RF fingerprinting, quantum-resistant commitments, provenance log)"
@@ -18,12 +19,16 @@ blake3 = "1.5"
 thiserror = "2.0"
 tracing = "0.1"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-pqc_dilithium = "0.2"
+pqc_dilithium = { version = "0.2", optional = true }
 rand = "0.8"
 serde_bytes = "0.11"
 subtle = "2"
 hex = "0.4"
-ml-kem = { version = "0.2", features = ["zeroize"] }
+ml-kem = { version = "0.2", features = ["zeroize"], optional = true }
+
+[features]
+default = []
+pqc = ["dep:pqc_dilithium", "dep:ml-kem"]
 
 [dev-dependencies]
 tokio-test = "0.4"

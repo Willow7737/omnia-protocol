@@ -139,8 +139,7 @@ pub struct RedbConsensusStore {
 }
 
 // redb table definitions
-const CONSENSUS_STATE_TABLE: redb::TableDefinition<&str, &[u8]> =
-    redb::TableDefinition::new("consensus_state");
+const CONSENSUS_STATE_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("consensus_state");
 const ROUND_TABLE: redb::TableDefinition<&str, u64> = redb::TableDefinition::new("consensus_round");
 
 impl RedbConsensusStore {
@@ -159,8 +158,7 @@ impl RedbConsensusStore {
     /// Returns [`ConsensusStoreError::Database`] if the database cannot
     /// be opened or the tables cannot be created.
     pub fn open(path: &Path) -> Result<Self, ConsensusStoreError> {
-        let db = redb::Database::create(path)
-            .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+        let db = redb::Database::create(path).map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
         // Create tables if they don't exist
         let write_tx = db
             .begin_write()
@@ -207,8 +205,7 @@ impl RedbConsensusStore {
 
 impl ConsensusStore for RedbConsensusStore {
     fn save_state(&self, state: &ConsensusState) -> Result<(), ConsensusStoreError> {
-        let serialized = postcard::to_allocvec(state)
-            .map_err(|e| ConsensusStoreError::Serialization(e.to_string()))?;
+        let serialized = postcard::to_allocvec(state).map_err(|e| ConsensusStoreError::Serialization(e.to_string()))?;
 
         let write_tx = self
             .db
@@ -240,8 +237,8 @@ impl ConsensusStore for RedbConsensusStore {
         match table.get("current") {
             Ok(Some(value)) => {
                 let bytes = value.value();
-                let state: ConsensusState = postcard::from_bytes(bytes)
-                    .map_err(|e| ConsensusStoreError::Serialization(e.to_string()))?;
+                let state: ConsensusState =
+                    postcard::from_bytes(bytes).map_err(|e| ConsensusStoreError::Serialization(e.to_string()))?;
                 Ok(Some(state))
             }
             Ok(None) => Ok(None),

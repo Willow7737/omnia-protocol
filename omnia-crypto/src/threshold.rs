@@ -56,7 +56,7 @@ pub enum ThresholdError {
     #[error("threshold signature verification failed: {0}")]
     VerificationFailed(String),
     /// The participant is not registered in the key manager.
-    #[error("participant {.0:?} not registered")]
+    #[error("participant {prefix:?} not registered", prefix = .0)]
     ParticipantNotRegistered([u8; 4]),
 }
 
@@ -82,10 +82,7 @@ impl ThresholdConfig {
     ///
     /// Panics if `threshold < 2` or `threshold > total_participants`.
     pub fn new(total_participants: usize, threshold: usize) -> Self {
-        assert!(
-            threshold >= 2,
-            "Threshold must be at least 2, got {threshold}"
-        );
+        assert!(threshold >= 2, "Threshold must be at least 2, got {threshold}");
         assert!(
             threshold <= total_participants,
             "Threshold {threshold} exceeds total participants {total_participants}"
@@ -289,12 +286,8 @@ impl ThresholdKeyManager {
         let signers: Vec<NodeId> = partials.iter().map(|p| p.participant).collect();
 
         // Aggregate the BLS signatures
-        let aggregate_signature = crate::bls::aggregate_signatures(
-            &partials
-                .iter()
-                .map(|p| p.signature.clone())
-                .collect::<Vec<_>>(),
-        )?;
+        let aggregate_signature =
+            crate::bls::aggregate_signatures(&partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
 
         tracing::info!(
             signers = signers.len(),
@@ -338,22 +331,14 @@ impl ThresholdKeyManager {
         let agg_pk = crate::bls::aggregate_public_keys(&public_keys)?;
 
         // Verify aggregate signature
-        crate::bls::verify_aggregate(
-            &threshold_sig.message,
-            &agg_pk,
-            &threshold_sig.aggregate_signature,
-        )
-        .map_err(|e| ThresholdError::VerificationFailed(e.to_string()))
+        crate::bls::verify_aggregate(&threshold_sig.message, &agg_pk, &threshold_sig.aggregate_signature)
+            .map_err(|e| ThresholdError::VerificationFailed(e.to_string()))
     }
 
     /// Produce a partial signature for the given participant and message.
     ///
     /// The participant must be registered in this manager.
-    pub fn partial_sign(
-        &self,
-        participant: &NodeId,
-        message: &[u8],
-    ) -> Result<PartialSignature, ThresholdError> {
+    pub fn partial_sign(&self, participant: &NodeId, message: &[u8]) -> Result<PartialSignature, ThresholdError> {
         let share = self.key_shares.get(participant).ok_or_else(|| {
             let mut prefix = [0u8; 4];
             prefix.copy_from_slice(&participant[..4]);
@@ -526,7 +511,7 @@ impl DkgSession {
         if self.phase != DkgPhase::Init {
             return Err(DkgError::WrongPhase {
                 expected: "Init".to_string(),
-                actual: format!("{self.phase:?}"),
+                actual: format!("{:?}", self.phase),
             });
         }
 
@@ -601,7 +586,7 @@ impl DkgSession {
         if self.phase != DkgPhase::ShareDistribution && self.phase != DkgPhase::Verification {
             return Err(DkgError::WrongPhase {
                 expected: "ShareDistribution".to_string(),
-                actual: format!("{self.phase:?}"),
+                actual: format!("{:?}", self.phase),
             });
         }
 
@@ -618,10 +603,7 @@ impl DkgSession {
             let share_data = match package.version {
                 2 => {
                     let my_id = self.own_id.ok_or_else(|| {
-                        DkgError::InvalidShare(
-                            from_prefix,
-                            "own ID not set — call generate_shares first".to_string(),
-                        )
+                        DkgError::InvalidShare(from_prefix, "own ID not set — call generate_shares first".to_string())
                     })?;
                     let mut share_material = Vec::new();
                     share_material.extend_from_slice(&self.session_id.to_le_bytes());
@@ -634,10 +616,7 @@ impl DkgSession {
                     // Legacy XOR decryption
                     tracing::warn!("Received legacy v1 XOR DKG share — upgrade recommended");
                     let my_id = self.own_id.ok_or_else(|| {
-                        DkgError::InvalidShare(
-                            from_prefix,
-                            "own ID not set — call generate_shares first".to_string(),
-                        )
+                        DkgError::InvalidShare(from_prefix, "own ID not set — call generate_shares first".to_string())
                     })?;
                     let mut share_material = Vec::new();
                     share_material.extend_from_slice(&self.session_id.to_le_bytes());
@@ -657,11 +636,7 @@ impl DkgSession {
         }
 
         // Verify: the commitment should be a valid BLS public key
-        let valid = package
-            .commitments
-            .first()
-            .map(|c| !c.is_empty())
-            .unwrap_or(false);
+        let valid = package.commitments.first().map(|c| !c.is_empty()).unwrap_or(false);
 
         self.phase = DkgPhase::Verification;
 
@@ -673,7 +648,7 @@ impl DkgSession {
         if self.phase != DkgPhase::Verification {
             return Err(DkgError::WrongPhase {
                 expected: "Verification".to_string(),
-                actual: format!("{self.phase:?}"),
+                actual: format!("{:?}", self.phase),
             });
         }
 
@@ -688,11 +663,7 @@ impl DkgSession {
         let public_keys: Vec<BlsPublicKey> = self
             .commitments
             .values()
-            .filter_map(|commitments| {
-                commitments
-                    .first()
-                    .and_then(|c| BlsPublicKey::from_bytes(c).ok())
-            })
+            .filter_map(|commitments| commitments.first().and_then(|c| BlsPublicKey::from_bytes(c).ok()))
             .collect();
 
         if public_keys.len() < self.threshold {
@@ -740,10 +711,7 @@ impl DkgSession {
 /// Simple XOR encryption for DKG shares (domain-separated).
 /// Retained for backward compatibility with v1 DKG share packages.
 fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
-    data.iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect()
+    data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
 }
 
 /// Derive AES-256 key for DKG share encryption from BLAKE3 key material.
@@ -768,13 +736,7 @@ fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) 
     rand::thread_rng().fill_bytes(&mut nonce);
     let nonce_obj = Nonce::from_slice(&nonce);
     let ciphertext = cipher
-        .encrypt(
-            nonce_obj,
-            aes_gcm::aead::Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
+        .encrypt(nonce_obj, aes_gcm::aead::Payload { msg: plaintext, aad })
         .expect("AES-256-GCM encryption");
     AeadCiphertext {
         ciphertext,
@@ -784,10 +746,7 @@ fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) 
 }
 
 /// AES-256-GCM decrypt a DKG share.
-fn aes256gcm_decrypt_dkg(
-    ct: &AeadCiphertext,
-    key_material: &[u8; 32],
-) -> Result<Vec<u8>, DkgError> {
+fn aes256gcm_decrypt_dkg(ct: &AeadCiphertext, key_material: &[u8; 32]) -> Result<Vec<u8>, DkgError> {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 
     let aes_key = derive_dkg_aes_key(key_material);
@@ -801,12 +760,7 @@ fn aes256gcm_decrypt_dkg(
                 aad: &ct.associated_data,
             },
         )
-        .map_err(|_| {
-            DkgError::InvalidShare(
-                [0u8; 4],
-                "AES-GCM decryption failed: authentication error".to_string(),
-            )
-        })
+        .map_err(|_| DkgError::InvalidShare([0u8; 4], "AES-GCM decryption failed: authentication error".to_string()))
 }
 
 /// BLAKE3 hash as hex string.
@@ -878,8 +832,7 @@ mod tests {
         assert_eq!(threshold_sig.signers.len(), 3);
 
         // Verify
-        mgr.verify(&threshold_sig)
-            .expect("Threshold signature should verify");
+        mgr.verify(&threshold_sig).expect("Threshold signature should verify");
     }
 
     #[test]
@@ -891,10 +844,7 @@ mod tests {
         let result = mgr.combine_signatures(&partials, b"test");
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(
-            err,
-            ThresholdError::InsufficientPartials { got: 0, need: 3 }
-        ));
+        assert!(matches!(err, ThresholdError::InsufficientPartials { got: 0, need: 3 }));
     }
 
     #[test]
@@ -977,10 +927,7 @@ mod tests {
         assert!(e.to_string().contains("1"));
         assert!(e.to_string().contains("3"));
 
-        let e = ThresholdError::UnknownSigners {
-            found: 2,
-            expected: 3,
-        };
+        let e = ThresholdError::UnknownSigners { found: 2, expected: 3 };
         assert!(e.to_string().contains("unknown signers"));
 
         let e = ThresholdError::VerificationFailed("bad sig".to_string());
@@ -994,10 +941,7 @@ mod tests {
     fn test_threshold_error_from_bls_error() {
         let bls_err = BlsError::AggregationFailed("empty set".to_string());
         let threshold_err: ThresholdError = bls_err.into();
-        assert!(matches!(
-            threshold_err,
-            ThresholdError::AggregationFailed(_)
-        ));
+        assert!(matches!(threshold_err, ThresholdError::AggregationFailed(_)));
     }
 
     // ─── DKG tests ────────────────────────────────────────────────────────
@@ -1055,10 +999,7 @@ mod tests {
 
         let result = honest_session.receive_shares(nodes[4], &byzantine_package);
         let verification = result.unwrap();
-        assert!(
-            !verification.valid,
-            "Byzantine shares should fail verification"
-        );
+        assert!(!verification.valid, "Byzantine shares should fail verification");
     }
 
     #[test]
@@ -1092,8 +1033,7 @@ mod tests {
             .collect();
 
         let threshold_sig = mgr.combine_signatures(&partials, msg).unwrap();
-        mgr.verify(&threshold_sig)
-            .expect("Threshold signature should verify");
+        mgr.verify(&threshold_sig).expect("Threshold signature should verify");
     }
 
     #[test]
@@ -1126,9 +1066,7 @@ mod tests {
             .expect("node 0 should have a package for node 1");
 
         // Step 2: receive shares → Verification
-        let result = session1
-            .receive_shares(nodes[0], &package_for_node1.1)
-            .unwrap();
+        let result = session1.receive_shares(nodes[0], &package_for_node1.1).unwrap();
         assert!(result.valid);
         assert_eq!(session1.phase, DkgPhase::Verification);
     }

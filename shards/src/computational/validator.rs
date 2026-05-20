@@ -16,24 +16,18 @@ impl ComputationalValidator {
         match op {
             ComputationalOp::SubmitTask { task_id, .. } => {
                 if state.tasks.contains_key(task_id) {
-                    return Err(ShardError::StateConflict(format!(
-                        "Task already exists: {task_id:?}"
-                    )));
+                    return Err(ShardError::StateConflict(format!("Task already exists: {task_id:?}")));
                 }
                 Ok(())
             }
             ComputationalOp::SubmitProof { task_id, .. } => match state.tasks.get(task_id) {
                 Some(task) if task.status == super::state::TaskStatus::Submitted => Ok(()),
-                Some(_) => Err(ShardError::InvalidOperation(
-                    "Task is not in Submitted status".into(),
-                )),
+                Some(_) => Err(ShardError::InvalidOperation("Task is not in Submitted status".into())),
                 None => Err(ShardError::ValidationFailed("Task not found".into())),
             },
             ComputationalOp::VerifyProof { task_id } => match state.tasks.get(task_id) {
                 Some(task) if task.status == super::state::TaskStatus::Proved => Ok(()),
-                Some(_) => Err(ShardError::InvalidOperation(
-                    "Task is not in Proved status".into(),
-                )),
+                Some(_) => Err(ShardError::InvalidOperation("Task is not in Proved status".into())),
                 None => Err(ShardError::ValidationFailed("Task not found".into())),
             },
         }
@@ -43,9 +37,7 @@ impl ComputationalValidator {
     pub fn validate_shard_op(state: &ComputationalState, op: &ShardOp) -> Result<(), ShardError> {
         match op {
             ShardOp::Computational(comp_op) => Self::validate(state, comp_op),
-            _ => Err(ShardError::InvalidOperation(
-                "Not a Computational operation".into(),
-            )),
+            _ => Err(ShardError::InvalidOperation("Not a Computational operation".into())),
         }
     }
 }

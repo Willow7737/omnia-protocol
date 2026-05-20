@@ -17,7 +17,6 @@ omnia-binding = { path = "../binding" }       # Layer 3: physical-digital bindin
 omnia-network = { path = "../omnia-network", default-features = false, optional = true }  # P2P networking layer
 omnia-adapters = { path = "../omnia-adapters", default-features = false } # ZK-rollup settlement adapters (required for SettlementAdapter trait)
 omnia-crypto = { path = "../omnia-crypto", default-features = false, optional = true }     # Crypto primitives (for light mode keygen)
-omnia-consensus = { path = "../omnia-consensus", default-features = false, optional = true } # Consensus engine (for pipeline)
 
 # Async runtime — needed for all async I/O, signal handling, and task spawning
 tokio = { version = "1", features = ["full", "signal"] }

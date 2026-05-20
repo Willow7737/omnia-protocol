@@ -230,19 +230,13 @@ impl GossipProtocol {
     /// The event_rx is stored in self.network_rx so that
     /// process_pending_events() can drain network events into the
     /// pending queue and process them through the graph + consensus.
-    pub async fn start_with_network(
-        &mut self,
-        mut network: OmniaNetwork,
-    ) -> Result<(), GossipError> {
+    pub async fn start_with_network(&mut self, mut network: OmniaNetwork) -> Result<(), GossipError> {
         self.running = true;
 
         // Take the event_rx out of the network — we consume it in
         // process_pending_events() instead of letting the network task
         // insert into the graph directly.
-        let event_rx = network
-            .event_rx
-            .take()
-            .ok_or(GossipError::ChannelNotInitialized)?;
+        let event_rx = network.event_rx.take().ok_or(GossipError::ChannelNotInitialized)?;
         self.network_rx = Some(event_rx);
 
         // Command channel for broadcast_event() → network task
@@ -549,10 +543,7 @@ impl GossipProtocol {
                         // Prune seen_events if it exceeds the bound
                         if self.seen_events.len() > MAX_SEEN_EVENTS {
                             self.seen_events.clear();
-                            tracing::debug!(
-                                "seen_events exceeded {}, cleared dedup cache",
-                                MAX_SEEN_EVENTS
-                            );
+                            tracing::debug!("seen_events exceeded {}, cleared dedup cache", MAX_SEEN_EVENTS);
                         }
                     }
                 }
@@ -652,8 +643,7 @@ pub enum GossipError {
 /// (snappy flag). Otherwise, the output is prefixed with `0x00` (uncompressed).
 /// This flag byte ensures forward and backward compatibility.
 pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipError> {
-    let raw =
-        postcard::to_allocvec(value).map_err(|e| GossipError::SerializationError(e.to_string()))?;
+    let raw = postcard::to_allocvec(value).map_err(|e| GossipError::SerializationError(e.to_string()))?;
 
     if raw.len() > COMPRESSION_THRESHOLD {
         let mut encoder = snap::raw::Encoder::new();
@@ -680,9 +670,7 @@ pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipEr
 /// Reads the first byte as a compression flag:
 /// - `0x00`: uncompressed payload follows
 /// - `0x01`: snappy-compressed payload follows
-pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(
-    data: &[u8],
-) -> Result<T, GossipError> {
+pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(data: &[u8]) -> Result<T, GossipError> {
     let (flag, payload) = data
         .split_first()
         .ok_or_else(|| GossipError::InvalidMessageFormat("empty message".to_string()))?;
@@ -779,10 +767,7 @@ mod tests {
         let result = protocol.validate_event(&event);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("unsigned"),
-            "Expected unsigned error, got: {err_msg}"
-        );
+        assert!(err_msg.contains("unsigned"), "Expected unsigned error, got: {err_msg}");
     }
 
     #[test]
@@ -817,10 +802,7 @@ mod tests {
 
         let result = protocol.validate_event(&tampered);
         assert!(result.is_err());
-        assert!(
-            result.unwrap_err().to_string().contains("hash"),
-            "Expected hash error"
-        );
+        assert!(result.unwrap_err().to_string().contains("hash"), "Expected hash error");
     }
 
     #[tokio::test]
@@ -850,10 +832,7 @@ mod tests {
         drop(tx);
 
         // Process pending events
-        let inserted = gossip
-            .process_pending_events()
-            .await
-            .expect("process should succeed");
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
         assert_eq!(inserted.len(), 0, "Unsigned event should be rejected");
         assert_eq!(gossip.stats().events_rejected, 1);
         assert!(
@@ -890,10 +869,7 @@ mod tests {
 
         drop(tx);
 
-        let inserted = gossip
-            .process_pending_events()
-            .await
-            .expect("process should succeed");
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
         assert_eq!(inserted.len(), 1);
         assert_eq!(gossip.stats().events_received, 1);
         assert_eq!(gossip.stats().events_accepted, 1);
@@ -946,10 +922,7 @@ mod tests {
             protocol.last_seen.insert(PeerId::random(), Instant::now());
         }
 
-        assert!(
-            !protocol.detect_partition(),
-            "All peers recently seen => no partition"
-        );
+        assert!(!protocol.detect_partition(), "All peers recently seen => no partition");
     }
 
     #[test]
@@ -1025,10 +998,7 @@ mod tests {
         }
 
         // Should detect partition
-        assert_eq!(
-            protocol.check_partition(),
-            Some(GossipEvent::PartitionDetected)
-        );
+        assert_eq!(protocol.check_partition(), Some(GossipEvent::PartitionDetected));
 
         // Already in partition state — no new event
         assert_eq!(protocol.check_partition(), None);
@@ -1040,10 +1010,7 @@ mod tests {
         }
 
         // Should detect healing
-        assert_eq!(
-            protocol.check_partition(),
-            Some(GossipEvent::PartitionHealed)
-        );
+        assert_eq!(protocol.check_partition(), Some(GossipEvent::PartitionHealed));
 
         // Already healthy — no new event
         assert_eq!(protocol.check_partition(), None);

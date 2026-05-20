@@ -127,11 +127,7 @@ impl ReplayResult {
 /// let result = replay_genesis(&events, Some(expected_root), &config);
 /// assert!(result.root_matches.unwrap_or(false));
 /// ```
-pub fn replay_genesis(
-    events: &[Event],
-    expected_root: Option<&[u8; 32]>,
-    config: &ReplayConfig,
-) -> ReplayResult {
+pub fn replay_genesis(events: &[Event], expected_root: Option<&[u8; 32]>, config: &ReplayConfig) -> ReplayResult {
     let mut result = ReplayResult::empty();
     let mut graph = CausalGraph::new();
     let slashing = SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold);
@@ -143,11 +139,7 @@ pub fn replay_genesis(
         // Insert event into the causal graph
         if let Err(e) = graph.insert(event.clone()) {
             result.events_rejected += 1;
-            tracing::warn!(
-                "Failed to insert event {:?}: {}",
-                &event.id[..4.min(event.id.len())],
-                e
-            );
+            tracing::warn!("Failed to insert event {:?}: {}", &event.id[..4.min(event.id.len())], e);
             continue;
         }
 

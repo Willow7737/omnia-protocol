@@ -193,10 +193,7 @@ impl CeremonyServer {
     /// transitions the ceremony to the `AcceptingContributions` phase.
     pub fn start(&self) -> Result<(), CeremonyError> {
         {
-            let mut phase = self
-                .phase
-                .write()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let mut phase = self.phase.write().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             if !matches!(*phase, CeremonyPhase::NotStarted) {
                 return Err(CeremonyError::AlreadyFinalized);
             }
@@ -204,14 +201,10 @@ impl CeremonyServer {
         }
 
         // Initialize the SRS with generator points
-        let srs = PowersOfTau::new(self.config.degree)
-            .map_err(|e| CeremonyError::InvalidDegree(e.to_string()))?;
+        let srs = PowersOfTau::new(self.config.degree).map_err(|e| CeremonyError::InvalidDegree(e.to_string()))?;
 
         {
-            let mut srs_guard = self
-                .srs
-                .write()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let mut srs_guard = self.srs.write().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             *srs_guard = Some(srs);
         }
 
@@ -243,10 +236,7 @@ impl CeremonyServer {
     /// Returns the current SRS transcript bytes and the number of G1 powers.
     /// Clients use this to call `contribute` locally.
     pub fn get_srs_state(&self) -> Result<(Vec<u8>, usize), CeremonyError> {
-        let srs_guard = self
-            .srs
-            .read()
-            .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+        let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
         let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
         Ok((srs.to_transcript(), srs.g1_powers.len()))
     }
@@ -258,16 +248,10 @@ impl CeremonyServer {
     ///
     /// The `Contribution` struct includes the `ContributionProof` (PoK)
     /// internally, so they are submitted together.
-    pub fn accept_contribution(
-        &self,
-        contribution: Contribution,
-    ) -> Result<ContributionReceipt, CeremonyError> {
+    pub fn accept_contribution(&self, contribution: Contribution) -> Result<ContributionReceipt, CeremonyError> {
         // Check ceremony is accepting
         {
-            let phase = self
-                .phase
-                .read()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let phase = self.phase.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             if !matches!(*phase, CeremonyPhase::AcceptingContributions) {
                 return Err(CeremonyError::NotAcceptingContributions);
             }
@@ -286,10 +270,7 @@ impl CeremonyServer {
 
         // Get the current SRS transcript and tau_size for verification
         let (previous_transcript, tau_size) = {
-            let srs_guard = self
-                .srs
-                .read()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
             (srs.to_transcript(), srs.g1_powers.len())
         };
@@ -300,10 +281,7 @@ impl CeremonyServer {
 
         // Apply the contribution to the SRS
         {
-            let mut srs_guard = self
-                .srs
-                .write()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let mut srs_guard = self.srs.write().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             let srs = srs_guard.as_mut().ok_or(CeremonyError::NotStarted)?;
             srs.apply_contribution(&contribution)
                 .map_err(|e| CeremonyError::VerificationFailed(e.to_string()))?;
@@ -322,10 +300,7 @@ impl CeremonyServer {
 
         // Get transcript hash
         let transcript_hash = {
-            let srs_guard = self
-                .srs
-                .read()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
             srs.transcript_hash
         };
@@ -358,21 +333,14 @@ impl CeremonyServer {
 
         // Derive keys from the final SRS
         let key_pair = {
-            let srs_guard = self
-                .srs
-                .read()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
-            derive_keys_from_srs(srs, circuit)
-                .map_err(|e| CeremonyError::KeyDerivationFailed(e.to_string()))?
+            derive_keys_from_srs(srs, circuit).map_err(|e| CeremonyError::KeyDerivationFailed(e.to_string()))?
         };
 
         // Update phase
         {
-            let mut phase = self
-                .phase
-                .write()
-                .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+            let mut phase = self.phase.write().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             *phase = CeremonyPhase::Finalized;
         }
 
@@ -397,10 +365,7 @@ impl CeremonyServer {
             .map(|c| c.clone())
             .map_err(|e| CeremonyError::Internal(e.to_string()))?;
 
-        let srs_guard = self
-            .srs
-            .read()
-            .map_err(|e| CeremonyError::Internal(e.to_string()))?;
+        let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
         let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
 
         Ok(CeremonyTranscript {
@@ -443,11 +408,8 @@ mod tests {
             let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            let receipt = server
-                .accept_contribution(contribution)
-                .expect("accept failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            let receipt = server.accept_contribution(contribution).expect("accept failed");
             assert_eq!(receipt.contribution_index, i as usize);
         }
 
@@ -478,14 +440,10 @@ mod tests {
             let srs = PowersOfTau::new(8).unwrap();
             (srs.to_transcript(), srs.g1_powers.len())
         };
-        let contribution =
-            contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
+        let contribution = contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
         let result = server.accept_contribution(contribution);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            CeremonyError::NotAcceptingContributions
-        ));
+        assert!(matches!(result.unwrap_err(), CeremonyError::NotAcceptingContributions));
     }
 
     #[test]
@@ -498,11 +456,8 @@ mod tests {
             let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            server
-                .accept_contribution(contribution)
-                .expect("accept failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            server.accept_contribution(contribution).expect("accept failed");
         }
 
         // Finalize with only 2 contributors (need 3)
@@ -528,23 +483,16 @@ mod tests {
             let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            server
-                .accept_contribution(contribution)
-                .expect("accept failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            server.accept_contribution(contribution).expect("accept failed");
         }
 
         // 3rd contribution should be rejected (max reached)
         let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
-        let contribution =
-            contribute(&transcript, tau_size, Some([2u8; 32])).expect("contribute failed");
+        let contribution = contribute(&transcript, tau_size, Some([2u8; 32])).expect("contribute failed");
         let result = server.accept_contribution(contribution);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            CeremonyError::AlreadyFinalized
-        ));
+        assert!(matches!(result.unwrap_err(), CeremonyError::AlreadyFinalized));
     }
 
     #[test]
@@ -553,10 +501,7 @@ mod tests {
         server.start().expect("first start failed");
         let result = server.start();
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            CeremonyError::AlreadyFinalized
-        ));
+        assert!(matches!(result.unwrap_err(), CeremonyError::AlreadyFinalized));
     }
 
     #[test]
@@ -581,11 +526,8 @@ mod tests {
         server.start().expect("start failed");
 
         let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
-        let contribution =
-            contribute(&transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
-        let receipt = server
-            .accept_contribution(contribution)
-            .expect("accept failed");
+        let contribution = contribute(&transcript, tau_size, Some([42u8; 32])).expect("contribute failed");
+        let receipt = server.accept_contribution(contribution).expect("accept failed");
 
         assert_eq!(receipt.contribution_index, 0);
         assert_ne!(receipt.transcript_hash, [0u8; 32]);
@@ -605,11 +547,8 @@ mod tests {
             let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            server
-                .accept_contribution(contribution)
-                .expect("accept failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            server.accept_contribution(contribution).expect("accept failed");
         }
 
         let transcript = server.export_transcript().expect("export failed");

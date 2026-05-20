@@ -1,6 +1,7 @@
 [package]
 name = "omnia-shards"
 version = { workspace = true }
+rust-version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
 description = "Layer 2: Domain Shards — Specialized state machines for financial, computational, physical, biological, and identity domains"

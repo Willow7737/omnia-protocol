@@ -225,7 +225,7 @@ pub enum SlashingStoreError {
     #[error("serialization error: {0}")]
     Serialization(String),
     /// An undo operation failed because the validator has no offense history.
-    #[error("validator {.0:?} has no offense history to undo")]
+    #[error("validator {prefix:?} has no offense history to undo", prefix = .0)]
     UndoNoOffenseHistory([u8; 4]),
 }
 
@@ -327,11 +327,7 @@ pub trait SlashingStore: Send + Sync {
     ///
     /// Returns [`SlashingStoreError`] if the state cannot be loaded or saved,
     /// or if the validator has no slash count to decrement.
-    fn decrement_slash_count_by(
-        &self,
-        validator: &[u8; 32],
-        amount: u64,
-    ) -> Result<(), SlashingStoreError>;
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError>;
 
     /// Decrement the slash count for a specific validator by the minimum offense amount.
     ///
@@ -395,8 +391,7 @@ impl RedbSlashingStore {
     /// let state = store.load().unwrap();
     /// ```
     pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
-        let db = redb::Database::create(path)
-            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        let db = redb::Database::create(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
         // Ensure the table exists
         let write_txn = db
             .begin_write()
@@ -424,15 +419,15 @@ impl SlashingStore for RedbSlashingStore {
             .get("state")
             .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
         {
-            Some(value) => postcard::from_bytes(value.value())
-                .map_err(|e| SlashingStoreError::Serialization(e.to_string())),
+            Some(value) => {
+                postcard::from_bytes(value.value()).map_err(|e| SlashingStoreError::Serialization(e.to_string()))
+            }
             None => Ok(SlashingState::default()),
         }
     }
 
     fn save(&self, state: &SlashingState) -> Result<(), SlashingStoreError> {
-        let bytes = postcard::to_allocvec(state)
-            .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
+        let bytes = postcard::to_allocvec(state).map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
         let write_txn = self
             .db
             .begin_write()
@@ -457,11 +452,7 @@ impl SlashingStore for RedbSlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count_by(
-        &self,
-        validator: &[u8; 32],
-        amount: u64,
-    ) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
@@ -546,11 +537,7 @@ impl SlashingStore for InMemorySlashingStore {
             .unwrap_or(0)
     }
 
-    fn decrement_slash_count_by(
-        &self,
-        validator: &[u8; 32],
-        amount: u64,
-    ) -> Result<(), SlashingStoreError> {
+    fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
         let mut state = self.load()?;
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
@@ -694,11 +681,7 @@ impl SlashingEngine {
                         path = %path.display(),
                         "Slashing engine: using persistent redb store"
                     );
-                    Self::with_store_with_thresholds(
-                        Arc::new(store),
-                        slash_threshold,
-                        ejection_threshold,
-                    )
+                    Self::with_store_with_thresholds(Arc::new(store), slash_threshold, ejection_threshold)
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -942,18 +925,10 @@ impl SlashingEngine {
         let total_points = *current_points;
 
         // Track offense history for undo
-        state
-            .offense_history
-            .entry(node)
-            .or_default()
-            .push(points_added);
+        state.offense_history.entry(node).or_default().push(points_added);
 
         // Track typed offense history for graded slashing
-        state
-            .typed_offense_history
-            .entry(node)
-            .or_default()
-            .push(offense);
+        state.typed_offense_history.entry(node).or_default().push(offense);
 
         let ejection_threshold = state.ejection_threshold;
         let slash_threshold = state.slash_threshold;
@@ -1312,8 +1287,7 @@ impl SlashingEngine {
         let history = state.offense_history.get_mut(node);
         match history {
             Some(entries) if !entries.is_empty() => {
-                let last_offense_points =
-                    entries.pop().expect("entries is non-empty per guard above");
+                let last_offense_points = entries.pop().expect("entries is non-empty per guard above");
                 let current = state.slash_points.get(node).copied().unwrap_or(0);
                 let new_points = current.saturating_sub(last_offense_points);
                 state.slash_points.insert(*node, new_points);
@@ -1457,9 +1431,7 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Warning(1%)
                 // 3rd+ (2+ prior) → Jailed(5%, 500 rounds, auto-release)
                 if same_type_count < 2 {
-                    SlashPenalty::Warning {
-                        burn_percentage: 1.0,
-                    }
+                    SlashPenalty::Warning { burn_percentage: 1.0 }
                 } else {
                     SlashPenalty::Jailed {
                         burn_percentage: 5.0,
@@ -1473,9 +1445,7 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Jailed(10%, 2000 rounds, auto-release)
                 // 3rd+ (2+ prior) → Ejected(100%)
                 if same_type_count == 0 {
-                    SlashPenalty::Warning {
-                        burn_percentage: 2.0,
-                    }
+                    SlashPenalty::Warning { burn_percentage: 2.0 }
                 } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
                         burn_percentage: 10.0,
@@ -1654,11 +1624,7 @@ impl SlashingEngine {
     /// // 5% of 10_000 = 500
     /// assert_eq!(engine.compute_burn_amount_for(node, 5.0), Some(500));
     /// ```
-    pub fn compute_burn_amount_for(
-        &self,
-        validator_id: NodeId,
-        burn_percentage: f64,
-    ) -> Option<u64> {
+    pub fn compute_burn_amount_for(&self, validator_id: NodeId, burn_percentage: f64) -> Option<u64> {
         let stake = self.stake_of(&validator_id);
         if stake == 0 {
             return None;
@@ -1889,9 +1855,7 @@ impl SlashingEngine {
                 validator_id: *id,
                 round: current_round,
                 offense: Some(SlashOffense::LivenessViolation),
-                penalty: Some(SlashPenalty::Warning {
-                    burn_percentage: 0.0,
-                }),
+                penalty: Some(SlashPenalty::Warning { burn_percentage: 0.0 }),
                 timestamp: current_timestamp(),
             });
         }
@@ -1961,8 +1925,7 @@ mod tests {
 
     #[test]
     fn test_new_in_memory_slashing_engine() {
-        let engine =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let engine = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let n = node(1);
         assert!(!engine.is_slashed(&n));
         assert!(!engine.is_ejected(&n));
@@ -1985,13 +1948,7 @@ mod tests {
         let n = node(1);
         engine.register_validator(n, 10_000);
         let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
-        assert_eq!(
-            outcome,
-            SlashOutcome::Warned {
-                node: n,
-                points: 100
-            }
-        );
+        assert_eq!(outcome, SlashOutcome::Warned { node: n, points: 100 });
     }
 
     #[test]
@@ -2352,12 +2309,7 @@ mod tests {
 
         // First liveness: Warning
         let penalty = engine.compute_penalty(node, &SlashOffense::LivenessViolation);
-        assert!(matches!(
-            penalty,
-            SlashPenalty::Warning {
-                burn_percentage: 1.0
-            }
-        ));
+        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 1.0 }));
     }
 
     // ── Graded slashing (ADR-011) tests ────────────────────────────
@@ -2478,12 +2430,7 @@ mod tests {
 
         // Similarly, first InvalidAttestation should be Warning(2%)
         let penalty = engine.compute_penalty(node, &SlashOffense::InvalidAttestation);
-        assert!(matches!(
-            penalty,
-            SlashPenalty::Warning {
-                burn_percentage: 2.0
-            }
-        ));
+        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 2.0 }));
     }
 
     #[test]
@@ -2675,13 +2622,7 @@ mod tests {
                 .count(),
             2
         );
-        assert_eq!(
-            history
-                .iter()
-                .filter(|&&o| o == SlashOffense::Equivocation)
-                .count(),
-            1
-        );
+        assert_eq!(history.iter().filter(|&&o| o == SlashOffense::Equivocation).count(), 1);
     }
 
     #[test]
@@ -2692,13 +2633,7 @@ mod tests {
         engine.register_validator(n, 10_000);
 
         let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
-        assert_eq!(
-            outcome,
-            SlashOutcome::Warned {
-                node: n,
-                points: 100
-            }
-        );
+        assert_eq!(outcome, SlashOutcome::Warned { node: n, points: 100 });
 
         let outcome = engine.record_offense(n, SlashOffense::Equivocation);
         assert_eq!(
@@ -2994,12 +2929,7 @@ mod tests {
 
         // First invalid attestation should be 1st-tier: Warning(2%)
         let penalty = engine.compute_penalty(v, &SlashOffense::InvalidAttestation);
-        assert!(matches!(
-            penalty,
-            SlashPenalty::Warning {
-                burn_percentage: 2.0
-            }
-        ));
+        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 2.0 }));
 
         // But 3rd liveness should be 3rd-tier: Jailed(5%, 500 rounds)
         let penalty = engine.compute_penalty(v, &SlashOffense::LivenessViolation);

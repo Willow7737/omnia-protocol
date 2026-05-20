@@ -83,10 +83,7 @@ impl ProvenanceTracker {
         causal_anchor: [u8; 32],
     ) -> Result<(), ProvenanceTrackerError> {
         if self.anchors.contains_key(&item_id) {
-            return Err(ProvenanceTrackerError::AlreadyAnchored(format!(
-                "{:?}",
-                &item_id[..4]
-            )));
+            return Err(ProvenanceTrackerError::AlreadyAnchored(format!("{:?}", &item_id[..4])));
         }
 
         let provenance_log = ProvenanceLog::new(
@@ -119,10 +116,7 @@ impl ProvenanceTracker {
             .ok_or_else(|| ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4])))?;
 
         if anchor.is_destroyed() {
-            return Err(ProvenanceTrackerError::Destroyed(format!(
-                "{:?}",
-                &item_id[..4]
-            )));
+            return Err(ProvenanceTrackerError::Destroyed(format!("{:?}", &item_id[..4])));
         }
 
         anchor.provenance_log.transfer(to_did, rf_proof, commitment);
@@ -145,10 +139,7 @@ impl ProvenanceTracker {
             .ok_or_else(|| ProvenanceTrackerError::NotFound(format!("{:?}", &item_id[..4])))?;
 
         if anchor.is_destroyed() {
-            return Err(ProvenanceTrackerError::Destroyed(format!(
-                "{:?}",
-                &item_id[..4]
-            )));
+            return Err(ProvenanceTrackerError::Destroyed(format!("{:?}", &item_id[..4])));
         }
 
         anchor.provenance_log.destroy(rf_proof, commitment);
@@ -166,11 +157,7 @@ impl ProvenanceTracker {
     ///
     /// `Ok(())` if verification succeeds, or an error indicating which
     /// check failed.
-    pub fn verify_item(
-        &self,
-        item_id: [u8; 32],
-        current_rf: &[u8; 32],
-    ) -> Result<(), ProvenanceTrackerError> {
+    pub fn verify_item(&self, item_id: [u8; 32], current_rf: &[u8; 32]) -> Result<(), ProvenanceTrackerError> {
         let anchor = self
             .anchors
             .get(&item_id)

@@ -176,9 +176,7 @@ impl SettlementAdapter for EthereumSettlementAdapter {
             .get_transaction_receipt(B256::from(tx.0))
             .await
             .map_err(|e| SettlementError::RpcError(format!("Failed to fetch receipt: {e}")))?
-            .ok_or_else(|| {
-                SettlementError::RpcError("Transaction receipt not found".to_string())
-            })?;
+            .ok_or_else(|| SettlementError::RpcError("Transaction receipt not found".to_string()))?;
 
         let block_number = receipt.block_number.unwrap_or(0);
         let proof_hash = blake3::derive_key("OMNIA-ETH-FINALITY", &tx.0);
@@ -200,10 +198,11 @@ impl SettlementAdapter for EthereumSettlementAdapter {
         let contract = OmniaRollup::new(self.contract_address, provider);
 
         // Fetch on-chain state root
-        let on_chain_root =
-            contract.stateRoot().call().await.map_err(|e| {
-                SettlementError::ContractError(format!("stateRoot call failed: {e}"))
-            })?;
+        let on_chain_root = contract
+            .stateRoot()
+            .call()
+            .await
+            .map_err(|e| SettlementError::ContractError(format!("stateRoot call failed: {e}")))?;
 
         // Compute root from the provided proof
         let leaf = proof.siblings.first().copied().unwrap_or([0u8; 32]);

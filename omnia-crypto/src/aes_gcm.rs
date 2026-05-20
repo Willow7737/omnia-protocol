@@ -53,22 +53,11 @@ pub enum AesGcmError {
 /// # Panics
 ///
 /// Panics if the key is not 32 bytes (should never happen with `[u8; 32]`).
-pub fn aes256gcm_encrypt_aad(
-    plaintext: &[u8],
-    key: &[u8; 32],
-    nonce: &[u8; 12],
-    aad: &[u8],
-) -> Vec<u8> {
+pub fn aes256gcm_encrypt_aad(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
     let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
     let nonce = Nonce::from_slice(nonce);
     cipher
-        .encrypt(
-            nonce,
-            aes_gcm::aead::Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
+        .encrypt(nonce, aes_gcm::aead::Payload { msg: plaintext, aad })
         .expect("AES-256-GCM encryption should not fail")
 }
 
@@ -92,13 +81,7 @@ pub fn aes256gcm_decrypt_aad(
     let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
     let nonce = Nonce::from_slice(nonce);
     cipher
-        .decrypt(
-            nonce,
-            aes_gcm::aead::Payload {
-                msg: ciphertext,
-                aad,
-            },
-        )
+        .decrypt(nonce, aes_gcm::aead::Payload { msg: ciphertext, aad })
         .map_err(|_| AesGcmError::DecryptionFailed)
 }
 

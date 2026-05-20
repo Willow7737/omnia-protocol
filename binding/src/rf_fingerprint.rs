@@ -54,12 +54,7 @@ impl RfFingerprint {
     /// * `measured_at` — Vector clock at measurement time
     /// * `device_did` — DID string of the device being fingerprinted
     /// * `confidence` — Matching threshold (0.0–1.0); typical values: 0.90–0.99
-    pub fn new(
-        spectral_hash: [u8; 32],
-        measured_at: VectorClock,
-        device_did: String,
-        confidence: f64,
-    ) -> Self {
+    pub fn new(spectral_hash: [u8; 32], measured_at: VectorClock, device_did: String, confidence: f64) -> Self {
         Self {
             spectral_hash,
             measured_at,

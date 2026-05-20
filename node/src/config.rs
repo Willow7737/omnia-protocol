@@ -122,8 +122,8 @@ impl NodeConfigFile {
     ///
     /// - `anyhow::Error` if the file cannot be read or parsed.
     pub fn from_file(path: &std::path::Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+        let content =
+            std::fs::read_to_string(path).with_context(|| format!("Failed to read config file: {}", path.display()))?;
         Self::from_toml(&content)
     }
 
@@ -181,7 +181,7 @@ impl NodeConfig {
     /// Returns the canonical path to the data directory.
     pub fn ensure_data_dir(&self) -> Result<PathBuf> {
         std::fs::create_dir_all(&self.data_dir)
-            .with_context(|| format!("Failed to create data directory: {self.data_dir:?}"))?;
+            .with_context(|| format!("Failed to create data directory: {:?}", self.data_dir))?;
         self.data_dir
             .canonicalize()
             .context("Failed to canonicalize data directory path")
@@ -226,18 +226,19 @@ impl NodeConfig {
         let args = CliArgs::parse();
 
         // Load TOML config file if specified
-        let file_config = args.config.as_ref().and_then(|path| {
-            match NodeConfigFile::from_file(std::path::Path::new(path)) {
-                Ok(fc) => {
-                    tracing::info!(config_path = %path, "Loaded configuration file");
-                    Some(fc)
-                }
-                Err(e) => {
-                    tracing::error!(config_path = %path, error = %e, "Failed to load config file");
-                    None
-                }
-            }
-        });
+        let file_config =
+            args.config
+                .as_ref()
+                .and_then(|path| match NodeConfigFile::from_file(std::path::Path::new(path)) {
+                    Ok(fc) => {
+                        tracing::info!(config_path = %path, "Loaded configuration file");
+                        Some(fc)
+                    }
+                    Err(e) => {
+                        tracing::error!(config_path = %path, error = %e, "Failed to load config file");
+                        None
+                    }
+                });
 
         // Merge: CLI args > config file > defaults
         let node_id = args.node_id;
@@ -259,10 +260,7 @@ impl NodeConfig {
             .and_then(|fc| fc.max_payload_size)
             .unwrap_or(omnia_substrate::MAX_PAYLOAD_SIZE);
 
-        let pruning_depth = file_config
-            .as_ref()
-            .and_then(|fc| fc.pruning_depth)
-            .unwrap_or(0);
+        let pruning_depth = file_config.as_ref().and_then(|fc| fc.pruning_depth).unwrap_or(0);
 
         let snapshot_interval = file_config
             .as_ref()
@@ -284,10 +282,7 @@ impl NodeConfig {
             .and_then(|fc| fc.consensus_data_dir.clone())
             .map(PathBuf::from);
 
-        let readiness_min_peers = file_config
-            .as_ref()
-            .and_then(|fc| fc.readiness_min_peers)
-            .unwrap_or(1);
+        let readiness_min_peers = file_config.as_ref().and_then(|fc| fc.readiness_min_peers).unwrap_or(1);
 
         let readiness_max_finalization_age = file_config
             .as_ref()
@@ -527,17 +522,12 @@ mod tests {
         assert_eq!(config.log_level.as_deref(), Some("debug"));
         assert_eq!(
             config.bootstrap_nodes,
-            Some(vec![
-                "/ip4/1.2.3.4/udp/4001/quic/p2p/12D3KooWTest".to_string()
-            ])
+            Some(vec!["/ip4/1.2.3.4/udp/4001/quic/p2p/12D3KooWTest".to_string()])
         );
         assert_eq!(config.max_payload_size, Some(2_097_152));
         assert_eq!(config.pruning_depth, Some(10_000));
         assert_eq!(config.snapshot_interval, Some(5_000));
-        assert_eq!(
-            config.slashing_data_dir,
-            Some("/var/lib/omnia/slashing".to_string())
-        );
+        assert_eq!(config.slashing_data_dir, Some("/var/lib/omnia/slashing".to_string()));
     }
 
     #[test]

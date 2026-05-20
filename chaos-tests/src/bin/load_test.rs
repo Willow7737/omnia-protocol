@@ -99,7 +99,7 @@ async fn main() {
     });
 
     let warmup = parse_duration(&args.warmup).unwrap_or_else(|| {
-        eprintln!("Invalid warmup duration '{args.warmup}'. Use e.g., '5s'.");
+        eprintln!("Invalid warmup duration '{}'. Use e.g., '5s'.", args.warmup);
         std::process::exit(1);
     });
 
@@ -113,29 +113,26 @@ async fn main() {
     };
 
     println!("Starting Omnia Protocol load test");
-    println!("  Nodes: {config.num_nodes}");
-    println!("  BFT total_nodes: {config.total_nodes}");
-    println!("  Duration: {config.duration:?}");
-    println!("  Warmup: {config.warmup_duration:?}");
-    println!("  Target rate: {config.events_per_second} events/sec");
-    println!("  Event size: {config.event_size_bytes} bytes");
+    println!("  Nodes: {}", config.num_nodes);
+    println!("  BFT total_nodes: {}", config.total_nodes);
+    println!("  Duration: {:?}", config.duration);
+    println!("  Warmup: {:?}", config.warmup_duration);
+    println!("  Target rate: {} events/sec", config.events_per_second);
+    println!("  Event size: {} bytes", config.event_size_bytes);
 
     match run_load_test(&config).await {
         Ok(result) => {
             println!("\n=== Load Test Results ===");
-            println!("Events submitted: {result.total_events_submitted}");
-            println!("Events finalized: {result.total_events_finalized}");
-            println!(
-                "Finalization rate: {:.1} events/sec",
-                result.finalization_rate
-            );
+            println!("Events submitted: {}", result.total_events_submitted);
+            println!("Events finalized: {}", result.total_events_finalized);
+            println!("Finalization rate: {:.1} events/sec", result.finalization_rate);
             println!("Avg latency: {:.2} ms", result.avg_latency_ms);
             println!("P50 latency: {:.2} ms", result.p50_latency_ms);
             println!("P90 latency: {:.2} ms", result.p90_latency_ms);
             println!("P99 latency: {:.2} ms", result.p99_latency_ms);
             println!("Peak memory: {:.1} MB", result.max_memory_mb);
             println!("Bandwidth: {:.2} Mbps", result.network_bandwidth_mbps);
-            println!("Actual duration: {result.actual_duration:?}");
+            println!("Actual duration: {:?}", result.actual_duration);
         }
         Err(e) => {
             eprintln!("Load test failed: {e}");

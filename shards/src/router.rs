@@ -89,11 +89,7 @@ impl ShardRouter {
     /// * `fee_schedule` - Per-operation-type fee schedule (UBC units)
     /// * `quota` - UBC quota system for fee deduction
     /// * `nonce_store` - Persistent nonce store implementation
-    pub fn with_nonce_store(
-        fee_schedule: FeeSchedule,
-        quota: QuotaSystem,
-        nonce_store: Arc<dyn NonceStore>,
-    ) -> Self {
+    pub fn with_nonce_store(fee_schedule: FeeSchedule, quota: QuotaSystem, nonce_store: Arc<dyn NonceStore>) -> Self {
         // Load existing nonces from the store
         let last_nonces = nonce_store.load().unwrap_or_else(|e| {
             tracing::warn!("Failed to load nonces from store: {}", e);
@@ -159,14 +155,10 @@ impl ShardRouter {
     }
 
     /// Route a cross-shard message to its target shard.
-    fn route_cross_shard(
-        &mut self,
-        event: &Event,
-        msg: &CrossShardMessage,
-    ) -> Result<(), ShardError> {
+    fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
         // Deserialize the inner payload for the target shard
-        let inner_op: ShardOp = postcard::from_bytes(&msg.payload)
-            .map_err(|e| ShardError::DeserializationError(e.to_string()))?;
+        let inner_op: ShardOp =
+            postcard::from_bytes(&msg.payload).map_err(|e| ShardError::DeserializationError(e.to_string()))?;
 
         let target_id = msg.target_shard;
         if let Some(shard) = self.shards.get_mut(&target_id) {
@@ -307,15 +299,9 @@ impl omnia_substrate::EventProcessor for ShardRouter {
     #[allow(deprecated)]
     fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
         self.route_event(event).map_err(|e| match e {
-            ShardError::DeserializationError(msg) => {
-                omnia_substrate::EventProcessorError::Deserialization(msg)
-            }
-            ShardError::ValidationFailed(msg) => {
-                omnia_substrate::EventProcessorError::ValidationFailed(msg)
-            }
-            ShardError::UnknownShard(msg) => {
-                omnia_substrate::EventProcessorError::UnknownShard(msg)
-            }
+            ShardError::DeserializationError(msg) => omnia_substrate::EventProcessorError::Deserialization(msg),
+            ShardError::ValidationFailed(msg) => omnia_substrate::EventProcessorError::ValidationFailed(msg),
+            ShardError::UnknownShard(msg) => omnia_substrate::EventProcessorError::UnknownShard(msg),
             other => omnia_substrate::EventProcessorError::ShardError(other.to_string()),
         })
     }

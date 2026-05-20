@@ -47,19 +47,11 @@ impl SettlementLayer for CelestiaAdapter {
     }
 
     async fn deposit(&self, _l2_did: &str, _amount: u64) -> Result<String, SettlementError> {
-        Err(SettlementError::NotImplemented(
-            "Celestia has no asset layer".into(),
-        ))
+        Err(SettlementError::NotImplemented("Celestia has no asset layer".into()))
     }
 
-    async fn request_withdrawal(
-        &self,
-        _l2_did: &str,
-        _amount: u64,
-    ) -> Result<String, SettlementError> {
-        Err(SettlementError::NotImplemented(
-            "Celestia has no asset layer".into(),
-        ))
+    async fn request_withdrawal(&self, _l2_did: &str, _amount: u64) -> Result<String, SettlementError> {
+        Err(SettlementError::NotImplemented("Celestia has no asset layer".into()))
     }
 
     async fn submit_batch(&self, _bundle: &ProofBundle) -> Result<String, SettlementError> {

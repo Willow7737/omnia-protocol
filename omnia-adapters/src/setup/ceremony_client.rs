@@ -115,21 +115,15 @@ impl CeremonyClient {
     /// `Ok(true)` if all contributions verify and the final transcript
     /// hash matches. `Err(CeremonyClientError)` on the first invalid
     /// contribution or a hash mismatch.
-    pub fn verify_transcript(
-        transcript: &CeremonyTranscript,
-        degree: usize,
-    ) -> Result<bool, CeremonyClientError> {
+    pub fn verify_transcript(transcript: &CeremonyTranscript, degree: usize) -> Result<bool, CeremonyClientError> {
         // Initialize the SRS from scratch and replay all contributions.
         // apply_contribution() internally calls verify_contribution(),
         // so each contribution's PoK is verified as part of the replay.
-        let mut replay_srs = PowersOfTau::new(degree)
-            .map_err(|e| CeremonyClientError::InvalidState(e.to_string()))?;
+        let mut replay_srs = PowersOfTau::new(degree).map_err(|e| CeremonyClientError::InvalidState(e.to_string()))?;
 
         for (i, contribution) in transcript.contributions.iter().enumerate() {
             replay_srs.apply_contribution(contribution).map_err(|e| {
-                CeremonyClientError::VerificationFailed(format!(
-                    "Contribution {i} failed verification: {e}"
-                ))
+                CeremonyClientError::VerificationFailed(format!("Contribution {i} failed verification: {e}"))
             })?;
         }
 
@@ -156,9 +150,8 @@ mod tests {
         let transcript = srs.to_transcript();
         let tau_size = srs.g1_powers.len();
 
-        let (contribution, proof) =
-            CeremonyClient::generate_contribution(&transcript, tau_size, Some([1u8; 32]))
-                .expect("generate_contribution failed");
+        let (contribution, proof) = CeremonyClient::generate_contribution(&transcript, tau_size, Some([1u8; 32]))
+            .expect("generate_contribution failed");
 
         assert!(!contribution.transcript.is_empty());
         assert!(!contribution.proof.commitment.is_empty());
@@ -182,11 +175,8 @@ mod tests {
             let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
             let mut seed = [0u8; 32];
             seed[0] = i;
-            let contribution =
-                contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
-            server
-                .accept_contribution(contribution)
-                .expect("accept failed");
+            let contribution = contribute(&transcript, tau_size, Some(seed)).expect("contribute failed");
+            server.accept_contribution(contribution).expect("accept failed");
         }
 
         let transcript = server.export_transcript().expect("export failed");
@@ -207,11 +197,8 @@ mod tests {
         server.start().expect("start failed");
 
         let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
-        let contribution =
-            contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
-        server
-            .accept_contribution(contribution)
-            .expect("accept failed");
+        let contribution = contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
+        server.accept_contribution(contribution).expect("accept failed");
 
         let mut transcript = server.export_transcript().expect("export failed");
 
@@ -236,11 +223,8 @@ mod tests {
         server.start().expect("start failed");
 
         let (transcript, tau_size) = server.get_srs_state().expect("get state failed");
-        let contribution =
-            contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
-        server
-            .accept_contribution(contribution)
-            .expect("accept failed");
+        let contribution = contribute(&transcript, tau_size, Some([1u8; 32])).expect("contribute failed");
+        server.accept_contribution(contribution).expect("accept failed");
 
         let mut transcript = server.export_transcript().expect("export failed");
 

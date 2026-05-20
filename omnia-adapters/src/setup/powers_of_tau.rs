@@ -279,9 +279,7 @@ impl PowersOfTau {
         for (i, g1_bytes) in self.g1_powers.iter().enumerate() {
             let mut slice = g1_bytes.as_slice();
             let _g1 = G1Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
-                SetupError::InvalidContribution(format!(
-                    "G1 power {i} is not a valid curve point: {e}"
-                ))
+                SetupError::InvalidContribution(format!("G1 power {i} is not a valid curve point: {e}"))
             })?;
         }
 
@@ -289,9 +287,7 @@ impl PowersOfTau {
         for (i, g2_bytes) in self.g2_powers.iter().enumerate() {
             let mut slice = g2_bytes.as_slice();
             let _g2 = G2Affine::deserialize_uncompressed(&mut slice).map_err(|e| {
-                SetupError::InvalidContribution(format!(
-                    "G2 power {i} is not a valid curve point: {e}"
-                ))
+                SetupError::InvalidContribution(format!("G2 power {i} is not a valid curve point: {e}"))
             })?;
         }
 
@@ -491,8 +487,7 @@ mod tests {
     #[test]
     fn test_verify_srs() {
         let pot = run_ceremony(4, 2).expect("ceremony failed");
-        pot.verify_srs()
-            .expect("SRS verification should pass after ceremony");
+        pot.verify_srs().expect("SRS verification should pass after ceremony");
     }
 
     #[test]

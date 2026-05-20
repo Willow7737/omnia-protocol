@@ -191,11 +191,7 @@ pub trait SettlementLayer: Send + Sync {
     async fn deposit(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError>;
 
     /// Bridge: initiate withdrawal from L2 to L1.
-    async fn request_withdrawal(
-        &self,
-        l2_did: &str,
-        amount: u64,
-    ) -> Result<String, SettlementError>;
+    async fn request_withdrawal(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError>;
 
     /// Submit a proof bundle to the L1 for verification and settlement.
     async fn submit_batch(&self, bundle: &ProofBundle) -> Result<String, SettlementError>;

@@ -77,12 +77,7 @@ pub struct Proposal {
 
 impl Proposal {
     /// Create a new proposal.
-    pub fn new(
-        id: String,
-        description: String,
-        created_at_epoch: u64,
-        expires_at_epoch: u64,
-    ) -> Self {
+    pub fn new(id: String, description: String, created_at_epoch: u64, expires_at_epoch: u64) -> Self {
         Self {
             id,
             description,
@@ -285,12 +280,8 @@ impl GovernanceState {
 
         match choice {
             VoteChoice::For => proposal.votes_for = proposal.votes_for.saturating_add(weight),
-            VoteChoice::Against => {
-                proposal.votes_against = proposal.votes_against.saturating_add(weight)
-            }
-            VoteChoice::Abstain => {
-                proposal.votes_abstain = proposal.votes_abstain.saturating_add(weight)
-            }
+            VoteChoice::Against => proposal.votes_against = proposal.votes_against.saturating_add(weight),
+            VoteChoice::Abstain => proposal.votes_abstain = proposal.votes_abstain.saturating_add(weight),
         }
 
         self.last_active.insert(did.to_string(), current_epoch);
@@ -369,10 +360,7 @@ impl GovernanceState {
         }
 
         // Proposal passes: set execution_time with time-lock delay.
-        let proposal = self
-            .proposals
-            .get_mut(proposal_id)
-            .expect("proposal was found above");
+        let proposal = self.proposals.get_mut(proposal_id).expect("proposal was found above");
         proposal.execution_time = Some(current_time_ms.saturating_add(self.time_lock_ms));
 
         Ok(())
@@ -388,10 +376,7 @@ impl GovernanceState {
     /// This is used for quorum computation: a proposal passes quorum when
     /// the total weight of votes cast ≥ `quorum_percentage`% of this total.
     pub fn total_voting_weight(&self) -> u64 {
-        self.voting_weights
-            .values()
-            .copied()
-            .fold(0u64, u64::saturating_add)
+        self.voting_weights.values().copied().fold(0u64, u64::saturating_add)
     }
 
     /// Remove expired proposals from the active set.
@@ -593,8 +578,7 @@ mod tests {
         gov.set_weight("bob", 400); // weight = 20
         gov.set_weight("charlie", 900); // weight = 30
 
-        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-            .ok();
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
         // All 3 vote "for" → 60 total weight, eligible = 3
         // quorum: 60 * 100 = 6000 >= 3 * 67 = 201 ✓
@@ -607,10 +591,7 @@ mod tests {
         assert!(result.is_ok());
 
         let proposal = gov.get_proposal("prop1").expect("proposal exists");
-        assert_eq!(
-            proposal.execution_time,
-            Some(1_000_000 + DEFAULT_TIME_LOCK_MS)
-        );
+        assert_eq!(proposal.execution_time, Some(1_000_000 + DEFAULT_TIME_LOCK_MS));
     }
 
     #[test]
@@ -622,8 +603,7 @@ mod tests {
             gov.set_weight(&format!("voter{i}"), 100);
         }
 
-        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-            .ok();
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
         // Only 1 voter votes "for" → 10 total weight, total_possible_weight = 100
         // quorum: 10 * 100 = 1000 < 100 * 67 = 6700 ✗
@@ -639,8 +619,7 @@ mod tests {
         gov.set_weight("alice", 100);
         gov.set_weight("bob", 400);
 
-        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-            .ok();
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
         // Both vote, quorum met, but majority against
         gov.vote("alice", "prop1", VoteChoice::Against, 0).ok();
@@ -655,8 +634,7 @@ mod tests {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
         gov.set_weight("alice", 100);
 
-        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-            .ok();
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
         // Try to finalize before expiration (current_epoch=5, expires_at=10)
         let result = gov.finalize_proposal("prop1", 5, 1_000_000);
@@ -673,8 +651,7 @@ mod tests {
     #[test]
     fn test_get_proposal_mut() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-            .ok();
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
         let proposal = gov.get_proposal_mut("prop1");
         assert!(proposal.is_some());

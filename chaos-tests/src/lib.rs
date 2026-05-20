@@ -39,9 +39,8 @@
 pub mod load_test;
 
 use omnia_substrate::{
-    generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId,
-    NodeKeypair, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
-    DEFAULT_SLASH_THRESHOLD,
+    generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, NodeKeypair, SlashOutcome,
+    SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
@@ -103,13 +102,14 @@ impl ChaosNode {
     /// * `index` — 0-based index of this node in the network.
     /// * `keypair` — Ed25519 signing keypair for this node (node_id is derived as blake3(pubkey)).
     /// * `total_nodes` — Total number of validators (used for consensus thresholds).
+    // Kept for potential future use in standalone chaos node construction; currently
+    // ChaosNetwork::new() builds nodes inline instead of calling this constructor.
+    #[allow(dead_code)]
     pub fn new(index: usize, keypair: NodeKeypair, total_nodes: usize) -> Self {
         // Derive node_id from the keypair: node_id = blake3_hash_domain("omnia-creator", pubkey)
         // This matches Event::sign_with_keypair() which sets creator = blake3_hash_domain("omnia-creator", pubkey)
-        let node_id: NodeId = omnia_substrate::blake3_hash_domain(
-            b"omnia-creator",
-            &keypair.verifying_key().to_bytes(),
-        );
+        let node_id: NodeId =
+            omnia_substrate::blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let mut seed = [0u8; 32];
         seed[0] = (index as u8) + 1; // Non-zero to avoid debug-build panic
         let config = ConsensusConfig {
@@ -117,13 +117,11 @@ impl ChaosNode {
             round_seed: seed,
             ..Default::default()
         };
-        let slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut consensus = ConsensusEngine::new(config, slashing.clone());
         consensus.register_validator(node_id, 10_000);
 
-        let mut slashing_separate =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing_separate = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         slashing_separate.register_validator(node_id, 10_000);
 
         Self {
@@ -201,12 +199,7 @@ impl ChaosNetwork {
         // Derive node IDs from the domain-separated BLAKE3 hash of each keypair's public key
         let node_ids: Vec<NodeId> = keypairs
             .iter()
-            .map(|kp| {
-                omnia_substrate::blake3_hash_domain(
-                    b"omnia-creator",
-                    &kp.verifying_key().to_bytes(),
-                )
-            })
+            .map(|kp| omnia_substrate::blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes()))
             .collect();
 
         // Create nodes, each with all validators registered
@@ -219,8 +212,7 @@ impl ChaosNetwork {
                 round_seed: seed,
                 ..Default::default()
             };
-            let slashing =
-                SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+            let slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
             let mut consensus = ConsensusEngine::new(config, slashing.clone());
             let mut slashing_separate =
                 SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
@@ -470,14 +462,7 @@ impl ChaosNetwork {
             let mut event = if self_parent.is_none() {
                 Event::genesis(node.node_id, payload)
             } else {
-                Event::new(
-                    node.node_id,
-                    sequence,
-                    vc,
-                    self_parent,
-                    other_parent,
-                    payload,
-                )
+                Event::new(node.node_id, sequence, vc, self_parent, other_parent, payload)
             };
             event.sign_with_keypair(&node.keypair);
 
@@ -545,16 +530,10 @@ impl ChaosNetwork {
                     continue;
                 }
                 if self.nodes[source_idx].graph.contains(&parent_id) {
-                    if let Ok(ancestors) =
-                        self.collect_missing_ancestors(source_idx, parent_id, target_idx)
-                    {
+                    if let Ok(ancestors) = self.collect_missing_ancestors(source_idx, parent_id, target_idx) {
                         for ancestor in ancestors {
                             if let Err(e) = self.insert_event_to_node(target_idx, ancestor) {
-                                tracing::debug!(
-                                    node = target_idx,
-                                    "Parent propagation failed: {}",
-                                    e
-                                );
+                                tracing::debug!(node = target_idx, "Parent propagation failed: {}", e);
                             }
                         }
                     }
@@ -659,10 +638,7 @@ impl ChaosNetwork {
     /// This counts each committed event once per node that has committed it.
     /// For a count of unique committed events, use a different method.
     pub fn committed_count(&self) -> usize {
-        self.nodes
-            .iter()
-            .map(|n| n.consensus.get_committed().len())
-            .sum()
+        self.nodes.iter().map(|n| n.consensus.get_committed().len()).sum()
     }
 
     /// Returns the number of committed events for a specific node.
@@ -721,12 +697,9 @@ impl ChaosNetwork {
         if observer_idx >= self.nodes.len() {
             return None;
         }
-        self.nodes[observer_idx].slashing.check_liveness(
-            node,
-            last_active_round,
-            current_round,
-            threshold,
-        )
+        self.nodes[observer_idx]
+            .slashing
+            .check_liveness(node, last_active_round, current_round, threshold)
     }
 
     // -----------------------------------------------------------------------
@@ -817,32 +790,18 @@ impl ChaosNetwork {
                 continue;
             }
             if !self.should_deliver(target_idx) {
-                tracing::debug!(
-                    from = source_idx,
-                    to = target_idx,
-                    "Message dropped due to drop rate"
-                );
+                tracing::debug!(from = source_idx, to = target_idx, "Message dropped due to drop rate");
                 continue;
             }
             if let Err(e) = self.propagate_event(source_idx, event_id, target_idx) {
-                tracing::debug!(
-                    from = source_idx,
-                    to = target_idx,
-                    "Gossip propagation failed: {}",
-                    e
-                );
+                tracing::debug!(from = source_idx, to = target_idx, "Gossip propagation failed: {}", e);
             }
         }
         Ok(())
     }
 
     /// Propagate an event (and its missing ancestors) from source to target.
-    fn propagate_event(
-        &mut self,
-        source_idx: usize,
-        event_id: EventId,
-        target_idx: usize,
-    ) -> anyhow::Result<()> {
+    fn propagate_event(&mut self, source_idx: usize, event_id: EventId, target_idx: usize) -> anyhow::Result<()> {
         let events = self.collect_missing_ancestors(source_idx, event_id, target_idx)?;
         for event in events {
             self.insert_event_to_node(target_idx, event)?;
@@ -862,13 +821,7 @@ impl ChaosNetwork {
     ) -> anyhow::Result<Vec<Event>> {
         let mut result = Vec::new();
         let mut visited = HashSet::new();
-        self.collect_missing_ancestors_inner(
-            source_idx,
-            event_id,
-            target_idx,
-            &mut visited,
-            &mut result,
-        )?;
+        self.collect_missing_ancestors_inner(source_idx, event_id, target_idx, &mut visited, &mut result)?;
         Ok(result)
     }
 
@@ -985,9 +938,7 @@ impl ChaosNetwork {
                             continue;
                         }
 
-                        if let Ok(events) =
-                            self.collect_missing_ancestors(source_idx, event_id, target_idx)
-                        {
+                        if let Ok(events) = self.collect_missing_ancestors(source_idx, event_id, target_idx) {
                             for event in events {
                                 if let Ok(()) = self.insert_event_to_node(target_idx, event) {
                                     any_propagated = true;
@@ -1002,10 +953,7 @@ impl ChaosNetwork {
                 tracing::debug!(round = round, "Sync converged — no new events propagated");
                 break;
             }
-            tracing::debug!(
-                round = round,
-                "Sync round completed, more events to propagate"
-            );
+            tracing::debug!(round = round, "Sync round completed, more events to propagate");
         }
     }
 }

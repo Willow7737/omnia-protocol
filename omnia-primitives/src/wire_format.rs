@@ -44,9 +44,7 @@ pub fn serialize_with_version<T: serde::Serialize>(value: &T) -> Result<Vec<u8>,
 /// - Version `1`: Current postcard format
 ///
 /// Returns an error for empty data or unknown version bytes.
-pub fn deserialize_with_version<T: serde::de::DeserializeOwned>(
-    bytes: &[u8],
-) -> Result<T, WireFormatError> {
+pub fn deserialize_with_version<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, WireFormatError> {
     if bytes.is_empty() {
         return Err(WireFormatError::EmptyData);
     }
@@ -54,13 +52,11 @@ pub fn deserialize_with_version<T: serde::de::DeserializeOwned>(
     match version {
         0 => {
             // Legacy bincode format
-            bincode::deserialize(&bytes[1..])
-                .map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
+            bincode::deserialize(&bytes[1..]).map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
         }
         1 => {
             // Current postcard format
-            postcard::from_bytes(&bytes[1..])
-                .map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
+            postcard::from_bytes(&bytes[1..]).map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
         }
         v => Err(WireFormatError::UnknownVersion(v)),
     }

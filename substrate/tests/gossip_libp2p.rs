@@ -76,11 +76,7 @@ impl TestNode {
     ///
     /// Returns an error string if the timeout expires or the event channel
     /// closes unexpectedly.
-    async fn wait_for_gossip(
-        &mut self,
-        expected_data: &[u8],
-        timeout_duration: Duration,
-    ) -> Result<PeerId, String> {
+    async fn wait_for_gossip(&mut self, expected_data: &[u8], timeout_duration: Duration) -> Result<PeerId, String> {
         timeout(timeout_duration, async {
             loop {
                 match self.event_rx.recv().await {
@@ -123,10 +119,7 @@ impl TestNode {
     /// Returns an error string if the timeout expires or the event channel
     /// closes unexpectedly.
     #[allow(dead_code)]
-    async fn wait_for_any_peer_connected(
-        &mut self,
-        timeout_duration: Duration,
-    ) -> Result<PeerId, String> {
+    async fn wait_for_any_peer_connected(&mut self, timeout_duration: Duration) -> Result<PeerId, String> {
         timeout(timeout_duration, async {
             loop {
                 match self.event_rx.recv().await {
@@ -331,22 +324,12 @@ async fn event_propagation() -> Result<(), Box<dyn std::error::Error + Send + Sy
     node_a.publish("omnia_events", event_bytes.clone()).await?;
 
     // Wait for B to receive the event (timeout 10s)
-    let result_b = node_b
-        .wait_for_gossip(&event_bytes, Duration::from_secs(10))
-        .await;
-    assert!(
-        result_b.is_ok(),
-        "Node B should receive the event from A: {result_b:?}"
-    );
+    let result_b = node_b.wait_for_gossip(&event_bytes, Duration::from_secs(10)).await;
+    assert!(result_b.is_ok(), "Node B should receive the event from A: {result_b:?}");
 
     // Wait for C to receive the event (timeout 10s)
-    let result_c = node_c
-        .wait_for_gossip(&event_bytes, Duration::from_secs(10))
-        .await;
-    assert!(
-        result_c.is_ok(),
-        "Node C should receive the event from A: {result_c:?}"
-    );
+    let result_c = node_c.wait_for_gossip(&event_bytes, Duration::from_secs(10)).await;
+    assert!(result_c.is_ok(), "Node C should receive the event from A: {result_c:?}");
 
     // Verify the event can be deserialized and its ID matches
     let received_event = Event::from_bytes(&event_bytes)?;
@@ -402,13 +385,8 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
     node_a.publish("omnia_events", event1_bytes.clone()).await?;
 
     // Wait for B to receive the first event
-    let result_b = node_b
-        .wait_for_gossip(&event1_bytes, Duration::from_secs(5))
-        .await;
-    assert!(
-        result_b.is_ok(),
-        "Node B should receive the first event: {result_b:?}"
-    );
+    let result_b = node_b.wait_for_gossip(&event1_bytes, Duration::from_secs(5)).await;
+    assert!(result_b.is_ok(), "Node B should receive the first event: {result_b:?}");
 
     // --- D joins the network ---
 
@@ -426,9 +404,7 @@ async fn late_join_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>
     node_a.publish("omnia_events", event2_bytes.clone()).await?;
 
     // Wait for D to receive the event (timeout 15s)
-    let result_d = node_d
-        .wait_for_gossip(&event2_bytes, Duration::from_secs(15))
-        .await;
+    let result_d = node_d.wait_for_gossip(&event2_bytes, Duration::from_secs(15)).await;
     assert!(
         result_d.is_ok(),
         "Node D (late joiner) should receive the event from A: {result_d:?}"
@@ -487,35 +463,17 @@ async fn multi_event_propagation() -> Result<(), Box<dyn std::error::Error + Sen
     node_a.publish("omnia_events", event3_bytes.clone()).await?;
 
     // Wait for B to receive all three events (timeout 10s each)
-    let result1 = node_b
-        .wait_for_gossip(&event1_bytes, Duration::from_secs(10))
-        .await;
-    assert!(
-        result1.is_ok(),
-        "Node B should receive event 1: {result1:?}"
-    );
+    let result1 = node_b.wait_for_gossip(&event1_bytes, Duration::from_secs(10)).await;
+    assert!(result1.is_ok(), "Node B should receive event 1: {result1:?}");
 
-    let result2 = node_b
-        .wait_for_gossip(&event2_bytes, Duration::from_secs(10))
-        .await;
-    assert!(
-        result2.is_ok(),
-        "Node B should receive event 2: {result2:?}"
-    );
+    let result2 = node_b.wait_for_gossip(&event2_bytes, Duration::from_secs(10)).await;
+    assert!(result2.is_ok(), "Node B should receive event 2: {result2:?}");
 
-    let result3 = node_b
-        .wait_for_gossip(&event3_bytes, Duration::from_secs(10))
-        .await;
-    assert!(
-        result3.is_ok(),
-        "Node B should receive event 3: {result3:?}"
-    );
+    let result3 = node_b.wait_for_gossip(&event3_bytes, Duration::from_secs(10)).await;
+    assert!(result3.is_ok(), "Node B should receive event 3: {result3:?}");
 
     // Verify all events deserialize correctly and have valid signatures
-    for (i, bytes) in [&event1_bytes, &event2_bytes, &event3_bytes]
-        .iter()
-        .enumerate()
-    {
+    for (i, bytes) in [&event1_bytes, &event2_bytes, &event3_bytes].iter().enumerate() {
         let event = Event::from_bytes(bytes)?;
         assert!(
             event.verify_signature(),

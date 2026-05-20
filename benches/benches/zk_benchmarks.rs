@@ -17,8 +17,7 @@ use omnia_adapters::circuit::{ExpandedRollupCircuit, RollupCircuit};
 use omnia_adapters::merkle::build_merkle_tree;
 use omnia_adapters::poseidon::poseidon_hash_offchain;
 use omnia_adapters::prover::{
-    create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded,
-    verify_proof,
+    create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded, verify_proof,
 };
 
 fn bench_poseidon_hash(c: &mut Criterion) {
@@ -54,8 +53,7 @@ fn bench_groth16_proof_generation(c: &mut Criterion) {
     // Expanded circuit with different batch sizes
     for &num_events in &[1, 4, 16] {
         let merkle_depth = 8;
-        let (pk, _vk) = generate_trusted_setup_expanded(num_events, merkle_depth)
-            .expect("expanded setup failed");
+        let (pk, _vk) = generate_trusted_setup_expanded(num_events, merkle_depth).expect("expanded setup failed");
 
         group.bench_with_input(
             BenchmarkId::new("expanded_circuit", num_events),

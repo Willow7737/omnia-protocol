@@ -50,9 +50,7 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
     // Pre-create genesis
     let mut genesis = Event::genesis(creator, vec![]);
     genesis.sign_with_keypair(&keypair);
-    graph
-        .insert(genesis.clone())
-        .expect("genesis insert should succeed");
+    graph.insert(genesis.clone()).expect("genesis insert should succeed");
 
     group.bench_function("insert_chain", |b| {
         let mut seq: u64 = 1;

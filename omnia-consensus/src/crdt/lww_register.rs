@@ -202,15 +202,13 @@ mod tests {
     /// Strategy for generating arbitrary LwwRegister<u64> states.
     /// Uses `set_with_meta` for deterministic control over timestamp, node_id, and version.
     fn lww_strategy() -> impl Strategy<Value = LwwRegister<u64>> {
-        (any::<u64>(), 0u64..10000, any::<u8>(), 0u64..100).prop_map(
-            |(value, timestamp, node_byte, version)| {
-                let mut node_id = [0u8; 32];
-                node_id[0] = node_byte;
-                let mut reg = LwwRegister::new(node_id);
-                reg.set_with_meta(value, timestamp, node_id, version);
-                reg
-            },
-        )
+        (any::<u64>(), 0u64..10000, any::<u8>(), 0u64..100).prop_map(|(value, timestamp, node_byte, version)| {
+            let mut node_id = [0u8; 32];
+            node_id[0] = node_byte;
+            let mut reg = LwwRegister::new(node_id);
+            reg.set_with_meta(value, timestamp, node_id, version);
+            reg
+        })
     }
 
     #[test]

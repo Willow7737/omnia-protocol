@@ -19,7 +19,7 @@ env:
 
 jobs:
   # -----------------------------------------------------------------------
-  # Mock settlement tests (always run, MSRV 1.88 compliant)
+  # Mock settlement tests (always run, MSRV 1.91 compliant)
   # These verify the SettlementAdapter trait, MockSettlementAdapter,
   # and the simulated EthereumAdapter — zero alloy dependency.
   # -----------------------------------------------------------------------
@@ -30,11 +30,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: 1.88.0
+          toolchain: 1.91.0
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-eth-mock"
-      - name: Test omnia-adapters (no features — MSRV 1.88)
+      - name: Test omnia-adapters (no features — MSRV 1.91)
         run: cargo test -p omnia-adapters --verbose
       - name: Test settlement mock adapter
         run: cargo test -p omnia-adapters -- settlement::mock --nocapture

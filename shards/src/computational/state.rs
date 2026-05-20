@@ -51,23 +51,15 @@ pub struct ComputationalState {
 impl ComputationalState {
     /// Create an empty computational state.
     pub fn new() -> Self {
-        Self {
-            tasks: HashMap::new(),
-        }
+        Self { tasks: HashMap::new() }
     }
 
     /// Apply a computational operation, mutating state.
     pub fn apply(&mut self, op: &ComputationalOp, vc: &VectorClock) -> Result<(), ShardError> {
         match op {
-            ComputationalOp::SubmitTask {
-                task_id,
-                spec,
-                reward,
-            } => {
+            ComputationalOp::SubmitTask { task_id, spec, reward } => {
                 if self.tasks.contains_key(task_id) {
-                    return Err(ShardError::StateConflict(format!(
-                        "Task already exists: {task_id:?}"
-                    )));
+                    return Err(ShardError::StateConflict(format!("Task already exists: {task_id:?}")));
                 }
                 self.tasks.insert(
                     *task_id,
@@ -106,9 +98,7 @@ impl ComputationalState {
                     .ok_or_else(|| ShardError::ValidationFailed("Task not found".into()))?;
 
                 if task.status != TaskStatus::Proved {
-                    return Err(ShardError::InvalidOperation(
-                        "Only Proved tasks can be verified".into(),
-                    ));
+                    return Err(ShardError::InvalidOperation("Only Proved tasks can be verified".into()));
                 }
 
                 // In a real implementation, this would invoke a ZK-proof verifier.

@@ -161,9 +161,7 @@ impl EthereumConfig {
     /// Validate the configuration for live mode.
     pub fn validate(&self) -> Result<(), SettlementError> {
         if self.rpc_url.is_empty() {
-            return Err(SettlementError::ConfigError(
-                "RPC URL cannot be empty".to_string(),
-            ));
+            return Err(SettlementError::ConfigError("RPC URL cannot be empty".to_string()));
         }
         if !self.rpc_url.starts_with("ws://")
             && !self.rpc_url.starts_with("wss://")
@@ -247,9 +245,10 @@ impl EthereumLiveClient {
             .parse()
             .map_err(|e| SettlementError::ConfigError(format!("Invalid contract address: {e}")))?;
 
-        let _: PrivateKeySigner = config.operator_private_key.parse().map_err(|e| {
-            SettlementError::ConfigError(format!("Invalid operator private key: {e}"))
-        })?;
+        let _: PrivateKeySigner = config
+            .operator_private_key
+            .parse()
+            .map_err(|e| SettlementError::ConfigError(format!("Invalid operator private key: {e}")))?;
 
         Ok(Self {
             rpc_url: config.rpc_url.clone(),
@@ -356,10 +355,11 @@ impl EthereumLiveClient {
         let provider = self.build_provider().await?;
         let contract = OmniaRollupLegacy::new(self.contract_address, provider);
 
-        let root =
-            contract.stateRoot().call().await.map_err(|e| {
-                SettlementError::ContractError(format!("stateRoot call failed: {e}"))
-            })?;
+        let root = contract
+            .stateRoot()
+            .call()
+            .await
+            .map_err(|e| SettlementError::ContractError(format!("stateRoot call failed: {e}")))?;
 
         Ok(root.0)
     }
@@ -397,11 +397,7 @@ impl EthereumLiveClient {
     }
 
     /// Request a withdrawal from L2 to L1.
-    pub async fn request_withdrawal_live(
-        &self,
-        l2_did: &str,
-        amount: u64,
-    ) -> Result<String, SettlementError> {
+    pub async fn request_withdrawal_live(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         let provider = self.build_provider().await?;
         let contract = OmniaRollupLegacy::new(self.contract_address, provider);
 
@@ -410,9 +406,10 @@ impl EthereumLiveClient {
 
         let builder = contract.requestWithdrawal(l2_did_bytes, U256::from(amount));
 
-        let pending_tx = builder.send().await.map_err(|e| {
-            SettlementError::TxFailed(format!("requestWithdrawal send failed: {e}"))
-        })?;
+        let pending_tx = builder
+            .send()
+            .await
+            .map_err(|e| SettlementError::TxFailed(format!("requestWithdrawal send failed: {e}")))?;
 
         let tx_hash = *pending_tx.tx_hash();
 
@@ -656,11 +653,9 @@ impl SettlementLayer for EthereumAdapter {
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
-                    let state_root: [u8; 32] =
-                        blake3::derive_key("OMNIA-ETH-POST-BATCH-STATE", batch_data);
+                    let state_root: [u8; 32] = blake3::derive_key("OMNIA-ETH-POST-BATCH-STATE", batch_data);
                     let prev_state_root = self.latest_root;
-                    let batch_merkle_root =
-                        blake3::derive_key("OMNIA-ETH-POST-BATCH-MERKLE", batch_data);
+                    let batch_merkle_root = blake3::derive_key("OMNIA-ETH-POST-BATCH-MERKLE", batch_data);
 
                     let bundle = ProofBundle::new(
                         prev_state_root,
@@ -682,9 +677,7 @@ impl SettlementLayer for EthereumAdapter {
 
                 #[cfg(feature = "ethereum-live")]
                 {
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
@@ -715,9 +708,7 @@ impl SettlementLayer for EthereumAdapter {
                 #[cfg(feature = "ethereum-live")]
                 {
                     let _ = (old_root, new_root, proof);
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
@@ -741,9 +732,7 @@ impl SettlementLayer for EthereumAdapter {
 
                 #[cfg(feature = "ethereum-live")]
                 {
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
@@ -767,19 +756,13 @@ impl SettlementLayer for EthereumAdapter {
 
                 #[cfg(feature = "ethereum-live")]
                 {
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
     }
 
-    async fn request_withdrawal(
-        &self,
-        l2_did: &str,
-        amount: u64,
-    ) -> Result<String, SettlementError> {
+    async fn request_withdrawal(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError> {
         match self.mode {
             EthereumMode::Simulated => Ok(format!("0xwithdraw_{l2_did}_{amount}")),
             EthereumMode::Live => {
@@ -797,9 +780,7 @@ impl SettlementLayer for EthereumAdapter {
 
                 #[cfg(feature = "ethereum-live")]
                 {
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
@@ -831,9 +812,7 @@ impl SettlementLayer for EthereumAdapter {
                 #[cfg(feature = "ethereum-live")]
                 {
                     let _ = bundle;
-                    Err(SettlementError::ConfigError(
-                        "Live client not initialized".to_string(),
-                    ))
+                    Err(SettlementError::ConfigError("Live client not initialized".to_string()))
                 }
             }
         }
@@ -859,10 +838,7 @@ mod tests {
     fn test_ethereum_config_default() {
         let config = EthereumConfig::default();
         assert_eq!(config.rpc_url, "http://localhost:8545");
-        assert_eq!(
-            config.contract_address,
-            "0x0000000000000000000000000000000000000000"
-        );
+        assert_eq!(config.contract_address, "0x0000000000000000000000000000000000000000");
     }
 
     #[test]
@@ -888,8 +864,7 @@ mod tests {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
             contract_address: "0x0000000000000000000000000000000000000000".to_string(),
-            operator_private_key:
-                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
+            operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
             ..Default::default()
         };
         assert!(config.validate().is_ok());
@@ -905,14 +880,8 @@ mod tests {
     #[tokio::test]
     async fn test_ethereum_simulated_verify_proof() {
         let adapter = EthereumAdapter::new("http://localhost:8545", "0x1234", &[0u8; 32]);
-        assert!(adapter
-            .verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA])
-            .await
-            .unwrap());
-        assert!(!adapter
-            .verify_proof(&[0u8; 32], &[1u8; 32], &[])
-            .await
-            .unwrap());
+        assert!(adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA]).await.unwrap());
+        assert!(!adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[]).await.unwrap());
     }
 
     #[tokio::test]

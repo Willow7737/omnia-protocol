@@ -252,10 +252,7 @@ mod tests {
         assert_eq!(restored.transition_proof, bundle.transition_proof);
         assert_eq!(restored.batch_merkle_root, bundle.batch_merkle_root);
         assert_eq!(restored.l1_anchor.chain_id, bundle.l1_anchor.chain_id);
-        assert_eq!(
-            restored.l1_anchor.block_height,
-            bundle.l1_anchor.block_height
-        );
+        assert_eq!(restored.l1_anchor.block_height, bundle.l1_anchor.block_height);
         assert_eq!(restored.l1_anchor.timestamp, bundle.l1_anchor.timestamp);
     }
 

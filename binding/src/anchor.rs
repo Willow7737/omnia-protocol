@@ -144,11 +144,7 @@ mod tests {
         QuantumCommitment::sign_classical(data, kp).unwrap()
     }
 
-    fn test_commitment_with_vc(
-        data: &[u8],
-        kp: &NodeKeypair,
-        _vc: &VectorClock,
-    ) -> QuantumCommitment {
+    fn test_commitment_with_vc(data: &[u8], kp: &NodeKeypair, _vc: &VectorClock) -> QuantumCommitment {
         QuantumCommitment::sign_classical(data, kp).unwrap()
     }
 

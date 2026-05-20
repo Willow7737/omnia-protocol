@@ -35,8 +35,7 @@ use crate::PROTOCOL_IDENTIFIER;
 use crate::PROTOCOL_VERSION;
 use libp2p::{
     gossipsub::{
-        self, IdentTopic, MessageAuthenticity, PeerScoreParams, PeerScoreThresholds,
-        TopicScoreParams, ValidationMode,
+        self, IdentTopic, MessageAuthenticity, PeerScoreParams, PeerScoreThresholds, TopicScoreParams, ValidationMode,
     },
     identity, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
@@ -81,9 +80,7 @@ impl Default for NetworkConfig {
             enable_relay: true,
             enable_dcutr: true,
             enable_tcp_fallback: true,
-            listen_addresses: vec!["/ip4/0.0.0.0/udp/0/quic-v1"
-                .parse()
-                .expect("valid QUIC listen address")],
+            listen_addresses: vec!["/ip4/0.0.0.0/udp/0/quic-v1".parse().expect("valid QUIC listen address")],
         }
     }
 }
@@ -105,9 +102,7 @@ pub struct PeerScoreTracker {
 impl PeerScoreTracker {
     /// Create a new empty peer score tracker.
     pub fn new() -> Self {
-        Self {
-            scores: HashMap::new(),
-        }
+        Self { scores: HashMap::new() }
     }
 
     /// Record a validation result for a peer's message.
@@ -255,14 +250,8 @@ pub fn check_version_compatibility(local: &str, remote: &str) -> VersionCompatib
     let local_parts: Vec<&str> = local.split('.').collect();
     let remote_parts: Vec<&str> = remote.split('.').collect();
 
-    let local_major = local_parts
-        .first()
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(0);
-    let remote_major = remote_parts
-        .first()
-        .and_then(|s| s.parse::<u32>().ok())
-        .unwrap_or(0);
+    let local_major = local_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let remote_major = remote_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
 
     if local_major != remote_major {
         VersionCompatibility::Incompatible {
@@ -366,9 +355,7 @@ pub struct OmniaNetwork {
 impl OmniaNetwork {
     /// Create a new network instance listening on the given address with
     /// default [`NetworkConfig`].
-    pub async fn new(
-        listen_addr: Multiaddr,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(listen_addr: Multiaddr) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         Self::with_config(listen_addr, NetworkConfig::default()).await
     }
 
@@ -420,18 +407,13 @@ impl OmniaNetwork {
                 let local_pid = PeerId::from(key.public());
 
                 // GossipSub with custom peer scoring
-                let mut gossipsub = gossipsub::Behaviour::new(
-                    MessageAuthenticity::Signed(key.clone()),
-                    gossipsub_config,
-                )?;
+                let mut gossipsub =
+                    gossipsub::Behaviour::new(MessageAuthenticity::Signed(key.clone()), gossipsub_config)?;
                 let (score_params, thresholds) = configure_gossipsub_scoring();
                 gossipsub.with_peer_score(score_params, thresholds)?;
 
                 // mDNS for LAN discovery
-                let mdns = libp2p::mdns::tokio::Behaviour::new(
-                    libp2p::mdns::Config::default(),
-                    local_pid,
-                )?;
+                let mdns = libp2p::mdns::tokio::Behaviour::new(libp2p::mdns::Config::default(), local_pid)?;
 
                 // Request-response for sync operations
                 let req_res = libp2p::request_response::cbor::Behaviour::new(
@@ -444,8 +426,7 @@ impl OmniaNetwork {
 
                 // Kademlia DHT for wide-area peer discovery
                 let store = libp2p::kad::store::MemoryStore::new(local_pid);
-                let mut kademlia =
-                    libp2p::kad::Behaviour::with_config(local_pid, store, kademlia_config);
+                let mut kademlia = libp2p::kad::Behaviour::with_config(local_pid, store, kademlia_config);
                 // Add bootstrap peers to the routing table
                 for addr in &bootstrap_peers {
                     if let Some(peer_id) = extract_peer_id_from_multiaddr(addr) {
@@ -469,9 +450,7 @@ impl OmniaNetwork {
                     dcutr,
                 })
             })?
-            .with_swarm_config(|cfg| {
-                cfg.with_idle_connection_timeout(std::time::Duration::from_secs(60))
-            })
+            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(std::time::Duration::from_secs(60)))
             .build();
 
         swarm.listen_on(listen_addr)?;
@@ -486,8 +465,7 @@ impl OmniaNetwork {
         let (event_tx, event_rx) = mpsc::channel(1000);
 
         // Periodic Kademlia bootstrap every 5 minutes
-        let kademlia_bootstrap_interval =
-            tokio::time::interval(std::time::Duration::from_secs(300));
+        let kademlia_bootstrap_interval = tokio::time::interval(std::time::Duration::from_secs(300));
 
         Ok(Self {
             swarm,
@@ -506,11 +484,7 @@ impl OmniaNetwork {
     }
 
     /// Dial a peer at the given address
-    pub fn dial(
-        &mut self,
-        peer_id: PeerId,
-        addr: Multiaddr,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn dial(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let p2p_addr = addr.with(libp2p::multiaddr::Protocol::P2p(peer_id));
         self.swarm.dial(p2p_addr)?;
         Ok(())
@@ -633,16 +607,10 @@ impl OmniaNetwork {
                         // Log DHT query results for monitoring
                         match result {
                             libp2p::kad::QueryResult::GetClosestPeers(Ok(ok)) => {
-                                tracing::debug!(
-                                    "Kademlia closest peers query completed: {} peers",
-                                    ok.peers.len()
-                                );
+                                tracing::debug!("Kademlia closest peers query completed: {} peers", ok.peers.len());
                             }
                             libp2p::kad::QueryResult::Bootstrap(Ok(ok)) => {
-                                tracing::debug!(
-                                    "Kademlia bootstrap completed, remaining: {}",
-                                    ok.num_remaining
-                                );
+                                tracing::debug!("Kademlia bootstrap completed, remaining: {}", ok.num_remaining);
                             }
                             libp2p::kad::QueryResult::GetClosestPeers(Err(e)) => {
                                 tracing::warn!("Kademlia closest peers query failed: {:?}", e);
@@ -664,9 +632,7 @@ impl OmniaNetwork {
                 }
             }
             // AutoNAT event handling — log NAT status changes
-            SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(
-                libp2p::autonat::Event::StatusChanged { old, new },
-            )) => {
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(libp2p::autonat::Event::StatusChanged { old, new })) => {
                 tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
             }
             // DCutr event handling — log direct connection upgrades
@@ -677,16 +643,10 @@ impl OmniaNetwork {
                 tracing::info!("Listening on {}", address);
             }
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                let _ = self
-                    .event_tx
-                    .send(NetworkEvent::PeerConnected(peer_id))
-                    .await;
+                let _ = self.event_tx.send(NetworkEvent::PeerConnected(peer_id)).await;
             }
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                let _ = self
-                    .event_tx
-                    .send(NetworkEvent::PeerDisconnected(peer_id))
-                    .await;
+                let _ = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await;
             }
             _ => {}
         }
@@ -839,8 +799,7 @@ mod tests {
 
     #[test]
     fn test_kademlia_protocol_name() {
-        let protocol = StreamProtocol::try_from_owned("/omnia/kad/1.0.0".to_string())
-            .expect("valid protocol name");
+        let protocol = StreamProtocol::try_from_owned("/omnia/kad/1.0.0".to_string()).expect("valid protocol name");
         assert_eq!(protocol.to_string(), "/omnia/kad/1.0.0");
     }
 
@@ -904,12 +863,8 @@ mod tests {
         let (params, thresholds) = configure_gossipsub_scoring();
 
         // Check that topic scoring is configured for both Omnia topics
-        assert!(params
-            .topics
-            .contains_key(&IdentTopic::new("omnia-events").hash()));
-        assert!(params
-            .topics
-            .contains_key(&IdentTopic::new("omnia-consensus").hash()));
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia-events").hash()));
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia-consensus").hash()));
         assert_eq!(params.app_specific_weight, 10.0);
 
         // Check thresholds
@@ -924,10 +879,7 @@ mod tests {
     fn test_configure_gossipsub_scoring_validates() {
         let (params, thresholds) = configure_gossipsub_scoring();
         assert!(params.validate().is_ok(), "PeerScoreParams should validate");
-        assert!(
-            thresholds.validate().is_ok(),
-            "PeerScoreThresholds should validate"
-        );
+        assert!(thresholds.validate().is_ok(), "PeerScoreThresholds should validate");
     }
 
     #[test]
@@ -942,9 +894,7 @@ mod tests {
         assert_eq!(extracted.unwrap(), peer_id);
 
         // Multiaddr without /p2p suffix
-        let addr_no_p2p: Multiaddr = "/ip4/1.2.3.4/udp/4001/quic-v1"
-            .parse()
-            .expect("valid multiaddr");
+        let addr_no_p2p: Multiaddr = "/ip4/1.2.3.4/udp/4001/quic-v1".parse().expect("valid multiaddr");
         assert!(extract_peer_id_from_multiaddr(&addr_no_p2p).is_none());
     }
 }

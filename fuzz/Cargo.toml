@@ -14,7 +14,7 @@ libfuzzer-sys = "0.4"
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-consensus = { path = "../omnia-consensus" }
 omnia-crypto = { path = "../omnia-crypto" }
-omnia-network = { path = "../omnia-network" }
+omnia-network = { path = "../omnia-network", features = ["network"] }
 omnia-shards = { path = "../shards" }
 omnia-binding = { path = "../binding" }
 omnia-adapters = { path = "../omnia-adapters" }

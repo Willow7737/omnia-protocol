@@ -181,8 +181,7 @@ impl FfiSettlementAdapter {
                 .iter()
                 .position(|&b| b == 0)
                 .unwrap_or(result.error_message.len());
-            let msg = std::str::from_utf8(&result.error_message[..msg_end])
-                .unwrap_or("unknown FFI error");
+            let msg = std::str::from_utf8(&result.error_message[..msg_end]).unwrap_or("unknown FFI error");
             Err(SettlementError::RpcError(format!(
                 "FFI init failed (code {}): {}",
                 result.error_code, msg
@@ -234,11 +233,7 @@ impl SettlementAdapter for FfiSettlementAdapter {
         }
 
         // Flatten siblings into a contiguous byte buffer
-        let sibling_bytes: Vec<u8> = proof
-            .siblings
-            .iter()
-            .flat_map(|s| s.iter().copied())
-            .collect();
+        let sibling_bytes: Vec<u8> = proof.siblings.iter().flat_map(|s| s.iter().copied()).collect();
         let direction_bytes: Vec<u8> = proof.directions.iter().map(|&d| d as u8).collect();
 
         // Safety: sibling_bytes and direction_bytes are valid Vec<u8> buffers

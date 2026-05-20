@@ -41,12 +41,7 @@ pub struct MerkleProof {
 /// Always available (no arkworks dependency).
 pub fn compute_root_from_proof(leaf: &[u8; 32], proof: &MerkleProof) -> [u8; 32] {
     let mut current = *leaf;
-    for (i, (sibling, go_left)) in proof
-        .siblings
-        .iter()
-        .zip(proof.directions.iter())
-        .enumerate()
-    {
+    for (i, (sibling, go_left)) in proof.siblings.iter().zip(proof.directions.iter()).enumerate() {
         if i >= MERKLE_DEPTH {
             break;
         }
@@ -71,10 +66,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
         return ([0u8; 32], vec![]);
     }
 
-    let leaves: Vec<[u8; 32]> = items
-        .iter()
-        .map(|item| *blake3::hash(item).as_bytes())
-        .collect();
+    let leaves: Vec<[u8; 32]> = items.iter().map(|item| *blake3::hash(item).as_bytes()).collect();
 
     let current_level = leaves.clone();
     let mut proofs = Vec::new();
@@ -99,11 +91,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
             let mut i = 0;
             while i < level.len() {
                 let left = level[i];
-                let right = if i + 1 < level.len() {
-                    level[i + 1]
-                } else {
-                    [0u8; 32]
-                };
+                let right = if i + 1 < level.len() { level[i + 1] } else { [0u8; 32] };
                 let mut hasher = blake3::Hasher::new();
                 hasher.update(&left);
                 hasher.update(&right);
@@ -113,10 +101,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
             level = next_level;
             pos /= 2;
         }
-        proofs.push(MerkleProof {
-            siblings,
-            directions,
-        });
+        proofs.push(MerkleProof { siblings, directions });
     }
 
     let mut level = current_level;
@@ -125,11 +110,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
         let mut i = 0;
         while i < level.len() {
             let left = level[i];
-            let right = if i + 1 < level.len() {
-                level[i + 1]
-            } else {
-                [0u8; 32]
-            };
+            let right = if i + 1 < level.len() { level[i + 1] } else { [0u8; 32] };
             let mut hasher = blake3::Hasher::new();
             hasher.update(&left);
             hasher.update(&right);

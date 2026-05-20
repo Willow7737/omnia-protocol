@@ -108,7 +108,7 @@ pub async fn transfer_ubc(
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("Sender DID not registered: {body.from_did}"),
+                "error": format!("Sender DID not registered: {}", body.from_did),
             })),
         ));
     }
@@ -118,7 +118,7 @@ pub async fn transfer_ubc(
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("Recipient DID not registered: {body.to_did}"),
+                "error": format!("Recipient DID not registered: {}", body.to_did),
             })),
         ));
     }

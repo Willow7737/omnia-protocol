@@ -97,9 +97,7 @@ impl VectorClock {
 
     /// Check if all entries in self are <= corresponding entries in other
     fn all_less_equal(&self, other: &Self) -> bool {
-        self.clocks
-            .iter()
-            .all(|(node, &clock)| clock <= other.get(node))
+        self.clocks.iter().all(|(node, &clock)| clock <= other.get(node))
     }
 
     /// Compare this vector clock with another to determine causal ordering
@@ -212,18 +210,14 @@ impl VectorClock {
     /// Deserialize from bytes
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, VectorClockError> {
         if bytes.len() < 4 {
-            return Err(VectorClockError::InvalidNodeId(
-                "insufficient bytes".to_string(),
-            ));
+            return Err(VectorClockError::InvalidNodeId("insufficient bytes".to_string()));
         }
         let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
         let mut clocks = BTreeMap::new();
         let mut offset = 4;
         for _ in 0..count {
             if offset + 40 > bytes.len() {
-                return Err(VectorClockError::InvalidNodeId(
-                    "truncated entry".to_string(),
-                ));
+                return Err(VectorClockError::InvalidNodeId("truncated entry".to_string()));
             }
             let mut node_id = [0u8; 32];
             node_id.copy_from_slice(&bytes[offset..offset + 32]);

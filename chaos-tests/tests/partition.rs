@@ -24,10 +24,7 @@ fn test_partition_and_heal() {
         network.check_liveness(),
         "Network should have committed genesis events after construction"
     );
-    assert!(
-        network.check_safety(),
-        "No conflicting commits should exist initially"
-    );
+    assert!(network.check_safety(), "No conflicting commits should exist initially");
 
     let committed_before = network.committed_count();
     assert!(
@@ -57,10 +54,7 @@ fn test_partition_and_heal() {
     }
 
     // Safety should be maintained during partition
-    assert!(
-        network.check_safety(),
-        "Safety should be maintained during partition"
-    );
+    assert!(network.check_safety(), "Safety should be maintained during partition");
 
     // Heal the partition
     network.heal();
@@ -69,16 +63,10 @@ fn test_partition_and_heal() {
     network.advance(3);
 
     // After healing and advancing, safety should still hold
-    assert!(
-        network.check_safety(),
-        "Safety should be maintained after healing"
-    );
+    assert!(network.check_safety(), "Safety should be maintained after healing");
 
     // Liveness should be confirmed
-    assert!(
-        network.check_liveness(),
-        "Network should be live after healing"
-    );
+    assert!(network.check_liveness(), "Network should be live after healing");
 
     // All nodes should have events in their graphs
     for i in 0..4 {
@@ -128,10 +116,7 @@ fn test_overlapping_partitions() {
         let _ = network.submit_event(i, vec![2]);
     }
 
-    assert!(
-        network.check_safety(),
-        "Safety should hold with overlapping partitions"
-    );
+    assert!(network.check_safety(), "Safety should hold with overlapping partitions");
 
     // Heal everything
     network.heal();

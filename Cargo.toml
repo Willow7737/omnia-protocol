@@ -22,7 +22,7 @@ edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"
 repository = "https://github.com/Willow7737/omnia-protocol"
-rust-version = "1.88"
+rust-version = "1.91.0"
 
 [workspace.dependencies]
 # bincode 1.x for legacy wire format deserialization (v0 fallback)

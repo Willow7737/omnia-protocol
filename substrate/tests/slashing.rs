@@ -6,9 +6,8 @@
 //! penalized, and that slashed nodes are rejected.
 
 use omnia_substrate::{
-    generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, ConsensusError, Event,
-    SlashOffense, SlashOutcome, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
-    DEFAULT_SLASH_THRESHOLD,
+    generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, ConsensusError, Event, SlashOffense, SlashOutcome,
+    SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 
 /// Helper: create a `NodeId` from a single byte.

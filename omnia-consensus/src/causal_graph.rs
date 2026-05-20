@@ -221,16 +221,12 @@ impl CausalGraph {
         // Check for cycles
         if let Some(sp) = event.self_parent {
             if self.is_ancestor_of(&event_id, &sp)? {
-                return Err(CausalGraphError::CycleDetected(
-                    hex::encode(&event_id[..8]).to_string(),
-                ));
+                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
             }
         }
         if let Some(op) = event.other_parent {
             if self.is_ancestor_of(&event_id, &op)? {
-                return Err(CausalGraphError::CycleDetected(
-                    hex::encode(&event_id[..8]).to_string(),
-                ));
+                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
             }
         }
 
@@ -243,10 +239,7 @@ impl CausalGraph {
         }
 
         // Update creator index
-        self.by_creator
-            .entry(event.creator)
-            .or_default()
-            .push(event_id);
+        self.by_creator.entry(event.creator).or_default().push(event_id);
 
         // Update node sequence tracking
         let current_seq = self.node_sequences.entry(event.creator).or_insert(0);
@@ -378,11 +371,7 @@ impl CausalGraph {
     /// Returns `EventPruned` if any event on the path between `descendant`
     /// and `ancestor` has been pruned, since the parent links cannot be
     /// followed through pruned events.
-    pub fn is_ancestor_of(
-        &self,
-        descendant: &EventId,
-        ancestor: &EventId,
-    ) -> Result<bool, CausalGraphError> {
+    pub fn is_ancestor_of(&self, descendant: &EventId, ancestor: &EventId) -> Result<bool, CausalGraphError> {
         if descendant == ancestor {
             return Ok(false);
         }
@@ -525,9 +514,7 @@ impl CausalGraph {
 
         self.events
             .values()
-            .filter(|other| {
-                other.id != *event_id && other.vector_clock.concurrent(&event.vector_clock)
-            })
+            .filter(|other| other.id != *event_id && other.vector_clock.concurrent(&event.vector_clock))
             .collect()
     }
 
@@ -539,10 +526,7 @@ impl CausalGraph {
     /// children) cannot be guaranteed because the pruned parent edge is
     /// invisible to Kahn's algorithm, causing the child's in-degree to be
     /// under-counted.
-    pub fn topological_order(
-        &self,
-        start_from: Option<&VectorClock>,
-    ) -> Result<Vec<EventId>, CausalGraphError> {
+    pub fn topological_order(&self, start_from: Option<&VectorClock>) -> Result<Vec<EventId>, CausalGraphError> {
         let relevant_events: Vec<&Event> = match start_from {
             Some(vc) => self
                 .events
@@ -556,9 +540,7 @@ impl CausalGraph {
         for event in &relevant_events {
             for parent_id in [event.self_parent, event.other_parent].iter().flatten() {
                 // If the parent is not in self.events, check if it was pruned
-                if !self.events.contains_key(parent_id)
-                    && self.pruned_events.contains_key(parent_id)
-                {
+                if !self.events.contains_key(parent_id) && self.pruned_events.contains_key(parent_id) {
                     return Err(CausalGraphError::EventPruned(hex::encode(&parent_id[..8])));
                 }
                 // If not in events and not in pruned_events, it's a missing parent
@@ -602,10 +584,7 @@ impl CausalGraph {
                     hex::encode(&b[..8])
                 )
             });
-            event_a
-                .timestamp
-                .cmp(&event_b.timestamp)
-                .then_with(|| a.cmp(b))
+            event_a.timestamp.cmp(&event_b.timestamp).then_with(|| a.cmp(b))
         });
         queue = VecDeque::from(queue_vec);
 
@@ -641,10 +620,7 @@ impl CausalGraph {
     ///
     /// References to events not in `known_events`.
     pub fn diff(&self, known_events: &HashSet<EventId>) -> Vec<&Event> {
-        self.events
-            .values()
-            .filter(|e| !known_events.contains(&e.id))
-            .collect()
+        self.events.values().filter(|e| !known_events.contains(&e.id)).collect()
     }
 
     /// Find events newer than a given vector clock.
@@ -693,11 +669,7 @@ impl CausalGraph {
     ///
     /// Returns [`CausalGraphError::InvalidEvent`] if the event is not found.
     /// Returns [`CausalGraphError::EventPruned`] if the event has been pruned.
-    pub fn finalize_event_with_round(
-        &mut self,
-        event_id: &EventId,
-        round: u64,
-    ) -> Result<(), CausalGraphError> {
+    pub fn finalize_event_with_round(&mut self, event_id: &EventId, round: u64) -> Result<(), CausalGraphError> {
         if self.pruned_events.contains_key(event_id) {
             return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
         }
@@ -913,11 +885,7 @@ impl CausalGraph {
     /// let pruned = graph.prune_finalized(current_round, 1000);
     /// tracing::info!(pruned, "pruned old finalized events");
     /// ```
-    pub fn prune_finalized(
-        &mut self,
-        current_round: u64,
-        depth: u64,
-    ) -> Result<usize, CausalGraphError> {
+    pub fn prune_finalized(&mut self, current_round: u64, depth: u64) -> Result<usize, CausalGraphError> {
         // Archive mode: never prune
         if depth == 0 {
             return Ok(0);
@@ -980,12 +948,7 @@ impl CausalGraph {
         self.finalized_count = self.finalized_count.saturating_sub(pruned_count);
 
         if pruned_count > 0 {
-            tracing::debug!(
-                pruned_count,
-                current_round,
-                cutoff_round,
-                "pruned finalized events"
-            );
+            tracing::debug!(pruned_count, current_round, cutoff_round, "pruned finalized events");
         }
 
         // Evict oldest pruned_events entries if we exceeded the bound
@@ -1005,11 +968,7 @@ impl CausalGraph {
             return;
         }
 
-        let mut tip_events: Vec<&Event> = self
-            .tips
-            .iter()
-            .filter_map(|id| self.events.get(id))
-            .collect();
+        let mut tip_events: Vec<&Event> = self.tips.iter().filter_map(|id| self.events.get(id)).collect();
 
         tip_events.sort_by_key(|e| e.timestamp);
 
@@ -1091,9 +1050,7 @@ impl CausalGraph {
                     ));
                 }
                 if !visited.insert(current) {
-                    return Err(CausalGraphError::IntegrityError(
-                        "cycle found in graph".to_string(),
-                    ));
+                    return Err(CausalGraphError::IntegrityError("cycle found in graph".to_string()));
                 }
                 match self.get_checked(&current) {
                     Ok(event) => {
@@ -1224,10 +1181,7 @@ mod tests {
         event.sign_with_keypair(&kp);
 
         graph.insert(event.clone()).unwrap();
-        assert!(matches!(
-            graph.insert(event),
-            Err(CausalGraphError::DuplicateEvent(_))
-        ));
+        assert!(matches!(graph.insert(event), Err(CausalGraphError::DuplicateEvent(_))));
     }
 
     #[test]
@@ -1236,19 +1190,9 @@ mod tests {
         let n1 = test_node(1);
 
         let fake_parent = [99u8; 32];
-        let event = Event::new(
-            n1,
-            1,
-            VectorClock::with_node(n1, 2),
-            Some(fake_parent),
-            None,
-            vec![],
-        );
+        let event = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(fake_parent), None, vec![]);
 
-        assert!(matches!(
-            graph.insert(event),
-            Err(CausalGraphError::MissingParent(_))
-        ));
+        assert!(matches!(graph.insert(event), Err(CausalGraphError::MissingParent(_))));
     }
 
     #[test]
@@ -1313,14 +1257,7 @@ mod tests {
         graph.insert(e1).unwrap();
         assert!(graph.tips().any(|&t| t == e1_id));
 
-        let mut e2 = Event::new(
-            n1,
-            1,
-            VectorClock::with_node(n1, 2),
-            Some(e1_id),
-            None,
-            vec![],
-        );
+        let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![]);
         e2.sign_with_keypair(&kp);
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
@@ -1339,26 +1276,12 @@ mod tests {
         let g_id = g.id;
         graph.insert(g).unwrap();
 
-        let mut a = Event::new(
-            n1,
-            1,
-            VectorClock::with_node(n1, 2),
-            Some(g_id),
-            None,
-            vec![],
-        );
+        let mut a = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(g_id), None, vec![]);
         a.sign_with_keypair(&kp);
         let a_id = a.id;
         graph.insert(a).unwrap();
 
-        let mut b = Event::new(
-            n1,
-            2,
-            VectorClock::with_node(n1, 3),
-            Some(a_id),
-            None,
-            vec![],
-        );
+        let mut b = Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(a_id), None, vec![]);
         b.sign_with_keypair(&kp);
         let b_id = b.id;
         graph.insert(b).unwrap();
@@ -1551,11 +1474,7 @@ mod tests {
     }
 
     /// Helper: verify a Merkle proof against a known root.
-    fn verify_merkle_proof(
-        event_id: &EventId,
-        proof: &[([u8; 32], bool)],
-        root: &[u8; 32],
-    ) -> bool {
+    fn verify_merkle_proof(event_id: &EventId, proof: &[([u8; 32], bool)], root: &[u8; 32]) -> bool {
         let leaf = blake3_hash_domain(b"omnia-state-root", event_id);
         let mut current = leaf;
         for (sibling, sibling_is_right) in proof {
@@ -1600,23 +1519,14 @@ mod tests {
         );
 
         // Verify some payloads were actually cleared
-        let _size_before_prune: usize = ids
-            .iter()
-            .map(|id| graph.get(id).unwrap().payload.len())
-            .sum();
+        let _size_before_prune: usize = ids.iter().map(|id| graph.get(id).unwrap().payload.len()).sum();
         // Some events should have empty payloads (pruned) and some shouldn't
         let pruned_count = ids
             .iter()
             .filter(|id| graph.get(id).unwrap().payload.is_empty())
             .count();
-        assert!(
-            pruned_count > 0,
-            "No events were pruned — test is ineffective"
-        );
-        assert!(
-            pruned_count < ids.len(),
-            "All events were pruned — test is ineffective"
-        );
+        assert!(pruned_count > 0, "No events were pruned — test is ineffective");
+        assert!(pruned_count < ids.len(), "All events were pruned — test is ineffective");
     }
 
     /// Test that merkle_proof() still produces valid proofs for events
@@ -1733,14 +1643,7 @@ mod tests {
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
-        let mut e2 = Event::new(
-            n1,
-            1,
-            VectorClock::with_node(n1, 2),
-            Some(e1_id),
-            None,
-            vec![2],
-        );
+        let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![2]);
         e2.sign_with_keypair(&kp);
         let e2_id = e2.id;
         graph.insert(e2).unwrap();

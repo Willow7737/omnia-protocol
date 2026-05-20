@@ -85,15 +85,11 @@ impl RedbNonceStore {
     pub fn open(path: &std::path::Path) -> Result<Self, NonceStoreError> {
         let db = redb::Database::create(path).map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         // Ensure the table exists
-        let write_txn = db
-            .begin_write()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        let write_txn = db.begin_write().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         write_txn
             .open_table(NONCE_TABLE)
             .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
-        write_txn
-            .commit()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn.commit().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         Ok(Self {
             db: std::sync::Arc::new(db),
         })
@@ -104,15 +100,11 @@ impl RedbNonceStore {
     /// This is useful when multiple stores (e.g., slashing + nonces) share
     /// the same database file.
     pub fn from_db(db: std::sync::Arc<redb::Database>) -> Result<Self, NonceStoreError> {
-        let write_txn = db
-            .begin_write()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        let write_txn = db.begin_write().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         write_txn
             .open_table(NONCE_TABLE)
             .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
-        write_txn
-            .commit()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn.commit().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         Ok(Self { db })
     }
 }
@@ -120,10 +112,7 @@ impl RedbNonceStore {
 impl NonceStore for RedbNonceStore {
     fn load(&self) -> Result<HashMap<[u8; 32], u64>, NonceStoreError> {
         let mut nonces = HashMap::new();
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        let read_txn = self.db.begin_read().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         let table = read_txn
             .open_table(NONCE_TABLE)
             .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
@@ -161,16 +150,13 @@ impl NonceStore for RedbNonceStore {
 
             // Insert all entries
             for (key, &nonce) in nonces {
-                let value = postcard::to_allocvec(&nonce)
-                    .map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
+                let value = postcard::to_allocvec(&nonce).map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
                 table
                     .insert(key.as_slice(), value.as_slice())
                     .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
             }
         }
-        write_txn
-            .commit()
-            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        write_txn.commit().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         Ok(())
     }
 }

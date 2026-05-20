@@ -106,10 +106,7 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/events", post(events::submit_event))
         .route("/events/:id", get(events::get_event))
         // Shard operations
-        .route(
-            "/shards/:shard_id/operations",
-            post(shards::submit_shard_operation),
-        )
+        .route("/shards/:shard_id/operations", post(shards::submit_shard_operation))
         // Governance
         .route("/governance/proposals", post(governance::create_proposal))
         .route("/governance/vote", post(governance::cast_vote))

@@ -40,7 +40,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum SlashingUndoError {
     /// The rate limit for undos on this validator has been exceeded.
-    #[error("rate limit: last undo for validator {.validator_prefix:?} was at round {last_round}, current round {current_round}, minimum interval {min_interval}", last_round = last_round, current_round = current_round, min_interval = min_interval)]
+    #[error("rate limit: last undo for validator {validator_prefix:?} was at round {last_round}, current round {current_round}, minimum interval {min_interval}", last_round = last_round, current_round = current_round, min_interval = min_interval)]
     RateLimitExceeded {
         /// First 4 bytes of the validator ID (for display).
         validator_prefix: [u8; 4],
@@ -52,7 +52,7 @@ pub enum SlashingUndoError {
         min_interval: u64,
     },
     /// The validator has no offense history to undo.
-    #[error("validator {.0:?} has no offense history to undo"])
+    #[error("validator {prefix:?} has no offense history to undo", prefix = .0)]
     NoOffenseHistory([u8; 4]),
     /// The underlying slashing engine failed to undo the slash.
     #[error("slashing undo failed: {0}")]
@@ -239,8 +239,7 @@ impl SlashingUndoManager {
         };
 
         // Update rate-limiting state
-        self.last_undo_round
-            .insert(request.validator_id, current_round);
+        self.last_undo_round.insert(request.validator_id, current_round);
 
         // Record in audit log
         self.audit_log.push(record.clone());
@@ -325,8 +324,7 @@ mod tests {
 
     #[test]
     fn test_undo_liveness_violation() {
-        let mut slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::new();
 
         let n = node(1);
@@ -346,8 +344,7 @@ mod tests {
 
     #[test]
     fn test_undo_equivocation() {
-        let mut slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::new();
 
         let n = node(2);
@@ -364,8 +361,7 @@ mod tests {
 
     #[test]
     fn test_undo_rate_limit() {
-        let mut slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::with_interval(100);
 
         let n = node(3);
@@ -402,8 +398,7 @@ mod tests {
 
     #[test]
     fn test_undo_no_slash_points() {
-        let mut slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::new();
 
         let n = node(5);
@@ -417,8 +412,7 @@ mod tests {
 
     #[test]
     fn test_audit_log() {
-        let mut slashing =
-            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+        let mut slashing = SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
         let mut undo_mgr = SlashingUndoManager::new();
 
         let n1 = node(10);
@@ -503,8 +497,7 @@ mod tests {
 
     #[test]
     fn test_slashing_undo_error_from_slashing_store_error() {
-        let store_err =
-            crate::slashing::SlashingStoreError::Serialization("serde fail".to_string());
+        let store_err = crate::slashing::SlashingStoreError::Serialization("serde fail".to_string());
         let undo_err: SlashingUndoError = store_err.into();
         assert!(matches!(undo_err, SlashingUndoError::UndoFailed(_)));
     }

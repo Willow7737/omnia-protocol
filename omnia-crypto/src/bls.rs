@@ -252,8 +252,7 @@ impl BlsPublicKey {
             )));
         }
 
-        let pk = BlstPublicKey::from_bytes(bytes)
-            .map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
+        let pk = BlstPublicKey::from_bytes(bytes).map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
 
         // Validate the public key (group check)
         pk.validate()
@@ -298,11 +297,9 @@ impl BlsPublicKey {
     /// pk.verify(b"hello", &sig)?;
     /// ```
     pub fn verify(&self, message: &[u8], signature: &BlsSignature) -> Result<(), BlsError> {
-        let pk = BlstPublicKey::from_bytes(&self.0)
-            .map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
+        let pk = BlstPublicKey::from_bytes(&self.0).map_err(|e| BlsError::InvalidPublicKey(format!("{e:?}")))?;
 
-        let sig = BlstSignature::from_bytes(&signature.0)
-            .map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
+        let sig = BlstSignature::from_bytes(&signature.0).map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
 
         let result = sig.verify(true, message, BLS_DST, &[], &pk, false);
 
@@ -338,8 +335,7 @@ impl BlsSignature {
         }
 
         // Validate by attempting to deserialize
-        let _sig = BlstSignature::from_bytes(bytes)
-            .map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
+        let _sig = BlstSignature::from_bytes(bytes).map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
 
         Ok(BlsSignature(bytes.to_vec()))
     }
@@ -665,8 +661,7 @@ mod tests {
         let sig2 = kp2.sign(msg);
         let sig3 = kp3.sign(msg);
 
-        let agg_sig =
-            aggregate_signatures(&[sig1, sig2, sig3]).expect("aggregation should succeed");
+        let agg_sig = aggregate_signatures(&[sig1, sig2, sig3]).expect("aggregation should succeed");
         assert_eq!(agg_sig.0.len(), SIGNATURE_SIZE);
     }
 
@@ -675,8 +670,7 @@ mod tests {
         let kp1 = BlsKeypair::generate(&[11u8; 32]).unwrap();
         let kp2 = BlsKeypair::generate(&[22u8; 32]).unwrap();
 
-        let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()])
-            .expect("aggregation should succeed");
+        let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()]).expect("aggregation should succeed");
         assert_eq!(agg_pk.0.len(), PUBLIC_KEY_SIZE);
     }
 
@@ -691,8 +685,7 @@ mod tests {
         let sig2 = kp2.sign(msg);
         let sig3 = kp3.sign(msg);
 
-        let agg_sig =
-            aggregate_signatures(&[sig1, sig2, sig3]).expect("sig aggregation should succeed");
+        let agg_sig = aggregate_signatures(&[sig1, sig2, sig3]).expect("sig aggregation should succeed");
         let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key(), kp3.public_key()])
             .expect("pk aggregation should succeed");
 
@@ -703,10 +696,7 @@ mod tests {
     fn test_bls_aggregate_empty_fails() {
         let result = aggregate_signatures(&[]);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            BlsError::AggregationFailed(_)
-        ));
+        assert!(matches!(result.unwrap_err(), BlsError::AggregationFailed(_)));
 
         let result = aggregate_public_keys(&[]);
         assert!(result.is_err());
@@ -718,8 +708,7 @@ mod tests {
         let msg = b"single signer";
         let sig = kp.sign(msg);
 
-        let agg_sig =
-            aggregate_signatures(std::slice::from_ref(&sig)).expect("single sig aggregation");
+        let agg_sig = aggregate_signatures(std::slice::from_ref(&sig)).expect("single sig aggregation");
         let agg_pk = aggregate_public_keys(&[kp.public_key()]).expect("single pk aggregation");
 
         verify_aggregate(msg, &agg_pk, &agg_sig).expect("single aggregate should verify");
@@ -765,8 +754,7 @@ mod tests {
         let sig2 = kp2.sign(b"message two");
 
         let agg_sig = aggregate_signatures(&[sig1, sig2]).expect("aggregation should succeed");
-        let agg_pk =
-            aggregate_public_keys(&[kp1.public_key(), kp2.public_key()]).expect("pk aggregation");
+        let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()]).expect("pk aggregation");
 
         // Aggregate verify against a single message should fail
         // because the signers signed different messages

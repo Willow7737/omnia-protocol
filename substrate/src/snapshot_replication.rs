@@ -85,9 +85,7 @@ impl ReplicationConfig {
     ///
     /// Used by [`find_latest_snapshot`] as the default search location.
     pub fn primary_dir(&self) -> &PathBuf {
-        self.replica_dirs
-            .first()
-            .expect("replica_dirs must not be empty")
+        self.replica_dirs.first().expect("replica_dirs must not be empty")
     }
 }
 
@@ -116,10 +114,7 @@ impl ReplicationConfig {
 /// let config = ReplicationConfig::new(PathBuf::from("./data/snapshots"));
 /// let path = replicate_snapshot(&snapshot, &config)?;
 /// ```
-pub fn replicate_snapshot(
-    snapshot: &StateSnapshot,
-    config: &ReplicationConfig,
-) -> Result<PathBuf, SnapshotError> {
+pub fn replicate_snapshot(snapshot: &StateSnapshot, config: &ReplicationConfig) -> Result<PathBuf, SnapshotError> {
     // Verify integrity before writing (if configured)
     if config.verify_on_import {
         snapshot.verify()?;
@@ -134,7 +129,7 @@ pub fn replicate_snapshot(
         }
 
         // Write snapshot to file
-        let filename = format!("snapshot-{snapshot.height}.bin");
+        let filename = format!("snapshot-{}.bin", snapshot.height);
         let path = dir.join(&filename);
         snapshot.write_to_file(&path)?;
 
@@ -185,9 +180,7 @@ pub fn replicate_snapshot(
 ///     println!("Latest snapshot at height {}", snapshot.height);
 /// }
 /// ```
-pub fn find_latest_snapshot(
-    config: &ReplicationConfig,
-) -> Result<Option<StateSnapshot>, SnapshotError> {
+pub fn find_latest_snapshot(config: &ReplicationConfig) -> Result<Option<StateSnapshot>, SnapshotError> {
     for dir in &config.replica_dirs {
         if let Some(snapshot) = find_latest_in_dir(dir, config.verify_on_import)? {
             return Ok(Some(snapshot));
@@ -269,11 +262,7 @@ fn prune_old_snapshots(dir: &PathBuf, max_snapshots: usize) -> Result<(), Snapsh
             let path = entry.path();
             let filename = path.file_name()?.to_str()?;
             // Parse "snapshot-{height}.bin"
-            let height: u64 = filename
-                .strip_prefix("snapshot-")?
-                .strip_suffix(".bin")?
-                .parse()
-                .ok()?;
+            let height: u64 = filename.strip_prefix("snapshot-")?.strip_suffix(".bin")?.parse().ok()?;
             Some((height, path))
         })
         .collect();
@@ -404,10 +393,7 @@ mod tests {
         }
 
         // Only the 2 newest should remain
-        let files: Vec<_> = std::fs::read_dir(tmp.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .collect();
+        let files: Vec<_> = std::fs::read_dir(tmp.path()).unwrap().filter_map(|e| e.ok()).collect();
         assert_eq!(files.len(), 2);
 
         // The latest should be the highest
@@ -432,12 +418,8 @@ mod tests {
         assert!(path.exists());
 
         // Both dirs should have the snapshot
-        let found1 = find_latest_in_dir(&tmp1.path().to_path_buf(), true)
-            .unwrap()
-            .unwrap();
-        let found2 = find_latest_in_dir(&tmp2.path().to_path_buf(), true)
-            .unwrap()
-            .unwrap();
+        let found1 = find_latest_in_dir(&tmp1.path().to_path_buf(), true).unwrap().unwrap();
+        let found2 = find_latest_in_dir(&tmp2.path().to_path_buf(), true).unwrap().unwrap();
         assert_eq!(found1.height, 100);
         assert_eq!(found2.height, 100);
     }
