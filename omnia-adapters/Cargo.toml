@@ -12,7 +12,7 @@ rust-version = { workspace = true }
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-crypto = { path = "../omnia-crypto" }
 omnia-consensus = { path = "../omnia-consensus" }
-# ZK deps (feature-gated)
+# ZK deps (feature-gated: arkworks)
 ark-relations = { version = "0.4", optional = true }
 ark-r1cs-std = { version = "0.4", optional = true }
 ark-groth16 = { version = "0.4", optional = true }
@@ -30,26 +30,35 @@ alloy = { version = "1", optional = true, features = [
     "provider-ws", "provider-http", "signers", "signer-local",
     "contract", "network", "essentials",
 ] }
-# Common
+# Common (always available)
 async-trait = "0.1"
-tokio = { version = "1.35", features = ["sync", "macros", "rt"] }
+tokio = { version = "1.35", features = ["sync", "macros", "rt", "time"] }
 blake3 = "1.5"
 thiserror = "2.0"
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 postcard = { version = "1", features = ["alloc"] }
-rand = "0.8"
-rand_chacha = "0.3"
+rand = { version = "0.8", optional = true }
+rand_chacha = { version = "0.3", optional = true }
 hex = "0.4"
 subtle = "2"
 
 [features]
 default = []
-arkworks = ["dep:ark-ff", "dep:ark-ec", "dep:ark-serialize", "dep:ark-groth16", "dep:ark-bn254", "dep:ark-relations", "dep:ark-r1cs-std", "dep:ark-snark", "dep:ark-crypto-primitives"]
+arkworks = [
+    "dep:ark-ff", "dep:ark-ec", "dep:ark-serialize", "dep:ark-groth16",
+    "dep:ark-bn254", "dep:ark-relations", "dep:ark-r1cs-std", "dep:ark-snark",
+    "dep:ark-crypto-primitives", "dep:rand", "dep:rand_chacha",
+]
 ethereum-live = ["dep:alloy"]
+settlement-ffi = []
 cosmos = []
 ceremony = []
+
+[build-dependencies]
+rustc_version = "0.4"
+semver = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"
