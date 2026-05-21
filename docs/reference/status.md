@@ -1,7 +1,7 @@
 # Requirements and Status
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-05-21
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -141,28 +141,19 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-P4.8** | VRF Spec Compliance (ADR-012) | P2 | 📋 Deferred |
 | **REQ-P4.9** | Poseidon Parameter Migration (ADR-014) | P2 | 📋 Deferred |
 
-## 12. Sprint 4: Push to 9
+## 12. Phase 4: Mainnet Readiness
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
-| **REQ-8.1** | Creator ↔ Pubkey Binding (blake3) | P0 | ✅ Completed |
-| **REQ-8.2** | Payload Size Limits (1 MiB default) | P0 | ✅ Completed |
-| **REQ-8.3** | Gossip Rate Limiting (token-bucket) | P1 | ✅ Completed |
-| **REQ-8.4** | Nonce Persistence (redb) | P1 | ✅ Completed |
-| **REQ-8.5** | TLA+ Agreement Fix + Liveness | P0 | ✅ Completed |
-| **REQ-8.6** | Poseidon Hash in ZK Circuit | P0 | ✅ Completed |
-| **REQ-8.7** | Snapshot Sync | P1 | ✅ Completed |
-| **REQ-8.8** | Event Pruning (prune_finalized) | P1 | ✅ Completed |
-| **REQ-8.9** | CRDT Convergence Formal Proof (TLA+) | P2 | ✅ Completed |
-| **REQ-8.10** | Trusted Setup Ceremony (Powers of Tau) | P1 | ✅ Completed |
-| **REQ-8.11** | VRF Leader Selection (ECVRF) | P1 | ✅ Completed |
-| **REQ-8.12** | BLS Signature Aggregation | P2 | ✅ Completed |
-| **REQ-8.13** | TOML Config File Support | P2 | ✅ Completed |
-| **REQ-8.14** | Validator Key Management (keygen + rotation) | P2 | ✅ Completed |
-| **REQ-8.15** | Grafana Dashboards + Alert Rules | P2 | ✅ Completed |
-| **REQ-8.16** | Side-Channel Resistance Audit | P2 | ✅ Completed |
-| **REQ-8.17** | Operations Runbook | P2 | ✅ Completed |
-| **REQ-8.18** | Rolling Upgrade Strategy | P2 | ✅ Completed |
+| **REQ-P4.1** | Real Ethereum Settlement with Alloy | P1 | ✅ Completed |
+| **REQ-P4.2** | Gradual Slashing Implementation (ADR-011) | P0 | ✅ Completed |
+| **REQ-P4.3** | Migrate pqc_kyber → ml-kem (FIPS-203) | P0 | ✅ Completed |
+| **REQ-P4.4** | Fast-Sync P2P Automation | P1 | ✅ Completed |
+| **REQ-P4.5** | Separate Liveness and Readiness Probes | P2 | ✅ Completed |
+| **REQ-P4.6** | Multi-party Trusted Setup Ceremony Automation | P1 | ✅ Completed |
+| **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2 | ✅ Completed |
+| **REQ-P4.8** | Load Testing Baseline Capture | P2 | ✅ Completed |
+| **REQ-P4.9** | Supply Chain Hardening (cargo-vet, cargo-deny, SBOM) | P2 | ✅ Completed |
 
 ---
 
@@ -180,9 +171,9 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Sprint 3** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Sprint 4** | 18 | 18 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **Phase 4** | 9 | 1 | 0 | 3 | 2 | 3 | █░░░░░░░░░ 17% |
+| **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **TOTAL** | **99** | **85** | **0** | **4** | **6** | **3** | ████████░░ 89% |
+| **TOTAL** | **108** | **93** | **0** | **1** | **4** | **2** | █████████░ 92% |
 
 ---
 *Legend:*

@@ -9,15 +9,41 @@ Phase 0 implements the ZK-rollup settlement layer, providing a settlement-agnost
 
 ## Settlement-Agnostic Architecture
 
-The `SettlementLayer` trait (`omnia-adapters/src/settlement/mod.rs`) defines the interface for all settlement adapters:
+The protocol provides **two** settlement trait hierarchies:
+
+### New: `SettlementAdapter` (hybrid architecture)
+
+The `SettlementAdapter` trait (`omnia-adapters/src/settlement/mod.rs`) is the primary trait for the hybrid settlement architecture. Core protocol depends ONLY on this trait — zero alloy, zero MSRV conflict:
 
 ```rust
-pub trait SettlementLayer {
-    fn post_batch(&self, batch: &RollupBatch) -> Result<SettlementReceipt, SettlementError>;
-    fn verify_proof(&self, receipt: &SettlementReceipt) -> Result<bool, SettlementError>;
-    fn latest_state_root(&self) -> Result<[u8; 32], SettlementError>;
-    fn deposit(&self, deposit: &Deposit) -> Result<DepositReceipt, SettlementError>;
-    fn request_withdrawal(&self, withdrawal: &Withdrawal) -> Result<WithdrawalReceipt, SettlementError>;
+#[async_trait]
+pub trait SettlementAdapter: Send + Sync {
+    async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError>;
+    async fn fetch_finality(&self, tx: TxHash) -> Result<FinalityProof, SettlementError>;
+    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError>;
+    fn is_live(&self) -> bool { false }
+}
+```
+
+Implementations:
+- **MockSettlementAdapter** — always available, deterministic BLAKE3-based responses
+- **EthereumSettlementAdapter** — feature-gated behind `ethereum-live`, real RPC via Alloy
+- **FfiSettlementAdapter** — feature-gated behind `settlement-ffi`, C library integration
+
+### Legacy: `SettlementLayer` (backward-compatible)
+
+The original `SettlementLayer` trait with full adapter methods (post_batch, verify_proof, deposit, withdrawal, etc.). Existing code using this trait continues to work unchanged.
+
+```rust
+#[async_trait]
+pub trait SettlementLayer: Send + Sync {
+    fn chain_id(&self) -> &'static str;
+    async fn post_batch(&self, batch_data: &[u8]) -> Result<String, SettlementError>;
+    async fn verify_proof(&self, old_root: &[u8; 32], new_root: &[u8; 32], proof: &[u8]) -> Result<bool, SettlementError>;
+    async fn latest_state_root(&self) -> Result<[u8; 32], SettlementError>;
+    async fn deposit(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError>;
+    async fn request_withdrawal(&self, l2_did: &str, amount: u64) -> Result<String, SettlementError>;
+    async fn submit_batch(&self, bundle: &ProofBundle) -> Result<String, SettlementError>;
 }
 ```
 

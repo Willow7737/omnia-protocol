@@ -7,9 +7,9 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-300%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-800%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Rust-stable-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
@@ -77,15 +77,21 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 | Crate | Purpose | Tests | Status |
 |-------|---------|-------|--------|
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 144+ | ✅ |
-| `shards/` | 6 domain shards + cross-shard messaging | 46+ | ✅ |
-| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 26+ | ✅ |
-| `economics/` | UBC token, quota, governance, useful work | 37+ | ✅ |
-| `zk/` | ZK-rollup (arkworks R1CS + Groth16 + Merkle), Ethereum adapter | 25+ | ✅ |
-| `node/` | Binary entrypoint, REST API, health/metrics | ✅ | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ✅ | ✅ |
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 57+ | ✅ |
+| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC | 119+ | ✅ |
+| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs | 178+ | ✅ |
+| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 61+ | ✅ |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 128+ | ✅ |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 36+ | ✅ |
+| `shards/` | 6 domain shards + cross-shard messaging | 62+ | ✅ |
+| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 61+ | ✅ |
+| `economics/` | UBC token, quota, governance, useful work | 58+ | ✅ |
+| `node/` | Binary entrypoint, REST API, health/metrics | 37+ | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ~15 scenarios | ✅ |
+| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
+| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | benchmark suite | ✅ |
 
-**Total: 278+ lib tests + chaos/integration tests, all passing.**
+**Total: 800+ lib tests + integration/chaos/fuzz tests, all passing.**
 
 ---
 
@@ -146,9 +152,10 @@ cargo bench --no-run
 - ⚠️ Stub: Proof-of-useful-work (3 work types defined, not production)
 
 ### Phase 0: ZK-Rollup ✅
-- Settlement-agnostic architecture (`SettlementLayer` trait)
-- Ethereum adapter with Solidity contract (OmniaRollup.sol)
-- Bitcoin, Solana, Celestia stubs
+- Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
+- Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
+- FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
+- Bitcoin, Solana, Celestia, Cosmos stubs
 - L2 operator with batch builder
 - ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
 - ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
@@ -217,6 +224,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - 📋 Production ZK hash gadget (✅ Poseidon already implemented)
 - 📋 Mobile wallet
 - 📋 Conviction voting & delegation
+- 📋 Bitcoin/Solana/Celestia settlement adapters (currently stubs)
 
 ### Phase 2: The Trunk 🔮 Long-term Vision
 *Goal: Decentralization*

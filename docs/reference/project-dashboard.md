@@ -1,18 +1,18 @@
 # Project Dashboard
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-05-21
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
-## Current Project Status: Phase 0 — Complete | Phase 1 — Complete | Phase 2 — Complete | Phase 3 — Complete | Phase 4 — In Progress
+## Current Project Status: Phase 0–4 Complete | Phase 5 Complete | Post-Phase 5 In Progress
 
 | Metric | Value | Status |
 | :--- | :--- | :--- |
-| **Phase** | Phase 4: Production Hardening & Mainnet Preparation | 🔄 In Progress |
-| **Overall Completion** | **97%** | Phase 3 complete; Phase 4 in progress |
+| **Phase** | Post-Phase 5: Mainnet Preparation | 🔄 In Progress |
+| **Overall Completion** | **97%** | Phases 0–5 complete; remaining items are stubs and long-term goals |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 938+ tests passing, 0 production `unwrap()`, 34 typed error enums | Verified |
+| **Code Health** | 800+ tests passing, 0 production `unwrap()`, 34 typed error enums | Verified |
 | **Network Status** | Single-node operator | Phase 0 |
 | **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC | Phase 3 resolved |
 
@@ -42,7 +42,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 
 | Component | Status | Risk Level | Notes |
 | :--- | :--- | :--- | :--- |
-| **Causal Consensus** | Implemented | Low | Rust, 120+ tests passing, O(new_events) processing |
+| **Causal Consensus** | Implemented | Low | Rust, 178+ consensus tests + 36 substrate tests, O(new_events) processing |
 | **Identity Shard** | Implemented | Low | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery |
 | **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence) |
 | **Computational Shard** | Implemented | Low | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub |
@@ -120,15 +120,15 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 
 | # | Item | Status | ADR | Notes |
 |---|------|--------|-----|-------|
-| C-1 | Bitcoin Settlement Adapter | 🔄 Stub | — | Stub implementation; needs full Bitcoin script integration |
-| H-1 | Solana Settlement Adapter | 🔄 Stub | — | Stub implementation; needs Solana program integration |
-| H-2 | Celestia Settlement Adapter | 🔄 Stub | — | Stub implementation; needs Celestia blob submission |
-| H-3 | Validator Network (multi-node) | 📋 Planned | — | Multi-node validator network deployment |
-| H-4 | Public Testnet Launch | 📋 Planned | — | Public testnet with real validators |
-| M-1 | Dynamic Fee Mechanism (EIP-1559-style) | 📋 Planned | — | Replace flat fees with dynamic fee market |
+| C-1 | Real Ethereum Settlement with Alloy | ✅ Complete | — | `ethereum-live` feature flag, live RPC integration |
+| H-1 | Gradual Slashing Implementation | ✅ Complete | ADR-011 | 3-tier Warning → Jail → Ejection |
+| H-2 | Migrate pqc_kyber → ml-kem | ✅ Complete | ADR-020 | KyberSlash eliminated, FIPS-203 compliant |
+| H-3 | Fast-Sync P2P Automation | ✅ Complete | ADR-019 | Checkpoints, supermajority, P2P download |
+| H-4 | Separate Liveness and Readiness Probes | ✅ Complete | — | Distinct `/health` and `/ready` endpoints |
+| M-1 | Multi-party Trusted Setup Ceremony Automation | ✅ Complete | — | CeremonyServer + CeremonyClient lifecycle |
 | M-2 | Documentation Sprint (Dashboard, ADRs, FAQ) | ✅ Complete | ADR-015–021 | Phase 3 documentation catch-up |
-| M-3 | VRF Spec Compliance (ADR-012) | 📋 Deferred | ADR-012 | Migrate to ECVRF (RFC 9381) |
-| M-4 | Poseidon Parameter Migration (ADR-014) | 📋 Deferred | ADR-014 | Dual-hash transition to Filecoin/Neptune constants |
+| M-3 | Load Testing Baseline Capture | ✅ Complete | — | LoadTestConfig, CI workflow, baseline document |
+| M-4 | Supply Chain Hardening | ✅ Complete | — | cargo-vet, cargo-deny, SBOM generation |
 
 ---
 
@@ -193,16 +193,16 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] Load Testing Infrastructure (M-4)
 - [x] RUSTSEC Advisory Cleanup (M-5)
 
-### Phase 4: Production Hardening & Mainnet Preparation — 🔄 In Progress
-- [ ] Bitcoin Settlement Adapter
-- [ ] Solana Settlement Adapter
-- [ ] Celestia Settlement Adapter
-- [ ] Validator Network (multi-node)
-- [ ] Public Testnet Launch
-- [ ] Dynamic Fee Mechanism (EIP-1559-style)
-- [x] Documentation Sprint (Dashboard, ADRs, FAQ)
-- [ ] VRF Spec Compliance (ADR-012)
-- [ ] Poseidon Parameter Migration (ADR-014)
+### Phase 4: Mainnet Readiness — ✅ Complete
+- [x] Real Ethereum settlement with Alloy (`ethereum-live` feature)
+- [x] Gradual slashing implementation (ADR-011)
+- [x] Migrate pqc_kyber → ml-kem (fix KyberSlash, FIPS-203)
+- [x] Fast-sync P2P automation
+- [x] Separate liveness and readiness probes
+- [x] Multi-party trusted setup ceremony automation
+- [x] Documentation sprint — dashboard, ADRs, FAQ
+- [x] Load testing baseline capture
+- [x] Supply chain hardening (cargo-vet, cargo-deny, SBOM)
 
 ---
 
@@ -236,6 +236,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 ## Transparency Log
 *Every major decision and status change is logged here.*
 
+- **2026-05-21:** Documentation audit: Fixed README.md workspace table (was missing omnia-primitives, omnia-crypto, omnia-consensus, omnia-network; had stale `zk/` directory reference), updated test counts (278→800+), updated Rust version badge (stable→1.91), added FFI settlement adapter and Cosmos stub to ZK-Rollup section, added Bitcoin/Solana/Celestia adapters to Phase 1 roadmap. Updated feature-matrix.md with complete feature flag reference (was missing arkworks, pqc, bls, settlement-ffi, persistent-storage, network, metrics, etc.). Updated feature-flags.md with all feature flags. Fixed docs/architecture/README.md broken table and test counts. Updated zk-rollup-settlement.md with actual current trait signatures (SettlementAdapter + SettlementLayer). Reconciled Phase 4 status across dashboard, status.md, and roadmap.md (Phase 4 now marked Complete, matching roadmap).
 - **2026-05-19:** Phase 4 M-2: Documentation sprint. Created ADRs 015-021 (leader selection, Kademlia DHT, GossipSub peer scoring, consensus persistence, fast-sync, ML-KEM integration, message compression). Updated dashboard for Phase 3 completion. Fixed FAQ entries. Updated STATUS.md.
 - **2026-05-18:** Phase 3 complete. All 5 open Phase 2 findings closed (FIND-P2-001/002/003/010/011). Leader selection, Kademlia DHT, peer scoring, consensus persistence, ML-KEM, fast-sync, message compression implemented. 938+ tests passing.
 - **2026-05-18:** Phase 2 complete. Gradual slashing (ADR-011) implemented, DKG share encryption upgraded to AES-256-GCM, ZK circuit dummy fields resolved, trusted setup transcript hash initialized, identity recovery auth update completed.
@@ -249,7 +250,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - **2026-05-10:** Project ownership confirmed under CC0 License.
 
 ---
-*Last Updated: 2026-05-19*
+*Last Updated: 2026-05-21*
 *Version: 6.0.0*
 
 ---

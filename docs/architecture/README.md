@@ -38,23 +38,27 @@ Omnia Protocol is a five-layer distributed system designed to enable trustless c
 | [trait-boundaries.md](trait-boundaries.md) | Cross-cutting | EventProcessor, SettlementLayer, Shard trait contracts, ADRs 001–007 |
 | [pipeline-design.md](pipeline-design.md) | Cross-cutting | Consensus pipeline, mempool, leader selection, queue invariants |
 | [crdt-convergence.md](crdt-convergence.md) | Cross-cutting | CRDT convergence proofs for GCounter, OrSet, LWWRegister |
-| [vector-clock-reconciliation.md](vector-clock-reconciliation.md) | Vector clock reconciliation strategy |
-| [consensus-queue.md](consensus-queue.md) | Consensus queue invariants |
-| [full-spec.md](full-spec.md) | Comprehensive architecture specification | | Consensus queue invariants | | Cross-cutting | Vector clock reconciliation strategy, partition recovery |
+| [vector-clock-reconciliation.md](vector-clock-reconciliation.md) | Cross-cutting | Vector clock reconciliation strategy, partition recovery |
+| [consensus-queue.md](consensus-queue.md) | Cross-cutting | Consensus queue invariants |
+| [full-spec.md](full-spec.md) | Cross-cutting | Comprehensive architecture specification (all layers) |
 
 ## Workspace Crates
 
 | Crate | Purpose | Tests |
 |-------|---------|-------|
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 454+ |
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 57+ |
+| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC | 119+ |
+| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs | 178+ |
+| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 61+ |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 128+ |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 36+ |
 | `shards/` | 6 domain shards + cross-shard messaging | 62+ |
 | `binding/` | Provenance log, RF stub, hybrid PQC signatures | 61+ |
 | `economics/` | UBC token, quota, governance, useful work | 58+ |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16 + Merkle), Ethereum adapter | 129+ |
-| `node/` | Binary entrypoint, REST API, health/metrics | 30+ |
+| `node/` | Binary entrypoint, REST API, health/metrics | 37+ |
 | `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ~15 scenarios |
 
-**Total: 800+ lib tests + chaos/integration tests, all passing.**
+**Total: 800+ lib tests + integration/chaos/fuzz tests, all passing.**
 
 ---
 🔙 **Back**: [docs/](../) | 🔄 **Related**: [trait-boundaries.md](trait-boundaries.md)
