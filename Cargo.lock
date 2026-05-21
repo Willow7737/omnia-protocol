@@ -4699,6 +4699,7 @@ dependencies = [
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
+ "postcard",
  "rand 0.8.6",
  "tokio",
 ]

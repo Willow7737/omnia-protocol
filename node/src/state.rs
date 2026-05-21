@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 #[cfg(feature = "metrics")]
-use prometheus::{IntCounter, IntGauge};
+use prometheus::{Histogram, IntCounter, IntGauge};
 use tokio::sync::{Mutex, RwLock};
 
 use omnia_economics::EconomicsState;
@@ -40,9 +40,24 @@ static NODE_METRICS: OnceLock<NodeMetrics> = OnceLock::new();
 ///
 /// All metrics are registered with the default Prometheus registry
 /// so they can be exposed via the `/metrics` endpoint.
+///
+/// # Throughput-Specific Metrics (Sprint 0)
+///
+/// The following metrics were added for the Phase 0 throughput optimization
+/// sprint to enable detailed monitoring of consensus and DAG performance:
+///
+/// - `omnia_consensus_tps` — counter incremented per finalized transaction
+/// - `omnia_consensus_finality_latency_seconds` — histogram of time from event
+///   creation to finality commitment
+/// - `omnia_gossip_propagation_latency_seconds` — histogram of end-to-end event
+///   propagation latency across the gossip network
+/// - `omnia_dag_events_total` — counter for total events inserted into the DAG
+/// - `omnia_dag_insertion_latency_seconds` — histogram of DAG event insertion latency
+/// - `omnia_node_memory_rss_bytes` — gauge of process resident memory (RSS)
 #[cfg(feature = "metrics")]
 #[derive(Debug, Clone)]
 pub struct NodeMetrics {
+    // ── Existing metrics ───────────────────────────────────────────────
     /// Total number of events submitted via the API.
     pub events_submitted: IntCounter,
     /// Total number of events finalized by consensus.
@@ -55,6 +70,30 @@ pub struct NodeMetrics {
     pub shard_ops_total: IntCounter,
     /// Total number of HTTP requests served.
     pub http_requests_total: IntCounter,
+
+    // ── Throughput-specific metrics (Sprint 0) ─────────────────────────
+    /// Counter for finalized transactions per second (incremented per tx).
+    ///
+    /// Combine with `rate()` in PromQL to get TPS:
+    /// `rate(omnia_consensus_tps[1m])`
+    pub consensus_tps: IntCounter,
+    /// Histogram of consensus finality latency — time from event creation
+    /// to finality commitment, in seconds.
+    ///
+    /// Buckets are chosen to capture sub-millisecond to multi-second ranges.
+    pub consensus_finality_latency_seconds: Histogram,
+    /// Histogram of gossip propagation latency — end-to-end event
+    /// propagation delay across the network, in seconds.
+    pub gossip_propagation_latency_seconds: Histogram,
+    /// Counter for total events inserted into the DAG.
+    pub dag_events_total: IntCounter,
+    /// Histogram of DAG event insertion latency, in seconds.
+    pub dag_insertion_latency_seconds: Histogram,
+    /// Gauge for process resident memory (RSS) in bytes.
+    ///
+    /// On Linux, this reads from `/proc/self/status` VmRSS.
+    /// On other platforms, reports 0.
+    pub node_memory_rss_bytes: IntGauge,
 }
 
 #[cfg(feature = "metrics")]
@@ -88,6 +127,47 @@ impl NodeMetrics {
                     IntCounter::new("omnia_node_http_requests_total", "Total HTTP requests served")
                         .expect("Failed to create http_requests_total counter");
 
+                // ── Throughput-specific metrics (Sprint 0) ───────────────
+                let consensus_tps =
+                    IntCounter::new("omnia_consensus_tps", "Counter for finalized transactions (use rate() for TPS)")
+                        .expect("Failed to create consensus_tps counter");
+                let consensus_finality_latency_seconds = Histogram::with_opts(
+                    prometheus::HistogramOpts::new(
+                        "omnia_consensus_finality_latency_seconds",
+                        "Time from event creation to finality commitment",
+                    )
+                    .buckets(vec![
+                        0.000_1, 0.000_5, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                    ]),
+                )
+                .expect("Failed to create consensus_finality_latency histogram");
+                let gossip_propagation_latency_seconds = Histogram::with_opts(
+                    prometheus::HistogramOpts::new(
+                        "omnia_gossip_propagation_latency_seconds",
+                        "End-to-end event propagation latency across the gossip network",
+                    )
+                    .buckets(vec![
+                        0.000_1, 0.000_5, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+                    ]),
+                )
+                .expect("Failed to create gossip_propagation_latency histogram");
+                let dag_events_total =
+                    IntCounter::new("omnia_dag_events_total", "Total events inserted into the DAG")
+                        .expect("Failed to create dag_events_total counter");
+                let dag_insertion_latency_seconds = Histogram::with_opts(
+                    prometheus::HistogramOpts::new(
+                        "omnia_dag_insertion_latency_seconds",
+                        "Latency of DAG event insertion",
+                    )
+                    .buckets(vec![
+                        0.000_01, 0.000_05, 0.000_1, 0.000_5, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1,
+                    ]),
+                )
+                .expect("Failed to create dag_insertion_latency histogram");
+                let node_memory_rss_bytes =
+                    IntGauge::new("omnia_node_memory_rss_bytes", "Process resident memory (RSS) in bytes")
+                        .expect("Failed to create node_memory_rss_bytes gauge");
+
                 let registry = prometheus::default_registry();
                 // Ignore AlreadyReg errors — metrics may have been registered
                 // in a previous test or call
@@ -97,6 +177,12 @@ impl NodeMetrics {
                 let _ = registry.register(Box::new(consensus_round.clone()));
                 let _ = registry.register(Box::new(shard_ops_total.clone()));
                 let _ = registry.register(Box::new(http_requests_total.clone()));
+                let _ = registry.register(Box::new(consensus_tps.clone()));
+                let _ = registry.register(Box::new(consensus_finality_latency_seconds.clone()));
+                let _ = registry.register(Box::new(gossip_propagation_latency_seconds.clone()));
+                let _ = registry.register(Box::new(dag_events_total.clone()));
+                let _ = registry.register(Box::new(dag_insertion_latency_seconds.clone()));
+                let _ = registry.register(Box::new(node_memory_rss_bytes.clone()));
 
                 Self {
                     events_submitted,
@@ -105,6 +191,12 @@ impl NodeMetrics {
                     consensus_round,
                     shard_ops_total,
                     http_requests_total,
+                    consensus_tps,
+                    consensus_finality_latency_seconds,
+                    gossip_propagation_latency_seconds,
+                    dag_events_total,
+                    dag_insertion_latency_seconds,
+                    node_memory_rss_bytes,
                 }
             })
             .clone();

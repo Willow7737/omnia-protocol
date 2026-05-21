@@ -37,6 +37,7 @@
 #![warn(missing_docs)]
 
 pub mod load_test;
+pub mod safety_monitoring;
 
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, NodeKeypair, SlashOutcome,

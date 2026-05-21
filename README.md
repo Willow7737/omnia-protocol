@@ -135,7 +135,7 @@ cargo bench --no-run
 - Hybrid PQC signatures (Ed25519 + CRYSTALS-Dilithium)
 - ✅ Real PQC signatures (Ed25519 + CRYSTALS-Dilithium hybrid verification)
 - ✅ PqcKeyRotationManager for post-quantum key rotation (3-phase migration)
-- ⚠️ Stubs: RF fingerprinting (needs SDR hardware)
+- ⚠️ **STUB**: RF fingerprinting (needs SDR hardware; see [stub inventory](docs/stub-inventory.md))
 
 ### Layer 4: Identity Hardening ✅
 - `did:omnia:` method with validation
@@ -149,13 +149,13 @@ cargo bench --no-run
 - Quota system with epoch advancement
 - Quadratic voting with exponential reputation decay
 - Fixed-point governance decay (PPM arithmetic, no f64 in consensus)
-- ⚠️ Stub: Proof-of-useful-work (3 work types defined, not production)
+- ⚠️ **STUB**: Proof-of-useful-work (3 work types defined, not production; see [stub inventory](docs/stub-inventory.md))
 
 ### Phase 0: ZK-Rollup ✅
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- Bitcoin, Solana, Celestia, Cosmos stubs
+- ⚠️ **STUB**: Bitcoin, Solana, Celestia, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
 - L2 operator with batch builder
 - ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
 - ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
@@ -169,12 +169,19 @@ cargo bench --no-run
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Real RF fingerprinting | ⚠️ Stub | Needs HackRF/USRP hardware |
+| Real RF fingerprinting | ⚠️ **STUB** | Needs HackRF/USRP hardware |
+| Bitcoin settlement adapter | ⚠️ **STUB** | Implements trait, returns hardcoded values |
+| Solana settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Celestia settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Cosmos settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Proof-of-useful-work | ⚠️ **STUB** | 3 types defined, no real verification |
 | Mobile wallet | 🌑 Not started | Planned for Phase 1 |
 | Validator network | 🌑 Not started | Single-node operator for Phase 0 |
 | Conviction voting | 🌑 Not started | Planned for Phase 1 |
 | Delegation | 🌑 Not started | Planned for Phase 1 |
 | Production ZK hash gadget | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
+
+> **Full stub inventory**: See [docs/stub-inventory.md](docs/stub-inventory.md) for detailed documentation of all stubs and partial implementations.
 
 ---
 
