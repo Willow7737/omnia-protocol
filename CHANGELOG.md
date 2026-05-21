@@ -8,6 +8,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.43](https://github.com/Willow7737/omnia-protocol/compare/v0.1.42...v0.1.43) (2026-05-21)
+
+
+### Bug Fixes
+
+* **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([f4c5dd6](https://github.com/Willow7737/omnia-protocol/commit/f4c5dd6374061e91b2e6e4fbc2e32bdda9901104))
+* **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([ca9aaad](https://github.com/Willow7737/omnia-protocol/commit/ca9aaad659467d41285c5364040fbf495f622c8c))
+* **ci:** resolve all 7 CI failures ([47ff783](https://github.com/Willow7737/omnia-protocol/commit/47ff7837f2d1610195dc889382e1eeaff1a6ed89))
+* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([c80b325](https://github.com/Willow7737/omnia-protocol/commit/c80b3251e30f1e548507ad686f32a3cd2c1f3e21))
+* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([a9db9f9](https://github.com/Willow7737/omnia-protocol/commit/a9db9f96da785d5fa1c2647e8e9e51aa3cc989cd))
+* **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([0f47fed](https://github.com/Willow7737/omnia-protocol/commit/0f47fedbb8983ff326d04a0db4b89ae58fd00739))
+* **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([cd07277](https://github.com/Willow7737/omnia-protocol/commit/cd072778aa8ca2a703421a2046042b7fd1854147))
+* **ci:** resolve unsafe_code forbid conflict and gate pqc test ([e993d07](https://github.com/Willow7737/omnia-protocol/commit/e993d07f2d5c3554bfb69c84306143148da415b4))
+* **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([a4936df](https://github.com/Willow7737/omnia-protocol/commit/a4936df66465a65aa34e8653be200bc7e3350b3a))
+* **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([73ba66a](https://github.com/Willow7737/omnia-protocol/commit/73ba66a38cdd082fc5ff2e4df79b72a491fed7c7))
+* **doc:** replace broken intra-doc links for feature-gated types ([307452c](https://github.com/Willow7737/omnia-protocol/commit/307452ca47b70a671550f8e80eba71b7c1d6ae6c))
+* **doc:** resolve remaining broken intra-doc links across workspace ([669be6b](https://github.com/Willow7737/omnia-protocol/commit/669be6b1940b755184a4e5eda23910fef50a2cb5))
+* resolve 6 CI-breaking bugs + 5 minor issues ([2ed119e](https://github.com/Willow7737/omnia-protocol/commit/2ed119e4d38880f5fdec1d1bba76faff97537a2e))
+
 ## [0.1.42](https://github.com/Willow7737/omnia-protocol/compare/v0.1.41...v0.1.42) (2026-05-20)
 
 
