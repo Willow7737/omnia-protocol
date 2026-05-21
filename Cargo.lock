@@ -4699,6 +4699,7 @@ dependencies = [
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
+ "postcard",
  "rand 0.8.6",
  "tokio",
 ]
@@ -4735,7 +4736,10 @@ dependencies = [
  "blake3",
  "clap",
  "hex",
+ "omnia-consensus",
+ "omnia-crypto",
  "omnia-economics",
+ "omnia-network",
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",
@@ -4753,12 +4757,14 @@ name = "omnia-consensus"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "ed25519-dalek",
  "getrandom 0.2.17",
  "hex",
  "omnia-crypto",
  "omnia-primitives",
  "postcard",
  "proptest",
+ "rand 0.8.6",
  "redb",
  "serde",
  "serde_json",

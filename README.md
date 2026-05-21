@@ -39,19 +39,22 @@
 ## 🏗️ The Omnia Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  LAYER 5: Economics (UBC, Governance)  │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 4: Identity (DIDs, Shamir, Bio) │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 3: Binding (Provenance, RF, QC) │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 2: Domain Shards (6 shards)     │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 1: Substrate (Causal Graph)     │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  PHASE 0: ZK-Rollup (Settlement Layer) │ ✅ IMPLEMENTED
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  LAYER 5: Economics (UBC, Governance)           │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 4: Identity (DIDs, Shamir, Bio)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 3: Binding (Provenance, RF, QC)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 2: Domain Shards (6 shards)              │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 1: Substrate (Causal Graph)              │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  PHASE 0: ZK-Rollup (Settlement Layer)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINT 0-4
+│  + Compact Encoding + Bloom + Priority Gossip   │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
@@ -87,7 +90,7 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 | `binding/` | Provenance log, RF stub, hybrid PQC signatures | 61+ | ✅ |
 | `economics/` | UBC token, quota, governance, useful work | 58+ | ✅ |
 | `node/` | Binary entrypoint, REST API, health/metrics | 37+ | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ~15 scenarios | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss, integration | ~45 scenarios | ✅ |
 | `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
 | `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | benchmark suite | ✅ |
 
@@ -135,7 +138,7 @@ cargo bench --no-run
 - Hybrid PQC signatures (Ed25519 + CRYSTALS-Dilithium)
 - ✅ Real PQC signatures (Ed25519 + CRYSTALS-Dilithium hybrid verification)
 - ✅ PqcKeyRotationManager for post-quantum key rotation (3-phase migration)
-- ⚠️ Stubs: RF fingerprinting (needs SDR hardware)
+- ⚠️ **STUB**: RF fingerprinting (needs SDR hardware; see [stub inventory](docs/stub-inventory.md))
 
 ### Layer 4: Identity Hardening ✅
 - `did:omnia:` method with validation
@@ -149,13 +152,13 @@ cargo bench --no-run
 - Quota system with epoch advancement
 - Quadratic voting with exponential reputation decay
 - Fixed-point governance decay (PPM arithmetic, no f64 in consensus)
-- ⚠️ Stub: Proof-of-useful-work (3 work types defined, not production)
+- ⚠️ **STUB**: Proof-of-useful-work (3 work types defined, not production; see [stub inventory](docs/stub-inventory.md))
 
 ### Phase 0: ZK-Rollup ✅
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- Bitcoin, Solana, Celestia, Cosmos stubs
+- ⚠️ **STUB**: Bitcoin, Solana, Celestia, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
 - L2 operator with batch builder
 - ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
 - ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
@@ -169,12 +172,19 @@ cargo bench --no-run
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Real RF fingerprinting | ⚠️ Stub | Needs HackRF/USRP hardware |
+| Real RF fingerprinting | ⚠️ **STUB** | Needs HackRF/USRP hardware |
+| Bitcoin settlement adapter | ⚠️ **STUB** | Implements trait, returns hardcoded values |
+| Solana settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Celestia settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Cosmos settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| Proof-of-useful-work | ⚠️ **STUB** | 3 types defined, no real verification |
 | Mobile wallet | 🌑 Not started | Planned for Phase 1 |
 | Validator network | 🌑 Not started | Single-node operator for Phase 0 |
 | Conviction voting | 🌑 Not started | Planned for Phase 1 |
 | Delegation | 🌑 Not started | Planned for Phase 1 |
 | Production ZK hash gadget | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
+
+> **Full stub inventory**: See [docs/stub-inventory.md](docs/stub-inventory.md) for detailed documentation of all stubs and partial implementations.
 
 ---
 
@@ -216,6 +226,17 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ REST API: axum + utoipa Swagger UI with events/shards/governance/economics/node endpoints
 - ✅ Chaos testing: partitions, crash recovery, byzantine behavior, message loss
 - ✅ Security audit preparation: scope, attack surface, self-assessment documentation
+
+### Phase 0 Throughput Optimization (Sprint 0–4) ✅ Complete
+- ✅ Sprint 0: Baseline benchmarks, 3-node testnet Docker Compose, monitoring stack
+- ✅ Sprint 1: `ShardedConsensusState` — 256-shard RwLock for parallel event processing
+- ✅ Sprint 2: `BatchIngestor` + `ConsensusEventBatch` — amortized validation & proof generation
+- ✅ Sprint 3: `EventPool` + `PruningAwarePool` — pre-allocated arena allocator with slot reuse
+- ✅ Sprint 4: `CompactEncoder` + `GossipBloomFilter` + `PriorityGossipQueue` — optimized gossip
+- ✅ Sprint 5: Integration test suite, 168h stability framework, full chaos suite, completion report
+- ✅ Phase 0 Completion Report: [`docs/reports/phase0-completion-report.md`](docs/reports/phase0-completion-report.md)
+
+**Optimization Results**: ~40% wire size reduction, O(1) duplicate detection, priority-based finality propagation, pre-allocated graph insertion with slot reuse.
 
 ### Phase 1: The Root 📋 Planned
 *Goal: Independence*

@@ -36,7 +36,11 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod full_chaos_suite;
+pub mod gossip_chaos;
 pub mod load_test;
+pub mod safety_monitoring;
+pub mod stability_test;
 
 use omnia_substrate::{
     generate_keypair, CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, NodeKeypair, SlashOutcome,

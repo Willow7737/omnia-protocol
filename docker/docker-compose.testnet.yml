@@ -1,0 +1,141 @@
+# Omnia Protocol — 3-Node Testnet with Monitoring
+#
+# A minimal testnet configuration for Phase 0 throughput optimization.
+# Runs 1 bootstrap node + 2 peer nodes with Prometheus + Grafana monitoring.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.testnet.yml up
+#   docker compose -f docker/docker-compose.testnet.yml --profile monitoring up
+#
+# The monitoring profile starts Prometheus (port 9095) and Grafana (port 3000).
+# Without the profile, only the 3 nodes are started.
+#
+# Port mappings:
+#   bootstrap  → http://localhost:9090  (metrics, API)
+#   node-1     → http://localhost:9091  (metrics, API)
+#   node-2     → http://localhost:9092  (metrics, API)
+#   prometheus → http://localhost:9095  (Prometheus UI)
+#   grafana    → http://localhost:3000  (Grafana dashboard)
+
+services:
+  # ── Bootstrap node ──────────────────────────────────────────────────────
+  omnia-bootstrap:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-bootstrap
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=1
+      - OMNIA_BOOTSTRAP_NODES=
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/4001
+      - OMNIA_HTTP_PORT=8080
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9090:8080/tcp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - bootstrap-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── Peer node 1 ─────────────────────────────────────────────────────────
+  omnia-node-1:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-1
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=2
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/4001
+      - OMNIA_HTTP_PORT=8080
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9091:8080/tcp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node1-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  # ── Peer node 2 ─────────────────────────────────────────────────────────
+  omnia-node-2:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node-2
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=3
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001/p2p/bootstrap
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/4001
+      - OMNIA_HTTP_PORT=8080
+      - OMNIA_DATA_DIR=/app/data
+    ports:
+      - "9092:8080/tcp"
+    networks:
+      - omnia-testnet
+    volumes:
+      - node2-data:/app/data
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+
+  # ── Prometheus ───────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: omnia-prometheus
+    volumes:
+      - ./monitoring/prometheus-testnet.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9095:9090"
+    networks:
+      - omnia-testnet
+    profiles:
+      - monitoring
+
+  # ── Grafana ──────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: omnia-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/omnia-node.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../monitoring/grafana/alerts:/etc/grafana/provisioning/alerting:ro
+      - grafana-dashboards-provisioning:/etc/grafana/provisioning/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - omnia-testnet
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+networks:
+  omnia-testnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  bootstrap-data:
+  node1-data:
+  node2-data:
+  prometheus-data:
+  grafana-data:
+  grafana-dashboards-provisioning:

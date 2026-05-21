@@ -58,6 +58,8 @@ pub mod settlement;
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "arkworks")]
+pub mod batch_proof_circuit;
+#[cfg(feature = "arkworks")]
 pub mod circuit;
 pub mod merkle;
 #[cfg(feature = "arkworks")]
@@ -104,6 +106,8 @@ pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
 // Re-exports: ZK types (feature-gated)
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "arkworks")]
+pub use batch_proof_circuit::{BatchProofCircuit, BATCH_PROOF_TARGET_SIZE};
 #[cfg(feature = "arkworks")]
 pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness, OperationType};
 

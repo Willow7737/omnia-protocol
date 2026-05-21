@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'omnia-bootstrap'
+    static_configs:
+      - targets: ['omnia-bootstrap:8080']
+    metrics_path: /metrics
+
+  - job_name: 'omnia-nodes'
+    static_configs:
+      - targets:
+        - 'omnia-node-1:8080'
+        - 'omnia-node-2:8080'
+    metrics_path: /metrics
