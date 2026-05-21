@@ -21,12 +21,15 @@ pub mod batch_crdt_merge;
 pub mod causal_graph;
 pub mod consensus;
 pub mod crdt;
+pub mod event_pool;
 pub mod mempool;
+pub mod pruning_aware_pool;
 pub mod rate_limiter;
 pub mod sharded_state;
 pub mod slashing;
 pub mod slashing_undo;
 pub mod thread_pool;
+pub mod vector_clock_index;
 
 #[cfg(feature = "persistent-storage")]
 pub mod consensus_store;
@@ -48,9 +51,12 @@ pub use slashing::{
     SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
+pub use event_pool::{EventPool, EventPoolError, EventPoolStats};
+pub use pruning_aware_pool::{PoolStats, PruningAwarePool};
 pub use sharded_state::{ShardedConsensusState, ShardedConsensusStats};
 pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
 pub use thread_pool::{ValidationPool, ValidationResult, ValidationTask};
+pub use vector_clock_index::{VectorClockIndex, VectorClockIndexStats};
 
 #[cfg(feature = "persistent-storage")]
 pub use consensus_store::{
