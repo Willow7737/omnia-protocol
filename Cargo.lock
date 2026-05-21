@@ -4754,12 +4754,14 @@ name = "omnia-consensus"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "ed25519-dalek",
  "getrandom 0.2.17",
  "hex",
  "omnia-crypto",
  "omnia-primitives",
  "postcard",
  "proptest",
+ "rand 0.8.6",
  "redb",
  "serde",
  "serde_json",

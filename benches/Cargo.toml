@@ -44,6 +44,10 @@ harness = false
 name = "baseline_bench"
 harness = false
 
+[[bench]]
+name = "sharding_bench"
+harness = false
+
 [features]
 default = []
 full = ["omnia-node/full", "omnia-adapters/arkworks", "ark-bn254", "ark-ff"]

@@ -19,8 +19,10 @@ pub mod consensus;
 pub mod crdt;
 pub mod mempool;
 pub mod rate_limiter;
+pub mod sharded_state;
 pub mod slashing;
 pub mod slashing_undo;
+pub mod thread_pool;
 
 #[cfg(feature = "persistent-storage")]
 pub mod consensus_store;
@@ -38,7 +40,9 @@ pub use slashing::{
     SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
+pub use sharded_state::{ShardedConsensusState, ShardedConsensusStats};
 pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
+pub use thread_pool::{ValidationPool, ValidationResult, ValidationTask};
 
 #[cfg(feature = "persistent-storage")]
 pub use consensus_store::{
