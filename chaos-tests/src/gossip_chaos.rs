@@ -11,7 +11,7 @@ use crate::ChaosNetwork;
 use omnia_network::{
     CompactEncoder, DeltaClock, GossipBloomFilter, GossipPriority, PriorityQueueConfig, PriorityGossipQueue,
 };
-use omnia_primitives::{EventId, NodeId, VectorClock};
+use omnia_primitives::{Event, EventId, NodeId, VectorClock};
 use std::collections::HashSet;
 
 /// Helper: create a NodeId from a single byte.
@@ -519,7 +519,7 @@ fn test_full_optimized_gossip_integration() {
     for (idx, bloom) in bloom_filters.iter_mut().enumerate() {
         let committed = network.nodes[idx].consensus.get_committed();
         for event_id in committed {
-            bloom.insert(event_id);
+            bloom.insert(&event_id);
         }
     }
 
@@ -528,7 +528,7 @@ fn test_full_optimized_gossip_integration() {
         let committed = network.nodes[idx].consensus.get_committed();
         for event_id in committed {
             assert!(
-                bloom.contains(event_id),
+                bloom.contains(&event_id),
                 "Bloom filter false negative for committed event at node {idx}"
             );
         }

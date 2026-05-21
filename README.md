@@ -39,19 +39,22 @@
 ## 🏗️ The Omnia Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  LAYER 5: Economics (UBC, Governance)  │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 4: Identity (DIDs, Shamir, Bio) │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 3: Binding (Provenance, RF, QC) │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 2: Domain Shards (6 shards)     │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  LAYER 1: Substrate (Causal Graph)     │ ✅ IMPLEMENTED
-├─────────────────────────────────────────┤
-│  PHASE 0: ZK-Rollup (Settlement Layer) │ ✅ IMPLEMENTED
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  LAYER 5: Economics (UBC, Governance)           │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 4: Identity (DIDs, Shamir, Bio)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 3: Binding (Provenance, RF, QC)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 2: Domain Shards (6 shards)              │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  LAYER 1: Substrate (Causal Graph)              │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  PHASE 0: ZK-Rollup (Settlement Layer)          │ ✅ IMPLEMENTED
+├──────────────────────────────────────────────────┤
+│  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINT 0-4
+│  + Compact Encoding + Bloom + Priority Gossip   │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
@@ -87,7 +90,7 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 | `binding/` | Provenance log, RF stub, hybrid PQC signatures | 61+ | ✅ |
 | `economics/` | UBC token, quota, governance, useful work | 58+ | ✅ |
 | `node/` | Binary entrypoint, REST API, health/metrics | 37+ | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ~15 scenarios | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss, integration | ~45 scenarios | ✅ |
 | `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
 | `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | benchmark suite | ✅ |
 
@@ -223,6 +226,17 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ REST API: axum + utoipa Swagger UI with events/shards/governance/economics/node endpoints
 - ✅ Chaos testing: partitions, crash recovery, byzantine behavior, message loss
 - ✅ Security audit preparation: scope, attack surface, self-assessment documentation
+
+### Phase 0 Throughput Optimization (Sprint 0–4) ✅ Complete
+- ✅ Sprint 0: Baseline benchmarks, 3-node testnet Docker Compose, monitoring stack
+- ✅ Sprint 1: `ShardedConsensusState` — 256-shard RwLock for parallel event processing
+- ✅ Sprint 2: `BatchIngestor` + `ConsensusEventBatch` — amortized validation & proof generation
+- ✅ Sprint 3: `EventPool` + `PruningAwarePool` — pre-allocated arena allocator with slot reuse
+- ✅ Sprint 4: `CompactEncoder` + `GossipBloomFilter` + `PriorityGossipQueue` — optimized gossip
+- ✅ Sprint 5: Integration test suite, 168h stability framework, full chaos suite, completion report
+- ✅ Phase 0 Completion Report: [`docs/reports/phase0-completion-report.md`](docs/reports/phase0-completion-report.md)
+
+**Optimization Results**: ~40% wire size reduction, O(1) duplicate detection, priority-based finality propagation, pre-allocated graph insertion with slot reuse.
 
 ### Phase 1: The Root 📋 Planned
 *Goal: Independence*

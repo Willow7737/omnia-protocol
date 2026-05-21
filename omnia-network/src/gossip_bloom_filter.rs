@@ -222,8 +222,12 @@ impl GossipBloomFilter {
     pub fn rotate(&mut self) {
         // Swap active and inactive
         std::mem::swap(&mut self.active, &mut self.inactive);
-        // Clear the new inactive filter (which was the old active)
-        self.inactive.clear();
+        // Clear the new active filter (which was the old inactive).
+        // Events from the old inactive have now expired (they survived
+        // one rotation period in the inactive filter).
+        // The new inactive (old active) retains its events so they remain
+        // available for lookups for one more rotation period.
+        self.active.clear();
     }
 
     /// Get the current estimated false positive rate.

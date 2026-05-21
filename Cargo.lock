@@ -4736,6 +4736,7 @@ dependencies = [
  "blake3",
  "clap",
  "hex",
+ "omnia-consensus",
  "omnia-crypto",
  "omnia-economics",
  "omnia-network",
