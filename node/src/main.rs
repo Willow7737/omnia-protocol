@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! # Omnia Node Binary
 //!
 //! The `omnia-node` binary runs a full Omnia Protocol node with:

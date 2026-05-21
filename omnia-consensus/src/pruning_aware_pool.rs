@@ -181,11 +181,7 @@ impl PruningAwarePool {
     ///
     /// Like [`Self::resolve_parent()`], but returns a `Result` that
     /// distinguishes between "found", "pruned", and "not found".
-    pub fn resolve_parent_checked(
-        &self,
-        creator: &NodeId,
-        sequence: u64,
-    ) -> Result<&Event, CausalGraphError> {
+    pub fn resolve_parent_checked(&self, creator: &NodeId, sequence: u64) -> Result<&Event, CausalGraphError> {
         if let Some((_event_id, slot)) = self.index.resolve_parent(creator, sequence) {
             if let Some(event) = self.pool.get_by_slot(slot) {
                 return Ok(event);

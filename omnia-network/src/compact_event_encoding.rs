@@ -177,9 +177,7 @@ fn decode_varint(data: &[u8], offset: &mut usize) -> Result<u64, EncodingError> 
         }
         shift += 7;
         if shift >= 64 {
-            return Err(EncodingError::DeserializationError(
-                "varint overflow".to_string(),
-            ));
+            return Err(EncodingError::DeserializationError("varint overflow".to_string()));
         }
     }
     Ok(result)
@@ -359,7 +357,7 @@ impl CompactEncoder {
         // Resolve truncated parent IDs
         let self_parent = match compact.self_parent_truncated.as_ref() {
             Some(truncated) => Some(
-                resolve_truncated_id(truncated).ok_or_else(|| EncodingError::InvalidTruncatedId {
+                resolve_truncated_id(truncated).ok_or(EncodingError::InvalidTruncatedId {
                     expected: 32,
                     actual: truncated.len(),
                 })?,
@@ -369,7 +367,7 @@ impl CompactEncoder {
 
         let other_parent = match compact.other_parent_truncated.as_ref() {
             Some(truncated) => Some(
-                resolve_truncated_id(truncated).ok_or_else(|| EncodingError::InvalidTruncatedId {
+                resolve_truncated_id(truncated).ok_or(EncodingError::InvalidTruncatedId {
                     expected: 32,
                     actual: truncated.len(),
                 })?,
@@ -482,11 +480,7 @@ mod tests {
     #[test]
     fn test_delta_clock_roundtrip() {
         let delta = DeltaClock {
-            entries: vec![
-                (node(1), 42),
-                (node(2), 100),
-                (node(3), 1),
-            ],
+            entries: vec![(node(1), 42), (node(2), 100), (node(3), 1)],
         };
         let bytes = delta.to_bytes();
         let restored = DeltaClock::from_bytes(&bytes).unwrap();

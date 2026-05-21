@@ -38,8 +38,8 @@ use std::time::{Duration, Instant};
 
 use omnia_primitives::{Event, EventId, NodeId};
 use omnia_substrate::{
-    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, VectorClock,
-    DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 
 // ---------------------------------------------------------------------------
@@ -338,18 +338,18 @@ impl SafetyMonitor {
 
         // Create genesis events
         let mut genesis_events: Vec<(usize, Event)> = Vec::with_capacity(self.nodes.len());
-        for i in 0..self.nodes.len() {
-            let mut genesis = Event::genesis(self.nodes[i].node_id, vec![(i + 1) as u8]);
+        for (i, node) in self.nodes.iter_mut().enumerate() {
+            let mut genesis = Event::genesis(node.node_id, vec![(i + 1) as u8]);
             genesis.sign_with_keypair(&keypairs[i]);
 
-            if let Err(e) = self.nodes[i].graph.insert(genesis.clone()) {
+            if let Err(e) = node.graph.insert(genesis.clone()) {
                 tracing::warn!(node = i, "Genesis insert failed: {}", e);
                 continue;
             }
 
-            self.nodes[i].next_sequence = 1;
-            self.nodes[i].latest_events.insert(genesis.creator, genesis.id);
-            self.nodes[i].vector_clock = genesis.vector_clock.clone();
+            node.next_sequence = 1;
+            node.latest_events.insert(genesis.creator, genesis.id);
+            node.vector_clock = genesis.vector_clock.clone();
 
             genesis_events.push((i, genesis));
         }
@@ -491,7 +491,11 @@ impl SafetyMonitor {
                         .filter(|&target_idx| target_idx != source_idx)
                         .filter(|&target_idx| !self.nodes[target_idx].graph.contains(&event_id))
                         .filter_map(|target_idx| {
-                            self.nodes[source_idx].graph.get(&event_id).cloned().map(|e| (target_idx, e))
+                            self.nodes[source_idx]
+                                .graph
+                                .get(&event_id)
+                                .cloned()
+                                .map(|e| (target_idx, e))
                         })
                         .collect();
 

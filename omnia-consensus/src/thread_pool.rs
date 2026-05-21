@@ -41,7 +41,7 @@ use std::thread;
 #[derive(Debug)]
 pub enum ValidationTask {
     /// Validate and insert a single event into the sharded state.
-    ValidateEvent(Event),
+    ValidateEvent(Box<Event>),
     /// Shutdown the worker.
     Shutdown,
 }
@@ -165,15 +165,6 @@ impl ValidationPool {
     fn validate_and_insert(event: &Event, state: &ShardedConsensusState) -> ValidationResult {
         let event_id = event.id;
 
-        // Check if already processed
-        if state.contains_event(&event_id) {
-            return ValidationResult {
-                event_id,
-                valid: true,
-                error: Some("already processed".to_string()),
-            };
-        }
-
         // Hash integrity check
         if !event.verify_hash() {
             return ValidationResult {
@@ -183,8 +174,18 @@ impl ValidationPool {
             };
         }
 
-        // Insert into sharded state
-        state.insert_event_state(event_id, crate::consensus::ConsensusState::Pending);
+        // Atomically insert into sharded state — detects duplicates correctly
+        // even under concurrent access because each shard is protected by its
+        // own RwLock and the check+insert happens while holding the write lock.
+        let inserted = state.insert_event_state_if_absent(event_id, crate::consensus::ConsensusState::Pending);
+
+        if !inserted {
+            return ValidationResult {
+                event_id,
+                valid: true,
+                error: Some("already processed".to_string()),
+            };
+        }
 
         ValidationResult {
             event_id,
@@ -285,7 +286,7 @@ mod tests {
         let event = make_test_event(0);
         let event_id = event.id;
 
-        pool.submit(ValidationTask::ValidateEvent(event));
+        pool.submit(ValidationTask::ValidateEvent(Box::new(event)));
 
         // Give workers time to process
         thread::sleep(std::time::Duration::from_millis(100));
@@ -312,7 +313,7 @@ mod tests {
         for seq in 0..num_events {
             let event = make_test_event(seq as u64);
             event_ids.push(event.id);
-            pool.submit(ValidationTask::ValidateEvent(event));
+            pool.submit(ValidationTask::ValidateEvent(Box::new(event)));
         }
 
         // Give workers time to process
@@ -342,8 +343,8 @@ mod tests {
         let event = make_test_event(0);
 
         // Submit the same event twice
-        pool.submit(ValidationTask::ValidateEvent(event.clone()));
-        pool.submit(ValidationTask::ValidateEvent(event.clone()));
+        pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
+        pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
 
         // Give workers time to process
         thread::sleep(std::time::Duration::from_millis(200));
@@ -356,9 +357,17 @@ mod tests {
         // One of them should have the "already processed" note
         let already_processed_count = results
             .iter()
-            .filter(|r| r.error.as_ref().map(|e| e.contains("already processed")).unwrap_or(false))
+            .filter(|r| {
+                r.error
+                    .as_ref()
+                    .map(|e| e.contains("already processed"))
+                    .unwrap_or(false)
+            })
             .count();
-        assert!(already_processed_count >= 1, "At least one result should note 'already processed'");
+        assert!(
+            already_processed_count >= 1,
+            "At least one result should note 'already processed'"
+        );
 
         pool.shutdown();
     }

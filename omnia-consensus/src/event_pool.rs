@@ -28,7 +28,7 @@ use thiserror::Error;
 #[derive(Debug)]
 enum Slot {
     /// Slot is occupied with an event.
-    Occupied { event: Event },
+    Occupied { event: Box<Event> },
     /// Slot is free and can be reused. `next_free` points to the next
     /// free slot in the free list, or `None` if this is the tail.
     Free { next_free: Option<usize> },
@@ -123,11 +123,7 @@ impl EventPool {
         // Pre-allocate free slots
         let mut slots = Vec::with_capacity(initial_capacity);
         for i in 0..initial_capacity {
-            let next_free = if i + 1 < initial_capacity {
-                Some(i + 1)
-            } else {
-                None
-            };
+            let next_free = if i + 1 < initial_capacity { Some(i + 1) } else { None };
             slots.push(Slot::Free { next_free });
         }
 
@@ -184,10 +180,7 @@ impl EventPool {
                         let next_free = match &self.slots[idx] {
                             Slot::Free { next_free } => *next_free,
                             Slot::Occupied { .. } => {
-                                return Err(EventPoolError::PoolFull(
-                                    self.slots.len(),
-                                    self.max_capacity,
-                                ));
+                                return Err(EventPoolError::PoolFull(self.slots.len(), self.max_capacity));
                             }
                         };
                         self.free_head = next_free;
@@ -201,7 +194,7 @@ impl EventPool {
         };
 
         // Place event in slot
-        self.slots[slot_index] = Slot::Occupied { event };
+        self.slots[slot_index] = Slot::Occupied { event: Box::new(event) };
         self.index.insert(event_id, slot_index);
         self.occupied_count += 1;
 
@@ -261,7 +254,7 @@ impl EventPool {
         self.occupied_count -= 1;
 
         match old_slot {
-            Slot::Occupied { event } => Some(event),
+            Slot::Occupied { event } => Some(*event),
             Slot::Free { .. } => None, // Should not happen
         }
     }
@@ -314,11 +307,7 @@ impl EventPool {
 
         let additional = ((self.initial_capacity as f64) * self.growth_factor) as usize;
         let additional = additional.max(1); // Grow by at least 1 slot
-        let new_total = self
-            .slots
-            .len()
-            .saturating_add(additional)
-            .min(self.max_capacity);
+        let new_total = self.slots.len().saturating_add(additional).min(self.max_capacity);
         let actual_additional = new_total.saturating_sub(self.slots.len());
 
         if actual_additional == 0 {
@@ -349,11 +338,7 @@ impl EventPool {
         let total = self.slots.len();
         let occupied = self.occupied_count;
         let free = total.saturating_sub(occupied);
-        let utilization = if total > 0 {
-            occupied as f64 / total as f64
-        } else {
-            0.0
-        };
+        let utilization = if total > 0 { occupied as f64 / total as f64 } else { 0.0 };
 
         EventPoolStats {
             total_capacity: total,
@@ -722,7 +707,8 @@ mod stress_test_pool_allocation {
 
         // Should not have grown further (reused free slots)
         assert_eq!(
-            pool.stats().growth_count, growth_count,
+            pool.stats().growth_count,
+            growth_count,
             "pool should not grow when free slots are available"
         );
     }

@@ -149,7 +149,10 @@ impl BatchProof {
         let event_count = events.len();
 
         // Compute leaf hashes: domain-separated BLAKE3 of each event ID
-        let mut leaves: Vec<[u8; 32]> = events.iter().map(|e| blake3_hash_domain(BATCH_PROOF_DOMAIN, &e.id)).collect();
+        let mut leaves: Vec<[u8; 32]> = events
+            .iter()
+            .map(|e| blake3_hash_domain(BATCH_PROOF_DOMAIN, &e.id))
+            .collect();
 
         // Sort leaves for deterministic Merkle root
         leaves.sort();
@@ -189,14 +192,15 @@ impl BatchProof {
         }
 
         // Recompute Merkle root
-        let mut leaves: Vec<[u8; 32]> = events.iter().map(|e| blake3_hash_domain(BATCH_PROOF_DOMAIN, &e.id)).collect();
+        let mut leaves: Vec<[u8; 32]> = events
+            .iter()
+            .map(|e| blake3_hash_domain(BATCH_PROOF_DOMAIN, &e.id))
+            .collect();
         leaves.sort();
         let expected_root = compute_merkle_root(&leaves);
 
         if expected_root != self.merkle_root {
-            return Err(BatchError::InvalidProof(
-                "Merkle root mismatch".to_string(),
-            ));
+            return Err(BatchError::InvalidProof("Merkle root mismatch".to_string()));
         }
 
         // Recompute batch ID
@@ -457,7 +461,7 @@ fn compute_merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
     let mut level: Vec<[u8; 32]> = leaves.to_vec();
 
     while level.len() > 1 {
-        let mut next_level = Vec::with_capacity((level.len() + 1) / 2);
+        let mut next_level = Vec::with_capacity(level.len().div_ceil(2));
 
         for chunk in level.chunks(2) {
             let left = chunk[0];
@@ -507,39 +511,29 @@ mod tests {
 
     #[test]
     fn test_batch_proof_compute_multiple_events() {
-        let events: Vec<Event> = (0..5)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..5).map(|i| signed_event(node(1), vec![i])).collect();
         let proof = BatchProof::compute(&events).unwrap();
         assert_eq!(proof.event_count, 5);
     }
 
     #[test]
     fn test_batch_proof_verify_success() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         let proof = BatchProof::compute(&events).unwrap();
         assert!(proof.verify(&events).is_ok());
     }
 
     #[test]
     fn test_batch_proof_verify_wrong_events() {
-        let events_a: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
-        let events_b: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(2), vec![i]))
-            .collect();
+        let events_a: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
+        let events_b: Vec<Event> = (0..3).map(|i| signed_event(node(2), vec![i])).collect();
         let proof = BatchProof::compute(&events_a).unwrap();
         assert!(proof.verify(&events_b).is_err());
     }
 
     #[test]
     fn test_batch_proof_verify_count_mismatch() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         let proof = BatchProof::compute(&events).unwrap();
         // Verify with fewer events
         assert!(proof.verify(&events[..2]).is_err());
@@ -553,9 +547,7 @@ mod tests {
 
     #[test]
     fn test_batch_proof_deterministic() {
-        let events: Vec<Event> = (0..5)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..5).map(|i| signed_event(node(1), vec![i])).collect();
         let proof1 = BatchProof::compute(&events).unwrap();
         let proof2 = BatchProof::compute(&events).unwrap();
         assert_eq!(proof1.merkle_root, proof2.merkle_root);
@@ -564,17 +556,8 @@ mod tests {
 
     #[test]
     fn test_consensus_event_batch_new() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
-        let batch = ConsensusEventBatch::new(
-            events,
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        )
-        .unwrap();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
+        let batch = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
         assert_eq!(batch.events.len(), 3);
         assert_eq!(batch.sequence, 0);
         assert_eq!(batch.creator, node(1));
@@ -583,13 +566,7 @@ mod tests {
 
     #[test]
     fn test_consensus_event_batch_empty() {
-        let result = ConsensusEventBatch::new(
-            vec![],
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        );
+        let result = ConsensusEventBatch::new(vec![], node(1), 0, VectorClock::new(), MAX_BATCH_SIZE);
         assert!(matches!(result, Err(BatchError::EmptyBatch)));
     }
 
@@ -598,45 +575,21 @@ mod tests {
         let events: Vec<Event> = (0..=MAX_BATCH_SIZE)
             .map(|i| signed_event(node(1), vec![i as u8]))
             .collect();
-        let result = ConsensusEventBatch::new(
-            events,
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        );
+        let result = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE);
         assert!(matches!(result, Err(BatchError::BatchTooLarge(_, _))));
     }
 
     #[test]
     fn test_consensus_event_batch_validate_proof() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
-        let batch = ConsensusEventBatch::new(
-            events,
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        )
-        .unwrap();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
+        let batch = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
         assert!(batch.validate_proof().is_ok());
     }
 
     #[test]
     fn test_consensus_event_batch_validate_state_root() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
-        let batch = ConsensusEventBatch::new(
-            events,
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        )
-        .unwrap();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
+        let batch = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
         // Valid state root
         assert!(batch.validate_state_root(&batch.proof.merkle_root).is_ok());
         // Invalid state root
@@ -738,9 +691,7 @@ mod tests {
 
     #[test]
     fn test_batch_proof_tampered_merkle_root() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         let mut proof = BatchProof::compute(&events).unwrap();
         // Tamper with Merkle root
         proof.merkle_root[0] ^= 0xFF;
@@ -749,9 +700,7 @@ mod tests {
 
     #[test]
     fn test_batch_proof_tampered_batch_id() {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         let mut proof = BatchProof::compute(&events).unwrap();
         // Tamper with batch ID
         proof.batch_id[0] ^= 0xFF;
@@ -761,17 +710,8 @@ mod tests {
     #[test]
     fn test_batch_validate_with_graph() {
         let graph = CausalGraph::new();
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
-        let batch = ConsensusEventBatch::new(
-            events,
-            node(1),
-            0,
-            VectorClock::new(),
-            MAX_BATCH_SIZE,
-        )
-        .unwrap();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
+        let batch = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
 
         assert!(batch.validate(&graph, MAX_BATCH_SIZE).is_ok());
     }
@@ -779,9 +719,7 @@ mod tests {
     #[test]
     fn test_batch_validate_rejects_too_large() {
         let graph = CausalGraph::new();
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         let batch = ConsensusEventBatch::new(
             events,
             node(1),

@@ -15,14 +15,9 @@
 //! 7. Optimized stack produces identical consensus outcomes as the non-optimized stack
 
 use omnia_chaos_tests::ChaosNetwork;
-use omnia_consensus::{
-    BatchConfig, BatchIngestor, ConsensusState, PruningAwarePool, ShardedConsensusState,
-};
+use omnia_consensus::{BatchConfig, BatchIngestor, ConsensusState, PruningAwarePool, ShardedConsensusState};
 use omnia_crypto::generate_keypair;
-use omnia_network::{
-    CompactEncoder, GossipBloomFilter, GossipPriority, PriorityQueueConfig,
-    PriorityGossipQueue,
-};
+use omnia_network::{CompactEncoder, GossipBloomFilter, GossipPriority, PriorityGossipQueue, PriorityQueueConfig};
 use omnia_primitives::{Event, EventId, NodeId, VectorClock};
 
 /// Helper: create a NodeId from a single byte.
@@ -132,7 +127,8 @@ fn test_pool_pruning_with_sharded_state_tracking() {
     // Mark half as finalized and prune them
     for (i, id) in event_ids.iter().enumerate() {
         if i < 4 {
-            pool.mark_finalized(id, (i + 1) as u64).expect("finalize should succeed");
+            pool.mark_finalized(id, (i + 1) as u64)
+                .expect("finalize should succeed");
             sharded.insert_event_state(*id, ConsensusState::Committed);
         }
     }
@@ -161,8 +157,7 @@ fn test_pool_pruning_with_sharded_state_tracking() {
 fn test_batch_gossip_propagation_pipeline() {
     use omnia_consensus::batch::MAX_BATCH_SIZE;
     use omnia_network::{
-        serialize_batch_message, deserialize_batch_message, validate_batch_message,
-        GossipBatchMessage,
+        deserialize_batch_message, serialize_batch_message, validate_batch_message, GossipBatchMessage,
     };
 
     let creator = node(1);
@@ -213,9 +208,7 @@ fn test_batch_gossip_propagation_pipeline() {
 /// Test: Batch with gossip batch ack and digest.
 #[test]
 fn test_batch_gossip_ack_and_digest() {
-    use omnia_network::{
-        serialize_batch_message, deserialize_batch_message, GossipBatchMessage,
-    };
+    use omnia_network::{deserialize_batch_message, serialize_batch_message, GossipBatchMessage};
 
     // BatchAck
     let ack = GossipBatchMessage::BatchAck {
@@ -226,7 +219,9 @@ fn test_batch_gossip_ack_and_digest() {
     let serialized = serialize_batch_message(&ack).expect("serialize ack");
     let deserialized = deserialize_batch_message(&serialized).expect("deserialize ack");
     match deserialized {
-        GossipBatchMessage::BatchAck { batch_id, event_count, .. } => {
+        GossipBatchMessage::BatchAck {
+            batch_id, event_count, ..
+        } => {
             assert_eq!(batch_id, [1u8; 32]);
             assert_eq!(event_count, 5);
         }
@@ -243,7 +238,9 @@ fn test_batch_gossip_ack_and_digest() {
     let serialized = serialize_batch_message(&digest).expect("serialize digest");
     let deserialized = deserialize_batch_message(&serialized).expect("deserialize digest");
     match deserialized {
-        GossipBatchMessage::BatchDigest { node_id, last_sequence, .. } => {
+        GossipBatchMessage::BatchDigest {
+            node_id, last_sequence, ..
+        } => {
             assert_eq!(node_id, node(42));
             assert_eq!(last_sequence, 7);
         }
@@ -299,28 +296,19 @@ fn test_priority_queue_with_finality_events() {
     // Then high priority (fame determination)
     for _ in 0..5 {
         let event = queue.dequeue().expect("should have event");
-        assert!(
-            (20..25).contains(&event[0]),
-            "High priority events should come next"
-        );
+        assert!((20..25).contains(&event[0]), "High priority events should come next");
     }
 
     // Then normal priority
     for _ in 0..20 {
         let event = queue.dequeue().expect("should have event");
-        assert!(
-            (0..20).contains(&event[0]),
-            "Normal priority events should follow"
-        );
+        assert!((0..20).contains(&event[0]), "Normal priority events should follow");
     }
 
     // Then low priority
     for _ in 0..5 {
         let event = queue.dequeue().expect("should have event");
-        assert!(
-            (30..35).contains(&event[0]),
-            "Low priority events should come last"
-        );
+        assert!((30..35).contains(&event[0]), "Low priority events should come last");
     }
 
     assert!(queue.is_empty());
@@ -427,7 +415,11 @@ fn test_compact_encoding_with_multi_node_events() {
     let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
 
     // Delta should only contain entries where local > remote
-    assert_eq!(compact.delta_clock.entries.len(), 2, "Only 2 entries should have advanced");
+    assert_eq!(
+        compact.delta_clock.entries.len(),
+        2,
+        "Only 2 entries should have advanced"
+    );
     assert!(compact.delta_clock.entries.contains(&(node(1), 8)));
     assert!(compact.delta_clock.entries.contains(&(node(3), 10)));
     // node(2) didn't change, should not be in delta
@@ -487,13 +479,9 @@ fn test_three_node_with_optimized_gossip_components() {
     let mut network = ChaosNetwork::new(3);
 
     // Set up per-node bloom filters and priority queues
-    let mut bloom_filters: Vec<GossipBloomFilter> = (0..3)
-        .map(|_| GossipBloomFilter::new(10_000, 0.01))
-        .collect();
+    let mut bloom_filters: Vec<GossipBloomFilter> = (0..3).map(|_| GossipBloomFilter::new(10_000, 0.01)).collect();
 
-    let mut priority_queues: Vec<PriorityGossipQueue> = (0..3)
-        .map(|_| PriorityGossipQueue::with_defaults())
-        .collect();
+    let mut priority_queues: Vec<PriorityGossipQueue> = (0..3).map(|_| PriorityGossipQueue::with_defaults()).collect();
 
     // Submit events
     for round in 0..5 {
@@ -520,10 +508,7 @@ fn test_three_node_with_optimized_gossip_components() {
     for (idx, bloom) in bloom_filters.iter().enumerate() {
         let committed = network.nodes[idx].consensus.get_committed();
         for event_id in committed {
-            assert!(
-                bloom.contains(&event_id),
-                "Bloom filter false negative at node {idx}"
-            );
+            assert!(bloom.contains(&event_id), "Bloom filter false negative at node {idx}");
         }
     }
 
@@ -554,11 +539,7 @@ fn test_state_root_agreement_across_nodes() {
     network.warmup();
 
     // Collect state roots
-    let state_roots: Vec<[u8; 32]> = network
-        .nodes
-        .iter()
-        .map(|n| n.graph.state_root())
-        .collect();
+    let state_roots: Vec<[u8; 32]> = network.nodes.iter().map(|n| n.graph.state_root()).collect();
 
     // If all nodes have the same set of events, state roots should match.
     // With perfect sync, they should be identical.
@@ -642,7 +623,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
 
             // Classify and enqueue in priority queue
             let priority = GossipPriority::classify(
-                round == 0,  // first round events treated as witnesses
+                round == 0, // first round events treated as witnesses
                 false,
                 false,
             );
@@ -667,10 +648,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
 
     // Verify bloom filter has no false negatives for tracked events
     for id in &optimized_tracked {
-        assert!(
-            bloom.contains(id),
-            "Bloom filter should not have false negatives"
-        );
+        assert!(bloom.contains(id), "Bloom filter should not have false negatives");
     }
 
     // Verify pool has all tracked events
@@ -691,10 +669,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
     );
 
     // Safety must hold in both
-    assert!(
-        standard_network.check_safety(),
-        "Standard stack safety should hold"
-    );
+    assert!(standard_network.check_safety(), "Standard stack safety should hold");
 }
 
 /// Test: Full end-to-end pipeline with all optimizations:
@@ -710,8 +685,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
 fn test_full_optimized_pipeline_end_to_end() {
     use omnia_consensus::batch::MAX_BATCH_SIZE;
     use omnia_network::{
-        serialize_batch_message, deserialize_batch_message, validate_batch_message,
-        GossipBatchMessage,
+        deserialize_batch_message, serialize_batch_message, validate_batch_message, GossipBatchMessage,
     };
 
     let sharded = ShardedConsensusState::new();
@@ -760,7 +734,7 @@ fn test_full_optimized_pipeline_end_to_end() {
         let priority = GossipPriority::classify(i == 0, i == 1, false);
         priority_queue.enqueue(event_id, priority);
 
-            // Step 6: Submit to batch ingestor
+        // Step 6: Submit to batch ingestor
         if let Some(batch) = ingestor.submit(event) {
             // Validate batch proof
             assert!(batch.validate_proof().is_ok());

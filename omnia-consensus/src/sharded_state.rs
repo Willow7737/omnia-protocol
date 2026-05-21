@@ -126,9 +126,7 @@ impl ShardedConsensusState {
     /// Each shard is initialized with empty HashMaps. The global state
     /// is also initialized empty.
     pub fn new() -> Self {
-        let shards = (0..NUM_SHARDS)
-            .map(|_| RwLock::new(ConsensusShard::new()))
-            .collect();
+        let shards = (0..NUM_SHARDS).map(|_| RwLock::new(ConsensusShard::new())).collect();
         Self {
             shards,
             global: RwLock::new(GlobalConsensusState::new()),
@@ -151,6 +149,21 @@ impl ShardedConsensusState {
         let idx = Self::shard_index(&event_id);
         let mut shard = self.shards[idx].write().unwrap_or_else(|e| e.into_inner());
         shard.event_states.insert(event_id, state);
+    }
+
+    /// Insert a consensus state for an event only if it is not already present.
+    ///
+    /// Returns `true` if the event was inserted (was absent), `false` if it
+    /// already existed (no modification). This is atomic with respect to
+    /// concurrent calls targeting the same shard.
+    pub fn insert_event_state_if_absent(&self, event_id: EventId, state: ConsensusState) -> bool {
+        let idx = Self::shard_index(&event_id);
+        let mut shard = self.shards[idx].write().unwrap_or_else(|e| e.into_inner());
+        if shard.event_states.contains_key(&event_id) {
+            return false;
+        }
+        shard.event_states.insert(event_id, state);
+        true
     }
 
     /// Read the consensus state for an event from the correct shard.

@@ -31,22 +31,18 @@ fn bench_single_threaded_hashmap(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     for size in [1_000, 10_000, 100_000] {
-        group.bench_with_input(
-            BenchmarkId::new("hashmap_single_thread", size),
-            &size,
-            |b, &size| {
-                b.iter(|| {
-                    let mut event_states: HashMap<[u8; 32], ConsensusState> = HashMap::new();
-                    let mut event_rounds: HashMap<[u8; 32], u64> = HashMap::new();
+        group.bench_with_input(BenchmarkId::new("hashmap_single_thread", size), &size, |b, &size| {
+            b.iter(|| {
+                let mut event_states: HashMap<[u8; 32], ConsensusState> = HashMap::new();
+                let mut event_rounds: HashMap<[u8; 32], u64> = HashMap::new();
 
-                    for i in 0..size {
-                        let event_id = make_event_id(i);
-                        event_states.insert(event_id, ConsensusState::Pending);
-                        event_rounds.insert(event_id, i as u64);
-                    }
-                });
-            },
-        );
+                for i in 0..size {
+                    let event_id = make_event_id(i);
+                    event_states.insert(event_id, ConsensusState::Pending);
+                    event_rounds.insert(event_id, i as u64);
+                }
+            });
+        });
     }
 
     group.finish();
@@ -62,21 +58,17 @@ fn bench_sharded_single_thread(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     for size in [1_000, 10_000, 100_000] {
-        group.bench_with_input(
-            BenchmarkId::new("sharded_single_thread", size),
-            &size,
-            |b, &size| {
-                b.iter(|| {
-                    let state = ShardedConsensusState::new();
+        group.bench_with_input(BenchmarkId::new("sharded_single_thread", size), &size, |b, &size| {
+            b.iter(|| {
+                let state = ShardedConsensusState::new();
 
-                    for i in 0..size {
-                        let event_id = make_event_id(i);
-                        state.insert_event_state(event_id, ConsensusState::Pending);
-                        state.insert_event_round(event_id, i as u64);
-                    }
-                });
-            },
-        );
+                for i in 0..size {
+                    let event_id = make_event_id(i);
+                    state.insert_event_state(event_id, ConsensusState::Pending);
+                    state.insert_event_round(event_id, i as u64);
+                }
+            });
+        });
     }
 
     group.finish();

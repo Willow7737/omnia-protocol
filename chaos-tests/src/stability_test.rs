@@ -36,8 +36,8 @@ use std::time::{Duration, Instant};
 
 use omnia_primitives::{Event, EventId, NodeId};
 use omnia_substrate::{
-    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, VectorClock,
-    DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
+    DEFAULT_SLASH_THRESHOLD,
 };
 
 // ---------------------------------------------------------------------------
@@ -300,9 +300,7 @@ impl StabilityTestRunner {
             self.sync_all();
 
             // Periodic health check
-            if Instant::now().saturating_duration_since(self.last_health_check)
-                >= self.config.health_check_interval()
-            {
+            if Instant::now().saturating_duration_since(self.last_health_check) >= self.config.health_check_interval() {
                 self.health_check();
                 self.last_health_check = Instant::now();
             }
@@ -366,9 +364,7 @@ impl StabilityTestRunner {
             let mut vc = self.nodes[i].vector_clock.clone();
             vc.set(source_node_id, sequence.saturating_add(1));
 
-            let payload: Vec<u8> = (0..64)
-                .map(|j| ((j + sequence as usize) % 256) as u8)
-                .collect();
+            let payload: Vec<u8> = (0..64).map(|j| ((j + sequence as usize) % 256) as u8).collect();
 
             let mut event = if self_parent.is_none() {
                 Event::genesis(source_node_id, payload)
@@ -417,7 +413,11 @@ impl StabilityTestRunner {
                         .filter(|&target_idx| target_idx != source_idx)
                         .filter(|&target_idx| !self.nodes[target_idx].graph.contains(&event_id))
                         .filter_map(|target_idx| {
-                            self.nodes[source_idx].graph.get(&event_id).cloned().map(|e| (target_idx, e))
+                            self.nodes[source_idx]
+                                .graph
+                                .get(&event_id)
+                                .cloned()
+                                .map(|e| (target_idx, e))
                         })
                         .collect();
 
@@ -425,11 +425,7 @@ impl StabilityTestRunner {
                         let node = &mut self.nodes[target_idx];
                         if node.graph.insert(event.clone()).is_ok() {
                             if let Err(e) = node.consensus.process_event(&event, &node.graph) {
-                                tracing::debug!(
-                                    node = target_idx,
-                                    "Sync consensus error: {}",
-                                    e
-                                );
+                                tracing::debug!(node = target_idx, "Sync consensus error: {}", e);
                             }
                             node.latest_events.insert(event.creator, event.id);
                             node.vector_clock.merge(&event.vector_clock);
@@ -609,14 +605,8 @@ mod tests {
             "Should have submitted a significant number of events, got {}",
             result.total_events
         );
-        assert_eq!(
-            result.consensus_failures, 0,
-            "Should have no consensus failures"
-        );
-        assert_eq!(
-            result.state_root_mismatches, 0,
-            "Should have no state root mismatches"
-        );
+        assert_eq!(result.consensus_failures, 0, "Should have no consensus failures");
+        assert_eq!(result.state_root_mismatches, 0, "Should have no state root mismatches");
         assert!(result.passed, "Short-run stability test should pass");
     }
 
@@ -630,10 +620,7 @@ mod tests {
         let mut runner = StabilityTestRunner::new(config);
         let result = runner.run();
 
-        assert_eq!(
-            result.state_root_mismatches, 0,
-            "All nodes should agree on state root"
-        );
+        assert_eq!(result.state_root_mismatches, 0, "All nodes should agree on state root");
 
         // Additionally verify directly: after the run all node state roots should match
         let roots: Vec<[u8; 32]> = runner.nodes.iter().map(|n| n.graph.state_root()).collect();

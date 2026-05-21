@@ -52,7 +52,7 @@ struct BloomFilter {
 impl BloomFilter {
     /// Create a new bloom filter with the given number of bits and hash functions.
     fn new(num_bits: usize, num_hashes: usize) -> Self {
-        let num_bytes = (num_bits + 7) / 8;
+        let num_bytes = num_bits.div_ceil(8);
         Self {
             bits: vec![0u8; num_bytes],
             num_bits,
@@ -348,10 +348,7 @@ mod tests {
         for i in 0..100u8 {
             let mut item = [0u8; 32];
             item[0] = i;
-            assert!(
-                filter.might_contain(&item),
-                "False negative for item {i}"
-            );
+            assert!(filter.might_contain(&item), "False negative for item {i}");
         }
     }
 

@@ -199,12 +199,8 @@ impl BatchCrdtMerger {
 
         for (index, op) in ops.iter().enumerate() {
             match op {
-                CrdtBatchOp::GCounterIncrement {
-                    key,
-                    node_id,
-                    amount,
-                } => {
-                    let counter = self.g_counters.entry(key.clone()).or_insert_with(GCounter::new);
+                CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
+                    let counter = self.g_counters.entry(key.clone()).or_default();
                     if counter.increment(*node_id, *amount).is_err() {
                         // This shouldn't happen after validation, but handle it
                         // gracefully with a rollback
@@ -215,17 +211,13 @@ impl BatchCrdtMerger {
                     }
                     modified_keys.insert(key.clone());
                 }
-                CrdtBatchOp::OrSetAdd {
-                    key,
-                    node_id,
-                    element,
-                } => {
-                    let set = self.or_sets.entry(key.clone()).or_insert_with(OrSet::new);
+                CrdtBatchOp::OrSetAdd { key, node_id, element } => {
+                    let set = self.or_sets.entry(key.clone()).or_default();
                     set.add(*node_id, element.clone());
                     modified_keys.insert(key.clone());
                 }
                 CrdtBatchOp::OrSetRemove { key, element } => {
-                    let set = self.or_sets.entry(key.clone()).or_insert_with(OrSet::new);
+                    let set = self.or_sets.entry(key.clone()).or_default();
                     set.remove(element);
                     modified_keys.insert(key.clone());
                 }
@@ -260,11 +252,7 @@ impl BatchCrdtMerger {
     fn validate_batch(&self, ops: &[CrdtBatchOp]) -> Result<(), BatchCrdtError> {
         for (index, op) in ops.iter().enumerate() {
             match op {
-                CrdtBatchOp::GCounterIncrement {
-                    key,
-                    node_id,
-                    amount,
-                } => {
+                CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
                     // Check if increment would overflow
                     if let Some(counter) = self.g_counters.get(key) {
                         let current = counter.node_value(node_id);
@@ -334,13 +322,13 @@ impl BatchCrdtMerger {
     pub fn merge(&mut self, other: &Self) {
         // Merge G-Counters
         for (key, other_counter) in &other.g_counters {
-            let counter = self.g_counters.entry(key.clone()).or_insert_with(GCounter::new);
+            let counter = self.g_counters.entry(key.clone()).or_default();
             counter.merge(other_counter);
         }
 
         // Merge OR-Sets
         for (key, other_set) in &other.or_sets {
-            let set = self.or_sets.entry(key.clone()).or_insert_with(OrSet::new);
+            let set = self.or_sets.entry(key.clone()).or_default();
             set.merge(other_set);
         }
 

@@ -11,7 +11,9 @@
 //! as defined in the Phase 0 Throughput Optimization Sprint Plan.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use omnia_consensus::{CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
+use omnia_consensus::{
+    CausalGraph, ConsensusConfig, ConsensusEngine, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+};
 use omnia_crypto::generate_keypair;
 use omnia_primitives::{Event, NodeId, VectorClock};
 use std::hint::black_box;
@@ -83,10 +85,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
                 genesis.sign_with_keypair(&keypair);
                 let genesis_id = genesis.id;
                 graph.insert(genesis).expect("genesis insert");
-                let _ = consensus.process_event(
-                    graph.get(&genesis_id).expect("genesis exists"),
-                    &graph,
-                );
+                let _ = consensus.process_event(graph.get(&genesis_id).expect("genesis exists"), &graph);
 
                 (graph, consensus, genesis_id, 1u64)
             },
@@ -99,14 +98,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
                     let mut vc = VectorClock::new();
                     vc.set(creator, seq + 1);
 
-                    let mut event = Event::new(
-                        creator,
-                        seq,
-                        vc,
-                        Some(last_id),
-                        None,
-                        vec![seq as u8; 64],
-                    );
+                    let mut event = Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8; 64]);
                     event.sign_with_keypair(&keypair);
 
                     let event_id = event.id;
@@ -170,10 +162,7 @@ fn finality_latency_bench(c: &mut Criterion) {
                 genesis.sign_with_keypair(&keypair);
                 let genesis_id = genesis.id;
                 graph.insert(genesis).expect("genesis insert");
-                let _ = consensus.process_event(
-                    graph.get(&genesis_id).expect("genesis exists"),
-                    &graph,
-                );
+                let _ = consensus.process_event(graph.get(&genesis_id).expect("genesis exists"), &graph);
 
                 (graph, consensus, keypair, genesis_id, 1u64)
             },
@@ -218,7 +207,9 @@ fn zk_proof_gen_bench(c: &mut Criterion) {
     use ark_bn254::Fr;
     use ark_ff::PrimeField;
     use omnia_adapters::circuit::{ExpandedRollupCircuit, RollupCircuit};
-    use omnia_adapters::prover::{create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded};
+    use omnia_adapters::prover::{
+        create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded,
+    };
 
     let mut group = c.benchmark_group("zk_proof_gen");
     group.measurement_time(Duration::from_secs(30));
@@ -240,8 +231,7 @@ fn zk_proof_gen_bench(c: &mut Criterion) {
     // 100-tx batch (expanded circuit)
     let num_events = 100;
     let merkle_depth = 8;
-    let (pk_expanded, _vk) =
-        generate_trusted_setup_expanded(num_events, merkle_depth).expect("expanded setup failed");
+    let (pk_expanded, _vk) = generate_trusted_setup_expanded(num_events, merkle_depth).expect("expanded setup failed");
 
     group.bench_function("100_tx_batch", |b| {
         b.iter(|| {
@@ -355,14 +345,7 @@ fn dag_insert_bench(c: &mut Criterion) {
                         for _ in 0..pre_fill {
                             let mut vc = VectorClock::new();
                             vc.set(creator, seq + 1);
-                            let mut event = Event::new(
-                                creator,
-                                seq,
-                                vc,
-                                last_id,
-                                None,
-                                vec![seq as u8; 32],
-                            );
+                            let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]);
                             event.sign_with_keypair(&keypair);
                             last_id = Some(event.id);
                             graph.insert(event).expect("pre-fill insert");
@@ -376,14 +359,7 @@ fn dag_insert_bench(c: &mut Criterion) {
 
                         let mut vc = VectorClock::new();
                         vc.set(creator, seq + 1);
-                        let mut event = Event::new(
-                            creator,
-                            seq,
-                            vc,
-                            last_id,
-                            None,
-                            vec![seq as u8; 32],
-                        );
+                        let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]);
                         event.sign_with_keypair(&keypair);
                         let _ = graph.insert(event);
 

@@ -15,5 +15,5 @@ fuzz_target!(|data: &[u8]| {
             }
         }
     }
-    let _ = clock1.merge(&clock2);
+    clock1.merge(&clock2);
 });

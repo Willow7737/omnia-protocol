@@ -7,14 +7,19 @@
 //! - Liveness verification (events eventually delivered)
 //! - Bloom filter effectiveness (FPR within bounds)
 
+#[cfg(test)]
 use crate::ChaosNetwork;
+#[cfg(test)]
 use omnia_network::{
-    CompactEncoder, DeltaClock, GossipBloomFilter, GossipPriority, PriorityQueueConfig, PriorityGossipQueue,
+    CompactEncoder, DeltaClock, GossipBloomFilter, GossipPriority, PriorityGossipQueue, PriorityQueueConfig,
 };
+#[cfg(test)]
 use omnia_primitives::{Event, EventId, NodeId, VectorClock};
+#[cfg(test)]
 use std::collections::HashSet;
 
 /// Helper: create a NodeId from a single byte.
+#[cfg(test)]
 fn node(id: u8) -> NodeId {
     let mut n = [0u8; 32];
     n[0] = id;
@@ -100,10 +105,7 @@ fn test_bloom_filter_rotation_expires_entries() {
 
     // Second rotation: inactive (with our ID) gets cleared
     filter.rotate();
-    assert!(
-        !filter.contains(&event_id),
-        "Should be expired after second rotation"
-    );
+    assert!(!filter.contains(&event_id), "Should be expired after second rotation");
 }
 
 /// Test: Bloom filter maintains correctness under rotation with
@@ -343,10 +345,7 @@ fn test_optimized_gossip_under_message_loss() {
         for i in 0..3 {
             let payload = vec![round as u8, i as u8];
             let result = network.submit_event(i, payload);
-            assert!(
-                result.is_ok(),
-                "Event submission should succeed even with message loss"
-            );
+            assert!(result.is_ok(), "Event submission should succeed even with message loss");
         }
     }
 
@@ -361,10 +360,7 @@ fn test_optimized_gossip_under_message_loss() {
     );
 
     // Liveness should hold (events committed)
-    assert!(
-        network.check_liveness(),
-        "Network should be live with 10% message loss"
-    );
+    assert!(network.check_liveness(), "Network should be live with 10% message loss");
 }
 
 /// Test: Bloom filter correctly suppresses duplicate events
@@ -472,9 +468,7 @@ fn test_compact_encoding_large_vector_clock() {
 
     // Decode
     let local_frontier = VectorClock::new();
-    let decoded = encoder
-        .decode(&restored, &peer_id, &local_frontier, |_| None)
-        .unwrap();
+    let decoded = encoder.decode(&restored, &peer_id, &local_frontier, |_| None).unwrap();
 
     // Verify the reconstructed vector clock matches the original
     assert_eq!(decoded.vector_clock, event.vector_clock);
@@ -489,14 +483,10 @@ fn test_full_optimized_gossip_integration() {
     let mut network = ChaosNetwork::new(3);
 
     // Set up bloom filters for each "node" (simulated)
-    let mut bloom_filters: Vec<GossipBloomFilter> = (0..3)
-        .map(|_| GossipBloomFilter::new(10_000, 0.01))
-        .collect();
+    let mut bloom_filters: Vec<GossipBloomFilter> = (0..3).map(|_| GossipBloomFilter::new(10_000, 0.01)).collect();
 
     // Set up priority queues for each "node" (simulated)
-    let mut priority_queues: Vec<PriorityGossipQueue> = (0..3)
-        .map(|_| PriorityGossipQueue::with_defaults())
-        .collect();
+    let mut priority_queues: Vec<PriorityGossipQueue> = (0..3).map(|_| PriorityGossipQueue::with_defaults()).collect();
 
     // Verify initial state
     assert!(network.check_liveness());
@@ -602,10 +592,7 @@ fn test_gossip_with_event_reordering() {
     network.warmup();
 
     // Despite reordering, safety must hold
-    assert!(
-        network.check_safety(),
-        "Safety should hold despite event reordering"
-    );
+    assert!(network.check_safety(), "Safety should hold despite event reordering");
 
     // Events should eventually be delivered
     assert!(
@@ -635,11 +622,7 @@ fn test_bloom_filter_memory_bounded() {
 #[test]
 fn test_delta_clock_large_values() {
     let delta = DeltaClock {
-        entries: vec![
-            (node(1), u64::MAX),
-            (node(2), 1),
-            (node(3), 0),
-        ],
+        entries: vec![(node(1), u64::MAX), (node(2), 1), (node(3), 0)],
     };
 
     let bytes = delta.to_bytes();

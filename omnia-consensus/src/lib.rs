@@ -35,25 +35,26 @@ pub mod vector_clock_index;
 pub mod consensus_store;
 
 // Re-export commonly used types at crate root
-pub use batch::{BatchConfig, BatchError, BatchIngestor, BatchProof, ConsensusEventBatch, MAX_BATCH_SIZE, DEFAULT_BATCH_SIZE, DEFAULT_BATCH_TIMEOUT_MS};
-pub use batch_crdt_merge::{
-    BatchCrdtError, BatchCrdtMerger, BatchMergeResult, CrdtBatchOp, MAX_CRDT_BATCH_SIZE,
+pub use batch::{
+    BatchConfig, BatchError, BatchIngestor, BatchProof, ConsensusEventBatch, DEFAULT_BATCH_SIZE,
+    DEFAULT_BATCH_TIMEOUT_MS, MAX_BATCH_SIZE,
 };
+pub use batch_crdt_merge::{BatchCrdtError, BatchCrdtMerger, BatchMergeResult, CrdtBatchOp, MAX_CRDT_BATCH_SIZE};
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
 pub use consensus::{
     ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer,
 };
 pub use crdt::{CrdtError, CvRDT, GCounter, LwwRegister, OrSet};
+pub use event_pool::{EventPool, EventPoolError, EventPoolStats};
 pub use mempool::{Mempool, MempoolError};
+pub use pruning_aware_pool::{PoolStats, PruningAwarePool};
 pub use rate_limiter::RateLimiter;
+pub use sharded_state::{ShardedConsensusState, ShardedConsensusStats};
 pub use slashing::{
     InMemorySlashingStore, JailState, SlashOffense, SlashOutcome, SlashPenalty, SlashingEngine, SlashingEvent,
     SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
-pub use event_pool::{EventPool, EventPoolError, EventPoolStats};
-pub use pruning_aware_pool::{PoolStats, PruningAwarePool};
-pub use sharded_state::{ShardedConsensusState, ShardedConsensusStats};
 pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
 pub use thread_pool::{ValidationPool, ValidationResult, ValidationTask};
 pub use vector_clock_index::{VectorClockIndex, VectorClockIndexStats};

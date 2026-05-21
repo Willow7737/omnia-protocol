@@ -128,9 +128,11 @@ impl NodeMetrics {
                         .expect("Failed to create http_requests_total counter");
 
                 // ── Throughput-specific metrics (Sprint 0) ───────────────
-                let consensus_tps =
-                    IntCounter::new("omnia_consensus_tps", "Counter for finalized transactions (use rate() for TPS)")
-                        .expect("Failed to create consensus_tps counter");
+                let consensus_tps = IntCounter::new(
+                    "omnia_consensus_tps",
+                    "Counter for finalized transactions (use rate() for TPS)",
+                )
+                .expect("Failed to create consensus_tps counter");
                 let consensus_finality_latency_seconds = Histogram::with_opts(
                     prometheus::HistogramOpts::new(
                         "omnia_consensus_finality_latency_seconds",
@@ -151,9 +153,8 @@ impl NodeMetrics {
                     ]),
                 )
                 .expect("Failed to create gossip_propagation_latency histogram");
-                let dag_events_total =
-                    IntCounter::new("omnia_dag_events_total", "Total events inserted into the DAG")
-                        .expect("Failed to create dag_events_total counter");
+                let dag_events_total = IntCounter::new("omnia_dag_events_total", "Total events inserted into the DAG")
+                    .expect("Failed to create dag_events_total counter");
                 let dag_insertion_latency_seconds = Histogram::with_opts(
                     prometheus::HistogramOpts::new(
                         "omnia_dag_insertion_latency_seconds",

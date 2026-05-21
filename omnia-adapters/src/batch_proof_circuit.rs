@@ -86,11 +86,7 @@ impl BatchProofCircuit {
     ///
     /// Panics if `merkle_proofs.len() != event_hashes.len()`.
     #[allow(clippy::too_many_arguments)]
-    pub fn from_batch(
-        event_hashes: Vec<Fr>,
-        merkle_root: Fr,
-        merkle_proofs: Vec<merkle::MerkleProof>,
-    ) -> Self {
+    pub fn from_batch(event_hashes: Vec<Fr>, merkle_root: Fr, merkle_proofs: Vec<merkle::MerkleProof>) -> Self {
         let num_events = event_hashes.len();
         assert_eq!(
             merkle_proofs.len(),
@@ -211,17 +207,14 @@ impl ConstraintSynthesizer<Fr> for BatchProofCircuit {
             let mut current = event_hash;
 
             for j in 0..proof.len() {
-                let sibling = FpVar::<Fr>::new_witness(cs.clone(), || {
-                    proof[j].ok_or(SynthesisError::AssignmentMissing)
-                })?;
-                let go_left = Boolean::new_witness(cs.clone(), || {
-                    directions[j].ok_or(SynthesisError::AssignmentMissing)
-                })?;
+                let sibling =
+                    FpVar::<Fr>::new_witness(cs.clone(), || proof[j].ok_or(SynthesisError::AssignmentMissing))?;
+                let go_left =
+                    Boolean::new_witness(cs.clone(), || directions[j].ok_or(SynthesisError::AssignmentMissing))?;
 
                 // Conditional swap based on direction
                 let left = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(&go_left, &sibling, &current)?;
-                let right =
-                    <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(&go_left, &current, &sibling)?;
+                let right = <FpVar<Fr> as CondSelectGadget<Fr>>::conditionally_select(&go_left, &current, &sibling)?;
 
                 // Poseidon hash
                 current = crate::poseidon::poseidon_hash(cs.clone(), &left, &right)?;

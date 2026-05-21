@@ -119,8 +119,7 @@ const COMPRESSION_SNAPPY: u8 = 0x01;
 ///
 /// Returns [`GossipBatchError::SerializationError`] if postcard serialization fails.
 pub fn serialize_batch_message(msg: &GossipBatchMessage) -> Result<Vec<u8>, GossipBatchError> {
-    let raw = postcard::to_allocvec(msg)
-        .map_err(|e| GossipBatchError::SerializationError(e.to_string()))?;
+    let raw = postcard::to_allocvec(msg).map_err(|e| GossipBatchError::SerializationError(e.to_string()))?;
 
     if raw.len() > COMPRESSION_THRESHOLD {
         let mut encoder = snap::raw::Encoder::new();
@@ -252,9 +251,7 @@ mod tests {
     }
 
     fn test_batch() -> ConsensusEventBatch {
-        let events: Vec<Event> = (0..3)
-            .map(|i| signed_event(node(1), vec![i]))
-            .collect();
+        let events: Vec<Event> = (0..3).map(|i| signed_event(node(1), vec![i])).collect();
         ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap()
     }
 
@@ -288,9 +285,7 @@ mod tests {
 
         match deserialized {
             GossipBatchMessage::BatchAck {
-                batch_id,
-                event_count,
-                ..
+                batch_id, event_count, ..
             } => {
                 assert_eq!(batch_id, [1u8; 32]);
                 assert_eq!(event_count, 5);
@@ -301,9 +296,7 @@ mod tests {
 
     #[test]
     fn test_batch_request_serialization_roundtrip() {
-        let msg = GossipBatchMessage::BatchRequest {
-            batch_id: [3u8; 32],
-        };
+        let msg = GossipBatchMessage::BatchRequest { batch_id: [3u8; 32] };
 
         let serialized = serialize_batch_message(&msg).unwrap();
         let deserialized = deserialize_batch_message(&serialized).unwrap();
@@ -376,11 +369,8 @@ mod tests {
     #[test]
     fn test_compression_applied_for_large_payloads() {
         // Create a batch with larger payloads to trigger compression
-        let events: Vec<Event> = (0..10)
-            .map(|_| signed_event(node(1), vec![0u8; 512]))
-            .collect();
-        let batch =
-            ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
+        let events: Vec<Event> = (0..10).map(|_| signed_event(node(1), vec![0u8; 512])).collect();
+        let batch = ConsensusEventBatch::new(events, node(1), 0, VectorClock::new(), MAX_BATCH_SIZE).unwrap();
         let msg = GossipBatchMessage::Batch { batch };
 
         let serialized = serialize_batch_message(&msg).unwrap();

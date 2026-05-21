@@ -297,22 +297,10 @@ mod tests {
 
     #[test]
     fn test_priority_classify() {
-        assert_eq!(
-            GossipPriority::classify(true, false, false),
-            GossipPriority::Critical
-        );
-        assert_eq!(
-            GossipPriority::classify(false, true, false),
-            GossipPriority::High
-        );
-        assert_eq!(
-            GossipPriority::classify(false, false, true),
-            GossipPriority::Low
-        );
-        assert_eq!(
-            GossipPriority::classify(false, false, false),
-            GossipPriority::Normal
-        );
+        assert_eq!(GossipPriority::classify(true, false, false), GossipPriority::Critical);
+        assert_eq!(GossipPriority::classify(false, true, false), GossipPriority::High);
+        assert_eq!(GossipPriority::classify(false, false, true), GossipPriority::Low);
+        assert_eq!(GossipPriority::classify(false, false, false), GossipPriority::Normal);
     }
 
     #[test]

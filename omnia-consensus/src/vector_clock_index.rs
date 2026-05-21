@@ -214,8 +214,7 @@ impl VectorClockIndex {
         // Approximate memory usage:
         // - creator_index: HashMap overhead + NodeId keys + Vec values
         // - slot_to_id: Vec<Option<EventId>>
-        let creator_index_bytes = self.creator_index.capacity()
-            * (32 + std::mem::size_of::<Vec<Option<usize>>>())
+        let creator_index_bytes = self.creator_index.capacity() * (32 + std::mem::size_of::<Vec<Option<usize>>>())
             + self
                 .creator_index
                 .values()
