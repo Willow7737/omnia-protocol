@@ -1,0 +1,43 @@
+# GossipSub configuration optimized for causal graph events
+[gossipsub]
+# Heartbeat interval (ms) — shorter for faster propagation
+heartbeat_interval = 500
+# Fanout degree — number of peers to gossip to per heartbeat
+fanout = 4
+# Target mesh size — stable mesh for reliable delivery
+mesh_n = 4
+# Minimum mesh size before adding more peers
+mesh_n_low = 3
+# Maximum mesh size before pruning peers
+mesh_n_high = 6
+# Maximum number of peers to send pubsub messages to per heartbeat
+gossip_factor = 0.25
+# Time to live for gossip messages (seconds)
+gossip_retransmission = 5
+# Maximum message size (bytes)
+max_message_size = 65536
+# Duplicate cache time (seconds)
+duplicate_cache_time = 60
+
+[bloom_filter]
+# Expected number of events seen before rotation
+expected_items = 100000
+# Target false positive rate
+fp_rate = 0.001
+# Rotation interval (seconds)
+rotation_interval_secs = 300
+
+[compact_encoding]
+# Enable compact encoding
+enabled = true
+# Maximum delta clock size (bytes)
+max_delta_clock_size = 1024
+# Truncate event IDs to first N bytes for recent events
+id_truncation_bytes = 16
+
+[priority_queue]
+# Maximum events per priority level
+max_critical = 1000
+max_high = 5000
+max_normal = 10000
+max_low = 5000

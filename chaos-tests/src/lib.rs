@@ -36,6 +36,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod gossip_chaos;
 pub mod load_test;
 pub mod safety_monitoring;
 
