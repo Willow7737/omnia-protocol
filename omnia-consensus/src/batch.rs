@@ -503,7 +503,7 @@ mod tests {
     #[test]
     fn test_batch_proof_compute_single_event() {
         let event = signed_event(node(1), vec![1, 2, 3]);
-        let proof = BatchProof::compute(&[event.clone()]).unwrap();
+        let proof = BatchProof::compute(std::slice::from_ref(&event)).unwrap();
         assert_eq!(proof.event_count, 1);
         assert_ne!(proof.merkle_root, [0u8; 32]);
         assert_ne!(proof.batch_id, [0u8; 32]);

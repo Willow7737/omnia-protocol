@@ -242,11 +242,11 @@ fn test_compact_encoding_roundtrip_preserves_data() {
     event.sign_with_keypair(&keypair);
 
     let peer_id = node(2);
-    let compact = encoder.encode(&event, &peer_id).unwrap();
+    let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
 
     // Serialize and deserialize
-    let bytes = CompactEncoder::serialize_compact(&compact).unwrap();
-    let restored_compact = CompactEncoder::deserialize_compact(&bytes).unwrap();
+    let bytes = CompactEncoder::serialize_compact(&compact).expect("serialize should succeed");
+    let restored_compact = CompactEncoder::deserialize_compact(&bytes).expect("deserialize should succeed");
 
     // Decode back to full event
     let local_frontier = VectorClock::new();
@@ -256,7 +256,7 @@ fn test_compact_encoding_roundtrip_preserves_data() {
             // so just return None for truncated IDs
             None
         })
-        .unwrap();
+        .expect("decode should succeed");
 
     // The decoded event should match the original
     assert_eq!(decoded.id, event.id);
@@ -457,18 +457,20 @@ fn test_compact_encoding_large_vector_clock() {
     event.sign_with_keypair(&keypair);
 
     let peer_id = node(2);
-    let compact = encoder.encode(&event, &peer_id).unwrap();
+    let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
 
     // Delta clock should have 10 entries (all new to the peer)
     assert_eq!(compact.delta_clock.entries.len(), 10);
 
     // Serialize and deserialize
-    let bytes = CompactEncoder::serialize_compact(&compact).unwrap();
-    let restored = CompactEncoder::deserialize_compact(&bytes).unwrap();
+    let bytes = CompactEncoder::serialize_compact(&compact).expect("serialize should succeed");
+    let restored = CompactEncoder::deserialize_compact(&bytes).expect("deserialize should succeed");
 
     // Decode
     let local_frontier = VectorClock::new();
-    let decoded = encoder.decode(&restored, &peer_id, &local_frontier, |_| None).unwrap();
+    let decoded = encoder
+        .decode(&restored, &peer_id, &local_frontier, |_| None)
+        .expect("decode should succeed");
 
     // Verify the reconstructed vector clock matches the original
     assert_eq!(decoded.vector_clock, event.vector_clock);
@@ -493,7 +495,7 @@ fn test_full_optimized_gossip_integration() {
     assert!(network.check_safety());
 
     // Submit events and track them through bloom filters and priority queues
-    let mut all_event_ids: Vec<EventId> = Vec::new();
+    let _all_event_ids: Vec<EventId> = Vec::new();
     for round in 0..5 {
         for i in 0..3 {
             let payload = vec![round as u8, i as u8];
@@ -626,7 +628,7 @@ fn test_delta_clock_large_values() {
     };
 
     let bytes = delta.to_bytes();
-    let restored = DeltaClock::from_bytes(&bytes).unwrap();
+    let restored = DeltaClock::from_bytes(&bytes).expect("delta clock from_bytes should succeed");
     assert_eq!(delta, restored);
 }
 
@@ -646,9 +648,11 @@ fn test_compact_encoder_frontier_updates() {
     assert!(encoder.get_frontier(&peer_id).is_none());
 
     // Encode and decode
-    let compact = encoder.encode(&event, &peer_id).unwrap();
+    let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
     let local_frontier = VectorClock::new();
-    let _decoded = encoder.decode(&compact, &peer_id, &local_frontier, |_| None).unwrap();
+    let _decoded = encoder
+        .decode(&compact, &peer_id, &local_frontier, |_| None)
+        .expect("decode should succeed");
 
     // Frontier should now be updated
     let frontier = encoder.get_frontier(&peer_id);

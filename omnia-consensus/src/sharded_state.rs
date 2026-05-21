@@ -634,7 +634,7 @@ mod tests {
             .map(|thread_id| {
                 let state = Arc::clone(&state);
                 thread::spawn(move || {
-                    let base = thread_id as u64 * events_per_thread;
+                    let base = thread_id * events_per_thread;
                     for seq in 0..events_per_thread {
                         let mut event_id = [0u8; 32];
                         // Distribute events across shards
@@ -764,7 +764,6 @@ mod tests {
         let handles: Vec<_> = (0..num_threads)
             .map(|thread_id| {
                 let state = Arc::clone(&state);
-                let node_id = node_id;
                 thread::spawn(move || {
                     let mut event_id = [0u8; 32];
                     event_id[0] = thread_id as u8;
