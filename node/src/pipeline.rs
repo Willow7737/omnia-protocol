@@ -83,7 +83,7 @@ pub enum ColdWork {
 ///
 /// The router provides bounded senders for hot and warm paths, and
 /// an unbounded sender for cold paths. Workers are spawned separately
-/// via [`PipelineRouter::spawn_workers`].
+/// via `PipelineRouter::spawn_workers`.
 pub struct PipelineRouter {
     /// Sender for hot-path work items (bounded, provides back-pressure).
     hot_tx: mpsc::Sender<HotWork>,

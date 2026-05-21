@@ -12,8 +12,8 @@
 //!
 //! ## Field-element conversions (arkworks feature required)
 //!
-//! When the `arkworks` feature is enabled, [`hash_to_fr`], [`fr_to_hash`],
-//! and [`poseidon_hash_to_fr`] provide conversions between byte-oriented
+//! When the `arkworks` feature is enabled, `hash_to_fr`, `fr_to_hash`,
+//! and `poseidon_hash_to_fr` provide conversions between byte-oriented
 //! hashes and Bn254 field elements for ZK circuit compatibility.
 
 /// Default leaf value for the Sparse Merkle Tree (all zeros).

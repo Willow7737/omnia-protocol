@@ -1,6 +1,6 @@
 //! Economics shard — UBC token, useful work, and governance operations
 //!
-//! Re-exports [`EconomicsOp`] and [`EconomicsState`] from the `omnia-economics`
+//! Re-exports [`EconomicsOp`] and `EconomicsState` from the `omnia-economics`
 //! crate, eliminating the former duplicate definition that used `Vec<u8>` for
 //! proofs and a separate `EconomicsVoteChoice` enum. The canonical types now
 //! live in `omnia_economics`; this module provides backward-compatible aliases.

@@ -1,7 +1,7 @@
 //! Shared application state and Prometheus metrics
 //!
 //! This module defines the [`AppState`] struct that is shared across
-//! all HTTP handlers via `axum::extract::State`, and the [`NodeMetrics`]
+//! all HTTP handlers via `axum::extract::State`, and the `NodeMetrics`
 //! struct that tracks Prometheus counters and gauges.
 
 // omnia-substrate is deprecated but omnia-node still uses its Substrate
@@ -148,8 +148,8 @@ pub struct AppState {
     pub is_syncing: Arc<AtomicBool>,
     /// Settlement adapter for L1 batch submissions.
     ///
-    /// Uses [`MockSettlementAdapter`] by default (zero alloy, MSRV 1.88).
+    /// Uses `MockSettlementAdapter` by default (zero alloy, MSRV 1.88).
     /// When the `ethereum-live` feature is enabled and a valid config is
-    /// provided, uses [`EthereumSettlementAdapter`] instead (requires rustc >= 1.91).
+    /// provided, uses `EthereumSettlementAdapter` instead (requires rustc >= 1.91).
     pub settlement: Arc<dyn SettlementAdapter>,
 }
