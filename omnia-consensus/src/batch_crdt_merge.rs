@@ -138,9 +138,9 @@ pub struct BatchMergeResult {
 pub struct BatchCrdtMerger {
     /// G-Counters keyed by identifier
     g_counters: BTreeMap<String, GCounter>,
-    /// OR-Sets keyed by identifier (element type: Vec<u8>)
+    /// OR-Sets keyed by identifier (element type: `Vec<u8>`)
     or_sets: BTreeMap<String, OrSet<Vec<u8>>>,
-    /// LWW-Registers keyed by identifier (value type: Vec<u8>)
+    /// LWW-Registers keyed by identifier (value type: `Vec<u8>`)
     lww_registers: BTreeMap<String, LwwRegister<Vec<u8>>>,
     /// Maximum batch size
     max_batch_size: usize,

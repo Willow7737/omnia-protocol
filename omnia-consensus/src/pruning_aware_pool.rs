@@ -15,7 +15,7 @@
 //! When an event is finalized and then pruned, its slot in the EventPool
 //! is freed for reuse, but enough metadata is retained to distinguish
 //! "pruned" from "never existed" — matching the semantics of
-//! [`CausalGraph::prune_finalized()`].
+//! [`crate::causal_graph::CausalGraph::prune_finalized()`].
 
 use std::collections::{HashMap, VecDeque};
 

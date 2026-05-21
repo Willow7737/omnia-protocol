@@ -92,7 +92,7 @@ impl GlobalConsensusState {
 /// Sharded consensus state with RwLock-protected shards.
 ///
 /// This is a NEW parallel data structure that coexists with the existing
-/// [`ConsensusEngine`]. It provides the same state tracking capabilities
+/// \[`ConsensusEngine`\]. It provides the same state tracking capabilities
 /// but with fine-grained locking for concurrent access.
 ///
 /// # Thread Safety

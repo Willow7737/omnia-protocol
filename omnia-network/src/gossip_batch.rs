@@ -7,8 +7,8 @@
 //! # Wire Format
 //!
 //! Batch gossip messages use the same postcard + optional snappy
-//! compression format as individual event gossip (see [`serialize_compressed`]
-//! and [`deserialize_compressed`] in the parent `gossip` module).
+//! compression format as individual event gossip (see `serialize_compressed`
+//! and `deserialize_compressed` in the parent `gossip` module).
 //!
 //! The [`GossipBatchMessage`] is serialized using postcard (compatible
 //! with the existing [`WireFormat`](omnia_primitives::wire_format) protocol)
