@@ -1,8 +1,12 @@
 #![allow(clippy::unwrap_used)]
+#![cfg(feature = "pqc")]
 //! Real cryptographic verification tests for quantum commitments.
 //!
 //! These tests exercise the Ed25519 and Dilithium signing and verification
 //! paths with real cryptographic operations — no stubs or shortcuts.
+//!
+//! This test file is only compiled when the `pqc` feature is enabled,
+//! since it depends on `pqc_dilithium` for Dilithium keypair generation.
 
 use omnia_binding::{BindingError, CommitmentPhase, PqPublicKey, QuantumCommitment};
 use omnia_substrate::{generate_keypair, NodeKeypair};

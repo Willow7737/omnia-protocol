@@ -43,7 +43,7 @@
 //! compliance when ZK functionality is not needed.
 
 #![deny(clippy::unwrap_used)]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![warn(missing_docs)]
 
 // ---------------------------------------------------------------------------

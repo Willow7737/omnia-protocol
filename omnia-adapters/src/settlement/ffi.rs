@@ -17,6 +17,11 @@
 //! documentation. The C library is expected to follow the ABI defined
 //! in this module.
 
+// FFI intrinsically requires unsafe code. The crate-level `deny(unsafe_code)`
+// is relaxed to `allow` within this module because every unsafe block is
+// documented with a safety proof.
+#![allow(unsafe_code)]
+
 #[cfg(feature = "settlement-ffi")]
 use super::{FinalityProof, SettlementAdapter, SettlementError, TxHash};
 #[cfg(feature = "settlement-ffi")]
