@@ -10,10 +10,10 @@
 //! - **Mock** ([`MockSettlementAdapter`]): Always compiles with Rust 1.88.
 //!   Used in all CI pipelines and development. Deterministic BLAKE3-based
 //!   responses with simulated latency.
-//! - **Live Ethereum** ([`EthereumSettlementAdapter`]): Feature-gated behind
+//! - **Live Ethereum** (`EthereumSettlementAdapter`): Feature-gated behind
 //!   `ethereum-live`. Requires rustc >= 1.91 (alloy dependency). Connects
 //!   to real Ethereum RPC endpoints.
-//! - **FFI** ([`FfiSettlementAdapter`]): Feature-gated behind `settlement-ffi`.
+//! - **FFI** (`FfiSettlementAdapter`): Feature-gated behind `settlement-ffi`.
 //!   Calls a pre-compiled C library, enabling production deployments with
 //!   any Rust version.
 //!

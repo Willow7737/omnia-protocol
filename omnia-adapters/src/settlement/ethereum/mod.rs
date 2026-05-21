@@ -6,7 +6,7 @@
 //! - **Live** (`ethereum-live` feature): Connects to a real Ethereum RPC endpoint
 //!   via the `alloy` crate and interacts with the OmniaRollup smart contract.
 //!
-//! Additionally, this module provides [`EthereumSettlementAdapter`] which
+//! Additionally, this module provides `EthereumSettlementAdapter` which
 //! implements the new [`SettlementAdapter`](super::SettlementAdapter) trait
 //! for the hybrid architecture (feature-gated behind `ethereum-live`).
 
