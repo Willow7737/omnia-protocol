@@ -7,6 +7,8 @@
 //! - **Slashing**: Byzantine fault detection and validator penalization
 //! - **Mempool**: Bounded queue for pending events awaiting block inclusion
 //! - **Rate Limiter**: Per-peer token-bucket rate limiting
+//! - **Batch Processing**: Grouped event submission for amortized overhead
+//! - **Batch CRDT Merge**: Atomic batch application of CRDT operations
 //!
 //! Heavy dependencies (persistent storage via redb) are feature-gated.
 
@@ -14,6 +16,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod batch;
+pub mod batch_crdt_merge;
 pub mod causal_graph;
 pub mod consensus;
 pub mod crdt;
@@ -28,6 +32,10 @@ pub mod thread_pool;
 pub mod consensus_store;
 
 // Re-export commonly used types at crate root
+pub use batch::{BatchConfig, BatchError, BatchIngestor, BatchProof, ConsensusEventBatch, MAX_BATCH_SIZE, DEFAULT_BATCH_SIZE, DEFAULT_BATCH_TIMEOUT_MS};
+pub use batch_crdt_merge::{
+    BatchCrdtError, BatchCrdtMerger, BatchMergeResult, CrdtBatchOp, MAX_CRDT_BATCH_SIZE,
+};
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
 pub use consensus::{
     ConsensusConfig, ConsensusEngine, ConsensusError, ConsensusState, DefaultConsensusEngine, RoundTimer,

@@ -1,6 +1,6 @@
 //! Omnia Network — P2P networking layer
 //!
-//! Provides gossip protocol, fast-sync, and snapshot replication
+//! Provides gossip protocol, fast-sync, batch gossip, and snapshot replication
 //! behind feature gates for optional networking dependencies.
 
 #![deny(clippy::unwrap_used)]
@@ -9,6 +9,7 @@
 
 pub mod blake3_domain;
 pub mod fast_sync;
+pub mod gossip_batch;
 #[cfg(feature = "network")]
 pub mod gossip;
 #[cfg(feature = "network")]
@@ -18,6 +19,10 @@ pub mod network;
 pub use fast_sync::{
     select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest, SyncResponse,
     SyncResult, SyncSnapshot,
+};
+pub use gossip_batch::{
+    deserialize_batch_message, serialize_batch_message, validate_batch_message, BatchGossipStats, GossipBatchError,
+    GossipBatchMessage, GOSSIP_BATCH_TOPIC, MAX_BATCH_GOSSIP_SIZE,
 };
 #[cfg(feature = "network")]
 pub use gossip::{
