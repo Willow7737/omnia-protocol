@@ -8,6 +8,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.44](https://github.com/Willow7737/omnia-protocol/compare/v0.1.43...v0.1.44) (2026-05-21)
+
+
+### Features
+
+* **sprint-0:** foundation & baselines ([bf99745](https://github.com/Willow7737/omnia-protocol/commit/bf997451097ba5cd7a0fe1a586844238534b0503))
+* **sprint-1:** sharded consensus state with parallel event validation ([c09173e](https://github.com/Willow7737/omnia-protocol/commit/c09173eec2870999a7470aea5f222a074f0a0fc7))
+* **sprint-1:** sharded consensus state with parallel event validation ([ae41956](https://github.com/Willow7737/omnia-protocol/commit/ae419569eced76937009c9927ccd91e5f35fca77))
+* **sprint-2:** batch event submission & processing ([4814ea5](https://github.com/Willow7737/omnia-protocol/commit/4814ea5692d180f2d0387026390b3ed30c410dad))
+* **sprint-3:** optimized graph insertion with pre-allocated data structures ([32852fd](https://github.com/Willow7737/omnia-protocol/commit/32852fddc0e652b08b37cc8c3b755736eb2fe60a))
+* **sprint-4:** network-optimized gossip protocol ([80a790d](https://github.com/Willow7737/omnia-protocol/commit/80a790d160d7048f38e225449b74a15cc9582a63))
+* **sprint-5:** Phase 0 integration, stability & sign-off documentation ([c4f8b12](https://github.com/Willow7737/omnia-protocol/commit/c4f8b129f22c4fd0a9490c74edfefaa7c3f6a919))
+* **sprint-5:** stability test framework and full chaos test suite ([1d952dc](https://github.com/Willow7737/omnia-protocol/commit/1d952dce2ed57fddaff9e3164c6db644196d382e))
+
+
+### Bug Fixes
+
+* **ci:** resolve clippy errors, formatting issues, and test failure ([ac782b9](https://github.com/Willow7737/omnia-protocol/commit/ac782b902c450e0186c85a41e0f3f57cc8ce8538))
+* **ci:** resolve clippy unwrap_used errors and warnings ([f1176e6](https://github.com/Willow7737/omnia-protocol/commit/f1176e6fc62d45bad22ec6ba1266e8c895556cc2))
+* **ci:** resolve rustdoc broken links and invalid HTML tags ([fccdf59](https://github.com/Willow7737/omnia-protocol/commit/fccdf59d624512acafc76961324a037e1a6451d9))
+
 ## [0.1.43](https://github.com/Willow7737/omnia-protocol/compare/v0.1.42...v0.1.43) (2026-05-21)
 
 
