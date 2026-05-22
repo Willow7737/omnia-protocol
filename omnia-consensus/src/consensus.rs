@@ -1297,6 +1297,7 @@ mod tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
@@ -1442,6 +1443,7 @@ mod tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         };
         let mut engine = ConsensusEngine::new(
             config,
@@ -1811,6 +1813,7 @@ mod proptests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
@@ -1910,6 +1913,7 @@ mod timeout_tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
