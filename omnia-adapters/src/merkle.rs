@@ -211,7 +211,7 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerklePr
     use ark_ff::Zero;
 
     // Convert items to field elements as leaves
-    let leaves: Vec<Fr> = items.iter().map(|item| hash_to_fr(item)).collect();
+    let leaves: Vec<Fr> = items.iter().map(hash_to_fr).collect();
 
     let current_level = leaves.clone();
     let mut proofs = Vec::new();
