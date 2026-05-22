@@ -143,9 +143,9 @@ impl SettlementAdapter for CelestiaAdapter {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(SettlementError::RpcError(
-                format!("Celestia submit_root failed: status={status}, body={body}"),
-            ));
+            return Err(SettlementError::RpcError(format!(
+                "Celestia submit_root failed: status={status}, body={body}"
+            )));
         }
 
         tracing::info!(
@@ -188,9 +188,9 @@ impl SettlementAdapter for CelestiaAdapter {
             if status.as_u16() == 404 {
                 return Err(SettlementError::TxTimedOut(0));
             }
-            return Err(SettlementError::RpcError(
-                format!("Celestia fetch_finality failed: status={status}, body={body}"),
-            ));
+            return Err(SettlementError::RpcError(format!(
+                "Celestia fetch_finality failed: status={status}, body={body}"
+            )));
         }
 
         // Parse the response to extract block height and commitment
@@ -240,10 +240,7 @@ impl SettlementAdapter for CelestiaAdapter {
         let _computed_root = compute_root_from_proof(&default_leaf, proof);
 
         // Query Celestia for the share commitment to confirm inclusion
-        let url = format!(
-            "{}/share/commitment",
-            self.config.rpc_endpoint.trim_end_matches('/')
-        );
+        let url = format!("{}/share/commitment", self.config.rpc_endpoint.trim_end_matches('/'));
 
         tracing::info!(
             siblings = proof.siblings.len(),
@@ -263,9 +260,9 @@ impl SettlementAdapter for CelestiaAdapter {
             if status.as_u16() == 404 {
                 return Ok(false);
             }
-            return Err(SettlementError::RpcError(
-                format!("Celestia verify_inclusion failed: status={status}"),
-            ));
+            return Err(SettlementError::RpcError(format!(
+                "Celestia verify_inclusion failed: status={status}"
+            )));
         }
 
         // If the Celestia node responds successfully, the inclusion is verified
@@ -309,9 +306,7 @@ impl SettlementAdapter for CelestiaAdapter {
     }
 
     async fn verify_inclusion(&self, _proof: &MerkleProof) -> Result<bool, SettlementError> {
-        tracing::info!(
-            "[CelestiaAdapter/Mock] verify_inclusion: logging (celestia feature disabled)"
-        );
+        tracing::info!("[CelestiaAdapter/Mock] verify_inclusion: logging (celestia feature disabled)");
         // Mock: all inclusion proofs are valid
         Ok(true)
     }

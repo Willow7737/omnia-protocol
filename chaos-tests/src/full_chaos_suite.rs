@@ -414,10 +414,7 @@ fn run_byzantine_equivocation(config: &ChaosSuiteConfig) -> ChaosScenarioResult 
 
     // Verify that the two events have different IDs (because payloads differ)
     // but the same (creator, sequence) — this is equivocation.
-    assert!(
-        event_a.id != event_b.id,
-        "Conflicting events must have different IDs"
-    );
+    assert!(event_a.id != event_b.id, "Conflicting events must have different IDs");
     assert_eq!(
         event_a.creator, event_b.creator,
         "Equivocating events must have the same creator"

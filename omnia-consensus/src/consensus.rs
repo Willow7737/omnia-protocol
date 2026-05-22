@@ -417,7 +417,10 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         if self.first_event_for_sequence.len() > self.config.max_sequence_entries {
             let removed = self.cleanup_stale_sequences(None);
             if removed > 0 {
-                tracing::debug!(removed, "Cleaned up stale sequence tracking entries during event processing");
+                tracing::debug!(
+                    removed,
+                    "Cleaned up stale sequence tracking entries during event processing"
+                );
             }
         }
 
@@ -2148,6 +2151,9 @@ mod timeout_tests {
                 break;
             }
         }
-        assert!(found_difference, "coin_round should produce different results for different seeds");
+        assert!(
+            found_difference,
+            "coin_round should produce different results for different seeds"
+        );
     }
 }

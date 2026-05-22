@@ -580,7 +580,11 @@ impl EncryptedKeyStore {
     ///
     /// - SLIP-0010: <https://github.com/satoshilabs/slips/blob/master/slip-0010.md>
     /// - BIP-44: <https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki>
-    pub fn derive_child_key_slip0010(&self, purpose: KeyPurpose, index: u32) -> KeyStoreResult<ed25519_dalek::SigningKey> {
+    pub fn derive_child_key_slip0010(
+        &self,
+        purpose: KeyPurpose,
+        index: u32,
+    ) -> KeyStoreResult<ed25519_dalek::SigningKey> {
         let secret_bytes = self
             .keypair()
             .ok_or_else(|| KeyStoreError::Crypto("No keypair loaded".into()))?
@@ -589,8 +593,12 @@ impl EncryptedKeyStore {
         // SLIP-0010 master key derivation from the seed
         // HMAC-SHA512(Key = "ed25519 seed", Data = seed)
         let master_ikm = hmac_sha512(b"ed25519 seed", &secret_bytes);
-        let mut key = master_ikm[..32].try_into().map_err(|_| KeyStoreError::Crypto("key slice error".into()))?;
-        let mut chain_code: [u8; 32] = master_ikm[32..].try_into().map_err(|_| KeyStoreError::Crypto("chain code slice error".into()))?;
+        let mut key = master_ikm[..32]
+            .try_into()
+            .map_err(|_| KeyStoreError::Crypto("key slice error".into()))?;
+        let mut chain_code: [u8; 32] = master_ikm[32..]
+            .try_into()
+            .map_err(|_| KeyStoreError::Crypto("chain code slice error".into()))?;
 
         // Derive path: m/44'/6061'/{purpose}'/{index}'
         // All indices are hardened (i + 2^31)
@@ -603,8 +611,12 @@ impl EncryptedKeyStore {
 
         for &child_index in &derivation_path {
             let derived = slip0010_derive_child(&key, &chain_code, child_index);
-            key = derived[..32].try_into().map_err(|_| KeyStoreError::Crypto("derived key slice error".into()))?;
-            chain_code = derived[32..].try_into().map_err(|_| KeyStoreError::Crypto("derived chain code slice error".into()))?;
+            key = derived[..32]
+                .try_into()
+                .map_err(|_| KeyStoreError::Crypto("derived key slice error".into()))?;
+            chain_code = derived[32..]
+                .try_into()
+                .map_err(|_| KeyStoreError::Crypto("derived chain code slice error".into()))?;
         }
 
         Ok(ed25519_dalek::SigningKey::from_bytes(&key))

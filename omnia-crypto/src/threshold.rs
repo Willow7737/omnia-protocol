@@ -812,10 +812,7 @@ impl FeldmanVssSession {
     /// Panics if `threshold < 2` or `threshold > participants.len()`.
     pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Self {
         assert!(threshold >= 2, "Threshold must be at least 2");
-        assert!(
-            threshold <= participants.len(),
-            "Threshold exceeds participants"
-        );
+        assert!(threshold <= participants.len(), "Threshold exceeds participants");
         Self {
             session_id,
             participants,
@@ -971,10 +968,7 @@ impl FeldmanVssSession {
         let share_data = if let Some(aead_ct) = package.encrypted_shares.first() {
             if package.version == 2 {
                 let my_id = self.own_id.ok_or_else(|| {
-                    DkgError::InvalidShare(
-                        from_prefix,
-                        "own ID not set — call generate_shares first".to_string(),
-                    )
+                    DkgError::InvalidShare(from_prefix, "own ID not set — call generate_shares first".to_string())
                 })?;
                 let mut share_material = Vec::new();
                 share_material.extend_from_slice(&self.session_id.to_le_bytes());
@@ -1005,9 +999,7 @@ impl FeldmanVssSession {
         };
 
         // Verify the share against Feldman commitments
-        let own_index = self
-            .own_index
-            .expect("own_index must be set after generate_shares");
+        let own_index = self.own_index.expect("own_index must be set after generate_shares");
         let valid = feldman_verify_share(&share_data, own_index, &package.commitments);
 
         if valid {
@@ -1063,11 +1055,7 @@ impl FeldmanVssSession {
         // Collect C_0 commitments (first commitment from each participant)
         let c0_public_keys: Vec<BlsPublicKey> = all_commitments
             .iter()
-            .filter_map(|commitments| {
-                commitments
-                    .first()
-                    .and_then(|c| BlsPublicKey::from_bytes(c).ok())
-            })
+            .filter_map(|commitments| commitments.first().and_then(|c| BlsPublicKey::from_bytes(c).ok()))
             .collect();
 
         if c0_public_keys.len() < self.threshold {
@@ -1086,8 +1074,7 @@ impl FeldmanVssSession {
             .ok_or_else(|| DkgError::CommitmentVerificationFailed("No accumulated share".to_string()))?;
 
         // Create a BLS keypair from the accumulated share seed
-        let own_keypair =
-            BlsKeypair::generate(&own_share_seed).map_err(DkgError::BlsError)?;
+        let own_keypair = BlsKeypair::generate(&own_share_seed).map_err(DkgError::BlsError)?;
 
         let my_id = self
             .own_id
@@ -1254,8 +1241,7 @@ fn feldman_verify_share(share: &ScalarBytes, index: usize, commitments: &[Vec<u8
     // Both hashes must be non-zero (trivial structural check).
     // A full implementation would verify g^{s_i} == product(C_j^{index^j})
     // via pairing checks.
-    !share_hash.as_bytes().iter().all(|&b| b == 0)
-        && !commit_hash.as_bytes().iter().all(|&b| b == 0)
+    !share_hash.as_bytes().iter().all(|&b| b == 0) && !commit_hash.as_bytes().iter().all(|&b| b == 0)
 }
 
 /// Simple XOR encryption for DKG shares (domain-separated).
@@ -1926,8 +1912,7 @@ mod tests {
 
         // Step 1: Each participant generates shares
         let mut sessions: Vec<FeldmanVssSession> = Vec::new();
-        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> =
-            HashMap::new();
+        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
             let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 3);
@@ -1958,7 +1943,10 @@ mod tests {
                     .expect("Should have a package for this recipient");
 
                 let result = session.receive_shares(sender_id, &package_for_me).unwrap();
-                assert!(result.valid, "Share verification should succeed for honest participants");
+                assert!(
+                    result.valid,
+                    "Share verification should succeed for honest participants"
+                );
             }
 
             // Step 3: Finalize
@@ -1990,8 +1978,7 @@ mod tests {
 
         // Step 1: Each participant generates shares
         let mut sessions: Vec<FeldmanVssSession> = Vec::new();
-        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> =
-            HashMap::new();
+        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
             let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);
@@ -2139,10 +2126,7 @@ mod tests {
         // If decryption fails, it returns an error; if verification fails, valid = false
         match result {
             Ok(verification) => {
-                assert!(
-                    !verification.valid,
-                    "Byzantine shares should fail verification"
-                );
+                assert!(!verification.valid, "Byzantine shares should fail verification");
             }
             Err(_) => {
                 // Decryption failure is also acceptable for Byzantine packages
@@ -2344,8 +2328,7 @@ mod tests {
 
         // Generate shares for all 3 participants
         let mut sessions: Vec<FeldmanVssSession> = Vec::new();
-        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> =
-            HashMap::new();
+        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
             let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);
@@ -2479,8 +2462,7 @@ mod tests {
 
         // Run full DKG
         let mut sessions: Vec<FeldmanVssSession> = Vec::new();
-        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> =
-            HashMap::new();
+        let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
             let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);

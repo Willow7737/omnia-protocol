@@ -119,9 +119,7 @@ impl BiologicalState {
                     //   [4..4+vk_len)  : serialized verifying key (G1Affine point)
                     //   [4+vk_len..]   : serialized proof + public inputs
                     if zk_proof.len() > 8 {
-                        let vk_len = u32::from_le_bytes(
-                            zk_proof[0..4].try_into().unwrap_or([0u8; 4]),
-                        ) as usize;
+                        let vk_len = u32::from_le_bytes(zk_proof[0..4].try_into().unwrap_or([0u8; 4])) as usize;
 
                         if zk_proof.len() > 4 + vk_len + 1 {
                             let vk_bytes = &zk_proof[4..4 + vk_len];
@@ -161,9 +159,9 @@ impl BiologicalState {
                                         error = %e,
                                         "Real ZK verification: failed to deserialize biological verifying key"
                                     );
-                                    return Err(ShardError::ValidationFailed(
-                                        format!("ZK proof verification failed: invalid verifying key: {e}"),
-                                    ));
+                                    return Err(ShardError::ValidationFailed(format!(
+                                        "ZK proof verification failed: invalid verifying key: {e}"
+                                    )));
                                 }
                             }
                         }

@@ -38,16 +38,16 @@ pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreErro
 
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, aggregate_signatures_dedup, verify_aggregate, verify_aggregate_with_pop, BlsError, BlsKeypair,
-    BlsProofOfPossession, BlsPublicKey, BlsSignature,
+    aggregate_public_keys, aggregate_signatures, aggregate_signatures_dedup, verify_aggregate,
+    verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 
 #[cfg(feature = "bls")]
 #[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
-    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError,
-    ThresholdKeyManager, ThresholdSignature,
+    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager,
+    ThresholdSignature,
 };
 
 pub use vrf::{

@@ -503,9 +503,7 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
 ///     (kp2.public_key(), sig2),
 /// ])?;
 /// ```
-pub fn aggregate_signatures_dedup(
-    signatures: &[(BlsPublicKey, BlsSignature)],
-) -> Result<BlsSignature, BlsError> {
+pub fn aggregate_signatures_dedup(signatures: &[(BlsPublicKey, BlsSignature)]) -> Result<BlsSignature, BlsError> {
     if signatures.is_empty() {
         return Err(BlsError::AggregationFailed(
             "cannot aggregate empty signature set".to_string(),

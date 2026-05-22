@@ -102,9 +102,10 @@ impl ComputationalState {
                 }
 
                 #[allow(unused_variables)] // Used only when `real_verification` feature is enabled
-                let proof_bytes = task.proof.as_ref().ok_or_else(|| {
-                    ShardError::ValidationFailed("No proof data available for verification".into())
-                })?;
+                let proof_bytes = task
+                    .proof
+                    .as_ref()
+                    .ok_or_else(|| ShardError::ValidationFailed("No proof data available for verification".into()))?;
 
                 // -----------------------------------------------------------------------
                 // Real ZK/SNARK proof verification using ark-groth16.
@@ -124,9 +125,7 @@ impl ComputationalState {
                     // If the proof bytes are too short to contain a valid header,
                     // fall through to the default (placeholder) path.
                     if proof_bytes.len() > 8 {
-                        let vk_len = u32::from_le_bytes(
-                            proof_bytes[0..4].try_into().unwrap_or([0u8; 4]),
-                        ) as usize;
+                        let vk_len = u32::from_le_bytes(proof_bytes[0..4].try_into().unwrap_or([0u8; 4])) as usize;
 
                         if proof_bytes.len() > 4 + vk_len + 1 {
                             let vk_bytes = &proof_bytes[4..4 + vk_len];
@@ -175,9 +174,9 @@ impl ComputationalState {
                                     );
                                     task.status = TaskStatus::Failed;
                                     task.last_update.merge(vc);
-                                    return Err(ShardError::ValidationFailed(
-                                        format!("ZK proof verification failed: invalid verifying key: {e}"),
-                                    ));
+                                    return Err(ShardError::ValidationFailed(format!(
+                                        "ZK proof verification failed: invalid verifying key: {e}"
+                                    )));
                                 }
                             }
                         }

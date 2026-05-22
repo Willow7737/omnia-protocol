@@ -45,7 +45,12 @@ impl PhysicalState {
     /// The `event_creator` parameter is used to authorize ownership transfers:
     /// only the current owner can transfer an item. Pass `None` to skip
     /// authorization (e.g., for backward-compatible call sites or testing).
-    pub fn apply(&mut self, op: &PhysicalOp, vc: &VectorClock, event_creator: Option<super::ops::OwnerId>) -> Result<(), ShardError> {
+    pub fn apply(
+        &mut self,
+        op: &PhysicalOp,
+        vc: &VectorClock,
+        event_creator: Option<super::ops::OwnerId>,
+    ) -> Result<(), ShardError> {
         match op {
             PhysicalOp::AnchorItem {
                 item_id,

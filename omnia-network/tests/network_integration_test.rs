@@ -176,7 +176,10 @@ async fn test_cross_node_commitment_convergence() {
     }
 
     // At least the originator should have it committed
-    assert!(nodes_know >= 1, "At least the originator should have the event committed");
+    assert!(
+        nodes_know >= 1,
+        "At least the originator should have the event committed"
+    );
 }
 
 #[tokio::test]

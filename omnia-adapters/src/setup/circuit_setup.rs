@@ -33,6 +33,7 @@
 use ark_bn254::Bn254;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_snark::CircuitSpecificSetupSNARK;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use subtle::ConstantTimeEq;
@@ -512,8 +513,14 @@ mod tests {
         let keypair1 = derive_keys_deterministic_from_srs(&srs, &circuit).expect("derive failed");
         let keypair2 = derive_keys_deterministic_from_srs(&srs, &circuit).expect("derive failed");
 
-        assert_eq!(keypair1.proving_key, keypair2.proving_key, "Same SRS must produce same proving key");
-        assert_eq!(keypair1.verifying_key, keypair2.verifying_key, "Same SRS must produce same verifying key");
+        assert_eq!(
+            keypair1.proving_key, keypair2.proving_key,
+            "Same SRS must produce same proving key"
+        );
+        assert_eq!(
+            keypair1.verifying_key, keypair2.verifying_key,
+            "Same SRS must produce same verifying key"
+        );
     }
 
     #[test]
@@ -526,8 +533,14 @@ mod tests {
         let keypair1 = derive_keys_deterministic_from_srs(&srs1, &circuit).expect("derive 1 failed");
         let keypair2 = derive_keys_deterministic_from_srs(&srs2, &circuit).expect("derive 2 failed");
 
-        assert_ne!(keypair1.proving_key, keypair2.proving_key, "Different SRS must produce different proving keys");
-        assert_ne!(keypair1.verifying_key, keypair2.verifying_key, "Different SRS must produce different verifying keys");
+        assert_ne!(
+            keypair1.proving_key, keypair2.proving_key,
+            "Different SRS must produce different proving keys"
+        );
+        assert_ne!(
+            keypair1.verifying_key, keypair2.verifying_key,
+            "Different SRS must produce different verifying keys"
+        );
     }
 
     #[test]
