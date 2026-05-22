@@ -228,8 +228,7 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(burn_op),
         nonce: 2,
     };
-    let burn_event =
-        create_test_event_with_keypair(account, burn_payload.to_bytes().unwrap(), &account_keypair);
+    let burn_event = create_test_event_with_keypair(account, burn_payload.to_bytes().unwrap(), &account_keypair);
     router.route_event(&burn_event).expect("Burn should succeed");
 
     // Try to burn more than the balance
