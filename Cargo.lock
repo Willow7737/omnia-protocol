@@ -4716,7 +4716,7 @@ dependencies = [
  "omnia-shards",
  "omnia-substrate",
  "postcard",
- "pqc_dilithium 0.2.0",
+ "pqc_dilithium",
  "rand 0.8.6",
  "serde",
  "serde_bytes",
@@ -4790,7 +4790,7 @@ dependencies = [
  "ml-kem 0.1.1",
  "omnia-primitives",
  "postcard",
- "pqc_dilithium 0.1.1",
+ "pqc_dilithium",
  "rand 0.8.6",
  "serde",
  "serde_bytes",
@@ -5329,15 +5329,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
-]
-
-[[package]]
-name = "pqc_dilithium"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5159b14299f166bfb0fc37046c66e1ec0d4e8f108251a930c8b62e802f1710"
-dependencies = [
- "rand 0.8.6",
 ]
 
 [[package]]

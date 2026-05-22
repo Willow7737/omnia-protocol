@@ -4,13 +4,13 @@
 //! omnia-benches crate. Uses the new crate structure directly:
 //! - omnia-primitives: Event, VectorClock, NodeId
 //! - omnia-consensus: CausalGraph, SlashingEngine, SlashOffense
-//! - omnia-crypto: NodeKeypair, VRF operations
+//! - omnia-crypto: NodeKeypair, deterministic hash operations
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use omnia_consensus::{slashing::SlashOffense, CausalGraph, SlashingEngine};
 use omnia_crypto::{
     generate_keypair,
-    vrf::{select_leader, vrf_compute, vrf_verify},
+    vrf::{deterministic_compute, deterministic_verify, select_leader},
     NodeKeypair,
 };
 use omnia_primitives::{Event, NodeId, VectorClock};
@@ -125,23 +125,23 @@ fn bench_slashing_operations(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_vrf_compute(c: &mut Criterion) {
-    let mut group = c.benchmark_group("vrf");
+fn bench_deterministic_hash(c: &mut Criterion) {
+    let mut group = c.benchmark_group("deterministic_hash");
 
-    group.bench_function("vrf_compute", |b| {
+    group.bench_function("deterministic_compute", |b| {
         let keypair = generate_keypair();
         let input = b"round-42-seed";
         b.iter(|| {
-            let _ = vrf_compute(&keypair, input);
+            let _ = deterministic_compute(&keypair, input);
         })
     });
 
-    group.bench_function("vrf_verify", |b| {
+    group.bench_function("deterministic_verify", |b| {
         let keypair = generate_keypair();
         let input = b"round-42-seed";
-        let vrf_output = vrf_compute(&keypair, input);
+        let output = deterministic_compute(&keypair, input);
         b.iter(|| {
-            let _ = vrf_verify(&keypair.verifying_key(), input, &vrf_output);
+            let _ = deterministic_verify(&keypair.verifying_key(), input, &output);
         })
     });
 
@@ -169,6 +169,6 @@ criterion_group!(
     benchmark_graph_insertion,
     benchmark_vector_clock_merge,
     bench_slashing_operations,
-    bench_vrf_compute
+    bench_deterministic_hash
 );
 criterion_main!(benches);

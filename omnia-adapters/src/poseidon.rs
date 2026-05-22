@@ -8,6 +8,24 @@
 //! > Cryptology ePrint Archive, Paper 2019/458.
 //! > <https://eprint.iacr.org/2019/458>
 //!
+//! **NOTE: This Poseidon implementation uses BLAKE3-derived round constants
+//! for domain separation, NOT the standard Filecoin/Neptune constants.
+//! This makes the hash incompatible with existing ZK ecosystems.** This is
+//! intentional for domain separation — it prevents cross-protocol replay
+//! attacks between Omnia and other Poseidon-using systems. A migration path
+//! to standard constants is planned (see below).
+//!
+//! # Migration Path
+//!
+//! To migrate to standard Filecoin/Neptune constants:
+//! 1. Regenerate trusted setup keys with the new Poseidon parameters
+//! 2. Regenerate all existing ZK proofs
+//! 3. Update any off-chain code that computes Poseidon hashes
+//!
+//! TODO: Support standard Filecoin/Neptune constants as a configurable option,
+//! allowing users to choose between custom (BLAKE3-derived) and standard
+//! (Grain LFSR-derived) round constants.
+//!
 //! # Parameters (BN254, t = 3)
 //!
 //! | Parameter | Value | Description |

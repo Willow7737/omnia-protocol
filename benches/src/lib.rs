@@ -8,7 +8,7 @@
 //! ## Benchmark categories
 //!
 //! - **throughput**: Core event processing, graph insertion, vector clock merge,
-//!   slashing, and VRF operations (criterion-based)
+//!   slashing, and deterministic hash operations (criterion-based)
 //! - **zk_benchmarks**: ZK-SNARK proof generation, verification, Merkle tree,
 //!   and trusted setup (criterion-based)
 //! - **hot_path_iai**: Deterministic callgrind profiling for hot-path functions

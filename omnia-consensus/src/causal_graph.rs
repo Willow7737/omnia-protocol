@@ -572,19 +572,12 @@ impl CausalGraph {
 
         let mut queue_vec: Vec<EventId> = queue.into_iter().collect();
         queue_vec.sort_by(|a, b| {
-            let event_a = self.events.get(a).unwrap_or_else(|| {
-                panic!(
-                    "event {:?} should exist in graph for topological sort",
-                    hex::encode(&a[..8])
-                )
-            });
-            let event_b = self.events.get(b).unwrap_or_else(|| {
-                panic!(
-                    "event {:?} should exist in graph for topological sort",
-                    hex::encode(&b[..8])
-                )
-            });
-            event_a.timestamp.cmp(&event_b.timestamp).then_with(|| a.cmp(b))
+            let event_a = self.events.get(a);
+            let event_b = self.events.get(b);
+            match (event_a, event_b) {
+                (Some(ea), Some(eb)) => ea.timestamp.cmp(&eb.timestamp).then_with(|| a.cmp(b)),
+                _ => a.cmp(b), // fallback to ID comparison if event not found
+            }
         });
         queue = VecDeque::from(queue_vec);
 
@@ -603,6 +596,14 @@ impl CausalGraph {
                     }
                 }
             }
+        }
+
+        // Check for cycles: if not all relevant events were processed,
+        // there is a cycle in the graph among the relevant events.
+        if result.len() < relevant_events.len() {
+            return Err(CausalGraphError::CycleDetected(
+                "cycle detected during topological sort".to_string(),
+            ));
         }
 
         Ok(result)
@@ -1293,6 +1294,36 @@ mod tests {
 
         assert!(g_pos < a_pos);
         assert!(a_pos < b_pos);
+    }
+
+    #[test]
+    fn test_topological_order_cycle_detected() {
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Create two genesis events
+        let mut e1 = Event::genesis(n1, vec![]);
+        e1.sign_with_keypair(&kp);
+        let e1_id = e1.id;
+        graph.insert(e1.clone()).unwrap();
+
+        let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![]);
+        e2.sign_with_keypair(&kp);
+        let e2_id = e2.id;
+        graph.insert(e2.clone()).unwrap();
+
+        // Corrupt the graph: set e1's self_parent to point to e2, creating a cycle
+        // e1 → e2 (e2's self_parent = e1) and e2 → e1 (corrupted e1.self_parent = e2)
+        if let Some(event) = graph.events.get_mut(&e1_id) {
+            event.self_parent = Some(e2_id);
+        }
+
+        // topological_order should detect the cycle and return Err
+        let result = graph.topological_order(None);
+        assert!(
+            matches!(result, Err(CausalGraphError::CycleDetected(_))),
+            "topological_order should detect cycle in corrupt graph, got: {result:?}"
+        );
     }
 
     #[test]

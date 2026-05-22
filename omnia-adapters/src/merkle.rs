@@ -177,6 +177,95 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 }
 
 // ---------------------------------------------------------------------------
+// Poseidon-based Merkle tree (requires arkworks feature)
+// ---------------------------------------------------------------------------
+
+/// Build a Merkle tree using Poseidon hash instead of BLAKE3.
+///
+/// This function has the same interface as [`build_merkle_tree`] but uses
+/// the Poseidon SNARK-friendly hash function, ensuring the off-circuit tree
+/// matches the in-circuit hash computation. This is critical for ZK proof
+/// generation where the circuit uses Poseidon as its hash function.
+///
+/// Requires the `arkworks` feature.
+///
+/// # Arguments
+///
+/// * `items` — List of 32-byte items to include in the tree
+///
+/// # Returns
+///
+/// A tuple of (Poseidon root as 32 bytes, vector of Merkle proofs).
+///
+/// TODO: Update circuit witness generation to use the Poseidon tree instead
+/// of the BLAKE3 tree. Currently, the circuit may use BLAKE3 for Merkle
+/// verification while this function produces Poseidon-based roots, leading
+/// to a mismatch. The circuit must be updated to use Poseidon hashing
+/// consistently.
+#[cfg(feature = "arkworks")]
+pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
+    if items.is_empty() {
+        return ([0u8; 32], vec![]);
+    }
+
+    use ark_ff::Zero;
+
+    // Convert items to field elements as leaves
+    let leaves: Vec<Fr> = items.iter().map(|item| hash_to_fr(item)).collect();
+
+    let current_level = leaves.clone();
+    let mut proofs = Vec::new();
+
+    for (idx, _) in items.iter().enumerate() {
+        let mut siblings = Vec::new();
+        let mut directions = Vec::new();
+        let mut level = current_level.clone();
+        let mut pos = idx;
+
+        while level.len() > 1 {
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_fr = if sibling_pos < level.len() {
+                level[sibling_pos]
+            } else {
+                Fr::zero()
+            };
+            siblings.push(fr_to_hash(&sibling_fr));
+            directions.push(pos % 2 == 1);
+
+            let mut next_level = Vec::new();
+            let mut i = 0;
+            while i < level.len() {
+                let left = level[i];
+                let right = if i + 1 < level.len() { level[i + 1] } else { Fr::zero() };
+                let hash = poseidon_hash_to_fr(left, right).unwrap_or(Fr::zero());
+                next_level.push(hash);
+                i += 2;
+            }
+            level = next_level;
+            pos /= 2;
+        }
+        proofs.push(MerkleProof { siblings, directions });
+    }
+
+    // Compute root
+    let mut level = current_level;
+    while level.len() > 1 {
+        let mut next_level = Vec::new();
+        let mut i = 0;
+        while i < level.len() {
+            let left = level[i];
+            let right = if i + 1 < level.len() { level[i + 1] } else { Fr::zero() };
+            let hash = poseidon_hash_to_fr(left, right).unwrap_or(Fr::zero());
+            next_level.push(hash);
+            i += 2;
+        }
+        level = next_level;
+    }
+
+    (fr_to_hash(&level[0]), proofs)
+}
+
+// ---------------------------------------------------------------------------
 // Tests (always available — BLAKE3 tests don't need arkworks)
 // ---------------------------------------------------------------------------
 
@@ -262,6 +351,39 @@ mod arkworks_tests {
         let hash_ab = poseidon_hash_to_fr(a, b).unwrap();
         let hash_ba = poseidon_hash_to_fr(b, a).unwrap();
         assert_ne!(hash_ab, hash_ba);
+    }
+
+    #[test]
+    fn test_poseidon_merkle_tree_differs_from_blake3() {
+        let items: Vec<[u8; 32]> = vec![[1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]];
+
+        // Build BLAKE3-based Merkle tree
+        let (blake3_root, _) = build_merkle_tree(&items);
+
+        // Build Poseidon-based Merkle tree
+        let (poseidon_root, _) = build_poseidon_merkle_tree(&items);
+
+        // The two trees must produce different roots because they use
+        // different hash functions (BLAKE3 vs Poseidon)
+        assert_ne!(
+            blake3_root, poseidon_root,
+            "BLAKE3 and Poseidon Merkle trees must produce different roots"
+        );
+    }
+
+    #[test]
+    fn test_poseidon_merkle_tree_empty() {
+        let (root, proofs) = build_poseidon_merkle_tree(&[]);
+        assert_eq!(root, [0u8; 32]);
+        assert!(proofs.is_empty());
+    }
+
+    #[test]
+    fn test_poseidon_merkle_tree_deterministic() {
+        let items: Vec<[u8; 32]> = vec![[42u8; 32], [99u8; 32]];
+        let (root1, _) = build_poseidon_merkle_tree(&items);
+        let (root2, _) = build_poseidon_merkle_tree(&items);
+        assert_eq!(root1, root2, "Poseidon Merkle tree must be deterministic");
     }
 }
 

@@ -578,4 +578,48 @@ mod tests {
         assert_eq!(restored.balance_of(&account_b), 0);
         assert_eq!(restored.total_supply, 500);
     }
+
+    /// **Unauthorized mint test**: When mint_authority is set, only the
+    /// authority's public key can mint new tokens.
+    #[test]
+    fn test_unauthorized_mint_rejected() {
+        let authority_keypair = generate_keypair();
+        let authority_pubkey: AccountId = authority_keypair.verifying_key().to_bytes();
+
+        let mut state = FinancialState::new();
+        state.mint_authority = Some(authority_pubkey);
+
+        let target = test_account(0xAA);
+        let mint = FinancialOp::Mint {
+            to: target,
+            amount: 100,
+        };
+
+        // Mint from non-authority keypair should fail
+        let unauthorized_keypair = generate_keypair();
+        let event = make_signed_event(&unauthorized_keypair, vec![1]);
+        let result = state.apply(&mint, &event);
+        assert!(result.is_err(), "Mint from non-authority should be rejected");
+        match result {
+            Err(ShardError::ValidationFailed(msg)) => {
+                assert!(
+                    msg.to_lowercase().contains("mint authority"),
+                    "Error should mention mint authority, got: {msg}"
+                );
+            }
+            Err(other) => panic!("Expected ValidationFailed, got: {other:?}"),
+            Ok(()) => panic!("Unauthorized mint should have been rejected"),
+        }
+
+        // Balance should remain 0
+        assert_eq!(state.balance_of(&target), 0);
+        assert_eq!(state.total_supply, 0);
+
+        // Mint from authority keypair should succeed
+        let auth_event = make_signed_event(&authority_keypair, vec![1]);
+        let result = state.apply(&mint, &auth_event);
+        assert!(result.is_ok(), "Mint from authority should succeed");
+        assert_eq!(state.balance_of(&target), 100);
+        assert_eq!(state.total_supply, 100);
+    }
 }

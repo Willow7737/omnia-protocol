@@ -82,7 +82,10 @@ pub enum KeyStoreError {
 /// Result type for key store operations.
 pub type KeyStoreResult<T> = Result<T, KeyStoreError>;
 
-/// Purpose for derived child keys (SLIP-0010 compatible).
+/// Purpose for derived child keys (HKDF-based derivation).
+///
+/// Note: Derivation uses HKDF-SHA256, not SLIP-0010.
+/// TODO: Implement real SLIP-0010 (HMAC-SHA512 based) key derivation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum KeyPurpose {
@@ -409,9 +412,13 @@ impl EncryptedKeyStore {
 
     /// Create keystore from a BIP-39 mnemonic phrase.
     ///
-    /// The mnemonic is converted to a seed using BIP-39 specification,
-    /// then the first 32 bytes of the seed are used as HKDF input key
-    /// material for keystore encryption.
+    /// The Ed25519 keypair is derived **deterministically** from the mnemonic
+    /// using BLAKE3 with a fixed domain separator (`Omnia-Ed25519-KeyDerivation-V1`)
+    /// as the salt, then using the 32-byte output as the Ed25519 secret key seed.
+    /// The same mnemonic always produces the same keypair.
+    ///
+    /// The keystore encryption key is derived separately via HKDF-SHA256 from
+    /// the BIP-39 seed.
     ///
     /// # Arguments
     ///
@@ -428,9 +435,11 @@ impl EncryptedKeyStore {
         data_dir: &Path,
     ) -> KeyStoreResult<Self> {
         let seed = mnemonic.to_seed(passphrase.unwrap_or(""));
-        // Use first 32 bytes of seed as HKDF input for keystore encryption
+        // Derive the Ed25519 keypair deterministically from the mnemonic
+        let keypair = Self::derive_ed25519_keypair_from_seed(&seed[..32]);
+        // Derive the keystore encryption key from the BIP-39 seed
         let encryption_key = Self::derive_key_from_seed(&seed[..32])?;
-        Self::initialize_with_key(data_dir, &encryption_key)
+        Self::initialize_with_deterministic_key(data_dir, &encryption_key, keypair)
     }
 
     /// Generate a random 24-word mnemonic and create keystore from it.
@@ -453,10 +462,13 @@ impl EncryptedKeyStore {
         Ok((keystore, mnemonic))
     }
 
-    /// Derive an Ed25519 child key for a specific purpose using SLIP-0010.
+    /// Derive an Ed25519 child key for a specific purpose using HKDF.
     ///
-    /// Derivation path: m/44'/6061'/{index}'
-    /// 6061 = "OM" in decimal (OMnia)
+    /// This function uses HKDF-SHA256 to derive child keys from the master
+    /// keypair. It is **not** SLIP-0010 compliant — SLIP-0010 requires
+    /// HMAC-SHA512 based derivation with hardened key paths.
+    ///
+    /// Derivation info: `OMNIA-HKDF-{purpose}-{index}-V1`
     ///
     /// # Arguments
     ///
@@ -466,16 +478,49 @@ impl EncryptedKeyStore {
     /// # Errors
     ///
     /// Returns [`KeyStoreError`] if key derivation fails.
+    ///
+    /// # Deprecation
+    ///
+    /// This function was previously named `derive_child_key` and claimed to
+    /// implement SLIP-0010, but it actually uses HKDF-SHA256 instead of the
+    /// correct HMAC-SHA512-based derivation specified in SLIP-0010.
+    // TODO: Implement real SLIP-0010 (HMAC-SHA512 based) key derivation.
+    //       The current HKDF approach is not compatible with standard HD wallets.
+    #[deprecated(
+        since = "0.3.0",
+        note = "This function uses HKDF, not SLIP-0010. Use derive_key_hkdf() explicitly or implement real SLIP-0010."
+    )]
+    #[allow(deprecated)]
     pub fn derive_child_key(&self, purpose: KeyPurpose, index: u32) -> KeyStoreResult<ed25519_dalek::SigningKey> {
-        // SLIP-0010 Ed25519 derivation path: m/44'/6061'/{purpose}'/{index}'
-        // Simplified: derive from the stored secret key using HKDF
+        self.derive_key_hkdf(purpose, index)
+    }
+
+    /// Derive an Ed25519 child key for a specific purpose using HKDF-SHA256.
+    ///
+    /// This function uses HKDF-SHA256 to derive child keys from the master
+    /// keypair. Note: this is **not** SLIP-0010 compliant. SLIP-0010 requires
+    /// HMAC-SHA512 based derivation with hardened key paths.
+    ///
+    /// Derivation info: `OMNIA-HKDF-{purpose}-{index}-V1`
+    ///
+    /// # Arguments
+    ///
+    /// * `purpose` — The key purpose (Identity, Consensus, Governance, Staking)
+    /// * `index` — The child key index
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyStoreError`] if key derivation fails.
+    // TODO: Implement real SLIP-0010 (HMAC-SHA512 based) key derivation.
+    //       The current HKDF approach is not compatible with standard HD wallets.
+    pub fn derive_key_hkdf(&self, purpose: KeyPurpose, index: u32) -> KeyStoreResult<ed25519_dalek::SigningKey> {
         let secret_bytes = self
             .keypair()
             .ok_or_else(|| KeyStoreError::Crypto("No keypair loaded".into()))?
             .to_bytes();
 
         let purpose_index = purpose as u32;
-        let derivation_info = format!("OMNIA-SLIP0010-{purpose_index}-{index}-V1");
+        let derivation_info = format!("OMNIA-HKDF-{purpose_index}-{index}-V1");
 
         let hkdf = Hkdf::<Sha256>::new(Some(&purpose_index.to_be_bytes()), &secret_bytes);
         let mut derived_key = [0u8; 32];
@@ -495,8 +540,39 @@ impl EncryptedKeyStore {
         Ok(key)
     }
 
+    /// Derive an Ed25519 keypair deterministically from a BIP-39 seed.
+    ///
+    /// Uses BLAKE3 with a fixed domain separator (`Omnia-Ed25519-KeyDerivation-V1`)
+    /// as the salt to derive a 32-byte seed, then uses that seed as the
+    /// Ed25519 secret key. This ensures the same mnemonic always produces
+    /// the same keypair.
+    fn derive_ed25519_keypair_from_seed(seed: &[u8]) -> NodeKeypair {
+        let derived_seed = blake3_hash_domain(b"Omnia-Ed25519-KeyDerivation-V1", seed);
+        NodeKeypair::from_bytes(&derived_seed)
+    }
+
     /// Initialize keystore with a pre-derived encryption key.
+    ///
+    /// Generates a **random** keypair. For deterministic key derivation from
+    /// a mnemonic, use [`initialize_with_deterministic_key`] instead.
+    ///
+    /// Note: This function is retained for potential use by code that does not
+    /// require deterministic key derivation.
+    #[allow(dead_code)]
     fn initialize_with_key(data_dir: &Path, encryption_key: &[u8; 32]) -> KeyStoreResult<Self> {
+        let keypair = generate_keypair();
+        Self::initialize_with_deterministic_key(data_dir, encryption_key, keypair)
+    }
+
+    /// Initialize keystore with a pre-derived encryption key and a specific keypair.
+    ///
+    /// This is used by [`from_mnemonic`] to create a keystore with a
+    /// deterministic keypair derived from the BIP-39 mnemonic.
+    fn initialize_with_deterministic_key(
+        data_dir: &Path,
+        encryption_key: &[u8; 32],
+        keypair: NodeKeypair,
+    ) -> KeyStoreResult<Self> {
         std::fs::create_dir_all(data_dir)?;
 
         let pubkey_path = data_dir.join("pubkey");
@@ -506,7 +582,6 @@ impl EncryptedKeyStore {
             return Err(KeyStoreError::AlreadyExists(data_dir.display().to_string()));
         }
 
-        let keypair = generate_keypair();
         let public_key = keypair.verifying_key();
 
         // Write public key
@@ -1021,6 +1096,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_derive_child_key() {
         let dir = TempDir::new().expect("temp dir");
         let keystore = EncryptedKeyStore::create(dir.path(), "test-pass").expect("create keystore");
@@ -1047,6 +1123,65 @@ mod tests {
             identity_key.to_bytes(),
             identity_key2.to_bytes(),
             "Same purpose and index must produce the same key"
+        );
+    }
+
+    #[test]
+    fn test_derive_key_hkdf() {
+        let dir = TempDir::new().expect("temp dir");
+        let keystore = EncryptedKeyStore::create(dir.path(), "test-pass").expect("create keystore");
+
+        let identity_key = keystore
+            .derive_key_hkdf(KeyPurpose::Identity, 0)
+            .expect("derive identity key");
+        let consensus_key = keystore
+            .derive_key_hkdf(KeyPurpose::Consensus, 0)
+            .expect("derive consensus key");
+
+        // Different purposes should produce different keys
+        assert_ne!(
+            identity_key.to_bytes(),
+            consensus_key.to_bytes(),
+            "Different purposes must produce different child keys"
+        );
+
+        // Same purpose and index should produce the same key
+        let identity_key2 = keystore
+            .derive_key_hkdf(KeyPurpose::Identity, 0)
+            .expect("derive identity key again");
+        assert_eq!(
+            identity_key.to_bytes(),
+            identity_key2.to_bytes(),
+            "Same purpose and index must produce the same key"
+        );
+    }
+
+    #[test]
+    fn test_mnemonic_deterministic_keypair() {
+        // Same mnemonic should always produce the same Ed25519 keypair
+        let mnemonic = bip39::Mnemonic::parse_normalized(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+        .expect("parse mnemonic");
+
+        let dir1 = TempDir::new().expect("temp dir 1");
+        let dir2 = TempDir::new().expect("temp dir 2");
+
+        let ks1 = EncryptedKeyStore::from_mnemonic(&mnemonic, None, dir1.path()).expect("create ks1");
+        let ks2 = EncryptedKeyStore::from_mnemonic(&mnemonic, None, dir2.path()).expect("create ks2");
+
+        // The same mnemonic must produce the same public key (deterministic)
+        assert_eq!(
+            ks1.public_key().to_bytes(),
+            ks2.public_key().to_bytes(),
+            "Same mnemonic must produce the same Ed25519 keypair"
+        );
+
+        // Verify the keypair is also the same (not just the public key)
+        assert_eq!(
+            ks1.keypair().unwrap().to_bytes(),
+            ks2.keypair().unwrap().to_bytes(),
+            "Same mnemonic must produce the same Ed25519 secret key"
         );
     }
 }

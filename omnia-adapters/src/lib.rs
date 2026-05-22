@@ -119,7 +119,10 @@ pub use merkle::{build_merkle_tree, compute_root_from_proof, MerkleProof};
 pub use merkle::{fr_to_hash, hash_to_fr, poseidon_hash_to_fr};
 
 #[cfg(feature = "arkworks")]
-pub use prover::{verify_proofs_batch, Proof, ProverError, ProvingKey, VerifyingKey};
+#[allow(deprecated)]
+pub use prover::verify_proofs_batch;
+#[cfg(feature = "arkworks")]
+pub use prover::{verify_multiple, Proof, ProverError, ProvingKey, VerifyingKey};
 
 #[cfg(feature = "arkworks")]
 pub use poseidon::ZkError;
