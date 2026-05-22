@@ -7,9 +7,11 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-800%2B_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-1,173_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Lines-71,407-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Phase_0-70%25-orange?style=for-the-badge" alt="Phase 0">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
@@ -55,8 +57,18 @@
 │  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINT 0-4
 │  + Compact Encoding + Bloom + Priority Gossip   │
 ├──────────────────────────────────────────────────┤
-│  PHASE 0 REMEDIATION: Critical Security Fixes    │ ✅ COMPLETE
+│  PHASE 0 REMEDIATION: Critical Security Fixes   │ ✅ COMPLETE
 │  + Feldman VSS DKG + SRS Binding + Auth Fixes   │
+├──────────────────────────────────────────────────┤
+│  NODE INTEGRATION: Background Consensus Loop    │ ✅ FIXED
+│  + Pipeline Router Workers + P2P Network Task   │
+├──────────────────────────────────────────────────┤
+│  MERKLE TYPE SAFETY: Generic MerkleProof<H>     │ ✅ FIXED
+│  + Blake3/Poseidon markers prevent mismatch     │
+├──────────────────────────────────────────────────┤
+│  CEREMONY API: Wired to CeremonyServer          │ ✅ FIXED
+├──────────────────────────────────────────────────┤
+│  PLACEHOLDER FIXES: Reject invalid proofs        │ ✅ FIXED
 └──────────────────────────────────────────────────┘
 ```
 
@@ -83,21 +95,21 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 | Crate | Purpose | Tests | Status |
 |-------|---------|-------|--------|
-| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 57+ | ✅ |
-| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC | 119+ | ✅ |
-| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs | 178+ | ✅ |
-| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 61+ | ✅ |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 128+ | ✅ |
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 36+ | ✅ |
-| `shards/` | 6 domain shards + cross-shard messaging | 62+ | ✅ |
-| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 61+ | ✅ |
-| `economics/` | UBC token, quota, governance, useful work | 58+ | ✅ |
-| `node/` | Binary entrypoint, REST API, health/metrics | 37+ | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss, integration | ~45 scenarios | ✅ |
-| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
-| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | benchmark suite | ✅ |
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 57 | ✅ 90% |
+| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC, DKG | 139 | ✅ 70% |
+| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs | 233 | ✅ 75% |
+| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 103 | ✅ 80% |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 107 | ✅ 65% |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 52 | ✅ 80% |
+| `shards/` | 6 domain shards + cross-shard messaging | 107 | ✅ 75% |
+| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 68 | ✅ 70% |
+| `economics/` | UBC token, quota, governance, useful work | 88 | ✅ 65% |
+| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | 36 | ✅ 52% |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss, integration | 76 | ✅ 80% |
+| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ 70% |
+| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ 85% |
 
-**Total: 800+ lib tests + integration/chaos/fuzz tests, all passing.**
+**Total: 217 Rust source files, 71,407 lines, 1,173 tests — all passing.**
 
 ---
 
