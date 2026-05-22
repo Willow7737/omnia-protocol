@@ -76,6 +76,14 @@ impl BatchProofCircuit {
     /// Create a batch proof circuit from a list of event hashes and their
     /// Merkle proofs.
     ///
+    /// **Important**: The `merkle_proofs` and `merkle_root` must be produced by
+    /// [`build_poseidon_merkle_tree`], not [`build_merkle_tree`]. The circuit
+    /// verifies Merkle paths using Poseidon hashing, so BLAKE3-based proofs
+    /// would produce roots that don't match the in-circuit verification.
+    ///
+    /// [`build_poseidon_merkle_tree`]: crate::merkle::build_poseidon_merkle_tree
+    /// [`build_merkle_tree`]: crate::merkle::build_merkle_tree
+    ///
     /// # Arguments
     ///
     /// * `event_hashes` — Field element hashes for each event in the batch

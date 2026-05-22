@@ -197,11 +197,11 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 ///
 /// A tuple of (Poseidon root as 32 bytes, vector of Merkle proofs).
 ///
-/// TODO: Update circuit witness generation to use the Poseidon tree instead
-/// of the BLAKE3 tree. Currently, the circuit may use BLAKE3 for Merkle
-/// verification while this function produces Poseidon-based roots, leading
-/// to a mismatch. The circuit must be updated to use Poseidon hashing
-/// consistently.
+/// **Important**: Circuit witness generation (e.g., `ExpandedRollupCircuit::from_batch`
+/// and `BatchProofCircuit::from_batch`) must use this Poseidon tree builder instead
+/// of [`build_merkle_tree`], because the on-circuit Merkle path verification uses
+/// Poseidon hashing. Using the BLAKE3 tree would produce roots that don't match
+/// the in-circuit verification.
 #[cfg(feature = "arkworks")]
 pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
     if items.is_empty() {

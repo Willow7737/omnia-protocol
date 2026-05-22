@@ -74,10 +74,12 @@ pub use ceremony_client::{CeremonyClient, CeremonyClientError};
 pub use ceremony_server::{
     CeremonyConfig, CeremonyError, CeremonyPhase, CeremonyServer, CeremonyTranscript, ContributionReceipt,
 };
+#[allow(deprecated)]
 pub use circuit_setup::{
     derive_keys, derive_keys_deterministic_from_srs, derive_keys_expanded, derive_keys_from_srs,
     verify_key_consistency, CircuitKeyPair,
 };
+
 pub use contribution::{
     contribute, initial_transcript_with_generators, initialize_transcript, verify_ceremony_transcript,
     verify_contribution, Contribution, ContributionProof,
@@ -165,8 +167,9 @@ impl SetupCeremony {
 
     /// Complete Phase 1 and derive Phase 2 keys for the basic circuit.
     ///
-    /// Uses [`derive_keys_from_srs`] which verifies the SRS has contributions
-    /// and is well-formed before deriving keys.
+    /// Uses [`derive_keys_deterministic_from_srs`] which cryptographically binds
+    /// the Phase 2 keys to the SRS transcript, ensuring different SRS produce
+    /// different keys.
     ///
     /// # Arguments
     ///
@@ -184,7 +187,7 @@ impl SetupCeremony {
             ));
         }
 
-        let keypair = derive_keys_from_srs(&self.srs, circuit)?;
+        let keypair = derive_keys_deterministic_from_srs(&self.srs, circuit)?;
         self.completed = true;
         tracing::info!("Trusted setup ceremony finalized (basic circuit)");
         Ok(keypair)
@@ -209,6 +212,7 @@ impl SetupCeremony {
             ));
         }
 
+        #[allow(deprecated)] // TODO: create derive_keys_deterministic_expanded and switch
         let keypair = derive_keys_expanded(&self.srs, num_events, merkle_depth)?;
         self.completed = true;
         tracing::info!("Trusted setup ceremony finalized (expanded circuit)");

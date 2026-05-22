@@ -114,13 +114,14 @@ impl ComputationalState {
                 #[cfg(feature = "real_verification")]
                 {
                     use ark_bn254::Bn254;
-                    use ark_ec::pairing::Pairing;
+                    use ark_groth16::Groth16;
                     use ark_serialize::CanonicalDeserialize;
+                    use ark_snark::SNARK;
 
                     // Layout of proof_bytes:
-                    //   [0..32)   : verifying key length (u32 LE) + padding
-                    //   [4..4+vk_len) : serialized verifying key
-                    //   [4+vk_len..]  : serialized proof
+                    //   [0..4)         : verifying key length (u32 LE)
+                    //   [4..4+vk_len)  : serialized VerifyingKey
+                    //   [4+vk_len..]   : serialized Proof
                     //
                     // If the proof bytes are too short to contain a valid header,
                     // fall through to the default (placeholder) path.
@@ -131,41 +132,8 @@ impl ComputationalState {
                             let vk_bytes = &proof_bytes[4..4 + vk_len];
                             let proof_slice = &proof_bytes[4 + vk_len..];
 
-                            match <Bn254 as Pairing>::G1Affine::deserialize_uncompressed(vk_bytes) {
-                                Ok(_vk_g1) => {
-                                    // Attempt full deserialization of the verifying key and proof.
-                                    // In production, the verifying key is a structured object with
-                                    // multiple group elements. Here we check that the proof bytes
-                                    // are at least plausible (non-trivial length).
-                                    //
-                                    // A full verification would look like:
-                                    //   let vk = VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes)?;
-                                    //   let proof = Proof::<Bn254>::deserialize_uncompressed(proof_slice)?;
-                                    //   let pvk = prepare_verifying_key(&vk);
-                                    //   let public_inputs = vec![]; // derived from task spec
-                                    //   verify_proof(&pvk, &public_inputs, &proof)?
-                                    if proof_slice.len() >= 64 {
-                                        tracing::info!(
-                                            task = ?&task_id[..4],
-                                            proof_len = proof_slice.len(),
-                                            "Real ZK verification: proof structure validated (placeholder)"
-                                        );
-                                        task.status = TaskStatus::Verified;
-                                        task.last_update.merge(vc);
-                                        return Ok(());
-                                    } else {
-                                        tracing::warn!(
-                                            task = ?&task_id[..4],
-                                            proof_len = proof_slice.len(),
-                                            "Real ZK verification: proof too short, rejecting"
-                                        );
-                                        task.status = TaskStatus::Failed;
-                                        task.last_update.merge(vc);
-                                        return Err(ShardError::ValidationFailed(
-                                            "ZK proof verification failed: proof data too short".into(),
-                                        ));
-                                    }
-                                }
+                            let vk = match ark_groth16::VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes) {
+                                Ok(vk) => vk,
                                 Err(e) => {
                                     tracing::warn!(
                                         task = ?&task_id[..4],
@@ -176,6 +144,64 @@ impl ComputationalState {
                                     task.last_update.merge(vc);
                                     return Err(ShardError::ValidationFailed(format!(
                                         "ZK proof verification failed: invalid verifying key: {e}"
+                                    )));
+                                }
+                            };
+
+                            let proof = match ark_groth16::Proof::<Bn254>::deserialize_uncompressed(proof_slice) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        task = ?&task_id[..4],
+                                        error = %e,
+                                        "Real ZK verification: failed to deserialize proof, rejecting"
+                                    );
+                                    task.status = TaskStatus::Failed;
+                                    task.last_update.merge(vc);
+                                    return Err(ShardError::ValidationFailed(format!(
+                                        "ZK proof verification failed: invalid proof: {e}"
+                                    )));
+                                }
+                            };
+
+                            // Derive public inputs from the task specification.
+                            // In a full implementation, these would be computed from the task
+                            // parameters (task spec hash, input commitment, output commitment).
+                            // For now, we use an empty public input list which verifies that
+                            // the proof is valid for a circuit with no public inputs.
+                            let public_inputs: Vec<ark_bn254::Fr> = vec![];
+
+                            match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
+                                Ok(true) => {
+                                    tracing::info!(
+                                        task = ?&task_id[..4],
+                                        "Real ZK verification: proof verified successfully"
+                                    );
+                                    task.status = TaskStatus::Verified;
+                                    task.last_update.merge(vc);
+                                    return Ok(());
+                                }
+                                Ok(false) => {
+                                    tracing::warn!(
+                                        task = ?&task_id[..4],
+                                        "Real ZK verification: proof is invalid"
+                                    );
+                                    task.status = TaskStatus::Failed;
+                                    task.last_update.merge(vc);
+                                    return Err(ShardError::ValidationFailed(
+                                        "ZK proof verification failed: proof is invalid".into(),
+                                    ));
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        task = ?&task_id[..4],
+                                        error = %e,
+                                        "Real ZK verification: verification error"
+                                    );
+                                    task.status = TaskStatus::Failed;
+                                    task.last_update.merge(vc);
+                                    return Err(ShardError::ValidationFailed(format!(
+                                        "ZK proof verification failed: {e}"
                                     )));
                                 }
                             }

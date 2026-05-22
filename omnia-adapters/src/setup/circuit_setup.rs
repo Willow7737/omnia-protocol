@@ -94,6 +94,10 @@ pub struct CircuitKeyPair {
 /// let circuit = RollupCircuit::empty();
 /// let keypair = derive_keys(&srs, &circuit)?;
 /// ```
+#[deprecated(
+    since = "0.2.0",
+    note = "ignores the SRS; use `derive_keys_deterministic_from_srs` instead"
+)]
 pub fn derive_keys(srs: &PowersOfTau, circuit: &RollupCircuit) -> Result<CircuitKeyPair, SetupError> {
     tracing::info!(
         tau_contributions = srs.contribution_count,
@@ -156,6 +160,10 @@ pub fn derive_keys(srs: &PowersOfTau, circuit: &RollupCircuit) -> Result<Circuit
 /// let srs = PowersOfTau::new(64);
 /// let keypair = derive_keys_expanded(&srs, 4, 8)?;
 /// ```
+#[deprecated(
+    since = "0.2.0",
+    note = "ignores the SRS; use the deterministic key derivation for expanded circuits instead"
+)]
 pub fn derive_keys_expanded(
     srs: &PowersOfTau,
     num_events: usize,
@@ -238,6 +246,10 @@ pub fn derive_keys_expanded(
 /// let circuit = RollupCircuit::empty();
 /// let keypair = derive_keys_from_srs(&srs, &circuit)?;
 /// ```
+#[deprecated(
+    since = "0.2.0",
+    note = "uses fresh randomness without binding to SRS; use `derive_keys_deterministic_from_srs` instead"
+)]
 pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Result<CircuitKeyPair, SetupError> {
     // Verify the SRS has contributions
     if srs.contribution_count == 0 {
@@ -426,6 +438,7 @@ pub fn verify_key_consistency(pk_bytes: &[u8], vk_bytes: &[u8]) -> Result<(), Se
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::circuit::RollupCircuit;
