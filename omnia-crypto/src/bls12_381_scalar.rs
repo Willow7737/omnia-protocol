@@ -40,6 +40,44 @@ pub struct Scalar {
     inner: blst_fr,
 }
 
+// Manual Serialize/Deserialize implementations for Scalar.
+// We serialize as 32 little-endian bytes, which is the canonical
+// representation of a BLS12-381 scalar field element.
+impl serde::Serialize for Scalar {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.to_bytes())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Scalar {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ScalarVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ScalarVisitor {
+            type Value = Scalar;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "a 32-byte BLS12-381 scalar")
+            }
+
+            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Scalar, E> {
+                if v.len() != SCALAR_BYTES {
+                    return Err(E::custom(format!(
+                        "expected 32 bytes for BLS12-381 scalar, got {}",
+                        v.len()
+                    )));
+                }
+                let mut bytes = [0u8; SCALAR_BYTES];
+                bytes.copy_from_slice(v);
+                Scalar::from_bytes(&bytes)
+                    .ok_or_else(|| E::custom("invalid BLS12-381 scalar (>= subgroup order)"))
+            }
+        }
+
+        deserializer.deserialize_bytes(ScalarVisitor)
+    }
+}
+
 impl Scalar {
     /// Create a scalar from 32 bytes (little-endian).
     ///
@@ -322,6 +360,87 @@ pub fn accumulate_share_field(accumulated: Option<Scalar>, new_share: Scalar) ->
     }
 }
 
+/// Reconstruct the secret from a set of shares using Lagrange interpolation.
+///
+/// Given `threshold` shares of the form `(x_i, y_i)`, reconstructs the
+/// constant term of the polynomial (i.e., the secret) using Lagrange
+/// basis polynomials evaluated at x = 0:
+///
+/// ```text
+/// secret = sum_i( y_i * L_i(0) )
+/// where L_i(0) = product_{j != i} (0 - x_j) / (x_i - x_j)
+///             = product_{j != i} ( x_j / (x_i - x_j) )
+/// ```
+///
+/// This is the standard reconstruction formula for Shamir's Secret Sharing
+/// and Feldman VSS. The result is exact (no approximation error) because
+/// all arithmetic is in the finite field modulo the BLS12-381 subgroup order.
+///
+/// # Arguments
+///
+/// * `shares` — A vector of `(index, share_value)` pairs where `index` is
+///   the 1-based participant index and `share_value` is the scalar share.
+///   Must contain at least 2 shares for meaningful reconstruction.
+///
+/// # Returns
+///
+/// The reconstructed secret as a `Scalar`, or `None` if fewer than 2 shares
+/// are provided or if any two shares have the same index.
+pub fn reconstruct_secret(shares: &[(usize, Scalar)]) -> Option<Scalar> {
+    if shares.len() < 2 {
+        return None;
+    }
+
+    // Check for duplicate indices
+    let indices: Vec<usize> = shares.iter().map(|(i, _)| *i).collect();
+    for i in 0..indices.len() {
+        for j in (i + 1)..indices.len() {
+            if indices[i] == indices[j] {
+                return None;
+            }
+        }
+    }
+
+    let mut secret = Scalar::zero();
+
+    for (i, (xi, yi)) in shares.iter().enumerate() {
+        // Compute Lagrange basis polynomial L_i(0)
+        // L_i(0) = product_{j != i} (x_j / (x_i - x_j))
+        let xi_scalar = Scalar::from_u64(*xi as u64);
+        let mut li = Scalar::one(); // Start with 1
+
+        for (j, (xj, _)) in shares.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            let xj_scalar = Scalar::from_u64(*xj as u64);
+
+            // numerator = x_j (since we evaluate at 0: (0 - x_j) = -x_j,
+            //   but we want x_j / (x_i - x_j), not -x_j / (x_i - x_j))
+            // Actually: L_i(0) = prod_{j!=i} (0 - x_j) / (x_i - x_j)
+            //                      = prod_{j!=i} (-x_j) / (x_i - x_j)
+            //                      = prod_{j!=i} x_j / (x_j - x_i)
+            // (negating both numerator and denominator)
+            let numerator = xj_scalar;
+            let denominator = xj_scalar.sub(&xi_scalar);
+
+            if denominator.is_zero() {
+                return None; // Duplicate index — should not happen after check above
+            }
+
+            let denom_inv = denominator.invert()?;
+            let term = numerator.multiply(&denom_inv);
+            li = li.multiply(&term);
+        }
+
+        // Accumulate: secret += y_i * L_i(0)
+        let contribution = yi.multiply(&li);
+        secret = secret.add(&contribution);
+    }
+
+    Some(secret)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -515,5 +634,85 @@ mod tests {
         let index = 1u64;
         let commitments: Vec<Vec<u8>> = vec![];
         assert!(!verify_feldman_share(&share, index, &commitments));
+    }
+
+    #[test]
+    fn test_reconstruct_secret_linear() {
+        // f(x) = 42 + 7x, so f(1)=49, f(2)=56, f(3)=63
+        // Reconstructing from any 2 shares should give secret=42
+        let shares = vec![
+            (1, Scalar::from_u64(49)),
+            (2, Scalar::from_u64(56)),
+            (3, Scalar::from_u64(63)),
+        ];
+        let secret = reconstruct_secret(&shares).expect("reconstruction should succeed");
+        assert_eq!(secret, Scalar::from_u64(42));
+    }
+
+    #[test]
+    fn test_reconstruct_secret_quadratic() {
+        // f(x) = 10 + 5x + 2x^2, so f(1)=17, f(2)=28, f(3)=43, f(4)=62
+        // Need at least 3 shares (degree 2 polynomial), secret=10
+        let shares = vec![
+            (1, Scalar::from_u64(17)),
+            (2, Scalar::from_u64(28)),
+            (3, Scalar::from_u64(43)),
+        ];
+        let secret = reconstruct_secret(&shares).expect("reconstruction should succeed");
+        assert_eq!(secret, Scalar::from_u64(10));
+    }
+
+    #[test]
+    fn test_reconstruct_secret_subset_suffices() {
+        // Same polynomial, any 3-of-4 shares should reconstruct the same secret
+        let shares_a = vec![
+            (1, Scalar::from_u64(17)),
+            (2, Scalar::from_u64(28)),
+            (4, Scalar::from_u64(62)),
+        ];
+        let shares_b = vec![
+            (1, Scalar::from_u64(17)),
+            (3, Scalar::from_u64(43)),
+            (4, Scalar::from_u64(62)),
+        ];
+        let secret_a = reconstruct_secret(&shares_a).expect("reconstruction should succeed");
+        let secret_b = reconstruct_secret(&shares_b).expect("reconstruction should succeed");
+        assert_eq!(secret_a, secret_b);
+        assert_eq!(secret_a, Scalar::from_u64(10));
+    }
+
+    #[test]
+    fn test_reconstruct_secret_too_few_shares() {
+        let shares = vec![(1, Scalar::from_u64(42))];
+        assert!(reconstruct_secret(&shares).is_none());
+    }
+
+    #[test]
+    fn test_reconstruct_secret_duplicate_indices() {
+        let shares = vec![
+            (1, Scalar::from_u64(17)),
+            (1, Scalar::from_u64(28)),
+        ];
+        assert!(reconstruct_secret(&shares).is_none());
+    }
+
+    #[test]
+    fn test_reconstruct_secret_with_random_polynomial() {
+        // Create a random polynomial, evaluate at points, then reconstruct
+        let mut rng = rand::thread_rng();
+        let secret = Scalar::random(&mut rng);
+        let a1 = Scalar::random(&mut rng);
+        let a2 = Scalar::random(&mut rng);
+        // f(x) = secret + a1*x + a2*x^2
+        let coeffs = vec![secret, a1, a2];
+
+        // Evaluate at indices 1..5
+        let shares: Vec<(usize, Scalar)> = (1..=5)
+            .map(|i| (i, polynomial_evaluate(&coeffs, &Scalar::from_u64(i as u64))))
+            .collect();
+
+        // Reconstruct from first 3 shares (threshold = 3)
+        let reconstructed = reconstruct_secret(&shares[..3]).expect("reconstruction should succeed");
+        assert_eq!(reconstructed, secret, "reconstructed secret must match original");
     }
 }
