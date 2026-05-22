@@ -8,6 +8,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.47](https://github.com/Willow7737/omnia-protocol/compare/v0.1.46...v0.1.47) (2026-05-22)
+
+
+### Features
+
+* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([f6e41bb](https://github.com/Willow7737/omnia-protocol/commit/f6e41bbaaa8a7457f4c17ded6480137efd2969eb))
+* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([26d9999](https://github.com/Willow7737/omnia-protocol/commit/26d9999fe357515989b5121170c6e42f8b5a8ac9))
+
+
+### Bug Fixes
+
+* resolve rustdoc intra-doc link for validate_with_caller ([be770b8](https://github.com/Willow7737/omnia-protocol/commit/be770b8d9df093a987a775d8aef02985b1417880))
+
 ## [0.1.46](https://github.com/Willow7737/omnia-protocol/compare/v0.1.45...v0.1.46) (2026-05-22)
 
 
