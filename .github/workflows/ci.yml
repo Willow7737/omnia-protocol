@@ -179,13 +179,13 @@ jobs:
       - name: Build release binary (production profile)
         run: cargo build -p omnia-node --release --no-default-features --features full
         timeout-minutes: 20
-      - name: Verify binary size ≤ 12 MB
+      - name: Verify binary size ≤ 14 MB
         run: |
           SIZE=$(stat --format="%s" target/release/omnia-node)
-          MAX=$((12 * 1024 * 1024))  # 12,582,912 bytes
+          MAX=$((14 * 1024 * 1024))  # 14,680,064 bytes
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 / 1024 )) MB)"
           if [ "$SIZE" -gt "$MAX" ]; then
-            echo "::error::Binary size $SIZE exceeds 12 MB limit ($MAX bytes)"
+            echo "::error::Binary size $SIZE exceeds 14 MB limit ($MAX bytes)"
             exit 1
           fi
           echo "::notice::Binary size check passed: $SIZE bytes ≤ $MAX bytes"

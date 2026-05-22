@@ -140,6 +140,7 @@ fn test_empty_signature_fails_verification() {
         classical_sig: Vec::new(),
         data_hash: *hash.as_bytes(),
         committed_at: omnia_substrate::VectorClock::new(),
+        previous_hash: [0u8; 32],
     };
     assert!(
         !commitment.verify(&pk, data, CommitmentPhase::ClassicalOnly),
