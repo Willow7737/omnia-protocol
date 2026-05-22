@@ -1482,10 +1482,9 @@ mod tests {
         let result = coin_round(10, &seed);
         // The coin round always produces a definitive answer (true or false),
         // breaking the tie instead of leaving it unresolved.
-        assert!(
-            result || !result,
-            "Coin round must produce a definitive boolean to break ties"
-        );
+        // This is inherently always true for a bool, but we assert it
+        // to document the invariant and guard against future non-bool returns.
+        let _: bool = result;
 
         // Verify it's the same across calls (deterministic)
         let result2 = coin_round(10, &seed);

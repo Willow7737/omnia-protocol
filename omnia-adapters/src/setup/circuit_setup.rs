@@ -525,9 +525,11 @@ mod tests {
 
     #[test]
     fn test_derive_keys_deterministic_from_srs_different_srs_different_keys() {
-        // Different SRS must produce different keys
-        let srs1 = super::super::powers_of_tau::run_ceremony_with_offset(8, 3, 0).expect("ceremony 1 failed");
-        let srs2 = super::super::powers_of_tau::run_ceremony_with_offset(8, 3, 1).expect("ceremony 2 failed");
+        // Different SRS must produce different keys.
+        // Use different num_participants to guarantee genuinely different
+        // SRS accumulators (different contribution count = different EC state).
+        let srs1 = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony 1 failed");
+        let srs2 = super::super::powers_of_tau::run_ceremony(8, 5).expect("ceremony 2 failed");
         let circuit = RollupCircuit::empty();
 
         let keypair1 = derive_keys_deterministic_from_srs(&srs1, &circuit).expect("derive 1 failed");
