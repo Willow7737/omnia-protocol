@@ -338,7 +338,7 @@ pub fn derive_keys_deterministic_from_srs(
     );
 
     // Use the deterministic seed to initialize the RNG
-    let rng = ChaCha8Rng::from_seed(phase2_seed);
+    let mut rng = ChaCha8Rng::from_seed(phase2_seed);
 
     // Perform the Groth16 setup with deterministic RNG
     let (pk, vk) = Groth16::<Bn254>::setup((*circuit).clone(), &mut rng)
