@@ -8,6 +8,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.46](https://github.com/Willow7737/omnia-protocol/compare/v0.1.45...v0.1.46) (2026-05-22)
+
+
+### Features
+
+* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([57ba4dd](https://github.com/Willow7737/omnia-protocol/commit/57ba4dd6665526789b25498ac3ac2d2fdb39fc03))
+* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([5645c55](https://github.com/Willow7737/omnia-protocol/commit/5645c5565441f8b828665c04eeb058d906c908f6))
+
+
+### Bug Fixes
+
+* **ci:** add CircuitSpecificSetupSNARK trait import + cargo fmt ([ab9d4f8](https://github.com/Willow7737/omnia-protocol/commit/ab9d4f8499447d7c62630d81d513775c89f7535b))
+* **ci:** add Clone derive to RollupCircuit, deref-then-clone for Groth16::setup ([f8b2a12](https://github.com/Willow7737/omnia-protocol/commit/f8b2a12f85cc46a8bb309b20dc0b56a702ff6654))
+* **ci:** clippy overly_complex_bool_expr, SRS test, network integration tests ([c62b17a](https://github.com/Willow7737/omnia-protocol/commit/c62b17af20394acbfcf9905847a1150c4fbf7869))
+* **ci:** declare rng as mutable for Groth16::setup ([fc73e15](https://github.com/Willow7737/omnia-protocol/commit/fc73e15afb2ff5acb3c97a1733bb772f34ecffe8))
+* **ci:** Groth16::setup signature + missing max_sequence_entries ([6924083](https://github.com/Willow7737/omnia-protocol/commit/6924083e9729dec7307be47b647995f5ee430ea1))
+* **ci:** network test missing field, clippy bool_comparison, SRS test determinism ([029eeb7](https://github.com/Willow7737/omnia-protocol/commit/029eeb7067c60e1b75dccc1b4a4a198151be45c0))
+* **ci:** use turbofish Groth16::&lt;Bn254&gt;::setup to resolve type inference ([b4dd099](https://github.com/Willow7737/omnia-protocol/commit/b4dd09900c3427a96f9fcae312a9da9e4ba1851d))
+* sign burn event with account owner keypair in double-spend test ([2d561a7](https://github.com/Willow7737/omnia-protocol/commit/2d561a7a1496d6b4d09b8acf32b428812b8f7a4f))
+* use real keypair for account owner in cross_shard burn test ([c5a327f](https://github.com/Willow7737/omnia-protocol/commit/c5a327f21ada5de0bd2674dae8689711792ab54e))
+
 ## [0.1.45](https://github.com/Willow7737/omnia-protocol/compare/v0.1.44...v0.1.45) (2026-05-22)
 
 
