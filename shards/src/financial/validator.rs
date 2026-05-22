@@ -532,9 +532,8 @@ mod tests {
             from: sender_pubkey,
             amount: 80,
         };
-        // For Burn, the event's creator_pubkey doesn't matter — Burn takes `from` from the op
-        let keypair2 = generate_keypair();
-        let burn_event = make_signed_event(&keypair2, vec![1]);
+        // Burn requires the event to be signed by the account owner (creator_pubkey == from)
+        let burn_event = make_signed_event(&sender_keypair, vec![1]);
         assert!(state.apply(&burn, &burn_event).is_ok(), "Burn should succeed");
         assert_eq!(state.balance_of(&sender_pubkey), 20);
 
