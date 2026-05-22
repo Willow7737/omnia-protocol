@@ -51,7 +51,7 @@ use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::circuit_setup::{derive_keys_from_srs, CircuitKeyPair};
+use super::circuit_setup::{derive_keys_deterministic_from_srs, CircuitKeyPair};
 use super::contribution::{verify_contribution, Contribution, ContributionProof};
 use super::powers_of_tau::PowersOfTau;
 use super::SetupError;
@@ -321,7 +321,7 @@ impl CeremonyServer {
     /// Finalize the ceremony — verify the SRS and derive circuit-specific keys.
     ///
     /// Requires at least `min_participants` contributions. Derives keys
-    /// for the given circuit using [`derive_keys_from_srs`].
+    /// for the given circuit using [`derive_keys_deterministic_from_srs`].
     pub fn finalize(&self, circuit: &RollupCircuit) -> Result<CircuitKeyPair, CeremonyError> {
         let contribution_count = self.contribution_count();
         if contribution_count < self.config.min_participants {
@@ -331,11 +331,12 @@ impl CeremonyServer {
             });
         }
 
-        // Derive keys from the final SRS
+        // Derive keys deterministically from the final SRS
         let key_pair = {
             let srs_guard = self.srs.read().map_err(|e| CeremonyError::Internal(e.to_string()))?;
             let srs = srs_guard.as_ref().ok_or(CeremonyError::NotStarted)?;
-            derive_keys_from_srs(srs, circuit).map_err(|e| CeremonyError::KeyDerivationFailed(e.to_string()))?
+            derive_keys_deterministic_from_srs(srs, circuit)
+                .map_err(|e| CeremonyError::KeyDerivationFailed(e.to_string()))?
         };
 
         // Update phase

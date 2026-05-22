@@ -349,6 +349,14 @@ impl ExpandedRollupCircuit {
     /// byte-based Merkle proofs (from the [`merkle`] module) into the
     /// field-element representation used by the circuit.
     ///
+    /// **Important**: The `merkle_proofs` and `event_commitment` must be
+    /// produced by [`build_poseidon_merkle_tree`], not [`build_merkle_tree`].
+    /// The circuit verifies Merkle paths using Poseidon hashing, so BLAKE3-based
+    /// proofs would produce roots that don't match the in-circuit verification.
+    ///
+    /// [`build_poseidon_merkle_tree`]: crate::merkle::build_poseidon_merkle_tree
+    /// [`build_merkle_tree`]: crate::merkle::build_merkle_tree
+    ///
     /// # Arguments
     ///
     /// * `old_root` — Field element representing the old state root

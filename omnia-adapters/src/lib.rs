@@ -116,7 +116,7 @@ pub use merkle::{build_merkle_tree, compute_root_from_proof, MerkleProof};
 
 // Field-element functions require arkworks
 #[cfg(feature = "arkworks")]
-pub use merkle::{fr_to_hash, hash_to_fr, poseidon_hash_to_fr};
+pub use merkle::{build_poseidon_merkle_tree, fr_to_hash, hash_to_fr, poseidon_hash_to_fr};
 
 #[cfg(feature = "arkworks")]
 #[allow(deprecated)]
