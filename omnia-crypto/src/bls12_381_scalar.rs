@@ -84,20 +84,36 @@ impl Scalar {
     }
 
     /// Generate a random scalar using the provided RNG.
+    ///
+    /// Uses rejection sampling: generates 32 random bytes and retries
+    /// if the value is >= subgroup order r. Since r ≈ 2^254.33, the
+    /// probability of rejection is approximately 25%, so this loop
+    /// terminates quickly (expected ~1.33 iterations).
     pub fn random(rng: &mut (impl CryptoRng + RngCore)) -> Self {
-        let mut bytes = [0u8; SCALAR_BYTES];
-        rng.fill_bytes(&mut bytes);
-        Self::from_bytes(&bytes).expect("reduction of random bytes always succeeds")
+        loop {
+            let mut bytes = [0u8; SCALAR_BYTES];
+            rng.fill_bytes(&mut bytes);
+            if let Some(scalar) = Self::from_bytes(&bytes) {
+                return scalar;
+            }
+        }
     }
 
     /// Create a scalar from a u64 value.
+    ///
+    /// The value is treated as a 256-bit integer with the upper three
+    /// limbs set to zero, then converted to Montgomery form.
     pub fn from_u64(val: u64) -> Self {
+        // blst_fr_from_uint64 expects a pointer to an array of 4 u64 limbs
+        // representing a 256-bit integer in little-endian limb order.
+        let limbs = [val, 0u64, 0u64, 0u64];
         unsafe {
             // SAFETY: blst_fr_from_uint64 initializes a blst_fr from a
-            // pointer to a u64 value, performing the conversion to Montgomery
-            // form. We pass a pointer to the u64 on the stack.
+            // pointer to a 4-element u64 array (256-bit integer in
+            // little-endian limb order), performing the conversion to
+            // Montgomery form. The value is guaranteed < r since r > 2^254.
             let mut fr = std::mem::MaybeUninit::<blst_fr>::uninit();
-            blst_fr_from_uint64(fr.as_mut_ptr(), &val);
+            blst_fr_from_uint64(fr.as_mut_ptr(), limbs.as_ptr());
             Self {
                 inner: fr.assume_init(),
             }

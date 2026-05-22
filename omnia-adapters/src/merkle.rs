@@ -23,10 +23,16 @@
 //! circuit (or vice versa) at compile time.
 //!
 //! ```
-//! use omnia_adapters::merkle::{MerkleProof, Blake3, Poseidon, compute_root_from_proof};
+//! use omnia_adapters::merkle::{MerkleProof, Blake3, compute_root_from_proof};
 //!
-//! // These are different types — cannot be mixed up:
+//! // BLAKE3 proofs are always available:
 //! let blake3_proof: MerkleProof<Blake3> = MerkleProof::new(vec![], vec![]);
+//! ```
+//!
+//! When the `arkworks` feature is enabled, Poseidon proofs are also available:
+//!
+//! ```ignore
+//! use omnia_adapters::merkle::{MerkleProof, Poseidon};
 //! let poseidon_proof: MerkleProof<Poseidon> = MerkleProof::new(vec![], vec![]);
 //! ```
 
