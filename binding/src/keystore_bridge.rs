@@ -82,6 +82,10 @@ pub struct KeyStoreBridge {
     rotation_state_path: PathBuf,
     /// Cached rotation state.
     rotation_state: RotationState,
+    /// Stored Dilithium secret key bytes (populated after rotation to Hybrid/PostQuantum).
+    /// Used to produce Dilithium signatures in `sign_with_dilithium()`.
+    #[cfg(feature = "pqc")]
+    dilithium_secret_key: Option<Vec<u8>>,
 }
 
 impl KeyStoreBridge {
@@ -133,6 +137,8 @@ impl KeyStoreBridge {
             rotation_manager,
             rotation_state_path,
             rotation_state,
+            #[cfg(feature = "pqc")]
+            dilithium_secret_key: None,
         })
     }
 
@@ -176,6 +182,12 @@ impl KeyStoreBridge {
 
         #[cfg(feature = "pqc")]
         let dilithium_keypair = pqc_dilithium::Keypair::generate();
+
+        // Store the Dilithium secret key for later signing
+        #[cfg(feature = "pqc")]
+        {
+            self.dilithium_secret_key = Some(dilithium_keypair.secret.to_vec());
+        }
 
         let new_pubkey = PqPublicKey {
             ed25519: ed25519_keypair.verifying_key().to_bytes(),
@@ -234,6 +246,23 @@ impl KeyStoreBridge {
             .ok_or_else(|| BridgeError::Crypto("No keypair loaded".into()))
     }
 
+    /// Sign a message using the stored Dilithium secret key.
+    ///
+    /// Only available when the `pqc` feature is enabled. Returns an error
+    /// if no Dilithium secret key has been stored (i.e., rotation to Hybrid
+    /// or PostQuantum has not occurred).
+    #[cfg(feature = "pqc")]
+    pub fn sign_with_dilithium(&self, message: &[u8]) -> Result<Vec<u8>, BridgeError> {
+        let secret_bytes = self.dilithium_secret_key.as_ref().ok_or_else(|| {
+            BridgeError::InvalidState(
+                "No Dilithium secret key available — rotate to Hybrid or PostQuantum first".into(),
+            )
+        })?;
+        let dilithium_keypair = pqc_dilithium::Keypair::restore(secret_bytes);
+        let signature = dilithium_keypair.sign(message);
+        Ok(signature.to_vec())
+    }
+
     /// Sign using the current phase's key(s).
     ///
     /// In ClassicalOnly phase, only Ed25519 signature is produced.
@@ -250,20 +279,28 @@ impl KeyStoreBridge {
                 phase: CommitmentPhase::ClassicalOnly,
             }),
             CommitmentPhase::Hybrid => {
-                // In hybrid mode, we would sign with both keys
-                // For now, we produce the Ed25519 signature and note that
-                // Dilithium signing requires the dilithium secret key
+                // In hybrid mode, sign with both Ed25519 and Dilithium
+                #[cfg(feature = "pqc")]
+                let dilithium_sig = self.sign_with_dilithium(message).ok();
+                #[cfg(not(feature = "pqc"))]
+                let dilithium_sig: Option<Vec<u8>> = None;
+
                 Ok(SignatureBundle {
                     ed25519_signature: ed25519_sig,
-                    dilithium_signature: None, // Would be populated with actual Dilithium signing
+                    dilithium_signature: dilithium_sig,
                     phase: CommitmentPhase::Hybrid,
                 })
             }
             CommitmentPhase::PostQuantum => {
                 // In PQ-only mode, only Dilithium signature
+                #[cfg(feature = "pqc")]
+                let dilithium_sig = self.sign_with_dilithium(message).ok();
+                #[cfg(not(feature = "pqc"))]
+                let dilithium_sig: Option<Vec<u8>> = None;
+
                 Ok(SignatureBundle {
                     ed25519_signature: Vec::new(),
-                    dilithium_signature: None, // Would be populated with actual Dilithium signing
+                    dilithium_signature: dilithium_sig,
                     phase: CommitmentPhase::PostQuantum,
                 })
             }
@@ -361,5 +398,44 @@ mod tests {
         let deserialized: RotationState = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(state.version, deserialized.version);
         assert!(matches!(deserialized.current_phase, CommitmentPhase::Hybrid));
+    }
+
+    /// Test that Dilithium signing works after rotation to Hybrid phase.
+    #[cfg(feature = "pqc")]
+    #[test]
+    fn test_hybrid_sign_after_rotation() {
+        let dir = TempDir::new().expect("temp dir");
+        let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
+
+        // Rotate to Hybrid
+        let sig = vec![1u8; 64];
+        bridge
+            .rotate(&sig, CommitmentPhase::Hybrid, 100)
+            .expect("rotate to hybrid");
+
+        // Sign a message
+        let message = b"test hybrid signing";
+        let bundle = bridge.sign(message).expect("sign in hybrid mode");
+
+        // Ed25519 signature should be present
+        assert!(
+            !bundle.ed25519_signature.is_empty(),
+            "Ed25519 signature should be present"
+        );
+
+        // Dilithium signature should be present
+        assert!(
+            bundle.dilithium_signature.is_some(),
+            "Dilithium signature should be present in Hybrid mode"
+        );
+        let dilithium_sig = bundle.dilithium_signature.unwrap();
+        assert!(!dilithium_sig.is_empty(), "Dilithium signature should not be empty");
+
+        // Verify the Dilithium signature against the public key stored in rotation state
+        // We need the Dilithium public key — get it from the dilithium_secret_key
+        let secret_bytes = bridge.dilithium_secret_key.as_ref().expect("secret key stored");
+        let restored_kp = pqc_dilithium::Keypair::restore(secret_bytes);
+        let verify_result = pqc_dilithium::verify(&dilithium_sig, message, &restored_kp.public);
+        assert!(verify_result.is_ok(), "Dilithium signature should verify");
     }
 }

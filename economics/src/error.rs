@@ -68,4 +68,8 @@ pub enum EconomicsError {
     /// The proposal was defeated — majority voted against.
     #[error("Proposal defeated: {0}")]
     ProposalDefeated(String),
+
+    /// The DID has already voted on this proposal.
+    #[error("Duplicate vote on proposal {0}")]
+    DuplicateVote(String),
 }

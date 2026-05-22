@@ -113,11 +113,15 @@ pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoReco
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
+#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
     PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
-pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
+pub use vrf::{
+    deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,
+    DeterministicHashError, DeterministicOutput, EcdsaProofOutput, HashVersion,
+};
 
 /// Semantic version of this crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -403,13 +407,13 @@ pub struct Substrate {
     /// Mempool for pending events awaiting block inclusion.
     ///
     /// Events submitted locally are added to the mempool. When this node
-    /// is the VRF-selected leader for a round, `propose_block()` drains
+    /// is the deterministic-hash-selected leader for a round, `propose_block()` drains
     /// events from the mempool and inserts them into the causal graph
     /// for consensus processing.
     mempool: Mempool,
     /// Maximum number of events per block proposal.
     max_block_events: usize,
-    /// Validator candidates for VRF-based leader selection.
+    /// Validator candidates for deterministic hash-based leader selection.
     ///
     /// Maps `NodeId` to `(keypair, stake)` for each validator.
     /// Used by `compute_leader()` to determine the round leader.
@@ -534,11 +538,11 @@ impl Substrate {
         self
     }
 
-    /// Register validator candidates for VRF-based leader selection.
+    /// Register validator candidates for deterministic hash-based leader selection.
     ///
     /// Each entry maps a `NodeId` to its `(keypair, stake)`. The leader
     /// for a given round is selected deterministically from this set
-    /// using the VRF module's `select_leader()` function.
+    /// using the `select_leader()` function.
     ///
     /// If this method is not called, the run loop will skip the leader
     /// check and no blocks will be proposed.
@@ -790,7 +794,7 @@ impl Substrate {
 
     /// Produce a block proposal as the round leader.
     ///
-    /// Called when this node is the VRF-selected leader for the current round.
+    /// Called when this node is the deterministic-hash-selected leader for the current round.
     /// Drains pending events from the mempool and creates proposal events
     /// for consensus. Events that are already in the graph (e.g., submitted
     /// via `submit_event()`) are skipped gracefully since `CausalGraph::insert()`

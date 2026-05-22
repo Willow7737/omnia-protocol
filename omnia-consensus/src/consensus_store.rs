@@ -9,7 +9,7 @@
 //!
 //! Consensus state is persisted as a single snapshot containing:
 //! - Current round number (computed from per-node round tracking)
-//! - BLAKE3-derived round seed for VRF leader selection
+//! - BLAKE3-derived round seed for deterministic hash-based leader selection
 //! - Total committed events count
 //! - Last finalized round number
 //! - Active validator set

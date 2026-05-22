@@ -349,11 +349,15 @@ impl ThresholdKeyManager {
 }
 
 // ─── Distributed Key Generation (DKG) ──────────────────────────────────
+//
+// NOTE: This module implements key aggregation (sum of public keys), NOT true
+// Distributed Key Generation. True DKG requires Feldman VSS with polynomial
+// secret sharing. See `todo!()` below for the required implementation.
 
-/// Participant identifier for DKG sessions.
+/// Participant identifier for Key Aggregation sessions.
 pub type ParticipantId = NodeId;
 
-/// Errors that can occur during DKG operations.
+/// Errors that can occur during Key Aggregation operations.
 #[derive(Error, Debug)]
 pub enum DkgError {
     /// Invalid share received from another participant.
@@ -383,10 +387,10 @@ pub enum DkgError {
     BlsError(#[from] BlsError),
 }
 
-/// Phase of a DKG session.
+/// Phase of a Key Aggregation session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DkgPhase {
-    /// DKG session initialized, waiting for share distribution.
+    /// Key Aggregation session initialized, waiting for share distribution.
     Init,
     /// Participants are distributing encrypted shares.
     ShareDistribution,
@@ -394,7 +398,7 @@ pub enum DkgPhase {
     Verification,
     /// Key derivation complete.
     KeyDerivation,
-    /// DKG session complete.
+    /// Key Aggregation session complete.
     Complete {
         /// The group public key derived from the DKG.
         group_public_key_hash: String,
@@ -410,7 +414,7 @@ pub struct DkgVerificationResult {
     pub from: ParticipantId,
 }
 
-/// Result of a completed DKG session.
+/// Result of a completed Key Aggregation session.
 ///
 /// Note: Does not implement `Serialize`/`Deserialize` because `KeyShare`
 /// contains raw blst types that are not serializable.
@@ -448,9 +452,9 @@ pub struct DkgSharePackage {
     pub version: u8,
 }
 
-/// Feldman VSS-based DKG session.
+/// Feldman VSS-based Key Aggregation session.
 ///
-/// Implements a simplified DKG protocol where each participant:
+/// Implements a simplified Key Aggregation protocol where each participant:
 /// 1. Generates a random polynomial
 /// 2. Evaluates the polynomial at each participant's index to create shares
 /// 3. Distributes shares to all other participants
@@ -458,7 +462,12 @@ pub struct DkgSharePackage {
 /// 5. Combines all verified shares to derive the group key
 ///
 /// Reference: Pedersen (1991) + Feldman VSS
+///
+/// **WARNING**: The current implementation aggregates public keys rather than
+/// performing true Distributed Key Generation with Feldman VSS polynomial
+/// evaluation and share verification. See the `todo!()` in `finalize()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[deprecated(note = "This is key aggregation, not true DKG. True DKG with Feldman VSS is not yet implemented.")]
 pub struct DkgSession {
     /// Unique session identifier.
     pub session_id: u64,
@@ -482,8 +491,9 @@ pub struct DkgSession {
     pub own_keypair: Option<BlsKeypair>,
 }
 
+#[allow(deprecated)]
 impl DkgSession {
-    /// Initialize a new DKG session.
+    /// Initialize a new Key Aggregation session.
     pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Self {
         Self {
             session_id,
@@ -645,6 +655,8 @@ impl DkgSession {
 
     /// Finalize: compute group key and individual key share (Step 3).
     pub fn finalize(&mut self) -> Result<DkgResult, DkgError> {
+        // TODO: True DKG requires Feldman VSS polynomial evaluation and share verification.
+        // Current implementation aggregates public keys only.
         if self.phase != DkgPhase::Verification {
             return Err(DkgError::WrongPhase {
                 expected: "Verification".to_string(),
@@ -658,8 +670,9 @@ impl DkgSession {
             ));
         }
 
-        // In a simplified DKG, the group public key is the aggregate
-        // of all participants' public keys (from their commitments)
+        // In this key aggregation implementation, the group public key is the aggregate
+        // of all participants' public keys (from their commitments).
+        // This is NOT true DKG — it does not produce a distributed secret key.
         let public_keys: Vec<BlsPublicKey> = self
             .commitments
             .values()
@@ -771,6 +784,7 @@ fn blake3_hash_hex(data: &[u8]) -> String {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

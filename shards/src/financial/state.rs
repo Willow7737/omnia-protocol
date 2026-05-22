@@ -101,6 +101,11 @@ pub struct FinancialState {
     pub balances: HashMap<AccountId, AccountBalance>,
     /// Total supply across all accounts.
     pub total_supply: u64,
+    /// Public key of the mint authority. Only this key (or `None` for unrestricted)
+    /// is allowed to mint new tokens.
+    ///
+    /// TODO: Replace with on-chain governance for mint authorization.
+    pub mint_authority: Option<[u8; 32]>,
 }
 
 impl FinancialState {
@@ -112,6 +117,7 @@ impl FinancialState {
         Self {
             balances: HashMap::new(),
             total_supply: 0,
+            mint_authority: None,
         }
     }
 
@@ -148,6 +154,14 @@ impl FinancialState {
                 Ok(())
             }
             FinancialOp::Mint { to, amount } => {
+                // Check mint authority: if set, only the authority can mint
+                if let Some(authority) = self.mint_authority {
+                    if event.creator_pubkey != authority {
+                        return Err(ShardError::ValidationFailed(
+                            "Only mint authority can mint new tokens".into(),
+                        ));
+                    }
+                }
                 let vc = &event.vector_clock;
                 let balance = self.balances.entry(*to).or_default();
                 balance.increment(*amount, vc);

@@ -237,18 +237,20 @@ pub fn deserialize_verifying_key(bytes: &[u8]) -> Result<VerifyingKey, ProverErr
 // Batch verification
 // ---------------------------------------------------------------------------
 
-/// Verify multiple Groth16 proofs in a batch.
+/// Verify multiple Groth16 proofs individually.
 ///
-/// Batch verification reduces amortized verification cost from O(n) pairing
-/// checks to O(1) pairing checks + O(n) group operations, using random
-/// scalar aggregation.
+/// NOTE: This function verifies each proof individually. True batch verification
+/// (using random linear combinations) is future work.
 ///
-/// # Algorithm
+/// TODO: Implement proper batch verification using random linear combinations
+/// of pairing checks, reducing amortized verification cost from O(n) pairing
+/// checks to O(1) pairing checks + O(n) group operations.
 ///
-/// 1. Generate random scalar r_i for each proof using BLAKE3 domain separation
-/// 2. Aggregate: A = sum(r_i * A_i), B = sum(r_i * B_i), C = sum(r_i * C_i)
-/// 3. Aggregate IC (input consistency) contributions weighted by r_i
-/// 4. Single pairing check verifies all proofs simultaneously
+/// # Algorithm (current — individual verification)
+///
+/// Each proof is verified independently using [`verify_proof`]. The random
+/// scalars derived from BLAKE3 are currently unused but are retained for
+/// future optimization when proper batch pairing checks are implemented.
 ///
 /// # Arguments
 ///
@@ -265,10 +267,7 @@ pub fn deserialize_verifying_key(bytes: &[u8]) -> Result<VerifyingKey, ProverErr
 /// Random scalars are derived from BLAKE3 with domain separation
 /// `OMNIA-BATCH-VRFY-V1`, binding the randomness to the specific proofs
 /// being verified. This prevents the prover from manipulating the aggregation.
-pub fn verify_proofs_batch(
-    vk: &VerifyingKey,
-    proof_pairs: &[(Proof, Vec<ark_bn254::Fr>)],
-) -> Result<bool, ProverError> {
+pub fn verify_multiple(vk: &VerifyingKey, proof_pairs: &[(Proof, Vec<ark_bn254::Fr>)]) -> Result<bool, ProverError> {
     use ark_ff::PrimeField;
     use ark_serialize::CanonicalSerialize;
 
@@ -319,8 +318,9 @@ pub fn verify_proofs_batch(
     // A production implementation would use actual batch pairing checks
     // with MSM aggregation. For now, we verify each proof individually
     // but with the random scalar binding for future optimization.
+    // TODO: Implement proper batch verification using random linear combinations.
     for (i, (proof, inputs)) in proof_pairs.iter().enumerate() {
-        let _r_i = &random_scalars[i]; // Used for binding
+        let _r_i = &random_scalars[i]; // Used for binding in future batch verification
         let result = verify_proof(vk, inputs, proof)?;
         if !result {
             return Ok(false);
@@ -328,6 +328,22 @@ pub fn verify_proofs_batch(
     }
 
     Ok(true)
+}
+
+/// Deprecated alias for [`verify_multiple`].
+///
+/// This function was renamed to `verify_multiple` to accurately reflect that
+/// it verifies each proof individually rather than using true batch verification.
+#[deprecated(
+    since = "0.3.0",
+    note = "Use verify_multiple instead — this function does not perform true batch verification"
+)]
+#[allow(deprecated)]
+pub fn verify_proofs_batch(
+    vk: &VerifyingKey,
+    proof_pairs: &[(Proof, Vec<ark_bn254::Fr>)],
+) -> Result<bool, ProverError> {
+    verify_multiple(vk, proof_pairs)
 }
 
 #[cfg(test)]
@@ -355,7 +371,7 @@ mod tests {
             proof_pairs.push((proof, public_inputs));
         }
 
-        let result = verify_proofs_batch(&vk, &proof_pairs).expect("batch verify failed");
+        let result = verify_multiple(&vk, &proof_pairs).expect("batch verify failed");
         assert!(result, "All valid proofs should batch verify");
     }
 
@@ -388,7 +404,7 @@ mod tests {
         let wrong_public_inputs = vec![Fr::from(99999u64)]; // Wrong!
         proof_pairs.push((proof, wrong_public_inputs));
 
-        let result = verify_proofs_batch(&vk, &proof_pairs).expect("batch verify failed");
+        let result = verify_multiple(&vk, &proof_pairs).expect("batch verify failed");
         assert!(!result, "Batch with one invalid proof should fail");
     }
 
@@ -397,7 +413,7 @@ mod tests {
         let circuit = RollupCircuit::empty();
         let (_pk, vk) = generate_trusted_setup(&circuit).expect("setup failed");
 
-        let result = verify_proofs_batch(&vk, &[]).expect("batch verify failed");
+        let result = verify_multiple(&vk, &[]).expect("batch verify failed");
         assert!(result, "Empty batch should verify as true");
     }
 }

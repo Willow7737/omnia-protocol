@@ -129,8 +129,19 @@ pub struct QuantumCommitment {
     pub classical_sig: Vec<u8>,
     /// BLAKE3 hash of the committed data (32 bytes).
     pub data_hash: [u8; 32],
+    /// Hash of the previous commitment's `data_hash`, forming a
+    /// cryptographic chain. For genesis/legacy commitments this is
+    /// `[0u8; 32]`. A valid chain requires
+    /// `next.previous_hash == BLAKE3(prev.data_hash)`.
+    #[serde(default = "default_hash")]
+    pub previous_hash: [u8; 32],
     /// Commitment timestamp in causal time.
     pub committed_at: VectorClock,
+}
+
+/// Default value for `previous_hash` — all zeros (genesis/legacy).
+const fn default_hash() -> [u8; 32] {
+    [0u8; 32]
 }
 
 /// Public key for verifying quantum commitments.
@@ -176,6 +187,7 @@ impl QuantumCommitment {
             kyber_key: Vec::new(),
             classical_sig,
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at,
         }
     }
@@ -202,6 +214,7 @@ impl QuantumCommitment {
             kyber_key: Vec::new(),
             classical_sig: sig.to_bytes().to_vec(),
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         })
     }
@@ -241,6 +254,7 @@ impl QuantumCommitment {
             kyber_key: kyber_kp.encapsulation_key,
             classical_sig: ed_sig.to_bytes().to_vec(),
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         })
     }
@@ -287,6 +301,7 @@ impl QuantumCommitment {
             kyber_key: kyber_kp.encapsulation_key,
             classical_sig: Vec::new(),
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         })
     }
@@ -319,6 +334,7 @@ impl QuantumCommitment {
             kyber_key: Vec::new(),
             classical_sig,
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at,
         }
     }
@@ -421,19 +437,27 @@ impl QuantumCommitment {
         false
     }
 
-    /// Check whether this commitment links to (references) a previous
+    /// Check whether this commitment cryptographically links to a previous
     /// commitment. Used in provenance chain verification.
     ///
-    /// A commitment "links to" a previous one if the previous commitment's
-    /// `data_hash` is embedded in this commitment's signed data. In the
-    /// current implementation, we check if the data hash differs (i.e., both
-    /// commitments are not identical placeholders).
+    /// A commitment "links to" a previous one if its `previous_hash` field
+    /// equals `BLAKE3(previous.data_hash)`. This creates a cryptographic
+    /// hash chain that prevents event reordering or insertion.
+    ///
+    /// Genesis commitments (where `previous_hash == [0u8; 32]`) are
+    /// considered valid links only if the previous commitment is also
+    /// the zero sentinel (i.e., this is the first event in the chain).
     pub fn links_to(&self, previous: &QuantumCommitment) -> bool {
-        let valid_current: bool = self.data_hash.ct_ne(&[0u8; 32]).into();
-        let valid_previous: bool = previous.data_hash.ct_ne(&[0u8; 32]).into();
-        let progressing: bool = self.data_hash.ct_ne(&previous.data_hash).into();
+        let expected = Self::compute_chain_hash(&previous.data_hash);
+        self.previous_hash.ct_eq(&expected).into()
+    }
 
-        valid_current && valid_previous && progressing
+    /// Compute the chain hash from a previous commitment's `data_hash`.
+    ///
+    /// Returns `BLAKE3(previous_data_hash)` — the value that the next
+    /// commitment's `previous_hash` field must contain.
+    pub fn compute_chain_hash(previous_data_hash: &[u8; 32]) -> [u8; 32] {
+        *blake3::hash(previous_data_hash).as_bytes()
     }
 
     /// Compute the BLAKE3 hash of the given data.
@@ -635,6 +659,7 @@ mod tests {
             kyber_key: Vec::new(),
             classical_sig: Vec::new(), // Empty signature
             data_hash: *hash.as_bytes(),
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         };
         let (kp, _) = test_keypair_and_pk();
@@ -651,7 +676,12 @@ mod tests {
         let data2 = b"second commitment";
         let vc = VectorClock::new();
         let commitment1 = QuantumCommitment::new_stub(data1, vc.clone());
-        let commitment2 = QuantumCommitment::new_stub(data2, vc);
+
+        // Compute expected previous_hash = BLAKE3(commitment1.data_hash)
+        let expected_prev = QuantumCommitment::compute_chain_hash(&commitment1.data_hash);
+
+        let mut commitment2 = QuantumCommitment::new_stub(data2, vc);
+        commitment2.previous_hash = expected_prev;
 
         assert!(commitment2.links_to(&commitment1));
     }
@@ -741,6 +771,7 @@ mod tests {
             kyber_key: keypair.encapsulation_key.clone(),
             classical_sig: Vec::new(),
             data_hash: [0u8; 32],
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         };
 
@@ -785,6 +816,7 @@ mod tests {
             kyber_key: kp1.encapsulation_key.clone(),
             classical_sig: Vec::new(),
             data_hash: [0u8; 32],
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         };
 
@@ -806,6 +838,7 @@ mod tests {
             kyber_key: vec![0u8; 100], // Wrong length
             classical_sig: Vec::new(),
             data_hash: [0u8; 32],
+            previous_hash: [0u8; 32],
             committed_at: VectorClock::new(),
         };
         let result = commitment.kyber_encapsulate();
@@ -892,6 +925,7 @@ mod tests {
             kyber_key: kyber_kp.encapsulation_key.clone(),
             classical_sig: commitment.classical_sig,
             data_hash: commitment.data_hash,
+            previous_hash: commitment.previous_hash,
             committed_at: commitment.committed_at,
         };
 

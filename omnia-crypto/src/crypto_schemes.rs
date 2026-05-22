@@ -155,14 +155,18 @@ impl fmt::Display for HashScheme {
     }
 }
 
-/// VRF (Verifiable Random Function) schemes.
+/// Deterministic hash-based leader selection schemes.
+///
+/// These schemes use hash constructions with Ed25519 signature proofs
+/// for verifiable leader selection. They are NOT true VRFs as defined
+/// in RFC 9381, but provide verifiability and determinism.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum VrfScheme {
-    /// Ed25519-VRF — based on Ed25519, fast, not quantum-safe.
+    /// Ed25519-based deterministic hash — based on Ed25519, fast, not quantum-safe.
     Ed25519VrfV1,
-    /// BLS-VRF — BLS-based VRF for threshold settings.
+    /// BLS-based deterministic hash — for threshold settings.
     BlsVrfV2,
-    /// Dilithium-VRF — post-quantum VRF based on Dilithium.
+    /// Dilithium-based deterministic hash — post-quantum, based on Dilithium.
     DilithiumVrfV2,
 }
 
@@ -185,9 +189,9 @@ impl VrfScheme {
 impl fmt::Display for VrfScheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            VrfScheme::Ed25519VrfV1 => write!(f, "Ed25519-VRF/v1"),
-            VrfScheme::BlsVrfV2 => write!(f, "BLS-VRF/v2"),
-            VrfScheme::DilithiumVrfV2 => write!(f, "Dilithium-VRF/v2"),
+            VrfScheme::Ed25519VrfV1 => write!(f, "Ed25519-Hash/v1"),
+            VrfScheme::BlsVrfV2 => write!(f, "BLS-Hash/v2"),
+            VrfScheme::DilithiumVrfV2 => write!(f, "Dilithium-Hash/v2"),
         }
     }
 }
@@ -235,9 +239,9 @@ pub struct CryptoProfile {
     pub hash: HashScheme,
     /// Accepted hash schemes.
     pub accepted_hashes: Vec<HashScheme>,
-    /// Active VRF scheme.
+    /// Active deterministic hash scheme for leader selection.
     pub vrf: VrfScheme,
-    /// Accepted VRF schemes.
+    /// Accepted deterministic hash schemes for leader selection.
     pub accepted_vrfs: Vec<VrfScheme>,
     /// Active ZK scheme.
     pub zk: ZkScheme,
@@ -308,7 +312,7 @@ impl CryptoProfile {
         self.accepted_hashes.contains(&scheme)
     }
 
-    /// Check whether a given VRF scheme is accepted by this profile.
+    /// Check whether a given deterministic hash scheme is accepted by this profile.
     pub fn accepts_vrf(&self, scheme: VrfScheme) -> bool {
         self.accepted_vrfs.contains(&scheme)
     }
@@ -342,7 +346,7 @@ impl CryptoProfile {
     /// | 2026-01-01 to 2027-12-31 | Hybrid migration |
     /// | 2028-01-01 onwards | Post-quantum |
     pub fn minimum_for_date(date: u64) -> Self {
-        // Post-2028: require post-quantum signatures and VRF
+        // Post-2028: require post-quantum signatures and deterministic hash
         // 2028-01-01 00:00:00 UTC = 1830297600
         if date >= 1_830_297_600 {
             Self::post_quantum()

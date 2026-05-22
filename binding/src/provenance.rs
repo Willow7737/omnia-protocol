@@ -52,10 +52,23 @@ impl std::fmt::Display for ProvenanceEventType {
     }
 }
 
+/// Sentinel value for `previous_hash` on the genesis (first) event.
+const GENESIS_PREV: [u8; 32] = [0u8; 32];
+
 /// A single event in an item's provenance chain.
 ///
 /// Each event records who transferred to whom, with cryptographic proof
 /// (RF fingerprint + quantum commitment) and a causal timestamp.
+/// Two hash-chain fields provide tamper-evidence:
+///
+/// - **`previous_hash`** — the `entry_hash` of the preceding event
+///   (`[0u8; 32]` for the genesis event).
+/// - **`entry_hash`** — `BLAKE3(previous_hash || commitment.data_hash)`,
+///   committing this event to the chain.
+///
+/// An attacker who reorders, inserts, or modifies any event will break
+/// the chain because every `entry_hash` transitively depends on all
+/// preceding events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProvenanceEvent {
     /// The type of event: Created, Transferred, Verified, or Destroyed.
@@ -68,8 +81,33 @@ pub struct ProvenanceEvent {
     pub rf_proof: RfFingerprint,
     /// Quantum-resistant commitment of event data.
     pub commitment: QuantumCommitment,
+    /// `entry_hash` of the preceding `ProvenanceEvent`.
+    /// `[0u8; 32]` for the genesis (first) event.
+    /// Backward-compatible: defaults to all-zeros when deserializing old data.
+    #[serde(default = "default_hash")]
+    pub previous_hash: [u8; 32],
+    /// `BLAKE3(previous_hash || commitment.data_hash)` — the hash that
+    /// the *next* event must reference in its `previous_hash` field.
+    /// Backward-compatible: defaults to all-zeros when deserializing old data.
+    #[serde(default = "default_hash")]
+    pub entry_hash: [u8; 32],
     /// Causal timestamp (vector clock).
     pub timestamp: VectorClock,
+}
+
+/// Default value for `previous_hash` / `entry_hash` — all zeros.
+const fn default_hash() -> [u8; 32] {
+    [0u8; 32]
+}
+
+impl ProvenanceEvent {
+    /// Compute `entry_hash = BLAKE3(previous_hash || data_hash)`.
+    fn compute_entry_hash(previous_hash: &[u8; 32], data_hash: &[u8; 32]) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(previous_hash);
+        hasher.update(data_hash);
+        *hasher.finalize().as_bytes()
+    }
 }
 
 /// An append-only provenance log for a single physical item.
@@ -96,6 +134,11 @@ impl ProvenanceLog {
 
     /// Create a new provenance log for an item.
     ///
+    /// The genesis event's `previous_hash` is `[0u8; 32]` and its
+    /// `entry_hash` is `BLAKE3([0u8; 32] || commitment.data_hash)`.
+    /// The commitment's `previous_hash` is also set to `[0u8; 32]`
+    /// (genesis / legacy default).
+    ///
     /// # Arguments
     ///
     /// * `item_id` — 32-byte unique identifier for the item
@@ -110,12 +153,17 @@ impl ProvenanceLog {
         commitment: QuantumCommitment,
         anchor: EventId,
     ) -> Self {
+        let previous_hash = GENESIS_PREV;
+        let entry_hash = ProvenanceEvent::compute_entry_hash(&previous_hash, &commitment.data_hash);
+
         let creation_event = ProvenanceEvent {
             event_type: ProvenanceEventType::Created,
             from: None,
             to: creator.clone(),
             rf_proof,
             commitment,
+            previous_hash,
+            entry_hash,
             timestamp: VectorClock::new(),
         };
 
@@ -130,7 +178,13 @@ impl ProvenanceLog {
     /// Transfer ownership of the item to a new holder.
     ///
     /// Creates a new `ProvenanceEvent` of type `Transferred`, appends it
-    /// to the log, and updates the current holder.
+    /// to the log, and updates the current holder. The new event's
+    /// `previous_hash` is set to the previous event's `entry_hash`, and
+    /// its `entry_hash` is computed as
+    /// `BLAKE3(previous_entry_hash || commitment.data_hash)`. The
+    /// commitment's `previous_hash` is set to
+    /// `BLAKE3(prev_commitment.data_hash)` to maintain the commitment-level
+    /// chain.
     ///
     /// # Arguments
     ///
@@ -141,13 +195,31 @@ impl ProvenanceLog {
     /// # Returns
     ///
     /// The newly created `ProvenanceEvent`.
-    pub fn transfer(&mut self, to: String, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
+    pub fn transfer(
+        &mut self,
+        to: String,
+        rf_proof: RfFingerprint,
+        mut commitment: QuantumCommitment,
+    ) -> ProvenanceEvent {
+        let prev = self
+            .events
+            .last()
+            .expect("provenance log always has at least one event");
+
+        // Set the commitment's previous_hash to link to the previous commitment
+        commitment.previous_hash = QuantumCommitment::compute_chain_hash(&prev.commitment.data_hash);
+
+        let previous_hash = prev.entry_hash;
+        let entry_hash = ProvenanceEvent::compute_entry_hash(&previous_hash, &commitment.data_hash);
+
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Transferred,
             from: Some(self.current_holder.clone()),
             to: to.clone(),
             rf_proof,
             commitment,
+            previous_hash,
+            entry_hash,
             timestamp: VectorClock::new(),
         };
         self.events.push(event.clone());
@@ -159,13 +231,27 @@ impl ProvenanceLog {
     ///
     /// Verification checks that the item's current RF signature matches
     /// its registered fingerprint and that all commitments are valid.
-    pub fn verify(&mut self, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
+    /// The new event is cryptographically linked to the previous event
+    /// via `previous_hash` / `entry_hash` and the commitment chain.
+    pub fn verify(&mut self, rf_proof: RfFingerprint, mut commitment: QuantumCommitment) -> ProvenanceEvent {
+        let prev = self
+            .events
+            .last()
+            .expect("provenance log always has at least one event");
+
+        commitment.previous_hash = QuantumCommitment::compute_chain_hash(&prev.commitment.data_hash);
+
+        let previous_hash = prev.entry_hash;
+        let entry_hash = ProvenanceEvent::compute_entry_hash(&previous_hash, &commitment.data_hash);
+
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Verified,
             from: None,
             to: self.current_holder.clone(),
             rf_proof,
             commitment,
+            previous_hash,
+            entry_hash,
             timestamp: VectorClock::new(),
         };
         self.events.push(event.clone());
@@ -175,13 +261,27 @@ impl ProvenanceLog {
     /// Record a destruction event for the item.
     ///
     /// Once an item is destroyed, no further transfers are possible.
-    pub fn destroy(&mut self, rf_proof: RfFingerprint, commitment: QuantumCommitment) -> ProvenanceEvent {
+    /// The new event is cryptographically linked to the previous event
+    /// via `previous_hash` / `entry_hash` and the commitment chain.
+    pub fn destroy(&mut self, rf_proof: RfFingerprint, mut commitment: QuantumCommitment) -> ProvenanceEvent {
+        let prev = self
+            .events
+            .last()
+            .expect("provenance log always has at least one event");
+
+        commitment.previous_hash = QuantumCommitment::compute_chain_hash(&prev.commitment.data_hash);
+
+        let previous_hash = prev.entry_hash;
+        let entry_hash = ProvenanceEvent::compute_entry_hash(&previous_hash, &commitment.data_hash);
+
         let event = ProvenanceEvent {
             event_type: ProvenanceEventType::Destroyed,
             from: Some(self.current_holder.clone()),
             to: String::new(), // No new holder
             rf_proof,
             commitment,
+            previous_hash,
+            entry_hash,
             timestamp: VectorClock::new(),
         };
         self.events.push(event.clone());
@@ -191,8 +291,15 @@ impl ProvenanceLog {
     /// Verify the integrity of the entire provenance chain.
     ///
     /// Checks that every consecutive pair of events has a valid
-    /// cryptographic link: each event's commitment must reference
-    /// the previous event's commitment.
+    /// cryptographic link along **two** independent chains:
+    ///
+    /// 1. **Commitment chain**: `curr.commitment.previous_hash ==
+    ///    BLAKE3(prev.commitment.data_hash)` (checked via `links_to`).
+    /// 2. **Event chain**: `curr.previous_hash == prev.entry_hash` AND
+    ///    `prev.entry_hash == BLAKE3(prev.previous_hash ||
+    ///    prev.commitment.data_hash)`.
+    ///
+    /// The first (genesis) event must have `previous_hash == [0u8; 32]`.
     ///
     /// # Returns
     ///
@@ -202,17 +309,39 @@ impl ProvenanceLog {
             return true;
         }
 
-        // First event must be a Created event
-        if self.events[0].event_type != ProvenanceEventType::Created {
+        // First event must be a Created event with genesis previous_hash
+        let first = &self.events[0];
+        if first.event_type != ProvenanceEventType::Created {
+            return false;
+        }
+        if first.previous_hash != GENESIS_PREV {
             return false;
         }
 
-        // Check chain links
+        // Verify genesis entry_hash
+        let expected_entry = ProvenanceEvent::compute_entry_hash(&GENESIS_PREV, &first.commitment.data_hash);
+        if first.entry_hash != expected_entry {
+            return false;
+        }
+
+        // Walk the chain, verifying each pair
         for window in self.events.windows(2) {
             let prev = &window[0];
             let curr = &window[1];
-            // Current commitment should reference/link to previous commitment
+
+            // 1. Commitment-level chain
             if !curr.commitment.links_to(&prev.commitment) {
+                return false;
+            }
+
+            // 2. Event-level chain: previous_hash must equal prev.entry_hash
+            if curr.previous_hash != prev.entry_hash {
+                return false;
+            }
+
+            // 3. Recompute curr.entry_hash and verify it matches
+            let expected = ProvenanceEvent::compute_entry_hash(&curr.previous_hash, &curr.commitment.data_hash);
+            if curr.entry_hash != expected {
                 return false;
             }
         }
@@ -457,5 +586,80 @@ mod tests {
         );
 
         assert!(!log.is_destroyed());
+    }
+
+    /// Construct a valid chain, tamper with an entry, and assert
+    /// that `verify_chain()` returns `false`.
+    #[test]
+    fn test_tampered_chain_detection() {
+        let mut log = ProvenanceLog::new(
+            test_item_id(),
+            "did:omnia:factory".to_string(),
+            test_rf("did:omnia:factory"),
+            test_commitment(b"creation"),
+            test_anchor(),
+        );
+
+        log.transfer(
+            "did:omnia:distributor".to_string(),
+            test_rf("did:omnia:distributor"),
+            test_commitment(b"transfer1"),
+        );
+
+        log.transfer(
+            "did:omnia:retailer".to_string(),
+            test_rf("did:omnia:retailer"),
+            test_commitment(b"transfer2"),
+        );
+
+        // Sanity: the untampered chain should verify
+        assert!(log.verify_chain());
+
+        // --- Tamper scenario 1: modify the data_hash of event 1 ---
+        let mut tampered = log.clone();
+        tampered.events[1].commitment.data_hash = [0xDEu8; 32];
+        assert!(
+            !tampered.verify_chain(),
+            "tampering with data_hash must break the chain"
+        );
+
+        // --- Tamper scenario 2: swap two events ---
+        let mut swapped = log.clone();
+        let ev2 = swapped.events[2].clone();
+        let ev1 = swapped.events[1].clone();
+        swapped.events[1] = ev2;
+        swapped.events[2] = ev1;
+        assert!(!swapped.verify_chain(), "swapping events must break the chain");
+
+        // --- Tamper scenario 3: corrupt the entry_hash ---
+        let mut corrupt_hash = log.clone();
+        corrupt_hash.events[1].entry_hash = [0xBAu8; 32];
+        assert!(
+            !corrupt_hash.verify_chain(),
+            "corrupting entry_hash must break the chain"
+        );
+
+        // --- Tamper scenario 4: insert a fake event ---
+        let mut inserted = log.clone();
+        let fake = ProvenanceEvent {
+            event_type: ProvenanceEventType::Verified,
+            from: None,
+            to: "did:omnia:attacker".to_string(),
+            rf_proof: test_rf("did:omnia:attacker"),
+            commitment: test_commitment(b"fake"),
+            previous_hash: [0u8; 32], // wrong — should be prev.entry_hash
+            entry_hash: [0u8; 32],    // wrong
+            timestamp: VectorClock::new(),
+        };
+        inserted.events.insert(1, fake);
+        assert!(!inserted.verify_chain(), "inserting a fake event must break the chain");
+
+        // --- Tamper scenario 5: corrupt commitment.previous_hash ---
+        let mut corrupt_prev = log.clone();
+        corrupt_prev.events[2].commitment.previous_hash = [0xFFu8; 32];
+        assert!(
+            !corrupt_prev.verify_chain(),
+            "corrupting commitment.previous_hash must break the chain"
+        );
     }
 }

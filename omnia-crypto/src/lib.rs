@@ -1,9 +1,9 @@
 //! # Omnia Crypto — Cryptographic primitives for the Omnia Protocol
 //!
 //! This crate provides all cryptographic operations: key generation, signing,
-//! verification, BLS aggregation, threshold signatures, VRF leader selection,
-//! and encrypted key storage. Heavy dependencies are feature-gated to keep
-//! compile times down for consumers that only need basic Ed25519 operations.
+//! verification, BLS aggregation, threshold signatures, deterministic hash-based
+//! leader selection, and encrypted key storage. Heavy dependencies are feature-gated
+//! to keep compile times down for consumers that only need basic Ed25519 operations.
 
 #![deny(clippy::unwrap_used)]
 #![forbid(unsafe_code)]
@@ -43,9 +43,13 @@ pub use bls::{
 };
 
 #[cfg(feature = "bls")]
+#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
     PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
 
-pub use vrf::{select_leader, vrf_compute, vrf_verify, VrfError, VrfOutput};
+pub use vrf::{
+    deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,
+    DeterministicHashError, DeterministicOutput, EcdsaProofOutput, HashVersion,
+};

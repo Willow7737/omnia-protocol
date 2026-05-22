@@ -146,6 +146,9 @@ pub struct GovernanceState {
     /// After finalization, the proposal's `execution_time` is set to
     /// `current_time_ms + time_lock_ms`.
     pub time_lock_ms: u64,
+    /// Tracks which (proposal_id, did) pairs have already voted, preventing
+    /// double-voting. The value is always `true` when present.
+    pub voted: HashMap<(String, String), bool>,
 }
 
 impl GovernanceState {
@@ -175,6 +178,7 @@ impl GovernanceState {
             proposals: HashMap::new(),
             quorum_percentage: DEFAULT_QUORUM_PERCENTAGE,
             time_lock_ms: DEFAULT_TIME_LOCK_MS,
+            voted: HashMap::new(),
         }
     }
 
@@ -264,6 +268,12 @@ impl GovernanceState {
         choice: VoteChoice,
         current_epoch: u64,
     ) -> Result<(), EconomicsError> {
+        // Check for double-vote before tallying
+        let vote_key = (proposal_id.to_string(), did.to_string());
+        if self.voted.contains_key(&vote_key) {
+            return Err(EconomicsError::DuplicateVote(proposal_id.to_string()));
+        }
+
         let weight = self.effective_weight(did, current_epoch);
         if weight == 0 {
             return Err(EconomicsError::InactiveVoter(did.to_string()));
@@ -285,6 +295,10 @@ impl GovernanceState {
         }
 
         self.last_active.insert(did.to_string(), current_epoch);
+
+        // Record that this DID has voted on this proposal
+        self.voted.insert(vote_key, true);
+
         Ok(())
     }
 
@@ -646,6 +660,22 @@ mod tests {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
         let result = gov.finalize_proposal("nonexistent", 11, 1_000_000);
         assert!(matches!(result, Err(EconomicsError::ProposalNotFound(_))));
+    }
+
+    #[test]
+    fn test_double_vote_prevention() {
+        let mut gov = GovernanceState::new(DecayRate::ten_percent());
+        gov.set_weight("alice", 100); // weight = 10
+
+        gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
+
+        // First vote should succeed
+        let result = gov.vote("alice", "prop1", VoteChoice::For, 0);
+        assert!(result.is_ok());
+
+        // Second vote from the same DID on the same proposal should fail
+        let result = gov.vote("alice", "prop1", VoteChoice::Against, 1);
+        assert!(matches!(result, Err(EconomicsError::DuplicateVote(_))));
     }
 
     #[test]
