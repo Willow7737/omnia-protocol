@@ -487,20 +487,23 @@ fn test_three_node_with_optimized_gossip_components() {
     for round in 0..5 {
         for i in 0..3 {
             let payload = vec![round as u8, i as u8];
-            if network.submit_event(i, payload).is_ok() {
-                // Track committed events in bloom filters and priority queues
-                let committed = network.nodes[i].consensus.get_committed();
-                for event_id in committed {
-                    bloom_filters[i].insert(&event_id);
-                    // Classify: witness events (round 0) are critical
-                    let priority = if round == 0 {
-                        GossipPriority::Critical
-                    } else {
-                        GossipPriority::Normal
-                    };
-                    priority_queues[i].enqueue(event_id, priority);
-                }
-            }
+            let _ = network.submit_event(i, payload);
+        }
+    }
+
+    // Populate bloom filters and priority queues AFTER all events are submitted,
+    // so that the set of committed events is stable and the bloom filter
+    // contains every event that the assertion will later check.
+    for i in 0..3 {
+        let committed = network.nodes[i].consensus.get_committed();
+        for (round_idx, event_id) in committed.iter().enumerate() {
+            bloom_filters[i].insert(event_id);
+            let priority = if round_idx == 0 {
+                GossipPriority::Critical
+            } else {
+                GossipPriority::Normal
+            };
+            priority_queues[i].enqueue(*event_id, priority);
         }
     }
 
