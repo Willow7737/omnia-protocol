@@ -16,6 +16,7 @@ use crate::shard::ShardError;
 /// A Groth16 proof consists of three curve points:
 /// - 2 × G1 point (48 bytes uncompressed each) = 96 bytes
 /// - 1 × G2 point (96 bytes uncompressed) = 96 bytes
+///
 /// Total minimum: 192 bytes. We use the conservative lower bound of 128
 /// to allow for compressed representations.
 const MIN_GROTH16_PROOF_LEN: usize = 128;
