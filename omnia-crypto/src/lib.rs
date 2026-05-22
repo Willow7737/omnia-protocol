@@ -43,6 +43,7 @@ pub use bls::{
 };
 
 #[cfg(feature = "bls")]
+#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
     PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,

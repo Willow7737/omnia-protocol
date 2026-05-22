@@ -113,6 +113,7 @@ pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoReco
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
+#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
     AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
     PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
