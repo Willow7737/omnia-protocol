@@ -89,15 +89,7 @@ pub async fn ceremony_state(State(state): State<AppState>) -> impl IntoResponse 
             }
         };
 
-        let server = match server.read() {
-            Ok(s) => s,
-            Err(_) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Ceremony server lock poisoned"})),
-                );
-            }
-        };
+        let server = server.read().await;
 
         let phase = format!("{:?}", server.phase());
         let count = server.contribution_count();
@@ -108,13 +100,13 @@ pub async fn ceremony_state(State(state): State<AppState>) -> impl IntoResponse 
 
         (
             StatusCode::OK,
-            Json(CeremonyStateResponse {
-                phase: phase.to_lowercase(),
-                contribution_count: count,
-                min_participants: 3, // Will be replaced with actual config
-                max_participants: 100,
-                transcript_hash,
-            }),
+            Json(json!({
+                "phase": phase.to_lowercase(),
+                "contribution_count": count,
+                "min_participants": 3,
+                "max_participants": 100,
+                "transcript_hash": transcript_hash,
+            })),
         )
     }
 }
@@ -156,29 +148,20 @@ pub async fn ceremony_contribute(
         };
 
         // Deserialize the contribution from JSON
-        let contribution: omnia_adapters::setup::Contribution =
-            match serde_json::from_str(&body.contribution_json) {
-                Ok(c) => c,
-                Err(e) => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(json!({
-                            "error": format!("Invalid contribution JSON: {e}")
-                        })),
-                    );
-                }
-            };
+        let contribution: omnia_adapters::setup::Contribution = match serde_json::from_str(&body.contribution_json) {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "error": format!("Invalid contribution JSON: {e}")
+                    })),
+                );
+            }
+        };
 
         let result = {
-            let server = match server.read() {
-                Ok(s) => s,
-                Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"error": "Ceremony server lock poisoned"})),
-                    );
-                }
-            };
+            let server = server.read().await;
             server.accept_contribution(contribution)
         };
 
@@ -234,15 +217,7 @@ pub async fn ceremony_transcript(State(state): State<AppState>) -> impl IntoResp
         };
 
         let result = {
-            let server = match server.read() {
-                Ok(s) => s,
-                Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"error": "Ceremony server lock poisoned"})),
-                    );
-                }
-            };
+            let server = server.read().await;
             server.export_transcript()
         };
 
@@ -303,15 +278,7 @@ pub async fn ceremony_finalize(State(state): State<AppState>) -> impl IntoRespon
         };
 
         let result = {
-            let server = match server.read() {
-                Ok(s) => s,
-                Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"error": "Ceremony server lock poisoned"})),
-                    );
-                }
-            };
+            let server = server.read().await;
             let circuit = omnia_adapters::circuit::RollupCircuit::empty();
             server.finalize(&circuit)
         };

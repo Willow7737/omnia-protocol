@@ -48,7 +48,7 @@ use ark_r1cs_std::fields::FieldVar;
 use ark_r1cs_std::select::CondSelectGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
-use crate::merkle::{self, MerkleProof};
+use crate::merkle::{self, MerkleProof, Poseidon};
 
 // ---------------------------------------------------------------------------
 // Operation type definitions
@@ -396,7 +396,7 @@ impl ExpandedRollupCircuit {
         operation_types: Vec<Fr>,
         payload_hashes: Vec<Fr>,
         event_commitment: Fr,
-        merkle_proofs: Vec<MerkleProof>,
+        merkle_proofs: Vec<MerkleProof<Poseidon>>,
         intermediate_roots: Vec<Fr>,
     ) -> Self {
         let num_events = event_hashes.len();

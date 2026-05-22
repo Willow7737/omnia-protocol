@@ -393,6 +393,32 @@ mod tests {
         assert_eq!(root, [0u8; 32]);
         assert!(proofs.is_empty());
     }
+
+    #[test]
+    fn test_merkle_proof_type_safety() {
+        // BLAKE3 and Poseidon proofs are different types at compile time.
+        // This test demonstrates that you cannot accidentally mix them.
+        let blake3_proof = Blake3MerkleProof::new(vec![[1u8; 32]], vec![true]);
+        let _poseidon_proof = {
+            // Use cfg to compile this block only with arkworks
+            #[cfg(feature = "arkworks")]
+            {
+                PoseidonMerkleProof::new(vec![[2u8; 32]], vec![false])
+            }
+            #[cfg(not(feature = "arkworks"))]
+            {
+                // Without arkworks, just verify the Blake3 proof works
+                Blake3MerkleProof::new(vec![[2u8; 32]], vec![false])
+            }
+        };
+
+        // Both have the same data layout but are different types
+        assert_eq!(blake3_proof.siblings.len(), 1);
+        assert_eq!(blake3_proof.directions.len(), 1);
+
+        // The following would be a compile error (intentionally commented out):
+        // let _: PoseidonMerkleProof = blake3_proof; // ERROR: type mismatch
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -479,32 +505,6 @@ mod arkworks_tests {
         assert_eq!(root1, root2, "Poseidon Merkle tree must be deterministic");
     }
 }
-
-    #[test]
-    fn test_merkle_proof_type_safety() {
-        // BLAKE3 and Poseidon proofs are different types at compile time.
-        // This test demonstrates that you cannot accidentally mix them.
-        let blake3_proof = Blake3MerkleProof::new(vec![[1u8; 32]], vec![true]);
-        let _poseidon_proof = {
-            // Use cfg to compile this block only with arkworks
-            #[cfg(feature = "arkworks")]
-            {
-                PoseidonMerkleProof::new(vec![[2u8; 32]], vec![false])
-            }
-            #[cfg(not(feature = "arkworks"))]
-            {
-                // Without arkworks, just verify the Blake3 proof works
-                Blake3MerkleProof::new(vec![[2u8; 32]], vec![false])
-            }
-        };
-
-        // Both have the same data layout but are different types
-        assert_eq!(blake3_proof.siblings.len(), 1);
-        assert_eq!(blake3_proof.directions.len(), 1);
-
-        // The following would be a compile error (intentionally commented out):
-        // let _: PoseidonMerkleProof = blake3_proof; // ERROR: type mismatch
-    }
 
 /// Property-based tests for Merkle tree invariants (BLAKE3, no arkworks).
 #[cfg(test)]

@@ -1,11 +1,18 @@
 //! BLS12-381 Scalar Field Arithmetic for DKG.
 //!
-//! Provides safe wrappers around `blst` scalar operations for polynomial
+//! Provides safe wrappers around `blst` field-element operations for polynomial
 //! evaluation, share generation, and verification in the Feldman VSS DKG.
 //!
 //! This module requires `unsafe` code to interface with the `blst` C library,
 //! which is why it is isolated in its own module with a targeted `allow`.
 //! The rest of the crate remains `unsafe`-free.
+//!
+//! # Internal representation
+//!
+//! The `Scalar` type stores values as `blst_fr` (Montgomery form), which
+//! supports efficient modular arithmetic via `blst_fr_add`, `blst_fr_mul`,
+//! etc. Conversion to/from byte sequences uses `blst_scalar` (the canonical
+//! 256-bit representation) via `blst_fr_from_scalar` / `blst_scalar_from_fr`.
 //!
 //! # Security
 //!
@@ -25,54 +32,53 @@ pub const SCALAR_BYTES: usize = 32;
 
 /// A scalar in the BLS12-381 prime order subgroup.
 ///
-/// Internally wraps `blst_scalar`, which stores a 256-bit integer in
+/// Internally wraps `blst_fr`, which stores a 256-bit integer in
 /// Montgomery representation. All arithmetic is performed modulo the
-/// BLS12-381 subgroup order `r`.
-#[derive(Clone, Copy)]
+/// BLS12-381 subgroup order `r` using the efficient `blst_fr_*` API.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Scalar {
-    inner: blst_scalar,
+    inner: blst_fr,
 }
-
-impl fmt::Debug for Scalar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let bytes = self.to_bytes();
-        f.debug_struct("Scalar")
-            .field("bytes", &hex::encode(&bytes[..8]))
-            .finish()
-    }
-}
-
-impl PartialEq for Scalar {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_bytes() == other.to_bytes()
-    }
-}
-
-impl Eq for Scalar {}
 
 impl Scalar {
     /// Create a scalar from 32 bytes (little-endian).
     ///
     /// The input is reduced modulo the subgroup order. Returns `None` if
-    /// reduction fails (should not happen with valid bytes).
+    /// the bytes do not represent a valid scalar (i.e. >= subgroup order).
     pub fn from_bytes(bytes: &[u8; SCALAR_BYTES]) -> Option<Self> {
+        // First, parse bytes into a blst_scalar (canonical form).
         let scalar = unsafe {
             // SAFETY: blst_scalar_from_lendian reads exactly 32 bytes and
-            // performs Montgomery reduction. The output is always a valid
-            // scalar in the prime-order subgroup.
+            // produces a blst_scalar. The resulting scalar is then checked
+            // for validity (must be < subgroup order).
             let mut s = std::mem::MaybeUninit::<blst_scalar>::uninit();
             blst_scalar_from_lendian(s.as_mut_ptr(), bytes.as_ptr());
             s.assume_init()
         };
-        Some(Self { inner: scalar })
+        // Verify the scalar is within the valid range (< subgroup order).
+        if !unsafe { blst_scalar_fr_check(&scalar) } {
+            return None;
+        }
+        // Convert from canonical blst_scalar to Montgomery form blst_fr.
+        let fr = unsafe {
+            // SAFETY: blst_fr_from_scalar converts a validated blst_scalar
+            // into its Montgomery form blst_fr. Input is a valid scalar.
+            let mut fr = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_from_scalar(fr.as_mut_ptr(), &scalar);
+            fr.assume_init()
+        };
+        Some(Self { inner: fr })
     }
 
     /// Convert the scalar to 32 little-endian bytes.
     pub fn to_bytes(&self) -> [u8; SCALAR_BYTES] {
         let mut bytes = [0u8; SCALAR_BYTES];
         unsafe {
-            // SAFETY: blst_lendian_from_scalar writes exactly 32 bytes.
-            blst_lendian_from_scalar(bytes.as_mut_ptr(), &self.inner);
+            // SAFETY: Convert from Montgomery form back to canonical scalar,
+            // then write 32 bytes in little-endian order.
+            let mut scalar = std::mem::MaybeUninit::<blst_scalar>::uninit();
+            blst_scalar_from_fr(scalar.as_mut_ptr(), &self.inner);
+            blst_lendian_from_scalar(bytes.as_mut_ptr(), scalar.as_ptr());
         }
         bytes
     }
@@ -86,38 +92,50 @@ impl Scalar {
 
     /// Create a scalar from a u64 value.
     pub fn from_u64(val: u64) -> Self {
-        let mut bytes = [0u8; SCALAR_BYTES];
-        bytes[..8].copy_from_slice(&val.to_le_bytes());
-        Self::from_bytes(&bytes).expect("u64 always fits in scalar field")
+        unsafe {
+            // SAFETY: blst_fr_from_uint64 initializes a blst_fr from a
+            // pointer to a u64 value, performing the conversion to Montgomery
+            // form. We pass a pointer to the u64 on the stack.
+            let mut fr = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_from_uint64(fr.as_mut_ptr(), &val);
+            Self {
+                inner: fr.assume_init(),
+            }
+        }
     }
 
     /// The additive identity (zero).
     pub fn zero() -> Self {
-        let scalar = unsafe {
-            let mut s = std::mem::MaybeUninit::<blst_scalar>::zeroed();
-            s.assume_init()
-        };
-        Self { inner: scalar }
+        // Default blst_fr is zero (all bytes = 0).
+        Self {
+            inner: blst_fr::default(),
+        }
     }
 
     /// Test if this scalar is zero.
     pub fn is_zero(&self) -> bool {
-        let bytes = self.to_bytes();
-        bytes.iter().all(|&b| b == 0)
+        self.to_bytes().iter().all(|&b| b == 0)
     }
 
-    // Internal access to the wrapped blst_scalar.
-    pub(crate) fn as_inner(&self) -> &blst_scalar {
+    /// The multiplicative identity (one).
+    pub fn one() -> Self {
+        Self::from_u64(1)
+    }
+
+    // Internal access to the wrapped blst_fr.
+    #[allow(dead_code)]
+    pub(crate) fn as_inner(&self) -> &blst_fr {
         &self.inner
     }
 
     /// Raw addition of two scalars: `self + rhs` (mod r).
     pub fn add(&self, rhs: &Self) -> Self {
         let result = unsafe {
-            // SAFETY: blst_scalar_add computes (a + b) mod r. Both inputs
-            // are valid scalars, so the result is always a valid scalar.
-            let mut out = std::mem::MaybeUninit::<blst_scalar>::uninit();
-            blst_scalar_add(out.as_mut_ptr(), &self.inner, &rhs.inner);
+            // SAFETY: blst_fr_add computes (a + b) mod r in Montgomery form.
+            // Both inputs are valid field elements, so the result is always
+            // a valid field element.
+            let mut out = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_add(out.as_mut_ptr(), &self.inner, &rhs.inner);
             out.assume_init()
         };
         Self { inner: result }
@@ -126,10 +144,11 @@ impl Scalar {
     /// Raw multiplication of two scalars: `self * rhs` (mod r).
     pub fn multiply(&self, rhs: &Self) -> Self {
         let result = unsafe {
-            // SAFETY: blst_scalar_mul computes (a * b) mod r. Both inputs
-            // are valid scalars, so the result is always a valid scalar.
-            let mut out = std::mem::MaybeUninit::<blst_scalar>::uninit();
-            blst_scalar_mul(out.as_mut_ptr(), &self.inner, &rhs.inner);
+            // SAFETY: blst_fr_mul computes (a * b) mod r in Montgomery form.
+            // Both inputs are valid field elements, so the result is always
+            // a valid field element.
+            let mut out = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_mul(out.as_mut_ptr(), &self.inner, &rhs.inner);
             out.assume_init()
         };
         Self { inner: result }
@@ -137,19 +156,22 @@ impl Scalar {
 
     /// Negate a scalar: `-self` (mod r).
     pub fn negate(&self) -> Self {
-        let mut bytes = self.to_bytes();
-        // Compute r - self using blst
         let result = unsafe {
-            let mut zero = std::mem::MaybeUninit::<blst_scalar>::zeroed();
-            blst_scalar_add(
-                zero.as_mut_ptr(),
-                zero.as_mut_ptr(),
-                zero.as_mut_ptr(),
-            );
-            let mut out = std::mem::MaybeUninit::<blst_scalar>::uninit();
-            // out = 0 - self (mod r) = -self
-            let zero_scalar = zero.assume_init();
-            blst_scalar_sub(out.as_mut_ptr(), &zero_scalar, &self.inner);
+            // SAFETY: blst_fr_cneg computes conditional negation.
+            // Passing `true` unconditionally negates the input.
+            let mut out = self.inner;
+            blst_fr_cneg(&mut out, &self.inner, true);
+            out
+        };
+        Self { inner: result }
+    }
+
+    /// Subtract two scalars: `self - rhs` (mod r).
+    pub fn sub(&self, rhs: &Self) -> Self {
+        let result = unsafe {
+            // SAFETY: blst_fr_sub computes (a - b) mod r in Montgomery form.
+            let mut out = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_sub(out.as_mut_ptr(), &self.inner, &rhs.inner);
             out.assume_init()
         };
         Self { inner: result }
@@ -161,12 +183,26 @@ impl Scalar {
         if self.is_zero() {
             return None;
         }
-        // blst doesn't have a direct inverse function, but we can use
-        // Fermat's little theorem: a^{r-2} = a^{-1} mod r
-        // For now, return a placeholder — full implementation would
-        // use extended Euclidean algorithm or exponentiation.
-        // This is sufficient for polynomial evaluation and share verification.
-        Some(*self) // Placeholder — will be used for non-inversion paths
+        let result = unsafe {
+            // SAFETY: blst_fr_inverse computes the modular inverse of a
+            // non-zero field element using Fermat's little theorem.
+            let mut out = std::mem::MaybeUninit::<blst_fr>::uninit();
+            blst_fr_inverse(out.as_mut_ptr(), &self.inner);
+            out.assume_init()
+        };
+        Some(Self { inner: result })
+    }
+}
+
+impl fmt::Display for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_bytes();
+        // Display as hex (little-endian bytes reversed to big-endian display)
+        write!(f, "0x")?;
+        for byte in bytes.iter().rev() {
+            write!(f, "{byte:02x}")?;
+        }
+        Ok(())
     }
 }
 
@@ -215,43 +251,36 @@ pub fn polynomial_evaluate(coeffs: &[Scalar], x: &Scalar) -> Scalar {
 /// # Returns
 ///
 /// `true` if the share is consistent with the commitments.
-pub fn verify_feldman_share(share: &Scalar, index: u64, _commitments: &[Vec<u8>]) -> bool {
+pub fn verify_feldman_share(share: &Scalar, index: u64, commitments: &[Vec<u8>]) -> bool {
     // Check that the share is non-trivial
     if share.is_zero() {
         return false;
     }
 
     // Check that commitments are non-empty
-    if _commitments.is_empty() {
+    if commitments.is_empty() {
         return false;
     }
 
     // Verify that all commitments are valid BLS public keys (96-byte G2 points)
-    for commitment in _commitments {
+    for commitment in commitments {
         if commitment.is_empty() {
             return false;
         }
         if commitment.len() != 96 {
             return false;
         }
-        // Parse as BLS public key — if it fails, the commitment is invalid
-        // Note: blst_public_key is not directly available without the bls feature,
-        // so we do a structural check on size and non-zeroness.
     }
+
+    // Compute index as a scalar (used for future pairing verification)
+    let _index_scalar = Scalar::from_u64(index);
 
     // In a full implementation with pairing support, this would verify:
     // g^{share} == product(C_j^{index^j}) via pairing equation
     // e(share*G, H) == e(sum(index^j * C_j), H)
     //
-    // For now, we verify structural properties and perform a
-    // consistency check using the binding hash approach from before,
-    // but now with proper scalar arithmetic for the index powers.
-
-    // Compute index as a scalar
-    let index_scalar = Scalar::from_u64(index);
-
-    // Verify structural consistency: the share should not be zero
-    // and index should be positive
+    // For now, we verify structural properties: the share should not be zero
+    // and index should be positive.
     !share.is_zero() && index > 0
 }
 
@@ -269,7 +298,7 @@ pub fn verify_feldman_share(share: &Scalar, index: u64, _commitments: &[Vec<u8>]
 ///
 /// # Returns
 ///
-/// `Some(sum)` — the field addition of accumulated and new_share.
+/// The field addition of accumulated and new_share.
 pub fn accumulate_share_field(accumulated: Option<Scalar>, new_share: Scalar) -> Scalar {
     match accumulated {
         Some(existing) => existing.add(&new_share),
@@ -301,6 +330,15 @@ mod tests {
     }
 
     #[test]
+    fn test_scalar_one() {
+        let one = Scalar::one();
+        assert!(!one.is_zero());
+        let bytes = one.to_bytes();
+        assert_eq!(bytes[0], 1);
+        assert!(bytes[1..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
     fn test_scalar_addition() {
         let a = Scalar::from_u64(5);
         let b = Scalar::from_u64(7);
@@ -316,6 +354,24 @@ mod tests {
         let zero = Scalar::zero();
         let sum = a.add(&zero);
         assert_eq!(sum, a);
+    }
+
+    #[test]
+    fn test_scalar_subtraction() {
+        let a = Scalar::from_u64(10);
+        let b = Scalar::from_u64(3);
+        let diff = a.sub(&b);
+        let expected = Scalar::from_u64(7);
+        assert_eq!(diff, expected);
+    }
+
+    #[test]
+    fn test_scalar_negate() {
+        let a = Scalar::from_u64(1);
+        let neg = a.negate();
+        // -1 + 1 = 0
+        let sum = neg.add(&a);
+        assert!(sum.is_zero());
     }
 
     #[test]
@@ -337,10 +393,25 @@ mod tests {
     }
 
     #[test]
+    fn test_scalar_invert() {
+        let a = Scalar::from_u64(42);
+        let inv = a.invert().expect("non-zero scalar should invert");
+        // a * a^{-1} = 1
+        let product = a.multiply(&inv);
+        assert_eq!(product, Scalar::one());
+    }
+
+    #[test]
+    fn test_scalar_invert_zero_fails() {
+        let zero = Scalar::zero();
+        assert!(zero.invert().is_none());
+    }
+
+    #[test]
     fn test_scalar_random_is_non_zero() {
         let mut rng = rand::thread_rng();
         let scalar = Scalar::random(&mut rng);
-        // Probability of random scalar being zero is 1/r ≈ 2^{-256}
+        // Probability of random scalar being zero is 1/r ~ 2^{-256}
         assert!(!scalar.is_zero());
     }
 
@@ -366,11 +437,7 @@ mod tests {
     #[test]
     fn test_polynomial_evaluate_quadratic() {
         // f(x) = 1 + 2x + 3x^2
-        let coeffs = vec![
-            Scalar::from_u64(1),
-            Scalar::from_u64(2),
-            Scalar::from_u64(3),
-        ];
+        let coeffs = vec![Scalar::from_u64(1), Scalar::from_u64(2), Scalar::from_u64(3)];
         let x = Scalar::from_u64(2);
         let result = polynomial_evaluate(&coeffs, &x);
         // f(2) = 1 + 2*2 + 3*4 = 1 + 4 + 12 = 17

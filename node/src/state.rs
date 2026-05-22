@@ -22,9 +22,9 @@ use tokio::sync::{Mutex, RwLock};
 use omnia_economics::EconomicsState;
 use omnia_shards::ShardRouter;
 
-use omnia_adapters::SettlementAdapter;
 #[cfg(feature = "zk")]
 use omnia_adapters::setup::CeremonyServer;
+use omnia_adapters::SettlementAdapter;
 
 use crate::api::events::StoredEvent;
 use crate::api::node::PeerInfo;

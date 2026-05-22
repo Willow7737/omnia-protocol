@@ -28,7 +28,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
+#[cfg(feature = "network")]
+use omnia_network::{Multiaddr, NetworkEvent, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
+use omnia_node::pipeline::{ColdWork, PipelineRouter};
 use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
@@ -37,16 +40,11 @@ use omnia_shards::{
     ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
-use omnia_node::pipeline::{ColdWork, PipelineRouter, WarmWork};
-#[cfg(feature = "network")]
-use omnia_network::{NetworkConfig, NetworkEvent, OmniaNetwork};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
-#[cfg(feature = "network")]
-use futures::StreamExt;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -261,7 +259,7 @@ async fn main() -> Result<()> {
     };
 
     // 6. Build and start the HTTP server
-    let app = omnia_node::http::build_http_router().with_state(app_state);
+    let app = omnia_node::http::build_http_router().with_state(app_state.clone());
     let listen_addr = format!("0.0.0.0:{}", config.http_port);
 
     let listener = tokio::net::TcpListener::bind(&listen_addr)
@@ -273,16 +271,10 @@ async fn main() -> Result<()> {
     // 7. Spawn background tasks for consensus loop and pipeline router
     // These are the critical integration pieces that enable the node to
     // participate in the network autonomously.
-    let shutdown_tx = spawn_background_tasks(
-        config.clone(),
-        substrate_for_consensus,
-        app_state.clone(),
-    )
-    .await?;
+    let shutdown_tx = spawn_background_tasks(config.clone(), substrate_for_consensus, app_state.clone()).await?;
 
     // 8. Start the HTTP server with graceful shutdown
-    let server_future = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal());
+    let server_future = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
 
     server_future.await.context("HTTP server error")?;
 
@@ -304,12 +296,12 @@ async fn spawn_background_tasks(
     substrate: Arc<RwLock<Substrate>>,
     _app_state: AppState,
 ) -> Result<tokio::sync::broadcast::Sender<()>> {
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
+    let (shutdown_tx, _shutdown_rx) = tokio::sync::broadcast::channel(1);
 
     // 7a. Spawn pipeline router with worker tasks
     let (pipeline, mut hot_rx, mut warm_rx, mut cold_rx) = PipelineRouter::new();
     let pipeline = Arc::new(pipeline);
-    let _pipeline_clone = Arc::clone(&pipeline);
+    let _pipeline_clone = Arc::clone(&pipeline); // Reserved for future AppState wiring
 
     // Hot path worker — event validation and graph insertion
     let mut shutdown_hot = shutdown_tx.subscribe();
@@ -416,61 +408,68 @@ async fn spawn_background_tasks(
     #[cfg(feature = "network")]
     {
         let mut shutdown_network = shutdown_tx.subscribe();
-        let substrate_network = Arc::clone(&substrate);
-        let node_id = config.node_id_bytes();
         let listen_addr = config.listen_addr.clone();
 
         tokio::spawn(async move {
             tracing::info!("P2P network initialization started");
 
-            // Parse listen address for P2P
-            let listen_port = listen_addr
-                .rsplit(':')
-                .next()
-                .and_then(|p| p.parse::<u16>().ok())
-                .unwrap_or(4001);
-
-            let network_config = match omnia_network::NetworkConfig::new(listen_port) {
-                Ok(cfg) => cfg,
+            // Parse listen address into a Multiaddr for libp2p
+            let listen_multiaddr: Multiaddr = match listen_addr.parse() {
+                Ok(addr) => addr,
                 Err(e) => {
-                    tracing::error!(error = %e, "Failed to create network config");
+                    tracing::error!(error = %e, addr = %listen_addr, "Failed to parse listen address as Multiaddr");
                     return;
                 }
             };
 
             // Try to create the network, but don't block if it fails
             // (e.g., port already in use, network interface unavailable)
-            match OmniaNetwork::new(node_id, network_config).await {
-                Ok(network) => {
+            match OmniaNetwork::new(listen_multiaddr).await {
+                Ok(mut network) => {
                     tracing::info!("P2P network initialized");
 
-                    // Start network event loop
-                    let mut event_stream = network.event_stream();
-                    loop {
+                    // Take the event receiver before starting the network run loop
+                    let mut event_rx = network.event_rx.take();
+
+                    // Spawn the network run loop in a separate task
+                    let mut shutdown_run = shutdown_network.resubscribe();
+                    tokio::spawn(async move {
                         tokio::select! {
-                            _ = shutdown_network.recv() => {
-                                tracing::info!("P2P network shutting down");
-                                break;
+                            _ = network.run() => {},
+                            _ = shutdown_run.recv() => {
+                                tracing::info!("P2P network run loop shutting down");
                             }
-                            Some(event) = event_stream.next() => {
-                                match event {
-                                    NetworkEvent::PeerConnected(peer_id) => {
-                                        tracing::info!(peer = %peer_id, "Peer connected");
-                                    }
-                                    NetworkEvent::PeerDisconnected(peer_id) => {
-                                        tracing::info!(peer = %peer_id, "Peer disconnected");
-                                    }
-                                    NetworkEvent::MessageReceived { peer_id, data } => {
-                                        tracing::trace!(peer = %peer_id, bytes = data.len(), "Message received");
-                                    }
-                                    NetworkEvent::ListenEstablished(addr) => {
-                                        tracing::info!(addr = %addr, "P2P listener established");
-                                    }
-                                    _ => {}
+                        }
+                    });
+
+                    // Process incoming network events
+                    if let Some(rx) = event_rx.as_mut() {
+                        loop {
+                            tokio::select! {
+                                _ = shutdown_network.recv() => {
+                                    tracing::info!("P2P network event handler shutting down");
+                                    break;
                                 }
-                            }
-                            else => {
-                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                event = rx.recv() => {
+                                    match event {
+                                        Some(NetworkEvent::PeerConnected(peer_id)) => {
+                                            tracing::info!(peer = %peer_id, "Peer connected");
+                                        }
+                                        Some(NetworkEvent::PeerDisconnected(peer_id)) => {
+                                            tracing::info!(peer = %peer_id, "Peer disconnected");
+                                        }
+                                        Some(NetworkEvent::MessageReceived(peer_id, data)) => {
+                                            tracing::trace!(peer = %peer_id, bytes = data.len(), "Message received");
+                                        }
+                                        Some(NetworkEvent::GossipReceived { topic, data, propagation_source }) => {
+                                            tracing::trace!(topic = %topic, bytes = data.len(), peer = %propagation_source, "Gossip received");
+                                        }
+                                        None => {
+                                            tracing::info!("Network event channel closed");
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

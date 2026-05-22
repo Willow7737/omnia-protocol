@@ -49,6 +49,8 @@ pub use gossip_batch::{
 };
 pub use gossip_bloom_filter::GossipBloomFilter;
 #[cfg(feature = "network")]
+pub use libp2p::Multiaddr;
+#[cfg(feature = "network")]
 pub use network::{
     check_version_compatibility, configure_gossipsub_scoring, NetworkCommand, NetworkConfig, NetworkEvent,
     OmniaBehaviour, OmniaNetwork, PeerScoreTracker, VersionCompatibility, VersionHandshake,
