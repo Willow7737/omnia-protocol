@@ -201,7 +201,9 @@ fn test_burn_operation() {
     router.register(Box::new(FinancialShard::new()));
 
     let minter = test_node(1);
-    let account = test_node(2);
+    // Use a real keypair for the account so the burn event can be properly authorized
+    let account_keypair = generate_keypair();
+    let account: [u8; 32] = account_keypair.verifying_key().to_bytes();
 
     // Mint some tokens
     let mint_op = FinancialOp::Mint {
@@ -216,7 +218,7 @@ fn test_burn_operation() {
     let mint_event = create_test_event(minter, mint_payload.to_bytes().unwrap());
     router.route_event(&mint_event).expect("Mint should succeed");
 
-    // Burn some tokens
+    // Burn some tokens — must be signed by the account owner (creator_pubkey == from)
     let burn_op = FinancialOp::Burn {
         from: account,
         amount: 300,
@@ -226,7 +228,7 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(burn_op),
         nonce: 2,
     };
-    let burn_event = create_test_event(minter, burn_payload.to_bytes().unwrap());
+    let burn_event = create_test_event_with_keypair(account, burn_payload.to_bytes().unwrap(), &account_keypair);
     router.route_event(&burn_event).expect("Burn should succeed");
 
     // Try to burn more than the balance
@@ -239,7 +241,8 @@ fn test_burn_operation() {
         operation: ShardOp::Financial(overburn_op),
         nonce: 3,
     };
-    let overburn_event = create_test_event(minter, overburn_payload.to_bytes().unwrap());
+    let overburn_event =
+        create_test_event_with_keypair(account, overburn_payload.to_bytes().unwrap(), &account_keypair);
     let result = router.route_event(&overburn_event);
     assert!(result.is_err(), "Burning more than balance should fail");
 }

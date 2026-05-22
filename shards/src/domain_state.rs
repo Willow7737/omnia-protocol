@@ -86,7 +86,10 @@ impl ShardState for PhysicalState {
     type Op = crate::physical::ops::PhysicalOp;
 
     fn apply_op(&mut self, op: &Self::Op, event: &Event) -> Result<(), ShardError> {
-        self.apply(op, &event.vector_clock)
+        // Pass the event creator as the authorization identity for ownership checks.
+        // The `apply` method will verify that only the current owner can transfer.
+        let event_creator = Some(event.creator_pubkey);
+        self.apply(op, &event.vector_clock, event_creator)
     }
 
     fn snapshot(&self) -> Result<Vec<u8>, ShardError> {

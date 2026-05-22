@@ -415,6 +415,13 @@ impl BlsProofOfPossession {
 /// An aggregated [`BlsSignature`], or [`BlsError::AggregationFailed`]
 /// if the input is empty or any signature is invalid.
 ///
+/// # Warning
+///
+/// This function does **not** check for duplicate signers. If the same
+/// signer appears multiple times, their signature is aggregated multiple
+/// times, which inflates their effective weight. Use
+/// [`aggregate_signatures_dedup`] to deduplicate before aggregating.
+///
 /// # Example
 ///
 /// ```ignore
@@ -443,6 +450,86 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
     let blst_sigs: Vec<BlstSignature> = signatures
         .iter()
         .map(|s| s.to_blst())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {e}")))?;
+
+    // Create references for the blst aggregate function
+    let sig_refs: Vec<&BlstSignature> = blst_sigs.iter().collect();
+
+    let agg = AggregateSignature::aggregate(&sig_refs, false)
+        .map_err(|e| BlsError::AggregationFailed(format!("blst aggregation: {e:?}")))?;
+
+    let compressed = agg.to_signature().compress();
+    Ok(BlsSignature(compressed.to_vec()))
+}
+
+/// Aggregate multiple BLS signatures with duplicate signer detection and deduplication.
+///
+/// This is the safe version of [`aggregate_signatures`] — it takes public keys
+/// alongside signatures, detects duplicate signers, and deduplicates before
+/// aggregating. Duplicate signers (identified by their public key) are kept only
+/// once, using their first occurrence.
+///
+/// # Arguments
+///
+/// * `signatures` — Slice of `(BlsPublicKey, BlsSignature)` pairs to aggregate
+///
+/// # Returns
+///
+/// An aggregated [`BlsSignature`], or [`BlsError::AggregationFailed`]
+/// if the input is empty, any signature is invalid, or duplicate signers
+/// are detected (returns an error by default to alert callers).
+///
+/// # Duplicate Handling
+///
+/// If duplicate public keys are detected, this function returns
+/// [`BlsError::AggregationFailed`] with a descriptive message. This
+/// prevents the same signer from having disproportionate weight in the
+/// aggregate signature.
+///
+/// # Example
+///
+/// ```ignore
+/// use omnia_substrate::bls::{BlsKeypair, aggregate_signatures_dedup};
+///
+/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
+/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
+/// let msg = b"same message";
+///
+/// let sig1 = kp1.sign(msg);
+/// let sig2 = kp2.sign(msg);
+/// let agg_sig = aggregate_signatures_dedup(&[
+///     (kp1.public_key(), sig1),
+///     (kp2.public_key(), sig2),
+/// ])?;
+/// ```
+pub fn aggregate_signatures_dedup(signatures: &[(BlsPublicKey, BlsSignature)]) -> Result<BlsSignature, BlsError> {
+    if signatures.is_empty() {
+        return Err(BlsError::AggregationFailed(
+            "cannot aggregate empty signature set".to_string(),
+        ));
+    }
+
+    // Check for duplicate signers by public key
+    let mut seen = std::collections::HashSet::new();
+    for (pk, _sig) in signatures {
+        let pk_bytes = pk.as_bytes();
+        if !seen.insert(pk_bytes.to_vec()) {
+            return Err(BlsError::AggregationFailed(format!(
+                "duplicate signer detected: public key {} appears more than once",
+                hex::encode(&pk_bytes[..8])
+            )));
+        }
+    }
+
+    if signatures.len() == 1 {
+        return Ok(signatures[0].1.clone());
+    }
+
+    // Deserialize all signatures to blst types
+    let blst_sigs: Vec<BlstSignature> = signatures
+        .iter()
+        .map(|(_, s)| s.to_blst())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| BlsError::AggregationFailed(format!("deserialization: {e}")))?;
 

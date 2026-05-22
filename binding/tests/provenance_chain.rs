@@ -339,7 +339,7 @@ fn test_binding_layer_with_physical_shard() {
         owner: [0x11u8; 32],
         metadata: b"diamond_cert".to_vec(),
     };
-    physical_state.apply(&anchor_op, &vc).unwrap();
+    physical_state.apply(&anchor_op, &vc, None).unwrap();
 
     // Simultaneously track in the Binding Layer
     tracker
@@ -357,7 +357,7 @@ fn test_binding_layer_with_physical_shard() {
         item_id: item,
         new_owner: [0x22u8; 32],
     };
-    physical_state.apply(&transfer_op, &vc).unwrap();
+    physical_state.apply(&transfer_op, &vc, None).unwrap();
 
     // Simultaneously transfer in the Binding Layer
     tracker

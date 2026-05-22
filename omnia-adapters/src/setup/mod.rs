@@ -75,13 +75,14 @@ pub use ceremony_server::{
     CeremonyConfig, CeremonyError, CeremonyPhase, CeremonyServer, CeremonyTranscript, ContributionReceipt,
 };
 pub use circuit_setup::{
-    derive_keys, derive_keys_expanded, derive_keys_from_srs, verify_key_consistency, CircuitKeyPair,
+    derive_keys, derive_keys_deterministic_from_srs, derive_keys_expanded, derive_keys_from_srs,
+    verify_key_consistency, CircuitKeyPair,
 };
 pub use contribution::{
     contribute, initial_transcript_with_generators, initialize_transcript, verify_ceremony_transcript,
     verify_contribution, Contribution, ContributionProof,
 };
-pub use powers_of_tau::{run_ceremony, PowersOfTau, DEFAULT_TAU_DEGREE};
+pub use powers_of_tau::{run_ceremony, run_ceremony_with_offset, PowersOfTau, DEFAULT_TAU_DEGREE};
 
 /// Errors that can occur during the trusted setup ceremony.
 #[derive(Error, Debug)]

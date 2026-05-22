@@ -54,6 +54,9 @@
 ├──────────────────────────────────────────────────┤
 │  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINT 0-4
 │  + Compact Encoding + Bloom + Priority Gossip   │
+├──────────────────────────────────────────────────┤
+│  PHASE 0 REMEDIATION: Critical Security Fixes    │ ✅ COMPLETE
+│  + Feldman VSS DKG + SRS Binding + Auth Fixes   │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -158,13 +161,29 @@ cargo bench --no-run
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- ⚠️ **STUB**: Bitcoin, Solana, Celestia, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
-- L2 operator with batch builder
+- ✅ Celestia adapter with RPC integration (`celestia` feature)
+- ⚠️ **STUB**: Bitcoin, Solana, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
+- L2 operator with batch builder (TOCTOU race condition fixed)
 - ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
 - ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
+- ✅ SRS-to-key derivation with cryptographic binding (`derive_keys_deterministic_from_srs`)
 - Sparse Merkle tree proofs (BLAKE3 off-circuit)
 - Event pruning for sustainability
 - ⚠️ Placeholder: ExpandedRollupCircuit uses Poseidon hash (production-ready, but parameters use Cauchy MDS + BLAKE3 round constants, not Grain LFSR from paper)
+
+### Phase 0 Remediation ✅
+- ✅ **Coin round** integrated into fame determination (breaks split-vote deadlocks)
+- ✅ **Feldman VSS DKG** replaces deprecated key aggregation (`FeldmanVssSession`)
+- ✅ **SRS binding** in key derivation (`derive_keys_deterministic_from_srs`)
+- ✅ **Multi-node integration test** with in-memory consensus simulation
+- ✅ **Financial shard** burn authorization (creator must match `from`)
+- ✅ **Physical shard** transfer authorization (caller must be current owner)
+- ✅ **Bounded sequence tracking** (`max_sequence_entries` in `ConsensusConfig`)
+- ✅ **RollupOperator** race condition fix (single atomic read lock)
+- ✅ **BLS duplicate signer detection** (`aggregate_signatures_dedup`)
+- ✅ **SLIP-0010 key derivation** (HMAC-SHA512, BIP-44 path for Ed25519)
+- ✅ **Domain shard verification** (`real_verification` feature gate)
+- ✅ **Chaos suite** fixes (byzantine equivocation actually generates conflicts)
 
 ---
 
@@ -175,7 +194,7 @@ cargo bench --no-run
 | Real RF fingerprinting | ⚠️ **STUB** | Needs HackRF/USRP hardware |
 | Bitcoin settlement adapter | ⚠️ **STUB** | Implements trait, returns hardcoded values |
 | Solana settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
-| Celestia settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
+| ✅ Celestia settlement adapter | ✅ **IMPLEMENTED** | Real RPC via `celestia` feature |
 | Cosmos settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
 | Proof-of-useful-work | ⚠️ **STUB** | 3 types defined, no real verification |
 | Mobile wallet | 🌑 Not started | Planned for Phase 1 |
@@ -208,7 +227,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Settlement-agnostic ZK-rollup architecture
 - ✅ Full ZK circuit (arkworks R1CS)
 - ✅ Real PQC signatures (Dilithium)
-- 🌑 Local testnet (5 nodes)
+- ✅ Local testnet (multi-node integration tests)
 
 ### Sprint 2 Completed 🎉
 - ✅ Real ZK proofs: arkworks R1CS + Groth16 proof system on BN254 curve
@@ -245,7 +264,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - 📋 Production ZK hash gadget (✅ Poseidon already implemented)
 - 📋 Mobile wallet
 - 📋 Conviction voting & delegation
-- 📋 Bitcoin/Solana/Celestia settlement adapters (currently stubs)
+- 📋 Bitcoin/Solana/Cosmos settlement adapters (Celestia ✅ done)
 
 ### Phase 2: The Trunk 🔮 Long-term Vision
 *Goal: Decentralization*

@@ -57,7 +57,6 @@ fn supermajority(total_nodes: usize) -> usize {
 /// # Returns
 ///
 /// A boolean value derived deterministically from the inputs.
-#[allow(dead_code)]
 fn coin_round(round_number: u64, seed: &[u8; 32]) -> bool {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&round_number.to_le_bytes());
@@ -91,6 +90,9 @@ pub struct ConsensusConfig {
     /// Maximum consecutive timed-out rounds before entering recovery mode.
     /// Default: 3.
     pub max_consecutive_timeouts: u32,
+    /// Maximum number of entries in `first_event_for_sequence` before triggering cleanup.
+    /// Default: 10_000.
+    pub max_sequence_entries: usize,
 }
 
 impl Default for ConsensusConfig {
@@ -104,6 +106,7 @@ impl Default for ConsensusConfig {
             round_seed: [0u8; 32], // Must be set before production use
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 }
@@ -122,6 +125,7 @@ impl ConsensusConfig {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         })
     }
 }
@@ -409,6 +413,17 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             self.first_event_for_sequence.insert(seq_key, event_id);
         }
 
+        // Periodic cleanup of first_event_for_sequence to prevent unbounded growth
+        if self.first_event_for_sequence.len() > self.config.max_sequence_entries {
+            let removed = self.cleanup_stale_sequences(None);
+            if removed > 0 {
+                tracing::debug!(
+                    removed,
+                    "Cleaned up stale sequence tracking entries during event processing"
+                );
+            }
+        }
+
         // Update node info
         let info = self.node_info.entry(creator).or_default();
         info.events_created += 1;
@@ -683,6 +698,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let check_round = witness_round + self.config.commit_delay_rounds;
 
         if let Some(witnesses) = self.round_witnesses.get(&check_round) {
+            let total_witnesses = witnesses.len();
             let mut seeing_count = 0;
 
             for later_witness_id in witnesses {
@@ -698,7 +714,29 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                 }
             }
 
-            return Ok(seeing_count >= supermajority(self.config.total_nodes));
+            let not_seeing_count = total_witnesses.saturating_sub(seeing_count);
+            let threshold = supermajority(self.config.total_nodes);
+
+            // Supermajority sees the witness → famous
+            if seeing_count >= threshold {
+                return Ok(true);
+            }
+
+            // Supermajority does NOT see the witness → not famous
+            if not_seeing_count >= threshold {
+                return Ok(false);
+            }
+
+            // Neither side reaches supermajority (split vote) → coin round tiebreaker
+            tracing::debug!(
+                witness_round,
+                check_round,
+                seeing_count,
+                not_seeing_count,
+                threshold,
+                "Split vote detected — using coin round tiebreaker"
+            );
+            return Ok(coin_round(witness_round, &self.config.round_seed));
         }
 
         Ok(false)
@@ -1259,6 +1297,7 @@ mod tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
@@ -1404,6 +1443,7 @@ mod tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         };
         let mut engine = ConsensusEngine::new(
             config,
@@ -1442,10 +1482,9 @@ mod tests {
         let result = coin_round(10, &seed);
         // The coin round always produces a definitive answer (true or false),
         // breaking the tie instead of leaving it unresolved.
-        assert!(
-            result == true || result == false,
-            "Coin round must produce a definitive boolean to break ties"
-        );
+        // This is inherently always true for a bool, but we assert it
+        // to document the invariant and guard against future non-bool returns.
+        let _: bool = result;
 
         // Verify it's the same across calls (deterministic)
         let result2 = coin_round(10, &seed);
@@ -1773,6 +1812,7 @@ mod proptests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
@@ -1872,6 +1912,7 @@ mod timeout_tests {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         }
     }
 
@@ -2085,5 +2126,37 @@ mod timeout_tests {
         let removed = engine.cleanup_stale_sequences(Some(100));
         assert_eq!(removed, 0);
         assert_eq!(engine.first_event_for_sequence.len(), 5);
+    }
+
+    #[test]
+    fn test_coin_round_deterministic() {
+        // Same inputs must always produce same output
+        let seed = [42u8; 32];
+        let r1 = coin_round(1, &seed);
+        let r2 = coin_round(1, &seed);
+        assert_eq!(r1, r2);
+
+        // Different rounds may produce different results
+        let r3 = coin_round(2, &seed);
+        // Not guaranteed to differ, but the function must be deterministic
+        let _ = r3;
+    }
+
+    #[test]
+    fn test_coin_round_differs_with_seed() {
+        let seed_a = [1u8; 32];
+        let seed_b = [2u8; 32];
+        // At least one round should differ between seeds
+        let mut found_difference = false;
+        for round in 0..100u64 {
+            if coin_round(round, &seed_a) != coin_round(round, &seed_b) {
+                found_difference = true;
+                break;
+            }
+        }
+        assert!(
+            found_difference,
+            "coin_round should produce different results for different seeds"
+        );
     }
 }

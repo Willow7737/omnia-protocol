@@ -250,6 +250,19 @@ impl EncryptedKeyStore {
                 Ok(plain) => (plain, false),
                 Err(_) => {
                     // Fallback: try legacy XOR decryption
+                    //
+                    // DEPRECATION WARNING: The XOR fallback will be removed in a future
+                    // release. XOR encryption provides no authentication and is vulnerable
+                    // to tampering. Keystores loaded via this path are automatically
+                    // upgraded to AES-256-GCM on the next write/rotate, but the fallback
+                    // itself will be removed in v0.4.0. Migrate all keystores by running
+                    // `rotate()` with the current passphrase.
+                    tracing::warn!(
+                        "⚠️  DEPRECATED: XOR keystore fallback used. \
+                         This fallback will be removed in v0.4.0. \
+                         Migrate by calling rotate() with the current passphrase to upgrade \
+                         to AES-256-GCM."
+                    );
                     #[allow(deprecated)]
                     let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
                     if xor_decrypted.len() == 32 {
@@ -262,6 +275,14 @@ impl EncryptedKeyStore {
             }
         } else {
             // Too short for AES-256-GCM, try legacy XOR
+            //
+            // DEPRECATION WARNING: See above — this fallback will be removed in v0.4.0.
+            tracing::warn!(
+                "⚠️  DEPRECATED: XOR keystore fallback used (short ciphertext). \
+                 This fallback will be removed in v0.4.0. \
+                 Migrate by calling rotate() with the current passphrase to upgrade \
+                 to AES-256-GCM."
+            );
             #[allow(deprecated)]
             let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
             if xor_decrypted.len() == 32 {
@@ -530,6 +551,77 @@ impl EncryptedKeyStore {
         Ok(ed25519_dalek::SigningKey::from_bytes(&derived_key))
     }
 
+    /// Derive an Ed25519 child key using SLIP-0010-compliant HMAC-SHA512 derivation.
+    ///
+    /// This function implements the SLIP-0010 standard for Ed25519 key derivation,
+    /// which uses HMAC-SHA512 with hardened-only key paths. This is compatible with
+    /// standard HD wallets (e.g., hardware wallets, Ledger, Trezor) and follows
+    /// the derivation path `m/44'/6061'/{purpose}'/{index}'`.
+    ///
+    /// # SLIP-0010 Derivation
+    ///
+    /// Each child key is derived as:
+    /// 1. `I = HMAC-SHA512(Key = "ed25519 seed", Data = 0x00 || parent_key || 0x01 || parent_chain_code)`
+    ///    — for the master key from the seed
+    /// 2. Subsequent levels use:
+    ///    `I = HMAC-SHA512(Key = chain_code, Data = 0x00 || ser_256(k_par) || i + 2^31)`
+    ///    where `i + 2^31` is the hardened index in big-endian 4 bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `purpose` — The key purpose (Identity, Consensus, Governance, Staking)
+    /// * `index` — The child key index (automatically treated as hardened)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KeyStoreError`] if key derivation fails or the keypair is not loaded.
+    ///
+    /// # References
+    ///
+    /// - SLIP-0010: <https://github.com/satoshilabs/slips/blob/master/slip-0010.md>
+    /// - BIP-44: <https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki>
+    pub fn derive_child_key_slip0010(
+        &self,
+        purpose: KeyPurpose,
+        index: u32,
+    ) -> KeyStoreResult<ed25519_dalek::SigningKey> {
+        let secret_bytes = self
+            .keypair()
+            .ok_or_else(|| KeyStoreError::Crypto("No keypair loaded".into()))?
+            .to_bytes();
+
+        // SLIP-0010 master key derivation from the seed
+        // HMAC-SHA512(Key = "ed25519 seed", Data = seed)
+        let master_ikm = hmac_sha512(b"ed25519 seed", &secret_bytes);
+        let mut key = master_ikm[..32]
+            .try_into()
+            .map_err(|_| KeyStoreError::Crypto("key slice error".into()))?;
+        let mut chain_code: [u8; 32] = master_ikm[32..]
+            .try_into()
+            .map_err(|_| KeyStoreError::Crypto("chain code slice error".into()))?;
+
+        // Derive path: m/44'/6061'/{purpose}'/{index}'
+        // All indices are hardened (i + 2^31)
+        let derivation_path: [u32; 4] = [
+            44 + 0x80000000,               // 44'
+            6061 + 0x80000000,             // 6061' (Omnia coin type)
+            (purpose as u32) + 0x80000000, // purpose'
+            index + 0x80000000,            // index'
+        ];
+
+        for &child_index in &derivation_path {
+            let derived = slip0010_derive_child(&key, &chain_code, child_index);
+            key = derived[..32]
+                .try_into()
+                .map_err(|_| KeyStoreError::Crypto("derived key slice error".into()))?;
+            chain_code = derived[32..]
+                .try_into()
+                .map_err(|_| KeyStoreError::Crypto("derived chain code slice error".into()))?;
+        }
+
+        Ok(ed25519_dalek::SigningKey::from_bytes(&key))
+    }
+
     /// Derive an encryption key from a seed (used by mnemonic-based keystore creation).
     fn derive_key_from_seed(seed: &[u8]) -> KeyStoreResult<[u8; 32]> {
         let salt = blake3_hash_domain(b"OMNIA-KEYSTORE-FROM-MNEMONIC-V1", seed);
@@ -716,6 +808,45 @@ fn generate_salt() -> [u8; 32] {
     let mut salt = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut salt);
     salt
+}
+
+// ---------------------------------------------------------------------------
+// SLIP-0010 HMAC-SHA512 key derivation helpers
+// ---------------------------------------------------------------------------
+
+/// Compute HMAC-SHA512.
+///
+/// Returns a 64-byte output: the first 32 bytes are the derived key,
+/// the second 32 bytes are the derived chain code.
+fn hmac_sha512(key: &[u8], data: &[u8]) -> [u8; 64] {
+    use hmac::Mac;
+    type HmacSha512 = hmac::Hmac<sha2::Sha512>;
+
+    let mut mac = <HmacSha512 as Mac>::new_from_slice(key).expect("HMAC can accept any key size");
+    mac.update(data);
+    let result = mac.finalize().into_bytes();
+
+    let mut output = [0u8; 64];
+    output.copy_from_slice(&result);
+    output
+}
+
+/// Derive a SLIP-0010 child key from a parent key and chain code.
+///
+/// Follows the SLIP-0010 specification for Ed25519:
+/// `I = HMAC-SHA512(Key = chain_code, Data = 0x00 || ser_256(k_par) || i + 2^31)`
+///
+/// Returns a 64-byte array where:
+/// - Bytes 0..32 are the derived child key
+/// - Bytes 32..64 are the derived child chain code
+fn slip0010_derive_child(parent_key: &[u8; 32], chain_code: &[u8; 32], index: u32) -> [u8; 64] {
+    // SLIP-0010: data = 0x00 || ser_256(k_par) || i (4 bytes big-endian, hardened)
+    let mut data = Vec::with_capacity(1 + 32 + 4);
+    data.push(0x00);
+    data.extend_from_slice(parent_key);
+    data.extend_from_slice(&index.to_be_bytes());
+
+    hmac_sha512(chain_code, &data)
 }
 
 // ---------------------------------------------------------------------------

@@ -128,6 +128,7 @@ impl OperationType {
 /// # Public inputs
 ///
 /// - `expected_new_state_root` — the state root that the verifier expects
+#[derive(Clone)]
 pub struct RollupCircuit {
     /// The state root before the batch was applied (witness).
     old_state_root: Option<Fr>,

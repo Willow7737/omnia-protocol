@@ -193,6 +193,8 @@ struct SimNode {
     index: usize,
     /// Node identity.
     node_id: NodeId,
+    /// The node's Ed25519 keypair for signing events.
+    keypair: omnia_substrate::NodeKeypair,
     /// The node's causal graph.
     graph: CausalGraph,
     /// The node's consensus engine.
@@ -242,7 +244,7 @@ impl SafetyMonitor {
             .map(|kp| omnia_substrate::blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes()))
             .collect();
 
-        // Create nodes
+        // Create nodes — each node stores its own keypair for signing
         for i in 0..num_nodes {
             let mut seed = [0u8; 32];
             seed[0] = (i as u8) + 1;
@@ -262,6 +264,7 @@ impl SafetyMonitor {
             nodes.push(SimNode {
                 index: i,
                 node_id: node_ids[i],
+                keypair: keypairs[i].clone(),
                 graph: CausalGraph::new(),
                 consensus,
                 vector_clock: VectorClock::new(),
@@ -332,15 +335,12 @@ impl SafetyMonitor {
 
     /// Create genesis events for all nodes and sync the network.
     fn warmup(&mut self) {
-        use omnia_substrate::crypto::generate_keypair;
-
-        let keypairs: Vec<_> = (0..self.nodes.len()).map(|_| generate_keypair()).collect();
-
-        // Create genesis events
+        // Create genesis events using each node's identity keypair
         let mut genesis_events: Vec<(usize, Event)> = Vec::with_capacity(self.nodes.len());
         for (i, node) in self.nodes.iter_mut().enumerate() {
             let mut genesis = Event::genesis(node.node_id, vec![(i + 1) as u8]);
-            genesis.sign_with_keypair(&keypairs[i]);
+            // Use the node's own identity keypair for signing (not a random one)
+            genesis.sign_with_keypair(&node.keypair);
 
             if let Err(e) = node.graph.insert(genesis.clone()) {
                 tracing::warn!(node = i, "Genesis insert failed: {}", e);
@@ -370,8 +370,6 @@ impl SafetyMonitor {
 
     /// Submit an event from a node and propagate it to all other nodes.
     fn submit_and_propagate(&mut self, source_idx: usize) -> Result<(), SafetyViolation> {
-        use omnia_substrate::crypto::generate_keypair;
-
         // Phase 1: Read state from source node (immutable borrows)
         let source_node_id = self.nodes[source_idx].node_id;
         let sequence = self.nodes[source_idx].next_sequence;
@@ -395,7 +393,8 @@ impl SafetyMonitor {
             Event::new(source_node_id, sequence, vc, self_parent, other_parent, payload)
         };
 
-        let keypair = generate_keypair();
+        // Use the node's own identity keypair for signing (not a random one)
+        let keypair = self.nodes[source_idx].keypair.clone();
         event.sign_with_keypair(&keypair);
 
         let event_id = event.id;
