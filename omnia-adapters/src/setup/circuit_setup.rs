@@ -341,7 +341,7 @@ pub fn derive_keys_deterministic_from_srs(
     let rng = ChaCha8Rng::from_seed(phase2_seed);
 
     // Perform the Groth16 setup with deterministic RNG
-    let (pk, vk) = ark_groth16::Groth16::setup(circuit.clone(), &mut rng)
+    let (pk, vk) = ark_groth16::Groth16::setup((*circuit).clone(), &mut rng)
         .map_err(|e| SetupError::KeyDerivationFailed(format!("Groth16 setup failed: {e}")))?;
 
     // Serialize the proving key
