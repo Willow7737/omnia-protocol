@@ -15,7 +15,7 @@ impl PhysicalValidator {
     /// Validate a physical operation against the given state.
     ///
     /// Performs structural checks (item existence, no duplicate anchors).
-    /// For ownership pre-flight checks, use [`validate_with_caller`] instead.
+    /// For ownership pre-flight checks, use [`Self::validate_with_caller`] instead.
     pub fn validate(state: &PhysicalState, op: &PhysicalOp) -> Result<(), ShardError> {
         Self::validate_with_caller(state, op, None)
     }
