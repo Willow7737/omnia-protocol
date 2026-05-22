@@ -2,12 +2,12 @@ name: Ethereum Settlement Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'omnia-adapters/**'
       - '.github/workflows/ethereum-settlement.yml'
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'omnia-adapters/**'
       - '.github/workflows/ethereum-settlement.yml'
