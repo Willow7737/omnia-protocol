@@ -8,6 +8,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.45](https://github.com/Willow7737/omnia-protocol/compare/v0.1.44...v0.1.45) (2026-05-22)
+
+
+### Bug Fixes
+
+* **ci:** allow deprecated DkgSession in re-exports ([18a8518](https://github.com/Willow7737/omnia-protocol/commit/18a8518d9b32c6984575cb686071440fc7f91f3f))
+* **ci:** replace redundant closure with function reference in merkle.rs ([aacf953](https://github.com/Willow7737/omnia-protocol/commit/aacf953bf70c0bd85da2782dd06f7ad49206d899))
+* resolve all 14 code review issues + multi-node consensus test ([631dd31](https://github.com/Willow7737/omnia-protocol/commit/631dd311cb10e2b0e7077136aea35931ffb2ff02))
+* resolve all 14 code review issues + multi-node consensus test ([f467ebe](https://github.com/Willow7737/omnia-protocol/commit/f467ebe14680ab6bbf43d2d6a9ee3ddd4597b870))
+* **test:** bloom filter race in test_three_node_with_optimized_gossip_components ([e0ad142](https://github.com/Willow7737/omnia-protocol/commit/e0ad14216c53787d5a224f5b9b5f94cd8124d19f))
+
 ## [0.1.44](https://github.com/Willow7737/omnia-protocol/compare/v0.1.43...v0.1.44) (2026-05-21)
 
 
