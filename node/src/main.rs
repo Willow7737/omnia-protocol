@@ -29,7 +29,7 @@ use clap::Parser;
 use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
 #[cfg(feature = "network")]
-use omnia_network::{Multiaddr, NetworkEvent, OmniaNetwork};
+use omnia_network::{Multiaddr, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 use omnia_node::pipeline::{ColdWork, PipelineRouter};
 use omnia_node::state::AppState;
@@ -170,7 +170,16 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
-    let substrate = Substrate::new(substrate_config);
+    let mut substrate = Substrate::new(substrate_config);
+
+    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock.
+    // This creates a GossipProtocol with a shared Arc<RwLock<CausalGraph>> that
+    // will later be wired to the P2P network via start_with_network().
+    #[cfg(feature = "network")]
+    {
+        substrate.init_gossip();
+        tracing::info!("Gossip protocol initialized and wired to substrate");
+    }
     tracing::info!(
         path = %slashing_dir.display(),
         "Substrate runtime initialized with persistent slashing engine"
@@ -393,9 +402,13 @@ async fn spawn_background_tasks(
                     break;
                 }
                 _ = round_timer.tick() => {
-                    // Lock substrate and process a consensus round
+                    // P0-1: Use process_consensus_round() which drains gossip
+                    // events from the network, runs consensus, and feeds
+                    // committed events to the shard processor. This replaces
+                    // the previous process_consensus() call that skipped the
+                    // gossip event drain step.
                     let mut substrate = substrate_consensus.write().await;
-                    substrate.process_consensus().await;
+                    substrate.process_consensus_round().await;
                     drop(substrate);
                 }
             }
@@ -405,10 +418,18 @@ async fn spawn_background_tasks(
     tracing::info!("Consensus background loop spawned (1s interval)");
 
     // 7c. Spawn P2P network initialization (when network feature is enabled)
+    // P0-1: Wire OmniaNetwork → GossipProtocol → CausalGraph → Consensus
+    // Instead of manually draining event_rx and only logging, we now delegate
+    // to GossipProtocol::start_with_network() which wires the full pipeline:
+    //   network.event_rx → gossip.network_rx → process_pending_events() →
+    //   graph.insert() → unprocessed_events → process_consensus()
     #[cfg(feature = "network")]
     {
         let mut shutdown_network = shutdown_tx.subscribe();
         let listen_addr = config.listen_addr.clone();
+
+        // We need a clone of the substrate Arc for wiring the network
+        let substrate_for_network = Arc::clone(&substrate);
 
         tokio::spawn(async move {
             tracing::info!("P2P network initialization started");
@@ -423,56 +444,38 @@ async fn spawn_background_tasks(
             };
 
             // Try to create the network, but don't block if it fails
-            // (e.g., port already in use, network interface unavailable)
             match OmniaNetwork::new(listen_multiaddr).await {
                 Ok(mut network) => {
                     tracing::info!("P2P network initialized");
 
-                    // Take the event receiver before starting the network run loop
-                    let mut event_rx = network.event_rx.take();
+                    // Subscribe to the omnia_events gossip topic before
+                    // starting the network run loop
+                    if let Err(e) = network.subscribe("omnia_events") {
+                        tracing::warn!(error = %e, "Failed to subscribe to omnia_events topic");
+                    }
 
-                    // Spawn the network run loop in a separate task
-                    let mut shutdown_run = shutdown_network.resubscribe();
-                    tokio::spawn(async move {
-                        tokio::select! {
-                            _ = network.run() => {},
-                            _ = shutdown_run.recv() => {
-                                tracing::info!("P2P network run loop shutting down");
-                            }
+                    // Wire the network into the substrate's gossip protocol.
+                    // This takes ownership of the network, spawns network.run_with_commands()
+                    // internally, and stores event_rx in gossip.network_rx so that
+                    // process_pending_events() can drain incoming events.
+                    let mut substrate = substrate_for_network.write().await;
+                    match substrate.wire_network(network).await {
+                        Ok(()) => {
+                            tracing::info!(
+                                "P2P network wired to gossip protocol — events flow: \
+                                 network → gossip → graph → consensus"
+                            );
                         }
-                    });
-
-                    // Process incoming network events
-                    if let Some(rx) = event_rx.as_mut() {
-                        loop {
-                            tokio::select! {
-                                _ = shutdown_network.recv() => {
-                                    tracing::info!("P2P network event handler shutting down");
-                                    break;
-                                }
-                                event = rx.recv() => {
-                                    match event {
-                                        Some(NetworkEvent::PeerConnected(peer_id)) => {
-                                            tracing::info!(peer = %peer_id, "Peer connected");
-                                        }
-                                        Some(NetworkEvent::PeerDisconnected(peer_id)) => {
-                                            tracing::info!(peer = %peer_id, "Peer disconnected");
-                                        }
-                                        Some(NetworkEvent::MessageReceived(peer_id, data)) => {
-                                            tracing::trace!(peer = %peer_id, bytes = data.len(), "Message received");
-                                        }
-                                        Some(NetworkEvent::GossipReceived { topic, data, propagation_source }) => {
-                                            tracing::trace!(topic = %topic, bytes = data.len(), peer = %propagation_source, "Gossip received");
-                                        }
-                                        None => {
-                                            tracing::info!("Network event channel closed");
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+                        Err(e) => {
+                            tracing::error!(error = %e, "Failed to wire network to gossip protocol");
                         }
                     }
+                    drop(substrate);
+
+                    // Wait for shutdown signal — the network run loop is already
+                    // spawned inside GossipProtocol::start_with_network()
+                    let _ = shutdown_network.recv().await;
+                    tracing::info!("P2P network task shutting down");
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "P2P network initialization failed — node running without P2P");
