@@ -169,6 +169,12 @@ impl FinancialState {
                 Ok(())
             }
             FinancialOp::Burn { from, amount } => {
+                // Authorization: only the account owner can burn their own tokens
+                if event.creator_pubkey != *from {
+                    return Err(ShardError::ValidationFailed(
+                        "Burn authorization failed: only the account owner can burn tokens".into(),
+                    ));
+                }
                 let vc = &event.vector_clock;
                 let balance = self
                     .balances

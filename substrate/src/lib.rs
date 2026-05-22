@@ -64,7 +64,7 @@ pub use omnia_network;
 // Re-export commonly used types
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop, BlsError, BlsKeypair,
+    aggregate_public_keys, aggregate_signatures, aggregate_signatures_dedup, verify_aggregate, verify_aggregate_with_pop, BlsError, BlsKeypair,
     BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
@@ -115,8 +115,9 @@ pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, Replica
 #[cfg(feature = "bls")]
 #[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult, KeyShare,
-    PartialSignature, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
+    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError,
+    ThresholdKeyManager, ThresholdSignature,
 };
 pub use vrf::{
     deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,

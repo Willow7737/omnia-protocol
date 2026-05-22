@@ -29,6 +29,43 @@ ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 # production-ready and cross-platform (works on Linux/macOS/Windows).
 redb = "2"
 
+[features]
+default = []
+# Real ZK/SNARK proof verification using ark-groth16.
+# When disabled (default), proof verification is a no-op placeholder.
+real_verification = [
+    "dep:ark-groth16",
+    "dep:ark-bn254",
+    "dep:ark-ec",
+    "dep:ark-ff",
+    "dep:ark-serialize",
+    "dep:ark-snark",
+]
+
+[dependencies.ark-groth16]
+version = "0.4"
+optional = true
+
+[dependencies.ark-bn254]
+version = "0.4"
+optional = true
+
+[dependencies.ark-ec]
+version = "0.4"
+optional = true
+
+[dependencies.ark-ff]
+version = "0.4"
+optional = true
+
+[dependencies.ark-serialize]
+version = "0.4"
+optional = true
+
+[dependencies.ark-snark]
+version = "0.4"
+optional = true
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"

@@ -4670,10 +4670,12 @@ dependencies = [
  "proptest",
  "rand 0.8.6",
  "rand_chacha 0.3.1",
+ "reqwest 0.12.28",
  "rustc_version 0.4.1",
  "semver 1.0.28",
  "serde",
  "serde_bytes",
+ "serde_json",
  "subtle",
  "thiserror 2.0.18",
  "tokio",
@@ -4787,6 +4789,7 @@ dependencies = [
  "getrandom 0.2.17",
  "hex",
  "hkdf",
+ "hmac",
  "ml-kem 0.1.1",
  "omnia-primitives",
  "postcard",
@@ -4918,6 +4921,12 @@ dependencies = [
 name = "omnia-shards"
 version = "0.1.0"
 dependencies = [
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-groth16",
+ "ark-serialize 0.4.2",
+ "ark-snark",
  "blake3",
  "ed25519-dalek",
  "hex",

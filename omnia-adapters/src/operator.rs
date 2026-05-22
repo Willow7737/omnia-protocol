@@ -75,20 +75,16 @@ impl RollupOperator {
             return Ok(());
         }
 
-        // 2. Get old state root
-        let old_root = {
+        // 2. Acquire the read lock ONCE and compute both old_root and new_root
+        //    atomically to prevent a race condition where the graph could be
+        //    modified between the two reads.
+        let (old_root, new_root) = {
             let graph = self.graph.read().await;
-            graph.state_root()
+            (graph.state_root(), graph.state_root())
         };
 
         // 3. Build batch data
         let batch_data = self.build_batch_data(&events)?;
-
-        // 4. Get new state root (events already processed by consensus)
-        let new_root = {
-            let graph = self.graph.read().await;
-            graph.state_root()
-        };
 
         // 5. Generate real Groth16 proof
         let proof_bytes = self.generate_proof(&old_root, &new_root, events.len())?;

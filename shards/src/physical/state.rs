@@ -41,7 +41,11 @@ impl PhysicalState {
     }
 
     /// Apply a physical operation, mutating state.
-    pub fn apply(&mut self, op: &PhysicalOp, vc: &VectorClock) -> Result<(), ShardError> {
+    ///
+    /// The `event_creator` parameter is used to authorize ownership transfers:
+    /// only the current owner can transfer an item. Pass `None` to skip
+    /// authorization (e.g., for backward-compatible call sites or testing).
+    pub fn apply(&mut self, op: &PhysicalOp, vc: &VectorClock, event_creator: Option<super::ops::OwnerId>) -> Result<(), ShardError> {
         match op {
             PhysicalOp::AnchorItem {
                 item_id,
@@ -67,6 +71,16 @@ impl PhysicalState {
                     .provenance
                     .get_mut(item_id)
                     .ok_or_else(|| ShardError::ValidationFailed("Item not found".into()))?;
+
+                // Authorization: only the current owner can transfer ownership
+                if let Some(creator) = event_creator {
+                    let current = log.last().map(|e| e.owner);
+                    if current != Some(creator) {
+                        return Err(ShardError::ValidationFailed(
+                            "TransferOwnership authorization failed: only the current owner can transfer".into(),
+                        ));
+                    }
+                }
 
                 log.push(ProvenanceEvent {
                     event_type: "transfer".into(),
