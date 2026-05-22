@@ -11,7 +11,6 @@
 
 use omnia_consensus::{ConsensusConfig, ConsensusEngine, SlashingEngine};
 use omnia_primitives::{Event, EventId, NodeId};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -37,6 +36,7 @@ impl SimNode {
             round_seed: seed,
             round_timeout_ms: 30_000,
             max_consecutive_timeouts: 3,
+            max_sequence_entries: 10_000,
         };
         let slashing = SlashingEngine::new_in_memory(500, 2000);
 

@@ -1483,7 +1483,7 @@ mod tests {
         // The coin round always produces a definitive answer (true or false),
         // breaking the tie instead of leaving it unresolved.
         assert!(
-            result == true || result == false,
+            result || !result,
             "Coin round must produce a definitive boolean to break ties"
         );
 

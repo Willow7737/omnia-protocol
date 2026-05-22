@@ -346,18 +346,33 @@ impl PowersOfTau {
 /// assert_eq!(srs.contribution_count, 3);
 /// ```
 pub fn run_ceremony(degree: usize, num_participants: usize) -> Result<PowersOfTau, SetupError> {
+    run_ceremony_with_offset(degree, num_participants, 0)
+}
+
+/// Run a Powers of Tau ceremony with a seed offset for deterministic
+/// differentiation between ceremonies.
+///
+/// The `seed_offset` is added to each participant's RNG seed, allowing
+/// two ceremonies with the same `(degree, num_participants)` to produce
+/// different SRS accumulators.
+pub fn run_ceremony_with_offset(
+    degree: usize,
+    num_participants: usize,
+    seed_offset: u8,
+) -> Result<PowersOfTau, SetupError> {
     // Initialize with generator points (representing τ = 1)
     let mut accumulator = PowersOfTau::new(degree)?;
 
     tracing::info!(
         degree,
         num_participants,
+        seed_offset,
         "Starting Powers of Tau ceremony (real EC operations)"
     );
 
     for i in 0..num_participants {
         let mut seed = [0u8; 32];
-        seed[0] = i as u8;
+        seed[0] = (i as u8).wrapping_add(seed_offset);
         seed[1] = (i >> 8) as u8;
 
         // Generate a random secret for this participant
