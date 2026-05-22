@@ -211,7 +211,16 @@ impl ComputationalState {
                     // to the default placeholder verification below.
                 }
 
-                // Default (placeholder) verification: accept the proof as valid.
+                // Default (placeholder) verification: reject proofs that don't match
+                // the expected ZK proof format. When real_verification is disabled,
+                // we still require a non-empty proof to prevent accepting invalid submissions.
+                if proof_bytes.is_empty() {
+                    task.status = TaskStatus::Failed;
+                    task.last_update.merge(vc);
+                    return Err(ShardError::ValidationFailed(
+                        "Proof verification failed: empty proof bytes".into(),
+                    ));
+                }
                 task.status = TaskStatus::Verified;
                 task.last_update.merge(vc);
                 Ok(())

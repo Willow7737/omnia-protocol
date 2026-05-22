@@ -421,10 +421,7 @@ mod tests {
     #[tokio::test]
     async fn test_celestia_mock_verify_inclusion() {
         let adapter = CelestiaAdapter::with_defaults();
-        let proof = MerkleProof {
-            siblings: vec![[0u8; 32]],
-            directions: vec![true],
-        };
+        let proof = crate::merkle::Blake3MerkleProof::new(vec![[0u8; 32]], vec![true]);
         assert!(adapter.verify_inclusion(&proof).await.unwrap());
     }
 

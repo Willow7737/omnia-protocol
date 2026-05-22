@@ -15,6 +15,20 @@
 //! When the `arkworks` feature is enabled, `hash_to_fr`, `fr_to_hash`,
 //! and `poseidon_hash_to_fr` provide conversions between byte-oriented
 //! hashes and Bn254 field elements for ZK circuit compatibility.
+//!
+//! ## Type-Level Hash Function Safety
+//!
+//! `MerkleProof<H>` is parameterized by a [`HashFunction`] marker type,
+//! preventing accidental use of a BLAKE3-produced proof in a Poseidon
+//! circuit (or vice versa) at compile time.
+//!
+//! ```
+//! use omnia_adapters::merkle::{MerkleProof, Blake3, Poseidon, compute_root_from_proof};
+//!
+//! // These are different types — cannot be mixed up:
+//! let blake3_proof: MerkleProof<Blake3> = MerkleProof::new(vec![], vec![]);
+//! let poseidon_proof: MerkleProof<Poseidon> = MerkleProof::new(vec![], vec![]);
+//! ```
 
 /// Default leaf value for the Sparse Merkle Tree (all zeros).
 pub const DEFAULT_LEAF: [u8; 32] = [0u8; 32];
@@ -22,24 +36,92 @@ pub const DEFAULT_LEAF: [u8; 32] = [0u8; 32];
 /// Maximum depth of the Merkle tree (256-bit keys).
 pub const MERKLE_DEPTH: usize = 32;
 
+// ---------------------------------------------------------------------------
+// Hash function marker types for type-level Merkle proof safety
+// ---------------------------------------------------------------------------
+
+/// Marker trait for hash functions used in Merkle trees.
+///
+/// This trait has no methods — it exists purely as a type-level marker
+/// to prevent mixing proofs from different hash functions (e.g., BLAKE3
+/// vs Poseidon) at compile time.
+///
+/// See [`MerkleProof`] for the generic proof type.
+pub trait HashFunction: std::fmt::Debug + Clone + Send + Sync + 'static {}
+
+/// BLAKE3 hash function marker.
+///
+/// Used with [`MerkleProof<Blake3>`] for proofs produced by the BLAKE3
+/// Merkle tree builder. These proofs are suitable for off-circuit
+/// verification but **must not** be used in ZK circuits that expect
+/// Poseidon hashing.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Blake3;
+impl HashFunction for Blake3 {}
+
+/// Poseidon hash function marker.
+///
+/// Used with [`MerkleProof<Poseidon>`] for proofs produced by the
+/// Poseidon Merkle tree builder. These proofs are required for ZK
+/// circuit verification (e.g., [`ExpandedRollupCircuit`]).
+///
+/// [`ExpandedRollupCircuit`]: crate::circuit::ExpandedRollupCircuit
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Poseidon;
+#[cfg(feature = "arkworks")]
+impl HashFunction for Poseidon {}
+
 /// A Merkle proof consisting of sibling hashes and direction bits.
 ///
-/// This type is always available (no arkworks dependency) and is used
-/// by both the ZK circuit code and the settlement adapter verification.
+/// This type is parameterized by a [`HashFunction`] marker (`Blake3` or `Poseidon`)
+/// to prevent accidental mixing of proofs from different hash functions at
+/// compile time. This addresses C-06 (Merkle tree mismatch) from the security audit.
+///
+/// # Type Safety
+///
+/// - `MerkleProof<Blake3>` — proofs from [`build_merkle_tree`], for off-circuit use
+/// - `MerkleProof<Poseidon>` — proofs from [`build_poseidon_merkle_tree`], for ZK circuits
+///
+/// These types are not interchangeable — passing a `MerkleProof<Blake3>` to a
+/// function expecting `MerkleProof<Poseidon>` will fail to compile.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MerkleProof {
+pub struct MerkleProof<H: HashFunction = Blake3> {
     /// Sibling hashes at each level of the tree.
     pub siblings: Vec<[u8; 32]>,
     /// Direction bits: `true` means the sibling is on the left.
     pub directions: Vec<bool>,
+    /// Phantom marker for the hash function type (zero-sized).
+    #[serde(skip)]
+    _hash: std::marker::PhantomData<H>,
 }
 
-/// Compute a Merkle root from a leaf and a proof.
+impl<H: HashFunction> MerkleProof<H> {
+    /// Create a new Merkle proof with the given siblings and directions.
+    pub fn new(siblings: Vec<[u8; 32]>, directions: Vec<bool>) -> Self {
+        Self {
+            siblings,
+            directions,
+            _hash: std::marker::PhantomData,
+        }
+    }
+}
+
+// Type aliases for backward compatibility
+/// BLAKE3-based Merkle proof (off-circuit verification).
+pub type Blake3MerkleProof = MerkleProof<Blake3>;
+/// Poseidon-based Merkle proof (ZK circuit verification).
+#[cfg(feature = "arkworks")]
+pub type PoseidonMerkleProof = MerkleProof<Poseidon>;
+
+/// Compute a Merkle root from a leaf and a BLAKE3 proof.
 ///
 /// This is the off-circuit (native) verification function used for
 /// test comparison and proof generation. Uses BLAKE3 for hashing.
 /// Always available (no arkworks dependency).
-pub fn compute_root_from_proof(leaf: &[u8; 32], proof: &MerkleProof) -> [u8; 32] {
+///
+/// Only accepts `MerkleProof<Blake3>` — Poseidon proofs must use
+/// the Poseidon verification path in the ZK circuit.
+pub fn compute_root_from_proof(leaf: &[u8; 32], proof: &Blake3MerkleProof) -> [u8; 32] {
     let mut current = *leaf;
     for (i, (sibling, go_left)) in proof.siblings.iter().zip(proof.directions.iter()).enumerate() {
         if i >= MERKLE_DEPTH {
@@ -61,7 +143,11 @@ pub fn compute_root_from_proof(leaf: &[u8; 32], proof: &MerkleProof) -> [u8; 32]
 /// Build a simple Merkle tree from a list of items and return the root.
 ///
 /// Uses BLAKE3 for hashing. Always available (no arkworks dependency).
-pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
+///
+/// Returns `MerkleProof<Blake3>` proofs — these are for off-circuit use only
+/// and must **not** be used in ZK circuits that expect Poseidon hashing.
+/// For ZK-compatible proofs, use [`build_poseidon_merkle_tree`] instead.
+pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof>) {
     if items.is_empty() {
         return ([0u8; 32], vec![]);
     }
@@ -101,7 +187,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
             level = next_level;
             pos /= 2;
         }
-        proofs.push(MerkleProof { siblings, directions });
+        proofs.push(Blake3MerkleProof::new(siblings, directions));
     }
 
     let mut level = current_level;
@@ -195,15 +281,22 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 ///
 /// # Returns
 ///
-/// A tuple of (Poseidon root as 32 bytes, vector of Merkle proofs).
+/// A tuple of (Poseidon root as 32 bytes, vector of `MerkleProof<Poseidon>`).
 ///
 /// **Important**: Circuit witness generation (e.g., `ExpandedRollupCircuit::from_batch`
 /// and `BatchProofCircuit::from_batch`) must use this Poseidon tree builder instead
 /// of [`build_merkle_tree`], because the on-circuit Merkle path verification uses
 /// Poseidon hashing. Using the BLAKE3 tree would produce roots that don't match
 /// the in-circuit verification.
+///
+/// # Type Safety
+///
+/// Returns `MerkleProof<Poseidon>` which is a distinct type from
+/// `MerkleProof<Blake3>`. A function expecting `MerkleProof<Poseidon>` will
+/// not compile if passed a `MerkleProof<Blake3>`, preventing the C-06
+/// Merkle tree mismatch vulnerability.
 #[cfg(feature = "arkworks")]
-pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerkleProof>) {
+pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<PoseidonMerkleProof>) {
     if items.is_empty() {
         return ([0u8; 32], vec![]);
     }
@@ -244,7 +337,7 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<MerklePr
             level = next_level;
             pos /= 2;
         }
-        proofs.push(MerkleProof { siblings, directions });
+        proofs.push(PoseidonMerkleProof::new(siblings, directions));
     }
 
     // Compute root
@@ -386,6 +479,32 @@ mod arkworks_tests {
         assert_eq!(root1, root2, "Poseidon Merkle tree must be deterministic");
     }
 }
+
+    #[test]
+    fn test_merkle_proof_type_safety() {
+        // BLAKE3 and Poseidon proofs are different types at compile time.
+        // This test demonstrates that you cannot accidentally mix them.
+        let blake3_proof = Blake3MerkleProof::new(vec![[1u8; 32]], vec![true]);
+        let _poseidon_proof = {
+            // Use cfg to compile this block only with arkworks
+            #[cfg(feature = "arkworks")]
+            {
+                PoseidonMerkleProof::new(vec![[2u8; 32]], vec![false])
+            }
+            #[cfg(not(feature = "arkworks"))]
+            {
+                // Without arkworks, just verify the Blake3 proof works
+                Blake3MerkleProof::new(vec![[2u8; 32]], vec![false])
+            }
+        };
+
+        // Both have the same data layout but are different types
+        assert_eq!(blake3_proof.siblings.len(), 1);
+        assert_eq!(blake3_proof.directions.len(), 1);
+
+        // The following would be a compile error (intentionally commented out):
+        // let _: PoseidonMerkleProof = blake3_proof; // ERROR: type mismatch
+    }
 
 /// Property-based tests for Merkle tree invariants (BLAKE3, no arkworks).
 #[cfg(test)]
