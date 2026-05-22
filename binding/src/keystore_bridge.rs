@@ -82,10 +82,12 @@ pub struct KeyStoreBridge {
     rotation_state_path: PathBuf,
     /// Cached rotation state.
     rotation_state: RotationState,
-    /// Stored Dilithium secret key bytes (populated after rotation to Hybrid/PostQuantum).
+    /// Stored Dilithium keypair (populated after rotation to Hybrid/PostQuantum).
     /// Used to produce Dilithium signatures in `sign_with_dilithium()`.
+    /// Stored as the full `Keypair` because `pqc_dilithium` v0.2 does not
+    /// expose a `restore()` constructor from raw secret bytes.
     #[cfg(feature = "pqc")]
-    dilithium_secret_key: Option<Vec<u8>>,
+    dilithium_keypair: Option<pqc_dilithium::Keypair>,
 }
 
 impl KeyStoreBridge {
@@ -138,7 +140,7 @@ impl KeyStoreBridge {
             rotation_state_path,
             rotation_state,
             #[cfg(feature = "pqc")]
-            dilithium_secret_key: None,
+            dilithium_keypair: None,
         })
     }
 
@@ -183,10 +185,10 @@ impl KeyStoreBridge {
         #[cfg(feature = "pqc")]
         let dilithium_keypair = pqc_dilithium::Keypair::generate();
 
-        // Store the Dilithium secret key for later signing
+        // Store the Dilithium keypair for later signing
         #[cfg(feature = "pqc")]
         {
-            self.dilithium_secret_key = Some(dilithium_keypair.secret.to_vec());
+            self.dilithium_keypair = Some(dilithium_keypair);
         }
 
         let new_pubkey = PqPublicKey {
@@ -253,13 +255,10 @@ impl KeyStoreBridge {
     /// or PostQuantum has not occurred).
     #[cfg(feature = "pqc")]
     pub fn sign_with_dilithium(&self, message: &[u8]) -> Result<Vec<u8>, BridgeError> {
-        let secret_bytes = self.dilithium_secret_key.as_ref().ok_or_else(|| {
-            BridgeError::InvalidState(
-                "No Dilithium secret key available — rotate to Hybrid or PostQuantum first".into(),
-            )
+        let keypair = self.dilithium_keypair.as_ref().ok_or_else(|| {
+            BridgeError::InvalidState("No Dilithium keypair available — rotate to Hybrid or PostQuantum first".into())
         })?;
-        let dilithium_keypair = pqc_dilithium::Keypair::restore(secret_bytes);
-        let signature = dilithium_keypair.sign(message);
+        let signature = keypair.sign(message);
         Ok(signature.to_vec())
     }
 
@@ -431,11 +430,9 @@ mod tests {
         let dilithium_sig = bundle.dilithium_signature.unwrap();
         assert!(!dilithium_sig.is_empty(), "Dilithium signature should not be empty");
 
-        // Verify the Dilithium signature against the public key stored in rotation state
-        // We need the Dilithium public key — get it from the dilithium_secret_key
-        let secret_bytes = bridge.dilithium_secret_key.as_ref().expect("secret key stored");
-        let restored_kp = pqc_dilithium::Keypair::restore(secret_bytes);
-        let verify_result = pqc_dilithium::verify(&dilithium_sig, message, &restored_kp.public);
+        // Verify the Dilithium signature against the public key stored in the keypair
+        let keypair = bridge.dilithium_keypair.as_ref().expect("keypair stored");
+        let verify_result = pqc_dilithium::verify(&dilithium_sig, message, &keypair.public);
         assert!(verify_result.is_ok(), "Dilithium signature should verify");
     }
 }

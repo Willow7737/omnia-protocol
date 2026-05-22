@@ -6,7 +6,9 @@
 //! to keep compile times down for consumers that only need basic Ed25519 operations.
 
 #![deny(clippy::unwrap_used)]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+// NOTE: unsafe_code is denied crate-wide but allowed in specific modules
+// that require it for blst BLS12-381 scalar field arithmetic (DKG).
 #![warn(missing_docs)]
 
 pub mod crypto;
@@ -20,6 +22,9 @@ pub mod keystore;
 
 #[cfg(feature = "bls")]
 pub mod bls;
+
+#[cfg(feature = "bls")]
+pub mod bls12_381_scalar;
 
 #[cfg(feature = "bls")]
 pub mod threshold;

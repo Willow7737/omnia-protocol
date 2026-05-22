@@ -292,6 +292,8 @@ mod tests {
             started_at: Instant::now(),
             is_syncing: Arc::new(AtomicBool::new(is_syncing)),
             settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
+            #[cfg(feature = "zk")]
+            ceremony_server: None,
         }
     }
 

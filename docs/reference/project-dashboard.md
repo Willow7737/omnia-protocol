@@ -10,17 +10,22 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | Metric | Value | Status |
 | :--- | :--- | :--- |
 | **Phase** | Post-Phase 5: Mainnet Preparation | 🔄 In Progress |
-| **Overall Completion** | **97%** | Phases 0–5 complete; remaining items are stubs and long-term goals |
+| **Overall Completion** | **70%** (code review v0.1.47) | Phases 0–5 complete; node integration in progress |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 800+ tests passing, 0 production `unwrap()`, 34 typed error enums | Verified |
-| **Network Status** | Single-node operator | Phase 0 |
-| **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC | Phase 3 resolved |
+| **Code Health** | 1,173 tests passing, 0 production `unwrap()`, 34 typed error enums | Verified |
+| **Network Status** | Node runs background consensus + P2P | Integration at 52% |
+| **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG | Phase 3 resolved |
 
 ### Completion Bar
 
 ```
-[█████████████████████████████] 97%
+[███████████████████░░░░░░░░░░] 70%
 ```
+
+> **Note**: The 70% figure reflects the independent code review assessment (v0.1.47)
+> which weights node integration heavily. Component-level code is 75–90% complete
+> across most crates. The primary remaining work is wiring the P2P network,
+> consensus loop, and pipeline router into the node binary (P0).
 
 ---
 

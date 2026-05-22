@@ -22,6 +22,8 @@ use tokio::sync::{Mutex, RwLock};
 use omnia_economics::EconomicsState;
 use omnia_shards::ShardRouter;
 
+#[cfg(feature = "zk")]
+use omnia_adapters::setup::CeremonyServer;
 use omnia_adapters::SettlementAdapter;
 
 use crate::api::events::StoredEvent;
@@ -245,4 +247,10 @@ pub struct AppState {
     /// When the `ethereum-live` feature is enabled and a valid config is
     /// provided, uses `EthereumSettlementAdapter` instead (requires rustc >= 1.91).
     pub settlement: Arc<dyn SettlementAdapter>,
+    /// Optional ceremony server for multi-party trusted setup.
+    ///
+    /// When present, the ceremony HTTP API endpoints are functional.
+    /// When absent, ceremony endpoints return 503 Service Unavailable.
+    #[cfg(feature = "zk")]
+    pub ceremony_server: Option<Arc<RwLock<CeremonyServer>>>,
 }
