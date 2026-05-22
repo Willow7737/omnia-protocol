@@ -8,6 +8,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.48](https://github.com/Willow7737/omnia-protocol/compare/v0.1.47...v0.1.48) (2026-05-22)
+
+
+### Bug Fixes
+
+* Add BLS12-381 scalar field arithmetic for DKG (P1) ([c0b758f](https://github.com/Willow7737/omnia-protocol/commit/c0b758fc907ad600d75dd482c35acb46596aa0c6))
+* Address P0-P3 issues from code review v0.1.47 ([3243ed8](https://github.com/Willow7737/omnia-protocol/commit/3243ed87cc459629cd70726e756fd089380ce18e))
+* correct bls12_381_scalar arithmetic and merkle doctest ([78f30c8](https://github.com/Willow7737/omnia-protocol/commit/78f30c8c819fb7159de18d4f9fdd04cfdc7478e4))
+* resolve compilation errors and CI failures on dev branch ([28d44ab](https://github.com/Willow7737/omnia-protocol/commit/28d44abedf5f5ab1361b9ca6606f2502192fc169))
+* resolve remaining compilation errors and CI failures ([345f082](https://github.com/Willow7737/omnia-protocol/commit/345f08284680f22e0491ba15b2b08935845a7825))
+
+
+### Documentation
+
+* Update README and PROJECT_DASHBOARD for v0.1.47 ([e47b7fa](https://github.com/Willow7737/omnia-protocol/commit/e47b7fa5edbe8e46c55920a39a73bb0dcc63d754))
+
+
+### CI
+
+* Add dev branch triggers to CI workflows ([fec7b68](https://github.com/Willow7737/omnia-protocol/commit/fec7b68f75bf2b97ff2a4bad64afa453694c7aa3))
+* Add dev branch triggers to CI workflows ([3ab72be](https://github.com/Willow7737/omnia-protocol/commit/3ab72be6919c5226e720f2eac9856ea958c7bcfe))
+
 ## [0.1.47](https://github.com/Willow7737/omnia-protocol/compare/v0.1.46...v0.1.47) (2026-05-22)
 
 
