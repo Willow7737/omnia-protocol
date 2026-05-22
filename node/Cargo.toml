@@ -79,6 +79,9 @@ chrono = { version = "0.4", features = ["serde"] }
 # UUID generation for event and proposal identifiers
 uuid = { version = "1", features = ["v4"] }
 
+# HTTP client for ceremony server communication
+reqwest = { version = "0.12", features = ["json"], optional = true }
+
 # OpenAPI spec generation — auto-documents all REST endpoints
 utoipa = "5"
 # Swagger UI embeds ~11MB of JS/CSS assets into the binary.
@@ -93,7 +96,7 @@ light = []  # no networking, no ZK, no heavy crypto
 metrics = ["dep:prometheus"]
 swagger-ui = ["dep:utoipa-swagger-ui"]
 network = ["omnia-network/network", "omnia-substrate/network", "dep:omnia-network"]
-zk = ["omnia-adapters/arkworks", "omnia-substrate/zk"]
+zk = ["omnia-adapters/arkworks", "omnia-substrate/zk", "dep:reqwest"]
 bls = ["omnia-crypto/bls", "omnia-substrate/bls", "dep:omnia-crypto"]
 pqc = ["omnia-crypto/pqc", "omnia-substrate/pqc", "dep:omnia-crypto"]
 ethereum-live = ["omnia-adapters/ethereum-live", "zk"]
