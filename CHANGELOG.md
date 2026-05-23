@@ -8,6 +8,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.49](https://github.com/Willow7737/omnia-protocol/compare/v0.1.48...v0.1.49) (2026-05-23)
+
+
+### Bug Fixes
+
+* apply rustfmt formatting and increase binary size gate to 16 MB ([552d450](https://github.com/Willow7737/omnia-protocol/commit/552d450a33e6fee5584b162fae88947080cad702))
+* **P0-1:** Wire GossipProtocol into node binary ([a4df6c1](https://github.com/Willow7737/omnia-protocol/commit/a4df6c1aee2c61b31dd2390334e46aa13aec6109))
+* **P0-1:** Wire GossipProtocol into node binary ([807f093](https://github.com/Willow7737/omnia-protocol/commit/807f093ed4256e9f74d3210cb8b21629fc6f8ee8))
+* **P0-2:** Integrate bls12_381_scalar module into FeldmanVssSession ([e3f50f8](https://github.com/Willow7737/omnia-protocol/commit/e3f50f8f173bb93e6e6025755de25cfc5a0cfd3e))
+* **P1-1,P2-1,P3-1,P3-2:** BatchProofCircuit type safety, malformed proof rejection, auth tests, ceremony client ([f727241](https://github.com/Willow7737/omnia-protocol/commit/f72724163a6b06200a05d71108fde8f487e654b8))
+* pin Foundry toolchain to stable instead of nightly ([f934196](https://github.com/Willow7737/omnia-protocol/commit/f934196221e698c5a707e516eab9e2c7b170ec02))
+* resolve broken intra-doc links in substrate/src/lib.rs ([4ea63ff](https://github.com/Willow7737/omnia-protocol/commit/4ea63ff5f3397e7ef4944bf88979ce56790493a5))
+* resolve clippy doc comment warnings in shard modules ([428f89c](https://github.com/Willow7737/omnia-protocol/commit/428f89c1cd23a725dd5c83143e9efea9ab94a510))
+
 ## [0.1.48](https://github.com/Willow7737/omnia-protocol/compare/v0.1.47...v0.1.48) (2026-05-22)
 
 
