@@ -23,7 +23,7 @@ ark-r1cs-std = { version = "0.4", optional = true }
 ark-groth16 = { version = "0.4", optional = true }
 ark-snark = { version = "0.4", optional = true }
 ark-bn254 = { version = "0.4", optional = true }
-ark-ec = { version = "0.4", optional = true }
+ark-ec = { version = "0.6", optional = true }
 ark-ff = { version = "0.4", optional = true }
 ark-serialize = { version = "0.4", optional = true }
 ark-crypto-primitives = { version = "0.4", optional = true }
