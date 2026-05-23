@@ -1206,9 +1206,7 @@ async fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Re
     if !state_resp.status().is_success() {
         let status = state_resp.status();
         let body = state_resp.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "Ceremony server returned error {status} when fetching state: {body}"
-        );
+        anyhow::bail!("Ceremony server returned error {status} when fetching state: {body}");
     }
 
     let state: CeremonyStateResponse = state_resp
@@ -1224,12 +1222,8 @@ async fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Re
 
     // 2. Generate contribution locally
     println!("Generating contribution...");
-    let (contribution, _proof) = CeremonyClient::generate_contribution(
-        &state.transcript,
-        state.tau_size,
-        seed,
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to generate contribution: {e}"))?;
+    let (contribution, _proof) = CeremonyClient::generate_contribution(&state.transcript, state.tau_size, seed)
+        .map_err(|e| anyhow::anyhow!("Failed to generate contribution: {e}"))?;
 
     println!(
         "  Contribution generated: participant_id = {}",
@@ -1249,9 +1243,7 @@ async fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Re
     if !contribute_resp.status().is_success() {
         let status = contribute_resp.status();
         let body = contribute_resp.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "Ceremony server rejected contribution (HTTP {status}): {body}"
-        );
+        anyhow::bail!("Ceremony server rejected contribution (HTTP {status}): {body}");
     }
 
     let receipt: ContributionReceipt = contribute_resp
@@ -1261,14 +1253,8 @@ async fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Re
 
     println!("\n✓ Contribution accepted!");
     println!("  Contribution index: {}", receipt.contribution_index);
-    println!(
-        "  Transcript hash: {}",
-        hex::encode(&receipt.transcript_hash[..8])
-    );
-    println!(
-        "  Proof commitment: {}",
-        hex::encode(&receipt.proof.commitment[..8])
-    );
+    println!("  Transcript hash: {}", hex::encode(&receipt.transcript_hash[..8]));
+    println!("  Proof commitment: {}", hex::encode(&receipt.proof.commitment[..8]));
 
     Ok(())
 }
@@ -1311,15 +1297,10 @@ async fn run_ceremony_verify(server_url: &str) -> Result<()> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "Ceremony server returned error {status} when fetching transcript: {body}"
-        );
+        anyhow::bail!("Ceremony server returned error {status} when fetching transcript: {body}");
     }
 
-    let transcript: CeremonyTranscript = resp
-        .json()
-        .await
-        .context("Failed to deserialize ceremony transcript")?;
+    let transcript: CeremonyTranscript = resp.json().await.context("Failed to deserialize ceremony transcript")?;
 
     println!("  Received transcript:");
     println!("    Contributions: {}", transcript.contribution_count);

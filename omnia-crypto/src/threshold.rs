@@ -862,9 +862,7 @@ impl FeldmanVssSession {
 
         // Generate random polynomial coefficients as BLS12-381 scalars.
         // f(x) = a_0 + a_1*x + a_2*x^2 + ... + a_{t-1}*x^{t-1}
-        let polynomial_coeffs: Vec<Scalar> = (0..self.threshold)
-            .map(|_| Scalar::random(rng))
-            .collect();
+        let polynomial_coeffs: Vec<Scalar> = (0..self.threshold).map(|_| Scalar::random(rng)).collect();
         self.polynomial_coeffs = Some(polynomial_coeffs.clone());
 
         // Compute Feldman commitments: C_j = PK(BlsKeypair::generate(&a_j.to_bytes()))

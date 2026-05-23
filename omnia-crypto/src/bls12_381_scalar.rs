@@ -69,8 +69,7 @@ impl<'de> serde::Deserialize<'de> for Scalar {
                 }
                 let mut bytes = [0u8; SCALAR_BYTES];
                 bytes.copy_from_slice(v);
-                Scalar::from_bytes(&bytes)
-                    .ok_or_else(|| E::custom("invalid BLS12-381 scalar (>= subgroup order)"))
+                Scalar::from_bytes(&bytes).ok_or_else(|| E::custom("invalid BLS12-381 scalar (>= subgroup order)"))
             }
         }
 
@@ -689,10 +688,7 @@ mod tests {
 
     #[test]
     fn test_reconstruct_secret_duplicate_indices() {
-        let shares = vec![
-            (1, Scalar::from_u64(17)),
-            (1, Scalar::from_u64(28)),
-        ];
+        let shares = vec![(1, Scalar::from_u64(17)), (1, Scalar::from_u64(28))];
         assert!(reconstruct_secret(&shares).is_none());
     }
 

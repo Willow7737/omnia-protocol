@@ -357,13 +357,7 @@ mod tests {
 
         // Submit an empty proof
         state
-            .apply(
-                &ComputationalOp::SubmitProof {
-                    task_id,
-                    proof: vec![],
-                },
-                &vc,
-            )
+            .apply(&ComputationalOp::SubmitProof { task_id, proof: vec![] }, &vc)
             .unwrap();
 
         // Verify the empty proof — should fail

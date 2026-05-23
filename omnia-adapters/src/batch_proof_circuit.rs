@@ -94,7 +94,11 @@ impl BatchProofCircuit {
     ///
     /// Panics if `merkle_proofs.len() != event_hashes.len()`.
     #[allow(clippy::too_many_arguments)]
-    pub fn from_batch(event_hashes: Vec<Fr>, merkle_root: Fr, merkle_proofs: Vec<merkle::MerkleProof<Poseidon>>) -> Self {
+    pub fn from_batch(
+        event_hashes: Vec<Fr>,
+        merkle_root: Fr,
+        merkle_proofs: Vec<merkle::MerkleProof<Poseidon>>,
+    ) -> Self {
         let num_events = event_hashes.len();
         assert_eq!(
             merkle_proofs.len(),

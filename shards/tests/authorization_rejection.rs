@@ -54,18 +54,13 @@ fn test_transfer_ownership_unauthorized() {
         owner: owner_id,
         metadata: vec![1, 2, 3],
     };
-    state
-        .apply(&anchor_op, &VectorClock::with_node(node, 1), None)
-        .unwrap();
+    state.apply(&anchor_op, &VectorClock::with_node(node, 1), None).unwrap();
 
     // Verify the current owner
     assert_eq!(state.current_owner(&item_id), Some(owner_id));
 
     // Attempt TransferOwnership signed by the attacker (not the owner)
-    let transfer_op = PhysicalOp::TransferOwnership {
-        item_id,
-        new_owner,
-    };
+    let transfer_op = PhysicalOp::TransferOwnership { item_id, new_owner };
     let attacker_event = make_signed_event(&attacker_kp, 1, node);
     let result = state.apply(&transfer_op, &attacker_event.vector_clock, Some(attacker_id));
 
