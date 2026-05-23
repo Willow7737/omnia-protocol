@@ -606,7 +606,7 @@ impl Substrate {
     ///
     /// This is the main integration point between the P2P network layer
     /// and the consensus engine. When the `network` feature is enabled
-    /// and gossip has been initialized via [`init_gossip()`], this method
+    /// and gossip has been initialized via `init_gossip()`, this method
     /// drains incoming gossip events from the network, validates them,
     /// inserts them into the causal graph, and feeds them into consensus.
     pub async fn process_consensus_round(&mut self) {
@@ -680,12 +680,12 @@ impl Substrate {
     ///
     /// This is designed for use in background task architectures where
     /// the caller manages their own consensus loop (e.g., calling
-    /// [`process_consensus_round()`] periodically) rather than using
-    /// the built-in [`run()`] loop.
+    /// `process_consensus_round()` periodically) rather than using
+    /// the built-in `run()` loop.
     ///
     /// After calling this method, incoming gossip events will be queued
     /// in the gossip protocol's internal buffer. Call
-    /// [`process_consensus_round()`] to drain those events into the
+    /// `process_consensus_round()` to drain those events into the
     /// causal graph and run consensus.
     #[cfg(feature = "network")]
     pub async fn wire_network(&mut self, network: OmniaNetwork) -> Result<()> {
