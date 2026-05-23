@@ -8,6 +8,115 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.50](https://github.com/Willow7737/omnia-protocol/compare/v0.1.49...v0.1.50) (2026-05-23)
+
+
+### Bug Fixes
+
+* allow release-please to use PAT for credentials ([c1acefc](https://github.com/Willow7737/omnia-protocol/commit/c1acefc4bdd51f3119a328d2f6eec81ef29a8f4f))
+
+## [0.1.49](https://github.com/Willow7737/omnia-protocol/compare/v0.1.48...v0.1.49) (2026-05-23)
+
+
+### Bug Fixes
+
+* apply rustfmt formatting and increase binary size gate to 16 MB ([552d450](https://github.com/Willow7737/omnia-protocol/commit/552d450a33e6fee5584b162fae88947080cad702))
+* **P0-1:** Wire GossipProtocol into node binary ([a4df6c1](https://github.com/Willow7737/omnia-protocol/commit/a4df6c1aee2c61b31dd2390334e46aa13aec6109))
+* **P0-1:** Wire GossipProtocol into node binary ([807f093](https://github.com/Willow7737/omnia-protocol/commit/807f093ed4256e9f74d3210cb8b21629fc6f8ee8))
+* **P0-2:** Integrate bls12_381_scalar module into FeldmanVssSession ([e3f50f8](https://github.com/Willow7737/omnia-protocol/commit/e3f50f8f173bb93e6e6025755de25cfc5a0cfd3e))
+* **P1-1,P2-1,P3-1,P3-2:** BatchProofCircuit type safety, malformed proof rejection, auth tests, ceremony client ([f727241](https://github.com/Willow7737/omnia-protocol/commit/f72724163a6b06200a05d71108fde8f487e654b8))
+* pin Foundry toolchain to stable instead of nightly ([f934196](https://github.com/Willow7737/omnia-protocol/commit/f934196221e698c5a707e516eab9e2c7b170ec02))
+* resolve broken intra-doc links in substrate/src/lib.rs ([4ea63ff](https://github.com/Willow7737/omnia-protocol/commit/4ea63ff5f3397e7ef4944bf88979ce56790493a5))
+* resolve clippy doc comment warnings in shard modules ([428f89c](https://github.com/Willow7737/omnia-protocol/commit/428f89c1cd23a725dd5c83143e9efea9ab94a510))
+
+## [0.1.48](https://github.com/Willow7737/omnia-protocol/compare/v0.1.47...v0.1.48) (2026-05-22)
+
+
+### Bug Fixes
+
+* Add BLS12-381 scalar field arithmetic for DKG (P1) ([c0b758f](https://github.com/Willow7737/omnia-protocol/commit/c0b758fc907ad600d75dd482c35acb46596aa0c6))
+* Address P0-P3 issues from code review v0.1.47 ([3243ed8](https://github.com/Willow7737/omnia-protocol/commit/3243ed87cc459629cd70726e756fd089380ce18e))
+* correct bls12_381_scalar arithmetic and merkle doctest ([78f30c8](https://github.com/Willow7737/omnia-protocol/commit/78f30c8c819fb7159de18d4f9fdd04cfdc7478e4))
+* resolve compilation errors and CI failures on dev branch ([28d44ab](https://github.com/Willow7737/omnia-protocol/commit/28d44abedf5f5ab1361b9ca6606f2502192fc169))
+* resolve remaining compilation errors and CI failures ([345f082](https://github.com/Willow7737/omnia-protocol/commit/345f08284680f22e0491ba15b2b08935845a7825))
+
+
+### Documentation
+
+* Update README and PROJECT_DASHBOARD for v0.1.47 ([e47b7fa](https://github.com/Willow7737/omnia-protocol/commit/e47b7fa5edbe8e46c55920a39a73bb0dcc63d754))
+
+
+### CI
+
+* Add dev branch triggers to CI workflows ([fec7b68](https://github.com/Willow7737/omnia-protocol/commit/fec7b68f75bf2b97ff2a4bad64afa453694c7aa3))
+* Add dev branch triggers to CI workflows ([3ab72be](https://github.com/Willow7737/omnia-protocol/commit/3ab72be6919c5226e720f2eac9856ea958c7bcfe))
+
+## [0.1.47](https://github.com/Willow7737/omnia-protocol/compare/v0.1.46...v0.1.47) (2026-05-22)
+
+
+### Features
+
+* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([f6e41bb](https://github.com/Willow7737/omnia-protocol/commit/f6e41bbaaa8a7457f4c17ded6480137efd2969eb))
+* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([26d9999](https://github.com/Willow7737/omnia-protocol/commit/26d9999fe357515989b5121170c6e42f8b5a8ac9))
+
+
+### Bug Fixes
+
+* resolve rustdoc intra-doc link for validate_with_caller ([be770b8](https://github.com/Willow7737/omnia-protocol/commit/be770b8d9df093a987a775d8aef02985b1417880))
+
+## [0.1.46](https://github.com/Willow7737/omnia-protocol/compare/v0.1.45...v0.1.46) (2026-05-22)
+
+
+### Features
+
+* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([57ba4dd](https://github.com/Willow7737/omnia-protocol/commit/57ba4dd6665526789b25498ac3ac2d2fdb39fc03))
+* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([5645c55](https://github.com/Willow7737/omnia-protocol/commit/5645c5565441f8b828665c04eeb058d906c908f6))
+
+
+### Bug Fixes
+
+* **ci:** add CircuitSpecificSetupSNARK trait import + cargo fmt ([ab9d4f8](https://github.com/Willow7737/omnia-protocol/commit/ab9d4f8499447d7c62630d81d513775c89f7535b))
+* **ci:** add Clone derive to RollupCircuit, deref-then-clone for Groth16::setup ([f8b2a12](https://github.com/Willow7737/omnia-protocol/commit/f8b2a12f85cc46a8bb309b20dc0b56a702ff6654))
+* **ci:** clippy overly_complex_bool_expr, SRS test, network integration tests ([c62b17a](https://github.com/Willow7737/omnia-protocol/commit/c62b17af20394acbfcf9905847a1150c4fbf7869))
+* **ci:** declare rng as mutable for Groth16::setup ([fc73e15](https://github.com/Willow7737/omnia-protocol/commit/fc73e15afb2ff5acb3c97a1733bb772f34ecffe8))
+* **ci:** Groth16::setup signature + missing max_sequence_entries ([6924083](https://github.com/Willow7737/omnia-protocol/commit/6924083e9729dec7307be47b647995f5ee430ea1))
+* **ci:** network test missing field, clippy bool_comparison, SRS test determinism ([029eeb7](https://github.com/Willow7737/omnia-protocol/commit/029eeb7067c60e1b75dccc1b4a4a198151be45c0))
+* **ci:** use turbofish Groth16::&lt;Bn254&gt;::setup to resolve type inference ([b4dd099](https://github.com/Willow7737/omnia-protocol/commit/b4dd09900c3427a96f9fcae312a9da9e4ba1851d))
+* sign burn event with account owner keypair in double-spend test ([2d561a7](https://github.com/Willow7737/omnia-protocol/commit/2d561a7a1496d6b4d09b8acf32b428812b8f7a4f))
+* use real keypair for account owner in cross_shard burn test ([c5a327f](https://github.com/Willow7737/omnia-protocol/commit/c5a327f21ada5de0bd2674dae8689711792ab54e))
+
+## [0.1.45](https://github.com/Willow7737/omnia-protocol/compare/v0.1.44...v0.1.45) (2026-05-22)
+
+
+### Bug Fixes
+
+* **ci:** allow deprecated DkgSession in re-exports ([18a8518](https://github.com/Willow7737/omnia-protocol/commit/18a8518d9b32c6984575cb686071440fc7f91f3f))
+* **ci:** replace redundant closure with function reference in merkle.rs ([aacf953](https://github.com/Willow7737/omnia-protocol/commit/aacf953bf70c0bd85da2782dd06f7ad49206d899))
+* resolve all 14 code review issues + multi-node consensus test ([631dd31](https://github.com/Willow7737/omnia-protocol/commit/631dd311cb10e2b0e7077136aea35931ffb2ff02))
+* resolve all 14 code review issues + multi-node consensus test ([f467ebe](https://github.com/Willow7737/omnia-protocol/commit/f467ebe14680ab6bbf43d2d6a9ee3ddd4597b870))
+* **test:** bloom filter race in test_three_node_with_optimized_gossip_components ([e0ad142](https://github.com/Willow7737/omnia-protocol/commit/e0ad14216c53787d5a224f5b9b5f94cd8124d19f))
+
+## [0.1.44](https://github.com/Willow7737/omnia-protocol/compare/v0.1.43...v0.1.44) (2026-05-21)
+
+
+### Features
+
+* **sprint-0:** foundation & baselines ([bf99745](https://github.com/Willow7737/omnia-protocol/commit/bf997451097ba5cd7a0fe1a586844238534b0503))
+* **sprint-1:** sharded consensus state with parallel event validation ([c09173e](https://github.com/Willow7737/omnia-protocol/commit/c09173eec2870999a7470aea5f222a074f0a0fc7))
+* **sprint-1:** sharded consensus state with parallel event validation ([ae41956](https://github.com/Willow7737/omnia-protocol/commit/ae419569eced76937009c9927ccd91e5f35fca77))
+* **sprint-2:** batch event submission & processing ([4814ea5](https://github.com/Willow7737/omnia-protocol/commit/4814ea5692d180f2d0387026390b3ed30c410dad))
+* **sprint-3:** optimized graph insertion with pre-allocated data structures ([32852fd](https://github.com/Willow7737/omnia-protocol/commit/32852fddc0e652b08b37cc8c3b755736eb2fe60a))
+* **sprint-4:** network-optimized gossip protocol ([80a790d](https://github.com/Willow7737/omnia-protocol/commit/80a790d160d7048f38e225449b74a15cc9582a63))
+* **sprint-5:** Phase 0 integration, stability & sign-off documentation ([c4f8b12](https://github.com/Willow7737/omnia-protocol/commit/c4f8b129f22c4fd0a9490c74edfefaa7c3f6a919))
+* **sprint-5:** stability test framework and full chaos test suite ([1d952dc](https://github.com/Willow7737/omnia-protocol/commit/1d952dce2ed57fddaff9e3164c6db644196d382e))
+
+
+### Bug Fixes
+
+* **ci:** resolve clippy errors, formatting issues, and test failure ([ac782b9](https://github.com/Willow7737/omnia-protocol/commit/ac782b902c450e0186c85a41e0f3f57cc8ce8538))
+* **ci:** resolve clippy unwrap_used errors and warnings ([f1176e6](https://github.com/Willow7737/omnia-protocol/commit/f1176e6fc62d45bad22ec6ba1266e8c895556cc2))
+* **ci:** resolve rustdoc broken links and invalid HTML tags ([fccdf59](https://github.com/Willow7737/omnia-protocol/commit/fccdf59d624512acafc76961324a037e1a6451d9))
+
 ## [0.1.43](https://github.com/Willow7737/omnia-protocol/compare/v0.1.42...v0.1.43) (2026-05-21)
 
 
