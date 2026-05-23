@@ -85,7 +85,10 @@ pub struct ProofBundle {
     pub prev_state_root: [u8; 32],
     /// Serialized ZK proof bytes (R1CS proof in production, stub for Phase 0).
     pub transition_proof: Vec<u8>,
-    /// BLAKE3 Merkle root of all events in this batch.
+    /// Merkle root of all events in this batch.
+    ///
+    /// May contain a Poseidon Merkle root when used with ZK circuits;
+    /// for non-ZK paths, BLAKE3 is used.
     pub batch_merkle_root: [u8; 32],
     /// L1 anchor data for cross-chain verification.
     pub l1_anchor: L1Anchor,

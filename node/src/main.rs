@@ -29,7 +29,7 @@ use clap::Parser;
 use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
 #[cfg(feature = "network")]
-use omnia_network::{Multiaddr, NetworkEvent, OmniaNetwork};
+use omnia_network::{Multiaddr, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 use omnia_node::pipeline::{ColdWork, PipelineRouter};
 use omnia_node::state::AppState;
@@ -97,11 +97,11 @@ async fn main() -> Result<()> {
             }
             #[cfg(feature = "zk")]
             CliCommand::CeremonyContribute { server_url, seed } => {
-                return run_ceremony_contribute(&server_url, seed.as_deref());
+                return run_ceremony_contribute(&server_url, seed.as_deref()).await;
             }
             #[cfg(feature = "zk")]
             CliCommand::CeremonyVerify { server_url } => {
-                return run_ceremony_verify(&server_url);
+                return run_ceremony_verify(&server_url).await;
             }
             #[cfg(not(feature = "zk"))]
             CliCommand::CeremonyServe { .. } => {
@@ -170,7 +170,16 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
-    let substrate = Substrate::new(substrate_config);
+    let mut substrate = Substrate::new(substrate_config);
+
+    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock.
+    // This creates a GossipProtocol with a shared Arc<RwLock<CausalGraph>> that
+    // will later be wired to the P2P network via start_with_network().
+    #[cfg(feature = "network")]
+    {
+        substrate.init_gossip();
+        tracing::info!("Gossip protocol initialized and wired to substrate");
+    }
     tracing::info!(
         path = %slashing_dir.display(),
         "Substrate runtime initialized with persistent slashing engine"
@@ -393,9 +402,13 @@ async fn spawn_background_tasks(
                     break;
                 }
                 _ = round_timer.tick() => {
-                    // Lock substrate and process a consensus round
+                    // P0-1: Use process_consensus_round() which drains gossip
+                    // events from the network, runs consensus, and feeds
+                    // committed events to the shard processor. This replaces
+                    // the previous process_consensus() call that skipped the
+                    // gossip event drain step.
                     let mut substrate = substrate_consensus.write().await;
-                    substrate.process_consensus().await;
+                    substrate.process_consensus_round().await;
                     drop(substrate);
                 }
             }
@@ -405,10 +418,18 @@ async fn spawn_background_tasks(
     tracing::info!("Consensus background loop spawned (1s interval)");
 
     // 7c. Spawn P2P network initialization (when network feature is enabled)
+    // P0-1: Wire OmniaNetwork → GossipProtocol → CausalGraph → Consensus
+    // Instead of manually draining event_rx and only logging, we now delegate
+    // to GossipProtocol::start_with_network() which wires the full pipeline:
+    //   network.event_rx → gossip.network_rx → process_pending_events() →
+    //   graph.insert() → unprocessed_events → process_consensus()
     #[cfg(feature = "network")]
     {
         let mut shutdown_network = shutdown_tx.subscribe();
         let listen_addr = config.listen_addr.clone();
+
+        // We need a clone of the substrate Arc for wiring the network
+        let substrate_for_network = Arc::clone(&substrate);
 
         tokio::spawn(async move {
             tracing::info!("P2P network initialization started");
@@ -423,56 +444,38 @@ async fn spawn_background_tasks(
             };
 
             // Try to create the network, but don't block if it fails
-            // (e.g., port already in use, network interface unavailable)
             match OmniaNetwork::new(listen_multiaddr).await {
                 Ok(mut network) => {
                     tracing::info!("P2P network initialized");
 
-                    // Take the event receiver before starting the network run loop
-                    let mut event_rx = network.event_rx.take();
+                    // Subscribe to the omnia_events gossip topic before
+                    // starting the network run loop
+                    if let Err(e) = network.subscribe("omnia_events") {
+                        tracing::warn!(error = %e, "Failed to subscribe to omnia_events topic");
+                    }
 
-                    // Spawn the network run loop in a separate task
-                    let mut shutdown_run = shutdown_network.resubscribe();
-                    tokio::spawn(async move {
-                        tokio::select! {
-                            _ = network.run() => {},
-                            _ = shutdown_run.recv() => {
-                                tracing::info!("P2P network run loop shutting down");
-                            }
+                    // Wire the network into the substrate's gossip protocol.
+                    // This takes ownership of the network, spawns network.run_with_commands()
+                    // internally, and stores event_rx in gossip.network_rx so that
+                    // process_pending_events() can drain incoming events.
+                    let mut substrate = substrate_for_network.write().await;
+                    match substrate.wire_network(network).await {
+                        Ok(()) => {
+                            tracing::info!(
+                                "P2P network wired to gossip protocol — events flow: \
+                                 network → gossip → graph → consensus"
+                            );
                         }
-                    });
-
-                    // Process incoming network events
-                    if let Some(rx) = event_rx.as_mut() {
-                        loop {
-                            tokio::select! {
-                                _ = shutdown_network.recv() => {
-                                    tracing::info!("P2P network event handler shutting down");
-                                    break;
-                                }
-                                event = rx.recv() => {
-                                    match event {
-                                        Some(NetworkEvent::PeerConnected(peer_id)) => {
-                                            tracing::info!(peer = %peer_id, "Peer connected");
-                                        }
-                                        Some(NetworkEvent::PeerDisconnected(peer_id)) => {
-                                            tracing::info!(peer = %peer_id, "Peer disconnected");
-                                        }
-                                        Some(NetworkEvent::MessageReceived(peer_id, data)) => {
-                                            tracing::trace!(peer = %peer_id, bytes = data.len(), "Message received");
-                                        }
-                                        Some(NetworkEvent::GossipReceived { topic, data, propagation_source }) => {
-                                            tracing::trace!(topic = %topic, bytes = data.len(), peer = %propagation_source, "Gossip received");
-                                        }
-                                        None => {
-                                            tracing::info!("Network event channel closed");
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+                        Err(e) => {
+                            tracing::error!(error = %e, "Failed to wire network to gossip protocol");
                         }
                     }
+                    drop(substrate);
+
+                    // Wait for shutdown signal — the network run loop is already
+                    // spawned inside GossipProtocol::start_with_network()
+                    let _ = shutdown_network.recv().await;
+                    tracing::info!("P2P network task shutting down");
                 }
                 Err(e) => {
                     tracing::warn!(error = %e, "P2P network initialization failed — node running without P2P");
@@ -1152,11 +1155,13 @@ fn run_ceremony_serve(min_participants: usize, max_participants: usize, degree: 
 /// current SRS state, generates a contribution locally, and
 /// submits it to the server.
 ///
-/// **Note**: The full HTTP client implementation is a placeholder.
-/// The actual network communication requires the ceremony API
-/// endpoints to be deployed on the server.
+/// # API Contract
+///
+/// - `GET {server_url}/ceremony/state` → `{ "transcript": [...], "tau_size": N }`
+/// - `POST {server_url}/ceremony/contribute` → `ContributionReceipt` (JSON)
 #[cfg(feature = "zk")]
-fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<()> {
+async fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<()> {
+    use omnia_adapters::setup::ceremony_server::ContributionReceipt;
     use omnia_adapters::setup::CeremonyClient;
 
     // Initialize minimal tracing
@@ -1183,20 +1188,73 @@ fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<(
         })
         .transpose()?;
 
-    // TODO: Implement HTTP client for fetching SRS state from server
-    // For now, this is a placeholder that demonstrates the client API
+    // Build HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("Failed to build HTTP client")?;
+
+    // 1. Fetch current ceremony state
     println!("Fetching current ceremony state...");
+    let state_url = format!("{server_url}/ceremony/state");
+    let state_resp = client
+        .get(&state_url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to connect to ceremony server at {state_url}"))?;
+
+    if !state_resp.status().is_success() {
+        let status = state_resp.status();
+        let body = state_resp.text().await.unwrap_or_default();
+        anyhow::bail!("Ceremony server returned error {status} when fetching state: {body}");
+    }
+
+    let state: CeremonyStateResponse = state_resp
+        .json()
+        .await
+        .context("Failed to deserialize ceremony state response")?;
+
+    println!(
+        "  Received state: transcript {} bytes, tau_size = {}",
+        state.transcript.len(),
+        state.tau_size
+    );
+
+    // 2. Generate contribution locally
     println!("Generating contribution...");
+    let (contribution, _proof) = CeremonyClient::generate_contribution(&state.transcript, state.tau_size, seed)
+        .map_err(|e| anyhow::anyhow!("Failed to generate contribution: {e}"))?;
 
-    // Placeholder: in production, this would:
-    // 1. GET {server_url}/ceremony/state → (transcript, tau_size)
-    // 2. CeremonyClient::generate_contribution(transcript, tau_size, seed)
-    // 3. POST {server_url}/ceremony/contribute → receipt
-    let _ = CeremonyClient::generate_contribution;
-    let _ = seed;
+    println!(
+        "  Contribution generated: participant_id = {}",
+        hex::encode(&contribution.participant_id[..8])
+    );
 
-    println!("\nContribution submitted (placeholder — HTTP client not yet implemented)");
-    println!("Use `omnia-node ceremony-serve` for local ceremony simulation");
+    // 3. Submit contribution to server
+    println!("Submitting contribution to server...");
+    let contribute_url = format!("{server_url}/ceremony/contribute");
+    let contribute_resp = client
+        .post(&contribute_url)
+        .json(&contribution)
+        .send()
+        .await
+        .with_context(|| format!("Failed to submit contribution to {contribute_url}"))?;
+
+    if !contribute_resp.status().is_success() {
+        let status = contribute_resp.status();
+        let body = contribute_resp.text().await.unwrap_or_default();
+        anyhow::bail!("Ceremony server rejected contribution (HTTP {status}): {body}");
+    }
+
+    let receipt: ContributionReceipt = contribute_resp
+        .json()
+        .await
+        .context("Failed to deserialize contribution receipt")?;
+
+    println!("\n✓ Contribution accepted!");
+    println!("  Contribution index: {}", receipt.contribution_index);
+    println!("  Transcript hash: {}", hex::encode(&receipt.transcript_hash[..8]));
+    println!("  Proof commitment: {}", hex::encode(&receipt.proof.commitment[..8]));
 
     Ok(())
 }
@@ -1206,9 +1264,12 @@ fn run_ceremony_contribute(server_url: &str, seed_hex: Option<&str>) -> Result<(
 /// Downloads the full transcript and independently verifies each
 /// contribution's Proof of Knowledge.
 ///
-/// **Note**: The full HTTP client implementation is a placeholder.
+/// # API Contract
+///
+/// - `GET {server_url}/ceremony/transcript` → `CeremonyTranscript` (JSON)
 #[cfg(feature = "zk")]
-fn run_ceremony_verify(server_url: &str) -> Result<()> {
+async fn run_ceremony_verify(server_url: &str) -> Result<()> {
+    use omnia_adapters::setup::ceremony_server::CeremonyTranscript;
     use omnia_adapters::setup::CeremonyClient;
 
     // Initialize minimal tracing
@@ -1219,17 +1280,68 @@ fn run_ceremony_verify(server_url: &str) -> Result<()> {
 
     println!("Fetching ceremony transcript from {server_url}...");
 
-    // TODO: Implement HTTP client for fetching transcript from server
-    // For now, this is a placeholder that demonstrates the client API
-    println!("Verifying transcript...");
+    // Build HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .context("Failed to build HTTP client")?;
 
-    // Placeholder: in production, this would:
-    // 1. GET {server_url}/ceremony/transcript → CeremonyTranscript
-    // 2. CeremonyClient::verify_transcript(&transcript, degree)
-    let _ = CeremonyClient::verify_transcript;
+    // 1. Fetch the full transcript
+    let transcript_url = format!("{server_url}/ceremony/transcript");
+    let resp = client
+        .get(&transcript_url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to connect to ceremony server at {transcript_url}"))?;
 
-    println!("\nTranscript verification (placeholder — HTTP client not yet implemented)");
-    println!("Use `omnia-node ceremony-serve` for local ceremony simulation");
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Ceremony server returned error {status} when fetching transcript: {body}");
+    }
+
+    let transcript: CeremonyTranscript = resp.json().await.context("Failed to deserialize ceremony transcript")?;
+
+    println!("  Received transcript:");
+    println!("    Contributions: {}", transcript.contribution_count);
+    println!("    Ceremony ID: {}", transcript.config.ceremony_id);
+    println!("    Degree: {}", transcript.config.degree);
+    println!(
+        "    Final hash: {}",
+        hex::encode(&transcript.final_transcript_hash[..8])
+    );
+
+    // 2. Verify the transcript independently
+    println!("\nVerifying transcript...");
+    let degree = transcript.config.degree;
+    let contribution_count = transcript.contribution_count;
+
+    match CeremonyClient::verify_transcript(&transcript, degree) {
+        Ok(true) => {
+            println!("\n✓ Transcript verification succeeded!");
+            println!("  All {contribution_count} contributions verified");
+            println!("  Final transcript hash matches");
+        }
+        Ok(false) => {
+            anyhow::bail!("Transcript verification failed: final hash mismatch");
+        }
+        Err(e) => {
+            anyhow::bail!("Transcript verification failed: {e}");
+        }
+    }
 
     Ok(())
+}
+
+/// Response body for `GET /ceremony/state`.
+///
+/// Contains the current SRS transcript bytes and the number of G1 powers
+/// needed to generate a contribution.
+#[cfg(feature = "zk")]
+#[derive(serde::Deserialize)]
+struct CeremonyStateResponse {
+    /// Current SRS transcript bytes.
+    transcript: Vec<u8>,
+    /// Number of G1 powers in the ceremony.
+    tau_size: usize,
 }

@@ -24,6 +24,7 @@
 //!   need to know the threshold scheme was used.
 
 use crate::bls::{BlsError, BlsKeypair, BlsPublicKey, BlsSignature};
+use crate::bls12_381_scalar::{self, Scalar};
 use omnia_primitives::NodeId;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -730,10 +731,9 @@ impl DkgSession {
 
 /// A scalar value in the BLS12-381 field represented as 32 bytes.
 ///
-/// In the Feldman VSS context, scalars are used as polynomial coefficient
-/// seeds and share values. Since the crate forbids unsafe code, scalar
-/// arithmetic is performed using BLAKE3 domain-separated hashing rather
-/// than raw modular arithmetic over the BLS12-381 scalar field.
+/// Used for backward compatibility in share encryption/decryption where
+/// raw bytes are needed. For scalar arithmetic operations, use
+/// [`bls12_381_scalar::Scalar`] instead.
 pub type ScalarBytes = [u8; 32];
 
 /// Feldman VSS-based Distributed Key Generation session.
@@ -749,22 +749,23 @@ pub type ScalarBytes = [u8; 32];
 /// commitments (C_0), and each participant's final share is the accumulation
 /// of all shares they received.
 ///
-/// # Cryptographic Note
+/// # Cryptographic Foundation
 ///
-/// Due to the `#![forbid(unsafe_code)]` constraint, this implementation uses
-/// BLAKE3 domain-separated hashing for polynomial evaluation and share
-/// accumulation, rather than raw BLS12-381 scalar arithmetic. The Feldman
-/// commitments are genuine BLS public keys derived from the polynomial
-/// coefficients via `BlsKeypair::generate()`, and share encryption uses
-/// AES-256-GCM. This approach provides:
+/// This implementation uses proper BLS12-381 scalar field arithmetic for
+/// polynomial evaluation and share accumulation, powered by the `blst` C
+/// library via the [`bls12_381_scalar`] module:
 ///
-/// - **Binding**: Each coefficient seed deterministically produces a BLS
-///   keypair, so the commitment C_j = PK(a_j) binds the sender to their
-///   polynomial without revealing the coefficients.
-/// - **Verification**: Commitments are validated as BLS public keys, and
-///   share consistency is checked against the commitment structure.
-/// - **Confidentiality**: Shares are encrypted with AES-256-GCM, preventing
-///   unauthorized access.
+/// - **Polynomial evaluation**: Uses Horner's method over the BLS12-381
+///   scalar field via [`bls12_381_scalar::polynomial_evaluate`].
+/// - **Share accumulation**: Uses scalar field addition via
+///   [`bls12_381_scalar::accumulate_share_field`], enabling Lagrange
+///   interpolation for secret reconstruction.
+/// - **Lagrange interpolation**: [`bls12_381_scalar::reconstruct_secret`]
+///   recovers the group secret from `threshold` shares.
+/// - **Commitments**: Feldman commitments are BLS public keys derived from
+///   coefficient seeds via `BlsKeypair::generate()`.
+/// - **Share encryption**: AES-256-GCM with BLAKE3-derived keys for
+///   confidentiality during distribution.
 ///
 /// # Security
 ///
@@ -772,7 +773,8 @@ pub type ScalarBytes = [u8; 32];
 /// - Each participant's polynomial secret (`a_0`) contributes to the group secret.
 /// - Shares are encrypted with AES-256-GCM before transmission.
 /// - Feldman commitments allow public verification of share consistency.
-/// - BLAKE3-based accumulation is collision-resistant and deterministic.
+/// - Scalar field arithmetic is performed modulo the BLS12-381 subgroup order,
+///   ensuring all operations are correct and invertible.
 ///
 /// Reference: Feldman, P. (1987) *A Practical Scheme for Non-interactive
 /// Verifiable Secret Sharing*. FOCS 1987.
@@ -786,18 +788,18 @@ pub struct FeldmanVssSession {
     pub threshold: usize,
     /// Current phase of the DKG.
     pub phase: DkgPhase,
-    /// This participant's polynomial coefficient seeds (32 bytes each).
+    /// This participant's polynomial coefficients as BLS12-381 scalars.
     /// Only the first `threshold` coefficients are used.
     /// `None` until `generate_shares()` is called.
-    pub polynomial_seeds: Option<Vec<ScalarBytes>>,
+    pub polynomial_coeffs: Option<Vec<Scalar>>,
     /// Feldman commitments from each participant.
     /// Maps participant_id → list of commitment bytes (BLS public keys).
     pub commitments: HashMap<ParticipantId, Vec<Vec<u8>>>,
-    /// Received shares from each participant (decrypted 32-byte seeds).
-    pub received_shares: HashMap<ParticipantId, ScalarBytes>,
-    /// This participant's accumulated share seed (BLAKE3 accumulation of
-    /// all valid received shares, including self-share).
-    pub accumulated_share: Option<ScalarBytes>,
+    /// Received shares from each participant (BLS12-381 scalar values).
+    pub received_shares: HashMap<ParticipantId, Scalar>,
+    /// This participant's accumulated share (field addition of all valid
+    /// received shares, including self-share).
+    pub accumulated_share: Option<Scalar>,
     /// This participant's own ID.
     pub own_id: Option<ParticipantId>,
     /// This participant's own index (1-based, for polynomial evaluation).
@@ -818,7 +820,7 @@ impl FeldmanVssSession {
             participants,
             threshold,
             phase: DkgPhase::Init,
-            polynomial_seeds: None,
+            polynomial_coeffs: None,
             commitments: HashMap::new(),
             received_shares: HashMap::new(),
             accumulated_share: None,
@@ -830,13 +832,14 @@ impl FeldmanVssSession {
     /// Generate shares for all participants (Step 1).
     ///
     /// Creates a random polynomial of degree `threshold - 1` where each
-    /// coefficient is a random 32-byte seed. The constant term (`a_0`) is
+    /// coefficient is a random BLS12-381 scalar. The constant term (`a_0`) is
     /// this participant's contribution to the group secret.
     ///
     /// For each participant (including self), evaluates the polynomial at
-    /// their index to derive a share, encrypts it with AES-256-GCM, and
-    /// packages it with the Feldman commitments (BLS public keys for each
-    /// coefficient). The self-share is automatically accumulated.
+    /// their index using Horner's method over the BLS12-381 scalar field,
+    /// encrypts the share with AES-256-GCM, and packages it with the Feldman
+    /// commitments (BLS public keys for each coefficient). The self-share is
+    /// automatically accumulated using scalar field addition.
     pub fn generate_shares(
         &mut self,
         my_id: ParticipantId,
@@ -857,23 +860,20 @@ impl FeldmanVssSession {
         self.own_id = Some(my_id);
         self.own_index = Some(my_index + 1); // 1-based
 
-        // Generate random polynomial coefficient seeds of degree (threshold - 1)
+        // Generate random polynomial coefficients as BLS12-381 scalars.
         // f(x) = a_0 + a_1*x + a_2*x^2 + ... + a_{t-1}*x^{t-1}
-        let mut polynomial_seeds: Vec<ScalarBytes> = Vec::with_capacity(self.threshold);
-        for _ in 0..self.threshold {
-            let mut seed = [0u8; 32];
-            rng.fill_bytes(&mut seed);
-            polynomial_seeds.push(seed);
-        }
-        self.polynomial_seeds = Some(polynomial_seeds.clone());
+        let polynomial_coeffs: Vec<Scalar> = (0..self.threshold).map(|_| Scalar::random(rng)).collect();
+        self.polynomial_coeffs = Some(polynomial_coeffs.clone());
 
-        // Compute Feldman commitments: C_j = PK(BlsKeypair::generate(&a_j))
+        // Compute Feldman commitments: C_j = PK(BlsKeypair::generate(&a_j.to_bytes()))
         // Each commitment is the BLS public key corresponding to the coefficient seed.
-        let commitments: Vec<Vec<u8>> = polynomial_seeds
+        // Note: Commitments use the coefficient's byte representation as the seed for
+        // BLS key generation, which binds the commitment to the coefficient value.
+        let commitments: Vec<Vec<u8>> = polynomial_coeffs
             .iter()
-            .map(|seed| {
-                BlsKeypair::generate(seed)
-                    .expect("BLS key generation from random seed should succeed")
+            .map(|coeff| {
+                BlsKeypair::generate(&coeff.to_bytes())
+                    .expect("BLS key generation from scalar coefficient should succeed")
                     .public_key_bytes()
             })
             .collect();
@@ -881,9 +881,11 @@ impl FeldmanVssSession {
         // Store our own commitments
         self.commitments.insert(my_id, commitments.clone());
 
-        // Evaluate polynomial at our own index and accumulate the self-share
-        let self_share = feldman_evaluate_polynomial(&polynomial_seeds, my_index + 1);
-        self.accumulate_share(self_share);
+        // Evaluate polynomial at our own index using Horner's method and
+        // accumulate the self-share using scalar field addition.
+        let self_eval_point = Scalar::from_u64((my_index + 1) as u64);
+        let self_share = bls12_381_scalar::polynomial_evaluate(&polynomial_coeffs, &self_eval_point);
+        self.accumulated_share = Some(self_share);
         self.received_shares.insert(my_id, self_share);
 
         // Evaluate polynomial at each participant's index and encrypt the share
@@ -893,7 +895,9 @@ impl FeldmanVssSession {
             .enumerate()
             .map(|(idx, &participant_id)| {
                 let eval_index = idx + 1; // 1-based index
-                let share = feldman_evaluate_polynomial(&polynomial_seeds, eval_index);
+                let eval_point = Scalar::from_u64(eval_index as u64);
+                let share = bls12_381_scalar::polynomial_evaluate(&polynomial_coeffs, &eval_point);
+                let share_bytes = share.to_bytes();
 
                 // Encrypt the share with AES-256-GCM
                 let mut share_material = Vec::new();
@@ -908,7 +912,7 @@ impl FeldmanVssSession {
                     v.extend_from_slice(&participant_id);
                     v
                 };
-                let encrypted = aes256gcm_encrypt_dkg(&share, &share_seed, &aad);
+                let encrypted = aes256gcm_encrypt_dkg(&share_bytes, &share_seed, &aad);
 
                 (
                     participant_id,
@@ -998,14 +1002,35 @@ impl FeldmanVssSession {
             ));
         };
 
-        // Verify the share against Feldman commitments
+        // Verify the share against Feldman commitments using BLS12-381
+        // scalar field arithmetic for structural validation.
         let own_index = self.own_index.expect("own_index must be set after generate_shares");
-        let valid = feldman_verify_share(&share_data, own_index, &package.commitments);
+
+        // Convert decrypted bytes to a BLS12-381 Scalar for verification
+        let share_scalar = match Scalar::from_bytes(&share_data) {
+            Some(s) => s,
+            None => {
+                tracing::warn!(
+                    from = ?from_prefix,
+                    "Feldman VSS share verification failed — decrypted bytes are not a valid BLS12-381 scalar"
+                );
+                self.phase = DkgPhase::Verification;
+                return Ok(DkgVerificationResult { valid: false, from });
+            }
+        };
+
+        let valid = bls12_381_scalar::verify_feldman_share(&share_scalar, own_index as u64, &package.commitments);
 
         if valid {
-            // Accumulate the share: final_share_seed = H(prev || new_share)
-            self.received_shares.insert(from, share_data);
-            self.accumulate_share(share_data);
+            // Accumulate the share using BLS12-381 scalar field addition.
+            // This replaces the previous BLAKE3 hash-based accumulation with
+            // proper field arithmetic, enabling Lagrange interpolation for
+            // threshold reconstruction.
+            self.received_shares.insert(from, share_scalar);
+            self.accumulated_share = Some(bls12_381_scalar::accumulate_share_field(
+                self.accumulated_share,
+                share_scalar,
+            ));
         } else {
             tracing::warn!(
                 from = ?from_prefix,
@@ -1031,7 +1056,7 @@ impl FeldmanVssSession {
             });
         }
 
-        if self.received_shares.is_empty() && self.polynomial_seeds.is_none() {
+        if self.received_shares.is_empty() && self.polynomial_coeffs.is_none() {
             return Err(DkgError::CommitmentVerificationFailed(
                 "No shares received and no polynomial generated".to_string(),
             ));
@@ -1068,10 +1093,12 @@ impl FeldmanVssSession {
         // Aggregate all C_0 commitments to form the group public key
         let group_pk = crate::bls::aggregate_public_keys(&c0_public_keys)?;
 
-        // The own share is derived from the accumulated share seed
+        // The own share is derived from the accumulated share seed.
+        // Convert the accumulated Scalar to bytes for BLS key generation.
         let own_share_seed = self
             .accumulated_share
-            .ok_or_else(|| DkgError::CommitmentVerificationFailed("No accumulated share".to_string()))?;
+            .ok_or_else(|| DkgError::CommitmentVerificationFailed("No accumulated share".to_string()))?
+            .to_bytes();
 
         // Create a BLS keypair from the accumulated share seed
         let own_keypair = BlsKeypair::generate(&own_share_seed).map_err(DkgError::BlsError)?;
@@ -1111,137 +1138,28 @@ impl FeldmanVssSession {
         self.received_shares.len() >= self.threshold
     }
 
-    /// Accumulate a verified share into the running sum using BLAKE3.
+    /// Reconstruct the group secret from `threshold` shares using
+    /// Lagrange interpolation over the BLS12-381 scalar field.
     ///
-    /// Uses domain-separated BLAKE3 hashing to combine shares in a
-    /// commutative and collision-resistant manner:
-    /// ```text
-    /// accumulated = BLAKE3("OMNIA-VSS-ACCUMULATE-V1" || previous || new_share)
-    /// ```
-    fn accumulate_share(&mut self, share: ScalarBytes) {
-        self.accumulated_share = Some(match self.accumulated_share {
-            Some(existing) => {
-                let mut hasher = blake3::Hasher::new();
-                hasher.update(b"OMNIA-VSS-ACCUMULATE-V1");
-                hasher.update(&existing);
-                hasher.update(&share);
-                let result = hasher.finalize();
-                let mut accumulated = [0u8; 32];
-                accumulated.copy_from_slice(result.as_bytes());
-                accumulated
-            }
-            None => share,
-        });
-    }
-}
-
-/// Evaluate a polynomial at a given index using BLAKE3 domain-separated hashing.
-///
-/// Given coefficient seeds `[a_0, a_1, ..., a_{n-1}]` and an evaluation
-/// index `x`, computes the share as:
-/// ```text
-/// share = BLAKE3("OMNIA-POLY-EVAL-V1" || a_0 || a_1 || ... || a_{n-1} || x_le_bytes)
-/// ```
-///
-/// This is a deterministic, collision-resistant evaluation that binds the
-/// share to the polynomial coefficients and the evaluation index. Each
-/// participant evaluating the same polynomial at the same index will
-/// derive the same share.
-///
-/// # Security Properties
-///
-/// - **Binding**: The share is cryptographically bound to all coefficients
-///   and the index via BLAKE3's collision resistance.
-/// - **Deterministic**: The same inputs always produce the same output.
-/// - **Unique per index**: Different indices produce different shares
-///   (domain separation prevents cross-index collisions).
-fn feldman_evaluate_polynomial(coeffs: &[ScalarBytes], x: usize) -> ScalarBytes {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"OMNIA-POLY-EVAL-V1");
-    for coeff in coeffs {
-        hasher.update(coeff);
-    }
-    hasher.update(&(x as u64).to_le_bytes());
-    let hash = hasher.finalize();
-    let mut result = [0u8; 32];
-    result.copy_from_slice(hash.as_bytes());
-    result
-}
-
-/// Verify a share against Feldman commitments.
-///
-/// Checks that:
-/// 1. The share is non-trivial (not all zeros)
-/// 2. The commitments list is non-empty
-/// 3. Every commitment is a valid 96-byte compressed BLS G2 public key
-/// 4. The share is consistent with the commitment structure via a
-///    domain-separated binding hash
-///
-/// In a full Feldman VSS implementation, verification would use pairing
-/// checks to verify that `g^{s_i} == product(C_j^{index^j})` for j = 0
-/// to threshold-1. Since this crate forbids unsafe code, raw pairing
-/// operations are not available. This verification ensures structural
-/// integrity and commitment validity instead.
-///
-/// # Arguments
-///
-/// * `share` — The decrypted 32-byte share value
-/// * `index` — The 1-based participant index
-/// * `commitments` — The list of Feldman commitments (BLS public key bytes)
-///
-/// # Returns
-///
-/// `true` if the share passes all verification checks, `false` otherwise.
-fn feldman_verify_share(share: &ScalarBytes, index: usize, commitments: &[Vec<u8>]) -> bool {
-    // Check that the share is non-trivial
-    if share.iter().all(|&b| b == 0) {
-        return false;
-    }
-
-    // Check that we have at least one commitment
-    if commitments.is_empty() {
-        return false;
-    }
-
-    // Verify that all commitments are valid BLS public keys (96-byte G2 points)
-    for commitment in commitments {
-        if commitment.is_empty() {
-            return false;
+    /// This method collects shares from all participants and uses
+    /// [`bls12_381_scalar::reconstruct_secret`] to recover the constant
+    /// term of the combined polynomial, which is the group secret.
+    ///
+    /// # Arguments
+    ///
+    /// * `shares` — A vector of `(1-based index, scalar share)` pairs.
+    ///   Must contain at least `threshold` shares.
+    ///
+    /// # Returns
+    ///
+    /// The reconstructed secret as a `Scalar`, or `None` if insufficient
+    /// shares are provided or reconstruction fails.
+    pub fn reconstruct_group_secret(shares: &[(usize, Scalar)], threshold: usize) -> Option<Scalar> {
+        if shares.len() < threshold {
+            return None;
         }
-        // Each commitment should be a valid 96-byte BLS G2 public key
-        if commitment.len() != 96 {
-            return false;
-        }
-        if BlsPublicKey::from_bytes(commitment).is_err() {
-            return false;
-        }
+        bls12_381_scalar::reconstruct_secret(shares)
     }
-
-    // Verify the share-commitment binding via domain-separated hash.
-    // This checks that the share is structurally consistent with the
-    // C_0 commitment for the given index.
-    let c0 = match commitments.first() {
-        Some(c) => c,
-        None => return false,
-    };
-
-    // Compute binding hashes for the share and the C_0 commitment
-    let mut share_hasher = blake3::Hasher::new();
-    share_hasher.update(b"OMNIA-FELDMAN-VERIFY-V1");
-    share_hasher.update(share);
-    share_hasher.update(&(index as u64).to_le_bytes());
-    let share_hash = share_hasher.finalize();
-
-    let mut commit_hasher = blake3::Hasher::new();
-    commit_hasher.update(b"OMNIA-FELDMAN-COMMIT-V1");
-    commit_hasher.update(c0);
-    commit_hasher.update(&(index as u64).to_le_bytes());
-    let commit_hash = commit_hasher.finalize();
-
-    // Both hashes must be non-zero (trivial structural check).
-    // A full implementation would verify g^{s_i} == product(C_j^{index^j})
-    // via pairing checks.
-    !share_hash.as_bytes().iter().all(|&b| b == 0) && !commit_hash.as_bytes().iter().all(|&b| b == 0)
 }
 
 /// Simple XOR encryption for DKG shares (domain-separated).
@@ -1767,7 +1685,7 @@ mod tests {
         assert_eq!(session.participants.len(), 5);
         assert_eq!(session.threshold, 3);
         assert_eq!(session.phase, DkgPhase::Init);
-        assert!(session.polynomial_seeds.is_none());
+        assert!(session.polynomial_coeffs.is_none());
         assert!(session.commitments.is_empty());
         assert!(session.received_shares.is_empty());
         assert!(session.accumulated_share.is_none());
@@ -1821,10 +1739,10 @@ mod tests {
         // Phase should have advanced
         assert_eq!(session.phase, DkgPhase::ShareDistribution);
 
-        // Polynomial seeds should be set
-        assert!(session.polynomial_seeds.is_some());
-        let seeds = session.polynomial_seeds.as_ref().unwrap();
-        assert_eq!(seeds.len(), 3); // threshold = 3
+        // Polynomial coefficients should be set
+        assert!(session.polynomial_coeffs.is_some());
+        let coeffs = session.polynomial_coeffs.as_ref().unwrap();
+        assert_eq!(coeffs.len(), 3); // threshold = 3
 
         // Commitments should be stored for self
         assert!(session.commitments.contains_key(&nodes[0]));
@@ -2245,25 +2163,28 @@ mod tests {
 
     #[test]
     fn test_feldman_vss_polynomial_evaluation_deterministic() {
-        let coeffs: Vec<ScalarBytes> = vec![[1u8; 32], [2u8; 32], [3u8; 32]];
+        let coeffs: Vec<Scalar> = vec![Scalar::from_u64(1), Scalar::from_u64(2), Scalar::from_u64(3)];
+        let x5 = Scalar::from_u64(5);
 
         // Same inputs should produce same output
-        let share1 = feldman_evaluate_polynomial(&coeffs, 5);
-        let share2 = feldman_evaluate_polynomial(&coeffs, 5);
+        let share1 = bls12_381_scalar::polynomial_evaluate(&coeffs, &x5);
+        let share2 = bls12_381_scalar::polynomial_evaluate(&coeffs, &x5);
         assert_eq!(share1, share2);
 
         // Different indices should produce different shares
-        let share3 = feldman_evaluate_polynomial(&coeffs, 6);
+        let x6 = Scalar::from_u64(6);
+        let share3 = bls12_381_scalar::polynomial_evaluate(&coeffs, &x6);
         assert_ne!(share1, share3);
     }
 
     #[test]
     fn test_feldman_vss_polynomial_evaluation_different_coeffs() {
-        let coeffs1: Vec<ScalarBytes> = vec![[1u8; 32], [2u8; 32]];
-        let coeffs2: Vec<ScalarBytes> = vec![[1u8; 32], [3u8; 32]];
+        let coeffs1: Vec<Scalar> = vec![Scalar::from_u64(1), Scalar::from_u64(2)];
+        let coeffs2: Vec<Scalar> = vec![Scalar::from_u64(1), Scalar::from_u64(3)];
+        let x1 = Scalar::from_u64(1);
 
-        let share1 = feldman_evaluate_polynomial(&coeffs1, 1);
-        let share2 = feldman_evaluate_polynomial(&coeffs2, 1);
+        let share1 = bls12_381_scalar::polynomial_evaluate(&coeffs1, &x1);
+        let share2 = bls12_381_scalar::polynomial_evaluate(&coeffs2, &x1);
 
         // Different coefficients should produce different shares
         assert_ne!(share1, share2);
@@ -2276,8 +2197,8 @@ mod tests {
         let kp1 = BlsKeypair::generate(&[2u8; 32]).unwrap();
         let commitments = vec![kp0.public_key_bytes(), kp1.public_key_bytes()];
 
-        let share = [42u8; 32]; // Non-trivial share
-        let valid = feldman_verify_share(&share, 1, &commitments);
+        let share = Scalar::from_u64(42); // Non-trivial share
+        let valid = bls12_381_scalar::verify_feldman_share(&share, 1, &commitments);
         assert!(valid, "Valid commitments should pass verification");
     }
 
@@ -2286,31 +2207,31 @@ mod tests {
         let kp0 = BlsKeypair::generate(&[1u8; 32]).unwrap();
         let commitments = vec![kp0.public_key_bytes()];
 
-        let zero_share = [0u8; 32];
-        let valid = feldman_verify_share(&zero_share, 1, &commitments);
+        let zero_share = Scalar::zero();
+        let valid = bls12_381_scalar::verify_feldman_share(&zero_share, 1, &commitments);
         assert!(!valid, "Zero share should fail verification");
     }
 
     #[test]
     fn test_feldman_vss_verify_share_empty_commitments() {
-        let share = [42u8; 32];
-        let valid = feldman_verify_share(&share, 1, &[]);
+        let share = Scalar::from_u64(42);
+        let valid = bls12_381_scalar::verify_feldman_share(&share, 1, &[]);
         assert!(!valid, "Empty commitments should fail verification");
     }
 
     #[test]
     fn test_feldman_vss_verify_share_invalid_commitment_size() {
         let commitments = vec![vec![1, 2, 3]]; // Not 96 bytes
-        let share = [42u8; 32];
-        let valid = feldman_verify_share(&share, 1, &commitments);
+        let share = Scalar::from_u64(42);
+        let valid = bls12_381_scalar::verify_feldman_share(&share, 1, &commitments);
         assert!(!valid, "Invalid commitment size should fail verification");
     }
 
     #[test]
     fn test_feldman_vss_verify_share_empty_commitment_bytes() {
         let commitments = vec![vec![]];
-        let share = [42u8; 32];
-        let valid = feldman_verify_share(&share, 1, &commitments);
+        let share = Scalar::from_u64(42);
+        let valid = bls12_381_scalar::verify_feldman_share(&share, 1, &commitments);
         assert!(!valid, "Empty commitment bytes should fail verification");
     }
 
@@ -2390,7 +2311,7 @@ mod tests {
         assert_eq!(session.participants, deserialized.participants);
         assert_eq!(session.threshold, deserialized.threshold);
         assert_eq!(session.phase, deserialized.phase);
-        assert_eq!(session.polynomial_seeds, deserialized.polynomial_seeds);
+        assert_eq!(session.polynomial_coeffs, deserialized.polynomial_coeffs);
     }
 
     #[test]
@@ -2504,5 +2425,96 @@ mod tests {
                 "Key share should produce valid signatures"
             );
         }
+    }
+
+    // ─── P0-2: DKG Reconstruction Tests ──────────────────────────────
+    //
+    // These tests verify that the group secret can be reconstructed from
+    // threshold shares using Lagrange interpolation over the BLS12-381
+    // scalar field.
+
+    /// Run a full DKG session with `n` participants and `t` threshold,
+    /// then reconstruct the group secret from `t` shares.
+    fn run_dkg_reconstruction_test(n: usize, t: usize) {
+        let nodes: Vec<NodeId> = (1..=n as u8)
+            .map(|i| {
+                let mut n = [0u8; 32];
+                n[0] = i;
+                n
+            })
+            .collect();
+
+        let session_id: u64 = 42;
+        let mut rng = rand::thread_rng();
+
+        // Each participant generates shares
+        let mut sessions: Vec<FeldmanVssSession> = Vec::with_capacity(n);
+        let mut all_packages: Vec<Vec<(ParticipantId, DkgSharePackage)>> = Vec::with_capacity(n);
+
+        for i in 0..n {
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), t);
+            let packages = session.generate_shares(nodes[i], &mut rng).unwrap();
+            sessions.push(session);
+            all_packages.push(packages);
+        }
+
+        // Each participant receives shares from all others
+        for receiver_idx in 0..n {
+            for sender_idx in 0..n {
+                if sender_idx == receiver_idx {
+                    continue;
+                }
+                let (_, ref package) = all_packages[sender_idx][receiver_idx];
+                let _ = sessions[receiver_idx].receive_shares(nodes[sender_idx], package);
+            }
+        }
+
+        // Collect threshold shares for reconstruction.
+        // Each participant's accumulated_share is the sum of all their
+        // received shares (evaluated at their index). Since the combined
+        // polynomial is f(x) = sum_i f_i(x), each participant's share is
+        // f(j) where j is their 1-based index.
+        let shares: Vec<(usize, Scalar)> = sessions
+            .iter()
+            .take(t)
+            .enumerate()
+            .map(|(idx, session)| {
+                let share = session.accumulated_share.expect("accumulated share should exist");
+                (idx + 1, share) // 1-based index
+            })
+            .collect();
+
+        // Reconstruct the secret using Lagrange interpolation
+        let reconstructed = FeldmanVssSession::reconstruct_group_secret(&shares, t);
+        assert!(reconstructed.is_some(), "reconstruction should succeed with {t} shares");
+
+        // The reconstructed secret should equal the sum of all participants'
+        // constant terms (a_0 values), which is the combined secret.
+        let mut expected_secret = Scalar::zero();
+        for session in &sessions {
+            let coeffs = session.polynomial_coeffs.as_ref().unwrap();
+            expected_secret = expected_secret.add(&coeffs[0]);
+        }
+
+        assert_eq!(
+            reconstructed.unwrap(),
+            expected_secret,
+            "reconstructed secret must match sum of constant terms (t={t}, n={n})"
+        );
+    }
+
+    #[test]
+    fn test_dkg_reconstruction_3_of_5() {
+        run_dkg_reconstruction_test(5, 3);
+    }
+
+    #[test]
+    fn test_dkg_reconstruction_5_of_9() {
+        run_dkg_reconstruction_test(9, 5);
+    }
+
+    #[test]
+    fn test_dkg_reconstruction_8_of_15() {
+        run_dkg_reconstruction_test(15, 8);
     }
 }

@@ -11,6 +11,26 @@ use serde::{Deserialize, Serialize};
 use super::ops::ComputationalOp;
 use crate::shard::ShardError;
 
+/// Minimum expected byte length for a Groth16 proof over Bn254.
+///
+/// A Groth16 proof consists of three curve points:
+/// - 2 × G1 point (48 bytes uncompressed each) = 96 bytes
+/// - 1 × G2 point (96 bytes uncompressed) = 96 bytes
+///
+/// Total minimum: 192 bytes. We use the conservative lower bound of 128
+/// to allow for compressed representations.
+const MIN_GROTH16_PROOF_LEN: usize = 128;
+
+/// Check whether the proof bytes have a plausible Groth16 layout.
+///
+/// This does **not** verify cryptographic validity — it only rejects
+/// obviously malformed proofs (too short to contain the expected
+/// curve-point data). Real verification requires the `real_verification`
+/// feature flag.
+fn is_valid_zk_proof_layout(bytes: &[u8]) -> bool {
+    bytes.len() >= MIN_GROTH16_PROOF_LEN
+}
+
 /// Status of a compute task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
@@ -213,7 +233,8 @@ impl ComputationalState {
 
                 // Default (placeholder) verification: reject proofs that don't match
                 // the expected ZK proof format. When real_verification is disabled,
-                // we still require a non-empty proof to prevent accepting invalid submissions.
+                // we still validate proof structure — empty or obviously malformed
+                // proofs are rejected.
                 if proof_bytes.is_empty() {
                     task.status = TaskStatus::Failed;
                     task.last_update.merge(vc);
@@ -221,6 +242,20 @@ impl ComputationalState {
                         "Proof verification failed: empty proof bytes".into(),
                     ));
                 }
+                if !is_valid_zk_proof_layout(proof_bytes) {
+                    task.status = TaskStatus::Failed;
+                    task.last_update.merge(vc);
+                    return Err(ShardError::ValidationFailed(
+                        "Proof verification failed: proof too short for Groth16 layout".into(),
+                    ));
+                }
+                // Proof passes layout validation — placeholder accepts it.
+                // Real cryptographic verification requires the `real_verification` feature.
+                tracing::warn!(
+                    task = ?&task_id[..4],
+                    len = proof_bytes.len(),
+                    "Placeholder ZK verification: proof layout accepted without crypto verification"
+                );
                 task.status = TaskStatus::Verified;
                 task.last_update.merge(vc);
                 Ok(())
@@ -242,5 +277,100 @@ impl ComputationalState {
 impl Default for ComputationalState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use omnia_substrate::VectorClock;
+
+    /// Helper: create a VectorClock with a single node at counter 1.
+    fn test_vc() -> VectorClock {
+        VectorClock::with_node([1u8; 32], 1)
+    }
+
+    #[test]
+    fn test_malformed_proof_rejected() {
+        let mut state = ComputationalState::new();
+        let vc = test_vc();
+        let task_id = [0xAB; 32];
+
+        // 1. Submit a task
+        state
+            .apply(
+                &ComputationalOp::SubmitTask {
+                    task_id,
+                    spec: vec![1, 2, 3],
+                    reward: 100,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // 2. Submit a 1-byte (malformed) proof
+        state
+            .apply(
+                &ComputationalOp::SubmitProof {
+                    task_id,
+                    proof: vec![0xFF],
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // 3. Verify the 1-byte proof — should fail with ValidationFailed
+        let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
+        assert!(result.is_err(), "1-byte malformed proof should be rejected");
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => {
+                assert!(
+                    msg.contains("Groth16 layout"),
+                    "expected Groth16 layout error, got: {msg}"
+                );
+            }
+            other => panic!("expected ValidationFailed, got {other:?}"),
+        }
+
+        // Task should be in Failed status
+        assert_eq!(state.tasks[&task_id].status, TaskStatus::Failed);
+    }
+
+    #[test]
+    fn test_empty_proof_rejected() {
+        let mut state = ComputationalState::new();
+        let vc = test_vc();
+        let task_id = [0xCD; 32];
+
+        // Submit a task
+        state
+            .apply(
+                &ComputationalOp::SubmitTask {
+                    task_id,
+                    spec: vec![1, 2, 3],
+                    reward: 100,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Submit an empty proof
+        state
+            .apply(&ComputationalOp::SubmitProof { task_id, proof: vec![] }, &vc)
+            .unwrap();
+
+        // Verify the empty proof — should fail
+        let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
+        assert!(result.is_err(), "empty proof should be rejected");
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => {
+                assert!(
+                    msg.contains("empty proof bytes"),
+                    "expected empty proof error, got: {msg}"
+                );
+            }
+            other => panic!("expected ValidationFailed, got {other:?}"),
+        }
     }
 }
