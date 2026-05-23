@@ -17,7 +17,7 @@ omnia-adapters = { path = "../omnia-adapters" }
 omnia-node = { path = "../node" }
 omnia-substrate = { path = "../substrate" }
 
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 iai-callgrind = "0.13"
 tokio = { version = "1.38", features = ["full"] }
 rand = "0.8"
