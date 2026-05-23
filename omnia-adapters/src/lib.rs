@@ -92,8 +92,9 @@ pub use settlement::{
 #[cfg(feature = "ethereum-live")]
 pub use settlement::EthereumSettlementAdapter;
 
-// Conditionally re-export FFI adapter
-#[cfg(feature = "settlement-ffi")]
+// Conditionally re-export FFI adapter (requires both the feature flag
+// and the pre-compiled C library to be present at build time).
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 pub use settlement::FfiSettlementAdapter;
 
 // ---------------------------------------------------------------------------

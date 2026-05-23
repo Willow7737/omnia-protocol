@@ -8,6 +8,11 @@ license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 
+# Declare cfg values emitted by build.rs so the compiler knows they are valid
+# and doesn't emit "unexpected cfg" warnings.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(has_settlement_lib)", "cfg(rustc_version_compatible)"] }
+
 [dependencies]
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-crypto = { path = "../omnia-crypto" }

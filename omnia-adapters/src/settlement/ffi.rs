@@ -7,9 +7,23 @@
 //!
 //! ## Build Requirements
 //!
-//! The FFI adapter requires a pre-compiled `libsettlement.a` (or `.so`)
-//! in the `lib/` directory. If the library is not found, the `settlement-ffi`
-//! feature is automatically disabled by `build.rs`.
+//! The FFI adapter requires a pre-compiled `libsettlement.a` (Linux/macOS)
+//! or `settlement.lib` (Windows) in the `lib/` directory. If the library
+//! is not found, the `has_settlement_lib` cfg is not emitted by `build.rs`,
+//! and the FFI linkage code is excluded — even if the `settlement-ffi`
+//! Cargo feature is enabled (e.g., via `--all-features`).
+//!
+//! ## Two-Gate Design
+//!
+//! The `settlement-ffi` Cargo feature and the `has_settlement_lib` build
+//! script cfg work together:
+//!
+//! - `settlement-ffi` alone: C ABI types compile, but no FFI linkage.
+//!   This allows `--all-features` to work without linker errors on
+//!   systems that lack the pre-compiled C library.
+//! - `settlement-ffi` + `has_settlement_lib`: Full FFI adapter with
+//!   extern declarations, struct, and trait impl. Requires the static
+//!   library to be present at link time.
 //!
 //! ## Safety
 //!
@@ -22,14 +36,19 @@
 // documented with a safety proof.
 #![allow(unsafe_code)]
 
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 use super::{FinalityProof, SettlementAdapter, SettlementError, TxHash};
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 use crate::merkle::MerkleProof;
 
 // ---------------------------------------------------------------------------
 // C ABI types
 // ---------------------------------------------------------------------------
+//
+// These types are always compiled when the `settlement-ffi` feature is on,
+// even without the pre-compiled library. This allows downstream code to
+// reference the C ABI types for type-checking and documentation without
+// requiring the actual FFI linkage.
 
 /// C-compatible transaction hash (32 bytes).
 #[repr(C)]
@@ -78,8 +97,13 @@ pub struct CSettlementResult {
 // ---------------------------------------------------------------------------
 // FFI function declarations
 // ---------------------------------------------------------------------------
+//
+// These extern "C" declarations reference symbols provided by the
+// pre-compiled C library. They are only compiled when the library
+// is actually present (has_settlement_lib), because otherwise the
+// linker would emit "unresolved external symbol" errors.
 
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 extern "C" {
     /// Submit a state root to the settlement layer via the C library.
     ///
@@ -143,7 +167,7 @@ extern "C" {
 ///
 /// All FFI calls are isolated in this module. The C library is
 /// responsible for thread safety and error handling.
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 pub struct FfiSettlementAdapter {
     /// Whether the FFI client has been initialized.
     initialized: bool,
@@ -151,11 +175,11 @@ pub struct FfiSettlementAdapter {
     rpc_url: String,
 }
 
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 impl FfiSettlementAdapter {
     /// Create a new FFI settlement adapter.
     ///
-    /// The adapter is not connected until [`init`](Self::init) is called.
+    /// The adapter is not connected until `init` is called.
     /// Operations called before initialization will return an error.
     pub fn new(rpc_url: &str) -> Self {
         Self {
@@ -195,7 +219,7 @@ impl FfiSettlementAdapter {
     }
 }
 
-#[cfg(feature = "settlement-ffi")]
+#[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 #[async_trait::async_trait]
 impl SettlementAdapter for FfiSettlementAdapter {
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError> {
@@ -267,7 +291,7 @@ impl SettlementAdapter for FfiSettlementAdapter {
     }
 }
 
-#[cfg(all(test, feature = "settlement-ffi"))]
+#[cfg(all(test, feature = "settlement-ffi", has_settlement_lib))]
 mod tests {
     use super::*;
 

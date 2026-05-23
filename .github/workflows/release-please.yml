@@ -21,7 +21,12 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use RELEASE_PLEASE_TOKEN secret if available, otherwise fall back to GITHUB_TOKEN.
+          # The default GITHUB_TOKEN may lack permission to fetch merge commits
+          # and create release PRs depending on repository settings.
+          # To fix "Bad credentials" errors, create a PAT with repo scope and
+          # add it as the RELEASE_PLEASE_TOKEN repository secret.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
