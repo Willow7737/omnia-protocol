@@ -59,7 +59,7 @@ version = "0.4"
 optional = true
 
 [dependencies.ark-serialize]
-version = "0.4"
+version = "0.5"
 optional = true
 
 [dependencies.ark-snark]
