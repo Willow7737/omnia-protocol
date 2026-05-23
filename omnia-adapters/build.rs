@@ -34,8 +34,22 @@ fn main() {
         println!("cargo:rustc-env=OMNIA_RUSTC_VERSION={version}");
     }
 
-    // Enable FFI if pre-compiled library exists
-    if std::path::Path::new("lib/libsettlement.a").exists() {
+    // Enable FFI linking if pre-compiled library exists.
+    //
+    // We emit a custom cfg `has_settlement_lib` that the FFI code uses
+    // in addition to the `settlement-ffi` Cargo feature. This two-gate
+    // approach prevents linker errors when `--all-features` enables
+    // `settlement-ffi` but `libsettlement.a` is not present (e.g., on
+    // CI runners without the pre-compiled C library).
+    //
+    // The `settlement-ffi` feature alone allows the C ABI types to
+    // compile (for documentation and type-checking), but the `extern "C"`
+    // block and `FfiSettlementAdapter` impl that reference the FFI
+    // symbols require `has_settlement_lib` as well.
+    if std::path::Path::new("lib/libsettlement.a").exists()
+        || std::path::Path::new("lib/settlement.lib").exists()
+    {
+        println!("cargo:rustc-cfg=has_settlement_lib");
         println!("cargo:rustc-cfg=feature=\"settlement-ffi\"");
         println!("cargo:rustc-link-search=native=lib");
         println!("cargo:rustc-link-lib=static=settlement");
@@ -44,4 +58,5 @@ fn main() {
     // Ensure build script re-runs on changes
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=lib/libsettlement.a");
+    println!("cargo:rerun-if-changed=lib/settlement.lib");
 }
