@@ -30,6 +30,9 @@ use std::fmt;
 /// Number of bytes in a BLS12-381 scalar (256 bits).
 pub const SCALAR_BYTES: usize = 32;
 
+/// Number of bytes in a compressed G1 point on BLS12-381.
+pub const G1_COMPRESSED_SIZE: usize = 48;
+
 /// A scalar in the BLS12-381 prime order subgroup.
 ///
 /// Internally wraps `blst_fr`, which stores a 256-bit integer in
@@ -289,52 +292,216 @@ pub fn polynomial_evaluate(coeffs: &[Scalar], x: &Scalar) -> Scalar {
     result
 }
 
-/// Verify a Feldman share against commitments.
+/// Compute a Feldman commitment: `C = scalar * G1`.
 ///
-/// Checks that `g^{share} == product(C_j^{index^j})` for j = 0 to n-1,
-/// where `C_j` are the Feldman commitments and `index` is the participant
-/// index. This uses proper BLS12-381 scalar field arithmetic.
+/// This performs scalar multiplication on the G1 subgroup of BLS12-381,
+/// producing the standard Feldman commitment `C_j = a_j * G1` where `a_j`
+/// is a polynomial coefficient. The result is a compressed G1 point (48 bytes).
+///
+/// # Arguments
+///
+/// * `scalar` — The coefficient scalar `a_j`
+///
+/// * `Returns` — 48-byte compressed G1 point, or `None` if the scalar is zero.
+pub fn compute_commitment(scalar: &Scalar) -> Option<[u8; G1_COMPRESSED_SIZE]> {
+    if scalar.is_zero() {
+        return None;
+    }
+
+    // Convert Scalar (blst_fr Montgomery form) to blst_scalar (canonical form)
+    // then to raw bytes for use as a secret key, and compute PK = sk * G1.
+    let scalar_bytes = scalar.to_bytes();
+
+    // Use blst_sk_to_pk_in_g1: takes 32-byte scalar, outputs G1 point.
+    // This is equivalent to scalar * G1 where G1 is the generator.
+    unsafe {
+        let mut pk = std::mem::MaybeUninit::<blst_p1>::uninit();
+        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), scalar_bytes.as_ptr());
+        let mut compressed = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_to_affine(compressed.as_mut_ptr(), pk.as_ptr());
+        let mut out = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(out.as_mut_ptr(), compressed.as_ptr());
+        Some(out)
+    }
+}
+
+/// Derive a BLS public key in G1 from a scalar secret key.
+///
+/// This is the algebraically correct way to derive a public key from a DKG
+/// share: `PK = sk * G1`. Unlike `BlsKeypair::generate()` which hashes the
+/// seed through `key_gen` (HKDF-based), this function directly multiplies
+/// the scalar by the G1 generator, preserving algebraic consistency.
+///
+/// # Arguments
+///
+/// * `scalar` — The secret key as a BLS12-381 scalar field element
+///
+/// * `Returns` — 48-byte compressed G1 public key point
+pub fn scalar_to_g1_public_key(scalar: &Scalar) -> [u8; G1_COMPRESSED_SIZE] {
+    let scalar_bytes = scalar.to_bytes();
+    unsafe {
+        let mut pk = std::mem::MaybeUninit::<blst_p1>::uninit();
+        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), scalar_bytes.as_ptr());
+        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_to_affine(affine.as_mut_ptr(), pk.as_ptr());
+        let mut out = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        out
+    }
+}
+
+/// Aggregate multiple compressed G1 points by point addition.
+///
+/// Deserializes each 48-byte compressed G1 point, adds them together
+/// via repeated `blst_p1_add_or_double`, and returns the compressed result.
+/// Used to aggregate Feldman C_0 commitments into the group public key.
+///
+/// # Arguments
+///
+/// * `points` — Slice of 48-byte compressed G1 point references
+///
+/// * `Returns` — Compressed G1 point as `[u8; 48]`, or `None` if any point is invalid.
+pub fn aggregate_g1_points(points: &[&Vec<u8>]) -> Option<[u8; G1_COMPRESSED_SIZE]> {
+    if points.is_empty() {
+        return None;
+    }
+
+    let mut acc = blst_p1::default(); // identity (point at infinity)
+
+    for point_bytes in points {
+        if point_bytes.len() != G1_COMPRESSED_SIZE {
+            return None;
+        }
+        // Decompress
+        let affine = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+            if blst_p1_uncompress(pt.as_mut_ptr(), point_bytes.as_ptr()) != BLST_ERROR::BLST_SUCCESS {
+                return None;
+            }
+            pt.assume_init()
+        };
+        // Convert to projective
+        let proj = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_from_affine(pt.as_mut_ptr(), &affine);
+            pt.assume_init()
+        };
+        // Add to accumulator
+        acc = unsafe {
+            let mut sum = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_add_or_double(sum.as_mut_ptr(), &acc, &proj);
+            sum.assume_init()
+        };
+    }
+
+    // Compress result
+    let result = unsafe {
+        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_to_affine(affine.as_mut_ptr(), &acc);
+        let mut out = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        out
+    };
+    Some(result)
+}
+
+/// Verify a Feldman share against commitments using group operations.
+///
+/// Checks that `share * G1 == sum_{j=0}^{t-1}(index^j * C_j)` where `C_j`
+/// are the Feldman commitments (G1 points). This is the standard Feldman VSS
+/// verification equation, which verifies that the share is a valid evaluation
+/// of the polynomial whose commitments are published.
 ///
 /// # Arguments
 ///
 /// * `share` — The claimed share (a scalar)
 /// * `index` — The 1-based participant index
-/// * `commitments` — The Feldman commitments (BLS public key bytes)
+/// * `commitments` — The Feldman commitments (48-byte compressed G1 points)
 ///
-/// # Returns
-///
-/// `true` if the share is consistent with the commitments.
+/// * `Returns` — `true` if the share is consistent with the commitments.
 pub fn verify_feldman_share(share: &Scalar, index: u64, commitments: &[Vec<u8>]) -> bool {
-    // Check that the share is non-trivial
-    if share.is_zero() {
+    // Basic structural checks
+    if share.is_zero() || index == 0 || commitments.is_empty() {
         return false;
     }
 
-    // Check that commitments are non-empty
-    if commitments.is_empty() {
-        return false;
-    }
-
-    // Verify that all commitments are valid BLS public keys (96-byte G2 points)
-    for commitment in commitments {
-        if commitment.is_empty() {
-            return false;
-        }
-        if commitment.len() != 96 {
+    // All commitments must be 48-byte compressed G1 points
+    for c in commitments {
+        if c.len() != G1_COMPRESSED_SIZE {
             return false;
         }
     }
 
-    // Compute index as a scalar (used for future pairing verification)
-    let _index_scalar = Scalar::from_u64(index);
+    // Compute left side: share * G1
+    let share_bytes = share.to_bytes();
+    let left = unsafe {
+        let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+        blst_sk_to_pk_in_g1(pt.as_mut_ptr(), share_bytes.as_ptr());
+        pt.assume_init()
+    };
 
-    // In a full implementation with pairing support, this would verify:
-    // g^{share} == product(C_j^{index^j}) via pairing equation
-    // e(share*G, H) == e(sum(index^j * C_j), H)
-    //
-    // For now, we verify structural properties: the share should not be zero
-    // and index should be positive.
-    !share.is_zero() && index > 0
+    // Compute right side: sum_{j=0}^{t-1}(index^j * C_j)
+    // Using multi-scalar multiplication approach:
+    // Decompose each commitment C_j, multiply by index^j, and add to accumulator.
+    let index_scalar = Scalar::from_u64(index);
+    let mut right = blst_p1::default(); // identity (point at infinity)
+
+    let mut index_power = Scalar::one(); // index^0 = 1
+
+    for commitment_bytes in commitments {
+        // Decompress the commitment G1 point
+        let commitment_affine = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+            if blst_p1_uncompress(pt.as_mut_ptr(), commitment_bytes.as_ptr()) != BLST_ERROR::BLST_SUCCESS {
+                return false; // Invalid commitment point
+            }
+            pt.assume_init()
+        };
+
+        // Convert affine to projective for multiplication
+        let commitment_proj = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_from_affine(pt.as_mut_ptr(), &commitment_affine);
+            pt.assume_init()
+        };
+
+        // Compute index_power * C_j using double-and-add via blst
+        // Convert index_power to scalar bytes for blst multiplication
+        let power_bytes = index_power.to_bytes();
+        let term = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_mult(pt.as_mut_ptr(), &commitment_proj, power_bytes.as_ptr(), 256);
+            pt.assume_init()
+        };
+
+        // Accumulate: right += term
+        right = unsafe {
+            let mut sum = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_add_or_double(sum.as_mut_ptr(), &right, &term);
+            sum.assume_init()
+        };
+
+        // index_power *= index_scalar
+        index_power = index_power.multiply(&index_scalar);
+    }
+
+    // Compare left and right by comparing their compressed forms
+    let left_compressed = unsafe {
+        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_to_affine(affine.as_mut_ptr(), &left);
+        let mut out = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        out
+    };
+    let right_compressed = unsafe {
+        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_to_affine(affine.as_mut_ptr(), &right);
+        let mut out = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        out
+    };
+
+    left_compressed == right_compressed
 }
 
 /// Accumulate shares using field addition instead of hashing.
@@ -612,27 +779,67 @@ mod tests {
     }
 
     #[test]
-    fn test_feldman_share_verify_non_zero() {
-        let share = Scalar::from_u64(42);
-        let index = 3u64;
-        let commitments = vec![vec![1u8; 96]]; // Dummy 96-byte commitment
-        assert!(verify_feldman_share(&share, index, &commitments));
+    fn test_feldman_share_verify_valid() {
+        // f(x) = 10 + 5x, so f(3) = 25
+        // Commitments: C_0 = 10*G1, C_1 = 5*G1
+        let a0 = Scalar::from_u64(10);
+        let a1 = Scalar::from_u64(5);
+        let c0 = compute_commitment(&a0).unwrap();
+        let c1 = compute_commitment(&a1).unwrap();
+        let commitments = vec![c0.to_vec(), c1.to_vec()];
+
+        let share = polynomial_evaluate(&[a0, a1], &Scalar::from_u64(3));
+        assert!(verify_feldman_share(&share, 3, &commitments));
+    }
+
+    #[test]
+    fn test_feldman_share_verify_wrong_share_rejected() {
+        // f(x) = 10 + 5x, so f(3) = 25
+        // But we pass share = 26 (wrong)
+        let a0 = Scalar::from_u64(10);
+        let a1 = Scalar::from_u64(5);
+        let c0 = compute_commitment(&a0).unwrap();
+        let c1 = compute_commitment(&a1).unwrap();
+        let commitments = vec![c0.to_vec(), c1.to_vec()];
+
+        let wrong_share = Scalar::from_u64(26);
+        assert!(!verify_feldman_share(&wrong_share, 3, &commitments));
     }
 
     #[test]
     fn test_feldman_share_verify_zero_rejected() {
-        let share = Scalar::zero();
-        let index = 1u64;
-        let commitments = vec![vec![1u8; 96]];
-        assert!(!verify_feldman_share(&share, index, &commitments));
+        let c0 = compute_commitment(&Scalar::from_u64(42)).unwrap();
+        let commitments = vec![c0.to_vec()];
+        assert!(!verify_feldman_share(&Scalar::zero(), 1, &commitments));
     }
 
     #[test]
     fn test_feldman_share_verify_empty_commitments() {
         let share = Scalar::from_u64(42);
-        let index = 1u64;
         let commitments: Vec<Vec<u8>> = vec![];
-        assert!(!verify_feldman_share(&share, index, &commitments));
+        assert!(!verify_feldman_share(&share, 1, &commitments));
+    }
+
+    #[test]
+    fn test_feldman_share_verify_wrong_commitment_size() {
+        let share = Scalar::from_u64(42);
+        let commitments = vec![vec![1u8; 96]]; // Wrong size (96 not 48)
+        assert!(!verify_feldman_share(&share, 1, &commitments));
+    }
+
+    #[test]
+    fn test_compute_commitment_zero_returns_none() {
+        assert!(compute_commitment(&Scalar::zero()).is_none());
+    }
+
+    #[test]
+    fn test_scalar_to_g1_public_key() {
+        let scalar = Scalar::from_u64(42);
+        let pk_bytes = scalar_to_g1_public_key(&scalar);
+        assert_eq!(pk_bytes.len(), G1_COMPRESSED_SIZE);
+        // Should match compute_commitment
+        let commitment = compute_commitment(&scalar).unwrap();
+        assert_eq!(pk_bytes, commitment);
     }
 
     #[test]

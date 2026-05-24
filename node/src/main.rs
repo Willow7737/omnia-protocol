@@ -29,7 +29,7 @@ use clap::Parser;
 use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
 #[cfg(feature = "network")]
-use omnia_network::{Multiaddr, OmniaNetwork};
+use omnia_network::{Multiaddr, NetworkConfig, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 use omnia_node::pipeline::{ColdWork, PipelineRouter};
 use omnia_node::state::AppState;
@@ -170,15 +170,27 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
+
+    // A2: Populate GossipConfig.bootstrap_peers from CLI/TOML config so that
+    // the gossip layer dials the same seed nodes as the network layer.
+    // This must be set BEFORE Substrate::new() consumes the config.
+    #[cfg(feature = "network")]
+    {
+        substrate_config.gossip.bootstrap_peers = config.bootstrap_nodes.clone();
+    }
+
     let mut substrate = Substrate::new(substrate_config);
 
-    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock.
+    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock>.
     // This creates a GossipProtocol with a shared Arc<RwLock<CausalGraph>> that
     // will later be wired to the P2P network via start_with_network().
     #[cfg(feature = "network")]
     {
         substrate.init_gossip();
-        tracing::info!("Gossip protocol initialized and wired to substrate");
+        tracing::info!(
+            bootstrap_count = config.bootstrap_nodes.len(),
+            "Gossip protocol initialized with bootstrap peers"
+        );
     }
     tracing::info!(
         path = %slashing_dir.display(),
@@ -443,8 +455,17 @@ async fn spawn_background_tasks(
                 }
             };
 
+            // A2: Build a NetworkConfig that includes the bootstrap peers
+            // from CLI/TOML, so the Kademlia DHT is seeded correctly.
+            let network_config = NetworkConfig {
+                bootstrap_peers: config.bootstrap_nodes.iter()
+                    .filter_map(|addr| addr.parse::<Multiaddr>().ok())
+                    .collect(),
+                ..Default::default()
+            };
+
             // Try to create the network, but don't block if it fails
-            match OmniaNetwork::new(listen_multiaddr).await {
+            match OmniaNetwork::with_config(listen_multiaddr, network_config).await {
                 Ok(mut network) => {
                     tracing::info!("P2P network initialized");
 
