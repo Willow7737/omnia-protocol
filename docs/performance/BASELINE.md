@@ -1,10 +1,10 @@
 # Omnia Protocol — Performance Baseline
 > Audience: Performance Engineers
 > Context: Part of the performance documentation section
-> Last Updated: 2026-05-23
+> Last Updated: 2026-05-24
 
-> **Status**: Phase A — Micro-benchmark results captured (v0.1.48).
-> **Last Updated**: 2026-05-23
+> **Status**: Phase A (micro-benchmark) + Phase B (multi-node E2E) results captured (v0.1.53).
+> **Last Updated**: 2026-05-24
 
 ## Test Environment
 
@@ -45,9 +45,25 @@ Event size: 64–256 bytes (default 64)
 | **DAG insert p50 (1000 events)** | 18.28 µs |
 | **Gossip propagation p50 (sim)** | 38.93 µs |
 
-### Multi-Node BFT Note
-- Multi-node BFT finality has been validated in `substrate/tests/multi_node_test.rs`
-  with 4 honest nodes successfully reaching agreement on committed events
+### Multi-Node BFT E2E Results (v0.1.53)
+
+Multi-node BFT finality has been validated through **real libp2p networking** (QUIC transport, GossipSub protocol) in `omnia-network/tests/e2e_multi_node_consensus.rs`:
+
+| Test | Result | Description |
+|------|--------|-------------|
+| `e2e_three_node_genesis_finality` | ✅ PASS | 3 nodes reach BFT consensus on genesis events via real GossipSub |
+| `e2e_cross_ref_consensus_finality` | ✅ PASS | Multi-round cross-references achieve consensus across 3 nodes |
+| `e2e_single_producer_finality` | ✅ PASS | Single node produces 5+ events, all nodes finalize |
+| `localhost_three_node_consensus` | ✅ PASS | CI-friendly localhost test (non-ignored) |
+| `e2e_late_join_consensus` | 🔧 FIXING | Late-joining node needs cross-ref events for quorum (fixed in PR) |
+
+Simulated multi-node BFT also passes (`omnia-consensus/tests/multi_node_test.rs`):
+- 4-node BFT finality ✅
+- Byzantine fault tolerance (4 nodes, 1 faulty) ✅
+- Consensus progress with minority faults ✅
+
+**Network topology**: Bootstrap (port 9001) ← Node B (port 9002) ← Node C (port 9003)
+
 - Real distributed throughput will be lower than single-node numbers due to
   network latency, gossip overhead, and the supermajority requirement
 - Phase C network benchmarks (after multi-node testnet) will capture real distributed performance
@@ -135,6 +151,7 @@ To reach higher real-world throughput, consider:
 
 | Date | Test | Throughput | Notes |
 |------|------|-----------|-------|
+| v0.1.53 (2026-05-24) | Multi-node E2E, real P2P, 3 nodes | 4/5 tests PASS | First real multi-node testnet validation via libp2p/QUIC |
 | v0.1.48 (2026-05-23) | Micro-benchmark, synchronous, release build | ~7,190 events/sec | True pipeline throughput, no async overhead |
 | v0.1.47 (2026-05-20) | Load test, tokio async, release build | ~527 events/sec | First real benchmark capture; tokio overhead |
 | v0.1.43 (2026-05-19) | Load test, tokio async, release build | ~527 events/sec | Same as v0.1.47 |
