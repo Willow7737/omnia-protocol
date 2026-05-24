@@ -1039,9 +1039,7 @@ async fn e2e_late_join_consensus() -> Result<(), Box<dyn std::error::Error + Sen
     // that at least the intersection of committed sets is non-empty
     // (safety property) and that C has events in its graph.
     if node_c.committed_count() == 0 {
-        eprintln!(
-            "[warn] Node C has 0 committed events (late-join timing); checking graph size instead"
-        );
+        eprintln!("[warn] Node C has 0 committed events (late-join timing); checking graph size instead");
         assert!(
             node_c.graph.len() > 0,
             "Node C should have events in its graph even without finality"
