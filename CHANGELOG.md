@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.53](https://github.com/Willow7737/omnia-protocol/compare/v0.1.52...v0.1.53) (2026-05-24)
+
+
+### Bug Fixes
+
+* **ci:** sync release-please manifest + auto-fix version in Release workflow ([ce55c13](https://github.com/Willow7737/omnia-protocol/commit/ce55c13addf240d8410d84e417b0505269019afd))
+* **ci:** sync release-please manifest + auto-fix version in Release workflow ([11fdfd4](https://github.com/Willow7737/omnia-protocol/commit/11fdfd40632a903bb5335c5d404f36cbca82400f))
+
 ## [0.1.52](https://github.com/Willow7737/omnia-protocol/compare/v0.1.51...v0.1.52) (2026-05-24)
 
 
