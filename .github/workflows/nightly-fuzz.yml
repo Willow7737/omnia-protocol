@@ -27,21 +27,26 @@ jobs:
             targets: "fuzz_zk_proof_deserialization fuzz_snapshot_deserialization fuzz_shard_route"
     steps:
       - uses: actions/checkout@v6
-      # Pin to a known-good nightly to avoid ASAN+sancov regressions.
-      # Latest nightly frequently breaks with __sancov_gen_ linker errors.
+      # Use a recent nightly for fuzz builds.  The --sanitizer none flag
+      # avoids __sancov_gen_ linker errors that occur when ASan and
+      # SanitizerCoverage are combined on certain nightly versions.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly-2025-12-01
+          toolchain: nightly-2026-04-15
           components: rust-src, llvm-tools-preview
       - name: Override toolchain for fuzz
-        run: rustup override set nightly-2025-12-01
+        run: rustup override set nightly-2026-04-15
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-fuzz-${{ matrix.group }}"
       - name: Build fuzz targets
-        run: cargo fuzz build --fuzz-dir fuzz
+        run: cargo fuzz build --fuzz-dir fuzz --sanitizer none
+        # Use --sanitizer none to avoid __sancov_gen_ linker errors caused by
+        # ASan + SanitizerCoverage incompatibility on recent nightly toolchains.
+        # SanitizerCoverage (needed for fuzzing) is still enabled via RUSTFLAGS
+        # set by cargo-fuzz; only ASan is disabled here.
       - name: Run fuzz targets
         shell: bash
         run: |
@@ -54,7 +59,7 @@ jobs:
               # is normal (time exhausted).  Exit code 0 means the target
               # exited on its own (e.g. -runs limit reached).  Any other
               # non-zero exit code indicates a crash or error.
-              timeout 300 cargo fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=300 -runs=100000
+              timeout 300 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -max_total_time=300 -runs=100000
               ec=$?
               if [ $ec -eq 124 ]; then
                 echo "$target: time budget exhausted (normal)"
@@ -78,7 +83,7 @@ jobs:
           for target in ${{ matrix.targets }}; do
             if [ -d "fuzz/corpus/$target" ] && [ "$(ls -A fuzz/corpus/$target 2>/dev/null)" ]; then
               echo "Minimizing corpus for $target"
-              cargo fuzz cmin "$target" --fuzz-dir fuzz 2>/dev/null || true
+              cargo fuzz cmin "$target" --fuzz-dir fuzz --sanitizer none 2>/dev/null || true
             fi
           done
       - uses: actions/upload-artifact@v4

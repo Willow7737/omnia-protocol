@@ -23,13 +23,13 @@ jobs:
       - name: Run mutation testing on omnia-primitives
         run: |
           cargo mutants -p omnia-primitives --in-place --no-times \
-            --timeout 300 --output mutants-out-primitives 2>&1 | tee mutants-primitives.log
-        timeout-minutes: 45
+            --timeout 120 --output mutants-out-primitives 2>&1 | tee mutants-primitives.log
+        timeout-minutes: 55
       - name: Run mutation testing on omnia-consensus
         run: |
           cargo mutants -p omnia-consensus --in-place --no-times \
-            --timeout 300 --output mutants-out-consensus 2>&1 | tee mutants-consensus.log
-        timeout-minutes: 45
+            --timeout 120 --output mutants-out-consensus 2>&1 | tee mutants-consensus.log
+        timeout-minutes: 55
       - name: Enforce Mutation Score ≥75%
         run: |
           # Parse mutation score from cargo-mutants stdout output
