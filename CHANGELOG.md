@@ -8,6 +8,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.52](https://github.com/Willow7737/omnia-protocol/compare/v0.1.51...v0.1.52) (2026-05-24)
+
+
+### Features
+
+* **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([9067163](https://github.com/Willow7737/omnia-protocol/commit/90671637864dcbd0a7cdcdacb7db8428d7f0264a))
+* **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([423a7bf](https://github.com/Willow7737/omnia-protocol/commit/423a7bf1a32f5723f188f21e8c214005b5511cd7))
+* Docker Compose E2E test + benchmark regression gates (Group C) ([c1653f3](https://github.com/Willow7737/omnia-protocol/commit/c1653f3f7b0828536026c03311b252e0e21ca428))
+* wire ShardRouter + E2E multi-node consensus test (Group B) ([b0e709e](https://github.com/Willow7737/omnia-protocol/commit/b0e709e85a4e58076ce0abeba4357bbf752a7321))
+
+
+### Bug Fixes
+
+* borrow nodes in e2e test loops to avoid move-after-use ([131a47f](https://github.com/Willow7737/omnia-protocol/commit/131a47ff402c58065d64e8a98b8ba7c8d6416256))
+* **crypto:** correct blst API type mismatches + LE/BE scalar encoding ([1656553](https://github.com/Willow7737/omnia-protocol/commit/16565536bf86993ac38f432c0085a0d3279787ff))
+* HashSet::contains borrow check + clippy unwrap_used denial ([14b5477](https://github.com/Willow7737/omnia-protocol/commit/14b54771dd216ffe98e4b5b230b1f5f8adf0ad69))
+* **shards:** resolve broken rustdoc intra-doc links ([2354958](https://github.com/Willow7737/omnia-protocol/commit/23549581d7aff424246872cf1bf679ab9aff3fb2))
+
 ## [0.1.51](https://github.com/Willow7737/omnia-protocol/compare/v0.1.50...v0.1.51) (2026-05-23)
 
 
