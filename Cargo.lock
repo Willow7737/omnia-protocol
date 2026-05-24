@@ -4794,6 +4794,7 @@ dependencies = [
  "omnia-primitives",
  "postcard",
  "pqc_dilithium",
+ "proptest",
  "rand 0.8.6",
  "serde",
  "serde_bytes",

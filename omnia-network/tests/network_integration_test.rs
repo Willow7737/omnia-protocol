@@ -223,11 +223,16 @@ async fn test_safety_no_conflicting_commits() {
 
 #[tokio::test]
 async fn test_docker_compose_bft() {
-    // This test is kept as a marker for Docker-based integration testing.
-    // The actual in-memory tests above cover the same logic without
+    // The real Docker Compose E2E test now lives in:
+    //   node/tests/docker_compose_e2e.rs
+    // It exercises the full 5-node testnet with health checks, event
+    // submission, retrieval, shard operations, and cross-node consistency
+    // verification — all behind the `docker-tests` feature flag.
+    //
+    // Run it with:
+    //   cargo test -p omnia-node --test docker_compose_e2e --features docker-tests -- --nocapture
+    //
+    // The in-memory tests above cover the same consensus logic without
     // requiring external infrastructure.
-    println!("Docker Compose BFT integration test - covered by in-memory tests above");
-    println!("For full Docker-based testing:");
-    println!("  1. docker compose up -d");
-    println!("  2. cargo test -p omnia-network --test network_integration_test -- --ignored --nocapture");
+    println!("Docker Compose BFT test — see node/tests/docker_compose_e2e.rs (feature: docker-tests)");
 }

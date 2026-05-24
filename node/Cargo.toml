@@ -100,6 +100,9 @@ zk = ["omnia-adapters/arkworks", "omnia-substrate/zk", "dep:reqwest"]
 bls = ["omnia-crypto/bls", "omnia-substrate/bls", "dep:omnia-crypto"]
 pqc = ["omnia-crypto/pqc", "omnia-substrate/pqc", "dep:omnia-crypto"]
 ethereum-live = ["omnia-adapters/ethereum-live", "zk"]
+# Docker Compose E2E test — requires Docker daemon and ports 9090–9094.
+# Run with: cargo test -p omnia-node --test docker_compose_e2e --features docker-tests
+docker-tests = []
 
 [dev-dependencies]
 # HTTP client for integration tests
