@@ -110,11 +110,14 @@ jobs:
           cd openssl-${OPENSSL_VERSION}
           ./Configure linux-aarch64 --prefix=/opt/openssl-arm64 \
             --cross-compile-prefix=aarch64-linux-gnu- \
-            no-shared no-tests no-docs
-          make -j$(nproc) && sudo make install
+            no-shared no-tests
+          make -j$(nproc) && sudo make install_sw
           cd ..
           echo "OPENSSL_DIR=/opt/openssl-arm64" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=/opt/openssl-arm64/lib" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=/opt/openssl-arm64/include" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=/opt/openssl-arm64/lib/pkgconfig" >> "$GITHUB_ENV"
 
       # Build only the omnia-node binary, not the entire workspace.
       # The fuzz crate requires libfuzzer-sys which doesn't cross-compile
