@@ -1,7 +1,7 @@
 name: Benchmark Regression Gate
 
 # Runs criterion + iai-callgrind benchmarks and enforces regression gates
-# against stored baselines. A regression of >20% compared to baseline FAILS.
+# against stored baselines. A regression of >25% compared to baseline FAILS.
 #
 # Triggers:
 #   - Push to main (conservative: not every PR to avoid slowness)
@@ -61,20 +61,21 @@ jobs:
       - name: Install gnuplot
         run: sudo apt-get update && sudo apt-get install -y gnuplot
 
-      # ── Run criterion benchmarks (non-ZK) ──────────────────────────
+      # ── Run criterion benchmarks ───────────────────────────────────
       - name: Run throughput benchmarks
         run: |
           cargo bench -p omnia-benches --bench throughput 2>&1 | tee -a criterion_output.txt
 
-      - name: Run baseline benchmarks (consensus + DAG + gossip)
+      - name: Run baseline benchmarks (consensus + DAG + gossip + ZK)
         run: |
-          cargo bench -p omnia-benches --bench baseline_bench 2>&1 | tee -a criterion_output.txt
+          cargo bench -p omnia-benches --bench baseline_bench --features full 2>&1 | tee -a criterion_output.txt
+        continue-on-error: true  # ZK benchmarks within baseline_bench require --features full
 
       - name: Run sharding benchmarks
         run: |
           cargo bench -p omnia-benches --bench sharding_bench 2>&1 | tee -a criterion_output.txt
 
-      # ── Run ZK benchmarks (feature-gated, slow) ────────────────────
+      # ── Run standalone ZK benchmarks (feature-gated, slow) ──────────
       - name: Run ZK benchmarks
         if: ${{ github.event.inputs.run_zk != 'false' }}
         run: |

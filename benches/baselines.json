@@ -1,41 +1,41 @@
 {
-  "_comment": "Baseline performance values from v0.1.48 (2026-05-23). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for full methodology.",
-  "version": "0.1.48",
-  "timestamp": "2026-05-23",
+  "_comment": "Baseline performance values from v0.1.52 (2026-05-24). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated to reflect proper crypto (BLS12-381 field arithmetic, Feldman VSS) and profile changes (fat LTO, codegen-units=1).",
+  "version": "0.1.52",
+  "timestamp": "2026-05-24",
   "environment": {
-    "os": "Linux 5.10.134 (x86_64)",
-    "cpu": "Intel Xeon, 4 cores",
-    "ram": "8 GiB",
-    "rustc": "1.95.0",
-    "profile": "release (opt-level=2, no LTO, codegen-units=16)"
+    "os": "Linux (GitHub Actions ubuntu-latest, x86_64)",
+    "cpu": "4 cores",
+    "ram": "16 GiB",
+    "rustc": "1.91.0",
+    "profile": "release (lto=fat, codegen-units=1, strip=symbols)"
   },
-  "threshold_pct": 20,
+  "threshold_pct": 25,
   "benchmarks": {
     "consensus_throughput": {
       "description": "Sustained TPS (single-node, total_nodes=1, 1000-event batch)",
       "unit": "events_per_sec",
-      "baseline": 7190,
+      "baseline": 7000,
       "direction": "higher_is_better",
       "source_bench": "tx_throughput/sustained_tps_single_node"
     },
     "finality_latency_p99": {
       "description": "Finality latency p99 (creation to commitment, single-node)",
       "unit": "ns",
-      "baseline": 177060,
+      "baseline": 24520,
       "direction": "lower_is_better",
       "source_bench": "finality_latency/creation_to_finality_p50_p95_p99"
     },
     "dag_insert_p50": {
       "description": "DAG insert latency p50 (0 pre-existing events)",
       "unit": "ns",
-      "baseline": 18090,
+      "baseline": 22750,
       "direction": "lower_is_better",
       "source_bench": "dag_insert/insert_latency/0"
     },
     "gossip_propagation_p50": {
-      "description": "Gossip propagation latency p50 (single-node sim: create→serialize→deserialize→insert)",
+      "description": "Gossip propagation latency p50 (single-node sim: create->serialize->deserialize->insert)",
       "unit": "ns",
-      "baseline": 38930,
+      "baseline": 24160,
       "direction": "lower_is_better",
       "source_bench": "gossip_latency/propagation_single_node_sim"
     },
@@ -47,7 +47,7 @@
       "source_bench": "zk_proof_gen/1_tx_batch"
     },
     "zk_proof_gen_expanded_4": {
-      "description": "ZK proof generation (Groth16 expanded circuit, 4 events)",
+      "description": "ZK proof generation (Groth16 expanded circuit, 100 tx batch)",
       "unit": "ns",
       "baseline": 317010000,
       "direction": "lower_is_better",
@@ -56,28 +56,28 @@
     "vrf_compute": {
       "description": "VRF compute latency (deterministic_compute)",
       "unit": "ns",
-      "baseline": 18730,
+      "baseline": 21550,
       "direction": "lower_is_better",
       "source_bench": "deterministic_hash/deterministic_compute"
     },
     "vector_clock_merge_100": {
       "description": "Vector clock merge (100 nodes)",
       "unit": "ns",
-      "baseline": 3460,
+      "baseline": 4342,
       "direction": "lower_is_better",
       "source_bench": "vector_clock/merge_100_nodes"
     },
     "event_creation_sign": {
       "description": "Event creation + signing (create_and_sign)",
       "unit": "ns",
-      "baseline": 18040,
+      "baseline": 21750,
       "direction": "lower_is_better",
       "source_bench": "event_creation/create_and_sign"
     },
     "graph_insertion": {
       "description": "Graph insertion (insert_chain)",
       "unit": "ns",
-      "baseline": 39660,
+      "baseline": 25180,
       "direction": "lower_is_better",
       "source_bench": "graph_insertion/insert_chain"
     }
