@@ -4647,7 +4647,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-adapters"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "alloy",
  "ark-bn254",
@@ -4685,7 +4685,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-benches"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -4708,7 +4708,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-binding"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "blake3",
  "ed25519-dalek",
@@ -4732,7 +4732,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-chaos-tests"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "anyhow",
  "blake3",
@@ -4756,7 +4756,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-consensus"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "blake3",
  "ed25519-dalek",
@@ -4779,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-crypto"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "aes-gcm",
  "bip39",
@@ -4807,7 +4807,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-economics"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "omnia-primitives",
  "omnia-substrate",
@@ -4821,7 +4821,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-fuzz"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "libfuzzer-sys",
  "omnia-adapters",
@@ -4838,7 +4838,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-network"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "blake3",
  "chrono",
@@ -4861,7 +4861,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-node"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -4901,7 +4901,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-primitives"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "bincode",
  "blake3",
@@ -4920,7 +4920,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-shards"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -4950,7 +4950,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-substrate"
-version = "0.1.51"
+version = "0.1.52"
 dependencies = [
  "aes-gcm",
  "async-trait",
