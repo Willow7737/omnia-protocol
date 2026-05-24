@@ -57,7 +57,7 @@ fn test_node(id: u8) -> NodeId {
 /// can create, sign, insert, and finalize per second in steady state.
 fn tx_throughput_bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("tx_throughput");
-    group.throughput(Throughput::Elements(1));
+    group.throughput(Throughput::Elements(1000)); // Each iteration processes a 1000-event batch
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(20);
 

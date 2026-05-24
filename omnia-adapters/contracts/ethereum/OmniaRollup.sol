@@ -88,13 +88,13 @@ contract OmniaRollup {
         21888242871839275222246405745257275088696311157297823662689037894645226208583;
 
     /// @dev Precompile address for elliptic curve point addition on G1 (EIP-196).
-    address private constant EC_ADD_PRECOMPILE = address(0x06);
+    uint256 private constant EC_ADD_PRECOMPILE = 0x06;
 
     /// @dev Precompile address for elliptic curve scalar multiplication on G1 (EIP-196).
-    address private constant EC_MUL_PRECOMPILE = address(0x07);
+    uint256 private constant EC_MUL_PRECOMPILE = 0x07;
 
     /// @dev Precompile address for elliptic curve pairing check (EIP-197).
-    address private constant EC_PAIRING_PRECOMPILE = address(0x08);
+    uint256 private constant EC_PAIRING_PRECOMPILE = 0x08;
 
     // -----------------------------------------------------------------------
     // Structs
@@ -148,13 +148,15 @@ contract OmniaRollup {
     G1Point public vkAlpha;
 
     /// @notice Beta G2 point of the verifying key.
-    G2Point public vkBeta;
+    /// @dev Not marked `public` because solc auto-generated getters for structs
+    ///      containing fixed-size arrays may not compile on all versions.
+    G2Point internal vkBeta;
 
     /// @notice Gamma G2 point of the verifying key.
-    G2Point public vkGamma;
+    G2Point internal vkGamma;
 
     /// @notice Delta G2 point of the verifying key.
-    G2Point public vkDelta;
+    G2Point internal vkDelta;
 
     /// @notice IC (gamma-ABC) G1 commitments. Length = numPublicInputs + 1.
     ///         IC[0] is the constant term; IC[i] corresponds to public input i-1.
@@ -583,5 +585,20 @@ contract OmniaRollup {
     ///         This equals (number of public inputs) + 1.
     function vkICLength() external view returns (uint256) {
         return vkIC.length;
+    }
+
+    /// @notice Returns the beta G2 point of the verifying key.
+    function getVkBeta() external view returns (uint256[2] memory x, uint256[2] memory y) {
+        return (vkBeta.x, vkBeta.y);
+    }
+
+    /// @notice Returns the gamma G2 point of the verifying key.
+    function getVkGamma() external view returns (uint256[2] memory x, uint256[2] memory y) {
+        return (vkGamma.x, vkGamma.y);
+    }
+
+    /// @notice Returns the delta G2 point of the verifying key.
+    function getVkDelta() external view returns (uint256[2] memory x, uint256[2] memory y) {
+        return (vkDelta.x, vkDelta.y);
     }
 }

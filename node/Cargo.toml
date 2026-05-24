@@ -80,7 +80,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 
 # HTTP client for ceremony server communication
-reqwest = { version = "0.12", features = ["json"], optional = true }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false, optional = true }
 
 # OpenAPI spec generation — auto-documents all REST endpoints
 utoipa = "5"
@@ -106,7 +106,7 @@ docker-tests = []
 
 [dev-dependencies]
 # HTTP client for integration tests
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
 utoipa = "5"
 # Tower ServiceExt for oneshot testing of axum routers
