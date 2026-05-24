@@ -8,6 +8,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.54](https://github.com/Willow7737/omnia-protocol/compare/v0.1.53...v0.1.54) (2026-05-24)
+
+
+### Bug Fixes
+
+* **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([0901de9](https://github.com/Willow7737/omnia-protocol/commit/0901de905b89d8b3d4020f54f5b47586285509a2))
+* **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([717961e](https://github.com/Willow7737/omnia-protocol/commit/717961e7c5802d662597367a56764bc660f1447a))
+* **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([44f5287](https://github.com/Willow7737/omnia-protocol/commit/44f5287ef539adab68d11009f5b40f83747a1668))
+* **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([1b15de6](https://github.com/Willow7737/omnia-protocol/commit/1b15de63290b2f450e275e3ce95189ad001ec57c))
+* **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([c4a7566](https://github.com/Willow7737/omnia-protocol/commit/c4a75663f55e2ab040f073c5b9070df9ffc0a928))
+* **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([9c4d15a](https://github.com/Willow7737/omnia-protocol/commit/9c4d15a556eb688c618eddfef574ddb822ec3784))
+
 ## [0.1.53](https://github.com/Willow7737/omnia-protocol/compare/v0.1.52...v0.1.53) (2026-05-24)
 
 
