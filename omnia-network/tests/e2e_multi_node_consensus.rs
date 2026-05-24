@@ -41,8 +41,8 @@
 
 use libp2p::{Multiaddr, PeerId};
 use omnia_consensus::{
-    CausalGraph, CausalGraphError, ConsensusConfig, ConsensusEngine, ConsensusState,
-    SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    CausalGraph, CausalGraphError, ConsensusConfig, ConsensusEngine, ConsensusState, SlashingEngine,
+    DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
 };
 use omnia_crypto::generate_keypair;
 use omnia_crypto::NodeKeypair;
@@ -185,10 +185,7 @@ impl E2ETestNode {
         }
 
         // Process through consensus
-        let committed = self
-            .consensus
-            .process_event(event, &self.graph)
-            .unwrap_or_default();
+        let committed = self.consensus.process_event(event, &self.graph).unwrap_or_default();
 
         // Publish via gossip
         let bytes = event.to_bytes().expect("event serialization should succeed");
@@ -234,9 +231,7 @@ impl E2ETestNode {
                                 Ok(()) => {
                                     received_count += 1;
                                     // Process through consensus
-                                    if let Ok(committed) =
-                                        self.consensus.process_event(&event, &self.graph)
-                                    {
+                                    if let Ok(committed) = self.consensus.process_event(&event, &self.graph) {
                                         all_committed.extend(committed);
                                     }
                                 }
@@ -244,11 +239,7 @@ impl E2ETestNode {
                                     // Already have it — skip
                                 }
                                 Err(e) => {
-                                    eprintln!(
-                                        "[node={:?}] Graph insert failed: {:?}",
-                                        &self.node_id[..4],
-                                        e
-                                    );
+                                    eprintln!("[node={:?}] Graph insert failed: {:?}", &self.node_id[..4], e);
                                 }
                             }
                         }
@@ -262,28 +253,17 @@ impl E2ETestNode {
                     }
                 }
                 Ok(NetworkEvent::PeerConnected(pid)) => {
-                    eprintln!(
-                        "[node={:?}] Peer connected: {:?}",
-                        &self.node_id[..4],
-                        pid
-                    );
+                    eprintln!("[node={:?}] Peer connected: {:?}", &self.node_id[..4], pid);
                 }
                 Ok(NetworkEvent::PeerDisconnected(pid)) => {
-                    eprintln!(
-                        "[node={:?}] Peer disconnected: {:?}",
-                        &self.node_id[..4],
-                        pid
-                    );
+                    eprintln!("[node={:?}] Peer disconnected: {:?}", &self.node_id[..4], pid);
                 }
                 Ok(_) => {
                     // Skip other network events
                 }
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    eprintln!(
-                        "[node={:?}] Event channel disconnected",
-                        &self.node_id[..4]
-                    );
+                    eprintln!("[node={:?}] Event channel disconnected", &self.node_id[..4]);
                     break;
                 }
             }
@@ -433,10 +413,7 @@ fn all_committed_sets_equal(nodes: &[E2ETestNode]) -> bool {
 /// elapses.
 ///
 /// Returns `Ok(())` if convergence was achieved, `Err(String)` otherwise.
-async fn wait_for_finality_convergence(
-    nodes: &mut [E2ETestNode],
-    timeout_duration: Duration,
-) -> Result<(), String> {
+async fn wait_for_finality_convergence(nodes: &mut [E2ETestNode], timeout_duration: Duration) -> Result<(), String> {
     let start = std::time::Instant::now();
     let mut steps = 0u64;
 
@@ -509,12 +486,24 @@ async fn e2e_three_node_genesis_finality() -> Result<(), Box<dyn std::error::Err
     let addr_a: Multiaddr = "/ip4/127.0.0.1/udp/9001/quic-v1".parse()?;
 
     // Spawn Node B, dialing A as bootstrap
-    let mut node_b =
-        spawn_node(9002, vec![(node_a.peer_id, addr_a.clone())], &configs[1], &validator_ids, total_nodes).await?;
+    let mut node_b = spawn_node(
+        9002,
+        vec![(node_a.peer_id, addr_a.clone())],
+        &configs[1],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Spawn Node C, dialing A as bootstrap
-    let mut node_c =
-        spawn_node(9003, vec![(node_a.peer_id, addr_a)], &configs[2], &validator_ids, total_nodes).await?;
+    let mut node_c = spawn_node(
+        9003,
+        vec![(node_a.peer_id, addr_a)],
+        &configs[2],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for GossipSub mesh to form (requires heartbeat exchange)
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -658,10 +647,7 @@ async fn e2e_three_node_genesis_finality() -> Result<(), Box<dyn std::error::Err
                 .collect();
 
             if !intersection.is_empty() {
-                eprintln!(
-                    "[partial] All nodes agree on {} committed events",
-                    intersection.len()
-                );
+                eprintln!("[partial] All nodes agree on {} committed events", intersection.len());
             } else {
                 eprintln!("[warn] No common committed events across all nodes yet");
             }
@@ -696,10 +682,22 @@ async fn e2e_cross_ref_consensus_finality() -> Result<(), Box<dyn std::error::Er
     // Spawn nodes
     let mut node_a = spawn_node(9011, Vec::new(), &configs[0], &validator_ids, total_nodes).await?;
     let addr_a: Multiaddr = "/ip4/127.0.0.1/udp/9011/quic-v1".parse()?;
-    let mut node_b =
-        spawn_node(9012, vec![(node_a.peer_id, addr_a.clone())], &configs[1], &validator_ids, total_nodes).await?;
-    let mut node_c =
-        spawn_node(9013, vec![(node_a.peer_id, addr_a)], &configs[2], &validator_ids, total_nodes).await?;
+    let mut node_b = spawn_node(
+        9012,
+        vec![(node_a.peer_id, addr_a.clone())],
+        &configs[1],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
+    let mut node_c = spawn_node(
+        9013,
+        vec![(node_a.peer_id, addr_a)],
+        &configs[2],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for mesh formation
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -788,18 +786,9 @@ async fn e2e_cross_ref_consensus_finality() -> Result<(), Box<dyn std::error::Er
     );
 
     // Safety: every node should have at least some committed events
-    assert!(
-        node_a.committed_count() > 0,
-        "Node A should have committed events"
-    );
-    assert!(
-        node_b.committed_count() > 0,
-        "Node B should have committed events"
-    );
-    assert!(
-        node_c.committed_count() > 0,
-        "Node C should have committed events"
-    );
+    assert!(node_a.committed_count() > 0, "Node A should have committed events");
+    assert!(node_b.committed_count() > 0, "Node B should have committed events");
+    assert!(node_c.committed_count() > 0, "Node C should have committed events");
 
     match convergence {
         Ok(()) => {
@@ -830,10 +819,7 @@ async fn e2e_cross_ref_consensus_finality() -> Result<(), Box<dyn std::error::Er
                 "All nodes must agree on at least some committed events (intersection is empty)"
             );
 
-            eprintln!(
-                "[partial] All nodes agree on {} committed events",
-                intersection.len()
-            );
+            eprintln!("[partial] All nodes agree on {} committed events", intersection.len());
         }
     }
 
@@ -871,10 +857,22 @@ async fn e2e_single_producer_finality() -> Result<(), Box<dyn std::error::Error 
     // Spawn nodes
     let mut node_a = spawn_node(9021, Vec::new(), &configs[0], &validator_ids, total_nodes).await?;
     let addr_a: Multiaddr = "/ip4/127.0.0.1/udp/9021/quic-v1".parse()?;
-    let mut node_b =
-        spawn_node(9022, vec![(node_a.peer_id, addr_a.clone())], &configs[1], &validator_ids, total_nodes).await?;
-    let mut node_c =
-        spawn_node(9023, vec![(node_a.peer_id, addr_a)], &configs[2], &validator_ids, total_nodes).await?;
+    let mut node_b = spawn_node(
+        9022,
+        vec![(node_a.peer_id, addr_a.clone())],
+        &configs[1],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
+    let mut node_c = spawn_node(
+        9023,
+        vec![(node_a.peer_id, addr_a)],
+        &configs[2],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for mesh formation
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -914,18 +912,9 @@ async fn e2e_single_producer_finality() -> Result<(), Box<dyn std::error::Error 
     let [node_a, node_b, node_c] = nodes;
 
     // Verify every node has committed events
-    assert!(
-        node_a.committed_count() > 0,
-        "Node A should have committed events"
-    );
-    assert!(
-        node_b.committed_count() > 0,
-        "Node B should have committed events"
-    );
-    assert!(
-        node_c.committed_count() > 0,
-        "Node C should have committed events"
-    );
+    assert!(node_a.committed_count() > 0, "Node A should have committed events");
+    assert!(node_b.committed_count() > 0, "Node B should have committed events");
+    assert!(node_c.committed_count() > 0, "Node C should have committed events");
 
     // Verify the intersection of committed sets is non-empty
     let committed_a = node_a.committed_set();
@@ -970,8 +959,14 @@ async fn e2e_late_join_consensus() -> Result<(), Box<dyn std::error::Error + Sen
     // Spawn initial 2 nodes
     let mut node_a = spawn_node(9031, Vec::new(), &configs[0], &validator_ids, total_nodes).await?;
     let addr_a: Multiaddr = "/ip4/127.0.0.1/udp/9031/quic-v1".parse()?;
-    let mut node_b =
-        spawn_node(9032, vec![(node_a.peer_id, addr_a.clone())], &configs[1], &validator_ids, total_nodes).await?;
+    let mut node_b = spawn_node(
+        9032,
+        vec![(node_a.peer_id, addr_a.clone())],
+        &configs[1],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for mesh formation between A and B
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -997,8 +992,14 @@ async fn e2e_late_join_consensus() -> Result<(), Box<dyn std::error::Error + Sen
     );
 
     // --- Node C joins the network ---
-    let mut node_c =
-        spawn_node(9033, vec![(node_a.peer_id, addr_a)], &configs[2], &validator_ids, total_nodes).await?;
+    let mut node_c = spawn_node(
+        9033,
+        vec![(node_a.peer_id, addr_a)],
+        &configs[2],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for C to join the GossipSub mesh
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -1065,10 +1066,22 @@ async fn localhost_three_node_consensus() -> Result<(), Box<dyn std::error::Erro
     // Use higher port numbers to avoid conflicts with ignored tests
     let mut node_a = spawn_node(19001, Vec::new(), &configs[0], &validator_ids, total_nodes).await?;
     let addr_a: Multiaddr = "/ip4/127.0.0.1/udp/19001/quic-v1".parse()?;
-    let mut node_b =
-        spawn_node(19002, vec![(node_a.peer_id, addr_a.clone())], &configs[1], &validator_ids, total_nodes).await?;
-    let mut node_c =
-        spawn_node(19003, vec![(node_a.peer_id, addr_a)], &configs[2], &validator_ids, total_nodes).await?;
+    let mut node_b = spawn_node(
+        19002,
+        vec![(node_a.peer_id, addr_a.clone())],
+        &configs[1],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
+    let mut node_c = spawn_node(
+        19003,
+        vec![(node_a.peer_id, addr_a)],
+        &configs[2],
+        &validator_ids,
+        total_nodes,
+    )
+    .await?;
 
     // Wait for mesh formation
     tokio::time::sleep(MESH_FORMATION_DELAY).await;
@@ -1102,8 +1115,14 @@ async fn localhost_three_node_consensus() -> Result<(), Box<dyn std::error::Erro
     match convergence {
         Ok(()) => {
             // Full convergence — verify committed sets are identical
-            assert_eq!(committed_a, committed_b, "Nodes A and B should have identical committed sets");
-            assert_eq!(committed_b, committed_c, "Nodes B and C should have identical committed sets");
+            assert_eq!(
+                committed_a, committed_b,
+                "Nodes A and B should have identical committed sets"
+            );
+            assert_eq!(
+                committed_b, committed_c,
+                "Nodes B and C should have identical committed sets"
+            );
             assert!(
                 !committed_a.is_empty(),
                 "Committed set should not be empty after convergence"
@@ -1127,10 +1146,7 @@ async fn localhost_three_node_consensus() -> Result<(), Box<dyn std::error::Erro
 
             // Still verify that at least some events are in graphs
             let total_events = node_a.graph.len() + node_b.graph.len() + node_c.graph.len();
-            assert!(
-                total_events > 0,
-                "At least some events should be in the graphs"
-            );
+            assert!(total_events > 0, "At least some events should be in the graphs");
         }
     }
 

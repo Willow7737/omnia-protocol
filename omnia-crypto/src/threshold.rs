@@ -1110,8 +1110,7 @@ impl FeldmanVssSession {
         let own_pk_g1 = bls12_381_scalar::scalar_to_g1_public_key(&own_share_scalar);
 
         // Construct BlsKeypair from the raw scalar secret key and its G1 public key.
-        let own_keypair = BlsKeypair::from_scalar(&own_share_seed, &own_pk_g1)
-            .map_err(DkgError::BlsError)?;
+        let own_keypair = BlsKeypair::from_scalar(&own_share_seed, &own_pk_g1).map_err(DkgError::BlsError)?;
 
         let my_id = self
             .own_id
@@ -2206,20 +2205,24 @@ mod tests {
 
     #[test]
     fn test_feldman_vss_verify_share_valid_commitments() {
-        // Create valid commitments (BLS public keys)
-        let kp0 = BlsKeypair::generate(&[1u8; 32]).unwrap();
-        let kp1 = BlsKeypair::generate(&[2u8; 32]).unwrap();
-        let commitments = vec![kp0.public_key_bytes(), kp1.public_key_bytes()];
+        // Create valid G1 commitments using compute_commitment (Feldman C_j = a_j * G1)
+        let a0 = Scalar::from_u64(10);
+        let a1 = Scalar::from_u64(5);
+        let c0 = bls12_381_scalar::compute_commitment(&a0).unwrap();
+        let c1 = bls12_381_scalar::compute_commitment(&a1).unwrap();
+        let commitments = vec![c0.to_vec(), c1.to_vec()];
 
-        let share = Scalar::from_u64(42); // Non-trivial share
+        // f(x) = 10 + 5x, f(1) = 15
+        let share = bls12_381_scalar::polynomial_evaluate(&[a0, a1], &Scalar::from_u64(1));
         let valid = bls12_381_scalar::verify_feldman_share(&share, 1, &commitments);
         assert!(valid, "Valid commitments should pass verification");
     }
 
     #[test]
     fn test_feldman_vss_verify_share_zero_share() {
-        let kp0 = BlsKeypair::generate(&[1u8; 32]).unwrap();
-        let commitments = vec![kp0.public_key_bytes()];
+        let a0 = Scalar::from_u64(42);
+        let c0 = bls12_381_scalar::compute_commitment(&a0).unwrap();
+        let commitments = vec![c0.to_vec()];
 
         let zero_share = Scalar::zero();
         let valid = bls12_381_scalar::verify_feldman_share(&zero_share, 1, &commitments);
@@ -2602,11 +2605,7 @@ mod tests {
 
         // Step 3: Verify all participants have sufficient shares
         for session in &sessions {
-            assert!(
-                session.has_sufficient_shares(),
-                "should have at least {} shares",
-                t
-            );
+            assert!(session.has_sufficient_shares(), "should have at least {} shares", t);
         }
 
         // Step 4: Reconstruct the group secret from accumulated shares

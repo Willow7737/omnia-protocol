@@ -475,7 +475,9 @@ async fn spawn_background_tasks(
             // A2: Build a NetworkConfig that includes the bootstrap peers
             // from CLI/TOML, so the Kademlia DHT is seeded correctly.
             let network_config = NetworkConfig {
-                bootstrap_peers: config.bootstrap_nodes.iter()
+                bootstrap_peers: config
+                    .bootstrap_nodes
+                    .iter()
                     .filter_map(|addr| addr.parse::<Multiaddr>().ok())
                     .collect(),
                 ..Default::default()

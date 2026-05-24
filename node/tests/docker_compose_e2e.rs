@@ -127,15 +127,7 @@ fn node_url(port: u16) -> String {
 fn compose_up(project_root: &PathBuf) {
     eprintln!("[docker-e2e] Starting Docker Compose stack (this may take a while on first run)…");
     let output = Command::new("docker")
-        .args([
-            "compose",
-            "-f",
-            COMPOSE_FILE,
-            "up",
-            "-d",
-            "--build",
-            "--wait",
-        ])
+        .args(["compose", "-f", COMPOSE_FILE, "up", "-d", "--build", "--wait"])
         .current_dir(project_root)
         .output()
         .expect("failed to run docker compose up");
@@ -199,12 +191,7 @@ async fn wait_for_healthy(client: &reqwest::Client) {
 }
 
 /// Submit a single event to the given node, returning the event ID on success.
-async fn submit_event(
-    client: &reqwest::Client,
-    port: u16,
-    payload: &str,
-    event_type: &str,
-) -> String {
+async fn submit_event(client: &reqwest::Client, port: u16, payload: &str, event_type: &str) -> String {
     let url = format!("{}/api/v1/events", node_url(port));
     let body = json!({
         "payload": payload,
@@ -351,14 +338,15 @@ async fn test_docker_compose_5node_e2e() {
 
         assert_eq!(resp.status(), StatusCode::OK, "Node on port {port} should be alive");
         let body: Value = resp.json().await.expect("Failed to parse health response");
-        assert_eq!(body["status"], "alive", "Health response should have status=alive for port {port}");
+        assert_eq!(
+            body["status"], "alive",
+            "Health response should have status=alive for port {port}"
+        );
     }
     eprintln!("[docker-e2e] All nodes are alive.");
 
     // ── Step 4: Submit a batch of events via the bootstrap node ──────────
-    eprintln!(
-        "[docker-e2e] Submitting {EVENT_BATCH_SIZE} events to bootstrap node (port 9090)…"
-    );
+    eprintln!("[docker-e2e] Submitting {EVENT_BATCH_SIZE} events to bootstrap node (port 9090)…");
     let mut event_ids = Vec::with_capacity(EVENT_BATCH_SIZE);
     for i in 0..EVENT_BATCH_SIZE {
         let payload = hex::encode(format!("docker-e2e-event-{i}"));
@@ -440,9 +428,7 @@ async fn test_docker_compose_5node_e2e() {
         "Each node should have a unique node_id, got: {node_ids:?}"
     );
 
-    eprintln!(
-        "[docker-e2e] Node info consistent: protocol_version={first_version}, shard_count={first_shard_count}"
-    );
+    eprintln!("[docker-e2e] Node info consistent: protocol_version={first_version}, shard_count={first_shard_count}");
 
     // ── Step 7: Verify shard operations (economics) on bootstrap node ────
     eprintln!("[docker-e2e] Testing shard operations on bootstrap node…");
@@ -493,7 +479,9 @@ async fn test_docker_compose_5node_e2e() {
         // Balance endpoint returns 200 with amount or 404 if DID not registered
         eprintln!("[docker-e2e] Mint succeeded, balance response: {balance_resp:?}");
     } else {
-        eprintln!("[docker-e2e] Mint returned 403 (expected without OMNIA_AUTHORIZED_CALLERS) — auth is working correctly.");
+        eprintln!(
+            "[docker-e2e] Mint returned 403 (expected without OMNIA_AUTHORIZED_CALLERS) — auth is working correctly."
+        );
     }
 
     eprintln!("[docker-e2e] Shard operations verified.");
@@ -541,7 +529,10 @@ async fn test_docker_compose_5node_e2e() {
             "Peers endpoint on port {port} should return 200"
         );
     }
-    eprintln!("[docker-e2e] All API endpoints verified on all {} nodes.", NODE_PORTS.len());
+    eprintln!(
+        "[docker-e2e] All API endpoints verified on all {} nodes.",
+        NODE_PORTS.len()
+    );
 
     // ── Cleanup ──────────────────────────────────────────────────────────
     guard.down();

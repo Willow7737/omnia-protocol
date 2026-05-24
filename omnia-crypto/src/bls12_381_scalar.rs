@@ -309,18 +309,20 @@ pub fn compute_commitment(scalar: &Scalar) -> Option<[u8; G1_COMPRESSED_SIZE]> {
     }
 
     // Convert Scalar (blst_fr Montgomery form) to blst_scalar (canonical form)
-    // then to raw bytes for use as a secret key, and compute PK = sk * G1.
-    let scalar_bytes = scalar.to_bytes();
-
-    // Use blst_sk_to_pk_in_g1: takes 32-byte scalar, outputs G1 point.
+    // then compute PK = sk * G1 using blst_sk_to_pk_in_g1.
     // This is equivalent to scalar * G1 where G1 is the generator.
     unsafe {
+        // Convert blst_fr -> blst_scalar (canonical representation)
+        let mut blst_scalar_val = std::mem::MaybeUninit::<blst_scalar>::uninit();
+        blst_scalar_from_fr(blst_scalar_val.as_mut_ptr(), &scalar.inner);
+
+        // Compute pk = scalar * G1
         let mut pk = std::mem::MaybeUninit::<blst_p1>::uninit();
-        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), scalar_bytes.as_ptr());
-        let mut compressed = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
-        blst_p1_to_affine(compressed.as_mut_ptr(), pk.as_ptr());
+        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), blst_scalar_val.as_ptr());
+
+        // Compress the projective point directly
         let mut out = [0u8; G1_COMPRESSED_SIZE];
-        blst_p1_compress(out.as_mut_ptr(), compressed.as_ptr());
+        blst_p1_compress(out.as_mut_ptr(), pk.as_ptr());
         Some(out)
     }
 }
@@ -338,14 +340,18 @@ pub fn compute_commitment(scalar: &Scalar) -> Option<[u8; G1_COMPRESSED_SIZE]> {
 ///
 /// * `Returns` — 48-byte compressed G1 public key point
 pub fn scalar_to_g1_public_key(scalar: &Scalar) -> [u8; G1_COMPRESSED_SIZE] {
-    let scalar_bytes = scalar.to_bytes();
     unsafe {
+        // Convert blst_fr -> blst_scalar (canonical representation)
+        let mut blst_scalar_val = std::mem::MaybeUninit::<blst_scalar>::uninit();
+        blst_scalar_from_fr(blst_scalar_val.as_mut_ptr(), &scalar.inner);
+
+        // Compute pk = scalar * G1
         let mut pk = std::mem::MaybeUninit::<blst_p1>::uninit();
-        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), scalar_bytes.as_ptr());
-        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
-        blst_p1_to_affine(affine.as_mut_ptr(), pk.as_ptr());
+        blst_sk_to_pk_in_g1(pk.as_mut_ptr(), blst_scalar_val.as_ptr());
+
+        // Compress the projective point directly
         let mut out = [0u8; G1_COMPRESSED_SIZE];
-        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        blst_p1_compress(out.as_mut_ptr(), pk.as_ptr());
         out
     }
 }
@@ -394,12 +400,10 @@ pub fn aggregate_g1_points(points: &[&Vec<u8>]) -> Option<[u8; G1_COMPRESSED_SIZ
         };
     }
 
-    // Compress result
+    // Compress result (from projective directly)
     let result = unsafe {
-        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
-        blst_p1_to_affine(affine.as_mut_ptr(), &acc);
         let mut out = [0u8; G1_COMPRESSED_SIZE];
-        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        blst_p1_compress(out.as_mut_ptr(), &acc);
         out
     };
     Some(result)
@@ -433,10 +437,13 @@ pub fn verify_feldman_share(share: &Scalar, index: u64, commitments: &[Vec<u8>])
     }
 
     // Compute left side: share * G1
-    let share_bytes = share.to_bytes();
     let left = unsafe {
+        // Convert blst_fr -> blst_scalar (canonical representation)
+        let mut blst_scalar_val = std::mem::MaybeUninit::<blst_scalar>::uninit();
+        blst_scalar_from_fr(blst_scalar_val.as_mut_ptr(), &share.inner);
+
         let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
-        blst_sk_to_pk_in_g1(pt.as_mut_ptr(), share_bytes.as_ptr());
+        blst_sk_to_pk_in_g1(pt.as_mut_ptr(), blst_scalar_val.as_ptr());
         pt.assume_init()
     };
 
@@ -487,17 +494,13 @@ pub fn verify_feldman_share(share: &Scalar, index: u64, commitments: &[Vec<u8>])
 
     // Compare left and right by comparing their compressed forms
     let left_compressed = unsafe {
-        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
-        blst_p1_to_affine(affine.as_mut_ptr(), &left);
         let mut out = [0u8; G1_COMPRESSED_SIZE];
-        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        blst_p1_compress(out.as_mut_ptr(), &left);
         out
     };
     let right_compressed = unsafe {
-        let mut affine = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
-        blst_p1_to_affine(affine.as_mut_ptr(), &right);
         let mut out = [0u8; G1_COMPRESSED_SIZE];
-        blst_p1_compress(out.as_mut_ptr(), affine.as_ptr());
+        blst_p1_compress(out.as_mut_ptr(), &right);
         out
     };
 

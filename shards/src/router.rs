@@ -366,9 +366,10 @@ impl MutexShardRouter {
 impl omnia_substrate::EventProcessor for MutexShardRouter {
     #[allow(deprecated)]
     fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
-        let mut guard = self.inner.lock().map_err(|e| {
-            omnia_substrate::EventProcessorError::Internal(format!("ShardRouter mutex poisoned: {e}"))
-        })?;
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|e| omnia_substrate::EventProcessorError::Internal(format!("ShardRouter mutex poisoned: {e}")))?;
         guard.process_event(event)
     }
 }

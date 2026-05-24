@@ -196,20 +196,21 @@ impl BlsKeypair {
     ///
     /// A [`BlsKeypair`] with the given scalar as the secret key, or
     /// [`BlsError::KeyGenerationFailed`] if the scalar bytes are invalid.
-    pub fn from_scalar(scalar_bytes: &[u8; SECRET_KEY_SIZE], g1_pk_bytes: &[u8; 48]) -> Result<Self, BlsError> {
+    pub fn from_scalar(scalar_bytes: &[u8; SECRET_KEY_SIZE], _g1_pk_bytes: &[u8; 48]) -> Result<Self, BlsError> {
         // Construct the blst SecretKey from raw scalar bytes.
-        // blst::min_sig::SecretKey::from_bytes expects the 32-byte scalar.
-        let sk = BlstSecretKey::from_bytes(scalar_bytes)
+        // Scalar::to_bytes() outputs little-endian bytes, but
+        // BlstSecretKey::from_bytes() expects big-endian (it uses
+        // blst_scalar_from_bendian internally). Convert LE -> BE.
+        let mut be_bytes = *scalar_bytes;
+        be_bytes.reverse();
+
+        let sk = BlstSecretKey::from_bytes(&be_bytes)
             .map_err(|e| BlsError::KeyGenerationFailed(format!("invalid scalar for sk: {e:?}")))?;
 
-        // Construct the blst G1 public key from compressed bytes.
-        // We need to deserialize the G1 affine point and then convert it to
-        // the G2 public key that BlsKeypair uses for signing.
-        // However, blst min_sig uses G2 for public keys and G1 for signatures.
+        // Derive the G2 public key from the scalar: pk_g2 = sk * G2.
+        // blst min_sig uses G2 for public keys and G1 for signatures.
         // For DKG, we need the G1 public key for commitment verification,
-        // but for BLS signing the keypair still needs a G2 public key.
-        //
-        // We derive the G2 public key from the scalar directly: pk_g2 = sk * G2
+        // but for BLS signing the keypair needs a G2 public key.
         let pk_g2 = sk.sk_to_pk();
 
         Ok(Self {
