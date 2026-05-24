@@ -642,7 +642,7 @@ async fn e2e_three_node_genesis_finality() -> Result<(), Box<dyn std::error::Err
             // (at minimum, events that all nodes have seen and processed)
             let intersection: HashSet<EventId> = committed_a_set
                 .iter()
-                .filter(|id| committed_b_set.contains(id) && committed_c_set.contains(id))
+                .filter(|id| committed_b_set.contains(*id) && committed_c_set.contains(*id))
                 .copied()
                 .collect();
 
@@ -810,7 +810,7 @@ async fn e2e_cross_ref_consensus_finality() -> Result<(), Box<dyn std::error::Er
             // Verify intersection is non-empty (safety property)
             let intersection: HashSet<EventId> = committed_a
                 .iter()
-                .filter(|id| committed_b.contains(id) && committed_c.contains(id))
+                .filter(|id| committed_b.contains(*id) && committed_c.contains(*id))
                 .copied()
                 .collect();
 
@@ -923,7 +923,7 @@ async fn e2e_single_producer_finality() -> Result<(), Box<dyn std::error::Error 
 
     let intersection: HashSet<EventId> = committed_a
         .iter()
-        .filter(|id| committed_b.contains(id) && committed_c.contains(id))
+        .filter(|id| committed_b.contains(*id) && committed_c.contains(*id))
         .copied()
         .collect();
 
@@ -1028,7 +1028,7 @@ async fn e2e_late_join_consensus() -> Result<(), Box<dyn std::error::Error + Sen
 
     let intersection: HashSet<EventId> = committed_a
         .iter()
-        .filter(|id| committed_b.contains(id) && committed_c.contains(id))
+        .filter(|id| committed_b.contains(*id) && committed_c.contains(*id))
         .copied()
         .collect();
 
