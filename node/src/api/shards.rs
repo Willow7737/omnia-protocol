@@ -133,7 +133,7 @@ async fn handle_economics_op(
 
     let shard_op = ShardOp::Economics(econ_op);
 
-    let mut router = state.shard_router.lock().await;
+    let mut router = state.shard_router.lock().expect("shard_router mutex poisoned");
     match router.route(&event, shard_op) {
         Ok(()) => {
             tracing::info!(operation = %body.operation, "Economics operation processed successfully");

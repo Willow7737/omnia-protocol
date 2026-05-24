@@ -6,15 +6,15 @@
 //!
 //! Because `Substrate::shard_processor` is `Option<Box<dyn EventProcessor>>`,
 //! we cannot downcast back to `ShardRouter` to inspect shard state. Instead, we
-//! use a `SharedShardProcessor` wrapper backed by `Arc<Mutex<ShardRouter>>` so
+//! use the `MutexShardRouter` wrapper backed by `Arc<Mutex<ShardRouter>>` so
 //! that the test can both (a) attach the router to the substrate and (b) inspect
 //! the shard state after processing.
 
 use std::sync::{Arc, Mutex};
 
 use omnia_shards::{
-    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState, ShardId, ShardOp,
-    ShardPayload, ShardRouter,
+    FinancialOp, FinancialShard, FinancialState, IdentityOp, IdentityShard, IdentityState, MutexShardRouter, ShardId,
+    ShardOp, ShardPayload, ShardRouter,
 };
 use omnia_substrate::{crypto::generate_keypair, Event, NodeId, Substrate, SubstrateConfig};
 
@@ -22,22 +22,6 @@ fn test_node(id: u8) -> NodeId {
     let mut node = [0u8; 32];
     node[0] = id;
     node
-}
-
-// ---------------------------------------------------------------------------
-// SharedShardProcessor — allows both substrate and test to access the router
-// ---------------------------------------------------------------------------
-
-/// Wrapper that delegates `EventProcessor` to an `Arc<Mutex<ShardRouter>>`,
-/// allowing the test harness to inspect shard state after processing.
-struct SharedShardProcessor {
-    inner: Arc<Mutex<ShardRouter>>,
-}
-
-impl omnia_substrate::EventProcessor for SharedShardProcessor {
-    fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
-        self.inner.lock().unwrap().process_event(event)
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -54,8 +38,8 @@ async fn test_financial_shard_wired_into_substrate() {
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
     router.lock().unwrap().register(Box::new(FinancialShard::new()));
 
-    // 3. Attach router to substrate via SharedShardProcessor
-    let processor = SharedShardProcessor { inner: router.clone() };
+    // 3. Attach router to substrate via MutexShardRouter
+    let processor = MutexShardRouter::new(router.clone());
     substrate = substrate.with_shard_processor(Box::new(processor));
 
     // 4. Mint some tokens to an account
@@ -118,8 +102,8 @@ async fn test_identity_shard_wired_into_substrate() {
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
     router.lock().unwrap().register(Box::new(IdentityShard::new()));
 
-    // 3. Attach router to substrate
-    let processor = SharedShardProcessor { inner: router.clone() };
+    // 3. Attach router to substrate via MutexShardRouter
+    let processor = MutexShardRouter::new(router.clone());
     substrate = substrate.with_shard_processor(Box::new(processor));
 
     // 4. Create a DID

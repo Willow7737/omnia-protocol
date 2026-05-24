@@ -177,6 +177,48 @@ impl BlsKeypair {
         })
     }
 
+    /// Construct a BLS keypair directly from a raw scalar secret key and its
+    /// G1 public key.
+    ///
+    /// Unlike [`generate()`](Self::generate) which hashes the seed through
+    /// `key_gen` (HKDF-based key derivation), this method constructs the
+    /// keypair directly from the raw 32-byte scalar, preserving algebraic
+    /// consistency with Feldman VSS commitments. This is essential for DKG
+    /// where the secret key is a specific field element derived from polynomial
+    /// share accumulation, not an arbitrary seed.
+    ///
+    /// # Arguments
+    ///
+    /// * `scalar_bytes` — The 32-byte secret key in little-endian order
+    /// * `g1_pk_bytes` — The 48-byte compressed G1 public key point
+    ///
+    /// # Returns
+    ///
+    /// A [`BlsKeypair`] with the given scalar as the secret key, or
+    /// [`BlsError::KeyGenerationFailed`] if the scalar bytes are invalid.
+    pub fn from_scalar(scalar_bytes: &[u8; SECRET_KEY_SIZE], _g1_pk_bytes: &[u8; 48]) -> Result<Self, BlsError> {
+        // Construct the blst SecretKey from raw scalar bytes.
+        // Scalar::to_bytes() outputs little-endian bytes, but
+        // BlstSecretKey::from_bytes() expects big-endian (it uses
+        // blst_scalar_from_bendian internally). Convert LE -> BE.
+        let mut be_bytes = *scalar_bytes;
+        be_bytes.reverse();
+
+        let sk = BlstSecretKey::from_bytes(&be_bytes)
+            .map_err(|e| BlsError::KeyGenerationFailed(format!("invalid scalar for sk: {e:?}")))?;
+
+        // Derive the G2 public key from the scalar: pk_g2 = sk * G2.
+        // blst min_sig uses G2 for public keys and G1 for signatures.
+        // For DKG, we need the G1 public key for commitment verification,
+        // but for BLS signing the keypair needs a G2 public key.
+        let pk_g2 = sk.sk_to_pk();
+
+        Ok(Self {
+            secret_key: sk,
+            public_key: pk_g2,
+        })
+    }
+
     /// Get the serializable public key.
     ///
     /// # Returns

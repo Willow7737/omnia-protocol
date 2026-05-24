@@ -224,7 +224,14 @@ pub struct AppState {
     /// Slashing engine with redb persistence.
     pub slashing: Arc<Mutex<SlashingEngine>>,
     /// Shard router for dispatching operations to domain shards.
-    pub shard_router: Arc<Mutex<ShardRouter>>,
+    ///
+    /// Uses `std::sync::Mutex` instead of `tokio::sync::Mutex` because:
+    /// - The same `ShardRouter` must be shared with the Substrate's
+    ///   `EventProcessor` (which is a synchronous trait).
+    /// - `ShardRouter` operations are CPU-only (no I/O), so the lock
+    ///   is held for only a few microseconds, making `std::sync::Mutex`
+    ///   both safe and more efficient than its tokio counterpart.
+    pub shard_router: Arc<std::sync::Mutex<ShardRouter>>,
     /// Economics state — UBC token balances, governance, and quota tracking.
     pub economics: Arc<Mutex<EconomicsState>>,
     /// In-memory event store for API retrieval.

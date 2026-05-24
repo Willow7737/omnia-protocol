@@ -29,7 +29,7 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
     let event_count = state.event_store.read().await.len();
 
     let shard_count = {
-        let router = state.shard_router.lock().await;
+        let router = state.shard_router.lock().expect("shard_router mutex poisoned");
         router.shard_count()
     };
 

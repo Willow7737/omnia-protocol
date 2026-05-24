@@ -35,3 +35,4 @@ keystore = ["dep:aes-gcm", "dep:bip39", "dep:hkdf"]
 [dev-dependencies]
 tempfile = "3"
 postcard = { version = "1.0", features = ["alloc"] }
+proptest = "1.4"

@@ -83,7 +83,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
         config,
         substrate: Arc::new(RwLock::new(substrate)),
         slashing: Arc::new(Mutex::new(slashing)),
-        shard_router: Arc::new(Mutex::new(shard_router)),
+        shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(HashMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),

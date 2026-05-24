@@ -33,6 +33,7 @@ snapshot = []
 
 [dev-dependencies]
 omnia-crypto = { path = "../omnia-crypto" }
-tokio = { version = "1.35", features = ["macros", "rt", "time"] }
+libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
+tokio = { version = "1.35", features = ["macros", "rt", "time", "rt-multi-thread"] }
 tokio-test = "0.4"
 tempfile = "3"

@@ -29,15 +29,15 @@ use clap::Parser;
 use omnia_adapters::SettlementAdapter;
 use omnia_economics::EconomicsState;
 #[cfg(feature = "network")]
-use omnia_network::{Multiaddr, OmniaNetwork};
+use omnia_network::{Multiaddr, NetworkConfig, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 use omnia_node::pipeline::{ColdWork, PipelineRouter};
 use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
-    ShardRouter,
+    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, MutexShardRouter,
+    PhysicalShard, ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use std::sync::atomic::AtomicBool;
@@ -170,15 +170,27 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
+
+    // A2: Populate GossipConfig.bootstrap_peers from CLI/TOML config so that
+    // the gossip layer dials the same seed nodes as the network layer.
+    // This must be set BEFORE Substrate::new() consumes the config.
+    #[cfg(feature = "network")]
+    {
+        substrate_config.gossip.bootstrap_peers = config.bootstrap_nodes.clone();
+    }
+
     let mut substrate = Substrate::new(substrate_config);
 
-    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock.
+    // P0-1: Initialize the gossip protocol before wrapping substrate in Arc<RwLock>.
     // This creates a GossipProtocol with a shared Arc<RwLock<CausalGraph>> that
     // will later be wired to the P2P network via start_with_network().
     #[cfg(feature = "network")]
     {
         substrate.init_gossip();
-        tracing::info!("Gossip protocol initialized and wired to substrate");
+        tracing::info!(
+            bootstrap_count = config.bootstrap_nodes.len(),
+            "Gossip protocol initialized with bootstrap peers"
+        );
     }
     tracing::info!(
         path = %slashing_dir.display(),
@@ -188,6 +200,23 @@ async fn main() -> Result<()> {
     // Create the shard router with standard fees and nonce persistence
     let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
+
+    // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
+    // the HTTP API (via AppState) and the Substrate consensus loop (via
+    // EventProcessor). We use std::sync::Mutex (not tokio) because
+    // EventProcessor::process_event is synchronous.
+    let shared_shard_router = Arc::new(std::sync::Mutex::new(shard_router));
+
+    // B1: Create a MutexShardRouter wrapper that implements EventProcessor
+    // by locking the shared mutex and delegating to the inner ShardRouter.
+    let shard_processor = MutexShardRouter::new(Arc::clone(&shared_shard_router));
+
+    // B1: Wire the shard processor into the substrate so committed events
+    // from consensus are automatically routed to the appropriate domain shard.
+    // Previously, shard_processor was None and events only reached shards
+    // via the HTTP API bypass.
+    substrate = substrate.with_shard_processor(Box::new(shard_processor));
+    tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
 
     // Create the economics state
     let economics = EconomicsState::new();
@@ -254,7 +283,7 @@ async fn main() -> Result<()> {
         config: config.clone(),
         substrate: Arc::clone(&substrate_for_consensus),
         slashing: Arc::new(Mutex::new(slashing_engine)),
-        shard_router: Arc::new(Mutex::new(shard_router)),
+        shard_router: shared_shard_router,
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(std::collections::HashMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
@@ -443,8 +472,19 @@ async fn spawn_background_tasks(
                 }
             };
 
+            // A2: Build a NetworkConfig that includes the bootstrap peers
+            // from CLI/TOML, so the Kademlia DHT is seeded correctly.
+            let network_config = NetworkConfig {
+                bootstrap_peers: config
+                    .bootstrap_nodes
+                    .iter()
+                    .filter_map(|addr| addr.parse::<Multiaddr>().ok())
+                    .collect(),
+                ..Default::default()
+            };
+
             // Try to create the network, but don't block if it fails
-            match OmniaNetwork::new(listen_multiaddr).await {
+            match OmniaNetwork::with_config(listen_multiaddr, network_config).await {
                 Ok(mut network) => {
                     tracing::info!("P2P network initialized");
 
