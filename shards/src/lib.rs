@@ -75,7 +75,7 @@ pub use economics_shard::{EconomicsOp, EconomicsVoteChoice};
 pub use fee_schedule::FeeSchedule;
 pub use nonce_store::{InMemoryNonceStore, NonceStore, NonceStoreError, RedbNonceStore};
 pub use payload::{ShardOp, ShardPayload};
-pub use router::ShardRouter;
+pub use router::{MutexShardRouter, ShardRouter};
 pub use shard::{Shard, ShardError, ShardId};
 pub use validator::DomainValidator;
 

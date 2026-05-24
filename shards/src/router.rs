@@ -306,3 +306,69 @@ impl omnia_substrate::EventProcessor for ShardRouter {
         })
     }
 }
+
+/// Wrapper that allows a shared [`ShardRouter`] (behind `Arc<std::sync::Mutex>`)
+/// to implement the [`omnia_substrate::EventProcessor`] trait.
+///
+/// This enables the **same** `ShardRouter` instance to be used both by the
+/// HTTP API layer (via [`AppState`](crate::AppState)) and by the Substrate
+/// consensus loop (via `EventProcessor`). Committed events from consensus
+/// are automatically routed to the appropriate domain shard.
+///
+/// # Why `std::sync::Mutex`?
+///
+/// The `EventProcessor::process_event` method is synchronous, so we cannot
+/// use `tokio::sync::Mutex` (which requires `.await`). `std::sync::Mutex` is
+/// appropriate here because `ShardRouter` operations are CPU-only (no I/O),
+/// so the lock is held for only a few microseconds.
+///
+/// # Mutex poisoning
+///
+/// If the mutex is poisoned (a panic occurred while holding the lock), the
+/// processor returns [`EventProcessorError::Internal`]. This is preferable
+/// to silently dropping events or unwinding across the consensus boundary.
+///
+/// # Example
+///
+/// ```ignore
+/// use std::sync::{Arc, Mutex};
+/// use omnia_shards::{ShardRouter, MutexShardRouter};
+/// use omnia_substrate::{Substrate, SubstrateConfig, EventProcessor};
+///
+/// let shard_router = ShardRouter::new(fee_schedule, quota);
+/// let shared: Arc<Mutex<ShardRouter>> = Arc::new(Mutex::new(shard_router));
+///
+/// // Clone the Arc for the EventProcessor wrapper
+/// let processor = MutexShardRouter::new(Arc::clone(&shared));
+///
+/// // Wire into substrate
+/// let substrate = Substrate::new(config)
+///     .with_shard_processor(Box::new(processor));
+///
+/// // The same Arc can be stored in AppState for the HTTP API
+/// // app_state.shard_router = shared;
+/// ```
+pub struct MutexShardRouter {
+    inner: Arc<std::sync::Mutex<ShardRouter>>,
+}
+
+impl MutexShardRouter {
+    /// Create a new wrapper around an `Arc<std::sync::Mutex<ShardRouter>>`.
+    ///
+    /// The caller should clone the `Arc` before passing it so that the
+    /// same `ShardRouter` can be shared with the HTTP API layer.
+    pub fn new(inner: Arc<std::sync::Mutex<ShardRouter>>) -> Self {
+        Self { inner }
+    }
+}
+
+#[allow(deprecated)]
+impl omnia_substrate::EventProcessor for MutexShardRouter {
+    #[allow(deprecated)]
+    fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
+        let mut guard = self.inner.lock().map_err(|e| {
+            omnia_substrate::EventProcessorError::Internal(format!("ShardRouter mutex poisoned: {e}"))
+        })?;
+        guard.process_event(event)
+    }
+}

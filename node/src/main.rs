@@ -36,8 +36,8 @@ use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
 use omnia_shards::{
-    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
-    ShardRouter,
+    BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, MutexShardRouter,
+    PhysicalShard, ShardRouter,
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use std::sync::atomic::AtomicBool;
@@ -201,6 +201,23 @@ async fn main() -> Result<()> {
     let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
+    // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
+    // the HTTP API (via AppState) and the Substrate consensus loop (via
+    // EventProcessor). We use std::sync::Mutex (not tokio) because
+    // EventProcessor::process_event is synchronous.
+    let shared_shard_router = Arc::new(std::sync::Mutex::new(shard_router));
+
+    // B1: Create a MutexShardRouter wrapper that implements EventProcessor
+    // by locking the shared mutex and delegating to the inner ShardRouter.
+    let shard_processor = MutexShardRouter::new(Arc::clone(&shared_shard_router));
+
+    // B1: Wire the shard processor into the substrate so committed events
+    // from consensus are automatically routed to the appropriate domain shard.
+    // Previously, shard_processor was None and events only reached shards
+    // via the HTTP API bypass.
+    substrate = substrate.with_shard_processor(Box::new(shard_processor));
+    tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
+
     // Create the economics state
     let economics = EconomicsState::new();
     tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
@@ -266,7 +283,7 @@ async fn main() -> Result<()> {
         config: config.clone(),
         substrate: Arc::clone(&substrate_for_consensus),
         slashing: Arc::new(Mutex::new(slashing_engine)),
-        shard_router: Arc::new(Mutex::new(shard_router)),
+        shard_router: shared_shard_router,
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(std::collections::HashMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),

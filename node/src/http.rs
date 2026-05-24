@@ -283,7 +283,7 @@ mod tests {
             config,
             substrate: Arc::new(RwLock::new(substrate)),
             slashing: Arc::new(Mutex::new(slashing_engine)),
-            shard_router: Arc::new(Mutex::new(shard_router)),
+            shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
             economics: Arc::new(Mutex::new(EconomicsState::new())),
             event_store: Arc::new(RwLock::new(event_store)),
             peers: Arc::new(RwLock::new(peers)),
