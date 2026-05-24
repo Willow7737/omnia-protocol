@@ -571,7 +571,7 @@ async fn e2e_three_node_genesis_finality() -> Result<(), Box<dyn std::error::Err
     );
 
     // Log per-node info for debugging
-    for (i, node) in [node_a, node_b, node_c].iter().enumerate() {
+    for (i, node) in [&node_a, &node_b, &node_c].iter().enumerate() {
         eprintln!(
             "  Node {}: graph_size={}, consensus_committed={}",
             i,
@@ -622,7 +622,7 @@ async fn e2e_three_node_genesis_finality() -> Result<(), Box<dyn std::error::Err
                 .collect();
 
             // Verify that every committed event has the correct ConsensusState
-            for (node_idx, node) in [node_a, node_b, node_c].iter().enumerate() {
+            for (node_idx, node) in [&node_a, &node_b, &node_c].iter().enumerate() {
                 for event_id in &all_ids {
                     if node.consensus.is_committed(event_id) {
                         let state = node.consensus.get_state(event_id);
