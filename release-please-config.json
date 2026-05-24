@@ -16,14 +16,7 @@
       "skip-github-release": false,
       "extra-files": [
         "Cargo.toml",
-        "substrate/Cargo.toml",
-        "shards/Cargo.toml",
-        "binding/Cargo.toml",
-        "economics/Cargo.toml",
-        "zk/Cargo.toml",
-        "node/Cargo.toml",
-        "chaos-tests/Cargo.toml",
-        "fuzz/Cargo.toml"
+        "Cargo.lock"
       ]
     }
   },
