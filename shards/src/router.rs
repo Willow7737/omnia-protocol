@@ -311,7 +311,7 @@ impl omnia_substrate::EventProcessor for ShardRouter {
 /// to implement the [`omnia_substrate::EventProcessor`] trait.
 ///
 /// This enables the **same** `ShardRouter` instance to be used both by the
-/// HTTP API layer (via [`AppState`](crate::AppState)) and by the Substrate
+/// HTTP API layer (via `AppState` in the node crate) and by the Substrate
 /// consensus loop (via `EventProcessor`). Committed events from consensus
 /// are automatically routed to the appropriate domain shard.
 ///
@@ -325,7 +325,7 @@ impl omnia_substrate::EventProcessor for ShardRouter {
 /// # Mutex poisoning
 ///
 /// If the mutex is poisoned (a panic occurred while holding the lock), the
-/// processor returns [`EventProcessorError::Internal`]. This is preferable
+/// processor returns [`omnia_substrate::EventProcessorError::Internal`]. This is preferable
 /// to silently dropping events or unwinding across the consensus boundary.
 ///
 /// # Example
