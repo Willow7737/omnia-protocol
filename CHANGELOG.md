@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.55](https://github.com/Willow7737/omnia-protocol/compare/v0.1.54...v0.1.55) (2026-05-24)
+
+
+### Bug Fixes
+
+* **ci:** resolve 4 CI failures — benchmarks, OpenSSL, Solidity, binary size ([4c241a2](https://github.com/Willow7737/omnia-protocol/commit/4c241a273c0f24b07b644ad0b9983b07e4ee9c9d))
+* **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([153703d](https://github.com/Willow7737/omnia-protocol/commit/153703d765b27d6dad46e13e60ebb7a1310a1bfc))
+* **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([b90cf48](https://github.com/Willow7737/omnia-protocol/commit/b90cf488e71560ed85e6d513307909058b832383))
+
 ## [0.1.54](https://github.com/Willow7737/omnia-protocol/compare/v0.1.53...v0.1.54) (2026-05-24)
 
 
