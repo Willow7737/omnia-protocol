@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.57](https://github.com/Willow7737/omnia-protocol/compare/v0.1.56...v0.1.57) (2026-05-25)
+
+
+### Bug Fixes
+
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([5c6d8b8](https://github.com/Willow7737/omnia-protocol/commit/5c6d8b81b33cef61f10a1dac93a0b0bde0b32047))
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([a002c20](https://github.com/Willow7737/omnia-protocol/commit/a002c2083403add99dd29eadd115b4d7c05e47a1))
+
 ## [0.1.56](https://github.com/Willow7737/omnia-protocol/compare/v0.1.55...v0.1.56) (2026-05-25)
 
 
