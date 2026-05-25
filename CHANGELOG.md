@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.56](https://github.com/Willow7737/omnia-protocol/compare/v0.1.55...v0.1.56) (2026-05-25)
+
+
+### Bug Fixes
+
+* **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([597824d](https://github.com/Willow7737/omnia-protocol/commit/597824d87ead2bcce08d3b04029690a91f012998))
+* **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([a38b637](https://github.com/Willow7737/omnia-protocol/commit/a38b637f208c39da98f5663982fc1606ccc78b58))
+
 ## [0.1.55](https://github.com/Willow7737/omnia-protocol/compare/v0.1.54...v0.1.55) (2026-05-24)
 
 
