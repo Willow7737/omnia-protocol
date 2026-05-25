@@ -319,8 +319,11 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           TAG="${{ needs.validate.outputs.tag }}"
+          # Docker requires lowercase repository names — github.repository may contain uppercase
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tags=ghcr.io/${{ github.repository }}/omnia-node:$VERSION,ghcr.io/${{ github.repository }}/omnia-node:latest" >> "$GITHUB_OUTPUT"
+          echo "repo_lower=$REPO_LOWER" >> "$GITHUB_OUTPUT"
+          echo "tags=ghcr.io/$REPO_LOWER/omnia-node:$VERSION,ghcr.io/$REPO_LOWER/omnia-node:latest" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
