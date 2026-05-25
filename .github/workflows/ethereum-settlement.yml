@@ -82,6 +82,7 @@ jobs:
       - name: Deploy OmniaRollup to Anvil
         run: |
           cd omnia-adapters/contracts/ethereum
+          DEPLOY_EXIT=0
           DEPLOY_OUTPUT=$(forge create OmniaRollup \
             --constructor-args \
             0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
@@ -93,10 +94,10 @@ jobs:
             "[1,1,1,1]" \
             --rpc-url http://127.0.0.1:8545 \
             --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-            2>&1)
+            2>&1) || DEPLOY_EXIT=$?
           echo "$DEPLOY_OUTPUT"
-          if echo "$DEPLOY_OUTPUT" | grep -qi "error\|failed"; then
-            echo "::warning::Contract deployment may have failed — continuing with local tests"
+          if [ "$DEPLOY_EXIT" -ne 0 ]; then
+            echo "::warning::Contract deployment exited with code $DEPLOY_EXIT — continuing with local tests"
           fi
       - name: Test with ethereum-live feature (skip live tests on PRs)
         run: cargo test -p omnia-adapters --features ethereum-live -- --skip settlement::live
