@@ -235,7 +235,12 @@ impl KeyStoreBridge {
         self.rotation_state.rotated_ed25519_secret = Some(ed25519_secret_hex);
 
         let new_pubkey = PqPublicKey {
-            ed25519: self.rotated_keypair.as_ref().unwrap().verifying_key().to_bytes(),
+            ed25519: self
+                .rotated_keypair
+                .as_ref()
+                .expect("rotated_keypair was just set above")
+                .verifying_key()
+                .to_bytes(),
             #[cfg(feature = "pqc")]
             dilithium: dilithium_keypair.public.to_vec(),
             #[cfg(not(feature = "pqc"))]
