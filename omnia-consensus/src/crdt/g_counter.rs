@@ -63,14 +63,19 @@ impl GCounter {
     ///
     /// Saturates at `u64::MAX` if the sum overflows, preserving monotonicity.
     pub fn value(&self) -> u64 {
-        self.counts.values().copied().try_fold(0u64, |acc, v| acc.checked_add(v)).unwrap_or(u64::MAX)
+        self.counts
+            .values()
+            .copied()
+            .try_fold(0u64, |acc, v| acc.checked_add(v))
+            .unwrap_or(u64::MAX)
     }
 
     /// Get the current total value, returning an error if the sum overflows.
     pub fn value_checked(&self) -> Result<u64, CrdtError> {
-        self.counts.values().copied().try_fold(0u64, |acc, v| {
-            acc.checked_add(v).ok_or(CrdtError::Overflow)
-        })
+        self.counts
+            .values()
+            .copied()
+            .try_fold(0u64, |acc, v| acc.checked_add(v).ok_or(CrdtError::Overflow))
     }
 
     /// Get the count for a specific node

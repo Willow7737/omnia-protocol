@@ -477,7 +477,11 @@ mod tests {
         // Phase 1: create, record original key, then rotate
         let rotated_pubkey = {
             let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
-            original_pubkey = bridge.current_signing_key().expect("original key").verifying_key().to_bytes();
+            original_pubkey = bridge
+                .current_signing_key()
+                .expect("original key")
+                .verifying_key()
+                .to_bytes();
 
             let sig = vec![1u8; 64];
             bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
