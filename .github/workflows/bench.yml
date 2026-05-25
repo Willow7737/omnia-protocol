@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
@@ -87,7 +87,7 @@ jobs:
         run: |
           python3 scripts/check_benchmark_regression.py \
             --baselines benches/baselines.json \
-            ${{ github.event.inputs.threshold && format('--threshold {0}', github.event.inputs.threshold) || '' }} \
+            ${{ github.event.inputs.threshold != '' && format('--threshold {0}', github.event.inputs.threshold) || '' }} \
             criterion_output.txt
 
       # ── Upload artifacts ───────────────────────────────────────────
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Download criterion data
         uses: actions/download-artifact@v4

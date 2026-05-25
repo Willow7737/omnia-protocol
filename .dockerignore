@@ -1,0 +1,20 @@
+# Exclude fuzz crate (has its own rust-toolchain.toml pinned to nightly,
+# which can confuse the Docker build's cargo fetch).
+fuzz/
+
+# Exclude CI-only and development files that aren't needed for production builds.
+chaos-tests/
+benches/
+.github/
+.git/
+target/
+**/target/
+node_modules/
+
+# Exclude documentation and non-essential files.
+docs/
+*.md
+!Cargo.md
+LICENSE
+.env
+.env.*
