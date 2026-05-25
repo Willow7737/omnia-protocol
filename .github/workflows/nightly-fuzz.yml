@@ -32,10 +32,10 @@ jobs:
       # SanitizerCoverage are combined on certain nightly versions.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly-2026-04-15
+          toolchain: nightly-2025-12-01
           components: rust-src, llvm-tools-preview
       - name: Override toolchain for fuzz
-        run: rustup override set nightly-2026-04-15
+        run: rustup override set nightly-2025-12-01
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - uses: Swatinem/rust-cache@v2

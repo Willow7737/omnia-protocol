@@ -26,6 +26,7 @@
 use blst::*;
 use rand::{CryptoRng, RngCore};
 use std::fmt;
+use subtle::ConstantTimeEq;
 
 /// Number of bytes in a BLS12-381 scalar (256 bits).
 pub const SCALAR_BYTES: usize = 32;
@@ -504,7 +505,7 @@ pub fn verify_feldman_share(share: &Scalar, index: u64, commitments: &[Vec<u8>])
         out
     };
 
-    left_compressed == right_compressed
+    left_compressed.ct_eq(&right_compressed).unwrap_u8() == 1
 }
 
 /// Accumulate shares using field addition instead of hashing.

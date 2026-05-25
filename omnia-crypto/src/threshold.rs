@@ -695,18 +695,21 @@ impl DkgSession {
             .clone()
             .ok_or_else(|| DkgError::CommitmentVerificationFailed("No keypair".into()))?;
 
-        // Find our index
+        // Find our index — use own_id if set, otherwise fall back to first participant
+        // BUG FIX: Previously used participants.first() which always selected the
+        // first participant regardless of who is calling finalize(). This caused
+        // incorrect key share assignment for non-first participants.
         let my_id = self
-            .participants
-            .first()
+            .own_id
+            .or_else(|| self.participants.first().copied())
             .ok_or(DkgError::InsufficientParticipants { need: 1, got: 0 })?;
         let my_index = self
             .participants
             .iter()
-            .position(|p| *p == *my_id)
+            .position(|p| *p == my_id)
             .ok_or(DkgError::InsufficientParticipants { need: 1, got: 0 })?;
 
-        let own_share = KeyShare::new(*my_id, my_index + 1, my_keypair);
+        let own_share = KeyShare::new(my_id, my_index + 1, my_keypair);
 
         let group_pk_bytes = agg_pk.as_bytes().to_vec();
 

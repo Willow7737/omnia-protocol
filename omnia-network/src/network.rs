@@ -171,8 +171,8 @@ pub fn configure_gossipsub_scoring() -> (PeerScoreParams, PeerScoreThresholds) {
 
     let score_params = PeerScoreParams {
         topics: HashMap::from([
-            (IdentTopic::new("omnia-events").hash(), topic_params.clone()),
-            (IdentTopic::new("omnia-consensus").hash(), topic_params),
+            (IdentTopic::new("omnia_events").hash(), topic_params.clone()),
+            (IdentTopic::new("omnia_consensus").hash(), topic_params),
         ]),
         app_specific_weight: 10.0,
         ..Default::default()
@@ -863,8 +863,8 @@ mod tests {
         let (params, thresholds) = configure_gossipsub_scoring();
 
         // Check that topic scoring is configured for both Omnia topics
-        assert!(params.topics.contains_key(&IdentTopic::new("omnia-events").hash()));
-        assert!(params.topics.contains_key(&IdentTopic::new("omnia-consensus").hash()));
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia_events").hash()));
+        assert!(params.topics.contains_key(&IdentTopic::new("omnia_consensus").hash()));
         assert_eq!(params.app_specific_weight, 10.0);
 
         // Check thresholds
