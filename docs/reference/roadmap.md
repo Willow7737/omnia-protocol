@@ -1,7 +1,7 @@
 # Implementation Roadmap
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-05-25
 
 ## Phase 0: The Seed ✅ Complete
 
@@ -89,6 +89,32 @@
 - ✅ M-4: Side-channel audit for ZK and binding crates
 
 ## Remaining Work (Post-Phase 5)
+
+### v0.1.56 Audit Findings — High Priority (Fix Before Testnet)
+1. `BatchCrdtMerger::apply_batch` rollback implementation — claims atomic but doesn't roll back on partial failure
+2. `GCounter::value()` overflow — sum of all counters can panic/wrap; use `checked_add`
+3. Non-constant-time comparisons — `vrf.rs:190` and `bls12_381_scalar.rs:507` leak timing; use `subtle::ConstantTimeEq`
+4. Deprecated `DkgSession` — uses wrong participant ID (`participants.first()` not `own_id`) and distributes identical secret to all participants; should be removed
+5. GossipSub topic name mismatch — gossip uses `"omnia_events"` but scoring configures `"omnia-events"`; peer scoring is effectively a no-op
+6. `KeyStoreBridge::rotate()` — generates new keypair but doesn't persist to keystore; wrong key after restart
+
+### v0.1.56 Audit Findings — Medium Priority (Track for Resolution)
+7. `CmRDT` trait is dead code (never implemented)
+8. `AccountBalance::merge` doesn't merge `vector_clock`
+9. Mixed SHA-256/BLAKE3 in CRDT `state_hash()`
+10. `aes_gcm.rs` uses `expect()` instead of `Result`
+11. `combine_signatures` doesn't deduplicate partials by participant
+12. PQC feature declared but no implementation code
+13. PriorityGossipQueue / GossipBloomFilter / CompactEncoder implemented but not integrated
+14. Pipeline workers are stubs (log only, no actual processing)
+15. Event submission uses ephemeral keypairs instead of node's persistent key
+16. `UsefulWorkProof::verify_stub()` is the only verification method
+17. `UsefulWorkType` variant fields are private (can't construct externally)
+18. `TimeLockVoting` lacks `Serialize`/`Deserialize`
+19. Docker Prometheus scraping wrong ports (host vs container)
+20. Docker healthcheck endpoint mismatch (`/health` vs `/healthz`)
+21. Deprecated `substrate` facade crate with heavy `node` dependency
+22. Quorum check uses base weights instead of effective (decayed) weights
 
 ### Before Public Testnet
 1. Docker Compose multi-node verification
