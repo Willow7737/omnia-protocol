@@ -291,8 +291,8 @@ impl KeyStoreBridge {
 
     /// Get the current signing key (respects rotation phase).
     ///
-    /// After a rotation, returns the new Ed25519 keypair stored in
-    /// [`rotated_keypair`](Self::rotated_keypair).  Falls back to the
+    /// After a rotation, returns the new Ed25519 keypair that was persisted
+    /// during the last call to [`rotate()`](Self::rotate).  Falls back to the
     /// keystore's original keypair when no rotation has occurred.
     pub fn current_signing_key(&self) -> Result<&NodeKeypair, BridgeError> {
         if let Some(ref kp) = self.rotated_keypair {
