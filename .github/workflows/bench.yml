@@ -4,7 +4,7 @@ name: Benchmark Regression Gate
 # against stored baselines. A regression of >25% compared to baseline FAILS.
 #
 # Triggers:
-#   - Push to main (conservative: not every PR to avoid slowness)
+#   - Push to main or dev
 #   - Manual workflow_dispatch
 #
 # Benchmarks covered:
@@ -17,7 +17,7 @@ name: Benchmark Regression Gate
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'omnia-consensus/**'
       - 'omnia-crypto/**'
@@ -126,6 +126,12 @@ jobs:
 
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind
+
+      # iai-callgrind requires the iai-callgrind-runner binary to be installed
+      # separately from the library crate. The runner version must match the
+      # library version used in benches/Cargo.toml.
+      - name: Install iai-callgrind runner
+        run: cargo install iai-callgrind-runner
 
       # iai-callgrind requires the benchmark binary to be built first
       - name: Build iai-callgrind benchmarks

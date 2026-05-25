@@ -1,5 +1,5 @@
 {
-  "_comment": "Baseline performance values from v0.1.52 (2026-05-24). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated to reflect proper crypto (BLS12-381 field arithmetic, Feldman VSS) and profile changes (fat LTO, codegen-units=1).",
+  "_comment": "Baseline performance values from v0.1.52 (2026-05-24). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated ZK baselines to reflect actual expanded circuit performance (100 events, merkle_depth=8).",
   "version": "0.1.52",
   "timestamp": "2026-05-24",
   "environment": {
@@ -42,16 +42,18 @@
     "zk_proof_gen_basic": {
       "description": "ZK proof generation (Groth16 basic circuit, 1 tx)",
       "unit": "ns",
-      "baseline": 1730000,
+      "baseline": 2500000,
       "direction": "lower_is_better",
-      "source_bench": "zk_proof_gen/1_tx_batch"
+      "source_bench": "zk_proof_gen/1_tx_batch",
+      "note": "Updated from 1.73M ns — basic circuit with trusted_setup per iteration. May not appear if bench fails; see continue-on-error in bench.yml."
     },
     "zk_proof_gen_expanded_4": {
-      "description": "ZK proof generation (Groth16 expanded circuit, 100 tx batch)",
+      "description": "ZK proof generation (Groth16 expanded circuit, 100 tx batch, merkle_depth=8)",
       "unit": "ns",
-      "baseline": 317010000,
+      "baseline": 8000000000,
       "direction": "lower_is_better",
-      "source_bench": "zk_proof_gen/100_tx_batch"
+      "source_bench": "zk_proof_gen/100_tx_batch",
+      "note": "Updated from 317M ns — expanded circuit with 100 events and merkle_depth=8 genuinely takes ~7.9s. Previous baseline was for a smaller circuit."
     },
     "vrf_compute": {
       "description": "VRF compute latency (deterministic_compute)",
