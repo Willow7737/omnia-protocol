@@ -5,14 +5,14 @@ global:
 scrape_configs:
   - job_name: 'omnia-bootstrap'
     static_configs:
-      - targets: ['omnia-bootstrap:9090']
+      - targets: ['omnia-bootstrap:8080']
     metrics_path: /metrics
 
   - job_name: 'omnia-nodes'
     static_configs:
       - targets:
-        - 'omnia-node-1:9091'
-        - 'omnia-node-2:9092'
-        - 'omnia-node-3:9093'
-        - 'omnia-node-4:9094'
+        - 'omnia-node-1:8080'
+        - 'omnia-node-2:8080'
+        - 'omnia-node-3:8080'
+        - 'omnia-node-4:8080'
     metrics_path: /metrics

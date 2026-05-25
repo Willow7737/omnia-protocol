@@ -46,6 +46,7 @@ use ed25519_dalek::{Signature, Signer, Verifier};
 use omnia_primitives::blake3_hash_domain;
 use omnia_primitives::NodeId;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use thiserror::Error;
 
 /// Errors that can occur during deterministic hash operations.
@@ -187,7 +188,7 @@ pub fn deterministic_verify(
 
     let expected_output: [u8; 32] = blake3_hash_domain(b"omnia-commitment", &preimage);
 
-    if expected_output != det_output.output {
+    if expected_output.ct_eq(&det_output.output).unwrap_u8() == 0 {
         return Err(DeterministicHashError::VerificationFailed(
             "Output does not match expected value".to_string(),
         ));

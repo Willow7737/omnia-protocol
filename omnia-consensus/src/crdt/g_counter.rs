@@ -59,9 +59,23 @@ impl GCounter {
         Ok(())
     }
 
-    /// Get the current total value (sum of all node counts)
+    /// Get the current total value (sum of all node counts).
+    ///
+    /// Saturates at `u64::MAX` if the sum overflows, preserving monotonicity.
     pub fn value(&self) -> u64 {
-        self.counts.values().sum()
+        self.counts
+            .values()
+            .copied()
+            .try_fold(0u64, |acc, v| acc.checked_add(v))
+            .unwrap_or(u64::MAX)
+    }
+
+    /// Get the current total value, returning an error if the sum overflows.
+    pub fn value_checked(&self) -> Result<u64, CrdtError> {
+        self.counts
+            .values()
+            .copied()
+            .try_fold(0u64, |acc, v| acc.checked_add(v).ok_or(CrdtError::Overflow))
     }
 
     /// Get the count for a specific node
@@ -264,6 +278,19 @@ mod tests {
         let mut counter2 = GCounter::new();
         counter2.increment(n1, 1).unwrap();
         assert_eq!(counter.state_hash(), counter2.state_hash());
+    }
+
+    #[test]
+    fn test_value_saturates_on_overflow() {
+        let mut counter = GCounter::new();
+        let n1 = node(1);
+        let n2 = node(2);
+        counter.increment(n1, u64::MAX).unwrap();
+        counter.increment(n2, 1).unwrap();
+        // value() should saturate at u64::MAX rather than wrapping
+        assert_eq!(counter.value(), u64::MAX);
+        // value_checked() should return Overflow error
+        assert!(counter.value_checked().is_err());
     }
 
     // ── Property-based tests (proptest) ──────────────────────────────

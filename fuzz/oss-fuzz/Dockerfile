@@ -13,7 +13,7 @@
 #   2. Add omnia-protocol to projects/
 #   3. Use this Dockerfile as the project's Dockerfile
 
-FROM rust:1.88-bookworm AS builder
+FROM rust:1.91-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     clang libclang-dev llvm-dev pkg-config \

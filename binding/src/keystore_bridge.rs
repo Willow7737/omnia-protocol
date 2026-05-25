@@ -52,6 +52,14 @@ pub struct RotationState {
     pub hybrid_key_hash: Option<String>,
     /// Timestamp of the last rotation.
     pub last_rotation_timestamp: u64,
+    /// Hex-encoded Ed25519 secret key (32 bytes) of the rotated keypair.
+    ///
+    /// Present when the key has been rotated so that `current_signing_key()`
+    /// returns the correct post-rotation keypair even after a restart.
+    /// The keystore on disk still holds the original keypair; this field
+    /// supplements it until a full keystore rotation is performed.
+    #[serde(default)]
+    pub rotated_ed25519_secret: Option<String>,
 }
 
 impl RotationState {
@@ -82,6 +90,13 @@ pub struct KeyStoreBridge {
     rotation_state_path: PathBuf,
     /// Cached rotation state.
     rotation_state: RotationState,
+    /// Rotated Ed25519 keypair, set after a successful rotation.
+    ///
+    /// When present, [`current_signing_key()`](Self::current_signing_key) returns
+    /// this keypair instead of the keystore's original keypair, ensuring that
+    /// signatures are produced with the post-rotation key even though the
+    /// on-disk keystore still contains the pre-rotation key.
+    rotated_keypair: Option<NodeKeypair>,
     /// Stored Dilithium keypair (populated after rotation to Hybrid/PostQuantum).
     /// Used to produce Dilithium signatures in `sign_with_dilithium()`.
     /// Stored as the full `Keypair` because `pqc_dilithium` v0.2 does not
@@ -129,16 +144,36 @@ impl KeyStoreBridge {
                 classical_key_hash: blake3_hash_hex(&keystore.public_key().to_bytes()),
                 hybrid_key_hash: None,
                 last_rotation_timestamp: 0,
+                rotated_ed25519_secret: None,
             };
             let manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
             (state, manager)
         };
+
+        // Restore rotated Ed25519 keypair from persisted state (if any).
+        let rotated_keypair = rotation_state
+            .rotated_ed25519_secret
+            .as_ref()
+            .map(|hex_str| {
+                let bytes = hex::decode(hex_str)
+                    .map_err(|e| BridgeError::Serialization(format!("Invalid hex in rotated Ed25519 key: {e}")))?;
+                if bytes.len() != 32 {
+                    return Err(BridgeError::Serialization(
+                        "Rotated Ed25519 key must be 32 bytes".into(),
+                    ));
+                }
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                Ok(NodeKeypair::from_bytes(&arr))
+            })
+            .transpose()?;
 
         Ok(Self {
             keystore,
             rotation_manager,
             rotation_state_path,
             rotation_state,
+            rotated_keypair,
             #[cfg(feature = "pqc")]
             dilithium_keypair: None,
         })
@@ -191,8 +226,21 @@ impl KeyStoreBridge {
             self.dilithium_keypair = Some(dilithium_keypair);
         }
 
+        // Persist the new Ed25519 keypair so `current_signing_key()` returns the
+        // post-rotation key even after a restart.  Both the in-memory field and
+        // the serializable hex representation in `rotation_state` are updated
+        // so that `persist_rotation_state()` writes them to disk.
+        let ed25519_secret_hex = hex::encode(ed25519_keypair.to_bytes());
+        self.rotated_keypair = Some(ed25519_keypair);
+        self.rotation_state.rotated_ed25519_secret = Some(ed25519_secret_hex);
+
         let new_pubkey = PqPublicKey {
-            ed25519: ed25519_keypair.verifying_key().to_bytes(),
+            ed25519: self
+                .rotated_keypair
+                .as_ref()
+                .expect("rotated_keypair was just set above")
+                .verifying_key()
+                .to_bytes(),
             #[cfg(feature = "pqc")]
             dilithium: dilithium_keypair.public.to_vec(),
             #[cfg(not(feature = "pqc"))]
@@ -242,10 +290,18 @@ impl KeyStoreBridge {
     }
 
     /// Get the current signing key (respects rotation phase).
+    ///
+    /// After a rotation, returns the new Ed25519 keypair that was persisted
+    /// during the last call to [`rotate()`](Self::rotate).  Falls back to the
+    /// keystore's original keypair when no rotation has occurred.
     pub fn current_signing_key(&self) -> Result<&NodeKeypair, BridgeError> {
-        self.keystore
-            .keypair()
-            .ok_or_else(|| BridgeError::Crypto("No keypair loaded".into()))
+        if let Some(ref kp) = self.rotated_keypair {
+            Ok(kp)
+        } else {
+            self.keystore
+                .keypair()
+                .ok_or_else(|| BridgeError::Crypto("No keypair loaded".into()))
+        }
     }
 
     /// Sign a message using the stored Dilithium secret key.
@@ -391,12 +447,74 @@ mod tests {
             classical_key_hash: "blake3:abc".to_string(),
             hybrid_key_hash: Some("blake3:def".to_string()),
             last_rotation_timestamp: 1716000000,
+            rotated_ed25519_secret: None,
         };
 
         let json = serde_json::to_string(&state).expect("serialize");
         let deserialized: RotationState = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(state.version, deserialized.version);
         assert!(matches!(deserialized.current_phase, CommitmentPhase::Hybrid));
+    }
+
+    /// Verify that `rotated_ed25519_secret` deserializes as `None` from old
+    /// rotation state JSON that predates the field (backward compatibility).
+    #[test]
+    fn test_rotation_state_backward_compatible() {
+        let old_json = r#"{
+            "version": 1,
+            "current_phase": "Hybrid",
+            "transition_start_round": 100,
+            "classical_key_hash": "blake3:abc",
+            "hybrid_key_hash": "blake3:def",
+            "last_rotation_timestamp": 1716000000
+        }"#;
+        let state: RotationState = serde_json::from_str(old_json).expect("deserialize old format");
+        assert!(state.rotated_ed25519_secret.is_none());
+    }
+
+    /// Verify that after rotation the signing key changes and the same key
+    /// is returned after a restart (the core AUDIT-7 fix).
+    #[test]
+    fn test_rotated_keypair_survives_restart() {
+        let dir = TempDir::new().expect("temp dir");
+        let original_pubkey;
+
+        // Phase 1: create, record original key, then rotate
+        let rotated_pubkey = {
+            let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
+            original_pubkey = bridge
+                .current_signing_key()
+                .expect("original key")
+                .verifying_key()
+                .to_bytes();
+
+            let sig = vec![1u8; 64];
+            bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
+
+            // After rotation, current_signing_key() must return the NEW key
+            let new_key = bridge.current_signing_key().expect("rotated key");
+            let new_pubkey = new_key.verifying_key().to_bytes();
+            assert_ne!(
+                original_pubkey, new_pubkey,
+                "After rotation, current_signing_key() must return the new keypair, not the old one"
+            );
+            new_pubkey
+        };
+
+        // Phase 2: restart — reload from disk and verify the rotated key persists
+        let bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge reload");
+        let reloaded_key = bridge.current_signing_key().expect("key after reload");
+        let reloaded_pubkey = reloaded_key.verifying_key().to_bytes();
+
+        // The reloaded key must match the rotated key, NOT the original keystore key
+        assert_eq!(
+            rotated_pubkey, reloaded_pubkey,
+            "After restart, current_signing_key() must return the persisted rotated keypair"
+        );
+        assert_ne!(
+            original_pubkey, reloaded_pubkey,
+            "After restart, the signing key must NOT revert to the original keystore key"
+        );
     }
 
     /// Test that Dilithium signing works after rotation to Hybrid phase.

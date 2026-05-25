@@ -173,12 +173,17 @@ impl BatchCrdtMerger {
     /// operation fails validation, the entire batch is rejected and
     /// the merger state is unchanged.
     ///
+    /// If any operation fails during application, the entire batch is
+    /// rolled back to the pre-batch state.
+    ///
     /// # Errors
     ///
     /// - [`BatchCrdtError::EmptyBatch`] — the operations list is empty.
     /// - [`BatchCrdtError::BatchTooLarge`] — too many operations.
     /// - [`BatchCrdtError::ValidationFailed`] — one or more operations
     ///   failed pre-flight validation.
+    /// - [`BatchCrdtError::OperationFailed`] — an operation failed during
+    ///   application; all changes are rolled back.
     pub fn apply_batch(&mut self, ops: &[CrdtBatchOp]) -> Result<BatchMergeResult, BatchCrdtError> {
         // Validate batch size
         if ops.is_empty() {
@@ -191,6 +196,11 @@ impl BatchCrdtMerger {
         // Phase 1: Validate all operations (dry run)
         self.validate_batch(ops)?;
 
+        // Snapshot for rollback
+        let g_counters_snapshot = self.g_counters.clone();
+        let or_sets_snapshot = self.or_sets.clone();
+        let lww_registers_snapshot = self.lww_registers.clone();
+
         // Phase 2: Apply all operations
         // We know all operations are valid, so we can apply them without
         // further validation. However, we still handle overflow by rolling
@@ -202,8 +212,10 @@ impl BatchCrdtMerger {
                 CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
                     let counter = self.g_counters.entry(key.clone()).or_default();
                     if counter.increment(*node_id, *amount).is_err() {
-                        // This shouldn't happen after validation, but handle it
-                        // gracefully with a rollback
+                        // Rollback
+                        self.g_counters = g_counters_snapshot;
+                        self.or_sets = or_sets_snapshot;
+                        self.lww_registers = lww_registers_snapshot;
                         return Err(BatchCrdtError::OperationFailed {
                             index,
                             reason: "G-Counter overflow after validation".to_string(),

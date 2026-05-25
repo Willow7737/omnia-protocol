@@ -26,16 +26,16 @@ jobs:
           - group: adapters-binding
             targets: "fuzz_zk_proof_deserialization fuzz_snapshot_deserialization fuzz_shard_route"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       # Use a recent nightly for fuzz builds.  The --sanitizer none flag
       # avoids __sancov_gen_ linker errors that occur when ASan and
       # SanitizerCoverage are combined on certain nightly versions.
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly-2026-04-15
+          toolchain: nightly-2025-12-01
           components: rust-src, llvm-tools-preview
       - name: Override toolchain for fuzz
-        run: rustup override set nightly-2026-04-15
+        run: rustup override set nightly-2025-12-01
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - uses: Swatinem/rust-cache@v2
@@ -61,9 +61,9 @@ jobs:
               # non-zero exit code indicates a crash or error.
               timeout 300 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -max_total_time=300 -runs=100000
               ec=$?
-              if [ $ec -eq 124 ]; then
+              if [ "$ec" -eq 124 ]; then
                 echo "$target: time budget exhausted (normal)"
-              elif [ $ec -ne 0 ]; then
+              elif [ "$ec" -ne 0 ]; then
                 echo "::error::$target exited with code $ec (possible crash)"
                 FAILED=1
               else
@@ -102,7 +102,7 @@ jobs:
     name: Deep Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -146,7 +146,7 @@ jobs:
     name: Cargo Deny Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
