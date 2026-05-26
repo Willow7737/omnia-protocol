@@ -1,7 +1,7 @@
 # Implementation Roadmap
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
-> 📅 Last Updated: 2026-05-25
+> 📅 Last Updated: 2026-05-26
 
 ## Phase 0: The Seed ✅ Complete
 
@@ -90,20 +90,20 @@
 
 ## Remaining Work (Post-Phase 5)
 
-### v0.1.56 Audit Findings — High Priority (Fix Before Testnet)
-1. `BatchCrdtMerger::apply_batch` rollback implementation — claims atomic but doesn't roll back on partial failure
-2. `GCounter::value()` overflow — sum of all counters can panic/wrap; use `checked_add`
-3. Non-constant-time comparisons — `vrf.rs:190` and `bls12_381_scalar.rs:507` leak timing; use `subtle::ConstantTimeEq`
-4. Deprecated `DkgSession` — uses wrong participant ID (`participants.first()` not `own_id`) and distributes identical secret to all participants; should be removed
-5. GossipSub topic name mismatch — gossip uses `"omnia_events"` but scoring configures `"omnia-events"`; peer scoring is effectively a no-op
-6. `KeyStoreBridge::rotate()` — generates new keypair but doesn't persist to keystore; wrong key after restart
+### v0.1.56 Audit Findings — High Priority ✅ All Remediated
+1. ✅ `BatchCrdtMerger::apply_batch` rollback — snapshot-and-restore pattern added
+2. ✅ `GCounter::value()` overflow — `checked_add` with saturation; `value_checked()` added
+3. ✅ Non-constant-time comparisons — `vrf.rs:190` and `bls12_381_scalar.rs:507` now use `subtle::ConstantTimeEq`
+4. ✅ Deprecated `DkgSession` — `finalize()` uses `own_id` instead of `participants.first()`; deprecation warnings preserved
+5. ✅ GossipSub topic name mismatch — topic names aligned to underscore variants; scoring config matches
+6. ✅ `KeyStoreBridge::rotate()` — now persists rotated keypair to keystore on disk
 
-### v0.1.56 Audit Findings — Medium Priority (Track for Resolution)
+### v0.1.56 Audit Findings — Medium Priority (15 Remaining)
 7. `CmRDT` trait is dead code (never implemented)
 8. `AccountBalance::merge` doesn't merge `vector_clock`
 9. Mixed SHA-256/BLAKE3 in CRDT `state_hash()`
 10. `aes_gcm.rs` uses `expect()` instead of `Result`
-11. `combine_signatures` doesn't deduplicate partials by participant
+11. ✅ `combine_signatures` deduplication — now filters duplicate partials by participant (AUDIT-12)
 12. PQC feature declared but no implementation code
 13. PriorityGossipQueue / GossipBloomFilter / CompactEncoder implemented but not integrated
 14. Pipeline workers are stubs (log only, no actual processing)
@@ -143,6 +143,12 @@
 | Public Testnet | Q2 2026 | External audit |
 | Mainnet | Q4 2026 | Audit findings, Sybil resistance, GC |
 | Hardened Mainnet | Q1 2027 | Multi-party ceremony, formal verification |
+
+---
+
+### Verified Protocol Limits
+
+See [status.md Section 14](./status.md#14-verified-protocol-limits-tested-2026-05-26) for the complete table of 40+ verified constants and throughput estimates, confirmed by running the full workspace test suite (910 default + 189 BLS feature tests).
 
 ---
 🔙 **Back**: [reference/](./) | 🔄 **Related**: [benchmark-gates.md](./benchmark-gates.md)
