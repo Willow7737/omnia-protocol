@@ -187,14 +187,14 @@ pub enum CausalGraphError {
     },
     #[error("Sequence buffer overflow: too many out-of-order events for creator {creator:?}")]
     /// The per-creator sequence buffer exceeded its maximum capacity.
-    /// This is a DoS protection bound — see [`MAX_SEQUENCE_BUFFER_PER_CREATOR`].
+    /// This is a DoS protection bound (256 events per creator).
     SequenceBufferOverflow {
         /// The creator whose buffer overflowed
         creator: NodeId,
     },
     #[error("Sequence gap too large: creator {creator:?} event sequence {actual} exceeds expected {expected} by more than {max_gap}")]
     /// An event's sequence number is too far ahead of the expected next sequence.
-    /// This is a DoS protection bound — see [`MAX_SEQUENCE_GAP`].
+    /// This is a DoS protection bound (maximum gap of 512).
     SequenceGapTooLarge {
         /// The creator whose gap was too large
         creator: NodeId,
@@ -342,8 +342,8 @@ impl CausalGraph {
     /// - If `event.sequence == expected_next` (`last_known + 1`), it is inserted
     ///   immediately and any buffered successors are flushed.
     /// - If `event.sequence > expected_next` (out-of-order arrival), the event
-    ///   is buffered until its predecessor arrives. The buffer is bounded by
-    ///   [`MAX_SEQUENCE_BUFFER_PER_CREATOR`] and [`MAX_SEQUENCE_GAP`].
+    ///   is buffered until its predecessor arrives. The buffer is bounded per
+    ///   creator (256 events) and per gap (512 sequence numbers).
     ///
     /// # Cycle Detection Strategy
     ///
