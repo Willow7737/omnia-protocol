@@ -4841,15 +4841,11 @@ name = "omnia-limit-verification"
 version = "0.1.56"
 dependencies = [
  "blake3",
- "ed25519-dalek",
- "hex",
  "omnia-binding",
  "omnia-consensus",
  "omnia-crypto",
  "omnia-economics",
  "omnia-primitives",
- "rand 0.8.6",
- "sha2",
 ]
 
 [[package]]
