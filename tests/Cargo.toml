@@ -1,0 +1,16 @@
+[package]
+name = "omnia-limit-verification"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "Stress and limit verification tests for the Omnia Protocol — tests all absolute limits"
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+omnia-consensus = { path = "../omnia-consensus" }
+omnia-primitives = { path = "../omnia-primitives" }
+omnia-crypto = { path = "../omnia-crypto" }
+omnia-economics = { path = "../economics" }
+omnia-binding = { path = "../binding" }
+blake3 = "1"

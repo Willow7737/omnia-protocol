@@ -111,7 +111,7 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 | `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ 70% |
 | `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ 85% |
 
-**Total: 209 Rust source files, 75,280 lines, 1,219 tests — all passing.**
+**Total: 209 Rust source files, 75,280 lines, 1,315 tests — all passing.**
 
 ---
 
