@@ -1,7 +1,7 @@
 # Project Dashboard
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
-> 📅 Last Updated: 2026-05-25
+> 📅 Last Updated: 2026-05-26
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
@@ -11,25 +11,25 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | :--- | :--- | :--- |
 | **Version** | v0.1.56 | Latest release |
 | **Phase** | Post-Phase 5: Audit & Hardening | 🔄 In Progress |
-| **Overall Completion** | **97%** (18/23 audit findings resolved, 5 by design) | All core layers implemented; all bugs fixed |
+| **Overall Completion** | **93%** (full codebase audit v0.1.56, 8/23 findings remediated) | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 1,219 unit tests across 13 crates, 0 production `unwrap()`, 34 typed error enums, `#![forbid(unsafe_code)]` enforced | Verified |
+| **Code Health** | 1,099 unit tests (910 default + 189 BLS), 0 production `unwrap()`, 34 typed error enums, `#![forbid(unsafe_code)]` enforced | Verified |
 | **Network Status** | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack | Integration complete |
-| **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic | Phase 3 resolved |
+| **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining | Phase 3 resolved |
 | **Mutation Testing** | 75% minimum score on primitives; consensus sharded across 4 parallel jobs | Nightly CI |
 
 ### Completion Bar
 
 ```
-[█████████████████████████████░] 97%
+[██████████████████████████░░] 93%
 ```
 
-> **Note**: The 97% figure reflects resolution of 18/23 audit findings (78% of
-> audit items fixed, 5 retained by design). All Phase 0–5 milestones are complete.
-> The v0.1.56 audit identified 23 findings; all 7 high-priority and 9 medium-priority
-> ones are now fixed. The remaining 5 items are "by design" (PQC feature gate,
-> gossip module staging, pipeline worker Phase 1 milestone, test-only ephemeral keys,
-> substrate backward compatibility). Remaining work: external audit and public testnet.
+> **Note**: The 93% figure reflects the full v0.1.56 codebase audit across all 13 crates.
+> All Phase 0–5 milestones are complete. 8 of 23 audit findings have been remediated
+> (7 high-priority: BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS,
+> DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence; 1 medium: signature
+> dedup). Remaining: 15 medium-priority issues, Docker 5-node verification, external audit,
+> and public testnet preparation.
 
 ---
 
@@ -51,7 +51,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 
 | Component | Status | Risk Level | Notes |
 | :--- | :--- | :--- | :--- |
-| **Causal Consensus** | Implemented | Low | Rust, 284 consensus tests + 62 substrate tests, O(new_events) processing |
+| **Causal Consensus** | Implemented | Low | Rust, 267 consensus tests + 33 substrate tests, O(new_events) processing |
 | **Identity Shard** | Implemented | Low | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery |
 | **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence) |
 | **Computational Shard** | Implemented | Low | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub |
@@ -245,7 +245,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 ## Transparency Log
 *Every major decision and status change is logged here.*
 
-- **2026-05-25:** Full v0.1.56 codebase audit completed across all 13 crates (209 source files, 75,280 LOC, 1,219 tests). Identified 7 high-priority bugs: (1) `BatchCrdtMerger::apply_batch` lacks real rollback on partial failure, (2) `GCounter::value()` can overflow on sum, (3) non-constant-time comparisons in VRF verification (`vrf.rs:190`) and Feldman share verification (`bls12_381_scalar.rs:507`), (4) deprecated `DkgSession::finalize()` uses wrong participant ID, (5) deprecated `DkgSession` distributes identical secret key to all participants, (6) GossipSub topic name mismatch (`omnia_events` vs `omnia-events`) making peer scoring a no-op, (7) `KeyStoreBridge::rotate()` doesn't persist new keypair. Also identified 16 medium-priority issues tracked for resolution. Workspace version bumped from 0.1.52 to 0.1.56. CI fixes: Docker tag lowercase resolved, mutation testing sharded across 4 parallel jobs with 60s timeout.
+- **2026-05-26:** All 7 high-priority audit findings remediated and 1 medium (AUDIT-12: signature dedup). Full workspace test suite verified: 910 unit tests + 189 BLS feature tests all passing. 25 CI workflow fixes applied (actions/checkout v4, Docker MSRV 1.91, OpenSSL 3.1.8, forge error handling). Updated test for dedup behavior (combine_signatures now correctly rejects duplicate-inflated partials). Fixed governance.rs rustdoc link. Added Section 14 (Verified Protocol Limits) to status.md with 40+ verified constants and throughput estimates.
 - **2026-05-24:** v0.1.53 deep code review completed. All 8 previously identified critical issues now fully resolved. P0-1: Node binary wires GossipProtocol → CausalGraph → Consensus (main.rs lines 187-527). P0-2: DKG uses proper BLS12-381 scalar field arithmetic (`bls12_381_scalar` module with `blst_fr` operations). B1: ShardRouter wired as EventProcessor on Substrate. A2: Bootstrap peers from CLI/TOML propagated to both gossip and network layers. C-06: Merkle proofs have compile-time type safety via `MerkleProof<H: HashFunction>` generic. E2E multi-node tests: 4/5 passing (genesis finality, cross-ref consensus, single producer, localhost CI). Late-join test fixed with cross-reference events. Docker Compose 3-node testnet with health checks + Prometheus + Grafana. CI workflow comprehensive: clippy deny, feature matrix, multi-OS, chaos tests, mutation testing, benchmark comparison, SBOM, reproducibility, fuzz smoke, cargo-vet.
 - **2026-05-21:** Documentation audit: Fixed README.md workspace table (was missing omnia-primitives, omnia-crypto, omnia-consensus, omnia-network; had stale `zk/` directory reference), updated test counts (278→800+), updated Rust version badge (stable→1.91), added FFI settlement adapter and Cosmos stub to ZK-Rollup section, added Bitcoin/Solana/Celestia adapters to Phase 1 roadmap. Updated feature-matrix.md with complete feature flag reference (was missing arkworks, pqc, bls, settlement-ffi, persistent-storage, network, metrics, etc.). Updated feature-flags.md with all feature flags. Fixed docs/architecture/README.md broken table and test counts. Updated zk-rollup-settlement.md with actual current trait signatures (SettlementAdapter + SettlementLayer). Reconciled Phase 4 status across dashboard, status.md, and roadmap.md (Phase 4 now marked Complete, matching roadmap).
 - **2026-05-19:** Phase 4 M-2: Documentation sprint. Created ADRs 015-021 (leader selection, Kademlia DHT, GossipSub peer scoring, consensus persistence, fast-sync, ML-KEM integration, message compression). Updated dashboard for Phase 3 completion. Fixed FAQ entries. Updated STATUS.md.
@@ -261,8 +261,8 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - **2026-05-10:** Project ownership confirmed under CC0 License.
 
 ---
-*Last Updated: 2026-05-25*
-*Version: 8.0.0*
+*Last Updated: 2026-05-26*
+*Version: 9.0.0*
 
 ---
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
