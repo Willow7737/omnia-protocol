@@ -161,13 +161,13 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 | ID | Finding | Severity | Status |
 | :--- | :--- | :--- | :--- |
-| **AUDIT-1** | `BatchCrdtMerger::apply_batch` lacks real rollback on partial failure | 🔴 High | 📋 Tracked |
-| **AUDIT-2** | `GCounter::value()` can overflow/panic on sum of all counters | 🔴 High | 📋 Tracked |
-| **AUDIT-3** | Non-constant-time comparisons in VRF + Feldman share verification | 🔴 High | 📋 Tracked |
-| **AUDIT-4** | Deprecated `DkgSession::finalize()` uses wrong participant ID | 🔴 High | 📋 Tracked |
-| **AUDIT-5** | Deprecated `DkgSession` distributes identical secret key to all | 🔴 High | 📋 Tracked |
-| **AUDIT-6** | GossipSub topic name mismatch (peer scoring is a no-op) | 🔴 High | 📋 Tracked |
-| **AUDIT-7** | `KeyStoreBridge::rotate()` doesn't persist new keypair | 🔴 High | 📋 Tracked |
+| **AUDIT-1** | `BatchCrdtMerger::apply_batch` lacks real rollback on partial failure | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-2** | `GCounter::value()` can overflow/panic on sum of all counters | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-3** | Non-constant-time comparisons in VRF + Feldman share verification | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-4** | Deprecated `DkgSession::finalize()` uses wrong participant ID | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-5** | Deprecated `DkgSession` distributes identical secret key to all | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-6** | GossipSub topic name mismatch (peer scoring is a no-op) | 🔴 High | ✅ Fixed (b5d0e55) |
+| **AUDIT-7** | `KeyStoreBridge::rotate()` doesn't persist new keypair | 🔴 High | ✅ Fixed (b5d0e55) |
 | **AUDIT-8** | `CmRDT` trait is dead code (never implemented) | 🟡 Medium | 📋 Tracked |
 | **AUDIT-9** | `AccountBalance::merge` doesn't merge vector_clock | 🟡 Medium | 📋 Tracked |
 | **AUDIT-10** | Mixed SHA-256/BLAKE3 in CRDT state_hash | 🟡 Medium | 📋 Tracked |
@@ -203,8 +203,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **v0.1.56 Audit** | 23 | 0 | 0 | 7 | 0 | 16 | ░░░░░░░░░░ 0% |
-| **TOTAL** | **131** | **93** | **0** | **8** | **4** | **18** | █████████░ 92% |
+| **v0.1.56 Audit** | 23 | 7 | 0 | 0 | 0 | 16 | ███░░░░░░░ 30% |
+| **TOTAL** | **131** | **100** | **0** | **1** | **4** | **16** | █████████░ 93% |
 
 ---
 *Legend:*

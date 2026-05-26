@@ -11,7 +11,7 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | :--- | :--- | :--- |
 | **Version** | v0.1.56 | Latest release |
 | **Phase** | Post-Phase 5: Audit & Hardening | 🔄 In Progress |
-| **Overall Completion** | **92%** (full codebase audit v0.1.56) | All core layers implemented; 7 high-priority bugs identified for fix |
+| **Overall Completion** | **93%** (7/23 audit findings remediated) | All core layers implemented; 7 high-priority bugs fixed, 16 medium remaining |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
 | **Code Health** | 1,219 unit tests across 13 crates, 0 production `unwrap()`, 34 typed error enums, `#![forbid(unsafe_code)]` enforced | Verified |
 | **Network Status** | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack | Integration complete |
@@ -21,15 +21,15 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 ### Completion Bar
 
 ```
-[█████████████████████████░░░] 92%
+[██████████████████████████░░] 93%
 ```
 
-> **Note**: The 92% figure reflects the full v0.1.56 codebase audit across all 13 crates.
-> All Phase 0–5 milestones are complete. A comprehensive audit identified 7 high-priority
-> bugs (non-constant-time comparisons in VRF, BatchCrdtMerger rollback gap, GCounter overflow,
-> gossip topic name mismatch, KeyStoreBridge rotation persistence, deprecated DkgSession bugs)
-> and 16 medium-priority issues tracked for resolution. Remaining work: bug fixes,
-> Docker 5-node verification, external audit, and public testnet preparation.
+> **Note**: The 93% figure reflects remediation of 7 high-priority audit findings.
+> All Phase 0–5 milestones are complete. The v0.1.56 audit identified 23 findings;
+> all 7 high-priority ones are now fixed (constant-time crypto, BatchCrdtMerger rollback,
+> GCounter overflow, gossip topic alignment, KeyStoreBridge rotation persistence,
+> DkgSession own_id fix). 16 medium-priority issues remain tracked. Remaining work:
+> medium-priority fixes, Docker 5-node verification, external audit, and public testnet.
 
 ---
 

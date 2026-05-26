@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Lines-75,280-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/Phase_0-92%25-brightgreen?style=for-the-badge" alt="Phase 0">
+  <img src="https://img.shields.io/badge/Phase_0-93%25-brightgreen?style=for-the-badge" alt="Phase 0">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
