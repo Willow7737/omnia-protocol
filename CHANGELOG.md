@@ -8,6 +8,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.57](https://github.com/Willow7737/omnia-protocol/compare/v0.1.56...v0.1.57) (2026-05-26)
+
+
+### Bug Fixes
+
+* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([fb40575](https://github.com/Willow7737/omnia-protocol/commit/fb405753f943945ec940ced0045172f1674de641))
+* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([1eafa5a](https://github.com/Willow7737/omnia-protocol/commit/1eafa5aad493a1fb7634fe3044401f89a1d23dce))
+* **ci:** resolve 25 CI workflow issues — action versions, Dockerfile, timeouts, shell safety ([87a6529](https://github.com/Willow7737/omnia-protocol/commit/87a65296d53589e90962c24f82c98ca85ed948d5))
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([5c6d8b8](https://github.com/Willow7737/omnia-protocol/commit/5c6d8b81b33cef61f10a1dac93a0b0bde0b32047))
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([a002c20](https://github.com/Willow7737/omnia-protocol/commit/a002c2083403add99dd29eadd115b4d7c05e47a1))
+* **clippy:** replace unwrap() with expect() in keystore_bridge.rs rotate() ([4551edb](https://github.com/Willow7737/omnia-protocol/commit/4551edbdd1366c060bbcb088f9aebaec906b0544))
+* **fmt:** apply cargo fmt to keystore_bridge.rs and g_counter.rs ([55fd867](https://github.com/Willow7737/omnia-protocol/commit/55fd867efd67c7784882e1b7aef0ce36aa1db4d3))
+* resolve 7 high-priority audit bugs + CI/Docker infrastructure fixes ([b5d0e55](https://github.com/Willow7737/omnia-protocol/commit/b5d0e55caf3d1f602e06d26f32fc56b1080b7055))
+* **rustdoc:** remove private intra-doc link in current_signing_key() ([f0868d6](https://github.com/Willow7737/omnia-protocol/commit/f0868d609e4e6540b0e879e8ddb851eebadecb0a))
+
+
+### Documentation
+
+* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([1e69ee7](https://github.com/Willow7737/omnia-protocol/commit/1e69ee7bb2d39850165b13f4429360d3d54a9fde))
+* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([dc01129](https://github.com/Willow7737/omnia-protocol/commit/dc01129778177e75d7691a64691fcf8a884f84a7))
+
 ## [0.1.56](https://github.com/Willow7737/omnia-protocol/compare/v0.1.55...v0.1.56) (2026-05-25)
 
 
