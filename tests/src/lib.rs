@@ -624,7 +624,7 @@ fn governance_quadratic_voting_weight() {
 fn throughput_benchmark_causal_graph() {
     let mut graph = CausalGraph::new();
     let kp = generate_keypair();
-    let event_count = 1_000;
+    let event_count = 10_000;
 
     let start = Instant::now();
     let genesis = signed_genesis(&kp);

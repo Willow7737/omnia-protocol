@@ -105,6 +105,16 @@ pub struct PrunedEventMetadata {
 /// - Current tips (events with no children)
 /// - Per-node highest sequence number
 /// - The frontier (latest known vector clock)
+///
+/// # Performance Design
+///
+/// The insert hot path is optimized for O(1) amortized insertion:
+/// - Cycle detection uses a creator-sequence monotonicity check (O(1))
+///   instead of BFS traversal (O(n)). A valid event always has
+///   `self_parent.sequence < event.sequence` for the same creator;
+///   a cycle would violate this monotonicity invariant.
+/// - Depth is computed in O(1) by looking up parent depths from the
+///   `depths` HashMap rather than recursively traversing ancestors.
 pub struct CausalGraph {
     /// All events in the graph, keyed by event ID
     events: HashMap<EventId, Event>,
@@ -121,6 +131,7 @@ pub struct CausalGraph {
     /// Number of finalized events
     finalized_count: usize,
     /// Per-event depth (computed during insert, used for pruning)
+    /// This is the authoritative depth index — O(1) lookup by event ID.
     depths: HashMap<EventId, usize>,
     /// Metadata for events that have been pruned.
     ///
@@ -160,6 +171,17 @@ impl CausalGraph {
     /// pruned parents), checks for cycles, and updates all internal
     /// indexes (tips, creator index, sequence tracking, frontier).
     ///
+    /// # Cycle Detection Strategy
+    ///
+    /// Cycle detection uses **creator-sequence monotonicity** — an O(1) check
+    /// instead of O(n) BFS traversal. In a DAG, a valid event from creator C
+    /// with self-parent P (also from C) must satisfy `P.sequence < event.sequence`.
+    /// A cycle would require an event to be its own ancestor, which would violate
+    /// this monotonicity invariant because sequence numbers only increase.
+    /// For other-parent links (cross-creator), cycle detection relies on the
+    /// structural invariant that a newly created event cannot reference a future
+    /// event as its parent — the parent must already exist in the graph.
+    ///
     /// # Errors
     ///
     /// - [`CausalGraphError::DuplicateEvent`] — an event with the same ID already exists.
@@ -186,10 +208,18 @@ impl CausalGraph {
             )));
         }
 
-        // Verify parents exist (except for genesis events)
+        // Verify parents exist (except for genesis events) and collect depth info
+        let mut max_parent_depth: usize = 0;
         if let Some(sp) = event.self_parent {
             match self.get_checked(&sp) {
-                Ok(_) => {} // parent exists, OK
+                Ok(parent) => {
+                    // O(1) cycle check: self-parent must have lower sequence from same creator
+                    if parent.creator == event.creator && parent.sequence >= event.sequence {
+                        return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
+                    }
+                    // O(1) depth lookup from index
+                    max_parent_depth = max_parent_depth.max(self.depths.get(&sp).copied().unwrap_or(0));
+                }
                 Err(CausalGraphError::EventPruned(_)) => {
                     return Err(CausalGraphError::EventPruned(hex::encode(&sp[..8])));
                 }
@@ -204,7 +234,15 @@ impl CausalGraph {
         }
         if let Some(op) = event.other_parent {
             match self.get_checked(&op) {
-                Ok(_) => {} // parent exists, OK
+                Ok(parent) => {
+                    // Cross-creator cycle check: other-parent from same creator
+                    // must have lower sequence
+                    if parent.creator == event.creator && parent.sequence >= event.sequence {
+                        return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
+                    }
+                    // O(1) depth lookup from index
+                    max_parent_depth = max_parent_depth.max(self.depths.get(&op).copied().unwrap_or(0));
+                }
                 Err(CausalGraphError::EventPruned(_)) => {
                     return Err(CausalGraphError::EventPruned(hex::encode(&op[..8])));
                 }
@@ -215,18 +253,6 @@ impl CausalGraph {
                     )));
                 }
                 Err(e) => return Err(e),
-            }
-        }
-
-        // Check for cycles
-        if let Some(sp) = event.self_parent {
-            if self.is_ancestor_of(&event_id, &sp)? {
-                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
-            }
-        }
-        if let Some(op) = event.other_parent {
-            if self.is_ancestor_of(&event_id, &op)? {
-                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
             }
         }
 
@@ -256,11 +282,16 @@ impl CausalGraph {
             self.finalized_count += 1;
         }
 
-        // Store the event BEFORE calculating depth (depth calculation looks up events in the map)
+        // Store the event
         self.events.insert(event_id, event);
 
-        // Update max depth
-        let depth = self.calculate_depth(&event_id)?;
+        // O(1) depth computation: max(parent depths) + 1
+        let depth = max_parent_depth + 1;
+        if depth > MAX_ANCESTRY_DEPTH {
+            return Err(CausalGraphError::MaxDepthExceeded(
+                hex::encode(&event_id[..8]).to_string(),
+            ));
+        }
         self.max_depth = self.max_depth.max(depth);
         self.depths.insert(event_id, depth);
 
@@ -469,36 +500,6 @@ impl CausalGraph {
         }
 
         Ok(ancestors)
-    }
-
-    /// Calculate the depth of an event
-    fn calculate_depth(&self, event_id: &EventId) -> Result<usize, CausalGraphError> {
-        let mut memo = HashMap::new();
-        self.calculate_depth_memo(event_id, &mut memo)
-    }
-
-    fn calculate_depth_memo(
-        &self,
-        event_id: &EventId,
-        memo: &mut HashMap<EventId, usize>,
-    ) -> Result<usize, CausalGraphError> {
-        if let Some(&depth) = memo.get(event_id) {
-            return Ok(depth);
-        }
-
-        let event = self
-            .events
-            .get(event_id)
-            .ok_or_else(|| CausalGraphError::InvalidEvent("event not found".to_string()))?;
-
-        let mut max_parent_depth = 0;
-        for parent in [event.self_parent, event.other_parent].iter().flatten() {
-            max_parent_depth = max_parent_depth.max(self.calculate_depth_memo(parent, memo)?);
-        }
-
-        let depth = max_parent_depth + 1;
-        memo.insert(*event_id, depth);
-        Ok(depth)
     }
 
     /// Find events that are concurrent with the given event.
