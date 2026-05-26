@@ -1896,11 +1896,11 @@ mod timeout_tests {
     #[cfg(test)]
     use omnia_crypto::generate_keypair;
     #[cfg(test)]
+    use omnia_primitives::blake3_hash_domain;
+    #[cfg(test)]
     use omnia_primitives::Event;
     #[cfg(test)]
     use omnia_primitives::VectorClock;
-    #[cfg(test)]
-    use omnia_primitives::blake3_hash_domain;
     use std::thread;
 
     /// Helper: create a NodeId from a u8.

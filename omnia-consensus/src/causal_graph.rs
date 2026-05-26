@@ -99,9 +99,7 @@ impl SequenceBuffer {
 
         // Check buffer capacity
         if creator_buf.len() >= MAX_SEQUENCE_BUFFER_PER_CREATOR && !creator_buf.contains_key(&event.sequence) {
-            return Err(CausalGraphError::SequenceBufferOverflow {
-                creator: event.creator,
-            });
+            return Err(CausalGraphError::SequenceBufferOverflow { creator: event.creator });
         }
 
         creator_buf.insert(event.sequence, event.clone());
@@ -170,10 +168,15 @@ pub enum CausalGraphError {
     #[error("Invalid sequence: creator {creator:?} expected sequence {expected}, got {actual}")]
     /// Sequence number violates the monotonicity invariant required for O(1) cycle detection.
     ///
-    /// The O(1) cycle detection check assumes that for any creator, events are inserted
-    /// in strictly increasing sequence order. This error fires when an event's sequence
-    /// number is not exactly `last_known_sequence + 1` (or 0 for a creator's first event),
-    /// making the O(1) check sound.
+    /// The O(1) cycle detection check assumes that for any creator, events are never
+    /// inserted with a sequence number lower than the highest sequence already committed.
+    /// This error fires when an event's sequence number is less than the creator's
+    /// `last_known_sequence`, which would allow an attacker with a compromised key to
+    /// bypass the O(1) cycle check by creating disconnected sub-chains.
+    ///
+    /// Note: events with `sequence == last_known_sequence` are **not** rejected — they
+    /// represent potential equivocation (two different events from the same creator at
+    /// the same sequence), which the consensus layer must detect and slash.
     InvalidSequence {
         /// The creator whose sequence invariant was violated
         creator: NodeId,
@@ -326,16 +329,21 @@ impl CausalGraph {
     /// # Sequence Monotonicity Enforcement
     ///
     /// The O(1) cycle detection check is only sound if events from each creator
-    /// are inserted in strictly increasing sequence order. This method enforces
-    /// that invariant at the insertion boundary:
+    /// never go backward in sequence number. This method enforces that invariant
+    /// at the insertion boundary:
     ///
-    /// - If `event.sequence == expected_next` for this creator, it is inserted
+    /// - If `event.sequence < last_known` for this creator, it is rejected with
+    ///   [`CausalGraphError::InvalidSequence`] — this prevents the O(1) cycle
+    ///   check bypass where a compromised key creates a disconnected sub-chain.
+    /// - If `event.sequence == last_known` for this creator, it is allowed through
+    ///   as a potential **equivocation** (two different events from the same
+    ///   creator at the same sequence). The consensus layer is responsible for
+    ///   detecting and slashing equivocation.
+    /// - If `event.sequence == expected_next` (`last_known + 1`), it is inserted
     ///   immediately and any buffered successors are flushed.
     /// - If `event.sequence > expected_next` (out-of-order arrival), the event
     ///   is buffered until its predecessor arrives. The buffer is bounded by
     ///   [`MAX_SEQUENCE_BUFFER_PER_CREATOR`] and [`MAX_SEQUENCE_GAP`].
-    /// - If `event.sequence < expected_next` (duplicate or stale), it is
-    ///   rejected with [`CausalGraphError::InvalidSequence`].
     ///
     /// # Cycle Detection Strategy
     ///
@@ -384,15 +392,41 @@ impl CausalGraph {
 
         // ── Sequence monotonicity enforcement ──────────────────────
         // This is the security invariant that makes the O(1) cycle check sound.
-        // Every event from a given creator must be inserted in strict sequence
-        // order (0, 1, 2, ...). Events that arrive out of order are buffered;
-        // events that go backward are rejected.
-        let expected_next = self.node_sequences.get(&event.creator).map(|&s| s + 1).unwrap_or(0);
+        //
+        // For a creator with no prior events, the first event must have seq 0.
+        // For a creator with prior events at last_known, the rules are:
+        //
+        //   sequence < last_known  → REJECT  (stale / attack — prevents O(1)
+        //                                   cycle-check bypass where a compromised
+        //                                   key resets to a low sequence number)
+        //   sequence == last_known → ALLOW   (equivocation — two different events
+        //                                   from the same creator at the same
+        //                                   sequence; the consensus layer must
+        //                                   detect and slash)
+        //   sequence == last_known + 1 → ALLOW (normal forward progress)
+        //   sequence > last_known + 1 → BUFFER (out-of-order gossip delivery)
+        //
+        // The critical security property is that sequence < last_known is rejected.
+        // The O(1) cycle check in insert_inner verifies that self-parent and
+        // other-parent from the same creator have a lower sequence; a backward
+        // jump could otherwise bypass that check by creating a disconnected
+        // sub-chain with self_parent: None.
+        //
+        // Equivocation (sequence == last_known) is allowed through because:
+        // (a) it cannot bypass the O(1) check — if the event has a self-parent
+        //     from the same creator, the parent's sequence < event.sequence is
+        //     checked; if self_parent is None, there is no self-parent edge
+        //     that could form a cycle;
+        // (b) the consensus layer must observe both equivocating events to
+        //     detect and slash the malicious validator.
+        let has_existing = self.node_sequences.contains_key(&event.creator);
+        let last_known = self.node_sequences.get(&event.creator).copied().unwrap_or(0);
+        let expected_next = if has_existing { last_known + 1 } else { 0 };
 
-        if event.sequence < expected_next {
-            // Stale or duplicate sequence — reject outright.
-            // This catches: sequence=0 when creator already has events,
-            // or any sequence that's already been committed.
+        if has_existing && event.sequence < last_known {
+            // Genuinely going backward — reject.
+            // This is the attack vector for O(1) cycle-check bypass:
+            // a compromised key creating events with old sequence numbers.
             return Err(CausalGraphError::InvalidSequence {
                 creator: event.creator,
                 expected: expected_next,
@@ -407,14 +441,16 @@ impl CausalGraph {
             return Ok(Vec::new()); // Not inserted yet, no IDs to return
         }
 
-        // event.sequence == expected_next: proceed with insertion.
+        // sequence == expected_next (normal) or
+        // sequence == last_known (equivocation): proceed with insertion.
 
         // ── Internal insertion (no monotonicity re-check needed) ───
         let mut inserted_ids = self.insert_inner(event)?;
 
         // After successful insertion, drain the buffer of any consecutive
         // successors that can now be inserted.
-        let creator = inserted_ids.first()
+        let creator = inserted_ids
+            .first()
             .and_then(|id| self.events.get(id))
             .map(|e| e.creator)
             .unwrap_or([0u8; 32]);
@@ -503,11 +539,12 @@ impl CausalGraph {
         // Update creator index
         self.by_creator.entry(event.creator).or_default().push(event_id);
 
-        // Update node sequence tracking — strict assignment, not max-tracking.
+        // Update node sequence tracking.
         // The monotonicity check in insert() guarantees event.sequence is
-        // exactly last_sequence + 1, but we use assignment for clarity.
+        // either last_known (equivocation) or >= last_known + 1 (forward).
+        // We use max() to ensure the tracking never goes backward.
         let current_seq = self.node_sequences.entry(event.creator).or_insert(0);
-        *current_seq = event.sequence;
+        *current_seq = (*current_seq).max(event.sequence);
 
         // Update frontier vector clock
         self.frontier.merge(&event.vector_clock);
@@ -2158,11 +2195,21 @@ mod tests {
         // Try to insert another event with seq 0 — should fail
         let e_bad = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![]);
         let result = graph.insert(e_bad);
-        assert!(matches!(result, Err(CausalGraphError::InvalidSequence { expected: 2, actual: 0, .. })));
+        assert!(matches!(
+            result,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 2,
+                actual: 0,
+                ..
+            })
+        ));
     }
 
     #[test]
-    fn test_sequence_monotonicity_rejects_duplicate_sequence() {
+    fn test_sequence_monotonicity_allows_equivocation_at_current_sequence() {
+        // Equivocation: same creator, same sequence, different event (different
+        // payload → different hash). The graph MUST allow the second event
+        // through so the consensus layer can detect and slash the equivocator.
         let mut graph = CausalGraph::new();
         let (kp, n1) = make_keypair_and_node(1);
 
@@ -2171,10 +2218,60 @@ mod tests {
         g.sign_with_keypair(&kp);
         graph.insert(g).unwrap();
 
-        // Try to insert another event with seq 0 — should fail
-        let e_bad = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![]);
-        let result = graph.insert(e_bad);
-        assert!(matches!(result, Err(CausalGraphError::InvalidSequence { expected: 1, actual: 0, .. })));
+        // Insert a second event with seq 0 but DIFFERENT content — this is
+        // equivocation, not a duplicate (different hash). Should be ALLOWED.
+        // Both events claim to be genesis (self_parent: None), which is the
+        // equivocation pattern at sequence 0.
+        let mut eq_event = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![0xAA]);
+        eq_event.sign_with_keypair(&kp);
+        let result = graph.insert(eq_event);
+        assert!(
+            result.is_ok(),
+            "Equivocation at current sequence should be allowed through for detection"
+        );
+
+        // Both events should be in the graph
+        assert_eq!(graph.len(), 2);
+
+        // node_sequences should still track seq 0 (max of 0, 0 = 0)
+        assert_eq!(graph.node_sequences.get(&n1), Some(&0u64));
+    }
+
+    #[test]
+    fn test_sequence_monotonicity_allows_equivocation_at_tip() {
+        // Equivocation at the latest sequence (the common case in real networks):
+        // a validator double-signs at their current sequence. Both equivocating
+        // events share the same self_parent (the event at seq N-1).
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Build chain: seq 0 → 1 → 2
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let g_id = g.id;
+        graph.insert(g).unwrap();
+
+        let vc1 = VectorClock::with_node(n1, 2);
+        let mut e1 = Event::new(n1, 1, vc1, Some(g_id), None, vec![]);
+        e1.sign_with_keypair(&kp);
+        let e1_id = e1.id;
+        graph.insert(e1).unwrap();
+
+        let vc2 = VectorClock::with_node(n1, 3);
+        let mut e2 = Event::new(n1, 2, vc2, Some(e1_id), None, vec![]);
+        e2.sign_with_keypair(&kp);
+        graph.insert(e2).unwrap();
+
+        // Now equivocate at seq 2 (same as last_known). The equivocating event
+        // has the SAME self_parent (e1_id) as the real seq-2 event, but a
+        // different payload → different hash.
+        let mut eq_event = Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(e1_id), None, vec![0xBB]);
+        eq_event.sign_with_keypair(&kp);
+        let result = graph.insert(eq_event);
+        assert!(result.is_ok(), "Equivocation at last_known sequence should be allowed");
+
+        // The equivocating event is now in the graph alongside the original
+        assert_eq!(graph.len(), 4); // genesis + seq1 + seq2 + equivocation at seq2
     }
 
     #[test]
@@ -2290,12 +2387,26 @@ mod tests {
         // After the fix: rejected with InvalidSequence
         let rogue = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![]);
         let result = graph.insert(rogue);
-        assert!(matches!(result, Err(CausalGraphError::InvalidSequence { expected: 6, actual: 0, .. })));
+        assert!(matches!(
+            result,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 6,
+                actual: 0,
+                ..
+            })
+        ));
 
         // Also try seq=3 (already committed)
         let rogue2 = Event::new(n1, 3, VectorClock::with_node(n1, 4), None, None, vec![]);
         let result2 = graph.insert(rogue2);
-        assert!(matches!(result2, Err(CausalGraphError::InvalidSequence { expected: 6, actual: 3, .. })));
+        assert!(matches!(
+            result2,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 6,
+                actual: 3,
+                ..
+            })
+        ));
     }
 
     #[test]
