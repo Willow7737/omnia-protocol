@@ -204,7 +204,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
 | **v0.1.56 Audit** | 23 | 8 | 0 | 0 | 0 | 15 | ███░░░░░░░ 35% |
-| **TOTAL** | **131** | **101** | **0** | **0** | **4** | **26** | █████████░ 93% |
+| **Limit Verification** | 39 | 39 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **TOTAL** | **170** | **140** | **0** | **1** | **4** | **26** | █████████░ 93% |
 
 ---
 *Legend:*
@@ -266,14 +267,17 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Settlement** | Ethereum adapter | Simulated + Live (alloy) | `settlement/ethereum/` |
 | **Settlement** | Multi-chain support | Ethereum, Solana (stub), FFI | `settlement/` |
 
-### Throughput Estimates (Derived from Constants)
+### Throughput Estimates (Verified by Limit Verification Tests)
 
-| Scenario | Calculation | Estimate |
+| Scenario | Measured | Notes |
 | :--- | :--- | :--- |
-| Single-node events/s (default batch) | 50 evt / 0.1s | ~500 evt/s |
-| Single-node events/s (max batch) | 100 evt / 0.1s | ~1,000 evt/s |
-| Gossip throughput per peer | 100 evt/gossip x 10/s | ~1,000 evt/s |
-| Aggregate gossip (50 peers) | 1,000 x 50 | ~50,000 evt/s |
+| CausalGraph insertion (10K events) | ~1,417 evt/s | Release build, linear chain, 0B payload |
+| ConsensusEngine processing (1K events) | ~9,029 evt/s | Release build, linear chain |
+| Ed25519 signature verification (1K sigs) | ~26,935 sig/s | Standalone verify |
+| VRF leader selection (150 candidates) | ~10,000 sel/s | 100% unique leader distribution |
+| CRDT batch merge (1K ops/batch) | ~100K ops/s | 100 batches |
+
+> See [docs/reference/LIMITS.md](./LIMITS.md) for the complete verified limits reference.
 
 ---
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
