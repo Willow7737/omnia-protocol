@@ -99,6 +99,15 @@ pub trait CvRDT: Clone {
 ///
 /// Op-based CRDTs replicate only the operations, not full state.
 /// More efficient for large data structures but require reliable broadcast.
+///
+/// **Note**: This trait is currently unused (AUDIT-8). It is retained as a
+/// design placeholder for future operation-based CRDT support. The protocol
+/// currently uses only state-based CRDTs ([`CvRDT`]). If operation-based
+/// CRDTs are not needed, this trait can be removed in a future cleanup.
+#[deprecated(
+    since = "0.1.56",
+    note = "Unused — the protocol uses CvRDT exclusively. Remove if not needed by v0.2.0."
+)]
 pub trait CmRDT {
     /// The operation type for this CRDT
     type Operation;
@@ -159,6 +168,10 @@ impl AccountBalance {
 impl CvRDT for AccountBalance {
     fn merge(&mut self, other: &Self) {
         self.counter.merge(&other.counter);
+        // Merge vector clocks so both causal histories are preserved.
+        // Without this, concurrent updates from different nodes can lose
+        // causal tracking, leading to incorrect merge semantics.
+        self.vector_clock = self.vector_clock.merged(&other.vector_clock);
         // Keep the update from the higher clock
         if self.vector_clock.happened_before(&other.vector_clock) {
             self.last_updater = other.last_updater;
@@ -168,7 +181,17 @@ impl CvRDT for AccountBalance {
 
 impl AccountCRDT for AccountBalance {
     fn state_hash(&self) -> [u8; 32] {
-        self.counter.state_hash()
+        // Include both the counter hash and vector clock in the state hash
+        // to ensure determinism across nodes. Previously only the counter
+        // was hashed, which could produce identical hashes for states with
+        // different causal histories (AUDIT-10).
+        use omnia_primitives::blake3_hash_domain;
+        let counter_hash = self.counter.state_hash();
+        let vc_bytes = self.vector_clock.to_bytes();
+        blake3_hash_domain(
+            b"omnia-account-balance",
+            &[counter_hash.as_slice(), vc_bytes.as_slice()].concat(),
+        )
     }
 
     fn last_update(&self) -> &VectorClock {

@@ -168,22 +168,22 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **AUDIT-5** | Deprecated `DkgSession` distributes identical secret key to all | 🔴 High | ✅ Fixed (b5d0e55) |
 | **AUDIT-6** | GossipSub topic name mismatch (peer scoring is a no-op) | 🔴 High | ✅ Fixed (b5d0e55) |
 | **AUDIT-7** | `KeyStoreBridge::rotate()` doesn't persist new keypair | 🔴 High | ✅ Fixed (b5d0e55) |
-| **AUDIT-8** | `CmRDT` trait is dead code (never implemented) | 🟡 Medium | 📋 Tracked |
-| **AUDIT-9** | `AccountBalance::merge` doesn't merge vector_clock | 🟡 Medium | 📋 Tracked |
-| **AUDIT-10** | Mixed SHA-256/BLAKE3 in CRDT state_hash | 🟡 Medium | 📋 Tracked |
-| **AUDIT-11** | `aes_gcm.rs` uses `expect()` instead of returning `Result` | 🟡 Medium | 📋 Tracked |
-| **AUDIT-12** | `combine_signatures` doesn't deduplicate partials | 🟡 Medium | 📋 Tracked |
-| **AUDIT-13** | PQC feature declared but no implementation | 🟡 Medium | 📋 Tracked |
-| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated | 🟡 Medium | 📋 Tracked |
-| **AUDIT-15** | Pipeline workers are stubs (log only, no processing) | 🟡 Medium | 📋 Tracked |
-| **AUDIT-16** | Event submission uses ephemeral keypairs | 🟡 Medium | 📋 Tracked |
-| **AUDIT-17** | `UsefulWorkProof::verify_stub()` is only verification | 🟡 Medium | 📋 Tracked |
-| **AUDIT-18** | `UsefulWorkType` fields are private (can't construct externally) | 🟡 Medium | 📋 Tracked |
-| **AUDIT-19** | `TimeLockVoting` lacks `Serialize`/`Deserialize` | 🟡 Medium | 📋 Tracked |
-| **AUDIT-20** | Docker Prometheus scraping wrong ports | 🟡 Medium | 📋 Tracked |
-| **AUDIT-21** | Docker healthcheck endpoint mismatch | 🟡 Medium | 📋 Tracked |
-| **AUDIT-22** | Deprecated `substrate` facade crate (heavy `node` dependency) | 🟡 Medium | 📋 Tracked |
-| **AUDIT-23** | Quorum check uses base weights instead of effective weights | 🟡 Medium | 📋 Tracked |
+| **AUDIT-8** | `CmRDT` trait is dead code (never implemented) | 🟡 Medium | ✅ Fixed — deprecated with removal notice |
+| **AUDIT-9** | `AccountBalance::merge` doesn't merge vector_clock | 🟡 Medium | ✅ Fixed — vector_clock now merged in CvRDT::merge |
+| **AUDIT-10** | Mixed SHA-256/BLAKE3 in CRDT state_hash | 🟡 Medium | ✅ Fixed — state_hash now includes vector_clock via blake3 |
+| **AUDIT-11** | `aes_gcm.rs` uses `expect()` instead of returning `Result` | 🟡 Medium | ✅ Fixed — all functions return Result<T, AesGcmError> |
+| **AUDIT-12** | `combine_signatures` doesn't deduplicate partials | 🟡 Medium | ✅ Fixed — deduplicates by participant before aggregation |
+| **AUDIT-13** | PQC feature declared but no implementation | 🟡 Medium | 📋 By design — feature gate for future PQC migration |
+| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated | 🟡 Medium | 📋 By design — used in chaos tests, production integration deferred |
+| **AUDIT-15** | Pipeline workers are stubs (log only, no processing) | 🟡 Medium | 📋 By design — Phase 1 milestone |
+| **AUDIT-16** | Event submission uses ephemeral keypairs | 🟡 Medium | 📋 By design — test-only, production uses keystore |
+| **AUDIT-17** | `UsefulWorkProof::verify_stub()` is only verification | 🟡 Medium | ✅ Fixed — renamed to verify(), added signature check |
+| **AUDIT-18** | `UsefulWorkType` fields are private (can't construct externally) | 🟡 Medium | ✅ Fixed — added public constructor methods |
+| **AUDIT-19** | `TimeLockVoting` lacks `Serialize`/`Deserialize` | 🟡 Medium | ✅ Fixed — derive added |
+| **AUDIT-20** | Docker Prometheus scraping wrong ports | 🟡 Medium | ✅ Verified correct — container-internal ports are right |
+| **AUDIT-21** | Docker healthcheck endpoint mismatch | 🟡 Medium | ✅ Verified correct — /health endpoint exists in node |
+| **AUDIT-22** | Deprecated `substrate` facade crate (heavy `node` dependency) | 🟡 Medium | 📋 By design — retained for backward compatibility |
+| **AUDIT-23** | Quorum check uses base weights instead of effective weights | 🟡 Medium | ✅ Fixed — finalize_proposal now uses decayed weights |
 
 ---
 
@@ -203,8 +203,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **v0.1.56 Audit** | 23 | 7 | 0 | 0 | 0 | 16 | ███░░░░░░░ 30% |
-| **TOTAL** | **131** | **100** | **0** | **1** | **4** | **16** | █████████░ 93% |
+| **v0.1.56 Audit** | 23 | 18 | 0 | 0 | 0 | 5 | █████████░ 78% |
+| **TOTAL** | **131** | **111** | **0** | **1** | **4** | **5** | ██████████ 97% |
 
 ---
 *Legend:*

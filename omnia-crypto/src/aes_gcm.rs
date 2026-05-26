@@ -50,15 +50,21 @@ pub enum AesGcmError {
 ///   Use [`generate_nonce`] to create a random nonce.
 /// - The key must be exactly 32 bytes (AES-256).
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if the key is not 32 bytes (should never happen with `[u8; 32]`).
-pub fn aes256gcm_encrypt_aad(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
-    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
+/// Returns [`AesGcmError::InvalidKey`] if the key fails to initialize the cipher.
+/// Returns [`AesGcmError::EncryptionFailed`] if the encryption operation fails.
+pub fn aes256gcm_encrypt_aad(
+    plaintext: &[u8],
+    key: &[u8; 32],
+    nonce: &[u8; 12],
+    aad: &[u8],
+) -> Result<Vec<u8>, AesGcmError> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| AesGcmError::InvalidKey)?;
     let nonce = Nonce::from_slice(nonce);
     cipher
         .encrypt(nonce, aes_gcm::aead::Payload { msg: plaintext, aad })
-        .expect("AES-256-GCM encryption should not fail")
+        .map_err(|e| AesGcmError::EncryptionFailed(e.to_string()))
 }
 
 /// AES-256-GCM decrypt with associated data (AAD).
@@ -78,7 +84,7 @@ pub fn aes256gcm_decrypt_aad(
     nonce: &[u8; 12],
     aad: &[u8],
 ) -> Result<Vec<u8>, AesGcmError> {
-    let cipher = Aes256Gcm::new_from_slice(key).expect("AES key should be valid");
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| AesGcmError::InvalidKey)?;
     let nonce = Nonce::from_slice(nonce);
     cipher
         .decrypt(nonce, aes_gcm::aead::Payload { msg: ciphertext, aad })
@@ -91,16 +97,17 @@ pub fn aes256gcm_decrypt_aad(
 /// remaining 16 bytes as the input keying material (IKM). The `info`
 /// parameter provides domain separation.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if HKDF expand fails, which should never happen for a 32-byte
-/// output (the maximum output of HKDF-SHA256 is 255 × 32 = 8160 bytes).
-pub fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> [u8; 32] {
+/// Returns [`AesGcmError::InvalidKey`] if HKDF expand fails, which should
+/// never happen for a 32-byte output (the maximum output of HKDF-SHA256
+/// is 255 × 32 = 8160 bytes), but is handled for defensive programming.
+pub fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> Result<[u8; 32], AesGcmError> {
     let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
     let mut aes_key = [0u8; 32];
     hk.expand(info.as_bytes(), &mut aes_key)
-        .expect("HKDF expand should not fail for 32 bytes");
-    aes_key
+        .map_err(|_| AesGcmError::InvalidKey)?;
+    Ok(aes_key)
 }
 
 /// Generate a random 96-bit nonce for AES-256-GCM.
@@ -126,7 +133,7 @@ mod tests {
         let plaintext = b"hello world";
         let aad = b"associated data";
 
-        let ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad);
+        let ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad).unwrap();
         let decrypted = aes256gcm_decrypt_aad(&ciphertext, &key, &nonce, aad).unwrap();
         assert_eq!(decrypted, plaintext);
     }
@@ -138,7 +145,7 @@ mod tests {
         let plaintext = b"hello world";
         let aad = b"correct aad";
 
-        let ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad);
+        let ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad).unwrap();
         let result = aes256gcm_decrypt_aad(&ciphertext, &key, &nonce, b"wrong aad");
         assert!(result.is_err(), "Wrong AAD should fail decryption");
     }
@@ -150,7 +157,7 @@ mod tests {
         let plaintext = b"hello world";
         let aad = b"aad";
 
-        let mut ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad);
+        let mut ciphertext = aes256gcm_encrypt_aad(plaintext, &key, &nonce, aad).unwrap();
         if !ciphertext.is_empty() {
             ciphertext[0] ^= 0xFF;
         }
@@ -161,16 +168,16 @@ mod tests {
     #[test]
     fn test_hkdf_aes_key_deterministic() {
         let key_material = [0xABu8; 32];
-        let key1 = hkdf_aes_key(&key_material, "test-info");
-        let key2 = hkdf_aes_key(&key_material, "test-info");
+        let key1 = hkdf_aes_key(&key_material, "test-info").unwrap();
+        let key2 = hkdf_aes_key(&key_material, "test-info").unwrap();
         assert_eq!(key1, key2, "Same inputs must produce same key");
     }
 
     #[test]
     fn test_hkdf_aes_key_different_info() {
         let key_material = [0xABu8; 32];
-        let key1 = hkdf_aes_key(&key_material, "info-1");
-        let key2 = hkdf_aes_key(&key_material, "info-2");
+        let key1 = hkdf_aes_key(&key_material, "info-1").unwrap();
+        let key2 = hkdf_aes_key(&key_material, "info-2").unwrap();
         assert_ne!(key1, key2, "Different info must produce different keys");
     }
 }

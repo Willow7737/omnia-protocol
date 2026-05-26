@@ -496,7 +496,7 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 /// Delegates to [`omnia_crypto::hkdf_aes_key`] to avoid duplicating the
 /// HKDF key-derivation pattern that already exists in the crypto crate.
 fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> [u8; 32] {
-    omnia_crypto::hkdf_aes_key(key_material, info)
+    omnia_crypto::hkdf_aes_key(key_material, info).expect("HKDF key derivation should not fail for valid 32-byte input")
 }
 
 /// Generate a random 96-bit nonce for AES-256-GCM.
@@ -512,6 +512,7 @@ fn generate_nonce() -> [u8; 12] {
 /// the AES-GCM encryption pattern that already exists in the crypto crate.
 fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
     omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad)
+        .expect("AES-256-GCM encryption should not fail with valid key")
 }
 
 /// AES-256-GCM decrypt with associated data.

@@ -276,19 +276,28 @@ impl ThresholdKeyManager {
         partials: &[PartialSignature],
         message: &[u8],
     ) -> Result<ThresholdSignature, ThresholdError> {
-        if !self.has_quorum(partials.len()) {
+        // Deduplicate partials by participant (AUDIT-12).
+        // If the same participant submitted multiple partial signatures,
+        // only the first is kept. Duplicate partials would inflate the
+        // aggregated signature and could incorrectly satisfy the threshold.
+        let mut seen_participants = std::collections::HashSet::new();
+        let unique_partials: Vec<&PartialSignature> = partials
+            .iter()
+            .filter(|p| seen_participants.insert(p.participant))
+            .collect();
+
+        if !self.has_quorum(unique_partials.len()) {
             return Err(ThresholdError::InsufficientPartials {
-                got: partials.len(),
+                got: unique_partials.len(),
                 need: self.config.threshold,
             });
         }
 
-        // Collect unique signers
-        let signers: Vec<NodeId> = partials.iter().map(|p| p.participant).collect();
+        let signers: Vec<NodeId> = unique_partials.iter().map(|p| p.participant).collect();
 
         // Aggregate the BLS signatures
         let aggregate_signature =
-            crate::bls::aggregate_signatures(&partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
+            crate::bls::aggregate_signatures(&unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
 
         tracing::info!(
             signers = signers.len(),
