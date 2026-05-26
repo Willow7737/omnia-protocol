@@ -11,25 +11,17 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use omnia_consensus::{
-    BatchCrdtMerger, CausalGraph, CausalGraphError, ConsensusConfig, ConsensusEngine,
-    CrdtBatchOp, CvRDT, EventPool, GCounter, SlashOffense, SlashOutcome,
-    SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD, MAX_CRDT_BATCH_SIZE,
+    BatchCrdtMerger, CausalGraph, CausalGraphError, ConsensusConfig, ConsensusEngine, CrdtBatchOp, CvRDT, EventPool,
+    GCounter, SlashOffense, SlashOutcome, SlashingEngine, DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+    MAX_CRDT_BATCH_SIZE,
 };
-use omnia_primitives::{
-    blake3_hash_domain, Event, EventId, EventStatus, NodeId, VectorClock, MAX_PAYLOAD_SIZE,
-};
+use omnia_primitives::{blake3_hash_domain, Event, EventId, EventStatus, NodeId, VectorClock, MAX_PAYLOAD_SIZE};
 
-use omnia_crypto::{
-    deterministic_compute, deterministic_verify, generate_keypair, select_leader, NodeKeypair,
-};
+use omnia_crypto::{deterministic_compute, deterministic_verify, generate_keypair, select_leader, NodeKeypair};
 
-use omnia_economics::{
-    DecayRate, GovernanceState, QuotaSystem, VoteChoice, DEFAULT_QUORUM_PERCENTAGE,
-};
+use omnia_economics::{DecayRate, GovernanceState, QuotaSystem, VoteChoice, DEFAULT_QUORUM_PERCENTAGE};
 
-use omnia_binding::{
-    ProvenanceLog, QuantumCommitment, RfFingerprint,
-};
+use omnia_binding::{ProvenanceLog, QuantumCommitment, RfFingerprint};
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -137,9 +129,15 @@ fn tip_count_at_max_tips() {
     }
 
     let stats = graph.stats();
-    assert!(stats.tip_count <= 10_000 + (10_000 / 10), "tip_count should be bounded near MAX_TIPS");
+    assert!(
+        stats.tip_count <= 10_000 + (10_000 / 10),
+        "tip_count should be bounded near MAX_TIPS"
+    );
 
-    println!("[tips] Inserted {tip_target} genesis events, tip_count = {}", stats.tip_count);
+    println!(
+        "[tips] Inserted {tip_target} genesis events, tip_count = {}",
+        stats.tip_count
+    );
 }
 
 #[test]
@@ -154,9 +152,16 @@ fn tip_consolidation_on_overflow() {
     }
 
     let stats = graph.stats();
-    assert!(stats.tip_count <= 11_000, "tips should be bounded after consolidation, got {}", stats.tip_count);
+    assert!(
+        stats.tip_count <= 11_000,
+        "tips should be bounded after consolidation, got {}",
+        stats.tip_count
+    );
 
-    println!("[tips] After overflow with {overflow_count} events, tip_count = {}", stats.tip_count);
+    println!(
+        "[tips] After overflow with {overflow_count} events, tip_count = {}",
+        stats.tip_count
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -219,7 +224,10 @@ fn payload_at_max_size_accepted() {
         Ok(()) => {}
         Err(e) => {
             let msg = format!("{e}");
-            assert!(!msg.contains("Payload too large"), "Should not be rejected for payload size, got: {msg}");
+            assert!(
+                !msg.contains("Payload too large"),
+                "Should not be rejected for payload size, got: {msg}"
+            );
         }
     }
 
@@ -238,7 +246,10 @@ fn payload_exceeding_max_size_rejected() {
     let result = event.validate();
     assert!(result.is_err(), "oversized payload should be rejected");
     let msg = format!("{}", result.unwrap_err());
-    assert!(msg.contains("Payload too large"), "Expected PayloadTooLarge, got: {msg}");
+    assert!(
+        msg.contains("Payload too large"),
+        "Expected PayloadTooLarge, got: {msg}"
+    );
 
     println!("[payload] MAX_PAYLOAD_SIZE + 1 = {oversized} bytes — correctly rejected");
 }
@@ -400,7 +411,10 @@ fn slashing_warned_below_threshold() {
 
     for _ in 0..3 {
         let o = engine.record_offense(node, SlashOffense::LivenessViolation);
-        assert!(matches!(o, SlashOutcome::Warned { .. }), "Should still be warned: {o:?}");
+        assert!(
+            matches!(o, SlashOutcome::Warned { .. }),
+            "Should still be warned: {o:?}"
+        );
     }
 
     println!("[slashing] 4 LivenessViolations (400 pts) < 500 threshold → Warned");
@@ -413,7 +427,10 @@ fn slashing_at_threshold() {
     engine.register_validator(node, 10_000);
 
     let outcome = engine.record_offense(node, SlashOffense::Equivocation);
-    assert!(matches!(outcome, SlashOutcome::Slashed { .. }), "At slash threshold, outcome should be Slashed, got {outcome:?}");
+    assert!(
+        matches!(outcome, SlashOutcome::Slashed { .. }),
+        "At slash threshold, outcome should be Slashed, got {outcome:?}"
+    );
 
     println!("[slashing] 1 Equivocation (500 pts) = DEFAULT_SLASH_THRESHOLD → Slashed");
 }
@@ -426,11 +443,17 @@ fn slashing_ejection_threshold() {
 
     for _ in 0..3 {
         let o = engine.record_offense(node, SlashOffense::Equivocation);
-        assert!(matches!(o, SlashOutcome::Slashed { .. }), "First 3 equivocations should be Slashed, got {o:?}");
+        assert!(
+            matches!(o, SlashOutcome::Slashed { .. }),
+            "First 3 equivocations should be Slashed, got {o:?}"
+        );
     }
 
     let outcome = engine.record_offense(node, SlashOffense::Equivocation);
-    assert!(matches!(outcome, SlashOutcome::Ejected { .. }), "At ejection threshold (2000 pts), outcome should be Ejected, got {outcome:?}");
+    assert!(
+        matches!(outcome, SlashOutcome::Ejected { .. }),
+        "At ejection threshold (2000 pts), outcome should be Ejected, got {outcome:?}"
+    );
 
     println!("[slashing] 4 Equivocations (2000 pts) = DEFAULT_EJECTION_THRESHOLD → Ejected");
 }
@@ -477,7 +500,10 @@ fn vrf_leader_selection_many_candidates() {
         leader_counts.len()
     );
 
-    assert!(leader_counts.len() > num_candidates / 2, "Most candidates should be selected at least once");
+    assert!(
+        leader_counts.len() > num_candidates / 2,
+        "Most candidates should be selected at least once"
+    );
 }
 
 #[test]
@@ -517,7 +543,8 @@ fn governance_quorum_enforcement_67_percent() {
         gov.set_weight(&format!("voter{i}"), 100);
     }
 
-    gov.create_proposal("prop1".to_string(), "test proposal".to_string(), 10, 0).unwrap();
+    gov.create_proposal("prop1".to_string(), "test proposal".to_string(), 10, 0)
+        .unwrap();
 
     // 6 out of 10 voters: total weight = 60, total possible = 100
     // 60 * 100 = 6000 < 100 * 67 = 6700 → quorum NOT met
@@ -544,7 +571,8 @@ fn governance_quorum_met_at_67_percent() {
     gov.set_weight("bob", 100);
     gov.set_weight("charlie", 100);
 
-    gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).unwrap();
+    gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+        .unwrap();
 
     gov.vote("alice", "prop1", VoteChoice::For, 0).unwrap();
     gov.vote("bob", "prop1", VoteChoice::For, 1).unwrap();
@@ -561,7 +589,8 @@ fn governance_double_vote_prevention() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
     gov.set_weight("alice", 100);
 
-    gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).unwrap();
+    gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
+        .unwrap();
 
     gov.vote("alice", "prop1", VoteChoice::For, 0).unwrap();
 
@@ -610,9 +639,15 @@ fn throughput_benchmark_causal_graph() {
 
     let events_per_sec = (event_count as f64) / elapsed.as_secs_f64();
 
-    println!("[throughput] CausalGraph: {event_count} events in {:.2?} = {:.0} events/sec", elapsed, events_per_sec);
+    println!(
+        "[throughput] CausalGraph: {event_count} events in {:.2?} = {:.0} events/sec",
+        elapsed, events_per_sec
+    );
 
-    assert!(events_per_sec > 1_000.0, "Throughput too low: {events_per_sec} events/sec");
+    assert!(
+        events_per_sec > 1_000.0,
+        "Throughput too low: {events_per_sec} events/sec"
+    );
 }
 
 #[test]
@@ -648,9 +683,15 @@ fn throughput_benchmark_consensus_engine() {
     let elapsed = start.elapsed();
 
     let events_per_sec = (event_count as f64) / elapsed.as_secs_f64();
-    println!("[throughput] ConsensusEngine: {event_count} events in {:.2?} = {:.0} events/sec", elapsed, events_per_sec);
+    println!(
+        "[throughput] ConsensusEngine: {event_count} events in {:.2?} = {:.0} events/sec",
+        elapsed, events_per_sec
+    );
 
-    assert!(events_per_sec > 500.0, "Consensus throughput too low: {events_per_sec} events/sec");
+    assert!(
+        events_per_sec > 500.0,
+        "Consensus throughput too low: {events_per_sec} events/sec"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -678,7 +719,10 @@ fn merkle_proof_generation_and_verification() {
     }
 
     let state_root = graph.state_root();
-    assert_ne!(state_root, [0u8; 32], "state root should not be zero for non-empty graph");
+    assert_ne!(
+        state_root, [0u8; 32],
+        "state root should not be zero for non-empty graph"
+    );
 
     let mut verified_count = 0;
     for (i, &eid) in event_ids.iter().enumerate().step_by(37) {
@@ -698,7 +742,10 @@ fn merkle_proof_generation_and_verification() {
                 }
                 current = *hasher.finalize().as_bytes();
             }
-            assert_eq!(current, state_root, "Merkle proof for event {i} should verify against state root");
+            assert_eq!(
+                current, state_root,
+                "Merkle proof for event {i} should verify against state root"
+            );
             verified_count += 1;
         }
     }
@@ -761,7 +808,10 @@ fn signature_verification_throughput() {
     let elapsed = start.elapsed();
 
     let verifications_per_sec = (verified as f64) / elapsed.as_secs_f64();
-    println!("[sig] Ed25519 verify: {verified} signatures in {:.2?} = {:.0} verifications/sec", elapsed, verifications_per_sec);
+    println!(
+        "[sig] Ed25519 verify: {verified} signatures in {:.2?} = {:.0} verifications/sec",
+        elapsed, verifications_per_sec
+    );
 
     assert_eq!(verified, count, "All signatures should verify");
     assert!(verifications_per_sec > 1_000.0, "Signature verification too slow");
@@ -835,24 +885,22 @@ fn provenance_log_deep_chain() {
     let rf = RfFingerprint::stub("did:omnia:factory", [0x55u8; 32]);
     let commitment = QuantumCommitment::new_classical(b"creation", vec![0u8; 64], VectorClock::new());
 
-    let mut log = ProvenanceLog::new(
-        item_id,
-        "did:omnia:factory".to_string(),
-        rf,
-        commitment,
-        anchor,
-    );
+    let mut log = ProvenanceLog::new(item_id, "did:omnia:factory".to_string(), rf, commitment, anchor);
 
     let transfer_count = 1_000;
     for i in 0..transfer_count {
         let holder = format!("did:omnia:holder{i}");
         let rf = RfFingerprint::stub(&holder, [0x55u8; 32]);
-        let commitment = QuantumCommitment::new_classical(format!("transfer{i}").as_bytes(), vec![0u8; 64], VectorClock::new());
+        let commitment =
+            QuantumCommitment::new_classical(format!("transfer{i}").as_bytes(), vec![0u8; 64], VectorClock::new());
         log.transfer(holder, rf, commitment);
     }
 
     assert_eq!(log.len(), transfer_count + 1);
-    assert!(log.verify_chain(), "Chain integrity should hold after {transfer_count} transfers");
+    assert!(
+        log.verify_chain(),
+        "Chain integrity should hold after {transfer_count} transfers"
+    );
 
     println!("[provenance] {transfer_count} transfers in provenance log, chain integrity verified");
 }
@@ -900,17 +948,35 @@ fn print_protocol_limits_summary() {
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║         OMNIA PROTOCOL — LIMIT VERIFICATION SUMMARY       ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║ MAX_ANCESTRY_DEPTH     = {:>12}                      ║", 1_000_000usize);
+    println!(
+        "║ MAX_ANCESTRY_DEPTH     = {:>12}                      ║",
+        1_000_000usize
+    );
     println!("║ MAX_TIPS               = {:>12}                      ║", 10_000usize);
-    println!("║ MAX_PAYLOAD_SIZE       = {:>12} bytes              ║", MAX_PAYLOAD_SIZE);
+    println!(
+        "║ MAX_PAYLOAD_SIZE       = {:>12} bytes              ║",
+        MAX_PAYLOAD_SIZE
+    );
     println!("║ MAX_PENDING_EVENTS     = {:>12}                      ║", 100_000usize);
-    println!("║ MAX_CRDT_BATCH_SIZE    = {:>12}                      ║", MAX_CRDT_BATCH_SIZE);
-    println!("║ DEFAULT_SLASH_THRESHOLD= {:>12}                      ║", DEFAULT_SLASH_THRESHOLD);
-    println!("║ DEFAULT_EJECTION_THRESH= {:>12}                      ║", DEFAULT_EJECTION_THRESHOLD);
+    println!(
+        "║ MAX_CRDT_BATCH_SIZE    = {:>12}                      ║",
+        MAX_CRDT_BATCH_SIZE
+    );
+    println!(
+        "║ DEFAULT_SLASH_THRESHOLD= {:>12}                      ║",
+        DEFAULT_SLASH_THRESHOLD
+    );
+    println!(
+        "║ DEFAULT_EJECTION_THRESH= {:>12}                      ║",
+        DEFAULT_EJECTION_THRESHOLD
+    );
     println!("║ EQUIVOCATION_POINTS    = {:>12}                      ║", 500u64);
     println!("║ LIVENESS_VIOLATION_PTS = {:>12}                      ║", 100u64);
     println!("║ INVALID_ATTESTATION_PTS= {:>12}                      ║", 300u64);
-    println!("║ DEFAULT_QUORUM_PERCENT = {:>12}%                     ║", DEFAULT_QUORUM_PERCENTAGE);
+    println!(
+        "║ DEFAULT_QUORUM_PERCENT = {:>12}%                     ║",
+        DEFAULT_QUORUM_PERCENTAGE
+    );
     println!("║ DEFAULT_UBC_QUOTA      = {:>12}                      ║", 1000u64);
     println!("╚══════════════════════════════════════════════════════════════╝");
 }
