@@ -349,7 +349,11 @@ impl GovernanceState {
 
         let total_votes = proposal.total_participation();
         let eligible_voters = self.eligible_voter_count();
-        let total_possible_weight = self.total_voting_weight();
+        // AUDIT-23: Use effective (decayed) weights for quorum computation,
+        // not base weights. Without decay, a voter whose reputation has
+        // eroded still counts fully toward quorum, which can be exploited
+        // to pass proposals with stale voters.
+        let total_possible_weight = self.total_effective_voting_weight(current_epoch);
 
         // Check quorum: total vote weight cast must be >= quorum_percentage%
         // of total possible voting weight (sum of all eligible voters' weights).
@@ -391,6 +395,19 @@ impl GovernanceState {
     /// the total weight of votes cast ≥ `quorum_percentage`% of this total.
     pub fn total_voting_weight(&self) -> u64 {
         self.voting_weights.values().copied().fold(0u64, u64::saturating_add)
+    }
+
+    /// Sum of effective (decayed) voting weights for all eligible voters
+    /// at the given epoch.
+    ///
+    /// This should be used for quorum computation instead of
+    /// [`Self::total_voting_weight()`] to prevent stale voters from inflating
+    /// the quorum threshold.
+    pub fn total_effective_voting_weight(&self, current_epoch: u64) -> u64 {
+        self.voting_weights
+            .keys()
+            .map(|did| self.effective_weight(did, current_epoch))
+            .fold(0u64, u64::saturating_add)
     }
 
     /// Remove expired proposals from the active set.

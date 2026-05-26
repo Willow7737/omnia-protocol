@@ -165,6 +165,7 @@ impl LockedStake {
 /// // At height 300 (after maturity), full voting power
 /// assert_eq!(voting.voting_power(&node, 300), 1000);
 /// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeLockVoting {
     /// Configuration for time-locked voting.
     pub config: TimeLockConfig,

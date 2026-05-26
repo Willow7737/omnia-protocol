@@ -41,6 +41,32 @@ pub enum UsefulWorkType {
     },
 }
 
+impl UsefulWorkType {
+    /// Create an AI training work type.
+    pub fn ai_training(model_hash: [u8; 32], training_data_hash: [u8; 32]) -> Self {
+        Self::AiTraining {
+            model_hash,
+            training_data_hash,
+        }
+    }
+
+    /// Create a scientific simulation work type.
+    pub fn scientific_simulation(simulation_id: String, params_hash: [u8; 32]) -> Self {
+        Self::ScientificSimulation {
+            simulation_id,
+            params_hash,
+        }
+    }
+
+    /// Create a distributed storage work type.
+    pub fn distributed_storage(data_hash: [u8; 32], storage_duration: u64) -> Self {
+        Self::DistributedStorage {
+            data_hash,
+            storage_duration,
+        }
+    }
+}
+
 /// A proof that useful work was performed.
 ///
 /// Contains the work type, result hash, compute units consumed, and
@@ -77,21 +103,28 @@ impl UsefulWorkProof {
     /// Verify that the proof is valid and the work was actually done.
     ///
     /// **Stub implementation**: Currently only checks that the result
-    /// hash is non-zero and that compute units were consumed. In
-    /// production, this will verify a ZK proof or check a Verifiable
-    /// Delay Function (VDF) result against the verifier's public key.
-    pub fn verify_stub(&self, _verifier_pubkey: &[u8; 32]) -> bool {
-        // A non-zero result hash and positive compute units are the
-        // minimum validity requirements for the stub. Real verification
-        // will replace this with cryptographic proof checking.
-        self.result_hash.iter().any(|&b| b != 0) && self.compute_units_consumed > 0
+    /// hash is non-zero, compute units were consumed, and the verifier
+    /// signature is non-empty. In production, this will verify a ZK proof
+    /// or check a Verifiable Delay Function (VDF) result against the
+    /// verifier's public key.
+    ///
+    /// The method is named `verify` (not `verify_stub`) because the
+    /// public API should be stable — the implementation will be upgraded
+    /// to real cryptographic verification without changing the call site.
+    pub fn verify(&self, _verifier_pubkey: &[u8; 32]) -> bool {
+        // A non-zero result hash, positive compute units, and non-empty
+        // signature are the minimum validity requirements for the stub.
+        // Real verification will replace this with cryptographic proof checking.
+        self.result_hash.iter().any(|&b| b != 0)
+            && self.compute_units_consumed > 0
+            && !self.verifier_signature.is_empty()
     }
 
     /// Validate the internal consistency of the proof.
     ///
     /// Checks that compute units are non-zero and that the result
     /// hash is not entirely zeros. This is a lighter check than
-    /// `verify_stub` — it doesn't check the signature.
+    /// `verify` — it doesn't check the signature.
     pub fn validate(&self) -> Result<(), EconomicsError> {
         if self.compute_units_consumed == 0 {
             return Err(EconomicsError::WorkProofInvalid);
