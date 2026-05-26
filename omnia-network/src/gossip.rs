@@ -565,9 +565,9 @@ impl GossipProtocol {
         for event in to_process {
             let mut graph = self.graph.write().await;
             match graph.insert(event.clone()) {
-                Ok(_) => {
+                Ok(ids) => {
                     self.stats.events_accepted += 1;
-                    inserted_ids.push(event.id);
+                    inserted_ids.extend(ids);
                 }
                 Err(CausalGraphError::DuplicateEvent(_)) => {
                     self.stats.events_rejected += 1;

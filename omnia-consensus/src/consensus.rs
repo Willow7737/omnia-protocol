@@ -1275,6 +1275,7 @@ mod tests {
     use super::*;
     use crate::causal_graph::CausalGraph;
     use omnia_crypto::generate_keypair;
+    use omnia_primitives::blake3_hash_domain;
     use omnia_primitives::Event;
     use omnia_primitives::VectorClock;
 
@@ -1303,17 +1304,25 @@ mod tests {
 
     fn setup_graph_with_events() -> (CausalGraph, Vec<EventId>) {
         let mut graph = CausalGraph::new();
-        let n1 = node(1);
-        let n2 = node(2);
-        let n3 = node(3);
-        let n4 = node(4);
+        let mut keypairs = Vec::new();
+
+        // Generate keypairs first so the same keypair is used for genesis and child
+        for _ in 0..4 {
+            keypairs.push(generate_keypair());
+        }
+
+        // Derive node IDs from keypairs (matching sign_with_keypair behavior)
+        let n1 = blake3_hash_domain(b"omnia-creator", &keypairs[0].verifying_key().to_bytes());
+        let n2 = blake3_hash_domain(b"omnia-creator", &keypairs[1].verifying_key().to_bytes());
+        let n3 = blake3_hash_domain(b"omnia-creator", &keypairs[2].verifying_key().to_bytes());
+        let n4 = blake3_hash_domain(b"omnia-creator", &keypairs[3].verifying_key().to_bytes());
 
         let mut events = Vec::new();
 
-        for &n in &[n1, n2, n3, n4] {
-            let keypair = generate_keypair();
-            let mut e = Event::genesis(n, vec![n[0]]);
-            e.sign_with_keypair(&keypair);
+        for kp in &keypairs {
+            let node_id = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
+            let mut e = Event::genesis(node_id, vec![node_id[0]]);
+            e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
             events.push(id);
@@ -1321,7 +1330,7 @@ mod tests {
 
         for i in 0..4 {
             let creator = [n1, n2, n3, n4][i];
-            let keypair = generate_keypair();
+            let kp = &keypairs[i];
             let sp = events[i];
             let op = events[(i + 1) % 4];
 
@@ -1330,7 +1339,7 @@ mod tests {
             vc.set(other, 1);
 
             let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]);
-            e.sign_with_keypair(&keypair);
+            e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
             events.push(id);
@@ -1890,6 +1899,8 @@ mod timeout_tests {
     use omnia_primitives::Event;
     #[cfg(test)]
     use omnia_primitives::VectorClock;
+    #[cfg(test)]
+    use omnia_primitives::blake3_hash_domain;
     use std::thread;
 
     /// Helper: create a NodeId from a u8.
@@ -1919,17 +1930,25 @@ mod timeout_tests {
     /// Helper: set up a graph with events for cleanup tests.
     fn setup_graph_with_events() -> (CausalGraph, Vec<EventId>) {
         let mut graph = CausalGraph::new();
-        let n1 = node(1);
-        let n2 = node(2);
-        let n3 = node(3);
-        let n4 = node(4);
+        let mut keypairs = Vec::new();
+
+        // Generate keypairs first so the same keypair is used for genesis and child
+        for _ in 0..4 {
+            keypairs.push(generate_keypair());
+        }
+
+        // Derive node IDs from keypairs (matching sign_with_keypair behavior)
+        let n1 = blake3_hash_domain(b"omnia-creator", &keypairs[0].verifying_key().to_bytes());
+        let n2 = blake3_hash_domain(b"omnia-creator", &keypairs[1].verifying_key().to_bytes());
+        let n3 = blake3_hash_domain(b"omnia-creator", &keypairs[2].verifying_key().to_bytes());
+        let n4 = blake3_hash_domain(b"omnia-creator", &keypairs[3].verifying_key().to_bytes());
 
         let mut events = Vec::new();
 
-        for &n in &[n1, n2, n3, n4] {
-            let keypair = generate_keypair();
-            let mut e = Event::genesis(n, vec![n[0]]);
-            e.sign_with_keypair(&keypair);
+        for kp in &keypairs {
+            let node_id = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
+            let mut e = Event::genesis(node_id, vec![node_id[0]]);
+            e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
             events.push(id);
@@ -1937,7 +1956,7 @@ mod timeout_tests {
 
         for i in 0..4 {
             let creator = [n1, n2, n3, n4][i];
-            let keypair = generate_keypair();
+            let kp = &keypairs[i];
             let sp = events[i];
             let op = events[(i + 1) % 4];
 
@@ -1946,7 +1965,7 @@ mod timeout_tests {
             vc.set(other, 1);
 
             let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]);
-            e.sign_with_keypair(&keypair);
+            e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
             events.push(id);

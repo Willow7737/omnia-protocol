@@ -719,11 +719,11 @@ impl Substrate {
 
         {
             let mut graph = self.graph.write().await;
-            graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
+            let inserted_ids = graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
+            self.unprocessed_events.extend(inserted_ids);
         }
 
-        // Track for consensus processing
-        self.unprocessed_events.push(event_arc.id);
+        // Track for consensus processing (already extended above)
 
         let graph = self.graph.read().await;
         self.consensus
@@ -851,8 +851,8 @@ impl Substrate {
             // blocking the async runtime (FIND-CRIT-001).
             {
                 let mut graph = self.graph.write().await;
-                if let Ok(()) = graph.insert(event.clone()) {
-                    self.unprocessed_events.push(event_id);
+                if let Ok(ids) = graph.insert(event.clone()) {
+                    self.unprocessed_events.extend(ids);
                 }
             }
             proposed.push(event_id);
