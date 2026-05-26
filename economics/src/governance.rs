@@ -401,7 +401,7 @@ impl GovernanceState {
     /// at the given epoch.
     ///
     /// This should be used for quorum computation instead of
-    /// [`total_voting_weight`] to prevent stale voters from inflating
+    /// [`Self::total_voting_weight()`] to prevent stale voters from inflating
     /// the quorum threshold.
     pub fn total_effective_voting_weight(&self, current_epoch: u64) -> u64 {
         self.voting_weights

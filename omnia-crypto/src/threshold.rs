@@ -1383,16 +1383,30 @@ mod tests {
         let p2 = mgr.partial_sign(&node(2), msg).unwrap();
         let p3 = mgr.partial_sign(&node(2), msg).unwrap(); // duplicate of signer 2
 
-        let partials = vec![p1, p2, p3];
+        // Case 1: With only 2 unique signers (out of 3 needed),
+        // combine_signatures must reject the duplicate-inflated partials.
+        let partials_dup = vec![p1.clone(), p2.clone(), p3.clone()];
+        let result = mgr.combine_signatures(&partials_dup, msg);
+        assert!(
+            result.is_err(),
+            "Combine should fail when duplicate signers inflate partial count below threshold"
+        );
+        match result {
+            Err(ThresholdError::InsufficientPartials { got, need }) => {
+                assert_eq!(got, 2, "Should have 2 unique signers after dedup");
+                assert_eq!(need, 3, "Threshold should be 3");
+            }
+            other => panic!("Expected InsufficientPartials error, got {:?}", other),
+        }
 
-        // Combining with duplicate signers: the combine_signatures method
-        // does not deduplicate, so it counts 3 partials (meeting threshold).
-        // The signers list will contain node(2) twice, but the signature
-        // will still aggregate (BLS aggregation is commutative).
-        let result = mgr.combine_signatures(&partials, msg);
+        // Case 2: With 3 unique signers, combine should succeed even if
+        // an extra duplicate is present (it gets deduplicated).
+        let p4 = mgr.partial_sign(&node(3), msg).unwrap();
+        let partials_ok = vec![p1, p2, p3, p4]; // 4 partials, 3 unique
+        let result = mgr.combine_signatures(&partials_ok, msg);
         assert!(
             result.is_ok(),
-            "Combine should succeed with 3 partials even if one signer is duplicated"
+            "Combine should succeed with 3 unique signers even with a duplicate present"
         );
     }
 
