@@ -8,6 +8,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.57](https://github.com/Willow7737/omnia-protocol/compare/v0.1.56...v0.1.57) (2026-05-27)
+
+
+### Features
+
+* add limit verification test suite (39 tests), LIMITS.md reference ([7e1cdab](https://github.com/Willow7737/omnia-protocol/commit/7e1cdab5cc541ad13b53288aec53537710a9dd0a))
+* add limit verification test suite (39 tests), LIMITS.md reference ([01ba013](https://github.com/Willow7737/omnia-protocol/commit/01ba013213e8d67cf14e88964378b282538eea81))
+* add testnet launch script with monitoring support ([84b2a45](https://github.com/Willow7737/omnia-protocol/commit/84b2a45ac572c2c3e826e7073315db6463060bdb))
+* add testnet launch script with monitoring support ([10daa78](https://github.com/Willow7737/omnia-protocol/commit/10daa7865e217060fa973c5fc63af7e4b186b33a))
+
+
+### Bug Fixes
+
+* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([fb40575](https://github.com/Willow7737/omnia-protocol/commit/fb405753f943945ec940ced0045172f1674de641))
+* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([1eafa5a](https://github.com/Willow7737/omnia-protocol/commit/1eafa5aad493a1fb7634fe3044401f89a1d23dce))
+* **ci:** resolve 25 CI workflow issues — action versions, Dockerfile, timeouts, shell safety ([87a6529](https://github.com/Willow7737/omnia-protocol/commit/87a65296d53589e90962c24f82c98ca85ed948d5))
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([5c6d8b8](https://github.com/Willow7737/omnia-protocol/commit/5c6d8b81b33cef61f10a1dac93a0b0bde0b32047))
+* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([a002c20](https://github.com/Willow7737/omnia-protocol/commit/a002c2083403add99dd29eadd115b4d7c05e47a1))
+* **clippy:** replace unwrap() with expect() in keystore_bridge.rs rotate() ([4551edb](https://github.com/Willow7737/omnia-protocol/commit/4551edbdd1366c060bbcb088f9aebaec906b0544))
+* **consensus:** allow equivocation at current sequence in monotonicity check ([0679e8f](https://github.com/Willow7737/omnia-protocol/commit/0679e8f484d03fa5d6cc0c641e096df630106252))
+* **consensus:** resolve rustdoc private-intra-doc-links errors ([131eb3d](https://github.com/Willow7737/omnia-protocol/commit/131eb3d233a626acdaedf0a422e6ef35ecfd554d))
+* **fmt:** apply cargo fmt to keystore_bridge.rs and g_counter.rs ([55fd867](https://github.com/Willow7737/omnia-protocol/commit/55fd867efd67c7784882e1b7aef0ce36aa1db4d3))
+* regenerate Cargo.lock and apply cargo fmt to tests/src/lib.rs ([e97c4df](https://github.com/Willow7737/omnia-protocol/commit/e97c4df979ae08b7e06388a0680a70bce54bce24))
+* resolve 7 high-priority audit bugs + CI/Docker infrastructure fixes ([b5d0e55](https://github.com/Willow7737/omnia-protocol/commit/b5d0e55caf3d1f602e06d26f32fc56b1080b7055))
+* resolve 9 medium-priority audit findings + verify 4 as by-design ([c8a41ad](https://github.com/Willow7737/omnia-protocol/commit/c8a41adb5504f971658820f059c658fdf2ff1f1d))
+* resolve 9 medium-priority audit findings + verify 4 as by-design ([bd1105e](https://github.com/Willow7737/omnia-protocol/commit/bd1105e6bc120ad39e26f9f7dbd3d656685c000d))
+* resolve all CI failures for testnet readiness ([24c4c3b](https://github.com/Willow7737/omnia-protocol/commit/24c4c3b93c251c41b9f65306b80d194521ac9728))
+* **rustdoc:** remove private intra-doc link in current_signing_key() ([f0868d6](https://github.com/Willow7737/omnia-protocol/commit/f0868d609e4e6540b0e879e8ddb851eebadecb0a))
+* **security:** enforce sequence monotonicity at CausalGraph::insert() boundary ([25198a0](https://github.com/Willow7737/omnia-protocol/commit/25198a07f349f44fa269f1028eff8919929536d7))
+* update test_duplicate_signers_detected for dedup (AUDIT-12), fix governance.rs doc link ([4da24da](https://github.com/Willow7737/omnia-protocol/commit/4da24da0a8c80aa563ff51ab2065ca8804e6a13c))
+
+
+### Performance
+
+* eliminate O(n) bottlenecks in CausalGraph::insert — 37× throughput gain ([7bb452a](https://github.com/Willow7737/omnia-protocol/commit/7bb452a768668569166b4c6548cd94cdaa2a989c))
+
+
+### Documentation
+
+* add verified protocol limits, update audit status to 8/23 remediated ([9429e9a](https://github.com/Willow7737/omnia-protocol/commit/9429e9a436f79202e946be7430a13b3e810b383b))
+* add verified protocol limits, update audit status to 8/23 remediated ([3330f25](https://github.com/Willow7737/omnia-protocol/commit/3330f2579b62a10d8fd626fbb53b3cb6f2eda568))
+* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([1e69ee7](https://github.com/Willow7737/omnia-protocol/commit/1e69ee7bb2d39850165b13f4429360d3d54a9fde))
+* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([dc01129](https://github.com/Willow7737/omnia-protocol/commit/dc01129778177e75d7691a64691fcf8a884f84a7))
+* update project status to 93% — 7 high-priority audit findings remediated ([dbf46e8](https://github.com/Willow7737/omnia-protocol/commit/dbf46e837f95831f48d57f76ddb7d5867db301fe))
+
 ## [0.1.56](https://github.com/Willow7737/omnia-protocol/compare/v0.1.55...v0.1.56) (2026-05-25)
 
 
