@@ -358,26 +358,26 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-artifacts/
           pattern: omnia-node-*
           merge-multiple: false
 
       - name: Download contract artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: omnia-rollup-contract
           path: release-artifacts/omnia-rollup-contract/
 
       - name: Download security audit
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: security-audit
           path: release-artifacts/security-audit/
 
       - name: Download SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: omnia-release-sbom
