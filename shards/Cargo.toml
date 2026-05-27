@@ -63,7 +63,7 @@ version = "0.4"
 optional = true
 
 [dependencies.ark-snark]
-version = "0.4"
+version = "0.6"
 optional = true
 
 [dev-dependencies]
