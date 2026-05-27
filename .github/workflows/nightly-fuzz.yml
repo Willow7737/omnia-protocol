@@ -26,7 +26,7 @@ jobs:
           - group: adapters-binding
             targets: "fuzz_zk_proof_deserialization fuzz_snapshot_deserialization fuzz_shard_route"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Use a recent nightly for fuzz builds.  The --sanitizer none flag
       # avoids __sancov_gen_ linker errors that occur when ASan and
       # SanitizerCoverage are combined on certain nightly versions.
@@ -102,7 +102,7 @@ jobs:
     name: Deep Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -146,7 +146,7 @@ jobs:
     name: Cargo Deny Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
