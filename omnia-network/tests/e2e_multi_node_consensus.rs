@@ -228,7 +228,7 @@ impl E2ETestNode {
 
                             // Insert into graph
                             match self.graph.insert(event.clone()) {
-                                Ok(()) => {
+                                Ok(_) => {
                                     received_count += 1;
                                     // Process through consensus
                                     if let Ok(committed) = self.consensus.process_event(&event, &self.graph) {

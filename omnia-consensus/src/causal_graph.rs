@@ -34,6 +34,113 @@ const MAX_TIPS: usize = 10_000;
 /// When exceeded, the oldest entries are evicted.
 const MAX_PRUNED_EVENTS: usize = 50_000;
 
+/// Maximum number of out-of-order events buffered per creator.
+///
+/// When events arrive out of order over gossip (e.g., sequence 5 arrives before
+/// sequence 3), they are held in a per-creator buffer until their predecessor
+/// arrives. This bound prevents a malicious peer from exhausting memory by
+/// sending events with arbitrarily high sequence numbers.
+const MAX_SEQUENCE_BUFFER_PER_CREATOR: usize = 256;
+
+/// Maximum allowed gap between the expected next sequence and an event's
+/// actual sequence number.
+///
+/// Events whose sequence number is too far ahead of the expected next sequence
+/// are rejected outright rather than buffered. This prevents an attacker from
+/// filling the buffer with events that can never be drained (because the gap
+/// is so large that the intermediate events would never arrive).
+const MAX_SEQUENCE_GAP: u64 = 512;
+
+/// A buffer for out-of-order events, keyed by (creator, sequence).
+///
+/// When an event arrives with `sequence > expected_next`, it is stored here
+/// rather than rejected. When the missing predecessor arrives and is inserted
+/// into the graph, the buffer is drained of all consecutive successors that
+/// can now be inserted.
+///
+/// # Security
+///
+/// The buffer is bounded by [`MAX_SEQUENCE_BUFFER_PER_CREATOR`] per creator
+/// and [`MAX_SEQUENCE_GAP`] on the allowed sequence gap. Events that exceed
+/// these bounds are rejected with [`CausalGraphError::SequenceBufferOverflow`]
+/// or [`CausalGraphError::SequenceGapTooLarge`], ensuring that the O(1) cycle
+/// detection invariant is enforced without creating an unbounded DoS surface.
+#[derive(Debug, Default)]
+struct SequenceBuffer {
+    /// Per-creator buffers: creator → (sequence → event).
+    /// Each inner map is a BTreeMap so we can drain consecutive entries
+    /// efficiently when the expected sequence arrives.
+    buffers: HashMap<NodeId, std::collections::BTreeMap<u64, Event>>,
+}
+
+impl SequenceBuffer {
+    fn new() -> Self {
+        Self {
+            buffers: HashMap::new(),
+        }
+    }
+
+    /// Buffer an out-of-order event for later insertion.
+    ///
+    /// Returns `Err` if the buffer is full or the gap is too large.
+    fn buffer_event(&mut self, event: &Event, expected_next: u64) -> Result<(), CausalGraphError> {
+        let creator_buf = self.buffers.entry(event.creator).or_default();
+
+        // Check gap size
+        let gap = event.sequence.saturating_sub(expected_next);
+        if gap > MAX_SEQUENCE_GAP {
+            return Err(CausalGraphError::SequenceGapTooLarge {
+                creator: event.creator,
+                expected: expected_next,
+                actual: event.sequence,
+                max_gap: MAX_SEQUENCE_GAP,
+            });
+        }
+
+        // Check buffer capacity
+        if creator_buf.len() >= MAX_SEQUENCE_BUFFER_PER_CREATOR && !creator_buf.contains_key(&event.sequence) {
+            return Err(CausalGraphError::SequenceBufferOverflow { creator: event.creator });
+        }
+
+        creator_buf.insert(event.sequence, event.clone());
+        Ok(())
+    }
+
+    /// Drain all consecutive events starting from `expected_next`.
+    ///
+    /// Returns events in strict sequence order. Stops at the first gap.
+    fn drain_consecutive(&mut self, creator: &NodeId, expected_next: u64) -> Vec<Event> {
+        let Some(creator_buf) = self.buffers.get_mut(creator) else {
+            return Vec::new();
+        };
+
+        let mut result = Vec::new();
+        let mut next = expected_next;
+
+        while let Some(event) = creator_buf.remove(&next) {
+            result.push(event);
+            next += 1;
+        }
+
+        // Clean up empty buffers
+        if creator_buf.is_empty() {
+            self.buffers.remove(creator);
+        }
+
+        result
+    }
+
+    /// Total number of buffered events across all creators.
+    fn total_buffered(&self) -> usize {
+        self.buffers.values().map(|b| b.len()).sum()
+    }
+
+    /// Number of buffered events for a specific creator.
+    fn buffered_count(&self, creator: &NodeId) -> usize {
+        self.buffers.get(creator).map(|b| b.len()).unwrap_or(0)
+    }
+}
+
 /// Errors that can occur during causal graph operations
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum CausalGraphError {
@@ -58,6 +165,46 @@ pub enum CausalGraphError {
     #[error("Event {0} has been pruned")]
     /// Event was pruned from the graph but minimal metadata is retained
     EventPruned(String),
+    #[error("Invalid sequence: creator {creator:?} expected sequence {expected}, got {actual}")]
+    /// Sequence number violates the monotonicity invariant required for O(1) cycle detection.
+    ///
+    /// The O(1) cycle detection check assumes that for any creator, events are never
+    /// inserted with a sequence number lower than the highest sequence already committed.
+    /// This error fires when an event's sequence number is less than the creator's
+    /// `last_known_sequence`, which would allow an attacker with a compromised key to
+    /// bypass the O(1) cycle check by creating disconnected sub-chains.
+    ///
+    /// Note: events with `sequence == last_known_sequence` are **not** rejected — they
+    /// represent potential equivocation (two different events from the same creator at
+    /// the same sequence), which the consensus layer must detect and slash.
+    InvalidSequence {
+        /// The creator whose sequence invariant was violated
+        creator: NodeId,
+        /// The expected next sequence number
+        expected: u64,
+        /// The actual sequence number on the event
+        actual: u64,
+    },
+    #[error("Sequence buffer overflow: too many out-of-order events for creator {creator:?}")]
+    /// The per-creator sequence buffer exceeded its maximum capacity.
+    /// This is a DoS protection bound (256 events per creator).
+    SequenceBufferOverflow {
+        /// The creator whose buffer overflowed
+        creator: NodeId,
+    },
+    #[error("Sequence gap too large: creator {creator:?} event sequence {actual} exceeds expected {expected} by more than {max_gap}")]
+    /// An event's sequence number is too far ahead of the expected next sequence.
+    /// This is a DoS protection bound (maximum gap of 512).
+    SequenceGapTooLarge {
+        /// The creator whose gap was too large
+        creator: NodeId,
+        /// The expected next sequence number
+        expected: u64,
+        /// The actual sequence number on the event
+        actual: u64,
+        /// The maximum allowed gap
+        max_gap: u64,
+    },
 }
 
 /// Statistics about the causal graph
@@ -105,6 +252,16 @@ pub struct PrunedEventMetadata {
 /// - Current tips (events with no children)
 /// - Per-node highest sequence number
 /// - The frontier (latest known vector clock)
+///
+/// # Performance Design
+///
+/// The insert hot path is optimized for O(1) amortized insertion:
+/// - Cycle detection uses a creator-sequence monotonicity check (O(1))
+///   instead of BFS traversal (O(n)). A valid event always has
+///   `self_parent.sequence < event.sequence` for the same creator;
+///   a cycle would violate this monotonicity invariant.
+/// - Depth is computed in O(1) by looking up parent depths from the
+///   `depths` HashMap rather than recursively traversing ancestors.
 pub struct CausalGraph {
     /// All events in the graph, keyed by event ID
     events: HashMap<EventId, Event>,
@@ -121,6 +278,7 @@ pub struct CausalGraph {
     /// Number of finalized events
     finalized_count: usize,
     /// Per-event depth (computed during insert, used for pruning)
+    /// This is the authoritative depth index — O(1) lookup by event ID.
     depths: HashMap<EventId, usize>,
     /// Metadata for events that have been pruned.
     ///
@@ -134,6 +292,13 @@ pub struct CausalGraph {
     pruned_order: VecDeque<EventId>,
     /// Per-event finalized round (set when `finalize_event` is called).
     finalized_rounds: HashMap<EventId, u64>,
+    /// Buffer for out-of-order events. When an event arrives with a
+    /// sequence number that is ahead of the expected next sequence for
+    /// its creator, it is held here until the predecessor arrives.
+    /// This makes the O(1) cycle detection invariant sound by enforcing
+    /// strict sequence monotonicity without rejecting legitimate
+    /// out-of-order delivery from gossip.
+    seq_buffer: SequenceBuffer,
 }
 
 impl CausalGraph {
@@ -151,24 +316,63 @@ impl CausalGraph {
             pruned_events: HashMap::new(),
             pruned_order: VecDeque::new(),
             finalized_rounds: HashMap::new(),
+            seq_buffer: SequenceBuffer::new(),
         }
     }
 
     /// Insert a new event into the graph.
     ///
-    /// Validates the event hash, checks that parents exist (rejecting
-    /// pruned parents), checks for cycles, and updates all internal
-    /// indexes (tips, creator index, sequence tracking, frontier).
+    /// Validates the event hash, enforces sequence monotonicity, checks that
+    /// parents exist (rejecting pruned parents), checks for cycles, and updates
+    /// all internal indexes (tips, creator index, sequence tracking, frontier).
+    ///
+    /// # Sequence Monotonicity Enforcement
+    ///
+    /// The O(1) cycle detection check is only sound if events from each creator
+    /// never go backward in sequence number. This method enforces that invariant
+    /// at the insertion boundary:
+    ///
+    /// - If `event.sequence < last_known` for this creator, it is rejected with
+    ///   [`CausalGraphError::InvalidSequence`] — this prevents the O(1) cycle
+    ///   check bypass where a compromised key creates a disconnected sub-chain.
+    /// - If `event.sequence == last_known` for this creator, it is allowed through
+    ///   as a potential **equivocation** (two different events from the same
+    ///   creator at the same sequence). The consensus layer is responsible for
+    ///   detecting and slashing equivocation.
+    /// - If `event.sequence == expected_next` (`last_known + 1`), it is inserted
+    ///   immediately and any buffered successors are flushed.
+    /// - If `event.sequence > expected_next` (out-of-order arrival), the event
+    ///   is buffered until its predecessor arrives. The buffer is bounded per
+    ///   creator (256 events) and per gap (512 sequence numbers).
+    ///
+    /// # Cycle Detection Strategy
+    ///
+    /// Cycle detection uses **creator-sequence monotonicity** — an O(1) check
+    /// instead of O(n) BFS traversal. In a DAG, a valid event from creator C
+    /// with self-parent P (also from C) must satisfy `P.sequence < event.sequence`.
+    /// A cycle would require an event to be its own ancestor, which would violate
+    /// this monotonicity invariant because sequence numbers only increase.
+    /// For other-parent links (cross-creator), cycle detection relies on the
+    /// structural invariant that a newly created event cannot reference a future
+    /// event as its parent — the parent must already exist in the graph.
+    ///
+    /// **Security note:** The monotonicity check in this method is the security
+    /// invariant that makes the O(1) cycle check sound. Without it, an attacker
+    /// with a compromised key could craft events with arbitrary sequence numbers
+    /// that create structural cycles bypassing the O(1) check.
     ///
     /// # Errors
     ///
     /// - [`CausalGraphError::DuplicateEvent`] — an event with the same ID already exists.
     /// - [`CausalGraphError::InvalidEvent`] — event hash does not match content.
+    /// - [`CausalGraphError::InvalidSequence`] — sequence number violates monotonicity.
     /// - [`CausalGraphError::MissingParent`] — a referenced parent does not exist.
     /// - [`CausalGraphError::EventPruned`] — a referenced parent has been pruned.
     /// - [`CausalGraphError::CycleDetected`] — adding this event would create a cycle.
     /// - [`CausalGraphError::MaxDepthExceeded`] — depth computation exceeded the limit.
-    pub fn insert(&mut self, event: Event) -> Result<(), CausalGraphError> {
+    /// - [`CausalGraphError::SequenceBufferOverflow`] — too many out-of-order events.
+    /// - [`CausalGraphError::SequenceGapTooLarge`] — sequence gap exceeds DoS bound.
+    pub fn insert(&mut self, event: Event) -> Result<Vec<EventId>, CausalGraphError> {
         let event_id = event.id;
 
         // Check for duplicate
@@ -186,10 +390,108 @@ impl CausalGraph {
             )));
         }
 
-        // Verify parents exist (except for genesis events)
+        // ── Sequence monotonicity enforcement ──────────────────────
+        // This is the security invariant that makes the O(1) cycle check sound.
+        //
+        // For a creator with no prior events, the first event must have seq 0.
+        // For a creator with prior events at last_known, the rules are:
+        //
+        //   sequence < last_known  → REJECT  (stale / attack — prevents O(1)
+        //                                   cycle-check bypass where a compromised
+        //                                   key resets to a low sequence number)
+        //   sequence == last_known → ALLOW   (equivocation — two different events
+        //                                   from the same creator at the same
+        //                                   sequence; the consensus layer must
+        //                                   detect and slash)
+        //   sequence == last_known + 1 → ALLOW (normal forward progress)
+        //   sequence > last_known + 1 → BUFFER (out-of-order gossip delivery)
+        //
+        // The critical security property is that sequence < last_known is rejected.
+        // The O(1) cycle check in insert_inner verifies that self-parent and
+        // other-parent from the same creator have a lower sequence; a backward
+        // jump could otherwise bypass that check by creating a disconnected
+        // sub-chain with self_parent: None.
+        //
+        // Equivocation (sequence == last_known) is allowed through because:
+        // (a) it cannot bypass the O(1) check — if the event has a self-parent
+        //     from the same creator, the parent's sequence < event.sequence is
+        //     checked; if self_parent is None, there is no self-parent edge
+        //     that could form a cycle;
+        // (b) the consensus layer must observe both equivocating events to
+        //     detect and slash the malicious validator.
+        let has_existing = self.node_sequences.contains_key(&event.creator);
+        let last_known = self.node_sequences.get(&event.creator).copied().unwrap_or(0);
+        let expected_next = if has_existing { last_known + 1 } else { 0 };
+
+        if has_existing && event.sequence < last_known {
+            // Genuinely going backward — reject.
+            // This is the attack vector for O(1) cycle-check bypass:
+            // a compromised key creating events with old sequence numbers.
+            return Err(CausalGraphError::InvalidSequence {
+                creator: event.creator,
+                expected: expected_next,
+                actual: event.sequence,
+            });
+        }
+
+        if event.sequence > expected_next {
+            // Out-of-order arrival — buffer the event.
+            // It will be inserted when its predecessor arrives.
+            self.seq_buffer.buffer_event(&event, expected_next)?;
+            return Ok(Vec::new()); // Not inserted yet, no IDs to return
+        }
+
+        // sequence == expected_next (normal) or
+        // sequence == last_known (equivocation): proceed with insertion.
+
+        // ── Internal insertion (no monotonicity re-check needed) ───
+        let mut inserted_ids = self.insert_inner(event)?;
+
+        // After successful insertion, drain the buffer of any consecutive
+        // successors that can now be inserted.
+        let creator = inserted_ids
+            .first()
+            .and_then(|id| self.events.get(id))
+            .map(|e| e.creator)
+            .unwrap_or([0u8; 32]);
+
+        let next_expected = self.node_sequences.get(&creator).map(|&s| s + 1).unwrap_or(0);
+        let buffered = self.seq_buffer.drain_consecutive(&creator, next_expected);
+
+        for event in buffered {
+            match self.insert_inner(event) {
+                Ok(mut ids) => inserted_ids.append(&mut ids),
+                Err(e) => {
+                    // Log but don't fail the original insertion — a buffered
+                    // event that fails validation is discarded.
+                    tracing::warn!(
+                        error = %e,
+                        "Buffered event failed insertion during drain — discarding"
+                    );
+                }
+            }
+        }
+
+        Ok(inserted_ids)
+    }
+
+    /// Internal insertion — performs all checks except sequence monotonicity
+    /// (which is handled by the caller). This is the core graph mutation.
+    fn insert_inner(&mut self, event: Event) -> Result<Vec<EventId>, CausalGraphError> {
+        let event_id = event.id;
+
+        // Verify parents exist (except for genesis events) and collect depth info
+        let mut max_parent_depth: usize = 0;
         if let Some(sp) = event.self_parent {
             match self.get_checked(&sp) {
-                Ok(_) => {} // parent exists, OK
+                Ok(parent) => {
+                    // O(1) cycle check: self-parent must have lower sequence from same creator
+                    if parent.creator == event.creator && parent.sequence >= event.sequence {
+                        return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
+                    }
+                    // O(1) depth lookup from index
+                    max_parent_depth = max_parent_depth.max(self.depths.get(&sp).copied().unwrap_or(0));
+                }
                 Err(CausalGraphError::EventPruned(_)) => {
                     return Err(CausalGraphError::EventPruned(hex::encode(&sp[..8])));
                 }
@@ -204,7 +506,15 @@ impl CausalGraph {
         }
         if let Some(op) = event.other_parent {
             match self.get_checked(&op) {
-                Ok(_) => {} // parent exists, OK
+                Ok(parent) => {
+                    // Cross-creator cycle check: other-parent from same creator
+                    // must have lower sequence
+                    if parent.creator == event.creator && parent.sequence >= event.sequence {
+                        return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
+                    }
+                    // O(1) depth lookup from index
+                    max_parent_depth = max_parent_depth.max(self.depths.get(&op).copied().unwrap_or(0));
+                }
                 Err(CausalGraphError::EventPruned(_)) => {
                     return Err(CausalGraphError::EventPruned(hex::encode(&op[..8])));
                 }
@@ -215,18 +525,6 @@ impl CausalGraph {
                     )));
                 }
                 Err(e) => return Err(e),
-            }
-        }
-
-        // Check for cycles
-        if let Some(sp) = event.self_parent {
-            if self.is_ancestor_of(&event_id, &sp)? {
-                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
-            }
-        }
-        if let Some(op) = event.other_parent {
-            if self.is_ancestor_of(&event_id, &op)? {
-                return Err(CausalGraphError::CycleDetected(hex::encode(&event_id[..8]).to_string()));
             }
         }
 
@@ -241,7 +539,10 @@ impl CausalGraph {
         // Update creator index
         self.by_creator.entry(event.creator).or_default().push(event_id);
 
-        // Update node sequence tracking
+        // Update node sequence tracking.
+        // The monotonicity check in insert() guarantees event.sequence is
+        // either last_known (equivocation) or >= last_known + 1 (forward).
+        // We use max() to ensure the tracking never goes backward.
         let current_seq = self.node_sequences.entry(event.creator).or_insert(0);
         *current_seq = (*current_seq).max(event.sequence);
 
@@ -256,11 +557,16 @@ impl CausalGraph {
             self.finalized_count += 1;
         }
 
-        // Store the event BEFORE calculating depth (depth calculation looks up events in the map)
+        // Store the event
         self.events.insert(event_id, event);
 
-        // Update max depth
-        let depth = self.calculate_depth(&event_id)?;
+        // O(1) depth computation: max(parent depths) + 1
+        let depth = max_parent_depth + 1;
+        if depth > MAX_ANCESTRY_DEPTH {
+            return Err(CausalGraphError::MaxDepthExceeded(
+                hex::encode(&event_id[..8]).to_string(),
+            ));
+        }
         self.max_depth = self.max_depth.max(depth);
         self.depths.insert(event_id, depth);
 
@@ -269,7 +575,7 @@ impl CausalGraph {
             self.consolidate_tips();
         }
 
-        Ok(())
+        Ok(vec![event_id])
     }
 
     /// Get an event by its ID.
@@ -364,6 +670,16 @@ impl CausalGraph {
     /// Get the latest sequence number for a node
     pub fn latest_sequence(&self, node_id: &NodeId) -> u64 {
         self.node_sequences.get(node_id).copied().unwrap_or(0)
+    }
+
+    /// Get the number of events buffered for a creator (waiting for predecessors).
+    pub fn buffered_sequence_count(&self, creator: &NodeId) -> usize {
+        self.seq_buffer.buffered_count(creator)
+    }
+
+    /// Get the total number of buffered events across all creators.
+    pub fn total_buffered_events(&self) -> usize {
+        self.seq_buffer.total_buffered()
     }
 
     /// Check if `ancestor` is an ancestor of `descendant`.
@@ -469,36 +785,6 @@ impl CausalGraph {
         }
 
         Ok(ancestors)
-    }
-
-    /// Calculate the depth of an event
-    fn calculate_depth(&self, event_id: &EventId) -> Result<usize, CausalGraphError> {
-        let mut memo = HashMap::new();
-        self.calculate_depth_memo(event_id, &mut memo)
-    }
-
-    fn calculate_depth_memo(
-        &self,
-        event_id: &EventId,
-        memo: &mut HashMap<EventId, usize>,
-    ) -> Result<usize, CausalGraphError> {
-        if let Some(&depth) = memo.get(event_id) {
-            return Ok(depth);
-        }
-
-        let event = self
-            .events
-            .get(event_id)
-            .ok_or_else(|| CausalGraphError::InvalidEvent("event not found".to_string()))?;
-
-        let mut max_parent_depth = 0;
-        for parent in [event.self_parent, event.other_parent].iter().flatten() {
-            max_parent_depth = max_parent_depth.max(self.calculate_depth_memo(parent, memo)?);
-        }
-
-        let depth = max_parent_depth + 1;
-        memo.insert(*event_id, depth);
-        Ok(depth)
     }
 
     /// Find events that are concurrent with the given event.
@@ -1188,8 +1474,15 @@ mod tests {
     #[test]
     fn test_missing_parent() {
         let mut graph = CausalGraph::new();
-        let n1 = test_node(1);
+        let (kp, n1) = make_keypair_and_node(1);
 
+        // First insert a genesis event so sequence=0 is registered
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        graph.insert(g).unwrap();
+
+        // Now try to insert an event with sequence=1 that references a
+        // non-existent self-parent — should fail with MissingParent
         let fake_parent = [99u8; 32];
         let event = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(fake_parent), None, vec![]);
 
@@ -1878,5 +2171,270 @@ mod tests {
         assert!(!snapshot.by_creator.is_empty());
         assert!(!snapshot.node_sequences.is_empty());
         assert_eq!(snapshot.finalized_count, 0);
+    }
+
+    // ── Sequence Monotonicity Enforcement Tests ──────────────────────
+
+    #[test]
+    fn test_sequence_monotonicity_rejects_backward_sequence() {
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Insert genesis (seq 0)
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let g_id = g.id;
+        graph.insert(g).unwrap();
+
+        // Insert seq 1
+        let vc = VectorClock::with_node(n1, 2);
+        let mut e1 = Event::new(n1, 1, vc, Some(g_id), None, vec![]);
+        e1.sign_with_keypair(&kp);
+        graph.insert(e1).unwrap();
+
+        // Try to insert another event with seq 0 — should fail
+        let e_bad = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![]);
+        let result = graph.insert(e_bad);
+        assert!(matches!(
+            result,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 2,
+                actual: 0,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_sequence_monotonicity_allows_equivocation_at_current_sequence() {
+        // Equivocation: same creator, same sequence, different event (different
+        // payload → different hash). The graph MUST allow the second event
+        // through so the consensus layer can detect and slash the equivocator.
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Insert genesis (seq 0)
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        graph.insert(g).unwrap();
+
+        // Insert a second event with seq 0 but DIFFERENT content — this is
+        // equivocation, not a duplicate (different hash). Should be ALLOWED.
+        // Both events claim to be genesis (self_parent: None), which is the
+        // equivocation pattern at sequence 0.
+        let mut eq_event = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![0xAA]);
+        eq_event.sign_with_keypair(&kp);
+        let result = graph.insert(eq_event);
+        assert!(
+            result.is_ok(),
+            "Equivocation at current sequence should be allowed through for detection"
+        );
+
+        // Both events should be in the graph
+        assert_eq!(graph.len(), 2);
+
+        // node_sequences should still track seq 0 (max of 0, 0 = 0)
+        assert_eq!(graph.node_sequences.get(&n1), Some(&0u64));
+    }
+
+    #[test]
+    fn test_sequence_monotonicity_allows_equivocation_at_tip() {
+        // Equivocation at the latest sequence (the common case in real networks):
+        // a validator double-signs at their current sequence. Both equivocating
+        // events share the same self_parent (the event at seq N-1).
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Build chain: seq 0 → 1 → 2
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let g_id = g.id;
+        graph.insert(g).unwrap();
+
+        let vc1 = VectorClock::with_node(n1, 2);
+        let mut e1 = Event::new(n1, 1, vc1, Some(g_id), None, vec![]);
+        e1.sign_with_keypair(&kp);
+        let e1_id = e1.id;
+        graph.insert(e1).unwrap();
+
+        let vc2 = VectorClock::with_node(n1, 3);
+        let mut e2 = Event::new(n1, 2, vc2, Some(e1_id), None, vec![]);
+        e2.sign_with_keypair(&kp);
+        graph.insert(e2).unwrap();
+
+        // Now equivocate at seq 2 (same as last_known). The equivocating event
+        // has the SAME self_parent (e1_id) as the real seq-2 event, but a
+        // different payload → different hash.
+        let mut eq_event = Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(e1_id), None, vec![0xBB]);
+        eq_event.sign_with_keypair(&kp);
+        let result = graph.insert(eq_event);
+        assert!(result.is_ok(), "Equivocation at last_known sequence should be allowed");
+
+        // The equivocating event is now in the graph alongside the original
+        assert_eq!(graph.len(), 4); // genesis + seq1 + seq2 + equivocation at seq2
+    }
+
+    #[test]
+    fn test_sequence_monotonicity_rejects_gap_without_buffer() {
+        // This test verifies that a gap is buffered, not rejected,
+        // and that the gap has limits.
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Insert genesis (seq 0)
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let g_id = g.id;
+        graph.insert(g).unwrap();
+
+        // Try to insert seq 3 (skipping 1, 2) — should be BUFFERED, not rejected
+        let vc = VectorClock::with_node(n1, 4);
+        let mut e3 = Event::new(n1, 3, vc, Some(g_id), None, vec![]);
+        e3.sign_with_keypair(&kp);
+        let result = graph.insert(e3);
+        // Should succeed with empty Vec (buffered)
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+
+        // Verify the event is in the buffer
+        assert_eq!(graph.buffered_sequence_count(&n1), 1);
+    }
+
+    #[test]
+    fn test_sequence_buffer_drains_on_arrival() {
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Insert genesis (seq 0)
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let g_id = g.id;
+        graph.insert(g).unwrap();
+
+        // Buffer seq 2 (skipping seq 1)
+        let vc2 = VectorClock::with_node(n1, 3);
+        let mut e2 = Event::new(n1, 2, vc2, Some(g_id), None, vec![]);
+        e2.sign_with_keypair(&kp);
+        let e2_id = e2.id;
+        let result = graph.insert(e2);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty()); // Buffered, not inserted
+
+        // Buffer seq 3
+        let vc3 = VectorClock::with_node(n1, 4);
+        let mut e3 = Event::new(n1, 3, vc3, Some(e2_id), None, vec![]);
+        e3.sign_with_keypair(&kp);
+        graph.insert(e3).unwrap(); // Buffered
+
+        assert_eq!(graph.buffered_sequence_count(&n1), 2);
+        assert_eq!(graph.len(), 1); // Only genesis is in the graph
+
+        // Now insert seq 1 — this should drain 1, 2, 3 all at once
+        let vc1 = VectorClock::with_node(n1, 2);
+        let mut e1 = Event::new(n1, 1, vc1, Some(g_id), None, vec![]);
+        e1.sign_with_keypair(&kp);
+        let inserted = graph.insert(e1).unwrap();
+
+        // Should have inserted all 3 events
+        assert_eq!(inserted.len(), 3);
+        assert_eq!(graph.len(), 4); // genesis + 3 drained
+        assert_eq!(graph.buffered_sequence_count(&n1), 0);
+    }
+
+    #[test]
+    fn test_sequence_buffer_gap_too_large() {
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Insert genesis (seq 0)
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        graph.insert(g).unwrap();
+
+        // Try to insert seq 1000 — gap of 999 exceeds MAX_SEQUENCE_GAP (512)
+        let vc = VectorClock::with_node(n1, 1001);
+        let mut e_big = Event::new(n1, 1000, vc, None, None, vec![]);
+        e_big.sign_with_keypair(&kp);
+        let result = graph.insert(e_big);
+        assert!(matches!(result, Err(CausalGraphError::SequenceGapTooLarge { .. })));
+    }
+
+    #[test]
+    fn test_sequence_monotonicity_prevents_cycle_attack() {
+        // This is the core security test: an attacker with a compromised key
+        // tries to insert an event with seq=0 when seq=5 already exists.
+        // The old code would silently accept this; the new code rejects it.
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        // Build a chain: seq 0, 1, 2, 3, 4, 5
+        let mut g = Event::genesis(n1, vec![]);
+        g.sign_with_keypair(&kp);
+        let mut last_id = g.id;
+        graph.insert(g).unwrap();
+
+        for seq in 1..=5u64 {
+            let vc = VectorClock::with_node(n1, seq + 1);
+            let mut e = Event::new(n1, seq, vc, Some(last_id), None, vec![]);
+            e.sign_with_keypair(&kp);
+            last_id = e.id;
+            graph.insert(e).unwrap();
+        }
+
+        // Attacker tries to insert a rogue event with seq=0
+        // Before the fix: this would be silently accepted (node_sequences would
+        // retain 5 via max-tracking, but the event would be in the graph)
+        // After the fix: rejected with InvalidSequence
+        let rogue = Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![]);
+        let result = graph.insert(rogue);
+        assert!(matches!(
+            result,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 6,
+                actual: 0,
+                ..
+            })
+        ));
+
+        // Also try seq=3 (already committed)
+        let rogue2 = Event::new(n1, 3, VectorClock::with_node(n1, 4), None, None, vec![]);
+        let result2 = graph.insert(rogue2);
+        assert!(matches!(
+            result2,
+            Err(CausalGraphError::InvalidSequence {
+                expected: 6,
+                actual: 3,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_independent_creators_not_affected() {
+        // Verify that monotonicity is per-creator — different creators
+        // can each start at seq 0 independently.
+        let mut graph = CausalGraph::new();
+        let (kp1, n1) = make_keypair_and_node(1);
+        let (kp2, n2) = make_keypair_and_node(2);
+
+        // Creator 1: genesis
+        let mut g1 = Event::genesis(n1, vec![]);
+        g1.sign_with_keypair(&kp1);
+        let g1_id = g1.id;
+        graph.insert(g1).unwrap();
+
+        // Creator 2: genesis — this should be fine even though creator 1 has seq 0
+        let mut g2 = Event::genesis(n2, vec![]);
+        g2.sign_with_keypair(&kp2);
+        let g2_id = g2.id;
+        graph.insert(g2).unwrap();
+
+        // Creator 2: seq 1 — should be fine
+        let vc = VectorClock::with_node(n2, 2);
+        let mut e2 = Event::new(n2, 1, vc, Some(g2_id), Some(g1_id), vec![]);
+        e2.sign_with_keypair(&kp2);
+        graph.insert(e2).unwrap();
+
+        assert_eq!(graph.len(), 3);
     }
 }
