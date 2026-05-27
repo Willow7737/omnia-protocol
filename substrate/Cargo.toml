@@ -15,7 +15,7 @@ omnia-consensus = { path = "../omnia-consensus", features = ["persistent-storage
 omnia-network = { path = "../omnia-network", default-features = false, optional = true }
 omnia-adapters = { path = "../omnia-adapters", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 thiserror = "2.0"
 tracing = "0.1"
