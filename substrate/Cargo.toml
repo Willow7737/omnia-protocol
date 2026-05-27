@@ -42,7 +42,7 @@ aes-gcm = "0.10"
 bip39 = { version = "2", features = ["zeroize", "rand"] }
 
 # HKDF key derivation for keystore
-hkdf = "0.12"
+hkdf = "0.13"
 serde_json = "1.0"
 
 # Embedded key-value store for persistent slashing state
