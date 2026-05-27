@@ -8,6 +8,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.59](https://github.com/Willow7737/omnia-protocol/compare/v0.1.58...v0.1.59) (2026-05-27)
+
+
+### Bug Fixes
+
+* **docker:** resolve build failure from CI-only crates excluded by .dockerignore ([b25226c](https://github.com/Willow7737/omnia-protocol/commit/b25226c925eb00e633452f7097cae708cfbb3339))
+
 ## [0.1.58](https://github.com/Willow7737/omnia-protocol/compare/v0.1.57...v0.1.58) (2026-05-27)
 
 
