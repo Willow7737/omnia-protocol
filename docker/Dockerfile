@@ -5,8 +5,9 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
+# Copy workspace root manifest and lockfile
 COPY Cargo.toml Cargo.lock ./
-# Core 9-crate layout (post-restructuring)
+# Copy only the production crate manifests (10 crates)
 COPY omnia-primitives/Cargo.toml omnia-primitives/
 COPY omnia-consensus/Cargo.toml omnia-consensus/
 COPY omnia-crypto/Cargo.toml omnia-crypto/
@@ -16,16 +17,16 @@ COPY shards/Cargo.toml shards/
 COPY binding/Cargo.toml binding/
 COPY economics/Cargo.toml economics/
 COPY node/Cargo.toml node/
-# Deprecated facade (still in workspace)
 COPY substrate/Cargo.toml substrate/
-# CI-only crates
-COPY benches/Cargo.toml benches/
-COPY fuzz/Cargo.toml fuzz/
-COPY chaos-tests/Cargo.toml chaos-tests/
-RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
+# CI-only crates (benches, fuzz, chaos-tests, tests) are excluded by .dockerignore.
+# 1) Strip them from workspace members
+# 2) Create stub source files for the remaining 10 crates
+# 3) Remove the lockfile — cargo will regenerate it for the reduced workspace
+# 4) Pre-fetch all dependencies
+RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
+    mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     omnia-network/src omnia-adapters/src shards/src binding/src \
-    economics/src node/src substrate/src benches/src fuzz/src \
-    chaos-tests/src && \
+    economics/src node/src substrate/src && \
     echo "" > omnia-primitives/src/lib.rs && \
     echo "" > omnia-consensus/src/lib.rs && \
     echo "" > omnia-crypto/src/lib.rs && \
@@ -36,10 +37,14 @@ RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     echo "" > economics/src/lib.rs && \
     echo "" > node/src/lib.rs && \
     echo "" > substrate/src/lib.rs && \
-    echo "" > benches/src/lib.rs && \
-    echo "" > chaos-tests/src/lib.rs && \
+    rm Cargo.lock && \
     cargo fetch
+# Copy all real source code (CI-only dirs excluded by .dockerignore)
 COPY . .
+# Re-strip CI-only members since COPY . . restores the original Cargo.toml.
+# Remove the original lockfile's CI-only crate entries so cargo build works.
+RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
+    rm Cargo.lock
 # Production profile: --no-default-features --features full (excludes swagger-ui to meet ≤12MB target)
 RUN cargo build --release -p omnia-node --no-default-features --features full
 

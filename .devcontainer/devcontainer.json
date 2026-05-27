@@ -1,0 +1,43 @@
+{
+  "name": "Omnia Protocol Testnet",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": true
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.91",
+      "profile": "default"
+    }
+  },
+  "forwardPorts": [9090, 9091, 9092, 9093, 9094, 9095, 3000, 8080],
+  "portsAttributes": {
+    "9090": { "label": "Bootstrap Node", "onAutoForward": "notify" },
+    "9091": { "label": "Node 1", "onAutoForward": "notify" },
+    "9092": { "label": "Node 2", "onAutoForward": "notify" },
+    "9093": { "label": "Node 3", "onAutoForward": "notify" },
+    "9094": { "label": "Node 4", "onAutoForward": "notify" },
+    "9095": { "label": "Prometheus", "onAutoForward": "notify" },
+    "3000": { "label": "Grafana", "onAutoForward": "notify" },
+    "8080": { "label": "Direct Node API", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "cargo fetch 2>/dev/null || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "serayuzgur.crates",
+        "tamasfe.even-better-toml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "rust-analyzer.checkOnSave.command": "clippy"
+      }
+    }
+  },
+  "remoteEnv": {
+    "RUST_LOG": "info"
+  }
+}

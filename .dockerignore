@@ -1,10 +1,13 @@
 # Exclude fuzz crate (has its own rust-toolchain.toml pinned to nightly,
 # which can confuse the Docker build's cargo fetch).
+# The Dockerfile strips CI-only crates from the workspace and regenerates
+# the lockfile so these are not needed in the build context.
 fuzz/
 
 # Exclude CI-only and development files that aren't needed for production builds.
 chaos-tests/
 benches/
+tests/
 .github/
 .git/
 target/
