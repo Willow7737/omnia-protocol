@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.60](https://github.com/Willow7737/omnia-protocol/compare/v0.1.59...v0.1.60) (2026-05-27)
+
+
+### Bug Fixes
+
+* **docker:** create stub source files before cargo generate-lockfile ([cb65ff0](https://github.com/Willow7737/omnia-protocol/commit/cb65ff0f67eaddd0bf09f9b9e751386010024f52))
+* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([aefb24b](https://github.com/Willow7737/omnia-protocol/commit/aefb24bb80a95c0cec3d88161c786d18d3f4801f))
+* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([5342f87](https://github.com/Willow7737/omnia-protocol/commit/5342f87605810dbabe79ed0c0ad024cd2bbfde48))
+
 ## [0.1.59](https://github.com/Willow7737/omnia-protocol/compare/v0.1.58...v0.1.59) (2026-05-27)
 
 
