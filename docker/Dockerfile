@@ -18,14 +18,15 @@ COPY economics/Cargo.toml economics/
 COPY node/Cargo.toml node/
 # Deprecated facade (still in workspace)
 COPY substrate/Cargo.toml substrate/
-# CI-only crates
-COPY benches/Cargo.toml benches/
-COPY fuzz/Cargo.toml fuzz/
-COPY chaos-tests/Cargo.toml chaos-tests/
+# CI-only crates (benches, fuzz, chaos-tests, tests) are excluded by .dockerignore.
+# Strip them from workspace members and regenerate the lockfile for the reduced workspace.
+RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
+    cargo generate-lockfile && \
+    cp Cargo.lock /tmp/Cargo.lock.reduced
+# Create stub source files for core crates so cargo fetch can resolve
 RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     omnia-network/src omnia-adapters/src shards/src binding/src \
-    economics/src node/src substrate/src benches/src fuzz/src \
-    chaos-tests/src && \
+    economics/src node/src substrate/src && \
     echo "" > omnia-primitives/src/lib.rs && \
     echo "" > omnia-consensus/src/lib.rs && \
     echo "" > omnia-crypto/src/lib.rs && \
@@ -36,10 +37,13 @@ RUN mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     echo "" > economics/src/lib.rs && \
     echo "" > node/src/lib.rs && \
     echo "" > substrate/src/lib.rs && \
-    echo "" > benches/src/lib.rs && \
-    echo "" > chaos-tests/src/lib.rs && \
     cargo fetch
+# Copy real source code (excludes CI-only dirs via .dockerignore)
 COPY . .
+# COPY . . restores the original Cargo.toml (with CI-only members) and Cargo.lock.
+# Re-strip CI-only members and restore the reduced lockfile.
+RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
+    cp /tmp/Cargo.lock.reduced Cargo.lock
 # Production profile: --no-default-features --features full (excludes swagger-ui to meet ≤12MB target)
 RUN cargo build --release -p omnia-node --no-default-features --features full
 
