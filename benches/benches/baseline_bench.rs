@@ -98,7 +98,8 @@ fn tx_throughput_bench(c: &mut Criterion) {
                     let mut vc = VectorClock::new();
                     vc.set(creator, seq + 1);
 
-                    let mut event = Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8; 64]).expect("event creation");
+                    let mut event =
+                        Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8; 64]).expect("event creation");
                     event.sign_with_keypair(&keypair);
 
                     let event_id = event.id;
@@ -171,7 +172,8 @@ fn finality_latency_bench(c: &mut Criterion) {
 
                 let mut vc = VectorClock::new();
                 vc.set(creator, seq + 1);
-                let mut event = Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 64]).expect("event creation");
+                let mut event =
+                    Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 64]).expect("event creation");
                 event.sign_with_keypair(&keypair);
 
                 let event_id = event.id;
@@ -292,7 +294,8 @@ fn gossip_latency_bench(c: &mut Criterion) {
                 // Create a new event on the "local" node
                 let mut vc = VectorClock::new();
                 vc.set(creator, seq + 1);
-                let mut event = Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 128]).expect("event creation");
+                let mut event =
+                    Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 128]).expect("event creation");
                 event.sign_with_keypair(&keypair);
 
                 // Simulate serialization + deserialization (postcard wire format)
@@ -345,7 +348,8 @@ fn dag_insert_bench(c: &mut Criterion) {
                         for _ in 0..pre_fill {
                             let mut vc = VectorClock::new();
                             vc.set(creator, seq + 1);
-                            let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]).expect("event creation");
+                            let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32])
+                                .expect("event creation");
                             event.sign_with_keypair(&keypair);
                             last_id = Some(event.id);
                             graph.insert(event).expect("pre-fill insert");
@@ -359,7 +363,8 @@ fn dag_insert_bench(c: &mut Criterion) {
 
                         let mut vc = VectorClock::new();
                         vc.set(creator, seq + 1);
-                        let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]).expect("event creation");
+                        let mut event =
+                            Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]).expect("event creation");
                         event.sign_with_keypair(&keypair);
                         let _ = graph.insert(event);
 

@@ -338,8 +338,8 @@ impl SafetyMonitor {
         // Create genesis events using each node's identity keypair
         let mut genesis_events: Vec<(usize, Event)> = Vec::with_capacity(self.nodes.len());
         for (i, node) in self.nodes.iter_mut().enumerate() {
-            let mut genesis = Event::genesis(node.node_id, vec![(i + 1) as u8])
-                .expect("genesis event creation should not fail");
+            let mut genesis =
+                Event::genesis(node.node_id, vec![(i + 1) as u8]).expect("genesis event creation should not fail");
             // Use the node's own identity keypair for signing (not a random one)
             genesis.sign_with_keypair(&node.keypair);
 

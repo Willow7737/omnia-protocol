@@ -405,8 +405,7 @@ impl ProvenanceLog {
     /// state-format migrations.
     pub fn to_bytes(&self) -> Result<Vec<u8>, ProvenanceError> {
         let mut bytes = vec![Self::PROVENANCE_LOG_VERSION];
-        let serialized = postcard::to_allocvec(self)
-            .map_err(|e| ProvenanceError::SerializationError(e.to_string()))?;
+        let serialized = postcard::to_allocvec(self).map_err(|e| ProvenanceError::SerializationError(e.to_string()))?;
         bytes.extend(serialized);
         Ok(bytes)
     }
@@ -426,8 +425,8 @@ impl ProvenanceLog {
                 version
             )));
         }
-        let log: Self = postcard::from_bytes(&bytes[1..])
-            .map_err(|e| ProvenanceError::DeserializationError(e.to_string()))?;
+        let log: Self =
+            postcard::from_bytes(&bytes[1..]).map_err(|e| ProvenanceError::DeserializationError(e.to_string()))?;
         if log.events.is_empty() {
             return Err(ProvenanceError::InvalidLog(
                 "provenance log must have at least one event".into(),

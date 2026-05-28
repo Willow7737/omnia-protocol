@@ -56,7 +56,8 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
         let mut seq: u64 = 1;
         b.iter(|| {
             let vc = VectorClock::with_node(creator, seq + 1);
-            let mut event = Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]).expect("event creation");
+            let mut event =
+                Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]).expect("event creation");
             event.sign_with_keypair(&keypair);
             let _ = graph.insert(event);
             seq += 1;

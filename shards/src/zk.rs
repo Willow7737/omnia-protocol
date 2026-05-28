@@ -30,9 +30,12 @@ pub fn is_valid_zk_proof_layout(proof_bytes: &[u8]) -> bool {
 /// this always returns an error to prevent accepting unverified proofs.
 pub fn verify_zk_proof(proof_bytes: &[u8], context: &str) -> Result<(), crate::shard::ShardError> {
     if !is_valid_zk_proof_layout(proof_bytes) {
-        return Err(crate::shard::ShardError::ValidationFailed(
-            format!("{}: invalid ZK proof layout ({} bytes, minimum {})", context, proof_bytes.len(), MIN_GROTH16_PROOF_LEN)
-        ));
+        return Err(crate::shard::ShardError::ValidationFailed(format!(
+            "{}: invalid ZK proof layout ({} bytes, minimum {})",
+            context,
+            proof_bytes.len(),
+            MIN_GROTH16_PROOF_LEN
+        )));
     }
 
     #[cfg(feature = "real_verification")]
@@ -45,8 +48,9 @@ pub fn verify_zk_proof(proof_bytes: &[u8], context: &str) -> Result<(), crate::s
     #[cfg(not(feature = "real_verification"))]
     {
         let _ = context;
-        Err(crate::shard::ShardError::ValidationFailed(
-            format!("{}: ZK proof verification requires 'real_verification' feature", context)
-        ))
+        Err(crate::shard::ShardError::ValidationFailed(format!(
+            "{}: ZK proof verification requires 'real_verification' feature",
+            context
+        )))
     }
 }

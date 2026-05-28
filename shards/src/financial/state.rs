@@ -149,7 +149,9 @@ impl FinancialState {
         match op {
             FinancialOp::Transfer { to, amount } => {
                 if *amount == 0 {
-                    return Err(ShardError::InvalidOperation("Transfer amount must be greater than zero".into()));
+                    return Err(ShardError::InvalidOperation(
+                        "Transfer amount must be greater than zero".into(),
+                    ));
                 }
                 let from = event.creator_pubkey;
                 let vc = &event.vector_clock;
@@ -180,7 +182,11 @@ impl FinancialState {
                 match self.mint_authority {
                     Some(auth) if auth == minter => {}
                     Some(_) => return Err(ShardError::ValidationFailed("Unauthorized minter".into())),
-                    None => return Err(ShardError::ValidationFailed("Minting is disabled (no mint authority set)".into())),
+                    None => {
+                        return Err(ShardError::ValidationFailed(
+                            "Minting is disabled (no mint authority set)".into(),
+                        ))
+                    }
                 }
                 let vc = &event.vector_clock;
                 let balance = self.balances.entry(*to).or_default();

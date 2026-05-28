@@ -163,10 +163,10 @@ impl ShardRouter {
         // Verify the source shard matches the shard type that would generate this event
         let expected_source = Self::shard_id_from_op(&inner_op);
         if expected_source != msg.source_shard {
-            return Err(ShardError::ValidationFailed(
-                format!("cross-shard message source mismatch: expected {:?}, got {:?}",
-                    expected_source, msg.source_shard)
-            ));
+            return Err(ShardError::ValidationFailed(format!(
+                "cross-shard message source mismatch: expected {:?}, got {:?}",
+                expected_source, msg.source_shard
+            )));
         }
 
         let target_id = msg.target_shard;

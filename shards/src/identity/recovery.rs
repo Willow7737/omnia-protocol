@@ -109,10 +109,12 @@ impl ShamirRecovery {
         // Validate share consistency: all shares must have the same value length
         for (i, share) in shares.iter().enumerate().skip(1) {
             if share.value.len() != secret_len {
-                return Err(ShamirError::InvalidShare(
-                    format!("inconsistent share lengths: share {} has {} bytes, expected {}",
-                        i, share.value.len(), secret_len)
-                ));
+                return Err(ShamirError::InvalidShare(format!(
+                    "inconsistent share lengths: share {} has {} bytes, expected {}",
+                    i,
+                    share.value.len(),
+                    secret_len
+                )));
             }
         }
 
@@ -120,9 +122,10 @@ impl ShamirRecovery {
         let mut seen_indices = std::collections::HashSet::new();
         for share in shares {
             if !seen_indices.insert(share.index) {
-                return Err(ShamirError::InvalidShare(
-                    format!("duplicate share index: {}", share.index)
-                ));
+                return Err(ShamirError::InvalidShare(format!(
+                    "duplicate share index: {}",
+                    share.index
+                )));
             }
         }
 

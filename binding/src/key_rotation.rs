@@ -91,7 +91,8 @@ impl PqcKeyRotationManager {
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             // The message being signed is the rotation request details
             let message = format!("{}:{}", request.new_phase as u8, request.effective_at);
-            verifying_key.verify(message.as_bytes(), &signature)
+            verifying_key
+                .verify(message.as_bytes(), &signature)
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
         }
 

@@ -153,9 +153,7 @@ impl EconomicsState {
                 // when admin_keys is configured.
                 if !self.admin_keys.is_empty() {
                     let submitter = event_creator.ok_or_else(|| {
-                        EconomicsError::ValidationFailed(
-                            "SubmitWork requires authenticated event creator".into(),
-                        )
+                        EconomicsError::ValidationFailed("SubmitWork requires authenticated event creator".into())
                     })?;
                     if !self.is_admin(submitter) {
                         return Err(EconomicsError::ValidationFailed(

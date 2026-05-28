@@ -32,10 +32,10 @@ fn test_equivocation_detection_two_events_same_creator_sequence_different_hash()
 
     // Create two events with the same creator and sequence but different payloads (→ different IDs)
     let vc = VectorClock::with_node(n1, 1);
-    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]);
+    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
     event_a.sign_with_keypair(&kp);
 
-    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]); // different payload → different id
+    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]).expect("valid event"); // different payload → different id
     event_b.sign_with_keypair(&kp);
 
     assert!(SlashingEngine::check_equivocation(&event_a, &event_b));
@@ -64,13 +64,13 @@ fn test_equivocation_triggers_slash_in_consensus() {
 
     // Insert and process the first event (sequence 0)
     let vc = VectorClock::with_node(n1, 1);
-    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]);
+    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
     event_a.sign_with_keypair(&kp);
     graph.insert(event_a.clone()).unwrap();
     engine.process_event(&event_a, &graph).unwrap();
 
     // Now create an equivocating event: same creator, same sequence, different ID
-    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]);
+    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]).expect("valid event");
     event_b.sign_with_keypair(&kp);
     graph.insert(event_b.clone()).unwrap();
 
@@ -87,7 +87,7 @@ fn test_equivocation_triggers_slash_in_consensus() {
 
     // A subsequent event from the same node should be rejected
     let vc2 = VectorClock::with_node(n1, 2);
-    let mut event_c = Event::new(n1, 1, vc2, None, None, vec![3]);
+    let mut event_c = Event::new(n1, 1, vc2, None, None, vec![3]).expect("valid event");
     event_c.sign_with_keypair(&kp);
     graph.insert(event_c.clone()).unwrap();
 
@@ -171,13 +171,13 @@ fn test_slashed_node_events_rejected() {
 
     // First, process a valid event
     let vc = VectorClock::with_node(n1, 1);
-    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]);
+    let mut event_a = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
     event_a.sign_with_keypair(&kp);
     graph.insert(event_a.clone()).unwrap();
     engine.process_event(&event_a, &graph).unwrap();
 
     // Now trigger slashing via equivocation
-    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]);
+    let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]).expect("valid event");
     event_b.sign_with_keypair(&kp);
     graph.insert(event_b.clone()).unwrap();
     engine.process_event(&event_b, &graph).unwrap();
@@ -187,7 +187,7 @@ fn test_slashed_node_events_rejected() {
 
     // Try to submit a new event from the slashed node
     let vc2 = VectorClock::with_node(n1, 2);
-    let mut event_c = Event::new(n1, 1, vc2, None, None, vec![3]);
+    let mut event_c = Event::new(n1, 1, vc2, None, None, vec![3]).expect("valid event");
     event_c.sign_with_keypair(&kp);
     graph.insert(event_c.clone()).unwrap();
 

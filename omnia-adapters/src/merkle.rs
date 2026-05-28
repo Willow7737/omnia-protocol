@@ -192,8 +192,10 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof
         let mut directions = Vec::new();
         let mut pos = idx;
 
-        for level_idx in 0..levels.len() - 1 {
-            let current_level = &levels[level_idx];
+        for (level_idx, current_level) in levels.iter().enumerate() {
+            if level_idx == levels.len() - 1 {
+                break;
+            }
             let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
             let sibling = if sibling_pos < current_level.len() {
                 current_level[sibling_pos]
@@ -207,7 +209,9 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof
         proofs.push(Blake3MerkleProof::new(siblings, directions));
     }
 
-    let root = levels.last().unwrap()[0];
+    let root = levels
+        .last()
+        .expect("at least one level must exist after tree construction")[0];
     (root, proofs)
 }
 
@@ -353,7 +357,9 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
         proofs.push(PoseidonMerkleProof::new(siblings, directions));
     }
 
-    let root = levels.last().unwrap()[0];
+    let root = levels
+        .last()
+        .expect("at least one level must exist after tree construction")[0];
     (fr_to_hash(&root), proofs)
 }
 

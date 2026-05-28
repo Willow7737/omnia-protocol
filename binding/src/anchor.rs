@@ -87,11 +87,10 @@ impl PhysicalAnchor {
             Ok(b) => b,
             Err(_) => return false,
         };
-        if !self.quantum_commitment.verify(
-            public_key,
-            &provenance_bytes,
-            CommitmentPhase::ClassicalOnly,
-        ) {
+        if !self
+            .quantum_commitment
+            .verify(public_key, &provenance_bytes, CommitmentPhase::ClassicalOnly)
+        {
             return false;
         }
 

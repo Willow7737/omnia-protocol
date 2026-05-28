@@ -217,9 +217,9 @@ impl VectorClock {
         }
         let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
         if count > MAX_CLOCK_ENTRIES {
-            return Err(VectorClockError::InvalidNodeId(
-                format!("clock count {count} exceeds maximum {MAX_CLOCK_ENTRIES}")
-            ));
+            return Err(VectorClockError::InvalidNodeId(format!(
+                "clock count {count} exceeds maximum {MAX_CLOCK_ENTRIES}"
+            )));
         }
         let mut clocks = BTreeMap::new();
         let mut offset = 4;
@@ -236,7 +236,7 @@ impl VectorClock {
             );
             if clocks.insert(node_id, clock).is_some() {
                 return Err(VectorClockError::InvalidNodeId(
-                    "duplicate node ID in vector clock bytes".to_string()
+                    "duplicate node ID in vector clock bytes".to_string(),
                 ));
             }
             offset += 40;

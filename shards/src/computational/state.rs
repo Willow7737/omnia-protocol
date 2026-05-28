@@ -227,7 +227,8 @@ impl ComputationalState {
                     task.status = TaskStatus::Failed;
                     task.last_update.merge(vc);
                     return Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: proof does not match expected layout for real verification".into(),
+                        "ZK proof verification failed: proof does not match expected layout for real verification"
+                            .into(),
                     ));
                 }
             }
@@ -365,7 +366,13 @@ mod tests {
 
         // Submit a well-formed (128+ byte) proof
         state
-            .apply(&ComputationalOp::SubmitProof { task_id, proof: vec![0u8; 192] }, &vc)
+            .apply(
+                &ComputationalOp::SubmitProof {
+                    task_id,
+                    proof: vec![0u8; 192],
+                },
+                &vc,
+            )
             .unwrap();
 
         // Verify — should STILL fail because real_verification is not enabled

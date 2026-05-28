@@ -132,7 +132,12 @@ impl IdentityState {
     /// The `caller_pubkey` parameter provides the public key of the event
     /// creator for authorization checks. When `None`, authorization checks
     /// are skipped (used in backward-compatible contexts like tests).
-    pub fn apply(&mut self, op: &IdentityOp, vc: &VectorClock, caller_pubkey: Option<&[u8; 32]>) -> Result<(), ShardError> {
+    pub fn apply(
+        &mut self,
+        op: &IdentityOp,
+        vc: &VectorClock,
+        caller_pubkey: Option<&[u8; 32]>,
+    ) -> Result<(), ShardError> {
         match op {
             IdentityOp::CreateDid { document } => {
                 if self.dids.contains_key(&document.id) {
@@ -145,7 +150,7 @@ impl IdentityState {
                 if let Some(caller) = caller_pubkey {
                     if &document.public_key != caller {
                         return Err(ShardError::ValidationFailed(
-                            "Unauthorized: creator public key must match DID document primary key".into()
+                            "Unauthorized: creator public key must match DID document primary key".into(),
                         ));
                     }
                 }
@@ -161,7 +166,9 @@ impl IdentityState {
                 // Authorization check: caller must be in the document's authentication set
                 if let Some(caller) = caller_pubkey {
                     if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed("Unauthorized: caller not in authentication set".into()));
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set".into(),
+                        ));
                     }
                 }
 
@@ -221,7 +228,9 @@ impl IdentityState {
                 if let Some(caller) = caller_pubkey {
                     let doc = self.dids.get(did).expect("checked above");
                     if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed("Unauthorized: caller not in authentication set for AddAgent".into()));
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for AddAgent".into(),
+                        ));
                     }
                 }
                 if self.agent_registry.contains_key(&agent.did) {
@@ -245,7 +254,9 @@ impl IdentityState {
                 if let Some(caller) = caller_pubkey {
                     let doc = self.dids.get(did).expect("checked above");
                     if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed("Unauthorized: caller not in authentication set for EnrollBiometric".into()));
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for EnrollBiometric".into(),
+                        ));
                     }
                 }
                 let anchor = BiometricAnchor::enroll(template, algorithm);
@@ -283,7 +294,9 @@ impl IdentityState {
                 if let Some(caller) = caller_pubkey {
                     let doc = self.dids.get(did).expect("checked above");
                     if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed("Unauthorized: caller not in authentication set for ConfigureRecovery".into()));
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for ConfigureRecovery".into(),
+                        ));
                     }
                 }
                 let shares = ShamirRecovery::split(secret, *threshold, *total_shares)
@@ -599,7 +612,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:abcd1234".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         // Step 2: Configure recovery with 5 custodians, threshold=3
         let secret = b"my-super-secret-recovery-key";
@@ -865,7 +880,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:recovery-auth-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         // Configure recovery with 5 custodians, threshold=3
         let secret = b"recovery-auth-secret";
@@ -925,7 +942,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xCC; 32];
         let did = "did:omnia:replay-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         let secret = b"replay-prevention-secret";
         state

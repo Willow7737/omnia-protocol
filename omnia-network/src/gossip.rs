@@ -547,11 +547,16 @@ impl GossipProtocol {
                         self.stats.events_received += 1;
                         // FIX 3: Evict random half instead of clearing everything
                         if self.seen_events.len() > MAX_SEEN_EVENTS {
-                            let to_remove: Vec<_> = self.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
+                            let to_remove: Vec<_> =
+                                self.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
                             for id in to_remove {
                                 self.seen_events.remove(&id);
                             }
-                            tracing::debug!("seen_events exceeded {}, evicted {} entries", MAX_SEEN_EVENTS, MAX_SEEN_EVENTS / 2);
+                            tracing::debug!(
+                                "seen_events exceeded {}, evicted {} entries",
+                                MAX_SEEN_EVENTS,
+                                MAX_SEEN_EVENTS / 2
+                            );
                         }
                     }
                 }

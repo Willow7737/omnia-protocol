@@ -155,7 +155,9 @@ impl EventRequest {
             return Err(EventValidationError::InvalidField("limit exceeds maximum".into()));
         }
         if self.known_events.len() > MAX_KNOWN_EVENTS {
-            return Err(EventValidationError::InvalidField("known_events exceeds maximum".into()));
+            return Err(EventValidationError::InvalidField(
+                "known_events exceeds maximum".into(),
+            ));
         }
         Ok(())
     }
@@ -254,12 +256,18 @@ impl Event {
         hasher.update(self.timestamp.to_le_bytes());
         hasher.update(self.vector_clock.to_bytes());
         match self.self_parent {
-            None => hasher.update(&[0u8]),
-            Some(sp) => { hasher.update(&[1u8]); hasher.update(sp); }
+            None => hasher.update([0u8]),
+            Some(sp) => {
+                hasher.update([1u8]);
+                hasher.update(sp);
+            }
         }
         match self.other_parent {
-            None => hasher.update(&[0u8]),
-            Some(op) => { hasher.update(&[1u8]); hasher.update(op); }
+            None => hasher.update([0u8]),
+            Some(op) => {
+                hasher.update([1u8]);
+                hasher.update(op);
+            }
         }
         hasher.update(&self.payload);
         hasher.update(self.creator_pubkey);
@@ -333,10 +341,7 @@ impl Event {
     /// Calling this method does nothing. It exists only for backward
     /// compatibility with older call sites. To actually sign an event,
     /// use [`sign_with_keypair()`](Self::sign_with_keypair) instead.
-    #[deprecated(
-        since = "0.2.0",
-        note = "sign() is a no-op - use sign_with_keypair() instead"
-    )]
+    #[deprecated(since = "0.2.0", note = "sign() is a no-op - use sign_with_keypair() instead")]
     pub fn sign(&mut self, _signature: Vec<u8>) {
         // This method is intentionally a no-op for backward compatibility.
         // Use sign_with_keypair() for actual signing.

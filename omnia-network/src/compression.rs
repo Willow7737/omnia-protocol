@@ -53,8 +53,7 @@ pub fn deserialize_with_compression<T: DeserializeOwned>(data: &[u8]) -> Result<
         COMPRESSION_NONE => payload.to_vec(),
         COMPRESSION_SNAPPY => {
             // Check the declared decompressed size before allocating.
-            let decompressed_len =
-                snap::raw::decompress_len(payload).map_err(|e| e.to_string())?;
+            let decompressed_len = snap::raw::decompress_len(payload).map_err(|e| e.to_string())?;
             if decompressed_len > MAX_DECOMPRESSED_SIZE {
                 return Err(format!(
                     "decompressed size {} exceeds limit {}",

@@ -128,8 +128,12 @@ async fn handle_economics_op(
 
     let node_id = state.config.node_id_bytes();
     let keypair = generate_keypair();
-    let mut event = Event::genesis(node_id, Vec::new())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Invalid event: {e}")}))))?;
+    let mut event = Event::genesis(node_id, Vec::new()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Invalid event: {e}")})),
+        )
+    })?;
     event.sign_with_keypair(&keypair);
 
     let shard_op = ShardOp::Economics(econ_op);

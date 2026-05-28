@@ -97,7 +97,9 @@ fn test_full_identity_lifecycle() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // 2. Enroll biometric
     state
@@ -162,7 +164,9 @@ fn test_biometric_verification_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // Enroll
     state
@@ -209,7 +213,9 @@ fn test_configure_recovery_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // Configure recovery
     state
@@ -241,7 +247,9 @@ fn test_agent_revocation_disables_capabilities() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     let agent = AgentIdentity {
         did: "did:omnia:agent:compute1".to_string(),
@@ -295,7 +303,9 @@ fn test_duplicate_agent_rejected() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc, None).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     let agent1 = AgentIdentity {
         did: "did:omnia:agent:dup".to_string(),

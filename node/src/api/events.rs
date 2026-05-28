@@ -103,8 +103,12 @@ pub async fn submit_event(
 
     // Create and sign a substrate event
     let keypair = generate_keypair();
-    let mut event = Event::genesis(node_id, payload_bytes.clone())
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Invalid event: {e}")}))))?;
+    let mut event = Event::genesis(node_id, payload_bytes.clone()).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Invalid event: {e}")})),
+        )
+    })?;
     event.sign_with_keypair(&keypair);
 
     let event_id_hex = hex::encode(event.id);

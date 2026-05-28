@@ -880,7 +880,10 @@ impl FeldmanVssSession {
         // f(x) = a_0 + a_1*x + a_2*x^2 + ... + a_{t-1}*x^{t-1}
         let polynomial_coeffs: Vec<Scalar> = (0..self.threshold).map(|_| Scalar::random(rng)).collect();
         if polynomial_coeffs[0].is_zero() {
-            return Err(DkgError::InvalidShare([0u8; 4], "Constant term coefficient must not be zero".to_string()));
+            return Err(DkgError::InvalidShare(
+                [0u8; 4],
+                "Constant term coefficient must not be zero".to_string(),
+            ));
         }
         self.polynomial_coeffs = Some(polynomial_coeffs.clone());
 

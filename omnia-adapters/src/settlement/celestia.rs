@@ -135,7 +135,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: submitting state root to DA layer"
         );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .header("Content-Type", "application/json")
@@ -174,7 +175,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: fetching finality proof"
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .send()
@@ -242,7 +244,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: verifying Merkle inclusion proof"
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .send()

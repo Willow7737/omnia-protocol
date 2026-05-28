@@ -1005,7 +1005,7 @@ mod tests {
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
 
-        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
+        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         substrate.submit_event(event).await.unwrap();

@@ -17,7 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::Mutex as StdMutex;
 use std::time::Instant;
 
 use axum::extract::Request;
@@ -173,31 +173,53 @@ pub struct CallerIdentity {
 // JWT helpers
 // ---------------------------------------------------------------------------
 
-/// Global OnceLock for the JWT signing secret.
+/// Global cache for the JWT signing secret.
 ///
-/// Caches the `OMNIA_JWT_SECRET` environment variable on first access
-/// so that every subsequent call avoids the `std::env::var` overhead
-/// and, more importantly, ensures a consistent value throughout the
-/// process lifetime (even if the env var is changed externally).
-static JWT_SECRET: OnceLock<Option<String>> = OnceLock::new();
+/// `None` means the cache has not been populated yet; `Some(inner)` holds
+/// the cached result of reading `OMNIA_JWT_SECRET` (where `inner` is
+/// `None` if the env var is unset). The cache persists for the process
+/// lifetime but can be reset in tests via [`reset_jwt_secret_for_test`].
+static JWT_SECRET: StdMutex<Option<Option<String>>> = StdMutex::new(None);
 
 /// Initialise the JWT secret cache. Called once at application startup.
 ///
 /// This must be invoked before any request hits the auth middleware so
 /// that the secret is captured from the environment at a deterministic
-/// point. Subsequent calls are no-ops (the OnceLock is already set).
+/// point. Subsequent calls are no-ops if the cache is already populated.
 pub fn init_jwt_secret() {
-    JWT_SECRET.get_or_init(|| std::env::var("OMNIA_JWT_SECRET").ok());
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_none() {
+        *guard = Some(std::env::var("OMNIA_JWT_SECRET").ok());
+    }
 }
 
 /// Read the JWT signing secret from the `OMNIA_JWT_SECRET` env var.
 ///
-/// Returns `None` if the variable is not set. The value is cached in a
-/// `OnceLock` so that it is read at most once per process lifetime.
+/// Returns `None` if the variable is not set. The value is cached so
+/// that it is read at most once per process lifetime (unless explicitly
+/// reset via [`reset_jwt_secret_for_test`] in test code).
 fn jwt_secret() -> Option<String> {
-    JWT_SECRET
-        .get_or_init(|| std::env::var("OMNIA_JWT_SECRET").ok())
-        .clone()
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    match &*guard {
+        Some(cached) => cached.clone(),
+        None => {
+            let val = std::env::var("OMNIA_JWT_SECRET").ok();
+            *guard = Some(val.clone());
+            val
+        }
+    }
+}
+
+/// Reset the JWT secret cache so the env var will be re-read on next access.
+///
+/// Only available in test builds. Necessary because `OnceLock` (or any
+/// caching mechanism) persists across test functions within the same
+/// process, and some tests need to verify behaviour when the env var is
+/// unset.
+#[cfg(test)]
+fn reset_jwt_secret_for_test() {
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
 }
 
 /// Create a signed JWT for the given caller identity.
@@ -279,10 +301,14 @@ pub async fn require_auth(mut req: Request, next: Next) -> Response {
             // Reject all requests when JWT secret is not configured
             // This prevents silent auth bypass in production
             tracing::error!("OMNIA_JWT_SECRET not set - rejecting authenticated request");
-            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
-                "error": "authentication not configured",
-                "message": "OMNIA_JWT_SECRET environment variable must be set"
-            }))).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "authentication not configured",
+                    "message": "OMNIA_JWT_SECRET environment variable must be set"
+                })),
+            )
+                .into_response();
         }
     };
 
@@ -467,12 +493,10 @@ impl RateLimiter {
             Self::evict_stale_buckets(&mut buckets);
         }
 
-        let tb = buckets
-            .entry(client_key.to_string())
-            .or_insert_with(|| TrackedBucket {
-                bucket: Bucket::new(self.max_tokens, self.refill_rate),
-                last_access: Instant::now(),
-            });
+        let tb = buckets.entry(client_key.to_string()).or_insert_with(|| TrackedBucket {
+            bucket: Bucket::new(self.max_tokens, self.refill_rate),
+            last_access: Instant::now(),
+        });
         tb.last_access = Instant::now();
         tb.bucket.try_consume()
     }
@@ -538,8 +562,7 @@ pub async fn rate_limit_middleware(
 /// - **Headers**: any (via `tower_http::cors::Any`)
 /// - **Max age**: 1 hour
 pub fn default_cors_layer() -> CorsLayer {
-    let allowed_origins = std::env::var("OMNIA_CORS_ORIGINS")
-        .unwrap_or_else(|_| "*".to_string());
+    let allowed_origins = std::env::var("OMNIA_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
 
     if allowed_origins == "*" {
         tracing::warn!("CORS allows all origins - not recommended for production");
@@ -610,12 +633,14 @@ mod tests {
     fn test_create_and_validate_token() {
         // Hold the lock for the entire test so no other test touches the
         // JWT_SECRET env var while we depend on it.
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_jwt_secret_for_test();
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let token = create_token("caller-42", 3600).expect("create token");
         let claims = validate_token(&token).expect("validate token");
         assert_eq!(claims.sub, "caller-42");
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
     }
 
     #[test]
@@ -643,24 +668,28 @@ mod tests {
 
     #[test]
     fn test_create_token_no_secret() {
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Remove the var if it was set by a previous test, then verify
         // that create_token returns SecretNotConfigured.
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
         let result = create_token("caller-42", 3600);
         assert!(
             matches!(result, Err(AuthError::SecretNotConfigured)),
             "Expected SecretNotConfigured when OMNIA_JWT_SECRET is unset"
         );
+        reset_jwt_secret_for_test();
     }
 
     #[test]
     fn test_validate_invalid_token() {
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
+        reset_jwt_secret_for_test();
         let result = validate_token("not.a.valid-token");
         assert!(matches!(result, Err(AuthError::InvalidToken(_))));
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
     }
 
     #[tokio::test]

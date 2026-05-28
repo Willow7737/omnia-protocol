@@ -208,7 +208,8 @@ impl BiologicalState {
                 #[cfg(feature = "real_verification")]
                 {
                     return Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: proof does not match expected layout for real verification".into(),
+                        "ZK proof verification failed: proof does not match expected layout for real verification"
+                            .into(),
                     ));
                 }
             }

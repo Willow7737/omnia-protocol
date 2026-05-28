@@ -77,11 +77,11 @@ impl DecayRate {
     /// ```
     pub fn new(ppm: u64) -> Self {
         if ppm > BASIS_PPM {
-            tracing::warn!(
-                "DecayRate::new({}) clamped to maximum {}", ppm, BASIS_PPM
-            );
+            tracing::warn!("DecayRate::new({}) clamped to maximum {}", ppm, BASIS_PPM);
         }
-        Self { ppm: ppm.min(BASIS_PPM) }
+        Self {
+            ppm: ppm.min(BASIS_PPM),
+        }
     }
 
     /// Convenience constructor for the standard 10% decay rate.

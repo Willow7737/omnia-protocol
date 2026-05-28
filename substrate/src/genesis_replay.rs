@@ -233,7 +233,7 @@ mod tests {
         let events: Vec<Event> = (0..4)
             .map(|i| {
                 let keypair = generate_keypair();
-                let mut e = Event::genesis(test_node(i), vec![i]);
+                let mut e = Event::genesis(test_node(i), vec![i]).expect("valid genesis event");
                 e.sign_with_keypair(&keypair);
                 e
             })
@@ -256,7 +256,7 @@ mod tests {
 
         // Create an event that will fail graph insertion (duplicate)
         let keypair = generate_keypair();
-        let mut event1 = Event::genesis(test_node(1), vec![1]);
+        let mut event1 = Event::genesis(test_node(1), vec![1]).expect("valid genesis event");
         event1.sign_with_keypair(&keypair);
         let event2 = event1.clone(); // Duplicate — should be rejected
 
