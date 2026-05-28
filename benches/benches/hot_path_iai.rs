@@ -16,7 +16,7 @@ use omnia_primitives::{Event, NodeId, VectorClock};
 fn create_signed_event(creator: NodeId, seq: u64, parent: Option<[u8; 32]>) -> Event {
     let keypair = generate_keypair();
     let vc = VectorClock::with_node(creator, seq + 1);
-    let mut event = Event::new(creator, seq, vc, parent, None, vec![1, 2, 3]);
+    let mut event = Event::new(creator, seq, vc, parent, None, vec![1, 2, 3]).expect("event creation");
     event.sign_with_keypair(&keypair);
     event
 }

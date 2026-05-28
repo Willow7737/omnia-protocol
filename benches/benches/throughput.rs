@@ -30,7 +30,7 @@ fn benchmark_event_creation(c: &mut Criterion) {
 
     group.bench_function("create_and_sign", |b| {
         b.iter(|| {
-            let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]);
+            let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]).expect("event creation");
             event.sign_with_keypair(&keypair);
             black_box(event);
         });
@@ -48,7 +48,7 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
     let creator: NodeId = [0u8; 32];
 
     // Pre-create genesis
-    let mut genesis = Event::genesis(creator, vec![]);
+    let mut genesis = Event::genesis(creator, vec![]).expect("genesis creation");
     genesis.sign_with_keypair(&keypair);
     graph.insert(genesis.clone()).expect("genesis insert should succeed");
 
@@ -56,7 +56,7 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
         let mut seq: u64 = 1;
         b.iter(|| {
             let vc = VectorClock::with_node(creator, seq + 1);
-            let mut event = Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]);
+            let mut event = Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]).expect("event creation");
             event.sign_with_keypair(&keypair);
             let _ = graph.insert(event);
             seq += 1;
@@ -112,9 +112,9 @@ fn bench_slashing_operations(c: &mut Criterion) {
         let keypair = generate_keypair();
         let creator: NodeId = [0u8; 32];
         let vc = VectorClock::with_node(creator, 1);
-        let mut event_a = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]);
+        let mut event_a = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]).expect("event creation");
         event_a.sign_with_keypair(&keypair);
-        let mut event_b = Event::new(creator, 0, vc.clone(), None, None, vec![4, 5, 6]);
+        let mut event_b = Event::new(creator, 0, vc.clone(), None, None, vec![4, 5, 6]).expect("event creation");
         event_b.sign_with_keypair(&keypair);
 
         b.iter(|| {
