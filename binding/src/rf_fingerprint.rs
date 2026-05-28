@@ -39,10 +39,12 @@ pub struct RfFingerprint {
     pub measured_at: VectorClock,
     /// Device's claimed identity (must match DID).
     pub device_did: String,
-    /// Measurement confidence (0.0 - 1.0). Higher means stricter matching
-    /// threshold. A confidence of 0.95 means the Hamming similarity must
+    /// Confidence threshold in parts per million (PPM).
+    /// 800_000 = 80% similarity required.
+    /// Higher means stricter matching threshold.
+    /// A confidence_ppm of 950_000 means the Hamming similarity must
     /// exceed 95% for the fingerprint to be considered a match.
-    pub confidence: f64,
+    pub confidence_ppm: u64,
 }
 
 impl RfFingerprint {
@@ -53,13 +55,13 @@ impl RfFingerprint {
     /// * `spectral_hash` — 32-byte hash of the device's RF spectral features
     /// * `measured_at` — Vector clock at measurement time
     /// * `device_did` — DID string of the device being fingerprinted
-    /// * `confidence` — Matching threshold (0.0–1.0); typical values: 0.90–0.99
-    pub fn new(spectral_hash: [u8; 32], measured_at: VectorClock, device_did: String, confidence: f64) -> Self {
+    /// * `confidence_ppm` — Matching threshold in PPM (0–1_000_000); typical values: 900_000–990_000
+    pub fn new(spectral_hash: [u8; 32], measured_at: VectorClock, device_did: String, confidence_ppm: u64) -> Self {
         Self {
             spectral_hash,
             measured_at,
             device_did,
-            confidence: confidence.clamp(0.0, 1.0),
+            confidence_ppm: confidence_ppm.min(1_000_000), // Cap at 100%
         }
     }
 
@@ -67,9 +69,9 @@ impl RfFingerprint {
     /// fingerprint.
     ///
     /// Uses Hamming distance between the stored `spectral_hash` and the
-    /// `current_measurement`. The similarity is computed as
-    /// `1.0 - (hamming_distance / 256.0)`, and the match is accepted if
-    /// similarity exceeds the stored `confidence` threshold.
+    /// `current_measurement`. The similarity is computed using integer
+    /// PPM arithmetic: `(256 - distance) * 1_000_000 / 256`, and the match
+    /// is accepted if similarity exceeds the stored `confidence_ppm` threshold.
     ///
     /// # Arguments
     ///
@@ -80,8 +82,9 @@ impl RfFingerprint {
     /// `true` if the similarity exceeds the confidence threshold.
     pub fn verify(&self, current_measurement: &[u8; 32]) -> bool {
         let distance = hamming_distance(&self.spectral_hash, current_measurement);
-        let similarity = 1.0 - (distance as f64 / 256.0);
-        similarity > self.confidence
+        // Integer PPM-based similarity: (256 - distance) * 1_000_000 / 256
+        let similarity_ppm = (256u64 - distance as u64) * 1_000_000 / 256;
+        similarity_ppm > self.confidence_ppm
     }
 
     /// Create a dummy/stub RF fingerprint for testing.
@@ -94,7 +97,7 @@ impl RfFingerprint {
             spectral_hash: hash_bytes,
             measured_at: VectorClock::new(),
             device_did: device_did.to_string(),
-            confidence: 0.95,
+            confidence_ppm: 950_000, // 95% in PPM
         }
     }
 }
@@ -128,7 +131,7 @@ mod tests {
         let hash_a = [0x00_u8; 32];
         let hash_b = [0xFF_u8; 32];
         let fp = RfFingerprint::stub("did:omnia:device1", hash_a);
-        // Hamming distance = 256, similarity = 0.0, which is NOT > 0.95
+        // Hamming distance = 256, similarity_ppm = 0, which is NOT > 950_000
         assert!(!fp.verify(&hash_b));
     }
 
@@ -136,7 +139,7 @@ mod tests {
     fn test_slightly_different_fingerprints_match() {
         let hash_a = [0xAB_u8; 32];
         let mut hash_b = [0xAB_u8; 32];
-        // Flip 1 bit — similarity = 1.0 - 1/256 ≈ 0.996 > 0.95
+        // Flip 1 bit — similarity_ppm = 255 * 1_000_000 / 256 = 996_093 > 950_000
         hash_b[0] ^= 0x01;
         let fp = RfFingerprint::stub("did:omnia:device1", hash_a);
         assert!(fp.verify(&hash_b));
@@ -161,9 +164,9 @@ mod tests {
             [0u8; 32],
             VectorClock::new(),
             "did:omnia:test".to_string(),
-            1.5, // Should be clamped to 1.0
+            1_500_000, // Should be clamped to 1_000_000
         );
-        // With confidence 1.0 (clamped from 1.5), similarity must be > 1.0
+        // With confidence_ppm 1_000_000 (clamped from 1_500_000), similarity must be > 1_000_000
         // which is impossible, so even identical hashes won't match
         assert!(!fp.verify(&[0u8; 32]));
     }

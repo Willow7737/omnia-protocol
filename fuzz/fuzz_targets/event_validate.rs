@@ -11,11 +11,11 @@ fuzz_target!(|data: &[u8]| {
     let payload = data[64..].to_vec();
     let clock = VectorClock::new();
     // Genesis event
-    let event = Event::genesis(creator, payload);
+    let event = Event::genesis(creator, payload).unwrap();
     let _ = event.validate();
     // Event with parents
     let mut self_parent = [0u8; 32];
     self_parent.copy_from_slice(&data[32..64]);
-    let event2 = Event::new(creator, 1, clock, Some(self_parent), None, data[0..32].to_vec());
+    let event2 = Event::new(creator, 1, clock, Some(self_parent), None, data[0..32].to_vec()).unwrap();
     let _ = event2.validate();
 });

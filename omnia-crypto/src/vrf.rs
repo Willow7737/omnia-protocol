@@ -127,7 +127,7 @@ pub fn deterministic_compute(keypair: &NodeKeypair, input: &[u8]) -> Determinist
     preimage.extend_from_slice(&signature.to_bytes());
     preimage.extend_from_slice(input);
 
-    let output: [u8; 32] = blake3_hash_domain(b"omnia-commitment", &preimage);
+    let output: [u8; 32] = blake3_hash_domain(b"OMNIA-VRF-OUTPUT-V1", &preimage);
 
     DeterministicOutput { output, proof }
 }
@@ -186,7 +186,7 @@ pub fn deterministic_verify(
     preimage.extend_from_slice(&proof_bytes);
     preimage.extend_from_slice(input);
 
-    let expected_output: [u8; 32] = blake3_hash_domain(b"omnia-commitment", &preimage);
+    let expected_output: [u8; 32] = blake3_hash_domain(b"OMNIA-VRF-OUTPUT-V1", &preimage);
 
     if expected_output.ct_eq(&det_output.output).unwrap_u8() == 0 {
         return Err(DeterministicHashError::VerificationFailed(

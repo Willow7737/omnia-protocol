@@ -18,6 +18,8 @@ pub use live::EthereumSettlementAdapter;
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(feature = "ethereum-live")]
+use tokio::sync::OnceCell;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -234,6 +236,8 @@ pub struct EthereumLiveClient {
     #[allow(dead_code)]
     max_fee_per_gas: Option<String>,
     confirmation_blocks: u64,
+    /// Cached wallet to avoid re-parsing the private key on every call.
+    wallet: OnceCell<PrivateKeySigner>,
 }
 
 #[cfg(feature = "ethereum-live")]
@@ -257,15 +261,26 @@ impl EthereumLiveClient {
             gas_limit: config.gas_limit,
             max_fee_per_gas: config.max_fee_per_gas.clone(),
             confirmation_blocks: config.confirmation_blocks,
+            wallet: OnceCell::new(),
         })
+    }
+
+    /// Get or initialize the cached wallet.
+    ///
+    /// Parses the private key once and caches the result for subsequent calls.
+    async fn get_wallet(&self) -> Result<&PrivateKeySigner, SettlementError> {
+        self.wallet
+            .get_or_try_init(|| async {
+                self.operator_private_key
+                    .parse()
+                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))
+            })
+            .await
     }
 
     /// Build an alloy provider with wallet signing.
     async fn build_provider(&self) -> Result<impl Provider, SettlementError> {
-        let wallet: PrivateKeySigner = self
-            .operator_private_key
-            .parse()
-            .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
+        let wallet = self.get_wallet().await?.clone();
 
         let provider = ProviderBuilder::new().wallet(wallet).connect_http(
             self.rpc_url
@@ -690,7 +705,10 @@ impl SettlementLayer for EthereumAdapter {
         proof: &[u8],
     ) -> Result<bool, SettlementError> {
         match self.mode {
-            EthereumMode::Simulated => Ok(!proof.is_empty()),
+            EthereumMode::Simulated => {
+                tracing::warn!("EthereumMode::Simulated accepts any non-empty proof — do not use in production!");
+                Ok(!proof.is_empty())
+            }
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {

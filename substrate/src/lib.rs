@@ -322,9 +322,26 @@ impl SubstrateConfig {
     /// Production callers should set `slashing_data_dir` before
     /// constructing the substrate.
     pub fn new(node_id: NodeId) -> Self {
-        let total_nodes = 4;
-        let mut seed = [0u8; 32];
-        seed[0] = 1; // Non-zero to avoid debug-build panic
+        let total_nodes = std::env::var("OMNIA_TOTAL_NODES")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(4);
+        let seed = std::env::var("OMNIA_CONSENSUS_SEED")
+            .ok()
+            .and_then(|s| {
+                let mut arr = [0u8; 32];
+                let bytes = s.as_bytes();
+                let len = bytes.len().min(32);
+                arr[..len].copy_from_slice(&bytes[..len]);
+                Some(arr)
+            })
+            .unwrap_or_else(|| {
+                let mut seed = [0u8; 32];
+                getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
+                    seed[0] = 1; // Non-zero fallback
+                });
+                seed
+            });
         Self {
             node_id,
             #[cfg(feature = "network")]
@@ -353,8 +370,22 @@ impl SubstrateConfig {
     ///
     /// Slashing defaults to in-memory mode with standard thresholds.
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
-        let mut seed = [0u8; 32];
-        seed[0] = 1; // Non-zero to avoid debug-build panic
+        let seed = std::env::var("OMNIA_CONSENSUS_SEED")
+            .ok()
+            .and_then(|s| {
+                let mut arr = [0u8; 32];
+                let bytes = s.as_bytes();
+                let len = bytes.len().min(32);
+                arr[..len].copy_from_slice(&bytes[..len]);
+                Some(arr)
+            })
+            .unwrap_or_else(|| {
+                let mut seed = [0u8; 32];
+                getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
+                    seed[0] = 1; // Non-zero fallback
+                });
+                seed
+            });
         Self {
             node_id,
             #[cfg(feature = "network")]

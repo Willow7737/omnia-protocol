@@ -10,7 +10,7 @@
 //! However, it does maintain its own `QuotaSystem` and `GovernanceState`
 //! for managing UBC allowances and voting.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -84,6 +84,8 @@ pub struct EconomicsState {
     pub governance: GovernanceState,
     /// Verified useful-work proofs keyed by result hash.
     pub verified_work: HashMap<[u8; 32], UsefulWorkProof>,
+    /// Admin keys authorized to submit work during the pre-ZK phase.
+    pub admin_keys: HashSet<[u8; 32]>,
 }
 
 impl EconomicsState {
@@ -99,6 +101,7 @@ impl EconomicsState {
             quota: QuotaSystem::default_system(),
             governance: GovernanceState::new(DecayRate::ten_percent()),
             verified_work: HashMap::new(),
+            admin_keys: HashSet::new(),
         }
     }
 
@@ -108,11 +111,34 @@ impl EconomicsState {
             quota: QuotaSystem::new(default_quota, epoch_duration_ms),
             governance: GovernanceState::new(decay_rate),
             verified_work: HashMap::new(),
+            admin_keys: HashSet::new(),
         }
     }
 
+    /// Check if a key is an admin key authorized to submit work.
+    fn is_admin(&self, key: &[u8; 32]) -> bool {
+        self.admin_keys.contains(key)
+    }
+
+    /// Add an admin key authorized to submit work during the pre-ZK phase.
+    pub fn add_admin_key(&mut self, key: [u8; 32]) {
+        self.admin_keys.insert(key);
+    }
+
     /// Apply an economics operation, mutating state.
-    pub fn apply(&mut self, op: &EconomicsOp, current_epoch: u64) -> Result<(), EconomicsError> {
+    ///
+    /// # Arguments
+    ///
+    /// * `op` — The economics operation to apply
+    /// * `current_epoch` — The current epoch number
+    /// * `event_creator` — Optional public key of the entity that created this event,
+    ///   used for admin gating of sensitive operations like `SubmitWork`
+    pub fn apply(
+        &mut self,
+        op: &EconomicsOp,
+        current_epoch: u64,
+        event_creator: Option<&[u8; 32]>,
+    ) -> Result<(), EconomicsError> {
         match op {
             EconomicsOp::MintUbc { did, amount } => {
                 if !self.quota.is_registered(did) {
@@ -122,6 +148,21 @@ impl EconomicsState {
             }
             EconomicsOp::SpendUbc { did, amount } => self.quota.spend(did, *amount),
             EconomicsOp::SubmitWork { did, proof } => {
+                // Gate work submission: only authorized submitters can mint UBC
+                // Until real ZK verification is implemented, require admin authorization
+                // when admin_keys is configured.
+                if !self.admin_keys.is_empty() {
+                    let submitter = event_creator.ok_or_else(|| {
+                        EconomicsError::ValidationFailed(
+                            "SubmitWork requires authenticated event creator".into(),
+                        )
+                    })?;
+                    if !self.is_admin(submitter) {
+                        return Err(EconomicsError::ValidationFailed(
+                            "SubmitWork is currently restricted to admin keys until real ZK verification is implemented".into(),
+                        ));
+                    }
+                }
                 proof.validate()?;
                 self.verified_work.insert(proof.result_hash, proof.clone());
                 let reward = proof.reward_amount();

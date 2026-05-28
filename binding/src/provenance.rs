@@ -110,6 +110,23 @@ impl ProvenanceEvent {
     }
 }
 
+/// Errors that can occur during provenance log operations.
+#[derive(Debug, thiserror::Error)]
+pub enum ProvenanceError {
+    /// The provenance log has no events (invalid state).
+    #[error("provenance log has no events")]
+    EmptyLog,
+    /// Deserialization failed.
+    #[error("deserialization error: {0}")]
+    DeserializationError(String),
+    /// Serialization failed.
+    #[error("serialization error: {0}")]
+    SerializationError(String),
+    /// Invalid log structure.
+    #[error("invalid log: {0}")]
+    InvalidLog(String),
+}
+
 /// An append-only provenance log for a single physical item.
 ///
 /// The log records the complete chain of custody for an item, from
@@ -366,8 +383,12 @@ impl ProvenanceLog {
     }
 
     /// Get the creation event (first event in the log).
-    pub fn creation_event(&self) -> &ProvenanceEvent {
-        &self.events[0]
+    ///
+    /// Returns an error if the log is empty (should never happen after
+    /// construction via `new()`, but can occur after deserialization of
+    /// corrupt data).
+    pub fn creation_event(&self) -> Result<&ProvenanceEvent, ProvenanceError> {
+        self.events.first().ok_or(ProvenanceError::EmptyLog)
     }
 
     /// Check if the item has been destroyed.
@@ -382,25 +403,37 @@ impl ProvenanceLog {
     ///
     /// The output is prefixed with a version byte to support future
     /// state-format migrations.
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, ProvenanceError> {
         let mut bytes = vec![Self::PROVENANCE_LOG_VERSION];
-        bytes.extend(postcard::to_allocvec(self).expect("ProvenanceLog serialization cannot fail"));
-        bytes
+        let serialized = postcard::to_allocvec(self)
+            .map_err(|e| ProvenanceError::SerializationError(e.to_string()))?;
+        bytes.extend(serialized);
+        Ok(bytes)
     }
 
     /// Deserialize a provenance log from bytes.
     ///
     /// Reads and validates the version byte before deserializing the
     /// payload. Returns an error if the version is unsupported.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, postcard::Error> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProvenanceError> {
         if bytes.is_empty() {
-            return Err(postcard::Error::DeserializeUnexpectedEnd);
+            return Err(ProvenanceError::DeserializationError("empty input".into()));
         }
         let version = bytes[0];
         if version != Self::PROVENANCE_LOG_VERSION {
-            return Err(postcard::Error::DeserializeUnexpectedEnd);
+            return Err(ProvenanceError::DeserializationError(format!(
+                "unsupported version: {}",
+                version
+            )));
         }
-        postcard::from_bytes(&bytes[1..])
+        let log: Self = postcard::from_bytes(&bytes[1..])
+            .map_err(|e| ProvenanceError::DeserializationError(e.to_string()))?;
+        if log.events.is_empty() {
+            return Err(ProvenanceError::InvalidLog(
+                "provenance log must have at least one event".into(),
+            ));
+        }
+        Ok(log)
     }
 }
 
@@ -542,7 +575,7 @@ mod tests {
             test_commitment(b"transfer1"),
         );
 
-        let bytes = log.to_bytes();
+        let bytes = log.to_bytes().unwrap();
         let restored = ProvenanceLog::from_bytes(&bytes).unwrap();
 
         assert_eq!(log.item_id, restored.item_id);

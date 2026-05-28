@@ -32,6 +32,7 @@ impl SettlementLayer for NoopSettlementAdapter {
         proof: &[u8],
     ) -> Result<bool, SettlementError> {
         // Accept any non-empty proof in standalone mode
+        tracing::warn!("NoopSettlementAdapter::verify_proof accepts any non-empty proof — do not use in production!");
         Ok(!proof.is_empty())
     }
 

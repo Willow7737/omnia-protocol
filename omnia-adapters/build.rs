@@ -48,7 +48,9 @@ fn main() {
     // symbols require `has_settlement_lib` as well.
     if std::path::Path::new("lib/libsettlement.a").exists() || std::path::Path::new("lib/settlement.lib").exists() {
         println!("cargo:rustc-cfg=has_settlement_lib");
-        println!("cargo:rustc-cfg=feature=\"settlement-ffi\"");
+        // REMOVED: Force-enabling features from build scripts violates Cargo conventions.
+        // The `settlement-ffi` feature must be explicitly enabled via --features or Cargo.toml.
+        // println!("cargo:rustc-cfg=feature=\"settlement-ffi\"");
         println!("cargo:rustc-link-search=native=lib");
         println!("cargo:rustc-link-lib=static=settlement");
     }

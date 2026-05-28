@@ -83,9 +83,13 @@ impl PhysicalAnchor {
         }
 
         // 2. Verify quantum commitment
+        let provenance_bytes = match self.provenance_log.to_bytes() {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
         if !self.quantum_commitment.verify(
             public_key,
-            &self.provenance_log.to_bytes(),
+            &provenance_bytes,
             CommitmentPhase::ClassicalOnly,
         ) {
             return false;
@@ -169,7 +173,7 @@ mod tests {
         );
 
         // Create commitment over the provenance log bytes (as verify() expects)
-        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
+        let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
 
@@ -192,7 +196,7 @@ mod tests {
             test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
-        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
+        let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
 
@@ -214,7 +218,7 @@ mod tests {
             test_commitment_with_vc(b"creation", &kp, &vc),
             [0xCDu8; 32],
         );
-        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
+        let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
         assert!(anchor.verify_chain_only());
@@ -241,7 +245,7 @@ mod tests {
             test_commitment_signed(b"transfer1", &kp),
         );
 
-        let commitment = test_commitment_signed(&provenance.to_bytes(), &kp);
+        let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
         let anchor = PhysicalAnchor::new(rf, commitment, provenance);
         assert_eq!(anchor.current_holder(), "did:omnia:bob");
     }

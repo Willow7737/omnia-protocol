@@ -421,11 +421,11 @@ impl GovernanceState {
             .map(|(id, _)| id.clone())
             .collect();
 
-        let count = expired_ids.len();
-        for id in expired_ids {
-            self.proposals.remove(&id);
+        self.proposals.retain(|_, p| !p.is_expired(current_epoch));
+        for id in &expired_ids {
+            self.voted.retain(|key, _| !key.0.eq(id));
         }
-        count
+        expired_ids.len()
     }
 
     /// Serialize the governance state to bytes.

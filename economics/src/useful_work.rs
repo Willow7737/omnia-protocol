@@ -135,12 +135,16 @@ impl UsefulWorkProof {
         Ok(())
     }
 
+    /// Maximum UBC reward per work proof
+    pub const MAX_REWARD_PER_PROOF: u64 = 1_000_000;
+
     /// Calculate the UBC reward for this work.
     ///
     /// The reward is proportional to the compute units consumed,
-    /// at a 1:1 ratio (1 UBC per compute unit). This ratio may
-    /// be governed by a future on-chain parameter.
+    /// at a 1:1 ratio (1 UBC per compute unit), capped at
+    /// [`MAX_REWARD_PER_PROOF`]. This ratio may be governed by a
+    /// future on-chain parameter.
     pub fn reward_amount(&self) -> u64 {
-        self.compute_units_consumed
+        self.compute_units_consumed.min(Self::MAX_REWARD_PER_PROOF)
     }
 }

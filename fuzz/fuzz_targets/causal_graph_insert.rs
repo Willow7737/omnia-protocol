@@ -12,12 +12,12 @@ fuzz_target!(|data: &[u8]| {
     let payload = data[64..].to_vec();
     let clock = VectorClock::new();
     // Genesis event (no parents required)
-    let event = Event::genesis(creator, payload);
+    let event = Event::genesis(creator, payload).unwrap();
     let mut graph = CausalGraph::new();
     let _ = graph.insert(event);
     // Try inserting a second event that links to the first
     if let Some(first_id) = graph.event_ids().first().copied() {
-        let event2 = Event::new(creator, 1, clock, Some(first_id), None, data[32..64].to_vec());
+        let event2 = Event::new(creator, 1, clock, Some(first_id), None, data[32..64].to_vec()).unwrap();
         let _ = graph.insert(event2);
     }
 });

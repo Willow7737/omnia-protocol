@@ -654,7 +654,7 @@ impl OmniaNetwork {
 }
 
 /// Try to extract a PeerId from a Multiaddr that ends with /p2p/<peer-id>.
-fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
+pub(crate) fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     use libp2p::multiaddr::Protocol;
     addr.iter().find_map(|proto| match proto {
         Protocol::P2p(peer_id) => Some(peer_id),

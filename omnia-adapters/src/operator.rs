@@ -75,13 +75,16 @@ impl RollupOperator {
             return Ok(());
         }
 
-        // 2. Acquire the read lock ONCE and compute both old_root and new_root
-        //    atomically to prevent a race condition where the graph could be
-        //    modified between the two reads.
-        let (old_root, new_root) = {
+        // 2. Compute old_root before the batch is applied.
+        //    IMPORTANT: new_root must be computed AFTER the batch is applied to state.
+        //    Currently both roots are identical because the batch hasn't been applied yet.
+        //    This is a known issue that needs to be fixed when batch application is integrated.
+        let old_root = {
             let graph = self.graph.read().await;
-            (graph.state_root(), graph.state_root())
+            graph.state_root()
         };
+        let new_root = old_root; // TODO: Fix after batch application is implemented
+        tracing::warn!("operator: old_root == new_root - batch application not yet integrated with proof generation");
 
         // 3. Build batch data
         let batch_data = self.build_batch_data(&events)?;

@@ -22,6 +22,7 @@ pub mod shards;
 
 use std::sync::Arc;
 
+use axum::extract::DefaultBodyLimit;
 use axum::middleware;
 use axum::routing::{get, post};
 use axum::Extension;
@@ -125,4 +126,7 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .layer(Extension(authorized))
         // JWT authentication — validates Bearer token and inserts CallerIdentity
         .layer(middleware::from_fn(api_auth::require_auth))
+        // Body size limit — reject oversized request bodies (10 MiB)
+        // to prevent DoS via memory exhaustion
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
 }

@@ -268,6 +268,7 @@ fn test_economics_state_full_lifecycle() {
                 did: "did:omnia:alice".into(),
             },
             epoch,
+            None,
         )
         .unwrap();
     state
@@ -276,6 +277,7 @@ fn test_economics_state_full_lifecycle() {
                 did: "did:omnia:bob".into(),
             },
             epoch,
+            None,
         )
         .unwrap();
 
@@ -290,6 +292,7 @@ fn test_economics_state_full_lifecycle() {
                 amount: 300,
             },
             epoch,
+            None,
         )
         .unwrap();
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300));
@@ -311,12 +314,13 @@ fn test_economics_state_full_lifecycle() {
                 proof,
             },
             epoch,
+            None,
         )
         .unwrap();
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300 + 500));
 
     // Step 4: Advance epoch — balances reset
-    state.apply(&EconomicsOp::AdvanceEpoch, 0).unwrap();
+    state.apply(&EconomicsOp::AdvanceEpoch, 0, None).unwrap();
     assert_eq!(state.current_epoch(), 1);
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA));
     assert_eq!(state.balance_of("did:omnia:bob"), Some(DEFAULT_UBC_QUOTA));
@@ -330,6 +334,7 @@ fn test_economics_state_full_lifecycle() {
                 expires_at_epoch: 5,
             },
             1,
+            None,
         )
         .unwrap();
 
@@ -348,6 +353,7 @@ fn test_economics_state_full_lifecycle() {
                 choice: VoteChoice::For,
             },
             1,
+            None,
         )
         .unwrap();
 
@@ -359,6 +365,7 @@ fn test_economics_state_full_lifecycle() {
                 choice: VoteChoice::Against,
             },
             1,
+            None,
         )
         .unwrap();
 
@@ -377,6 +384,7 @@ fn test_economics_serialization_roundtrip() {
                 did: "did:omnia:alice".into(),
             },
             0,
+            None,
         )
         .unwrap();
     state
@@ -386,6 +394,7 @@ fn test_economics_serialization_roundtrip() {
                 amount: 100,
             },
             0,
+            None,
         )
         .unwrap();
 

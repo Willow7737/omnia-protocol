@@ -67,6 +67,7 @@ pub mod physical;
 pub mod router;
 pub mod shard;
 pub mod validator;
+pub mod zk;
 
 // Re-export core types
 pub use cross_shard::CrossShardMessage;

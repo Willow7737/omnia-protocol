@@ -113,11 +113,26 @@ impl FinancialState {
     const FINANCIAL_STATE_VERSION: u8 = 1;
 
     /// Create an empty financial state with no accounts.
+    ///
+    /// Note: `mint_authority` is `None`, which means minting is disabled.
+    /// Use [`with_mint_authority`](Self::with_mint_authority) to create
+    /// a state that allows minting.
     pub fn new() -> Self {
         Self {
             balances: HashMap::new(),
             total_supply: 0,
             mint_authority: None,
+        }
+    }
+
+    /// Create a `FinancialState` with a specific mint authority.
+    ///
+    /// Only the specified public key will be allowed to mint new tokens.
+    pub fn with_mint_authority(mint_authority: [u8; 32]) -> Self {
+        Self {
+            balances: HashMap::new(),
+            total_supply: 0,
+            mint_authority: Some(mint_authority),
         }
     }
 
@@ -133,18 +148,24 @@ impl FinancialState {
     pub fn apply(&mut self, op: &FinancialOp, event: &Event) -> Result<(), ShardError> {
         match op {
             FinancialOp::Transfer { to, amount } => {
+                if *amount == 0 {
+                    return Err(ShardError::InvalidOperation("Transfer amount must be greater than zero".into()));
+                }
                 let from = event.creator_pubkey;
                 let vc = &event.vector_clock;
 
-                // Debit the sender
+                // Validate first (read-only checks)
                 let from_balance = self
                     .balances
-                    .get_mut(&from)
+                    .get(&from)
                     .ok_or_else(|| ShardError::ValidationFailed("Sender account not found".into()))?;
 
                 if from_balance.value() < *amount {
                     return Err(ShardError::ValidationFailed("Insufficient balance".into()));
                 }
+
+                // Now apply mutations
+                let from_balance = self.balances.get_mut(&from).expect("checked above");
                 from_balance.decrement(*amount, vc)?;
 
                 // Credit the recipient
@@ -154,13 +175,12 @@ impl FinancialState {
                 Ok(())
             }
             FinancialOp::Mint { to, amount } => {
-                // Check mint authority: if set, only the authority can mint
-                if let Some(authority) = self.mint_authority {
-                    if event.creator_pubkey != authority {
-                        return Err(ShardError::ValidationFailed(
-                            "Only mint authority can mint new tokens".into(),
-                        ));
-                    }
+                // Authorization: check mint authority
+                let minter = event.creator_pubkey;
+                match self.mint_authority {
+                    Some(auth) if auth == minter => {}
+                    Some(_) => return Err(ShardError::ValidationFailed("Unauthorized minter".into())),
+                    None => return Err(ShardError::ValidationFailed("Minting is disabled (no mint authority set)".into())),
                 }
                 let vc = &event.vector_clock;
                 let balance = self.balances.entry(*to).or_default();

@@ -171,7 +171,7 @@ impl Scalar {
 
     /// Test if this scalar is zero.
     pub fn is_zero(&self) -> bool {
-        self.to_bytes().iter().all(|&b| b == 0)
+        self.to_bytes().ct_eq(&[0u8; 32]).unwrap_u8() == 1
     }
 
     /// The multiplicative identity (one).

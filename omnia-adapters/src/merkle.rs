@@ -155,48 +155,20 @@ pub fn compute_root_from_proof(leaf: &[u8; 32], proof: &Blake3MerkleProof) -> [u
 /// For ZK-compatible proofs, use [`build_poseidon_merkle_tree`] instead.
 pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof>) {
     if items.is_empty() {
-        return ([0u8; 32], vec![]);
+        // Use a domain-separated hash for the empty root to avoid collision with DEFAULT_LEAF
+        let empty_root = blake3::derive_key("OMNIA-MERKLE-EMPTY-ROOT", &[]);
+        let mut root = [0u8; 32];
+        root.copy_from_slice(&empty_root[..32]);
+        return (root, vec![]);
     }
 
     let leaves: Vec<[u8; 32]> = items.iter().map(|item| *blake3::hash(item).as_bytes()).collect();
 
-    let current_level = leaves.clone();
-    let mut proofs = Vec::new();
-
-    for (idx, _) in items.iter().enumerate() {
-        let mut siblings = Vec::new();
-        let mut directions = Vec::new();
-        let mut level = current_level.clone();
-        let mut pos = idx;
-
-        while level.len() > 1 {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let sibling = if sibling_pos < level.len() {
-                level[sibling_pos]
-            } else {
-                [0u8; 32]
-            };
-            siblings.push(sibling);
-            directions.push(pos % 2 == 1);
-
-            let mut next_level = Vec::new();
-            let mut i = 0;
-            while i < level.len() {
-                let left = level[i];
-                let right = if i + 1 < level.len() { level[i + 1] } else { [0u8; 32] };
-                let mut hasher = blake3::Hasher::new();
-                hasher.update(&left);
-                hasher.update(&right);
-                next_level.push(*hasher.finalize().as_bytes());
-                i += 2;
-            }
-            level = next_level;
-            pos /= 2;
-        }
-        proofs.push(Blake3MerkleProof::new(siblings, directions));
-    }
-
-    let mut level = current_level;
+    // Build the tree once, storing all levels from leaves to root.
+    // This avoids the O(n²) behavior of rebuilding the tree for every proof.
+    let mut levels: Vec<Vec<[u8; 32]>> = Vec::new();
+    let mut level = leaves.clone();
+    levels.push(level.clone());
     while level.len() > 1 {
         let mut next_level = Vec::new();
         let mut i = 0;
@@ -210,9 +182,33 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof
             i += 2;
         }
         level = next_level;
+        levels.push(level.clone());
     }
 
-    (level[0], proofs)
+    // Extract proofs from the stored levels
+    let mut proofs = Vec::new();
+    for (idx, _) in items.iter().enumerate() {
+        let mut siblings = Vec::new();
+        let mut directions = Vec::new();
+        let mut pos = idx;
+
+        for level_idx in 0..levels.len() - 1 {
+            let current_level = &levels[level_idx];
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling = if sibling_pos < current_level.len() {
+                current_level[sibling_pos]
+            } else {
+                [0u8; 32]
+            };
+            siblings.push(sibling);
+            directions.push(pos % 2 == 1);
+            pos /= 2;
+        }
+        proofs.push(Blake3MerkleProof::new(siblings, directions));
+    }
+
+    let root = levels.last().unwrap()[0];
+    (root, proofs)
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +300,11 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 #[cfg(feature = "arkworks")]
 pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<PoseidonMerkleProof>) {
     if items.is_empty() {
-        return ([0u8; 32], vec![]);
+        // Use a domain-separated hash for the empty root to avoid collision with DEFAULT_LEAF
+        let empty_root = blake3::derive_key("OMNIA-MERKLE-EMPTY-ROOT", &[]);
+        let mut root = [0u8; 32];
+        root.copy_from_slice(&empty_root[..32]);
+        return (root, vec![]);
     }
 
     use ark_ff::Zero;
@@ -312,42 +312,11 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
     // Convert items to field elements as leaves
     let leaves: Vec<Fr> = items.iter().map(hash_to_fr).collect();
 
-    let current_level = leaves.clone();
-    let mut proofs = Vec::new();
-
-    for (idx, _) in items.iter().enumerate() {
-        let mut siblings = Vec::new();
-        let mut directions = Vec::new();
-        let mut level = current_level.clone();
-        let mut pos = idx;
-
-        while level.len() > 1 {
-            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
-            let sibling_fr = if sibling_pos < level.len() {
-                level[sibling_pos]
-            } else {
-                Fr::zero()
-            };
-            siblings.push(fr_to_hash(&sibling_fr));
-            directions.push(pos % 2 == 1);
-
-            let mut next_level = Vec::new();
-            let mut i = 0;
-            while i < level.len() {
-                let left = level[i];
-                let right = if i + 1 < level.len() { level[i + 1] } else { Fr::zero() };
-                let hash = poseidon_hash_to_fr(left, right).unwrap_or(Fr::zero());
-                next_level.push(hash);
-                i += 2;
-            }
-            level = next_level;
-            pos /= 2;
-        }
-        proofs.push(PoseidonMerkleProof::new(siblings, directions));
-    }
-
-    // Compute root
-    let mut level = current_level;
+    // Build the tree once, storing all levels from leaves to root.
+    // This avoids the O(n²) behavior of rebuilding the tree for every proof.
+    let mut levels: Vec<Vec<Fr>> = Vec::new();
+    let mut level = leaves.clone();
+    levels.push(level.clone());
     while level.len() > 1 {
         let mut next_level = Vec::new();
         let mut i = 0;
@@ -359,9 +328,33 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
             i += 2;
         }
         level = next_level;
+        levels.push(level.clone());
     }
 
-    (fr_to_hash(&level[0]), proofs)
+    // Extract proofs from the stored levels
+    let mut proofs = Vec::new();
+    for (idx, _) in items.iter().enumerate() {
+        let mut siblings = Vec::new();
+        let mut directions = Vec::new();
+        let mut pos = idx;
+
+        for level_idx in 0..levels.len() - 1 {
+            let current_level = &levels[level_idx];
+            let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
+            let sibling_fr = if sibling_pos < current_level.len() {
+                current_level[sibling_pos]
+            } else {
+                Fr::zero()
+            };
+            siblings.push(fr_to_hash(&sibling_fr));
+            directions.push(pos % 2 == 1);
+            pos /= 2;
+        }
+        proofs.push(PoseidonMerkleProof::new(siblings, directions));
+    }
+
+    let root = levels.last().unwrap()[0];
+    (fr_to_hash(&root), proofs)
 }
 
 // ---------------------------------------------------------------------------
@@ -396,7 +389,8 @@ mod tests {
     #[test]
     fn test_build_merkle_tree_empty() {
         let (root, proofs) = build_merkle_tree(&[]);
-        assert_eq!(root, [0u8; 32]);
+        // Empty root uses domain-separated hash, not all-zeros (avoids collision with DEFAULT_LEAF)
+        assert_ne!(root, [0u8; 32]);
         assert!(proofs.is_empty());
     }
 
@@ -499,7 +493,8 @@ mod arkworks_tests {
     #[test]
     fn test_poseidon_merkle_tree_empty() {
         let (root, proofs) = build_poseidon_merkle_tree(&[]);
-        assert_eq!(root, [0u8; 32]);
+        // Empty root uses domain-separated hash, not all-zeros (avoids collision with DEFAULT_LEAF)
+        assert_ne!(root, [0u8; 32]);
         assert!(proofs.is_empty());
     }
 

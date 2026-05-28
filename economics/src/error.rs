@@ -72,4 +72,8 @@ pub enum EconomicsError {
     /// The DID has already voted on this proposal.
     #[error("Duplicate vote on proposal {0}")]
     DuplicateVote(String),
+
+    /// A validation check failed (e.g., unauthorized operation).
+    #[error("Validation failed: {0}")]
+    ValidationFailed(String),
 }

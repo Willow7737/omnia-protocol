@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::key_rotation::{KeyRotationError, PqcKeyRotationManager, PqcKeyRotationRequest};
+use crate::provenance::ProvenanceError;
 use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
 
 /// Errors that can occur during keystore bridge operations.
@@ -35,6 +36,9 @@ pub enum BridgeError {
     /// Cryptographic operation failed.
     #[error("crypto error: {0}")]
     Crypto(String),
+    /// Provenance error.
+    #[error("provenance error: {0}")]
+    Provenance(#[from] ProvenanceError),
 }
 
 /// Persistent rotation state serialized as JSON.
@@ -58,6 +62,9 @@ pub struct RotationState {
     /// returns the correct post-rotation keypair even after a restart.
     /// The keystore on disk still holds the original keypair; this field
     /// supplements it until a full keystore rotation is performed.
+    ///
+    /// WARNING: Ed25519 secret key is stored in plaintext JSON.
+    /// This must be encrypted before production use.
     #[serde(default)]
     pub rotated_ed25519_secret: Option<String>,
 }
@@ -130,7 +137,7 @@ impl KeyStoreBridge {
         };
 
         let rotation_state_path = data_dir.join("rotation_state.json");
-        let (rotation_state, rotation_manager) = if rotation_state_path.exists() {
+        let (rotation_state, mut rotation_manager) = if rotation_state_path.exists() {
             let state_bytes = std::fs::read(&rotation_state_path)?;
             let state: RotationState =
                 serde_json::from_slice(&state_bytes).map_err(|e| BridgeError::Serialization(e.to_string()))?;
@@ -149,6 +156,10 @@ impl KeyStoreBridge {
             let manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
             (state, manager)
         };
+
+        // Set the current Ed25519 public key on the rotation manager
+        // so it can verify authorization signatures for rotation requests.
+        rotation_manager.set_current_ed25519_public(keystore.public_key().to_bytes());
 
         // Restore rotated Ed25519 keypair from persisted state (if any).
         let rotated_keypair = rotation_state
@@ -230,9 +241,19 @@ impl KeyStoreBridge {
         // post-rotation key even after a restart.  Both the in-memory field and
         // the serializable hex representation in `rotation_state` are updated
         // so that `persist_rotation_state()` writes them to disk.
-        let ed25519_secret_hex = hex::encode(ed25519_keypair.to_bytes());
         self.rotated_keypair = Some(ed25519_keypair);
-        self.rotation_state.rotated_ed25519_secret = Some(ed25519_secret_hex);
+        #[cfg(debug_assertions)]
+        {
+            let ed25519_secret_hex = hex::encode(self.rotated_keypair.as_ref().expect("just set").to_bytes());
+            self.rotation_state.rotated_ed25519_secret = Some(ed25519_secret_hex);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            // In release builds, do not persist the secret key in plaintext.
+            // Use the keystore's key rotation mechanism instead.
+            self.rotation_state.rotated_ed25519_secret = None;
+            tracing::warn!("Ed25519 secret key not persisted to disk in release build — use keystore rotation");
+        }
 
         let new_pubkey = PqPublicKey {
             ed25519: self
@@ -388,6 +409,13 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    /// Helper: sign a rotation authorization message with the current signing key.
+    fn sign_rotation_auth(bridge: &KeyStoreBridge, new_phase: CommitmentPhase, current_round: u64) -> Vec<u8> {
+        let keypair = bridge.current_signing_key().expect("signing key");
+        let message = format!("{}:{}", new_phase as u8, current_round);
+        keypair.sign(message.as_bytes()).to_bytes().to_vec()
+    }
+
     #[test]
     fn test_load_creates_new_bridge() {
         let dir = TempDir::new().expect("temp dir");
@@ -402,7 +430,7 @@ mod tests {
         // Create and rotate
         {
             let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
-            let sig = vec![1u8; 64]; // Mock signature
+            let sig = sign_rotation_auth(&bridge, CommitmentPhase::Hybrid, 100);
             bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
         }
 
@@ -417,13 +445,14 @@ mod tests {
         let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
 
         // First rotate to Hybrid
-        let sig = vec![1u8; 64];
+        let sig = sign_rotation_auth(&bridge, CommitmentPhase::Hybrid, 100);
         bridge
             .rotate(&sig, CommitmentPhase::Hybrid, 100)
             .expect("rotate to hybrid");
 
-        // Try to downgrade to ClassicalOnly
-        let result = bridge.rotate(&sig, CommitmentPhase::ClassicalOnly, 200);
+        // Try to downgrade to ClassicalOnly (signature doesn't matter — fails at downgrade check)
+        let bad_sig = vec![1u8; 64];
+        let result = bridge.rotate(&bad_sig, CommitmentPhase::ClassicalOnly, 200);
         assert!(result.is_err(), "Downgrade should be prevented");
     }
 
@@ -488,7 +517,7 @@ mod tests {
                 .verifying_key()
                 .to_bytes();
 
-            let sig = vec![1u8; 64];
+            let sig = sign_rotation_auth(&bridge, CommitmentPhase::Hybrid, 100);
             bridge.rotate(&sig, CommitmentPhase::Hybrid, 100).expect("rotate");
 
             // After rotation, current_signing_key() must return the NEW key
@@ -525,7 +554,7 @@ mod tests {
         let mut bridge = KeyStoreBridge::load(dir.path(), "test-pass").expect("bridge load");
 
         // Rotate to Hybrid
-        let sig = vec![1u8; 64];
+        let sig = sign_rotation_auth(&bridge, CommitmentPhase::Hybrid, 100);
         bridge
             .rotate(&sig, CommitmentPhase::Hybrid, 100)
             .expect("rotate to hybrid");

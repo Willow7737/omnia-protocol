@@ -13,8 +13,6 @@ blake3 = "1.5"
 hex = "0.4"
 subtle = "2.5"
 thiserror = "2.0"
-chrono = { version = "0.4", features = ["serde"], default-features = false }
-uuid = { version = "1.8", features = ["v4", "serde"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 bincode = { workspace = true }
 

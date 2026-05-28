@@ -4853,7 +4853,6 @@ name = "omnia-network"
 version = "0.1.56"
 dependencies = [
  "blake3",
- "chrono",
  "futures",
  "hex",
  "libp2p",
@@ -4909,6 +4908,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -4917,7 +4917,6 @@ version = "0.1.56"
 dependencies = [
  "bincode",
  "blake3",
- "chrono",
  "ed25519-dalek",
  "hex",
  "postcard",
@@ -4927,7 +4926,6 @@ dependencies = [
  "sha2",
  "subtle",
  "thiserror 2.0.18",
- "uuid",
 ]
 
 [[package]]

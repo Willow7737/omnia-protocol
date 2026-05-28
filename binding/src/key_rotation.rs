@@ -5,6 +5,7 @@
 //! and new keys are valid during a transition period.
 
 use crate::quantum_commit::{CommitmentPhase, PqPublicKey};
+use ed25519_dalek::Verifier;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -22,6 +23,9 @@ pub enum KeyRotationError {
     /// Authorization signature is missing.
     #[error("authorization signature required")]
     AuthorizationSignatureRequired,
+    /// Authorization signature is invalid.
+    #[error("invalid authorization signature")]
+    InvalidAuthorizationSignature,
 }
 
 /// A key rotation request that supports PQC transitions.
@@ -47,6 +51,8 @@ pub struct PqcKeyRotationManager {
     current_phase: CommitmentPhase,
     /// Pending rotations.
     pending: Vec<PqcKeyRotationRequest>,
+    /// Current Ed25519 public key used for verifying rotation authorization.
+    current_ed25519_public: Option<[u8; 32]>,
 }
 
 impl PqcKeyRotationManager {
@@ -55,7 +61,13 @@ impl PqcKeyRotationManager {
         Self {
             current_phase,
             pending: Vec::new(),
+            current_ed25519_public: None,
         }
+    }
+
+    /// Set the current Ed25519 public key for verifying rotation authorization signatures.
+    pub fn set_current_ed25519_public(&mut self, public_key: [u8; 32]) {
+        self.current_ed25519_public = Some(public_key);
     }
 
     /// Submit a key rotation request.
@@ -69,6 +81,18 @@ impl PqcKeyRotationManager {
 
         if request.authorization_sig.is_empty() {
             return Err(KeyRotationError::AuthorizationSignatureRequired);
+        }
+
+        // Verify the authorization signature against the current Ed25519 key
+        if let Some(ref pubkey_bytes) = self.current_ed25519_public {
+            let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(pubkey_bytes)
+                .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
+            let signature = ed25519_dalek::Signature::try_from(request.authorization_sig.as_slice())
+                .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
+            // The message being signed is the rotation request details
+            let message = format!("{}:{}", request.new_phase as u8, request.effective_at);
+            verifying_key.verify(message.as_bytes(), &signature)
+                .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
         }
 
         self.pending.push(request);

@@ -398,7 +398,8 @@ fn run_byzantine_equivocation(config: &ChaosSuiteConfig) -> ChaosScenarioResult 
         self_parent,
         other_parent,
         vec![0xEE, 0x01],
-    );
+    )
+    .expect("event creation should not fail");
     event_a.sign_with_keypair(&byzantine_keypair);
 
     // Create event B: same (creator, sequence), different payload = [0xEQ, 0x02]
@@ -409,7 +410,8 @@ fn run_byzantine_equivocation(config: &ChaosSuiteConfig) -> ChaosScenarioResult 
         self_parent,
         other_parent,
         vec![0xEE, 0x02],
-    );
+    )
+    .expect("event creation should not fail");
     event_b.sign_with_keypair(&byzantine_keypair);
 
     // Verify that the two events have different IDs (because payloads differ)

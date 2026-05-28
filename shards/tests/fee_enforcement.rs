@@ -26,7 +26,7 @@ fn test_node(id: u8) -> NodeId {
 /// Create a signed event with the given payload, creator, and keypair.
 fn create_test_event_with_keypair(creator: NodeId, payload: Vec<u8>, keypair: &NodeKeypair) -> Event {
     let vc = VectorClock::with_node(creator, 1);
-    let mut event = Event::new(creator, 0, vc, None, None, payload);
+    let mut event = Event::new(creator, 0, vc, None, None, payload).expect("event creation should succeed");
     event.sign_with_keypair(keypair);
     event
 }

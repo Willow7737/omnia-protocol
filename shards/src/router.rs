@@ -160,6 +160,15 @@ impl ShardRouter {
         let inner_op: ShardOp =
             postcard::from_bytes(&msg.payload).map_err(|e| ShardError::DeserializationError(e.to_string()))?;
 
+        // Verify the source shard matches the shard type that would generate this event
+        let expected_source = Self::shard_id_from_op(&inner_op);
+        if expected_source != msg.source_shard {
+            return Err(ShardError::ValidationFailed(
+                format!("cross-shard message source mismatch: expected {:?}, got {:?}",
+                    expected_source, msg.source_shard)
+            ));
+        }
+
         let target_id = msg.target_shard;
         if let Some(shard) = self.shards.get_mut(&target_id) {
             shard.process_event(event, inner_op)
@@ -217,6 +226,13 @@ impl ShardRouter {
                 payload.nonce, last_nonce
             )));
         }
+        // Prevent nonce gap attacks: reject nonces more than 1000 above the last seen
+        if payload.nonce > last_nonce + 1000 {
+            return Err(ShardError::ValidationFailed(format!(
+                "nonce {} too far ahead of last nonce {} (max gap: 1000)",
+                payload.nonce, last_nonce
+            )));
+        }
         self.last_nonces.insert(creator, payload.nonce);
 
         // Persist nonce state (best-effort, log on failure)
@@ -269,19 +285,25 @@ impl ShardRouter {
         self.shards.len()
     }
 
-    /// Convert a 32-byte Ed25519 public key to a DID string.
-    ///
-    /// Uses hex encoding of the public key bytes to form a
-    /// `did:omnia:<hex>` identifier. This DID is used as the
-    /// account key in the quota system.
-    ///
-    /// # Security
-    ///
-    /// The DID is derived deterministically from the public key,
-    /// making it a stable identifier that cannot be forged without
-    /// the corresponding private key.
+    /// Convert a public key to a DID string.
     pub fn pubkey_to_did(pubkey: &[u8; 32]) -> String {
         format!("did:omnia:{}", hex::encode(pubkey))
+    }
+
+    /// Determine which shard an operation belongs to.
+    ///
+    /// Maps each `ShardOp` variant to its corresponding `ShardId`.
+    /// Used for cross-shard message source verification.
+    fn shard_id_from_op(op: &ShardOp) -> ShardId {
+        match op {
+            ShardOp::Financial(_) => ShardId::financial(),
+            ShardOp::Computational(_) => ShardId::computational(),
+            ShardOp::Physical(_) => ShardId::physical(),
+            ShardOp::Biological(_) => ShardId::biological(),
+            ShardOp::Identity(_) => ShardId::identity(),
+            ShardOp::Economics(_) => ShardId::economics(),
+            ShardOp::CrossShard(_) => ShardId::financial(), // nested cross-shard not expected
+        }
     }
 }
 

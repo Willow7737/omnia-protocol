@@ -110,7 +110,12 @@ pub trait SettlementAdapter: Send + Sync {
     ///
     /// Returns `true` if the proof is valid according to the
     /// settlement layer's state.
-    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError>;
+    ///
+    /// # Arguments
+    ///
+    /// * `leaf` — The 32-byte leaf value being proven
+    /// * `proof` — The Merkle inclusion proof
+    async fn verify_inclusion(&self, leaf: &[u8; 32], proof: &MerkleProof) -> Result<bool, SettlementError>;
 
     /// Check whether this adapter is connected to a live settlement layer.
     ///

@@ -64,6 +64,9 @@ aes-gcm = "0.10"
 # BLAKE3 hash for key derivation from passphrase
 blake3 = "1.5"
 
+# Secure memory zeroization for key material cleanup
+zeroize = { version = "1", features = ["derive"] }
+
 # Cryptographic random number generation for nonce generation
 rand = "0.8"
 

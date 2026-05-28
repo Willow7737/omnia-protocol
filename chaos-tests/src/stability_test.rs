@@ -322,7 +322,8 @@ impl StabilityTestRunner {
         let mut genesis_events: Vec<(usize, Event)> = Vec::with_capacity(self.nodes.len());
 
         for i in 0..self.nodes.len() {
-            let mut genesis = Event::genesis(self.nodes[i].node_id, vec![(i + 1) as u8]);
+            let mut genesis = Event::genesis(self.nodes[i].node_id, vec![(i + 1) as u8])
+                .expect("genesis event creation should not fail");
             genesis.sign_with_keypair(&self.keypairs[i]);
 
             if let Err(e) = self.nodes[i].graph.insert(genesis.clone()) {
@@ -370,7 +371,8 @@ impl StabilityTestRunner {
                 Event::genesis(source_node_id, payload)
             } else {
                 Event::new(source_node_id, sequence, vc, self_parent, other_parent, payload)
-            };
+            }
+            .expect("event creation should not fail");
 
             event.sign_with_keypair(&self.keypairs[i]);
 

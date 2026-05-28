@@ -13,6 +13,7 @@
 use crate::merkle::MerkleProof;
 use crate::settlement::ethereum::EthereumConfig;
 use crate::settlement::{FinalityProof, SettlementAdapter, SettlementError, TxHash};
+use tokio::sync::OnceCell;
 
 // ---------------------------------------------------------------------------
 // Alloy imports (feature-gated)
@@ -90,6 +91,8 @@ alloy::sol! {
 pub struct EthereumSettlementAdapter {
     config: EthereumConfig,
     contract_address: Address,
+    /// Cached wallet to avoid re-parsing the private key on every call.
+    wallet: OnceCell<PrivateKeySigner>,
 }
 
 #[cfg(feature = "ethereum-live")]
@@ -109,16 +112,27 @@ impl EthereumSettlementAdapter {
         Ok(Self {
             config,
             contract_address,
+            wallet: OnceCell::new(),
         })
+    }
+
+    /// Get or initialize the cached wallet.
+    ///
+    /// Parses the private key once and caches the result for subsequent calls.
+    async fn get_wallet(&self) -> Result<&PrivateKeySigner, SettlementError> {
+        self.wallet
+            .get_or_try_init(|| async {
+                self.config
+                    .operator_private_key
+                    .parse()
+                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))
+            })
+            .await
     }
 
     /// Build an alloy provider with wallet signing.
     async fn build_provider(&self) -> Result<impl Provider, SettlementError> {
-        let wallet: PrivateKeySigner = self
-            .config
-            .operator_private_key
-            .parse()
-            .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
+        let wallet = self.get_wallet().await?.clone();
 
         let provider = ProviderBuilder::new().wallet(wallet).connect_http(
             self.config
@@ -189,10 +203,10 @@ impl SettlementAdapter for EthereumSettlementAdapter {
         })
     }
 
-    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError> {
+    async fn verify_inclusion(&self, leaf: &[u8; 32], proof: &MerkleProof) -> Result<bool, SettlementError> {
         // For the Ethereum adapter, inclusion verification is done on-chain
         // by the smart contract. We delegate to the contract's state root
-        // verification. For now, we compute the root from the proof and
+        // verification. We compute the root from the leaf and proof and
         // compare against the on-chain state root.
         let provider = self.build_provider().await?;
         let contract = OmniaRollup::new(self.contract_address, provider);
@@ -204,9 +218,8 @@ impl SettlementAdapter for EthereumSettlementAdapter {
             .await
             .map_err(|e| SettlementError::ContractError(format!("stateRoot call failed: {e}")))?;
 
-        // Compute root from the provided proof
-        let leaf = proof.siblings.first().copied().unwrap_or([0u8; 32]);
-        let computed = crate::merkle::compute_root_from_proof(&leaf, proof);
+        // Compute root from the provided leaf and proof
+        let computed = crate::merkle::compute_root_from_proof(leaf, proof);
 
         Ok(computed == on_chain_root.0)
     }

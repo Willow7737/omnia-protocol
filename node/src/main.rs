@@ -130,6 +130,10 @@ async fn main() -> Result<()> {
     // 2. Initialize tracing with the configured log level
     init_tracing(&config.log_level);
 
+    // 2b. Initialize the JWT secret cache from the environment.
+    // This must happen before any request hits the auth middleware.
+    omnia_node::api::auth::init_jwt_secret();
+
     tracing::info!(
         node_id = config.node_id,
         http_port = config.http_port,
@@ -352,7 +356,11 @@ async fn spawn_background_tasks(
                     break;
                 }
                 Some(work) = hot_rx.recv() => {
-                    tracing::trace!(event_len = work.event_bytes.len(), "Hot path: processing event validation");
+                    // TODO: Implement actual hot path event validation
+                    // Currently events are only processed via the direct submit_event API path.
+                    // The pipeline worker should validate event signatures, check graph
+                    // connectivity, and insert into the causal graph.
+                    tracing::debug!(event_len = work.event_bytes.len(), "Hot path: event received (pipeline worker not yet implemented)");
                 }
                 else => {
                     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -372,7 +380,11 @@ async fn spawn_background_tasks(
                     break;
                 }
                 Some(work) = warm_rx.recv() => {
-                    tracing::trace!(event_id = ?&work.event_id[..4], "Warm path: processing consensus/shards");
+                    // TODO: Implement actual warm path consensus/shard processing
+                    // Currently events are only processed via the direct submit_event API path.
+                    // The warm path should handle mempool insertion, shard routing,
+                    // and consensus round participation.
+                    tracing::debug!(event_id = ?&work.event_id[..4], "Warm path: event received (pipeline worker not yet implemented)");
                 }
                 else => {
                     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -786,7 +798,7 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
     let nonce = Nonce::from_slice(nonce_bytes);
 
     // Decrypt — this also verifies the authentication tag
-    let plaintext = cipher
+    let mut plaintext = cipher
         .decrypt(nonce, ciphertext)
         .map_err(|_| anyhow::anyhow!("Decryption failed: wrong passphrase or corrupted file"))?;
 
@@ -799,6 +811,10 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
 
     let mut key_bytes = [0u8; 64];
     key_bytes.copy_from_slice(&plaintext);
+    // Zeroize the plaintext buffer after copying to prevent key material
+    // from lingering on the stack or heap after this function returns.
+    use zeroize::Zeroize;
+    plaintext.zeroize();
     Ok(key_bytes)
 }
 

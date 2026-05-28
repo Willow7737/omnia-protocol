@@ -30,7 +30,7 @@ fn node(id: u8) -> NodeId {
 /// Helper: create a signed event for testing.
 fn signed_event(creator: NodeId, payload: Vec<u8>) -> Event {
     let keypair = generate_keypair();
-    let mut event = Event::genesis(creator, payload);
+    let mut event = Event::genesis(creator, payload).expect("genesis event creation");
     event.sign_with_keypair(&keypair);
     event
 }
@@ -354,7 +354,7 @@ fn test_bloom_filter_with_compact_encoded_events() {
     let mut event_ids: Vec<EventId> = Vec::new();
     for i in 0..50u8 {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(i), vec![i]);
+        let mut event = Event::genesis(node(i), vec![i]).expect("genesis event creation");
         event.sign_with_keypair(&keypair);
 
         // Insert into bloom filter
@@ -408,7 +408,7 @@ fn test_compact_encoding_with_multi_node_events() {
     vc.set(node(2), 3); // Same as peer
     vc.set(node(3), 10);
 
-    let mut event = Event::new(node(1), 8, vc, None, None, vec![1, 2, 3]);
+    let mut event = Event::new(node(1), 8, vc, None, None, vec![1, 2, 3]).expect("event creation");
     event.sign_with_keypair(&keypair);
 
     // Encode for the peer
@@ -709,7 +709,7 @@ fn test_full_optimized_pipeline_end_to_end() {
     // Create and process 10 events
     for i in 0..10u8 {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(i + 1), vec![i; 32]);
+        let mut event = Event::genesis(node(i + 1), vec![i; 32]).expect("genesis event creation");
         event.sign_with_keypair(&keypair);
         let event_id = event.id;
 

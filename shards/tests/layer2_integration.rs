@@ -56,7 +56,7 @@ async fn test_financial_shard_wired_into_substrate() {
         nonce: 1,
     };
 
-    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap());
+    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap()).expect("event creation should succeed");
     event.sign_with_keypair(&keypair);
 
     // 5. Submit event and run consensus
@@ -119,7 +119,7 @@ async fn test_identity_shard_wired_into_substrate() {
         nonce: 1,
     };
 
-    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap());
+    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap()).expect("event creation should succeed");
     event.sign_with_keypair(&keypair);
 
     // 5. Submit event and run consensus

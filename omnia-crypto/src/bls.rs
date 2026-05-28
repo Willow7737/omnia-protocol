@@ -555,8 +555,8 @@ pub fn aggregate_signatures_dedup(signatures: &[(BlsPublicKey, BlsSignature)]) -
     // Check for duplicate signers by public key
     let mut seen = std::collections::HashSet::new();
     for (pk, _sig) in signatures {
-        let pk_bytes = pk.as_bytes();
-        if !seen.insert(pk_bytes.to_vec()) {
+        let pk_bytes: [u8; 96] = pk.as_bytes().try_into().unwrap_or([0u8; 96]);
+        if !seen.insert(pk_bytes) {
             return Err(BlsError::AggregationFailed(format!(
                 "duplicate signer detected: public key {} appears more than once",
                 hex::encode(&pk_bytes[..8])
