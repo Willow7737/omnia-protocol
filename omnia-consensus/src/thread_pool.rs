@@ -269,7 +269,7 @@ mod tests {
         OsRng.fill_bytes(&mut creator);
 
         let vc = VectorClock::with_node(creator, seq + 1);
-        let mut event = Event::new(creator, seq, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(creator, seq, vc, None, None, vec![1, 2, 3]).expect("valid event");
 
         // Use a real keypair for proper signing
         let keypair = ed25519_dalek::SigningKey::generate(&mut OsRng);

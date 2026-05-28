@@ -495,7 +495,7 @@ mod tests {
 
     fn signed_event(creator: NodeId, payload: Vec<u8>) -> Event {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(creator, payload);
+        let mut event = Event::genesis(creator, payload).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         event
     }
@@ -668,7 +668,7 @@ mod tests {
         };
         let mut ingestor = BatchIngestor::new(config, node(1));
 
-        let event = Event::genesis(node(1), vec![1]);
+        let event = Event::genesis(node(1), vec![1]).expect("valid genesis event");
         ingestor.submit(event.clone());
 
         // The ingestor's vector clock should have merged the event's VC

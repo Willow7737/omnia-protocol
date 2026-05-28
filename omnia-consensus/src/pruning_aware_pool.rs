@@ -399,7 +399,7 @@ mod tests {
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![])
+        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
     }
 
     #[test]

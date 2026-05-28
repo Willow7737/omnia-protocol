@@ -208,7 +208,7 @@ mod tests {
 
     fn signed_event(creator: NodeId, payload: Vec<u8>) -> Event {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(creator, payload);
+        let mut event = Event::genesis(creator, payload).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         event
     }

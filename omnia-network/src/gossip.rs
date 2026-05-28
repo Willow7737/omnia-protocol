@@ -714,7 +714,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         assert!(protocol.validate_event(&event).is_ok());
@@ -726,7 +726,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         // Event::new creates events with all-zero signature and pubkey
-        let event = Event::genesis(node(2), vec![1, 2, 3]);
+        let event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
 
         let result = protocol.validate_event(&event);
         assert!(result.is_err());
@@ -740,7 +740,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         // Corrupt the signature
@@ -757,7 +757,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         // Tamper with the ID
@@ -781,7 +781,7 @@ mod tests {
         gossip.network_rx = Some(rx);
 
         // Create an unsigned event (should be rejected by validation)
-        let event = Event::genesis(node(2), vec![1, 2, 3]);
+        let event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         let bytes = event.to_bytes().expect("test event serialization");
 
         let dummy_peer_id = PeerId::random();
@@ -817,7 +817,7 @@ mod tests {
 
         // Create a properly signed event
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         let event_id = event.id;
         let bytes = event.to_bytes().expect("test event serialization");

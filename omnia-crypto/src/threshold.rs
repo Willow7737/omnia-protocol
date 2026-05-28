@@ -951,7 +951,7 @@ impl FeldmanVssSession {
             .collect();
 
         self.phase = DkgPhase::ShareDistribution;
-        Ok(packages?)
+        packages
     }
 
     /// Process received shares from another participant (Step 2).

@@ -378,7 +378,7 @@ mod tests {
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![])
+        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod stress_test_pool_allocation {
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![])
+        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
     }
 
     /// Stress test: insert 10,000 events rapidly.

@@ -1321,7 +1321,7 @@ mod tests {
 
         for kp in &keypairs {
             let node_id = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
-            let mut e = Event::genesis(node_id, vec![node_id[0]]);
+            let mut e = Event::genesis(node_id, vec![node_id[0]]).expect("valid genesis event");
             e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
@@ -1338,7 +1338,7 @@ mod tests {
             let other = [n1, n2, n3, n4][(i + 1) % 4];
             vc.set(other, 1);
 
-            let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]);
+            let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]).expect("valid event");
             e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
@@ -1563,7 +1563,7 @@ mod tests {
         // Genesis events
         let mut genesis_ids = Vec::new();
         for (node_id, keypair) in &nodes {
-            let mut e = Event::genesis(*node_id, vec![node_id[0]]);
+            let mut e = Event::genesis(*node_id, vec![node_id[0]]).expect("valid genesis event");
             e.sign_with_keypair(keypair);
             let id = e.id;
             graph.insert(e).unwrap();
@@ -1614,7 +1614,7 @@ mod tests {
 
         let mut genesis_ids = Vec::new();
         for (node_id, keypair) in &nodes {
-            let mut e = Event::genesis(*node_id, vec![node_id[0]]);
+            let mut e = Event::genesis(*node_id, vec![node_id[0]]).expect("valid genesis event");
             e.sign_with_keypair(keypair);
             let id = e.id;
             graph.insert(e).unwrap();
@@ -1831,7 +1831,7 @@ mod proptests {
     fn arb_genesis_event() -> impl Strategy<Value = Event> {
         (any::<u8>(), any::<Vec<u8>>()).prop_map(|(creator_byte, payload)| {
             let creator = nid(creator_byte % 10);
-            Event::genesis(creator, payload)
+            Event::genesis(creator, payload).expect("valid genesis event")
         })
     }
 
@@ -1947,7 +1947,7 @@ mod timeout_tests {
 
         for kp in &keypairs {
             let node_id = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
-            let mut e = Event::genesis(node_id, vec![node_id[0]]);
+            let mut e = Event::genesis(node_id, vec![node_id[0]]).expect("valid genesis event");
             e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();
@@ -1964,7 +1964,7 @@ mod timeout_tests {
             let other = [n1, n2, n3, n4][(i + 1) % 4];
             vc.set(other, 1);
 
-            let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]);
+            let mut e = Event::new(creator, 1, vc, Some(sp), Some(op), vec![]).expect("valid event");
             e.sign_with_keypair(kp);
             let id = e.id;
             graph.insert(e).unwrap();

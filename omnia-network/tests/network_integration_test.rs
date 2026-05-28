@@ -50,7 +50,7 @@ impl SimNode {
 
     fn create_event(&mut self, payload: Vec<u8>) -> Event {
         self.event_counter += 1;
-        Event::genesis(self.node_id, payload)
+        Event::genesis(self.node_id, payload).expect("valid genesis event")
     }
 
     async fn submit_and_process(&mut self, event: Event) -> Vec<EventId> {
