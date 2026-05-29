@@ -181,7 +181,7 @@ impl FinancialState {
                 let minter = event.creator_pubkey;
                 match self.mint_authority {
                     Some(auth) if auth == minter => {}
-                    Some(_) => return Err(ShardError::ValidationFailed("Unauthorized minter".into())),
+                    Some(_) => return Err(ShardError::ValidationFailed("Unauthorized: caller is not the mint authority".into())),
                     None => {
                         return Err(ShardError::ValidationFailed(
                             "Minting is disabled (no mint authority set)".into(),

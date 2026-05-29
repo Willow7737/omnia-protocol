@@ -271,16 +271,20 @@ mod tests {
         };
         let event = make_signed_event(&sender_keypair, vec![1]);
 
-        // Even if the validator were bypassed, apply still has the
-        // decrement check. With amount 0, decrement would succeed but
-        // increment would also succeed — the balance would be unchanged.
-        // However, in practice the FinancialShard::process_event calls
-        // validate() first, so this should never reach apply().
-        // Let's verify that direct apply with amount 0 is a no-op
-        // (decrement by 0 succeeds, increment by 0 succeeds).
+        // Defense in depth: apply() also rejects zero-amount transfers,
+        // even if the validator were bypassed.
         let result = state.apply(&transfer, &event);
-        // Amount 0 is handled gracefully — balance unchanged
-        assert!(result.is_ok(), "Zero-amount transfer via apply is a no-op");
+        assert!(result.is_err(), "Zero-amount transfer should be rejected by apply");
+        match result {
+            Err(ShardError::InvalidOperation(msg)) => {
+                assert!(
+                    msg.to_lowercase().contains("greater than zero"),
+                    "Error should mention zero amount, got: {msg}"
+                );
+            }
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
+            Ok(()) => panic!("Zero-amount transfer should have been rejected by apply"),
+        }
         assert_eq!(state.balance_of(&sender_pubkey), 100);
     }
 

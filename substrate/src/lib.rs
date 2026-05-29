@@ -328,12 +328,12 @@ impl SubstrateConfig {
             .unwrap_or(4);
         let seed = std::env::var("OMNIA_CONSENSUS_SEED")
             .ok()
-            .and_then(|s| {
+            .map(|s| {
                 let mut arr = [0u8; 32];
                 let bytes = s.as_bytes();
                 let len = bytes.len().min(32);
                 arr[..len].copy_from_slice(&bytes[..len]);
-                Some(arr)
+                arr
             })
             .unwrap_or_else(|| {
                 let mut seed = [0u8; 32];
@@ -372,12 +372,12 @@ impl SubstrateConfig {
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
         let seed = std::env::var("OMNIA_CONSENSUS_SEED")
             .ok()
-            .and_then(|s| {
+            .map(|s| {
                 let mut arr = [0u8; 32];
                 let bytes = s.as_bytes();
                 let len = bytes.len().min(32);
                 arr[..len].copy_from_slice(&bytes[..len]);
-                Some(arr)
+                arr
             })
             .unwrap_or_else(|| {
                 let mut seed = [0u8; 32];
