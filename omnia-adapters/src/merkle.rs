@@ -342,8 +342,7 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
         let mut directions = Vec::new();
         let mut pos = idx;
 
-        for level_idx in 0..levels.len() - 1 {
-            let current_level = &levels[level_idx];
+        for current_level in levels.iter().take(levels.len() - 1) {
             let sibling_pos = if pos % 2 == 0 { pos + 1 } else { pos - 1 };
             let sibling_fr = if sibling_pos < current_level.len() {
                 current_level[sibling_pos]
