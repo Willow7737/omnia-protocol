@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 //! Integration tests for the Omnia node HTTP API
 //!
 //! These tests start the full HTTP server and verify that each

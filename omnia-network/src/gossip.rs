@@ -641,7 +641,7 @@ pub enum GossipError {
 /// Delegates to [`crate::compression::serialize_with_compression`] and
 /// converts the error type to [`GossipError`].
 pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipError> {
-    serialize_with_compression(value).map_err(|e| GossipError::SerializationError(e))
+    serialize_with_compression(value).map_err(GossipError::SerializationError)
 }
 
 /// Deserialize an event with optional snappy decompression.

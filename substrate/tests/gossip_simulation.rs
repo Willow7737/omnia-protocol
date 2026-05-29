@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 //! Real Integration Test: Multi-Node Substrate Network
 //!
 //! Spins up N Substrate instances in-memory, submits signed events, and verifies:

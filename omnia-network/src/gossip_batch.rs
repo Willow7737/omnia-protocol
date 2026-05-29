@@ -112,7 +112,7 @@ pub const MAX_BATCH_GOSSIP_SIZE: usize = 1024 * 1024;
 ///
 /// Returns [`GossipBatchError::SerializationError`] if postcard serialization fails.
 pub fn serialize_batch_message(msg: &GossipBatchMessage) -> Result<Vec<u8>, GossipBatchError> {
-    serialize_with_compression(msg).map_err(|e| GossipBatchError::SerializationError(e))
+    serialize_with_compression(msg).map_err(GossipBatchError::SerializationError)
 }
 
 /// Deserialize a batch gossip message with optional snappy decompression.

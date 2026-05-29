@@ -1099,8 +1099,8 @@ mod tests {
         let passphrase = "same-passphrase";
         let salt1 = [1u8; 32];
         let salt2 = [2u8; 32];
-        let key1 = derive_key_hkdf(passphrase, &salt1);
-        let key2 = derive_key_hkdf(passphrase, &salt2);
+        let key1 = derive_key_hkdf(passphrase, &salt1).expect("HKDF derive key 1");
+        let key2 = derive_key_hkdf(passphrase, &salt2).expect("HKDF derive key 2");
         assert_ne!(key1, key2, "Different salts must produce different keys from HKDF");
     }
 
@@ -1108,8 +1108,8 @@ mod tests {
     fn test_derive_key_hkdf_same_inputs() {
         let passphrase = "same-passphrase";
         let salt = [42u8; 32];
-        let key1 = derive_key_hkdf(passphrase, &salt);
-        let key2 = derive_key_hkdf(passphrase, &salt);
+        let key1 = derive_key_hkdf(passphrase, &salt).expect("HKDF derive key 1");
+        let key2 = derive_key_hkdf(passphrase, &salt).expect("HKDF derive key 2");
         assert_eq!(key1, key2, "Same passphrase and salt must produce the same key");
     }
 

@@ -155,7 +155,6 @@ fn test_pool_pruning_with_sharded_state_tracking() {
 /// deserialize, validate, and process through consensus.
 #[test]
 fn test_batch_gossip_propagation_pipeline() {
-    use omnia_consensus::batch::MAX_BATCH_SIZE;
     use omnia_network::{
         deserialize_batch_message, serialize_batch_message, validate_batch_message, GossipBatchMessage,
     };
@@ -686,7 +685,6 @@ fn test_optimized_stack_identical_consensus_outcomes() {
 /// 8. Track in ShardedConsensusState
 #[test]
 fn test_full_optimized_pipeline_end_to_end() {
-    use omnia_consensus::batch::MAX_BATCH_SIZE;
     use omnia_network::{
         deserialize_batch_message, serialize_batch_message, validate_batch_message, GossipBatchMessage,
     };
@@ -695,7 +693,7 @@ fn test_full_optimized_pipeline_end_to_end() {
     let mut pool = PruningAwarePool::new(512, 100_000);
     let mut bloom = GossipBloomFilter::new(10_000, 0.01);
     let mut priority_queue = PriorityGossipQueue::with_defaults();
-    let mut encoder = CompactEncoder::new(2048, 16);
+    let encoder = CompactEncoder::new(2048, 16);
     let config = BatchConfig {
         flush_size: 5,
         ..Default::default()
@@ -704,7 +702,7 @@ fn test_full_optimized_pipeline_end_to_end() {
     let mut ingestor = BatchIngestor::new(config, creator);
 
     let peer_id = node(2);
-    let mut peer_frontier = VectorClock::new();
+    let _peer_frontier = VectorClock::new();
 
     // Create and process 10 events
     for i in 0..10u8 {
@@ -776,7 +774,7 @@ fn test_full_optimized_pipeline_end_to_end() {
 
     // All events should be in bloom filter
     let stats = sharded.stats();
-    for i in 0..10u8 {
+    for _ in 0..10u8 {
         // We can't iterate the sharded state, but we verified individual inserts
     }
     assert!(stats.total_tracked == 10);
