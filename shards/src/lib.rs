@@ -108,6 +108,19 @@ impl_shard!(
     ShardId::financial()
 );
 
+impl FinancialShard {
+    /// Create a Financial shard with a specific mint authority.
+    ///
+    /// Only the specified public key will be allowed to mint new tokens.
+    /// This is required for any test or deployment that needs minting,
+    /// since [`FinancialShard::new()`] creates a shard with minting disabled.
+    pub fn with_mint_authority(mint_authority: [u8; 32]) -> Self {
+        Self {
+            state: FinancialState::with_mint_authority(mint_authority),
+        }
+    }
+}
+
 impl_shard!(
     /// The Identity shard — handles DID lifecycle and social recovery.
     IdentityShard,

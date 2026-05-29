@@ -73,14 +73,14 @@ fn test_replay_protection_different_creators() {
 
     let keypair1 = generate_keypair();
     let keypair2 = generate_keypair();
+    let account1 = keypair1.verifying_key().to_bytes();
+    let account2 = keypair2.verifying_key().to_bytes();
 
     // Both creators use nonce 1 — should both succeed (different pubkeys)
+    // Use BalanceQuery instead of Mint since FinancialShard::new() has no mint authority
     let payload1 = ShardPayload {
         shard_id: ShardId::financial(),
-        operation: ShardOp::Financial(FinancialOp::Mint {
-            to: keypair1.verifying_key().to_bytes(),
-            amount: 100,
-        }),
+        operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: account1 }),
         nonce: 1,
     };
     let event1 = create_test_event_with_keypair(test_node(1), payload1.to_bytes().unwrap(), &keypair1);
@@ -88,10 +88,7 @@ fn test_replay_protection_different_creators() {
 
     let payload2 = ShardPayload {
         shard_id: ShardId::financial(),
-        operation: ShardOp::Financial(FinancialOp::Mint {
-            to: keypair2.verifying_key().to_bytes(),
-            amount: 200,
-        }),
+        operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: account2 }),
         nonce: 1,
     };
     let event2 = create_test_event_with_keypair(test_node(2), payload2.to_bytes().unwrap(), &keypair2);
