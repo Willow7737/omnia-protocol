@@ -124,7 +124,13 @@ impl VectorClockIndex {
     ///
     /// Returns [`VectorClockIndexError::SequenceTooLarge`] if `sequence`
     /// exceeds [`MAX_SEQUENCE`].
-    pub fn index_event(&mut self, creator: &NodeId, sequence: u64, slot: usize, event_id: EventId) -> Result<(), VectorClockIndexError> {
+    pub fn index_event(
+        &mut self,
+        creator: &NodeId,
+        sequence: u64,
+        slot: usize,
+        event_id: EventId,
+    ) -> Result<(), VectorClockIndexError> {
         // Bounds check: prevent unbounded memory allocation from u64 → usize cast
         if sequence > MAX_SEQUENCE {
             return Err(VectorClockIndexError::SequenceTooLarge {
@@ -461,7 +467,11 @@ mod tests {
         let result = index.index_event(&creator, MAX_SEQUENCE + 1, 0, test_event_id(1));
         assert!(result.is_err());
         match result.unwrap_err() {
-            VectorClockIndexError::SequenceTooLarge { creator: c, sequence, max } => {
+            VectorClockIndexError::SequenceTooLarge {
+                creator: c,
+                sequence,
+                max,
+            } => {
                 assert_eq!(c, creator);
                 assert_eq!(sequence, MAX_SEQUENCE + 1);
                 assert_eq!(max, MAX_SEQUENCE);

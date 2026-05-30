@@ -367,9 +367,7 @@ mod tests {
             let mut new = [0u8; 32];
             new[0] = i + 1;
             let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
-            let pub_input = circuit
-                .public_input()
-                .expect("public input should be available");
+            let pub_input = circuit.public_input().expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
             proof_pairs.push((proof, pub_input));
         }
@@ -392,9 +390,7 @@ mod tests {
             let mut new = [0u8; 32];
             new[0] = i + 1;
             let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
-            let pub_input = circuit
-                .public_input()
-                .expect("public input should be available");
+            let pub_input = circuit.public_input().expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
             proof_pairs.push((proof, pub_input));
         }

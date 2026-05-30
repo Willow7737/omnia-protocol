@@ -338,7 +338,7 @@ impl FastSyncManager {
         // 3. Apply delta events on top of the snapshot
         // For now, return an error indicating this is not yet implemented.
         return Err(SyncError::Consensus(
-            "Fast-sync snapshot application not yet implemented. Use full sync instead.".to_string()
+            "Fast-sync snapshot application not yet implemented. Use full sync instead.".to_string(),
         ));
 
         // Step 6: Download and replay delta events
@@ -778,7 +778,10 @@ mod tests {
 
         let result = manager.sync_to_latest().await;
         // Snapshot application is not yet implemented, so sync should return an error
-        assert!(result.is_err(), "Full sync loop should fail until snapshot application is implemented");
+        assert!(
+            result.is_err(),
+            "Full sync loop should fail until snapshot application is implemented"
+        );
         match result.unwrap_err() {
             SyncError::Consensus(msg) => {
                 assert!(

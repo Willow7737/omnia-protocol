@@ -136,7 +136,11 @@ impl PeerScoreTracker {
         if self.scores.len() > Self::MAX_PEER_SCORES {
             let mut entries: Vec<_> = self.scores.iter().collect();
             entries.sort_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal));
-            let to_remove: Vec<_> = entries.iter().take(entries.len() - Self::MAX_PEER_SCORES / 2).map(|(peer, _)| **peer).collect();
+            let to_remove: Vec<_> = entries
+                .iter()
+                .take(entries.len() - Self::MAX_PEER_SCORES / 2)
+                .map(|(peer, _)| **peer)
+                .collect();
             for peer in to_remove {
                 self.scores.remove(&peer);
             }
@@ -408,8 +412,7 @@ impl OmniaNetwork {
 
         // ── Kademlia DHT config (H-4) ────────────────────────────────
         let stream_protocol = StreamProtocol::try_from_owned(config.dht_protocol.clone())
-            .map_err(|e| format!("Invalid DHT protocol name: {e}"))?
-            ;
+            .map_err(|e| format!("Invalid DHT protocol name: {e}"))?;
         let kademlia_config = libp2p::kad::Config::new(stream_protocol);
 
         // ── AutoNAT config ───────────────────────────────────────────

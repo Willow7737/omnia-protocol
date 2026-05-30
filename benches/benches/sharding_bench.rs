@@ -6,7 +6,6 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use omnia_consensus::{ConsensusState, ShardedConsensusState};
-use omnia_primitives::VectorClock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;

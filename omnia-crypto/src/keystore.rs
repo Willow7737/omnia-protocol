@@ -775,8 +775,8 @@ fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u
     hkdf.expand(b"omnia-keystore-mnemonic-enc-v1", &mut derived_key)
         .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
 
-    let cipher =
-        Aes256Gcm::new_from_slice(&derived_key).map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
+    let cipher = Aes256Gcm::new_from_slice(&derived_key)
+        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
@@ -909,7 +909,7 @@ fn slip0010_derive_child(parent_key: &[u8; 32], chain_code: &[u8; 32], index: u3
 /// **Deprecated**: Use [`aes_gcm_encrypt`] instead. This function provides
 /// no authentication, no salt, and no IV — it is not suitable for production.
 #[deprecated(since = "0.2.0", note = "Use aes_gcm_encrypt instead — XOR encryption is not secure")]
-#[allow(deprecated)]
+#[allow(deprecated, dead_code)]
 fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     let key = derive_key(passphrase);
     data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
@@ -919,7 +919,7 @@ fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
 ///
 /// **Deprecated**: Use [`aes_gcm_decrypt`] instead.
 #[deprecated(since = "0.2.0", note = "Use aes_gcm_decrypt instead — XOR encryption is not secure")]
-#[allow(deprecated)]
+#[allow(deprecated, dead_code)]
 fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     xor_encrypt(data, passphrase)
 }
@@ -931,6 +931,7 @@ fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     since = "0.2.0",
     note = "Use derive_key_hkdf instead — deterministic key derivation without salt is insecure"
 )]
+#[allow(dead_code)]
 fn derive_key(passphrase: &str) -> [u8; 32] {
     blake3_hash_domain(b"OMNIA-KEY-DERIVATION-V1", passphrase.as_bytes())
 }

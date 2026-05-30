@@ -92,8 +92,13 @@ impl PqcKeyRotationManager {
             // The message being signed includes nonce and new key commitment
             // to prevent replay attacks. The nonce is derived from the current
             // public key, binding the signature to the current key state.
-            let nonce = blake3::hash(&self.current_ed25519_public.expect("current_ed25519_public must be set before rotation"));
-            let message = format!("{}:{}:{}:{}",
+            let nonce = blake3::hash(
+                &self
+                    .current_ed25519_public
+                    .expect("current_ed25519_public must be set before rotation"),
+            );
+            let message = format!(
+                "{}:{}:{}:{}",
                 request.new_phase as u8,
                 request.effective_at,
                 hex::encode(nonce.as_bytes()),

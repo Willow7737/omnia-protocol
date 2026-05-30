@@ -301,8 +301,9 @@ impl ThresholdKeyManager {
         let signers: Vec<NodeId> = unique_partials.iter().map(|p| p.participant).collect();
 
         // Aggregate the BLS signatures
-        let aggregate_signature =
-            crate::bls::aggregate_signatures_unchecked(&unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
+        let aggregate_signature = crate::bls::aggregate_signatures_unchecked(
+            &unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>(),
+        )?;
 
         tracing::info!(
             signers = signers.len(),
@@ -862,10 +863,16 @@ impl FeldmanVssSession {
     /// Returns an error if `threshold < 2` or `threshold > participants.len()`.
     pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Result<Self, DkgError> {
         if threshold < 2 {
-            return Err(DkgError::InvalidShare([0u8; 4], "Threshold must be at least 2".to_string()));
+            return Err(DkgError::InvalidShare(
+                [0u8; 4],
+                "Threshold must be at least 2".to_string(),
+            ));
         }
         if threshold > participants.len() {
-            return Err(DkgError::InvalidShare([0u8; 4], "Threshold exceeds participants".to_string()));
+            return Err(DkgError::InvalidShare(
+                [0u8; 4],
+                "Threshold exceeds participants".to_string(),
+            ));
         }
         Ok(Self {
             session_id,
@@ -1236,6 +1243,7 @@ impl FeldmanVssSession {
 
 /// Simple XOR encryption for DKG shares (domain-separated).
 /// Retained for backward compatibility with v1 DKG share packages.
+#[allow(dead_code)]
 fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
     data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
 }

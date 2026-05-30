@@ -58,7 +58,12 @@ impl BiologicalState {
     /// The `event_creator` parameter provides the public key of the event
     /// creator for authorization checks. When `None`, operations that
     /// require authorization will be rejected.
-    pub fn apply(&mut self, op: &BiologicalOp, vc: &VectorClock, event_creator: Option<&[u8; 32]>) -> Result<(), ShardError> {
+    pub fn apply(
+        &mut self,
+        op: &BiologicalOp,
+        vc: &VectorClock,
+        event_creator: Option<&[u8; 32]>,
+    ) -> Result<(), ShardError> {
         match op {
             BiologicalOp::GrantAccess {
                 subject,

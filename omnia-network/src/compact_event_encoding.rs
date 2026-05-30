@@ -136,9 +136,7 @@ impl DeltaClock {
     /// Decode a delta clock from bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, EncodingError> {
         if data.len() > MAX_DELTA_CLOCK_ENCODED_SIZE {
-            return Err(EncodingError::InvalidFormat(
-                "Delta clock data too large".to_string(),
-            ));
+            return Err(EncodingError::InvalidFormat("Delta clock data too large".to_string()));
         }
         let mut offset = 0usize;
         let count = decode_varint(data, &mut offset)? as usize;

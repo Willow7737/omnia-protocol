@@ -24,8 +24,8 @@
 //! - `merkle_proof_directions` — Direction bits for each event's Merkle path
 
 use ark_bn254::Fr;
-use ark_ff::Zero;
 use ark_ff::PrimeField;
+use ark_ff::Zero;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::boolean::Boolean;
 use ark_r1cs_std::eq::EqGadget;

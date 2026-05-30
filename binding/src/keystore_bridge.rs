@@ -140,7 +140,9 @@ fn decrypt_secret_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, Br
     if combined.len() < 12 {
         return Err(BridgeError::Crypto("Encrypted data too short — missing nonce".into()));
     }
-    let nonce: [u8; 12] = combined[..12].try_into().map_err(|_| BridgeError::Crypto("Invalid nonce".into()))?;
+    let nonce: [u8; 12] = combined[..12]
+        .try_into()
+        .map_err(|_| BridgeError::Crypto("Invalid nonce".into()))?;
     let ciphertext = &combined[12..];
     let aad = b"omnia-rotated-ed25519-key";
     let decrypted = aes256gcm_decrypt_aad(ciphertext, &key, &nonce, aad)
@@ -383,11 +385,13 @@ impl KeyStoreBridge {
                 }
                 // Sign with the ORIGINAL keystore key (not the rotated keypair)
                 // for replay protection with nonce + new_key commitment.
-                let old_keypair = self.keystore.keypair().ok_or_else(|| {
-                    BridgeError::Crypto("No keystore keypair available for signing".into())
-                })?;
+                let old_keypair = self
+                    .keystore
+                    .keypair()
+                    .ok_or_else(|| BridgeError::Crypto("No keystore keypair available for signing".into()))?;
                 let nonce = blake3::hash(&self.keystore.public_key().to_bytes());
-                let message = format!("{}:{}:{}:{}",
+                let message = format!(
+                    "{}:{}:{}:{}",
                     new_phase as u8,
                     current_round,
                     hex::encode(nonce.as_bytes()),
@@ -539,7 +543,8 @@ mod tests {
         let keypair = bridge.current_signing_key().expect("signing key");
         // Message format must match PqcKeyRotationManager::submit_rotation
         let nonce = blake3::hash(&bridge.keystore.public_key().to_bytes());
-        let message = format!("{}:{}:{}:{}",
+        let message = format!(
+            "{}:{}:{}:{}",
             new_phase as u8,
             current_round,
             hex::encode(nonce.as_bytes()),

@@ -114,9 +114,8 @@ pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult,
-    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager,
-    ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult, FeldmanVssSession, KeyShare,
+    PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
 
 #[cfg(all(feature = "bls", feature = "deprecated-dkg"))]

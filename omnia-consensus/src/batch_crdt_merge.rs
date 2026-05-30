@@ -210,6 +210,11 @@ impl CrdtSnapshot {
     }
 }
 
+/// Merger for applying batches of CRDT operations atomically.
+///
+/// Maintains G-Counters, OR-Sets, and LWW-Registers, validating
+/// each operation in a batch for overflow and consistency before
+/// committing the entire batch.
 pub struct BatchCrdtMerger {
     /// G-Counters keyed by identifier
     g_counters: BTreeMap<String, GCounter>,
@@ -384,11 +389,13 @@ impl BatchCrdtMerger {
             match op {
                 CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
                     // Check if increment would overflow against current + accumulated state
-                    let current = self.g_counters.get(key)
-                        .map(|c| c.node_value(node_id))
-                        .unwrap_or(0);
+                    let current = self.g_counters.get(key).map(|c| c.node_value(node_id)).unwrap_or(0);
                     let pending = pending_increments.get(&(key.clone(), *node_id)).copied().unwrap_or(0);
-                    if current.checked_add(pending).and_then(|v| v.checked_add(*amount)).is_none() {
+                    if current
+                        .checked_add(pending)
+                        .and_then(|v| v.checked_add(*amount))
+                        .is_none()
+                    {
                         return Err(BatchCrdtError::ValidationFailed(format!(
                             "G-Counter overflow at op {}: {} + {} + {} exceeds u64::MAX for key '{}'",
                             index, current, pending, amount, key

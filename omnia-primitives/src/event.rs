@@ -259,14 +259,18 @@ impl Event {
         hasher.update(&self.timestamp.to_le_bytes());
         hasher.update(&self.payload);
         match self.self_parent {
-            None => { hasher.update(&[0u8]); }
+            None => {
+                hasher.update(&[0u8]);
+            }
             Some(sp) => {
                 hasher.update(&[1u8]);
                 hasher.update(&sp);
             }
         }
         match self.other_parent {
-            None => { hasher.update(&[0u8]); }
+            None => {
+                hasher.update(&[0u8]);
+            }
             Some(op) => {
                 hasher.update(&[1u8]);
                 hasher.update(&op);

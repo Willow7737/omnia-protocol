@@ -147,9 +147,11 @@ impl IdentityState {
                     )));
                 }
                 // Authorization: caller's public key must match the document's primary key
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for CreateDid".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for CreateDid".into(),
+                    )
+                })?;
                 if &document.public_key != caller {
                     return Err(ShardError::ValidationFailed(
                         "Only the DID owner can create their DID".into(),
@@ -165,9 +167,11 @@ impl IdentityState {
                     .ok_or_else(|| ShardError::ValidationFailed(format!("DID not found: {did}")))?;
 
                 // Authorization check: caller must be in the document's authentication set
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for UpdateDid".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for UpdateDid".into(),
+                    )
+                })?;
                 if !doc.authentication.iter().any(|key| key == caller) {
                     return Err(ShardError::ValidationFailed(
                         "Unauthorized: caller not in authentication set".into(),
@@ -227,9 +231,11 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("Owner DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for AddAgent".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for AddAgent".into(),
+                    )
+                })?;
                 let doc = self.dids.get(did).expect("checked above");
                 if !doc.authentication.iter().any(|key| key == caller) {
                     return Err(ShardError::ValidationFailed(
@@ -254,9 +260,11 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for EnrollBiometric".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for EnrollBiometric".into(),
+                    )
+                })?;
                 let doc = self.dids.get(did).expect("checked above");
                 if !doc.authentication.iter().any(|key| key == caller) {
                     return Err(ShardError::ValidationFailed(
@@ -278,9 +286,11 @@ impl IdentityState {
                 Ok(())
             }
             IdentityOp::RevokeAgent { agent_did } => {
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for RevokeAgent".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for RevokeAgent".into(),
+                    )
+                })?;
                 let agent = self
                     .agent_registry
                     .get(agent_did)
@@ -288,12 +298,12 @@ impl IdentityState {
                 // The caller must be the DID that created this agent (owner)
                 // Look up the owner DID and verify caller is in its authentication set
                 let owner_did = &agent.owner_did;
-                let owner_doc = self.dids.get(owner_did)
+                let owner_doc = self
+                    .dids
+                    .get(owner_did)
                     .ok_or_else(|| ShardError::ValidationFailed(format!("Owner DID not found: {owner_did}")))?;
                 if !owner_doc.authentication.iter().any(|key| key == caller) {
-                    return Err(ShardError::ValidationFailed(
-                        "Only the agent owner can revoke".into(),
-                    ));
+                    return Err(ShardError::ValidationFailed("Only the agent owner can revoke".into()));
                 }
                 let agent = self.agent_registry.get_mut(agent_did).unwrap();
                 agent.revoke();
@@ -309,9 +319,11 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                let caller = caller_pubkey.ok_or_else(||
-                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for ConfigureRecovery".into())
-                )?;
+                let caller = caller_pubkey.ok_or_else(|| {
+                    ShardError::ValidationFailed(
+                        "Authorization required: caller_pubkey must be provided for ConfigureRecovery".into(),
+                    )
+                })?;
                 let doc = self.dids.get(did).expect("checked above");
                 if !doc.authentication.iter().any(|key| key == caller) {
                     return Err(ShardError::ValidationFailed(
@@ -518,7 +530,8 @@ impl IdentityState {
                 1 => {
                     return Err(ShardError::ValidationFailed(
                         "Legacy v1 XOR decryption requires the 'legacy-xor-encryption' feature flag. \
-                         Re-encrypt shares with v2 (AES-256-GCM) to decrypt without this flag.".into(),
+                         Re-encrypt shares with v2 (AES-256-GCM) to decrypt without this flag."
+                            .into(),
                     ));
                 }
                 2 => {

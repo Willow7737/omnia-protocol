@@ -273,9 +273,7 @@ impl SettlementAdapter for CelestiaAdapter {
         // the computed root matches the on-chain data root, which means a
         // malicious Celestia node could return a fake commitment.
         // This MUST be fixed before mainnet.
-        tracing::warn!(
-            "Celestia inclusion verification incomplete: computed root not compared against on-chain data"
-        );
+        tracing::warn!("Celestia inclusion verification incomplete: computed root not compared against on-chain data");
 
         Ok(true)
     }

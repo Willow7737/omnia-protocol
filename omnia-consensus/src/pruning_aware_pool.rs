@@ -131,12 +131,14 @@ impl PruningAwarePool {
         let slot = self.pool.insert(event)?;
 
         // Index the event for O(1) parent resolution
-        self.index.index_event(&creator, sequence, slot, event_id).map_err(|e| {
-            // If indexing fails (e.g., sequence too large), remove the event from the pool
-            // to maintain consistency, then convert to an appropriate error.
-            self.pool.remove(&event_id);
-            EventPoolError::InvalidEvent(format!("indexing failed: {}", e))
-        })?;
+        self.index
+            .index_event(&creator, sequence, slot, event_id)
+            .map_err(|e| {
+                // If indexing fails (e.g., sequence too large), remove the event from the pool
+                // to maintain consistency, then convert to an appropriate error.
+                self.pool.remove(&event_id);
+                EventPoolError::InvalidEvent(format!("indexing failed: {}", e))
+            })?;
 
         Ok(slot)
     }
@@ -403,8 +405,12 @@ mod tests {
     }
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static EVENT_COUNTER: AtomicU64 = AtomicU64::new(0);
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
+        let counter = EVENT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let payload = counter.to_le_bytes().to_vec();
+        Event::new(creator, seq, vc, None, None, payload).expect("valid event")
     }
 
     #[test]

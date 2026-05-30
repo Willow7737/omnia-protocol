@@ -167,7 +167,7 @@ fn finality_latency_bench(c: &mut Criterion) {
 
                 (graph, consensus, keypair, genesis_id, 1u64)
             },
-            |(mut graph, mut consensus, keypair, mut last_id, mut seq)| {
+            |(mut graph, mut consensus, keypair, last_id, seq)| {
                 let start = Instant::now();
 
                 let mut vc = VectorClock::new();
@@ -206,8 +206,6 @@ fn finality_latency_bench(c: &mut Criterion) {
 /// To run: `cargo bench --features full -- baseline_bench`
 #[cfg(feature = "full")]
 fn zk_proof_gen_bench(c: &mut Criterion) {
-    use ark_bn254::Fr;
-    use ark_ff::PrimeField;
     use omnia_adapters::circuit::{ExpandedRollupCircuit, RollupCircuit};
     use omnia_adapters::prover::{
         create_expanded_proof, create_proof, generate_trusted_setup, generate_trusted_setup_expanded,
@@ -225,7 +223,7 @@ fn zk_proof_gen_bench(c: &mut Criterion) {
         b.iter(|| {
             let old = [1u8; 32];
             let new = [2u8; 32];
-            let circuit = RollupCircuit::from_state_roots(old, new, 1);
+            let circuit = RollupCircuit::from_state_roots(old, new, 1, old);
             let _ = create_proof(circuit, &pk);
         })
     });
@@ -288,7 +286,7 @@ fn gossip_latency_bench(c: &mut Criterion) {
 
                 (local_graph, remote_graph, keypair, genesis_id, 1u64)
             },
-            |(local_graph, mut remote_graph, keypair, mut last_id, mut seq)| {
+            |(_local_graph, mut remote_graph, keypair, last_id, seq)| {
                 let start = Instant::now();
 
                 // Create a new event on the "local" node

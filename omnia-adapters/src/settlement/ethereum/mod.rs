@@ -285,10 +285,12 @@ impl EthereumLiveClient {
     async fn get_wallet(&self) -> Result<&PrivateKeySigner, SettlementError> {
         self.wallet
             .get_or_try_init(|| async {
-                self.operator_private_key
+                let key: PrivateKeySigner = self
+                    .operator_private_key
                     .as_ref()
                     .parse()
-                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))
+                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
+                Ok(key)
             })
             .await
     }
@@ -746,7 +748,9 @@ impl SettlementLayer for EthereumAdapter {
                     root_input[..32].copy_from_slice(old_root);
                     root_input[32..].copy_from_slice(new_root);
                     let batch_merkle_root = blake3::derive_key("OMNIA-ETH-BATCH-MERKLE", &root_input);
-                    return client.verify_proof_live(old_root, new_root, proof, &batch_merkle_root).await;
+                    return client
+                        .verify_proof_live(old_root, new_root, proof, &batch_merkle_root)
+                        .await;
                 }
 
                 #[cfg(not(feature = "ethereum-live"))]

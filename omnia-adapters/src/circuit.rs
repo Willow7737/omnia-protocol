@@ -640,8 +640,7 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
 
             // Allocate Merkle path witnesses and verify inclusion
             let proof = &self.merkle_proofs[i];
-            let path_witness = proof.as_ref()
-                .ok_or(SynthesisError::AssignmentMissing)?;
+            let path_witness = proof.as_ref().ok_or(SynthesisError::AssignmentMissing)?;
             let mut current = event_hash.clone();
             {
                 for j in 0..path_witness.siblings.len() {

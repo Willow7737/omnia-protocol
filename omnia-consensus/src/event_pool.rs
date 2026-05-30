@@ -372,6 +372,9 @@ impl Default for EventPool {
 mod tests {
     use super::*;
     use omnia_primitives::{Event, NodeId, VectorClock};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static EVENT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
@@ -381,7 +384,9 @@ mod tests {
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
+        let counter = EVENT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let payload = counter.to_le_bytes().to_vec();
+        Event::new(creator, seq, vc, None, None, payload).expect("valid event")
     }
 
     #[test]
@@ -583,6 +588,9 @@ mod tests {
 mod stress_test_pool_allocation {
     use super::*;
     use omnia_primitives::{Event, NodeId, VectorClock};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static EVENT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
@@ -592,7 +600,9 @@ mod stress_test_pool_allocation {
 
     fn make_event(creator: NodeId, seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
-        Event::new(creator, seq, vc, None, None, vec![]).expect("valid event")
+        let counter = EVENT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let payload = counter.to_le_bytes().to_vec();
+        Event::new(creator, seq, vc, None, None, payload).expect("valid event")
     }
 
     /// Stress test: insert 10,000 events rapidly.

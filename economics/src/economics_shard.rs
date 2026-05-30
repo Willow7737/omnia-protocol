@@ -144,7 +144,7 @@ impl EconomicsState {
                 if !self.admin_keys.is_empty() {
                     // Admin authorization required for minting
                     return Err(EconomicsError::Unauthorized(
-                        "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into()
+                        "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into(),
                     ));
                 }
                 // Only allow minting when no admin keys are configured (testing mode)
@@ -160,7 +160,9 @@ impl EconomicsState {
                 // when admin_keys is configured.
                 if self.admin_keys.is_empty() {
                     // When no admin keys configured, log a warning but allow (testing mode)
-                    tracing::warn!("SubmitWork accepted without admin verification - configure admin_keys for production");
+                    tracing::warn!(
+                        "SubmitWork accepted without admin verification - configure admin_keys for production"
+                    );
                 } else {
                     // Admin verification required
                     let submitter = event_creator.ok_or_else(|| {
