@@ -51,6 +51,7 @@ rand = { version = "0.8", optional = true }
 rand_chacha = { version = "0.3", optional = true }
 hex = "0.4"
 subtle = "2"
+zeroize = { version = "1", features = ["derive"] }
 
 [features]
 default = []

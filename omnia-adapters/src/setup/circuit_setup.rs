@@ -619,7 +619,7 @@ mod tests {
         let mut new_root = [0u8; 32];
         new_root[0] = 0x02;
 
-        let proof_circuit = RollupCircuit::from_state_roots(old_root, new_root, 5);
+        let proof_circuit = RollupCircuit::from_state_roots(old_root, new_root, 5, old_root);
         let public_inputs = proof_circuit.public_input().expect("public inputs");
         let proof = create_proof(proof_circuit, &pk).expect("proof creation failed");
 

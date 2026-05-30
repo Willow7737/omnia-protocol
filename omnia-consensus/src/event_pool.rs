@@ -43,6 +43,9 @@ pub enum EventPoolError {
     /// An event with the same ID already exists in the pool.
     #[error("Event already exists: {0}")]
     DuplicateEvent(String),
+    /// An event failed validation or indexing.
+    #[error("Invalid event: {0}")]
+    InvalidEvent(String),
 }
 
 /// Statistics about the event pool's memory usage and occupancy.

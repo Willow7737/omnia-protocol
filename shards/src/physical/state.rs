@@ -78,13 +78,14 @@ impl PhysicalState {
                     .ok_or_else(|| ShardError::ValidationFailed("Item not found".into()))?;
 
                 // Authorization: only the current owner can transfer ownership
-                if let Some(creator) = event_creator {
-                    let current = log.last().map(|e| e.owner);
-                    if current != Some(creator) {
-                        return Err(ShardError::ValidationFailed(
-                            "TransferOwnership authorization failed: only the current owner can transfer".into(),
-                        ));
-                    }
+                let creator = event_creator.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: event_creator must be provided for TransferOwnership".into())
+                )?;
+                let current = log.last().map(|e| e.owner);
+                if current != Some(creator) {
+                    return Err(ShardError::ValidationFailed(
+                        "TransferOwnership authorization failed: only the current owner can transfer".into(),
+                    ));
                 }
 
                 log.push(ProvenanceEvent {

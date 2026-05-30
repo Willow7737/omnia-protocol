@@ -171,6 +171,14 @@ impl ComputationalState {
                             // the proof is valid for a circuit with no public inputs.
                             let public_inputs: Vec<ark_bn254::Fr> = vec![];
 
+                            if public_inputs.is_empty() {
+                                tracing::warn!(
+                                    task = ?&task_id[..4],
+                                    "ZK proof verification with empty public inputs — accepting without meaningful verification. \
+                                     Compute proper public inputs from the task spec for real security."
+                                );
+                            }
+
                             match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
                                 Ok(true) => {
                                     tracing::info!(

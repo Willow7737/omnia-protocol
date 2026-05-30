@@ -615,6 +615,20 @@ const ENCRYPTED_KEY_MAGIC: &[u8; 10] = b"OMNIAKEY01";
 /// Domain separation tag for BLAKE3 key derivation from passphrase.
 const KEY_DERIVATION_CONTEXT: &str = "omnia-keygen-aes256gcm";
 
+/// Apply key stretching to a passphrase using multiple rounds of BLAKE3 derivation.
+///
+/// A single BLAKE3 `derive_key` call is too fast for passphrase-based key derivation
+/// (an attacker can try billions of guesses per second). This function applies
+/// 100,000 rounds of BLAKE3 derivation to slow down brute-force attacks while
+/// maintaining deterministic output (same passphrase always produces the same key).
+fn stretch_passphrase(pass: &str, context: &str) -> [u8; 32] {
+    let mut key = blake3::derive_key(context, pass.as_bytes());
+    for _ in 0..100_000 {
+        key = blake3::derive_key(context, &key);
+    }
+    key
+}
+
 /// Generate a new validator keypair and save it to the specified output directory.
 ///
 /// When a `passphrase` is provided, the private key is encrypted with
@@ -660,7 +674,8 @@ fn run_keygen(output_dir: &str, passphrase: Option<&str>) -> Result<()> {
     if let Some(pass) = passphrase {
         // ---- Encrypted path ----
         // Derive a 256-bit key from the passphrase using BLAKE3 with domain separation
-        let derived_key = blake3::derive_key(KEY_DERIVATION_CONTEXT, pass.as_bytes());
+        // and key stretching (multiple rounds to slow down brute-force attacks)
+        let derived_key = stretch_passphrase(pass, KEY_DERIVATION_CONTEXT);
         let cipher_key = aes_gcm::Key::<Aes256Gcm>::from_slice(&derived_key);
         let cipher = Aes256Gcm::new(cipher_key);
 
@@ -791,8 +806,8 @@ pub fn load_encrypted_key(path: &std::path::Path, passphrase: &str) -> Result<[u
         );
     }
 
-    // Derive the same key from the passphrase
-    let derived_key = blake3::derive_key(KEY_DERIVATION_CONTEXT, passphrase.as_bytes());
+    // Derive the same key from the passphrase (with stretching)
+    let derived_key = stretch_passphrase(passphrase, KEY_DERIVATION_CONTEXT);
     let cipher_key = aes_gcm::Key::<Aes256Gcm>::from_slice(&derived_key);
     let cipher = Aes256Gcm::new(cipher_key);
     let nonce = Nonce::from_slice(nonce_bytes);

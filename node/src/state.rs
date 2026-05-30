@@ -30,6 +30,31 @@ use crate::api::events::StoredEvent;
 use crate::api::node::PeerInfo;
 use crate::config::NodeConfig;
 
+/// Maximum number of events to store in the in-memory event store.
+/// When this limit is reached, the oldest 10% of events are evicted.
+const MAX_STORED_EVENTS: usize = 100_000;
+
+/// Store an event in the bounded event store with LRU eviction.
+///
+/// When the store exceeds `MAX_STORED_EVENTS`, the oldest 10% of
+/// entries are removed to prevent unbounded memory growth.
+pub async fn store_event(
+    event_store: &Arc<RwLock<HashMap<String, StoredEvent>>>,
+    event_id: String,
+    stored: StoredEvent,
+) {
+    let mut store = event_store.write().await;
+    if store.len() >= MAX_STORED_EVENTS {
+        // Remove oldest 10% to make room
+        let to_remove = MAX_STORED_EVENTS / 10;
+        let keys: Vec<_> = store.keys().take(to_remove).cloned().collect();
+        for key in keys {
+            store.remove(&key);
+        }
+    }
+    store.insert(event_id, stored);
+}
+
 /// Global singleton for Prometheus metrics.
 ///
 /// Using `OnceLock` ensures metrics are only registered once per process,

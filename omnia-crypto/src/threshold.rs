@@ -79,23 +79,28 @@ pub struct ThresholdConfig {
 impl ThresholdConfig {
     /// Create a new threshold configuration.
     ///
-    /// # Panics
-    ///
-    /// Panics if `threshold < 2` or `threshold > total_participants`.
-    pub fn new(total_participants: usize, threshold: usize) -> Self {
-        assert!(threshold >= 2, "Threshold must be at least 2, got {threshold}");
-        assert!(
-            threshold <= total_participants,
-            "Threshold {threshold} exceeds total participants {total_participants}"
-        );
-        Self {
+    /// Returns an error if `threshold < 2` or `threshold > total_participants`.
+    pub fn new(total_participants: usize, threshold: usize) -> Result<Self, ThresholdError> {
+        if threshold < 2 {
+            return Err(ThresholdError::InsufficientPartials {
+                got: threshold,
+                need: 2,
+            });
+        }
+        if threshold > total_participants {
+            return Err(ThresholdError::UnknownSigners {
+                found: total_participants,
+                expected: threshold,
+            });
+        }
+        Ok(Self {
             total_participants,
             threshold,
-        }
+        })
     }
 
     /// Create a BFT-style threshold configuration (2n/3 + 1).
-    pub fn bft(n: usize) -> Self {
+    pub fn bft(n: usize) -> Result<Self, ThresholdError> {
         let t = (2 * n) / 3 + 1;
         Self::new(n, t)
     }
@@ -104,7 +109,7 @@ impl ThresholdConfig {
     ///
     /// Three of five validator custodians must cooperate to recover
     /// a lost validator key.
-    pub fn validator_recovery() -> Self {
+    pub fn validator_recovery() -> Result<Self, ThresholdError> {
         Self::new(5, 3)
     }
 
@@ -112,7 +117,7 @@ impl ThresholdConfig {
     ///
     /// Two of three emergency signers can authorize critical operations
     /// like pausing the protocol or triggering an upgrade.
-    pub fn emergency_multisig() -> Self {
+    pub fn emergency_multisig() -> Result<Self, ThresholdError> {
         Self::new(3, 2)
     }
 
@@ -120,7 +125,7 @@ impl ThresholdConfig {
     ///
     /// Five of seven council members must approve governance decisions
     /// that require council authorization.
-    pub fn governance_council() -> Self {
+    pub fn governance_council() -> Result<Self, ThresholdError> {
         Self::new(7, 5)
     }
 
@@ -297,7 +302,7 @@ impl ThresholdKeyManager {
 
         // Aggregate the BLS signatures
         let aggregate_signature =
-            crate::bls::aggregate_signatures(&unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
+            crate::bls::aggregate_signatures_unchecked(&unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>())?;
 
         tracing::info!(
             signers = signers.len(),
@@ -476,6 +481,7 @@ pub struct DkgSharePackage {
 /// **WARNING**: The current implementation aggregates public keys rather than
 /// performing true Distributed Key Generation with Feldman VSS polynomial
 /// evaluation and share verification. See the `todo!()` in `finalize()`.
+#[cfg(feature = "deprecated-dkg")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[deprecated(since = "0.2.0", note = "DkgSession is insecure - use FeldmanVssSession instead")]
 #[doc(hidden)]
@@ -502,6 +508,7 @@ pub struct DkgSession {
     pub own_keypair: Option<BlsKeypair>,
 }
 
+#[cfg(feature = "deprecated-dkg")]
 #[allow(deprecated)]
 impl DkgSession {
     /// Initialize a new Key Aggregation session.
@@ -658,8 +665,35 @@ impl DkgSession {
             self.received_shares.insert(from, share_data);
         }
 
-        // Verify: the commitment should be a valid BLS public key
-        let valid = package.commitments.first().map(|c| !c.is_empty()).unwrap_or(false);
+        // Verify commitments properly:
+        // - Commitments count must match the threshold
+        // - Each commitment must be a valid G1 point (48-byte compressed)
+        // - Each commitment must not be empty
+        let valid = if package.commitments.len() != self.threshold {
+            tracing::warn!(
+                from = ?&from[..4],
+                expected = self.threshold,
+                got = package.commitments.len(),
+                "Commitment count mismatch"
+            );
+            false
+        } else {
+            package.commitments.iter().all(|c| {
+                if c.is_empty() {
+                    false
+                } else if c.len() != bls12_381_scalar::G1_COMPRESSED_SIZE {
+                    tracing::warn!(
+                        from = ?&from[..4],
+                        len = c.len(),
+                        "Invalid commitment size"
+                    );
+                    false
+                } else {
+                    // Validate as a valid G1 point by attempting decompression
+                    bls12_381_scalar::validate_g1_point(c)
+                }
+            })
+        };
 
         self.phase = DkgPhase::Verification;
 
@@ -825,13 +859,15 @@ pub struct FeldmanVssSession {
 impl FeldmanVssSession {
     /// Initialize a new Feldman VSS DKG session.
     ///
-    /// # Panics
-    ///
-    /// Panics if `threshold < 2` or `threshold > participants.len()`.
-    pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Self {
-        assert!(threshold >= 2, "Threshold must be at least 2");
-        assert!(threshold <= participants.len(), "Threshold exceeds participants");
-        Self {
+    /// Returns an error if `threshold < 2` or `threshold > participants.len()`.
+    pub fn new(session_id: u64, participants: Vec<ParticipantId>, threshold: usize) -> Result<Self, DkgError> {
+        if threshold < 2 {
+            return Err(DkgError::InvalidShare([0u8; 4], "Threshold must be at least 2".to_string()));
+        }
+        if threshold > participants.len() {
+            return Err(DkgError::InvalidShare([0u8; 4], "Threshold exceeds participants".to_string()));
+        }
+        Ok(Self {
             session_id,
             participants,
             threshold,
@@ -842,7 +878,7 @@ impl FeldmanVssSession {
             accumulated_share: None,
             own_id: None,
             own_index: None,
-        }
+        })
     }
 
     /// Generate shares for all participants (Step 1).
@@ -878,13 +914,19 @@ impl FeldmanVssSession {
 
         // Generate random polynomial coefficients as BLS12-381 scalars.
         // f(x) = a_0 + a_1*x + a_2*x^2 + ... + a_{t-1}*x^{t-1}
-        let polynomial_coeffs: Vec<Scalar> = (0..self.threshold).map(|_| Scalar::random(rng)).collect();
-        if polynomial_coeffs[0].is_zero() {
-            return Err(DkgError::InvalidShare(
-                [0u8; 4],
-                "Constant term coefficient must not be zero".to_string(),
-            ));
-        }
+        // Ensure all coefficients are non-zero (compute_commitment returns None for zero).
+        let mut rng = rng;
+        let polynomial_coeffs: Vec<Scalar> = (0..self.threshold)
+            .map(|_| {
+                loop {
+                    let scalar = Scalar::random(&mut rng);
+                    if !scalar.is_zero() {
+                        return scalar;
+                    }
+                    // Re-roll if zero (extremely unlikely with random generation)
+                }
+            })
+            .collect();
         self.polynomial_coeffs = Some(polynomial_coeffs.clone());
 
         // Compute Feldman commitments: C_j = a_j * G1
@@ -897,7 +939,7 @@ impl FeldmanVssSession {
             .iter()
             .map(|coeff| {
                 bls12_381_scalar::compute_commitment(coeff)
-                    .expect("commitment computation should succeed for non-zero coefficient")
+                    .expect("commitment computation should succeed — all coefficients are guaranteed non-zero")
                     .to_vec()
             })
             .collect();
@@ -1103,9 +1145,9 @@ impl FeldmanVssSession {
 
         // Collect C_0 commitments (first commitment from each participant)
         // Commitments are 48-byte compressed G1 points
-        let c0_bytes: Vec<&Vec<u8>> = all_commitments
+        let c0_bytes: Vec<&[u8]> = all_commitments
             .iter()
-            .filter_map(|commitments| commitments.first())
+            .filter_map(|commitments| commitments.first().map(|v| v.as_slice()))
             .collect();
 
         if c0_bytes.len() < self.threshold {
@@ -1269,14 +1311,14 @@ mod tests {
 
     #[test]
     fn test_threshold_config_bft() {
-        let config = ThresholdConfig::bft(4);
+        let config = ThresholdConfig::bft(4).unwrap();
         assert_eq!(config.total_participants, 4);
         assert_eq!(config.threshold, 3);
     }
 
     #[test]
     fn test_threshold_config_quorum() {
-        let config = ThresholdConfig::bft(4);
+        let config = ThresholdConfig::bft(4).unwrap();
         assert!(!config.has_quorum(2));
         assert!(config.has_quorum(3));
         assert!(config.has_quorum(4));
@@ -1294,7 +1336,7 @@ mod tests {
 
     #[test]
     fn test_threshold_sign_and_verify() {
-        let config = ThresholdConfig::new(4, 3);
+        let config = ThresholdConfig::new(4, 3).unwrap();
         let mut mgr = ThresholdKeyManager::new(config);
 
         // Register 4 participants
@@ -1324,7 +1366,7 @@ mod tests {
 
     #[test]
     fn test_threshold_insufficient_partials() {
-        let config = ThresholdConfig::new(4, 3);
+        let config = ThresholdConfig::new(4, 3).unwrap();
         let mgr = ThresholdKeyManager::new(config);
 
         let partials = vec![];
@@ -1337,18 +1379,18 @@ mod tests {
     #[test]
     #[should_panic(expected = "Threshold must be at least 2")]
     fn test_threshold_config_panics_below_2() {
-        ThresholdConfig::new(4, 1);
+        ThresholdConfig::new(4, 1).unwrap();
     }
 
     #[test]
     #[should_panic(expected = "Threshold 5 exceeds total participants 4")]
     fn test_threshold_config_panics_exceeds_total() {
-        ThresholdConfig::new(4, 5);
+        ThresholdConfig::new(4, 5).unwrap();
     }
 
     #[test]
     fn test_partial_sign_unregistered_participant() {
-        let config = ThresholdConfig::new(4, 3);
+        let config = ThresholdConfig::new(4, 3).unwrap();
         let mgr = ThresholdKeyManager::new(config);
         let result = mgr.partial_sign(&node(99), b"test");
         assert!(result.is_err());
@@ -1356,28 +1398,28 @@ mod tests {
 
     #[test]
     fn test_predefined_configs_validator_recovery() {
-        let config = ThresholdConfig::validator_recovery();
+        let config = ThresholdConfig::validator_recovery().unwrap();
         assert_eq!(config.total_participants, 5);
         assert_eq!(config.threshold, 3);
     }
 
     #[test]
     fn test_predefined_configs_emergency_multisig() {
-        let config = ThresholdConfig::emergency_multisig();
+        let config = ThresholdConfig::emergency_multisig().unwrap();
         assert_eq!(config.total_participants, 3);
         assert_eq!(config.threshold, 2);
     }
 
     #[test]
     fn test_predefined_configs_governance_council() {
-        let config = ThresholdConfig::governance_council();
+        let config = ThresholdConfig::governance_council().unwrap();
         assert_eq!(config.total_participants, 7);
         assert_eq!(config.threshold, 5);
     }
 
     #[test]
     fn test_duplicate_signers_detected() {
-        let config = ThresholdConfig::new(4, 3);
+        let config = ThresholdConfig::new(4, 3).unwrap();
         let mut mgr = ThresholdKeyManager::new(config);
 
         // Register 4 participants
@@ -1448,6 +1490,7 @@ mod tests {
     // ─── DKG tests ────────────────────────────────────────────────────────
 
     #[test]
+    #[cfg(feature = "deprecated-dkg")]
     fn test_dkg_3_of_5() {
         let nodes: Vec<NodeId> = (1..=5)
             .map(|i| {
@@ -1476,6 +1519,7 @@ mod tests {
         assert!(sessions[0].own_keypair.is_some());
     }
 
+    #[cfg(feature = "deprecated-dkg")]
     #[test]
     fn test_dkg_with_one_byzantine() {
         let nodes: Vec<NodeId> = (1..=5)
@@ -1503,6 +1547,7 @@ mod tests {
         assert!(!verification.valid, "Byzantine shares should fail verification");
     }
 
+    #[cfg(feature = "deprecated-dkg")]
     #[test]
     fn test_dkg_threshold_signing_after_dkg() {
         // Simplified test: verify that after DKG, the result can be used with ThresholdKeyManager
@@ -1514,7 +1559,7 @@ mod tests {
             })
             .collect();
 
-        let config = ThresholdConfig::new(3, 2);
+        let config = ThresholdConfig::new(3, 2).unwrap();
         let mut mgr = ThresholdKeyManager::new(config);
 
         // Register shares from DKG participants
@@ -1537,6 +1582,7 @@ mod tests {
         mgr.verify(&threshold_sig).expect("Threshold signature should verify");
     }
 
+    #[cfg(feature = "deprecated-dkg")]
     #[test]
     fn test_dkg_phase_transitions() {
         let nodes: Vec<NodeId> = (1..=3)
@@ -1572,6 +1618,7 @@ mod tests {
         assert_eq!(session1.phase, DkgPhase::Verification);
     }
 
+    #[cfg(feature = "deprecated-dkg")]
     #[test]
     fn test_dkg_wrong_phase_error() {
         let nodes: Vec<NodeId> = (1..=3)
@@ -1692,6 +1739,7 @@ mod tests {
         assert!(e.to_string().contains("1"));
     }
 
+    #[cfg(feature = "deprecated-dkg")]
     #[test]
     fn test_dkg_session_serialization() {
         let nodes: Vec<NodeId> = (1..=3)
@@ -1726,7 +1774,7 @@ mod tests {
             })
             .collect();
 
-        let session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         assert_eq!(session.session_id, 1);
         assert_eq!(session.participants.len(), 5);
         assert_eq!(session.threshold, 3);
@@ -1749,7 +1797,7 @@ mod tests {
                 n
             })
             .collect();
-        FeldmanVssSession::new(1, nodes, 1);
+        FeldmanVssSession::new(1, nodes, 1).unwrap();
     }
 
     #[test]
@@ -1762,7 +1810,7 @@ mod tests {
                 n
             })
             .collect();
-        FeldmanVssSession::new(1, nodes, 5);
+        FeldmanVssSession::new(1, nodes, 5).unwrap();
     }
 
     #[test]
@@ -1775,7 +1823,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -1819,7 +1867,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         let mut rng = rand::thread_rng();
         let _packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -1845,7 +1893,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(42, nodes.clone(), 2);
+        let mut session = FeldmanVssSession::new(42, nodes.clone(), 2).unwrap();
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -1883,7 +1931,7 @@ mod tests {
         let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
-            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 3);
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 3).unwrap();
             let mut rng = rand::thread_rng();
             let packages = session.generate_shares(node_id, &mut rng).unwrap();
             all_packages.insert(node_id, packages);
@@ -1949,7 +1997,7 @@ mod tests {
         let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
-            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2).unwrap();
             let mut rng = rand::thread_rng();
             let packages = session.generate_shares(node_id, &mut rng).unwrap();
             all_packages.insert(node_id, packages);
@@ -2001,7 +2049,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(42, nodes.clone(), 2);
+        let mut session = FeldmanVssSession::new(42, nodes.clone(), 2).unwrap();
         assert_eq!(session.phase, DkgPhase::Init);
 
         // Generate shares → ShareDistribution
@@ -2010,7 +2058,7 @@ mod tests {
         assert_eq!(session.phase, DkgPhase::ShareDistribution);
 
         // Receive shares → Verification
-        let mut sender_session = FeldmanVssSession::new(42, nodes.clone(), 2);
+        let mut sender_session = FeldmanVssSession::new(42, nodes.clone(), 2).unwrap();
         let sender_packages = sender_session.generate_shares(nodes[1], &mut rng).unwrap();
         let package_for_me = sender_packages
             .iter()
@@ -2033,7 +2081,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2).unwrap();
 
         // Can't receive_shares in Init phase
         let package = DkgSharePackage {
@@ -2073,7 +2121,7 @@ mod tests {
             })
             .collect();
 
-        let mut honest_session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let mut honest_session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         let mut rng = rand::thread_rng();
         let _packages = honest_session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2112,7 +2160,7 @@ mod tests {
             })
             .collect();
 
-        let mut honest_session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let mut honest_session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         let mut rng = rand::thread_rng();
         let _packages = honest_session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2139,11 +2187,11 @@ mod tests {
             .collect();
 
         // Node 0 generates shares, node 1 receives and decrypts
-        let mut session0 = FeldmanVssSession::new(42, nodes.clone(), 2);
+        let mut session0 = FeldmanVssSession::new(42, nodes.clone(), 2).unwrap();
         let mut rng = rand::thread_rng();
         let packages0 = session0.generate_shares(nodes[0], &mut rng).unwrap();
 
-        let mut session1 = FeldmanVssSession::new(42, nodes.clone(), 2);
+        let mut session1 = FeldmanVssSession::new(42, nodes.clone(), 2).unwrap();
         let _ = session1.generate_shares(nodes[1], &mut rng).unwrap();
 
         // Find package from node 0 for node 1
@@ -2168,7 +2216,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2).unwrap();
         let mut rng = rand::thread_rng();
         let _packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2177,7 +2225,7 @@ mod tests {
         assert_eq!(session.received_share_count(), 1); // self-share
 
         // Receive share from another participant
-        let mut sender_session = FeldmanVssSession::new(1, nodes.clone(), 2);
+        let mut sender_session = FeldmanVssSession::new(1, nodes.clone(), 2).unwrap();
         let sender_packages = sender_session.generate_shares(nodes[1], &mut rng).unwrap();
         let package_for_me = sender_packages
             .iter()
@@ -2202,7 +2250,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 3).unwrap();
         let mut rng = rand::thread_rng();
         let _packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2306,7 +2354,7 @@ mod tests {
         let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
-            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2).unwrap();
             let mut rng = rand::thread_rng();
             let packages = session.generate_shares(node_id, &mut rng).unwrap();
             all_packages.insert(node_id, packages);
@@ -2357,7 +2405,7 @@ mod tests {
             })
             .collect();
 
-        let session = FeldmanVssSession::new(1, nodes.clone(), 2);
+        let session = FeldmanVssSession::new(1, nodes.clone(), 2).unwrap();
         let serialized = postcard::to_allocvec(&session).unwrap();
         let deserialized: FeldmanVssSession = postcard::from_bytes(&serialized).unwrap();
 
@@ -2380,7 +2428,7 @@ mod tests {
 
         // Test with different thresholds
         for threshold in [2, 3, 4, 5] {
-            let mut session = FeldmanVssSession::new(1, nodes.clone(), threshold);
+            let mut session = FeldmanVssSession::new(1, nodes.clone(), threshold).unwrap();
             let mut rng = rand::thread_rng();
             let _packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2403,7 +2451,7 @@ mod tests {
             })
             .collect();
 
-        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2);
+        let mut session = FeldmanVssSession::new(1, nodes.clone(), 2).unwrap();
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
@@ -2440,7 +2488,7 @@ mod tests {
         let mut all_packages: HashMap<ParticipantId, Vec<(ParticipantId, DkgSharePackage)>> = HashMap::new();
 
         for &node_id in &nodes {
-            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2);
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), 2).unwrap();
             let mut rng = rand::thread_rng();
             let packages = session.generate_shares(node_id, &mut rng).unwrap();
             all_packages.insert(node_id, packages);
@@ -2506,7 +2554,7 @@ mod tests {
         let mut all_packages: Vec<Vec<(ParticipantId, DkgSharePackage)>> = Vec::with_capacity(n);
 
         for i in 0..n {
-            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), t);
+            let mut session = FeldmanVssSession::new(session_id, nodes.clone(), t).unwrap();
             let packages = session.generate_shares(nodes[i], &mut rng).unwrap();
             sessions.push(session);
             all_packages.push(packages);
@@ -2595,7 +2643,7 @@ mod tests {
         let mut all_packages: Vec<Vec<(ParticipantId, DkgSharePackage)>> = Vec::with_capacity(n);
 
         for &node_id in nodes.iter() {
-            let mut session = FeldmanVssSession::new(1, nodes.clone(), t);
+            let mut session = FeldmanVssSession::new(1, nodes.clone(), t).unwrap();
             let packages = session.generate_shares(node_id, &mut rng).unwrap();
             assert_eq!(session.phase, DkgPhase::ShareDistribution);
 

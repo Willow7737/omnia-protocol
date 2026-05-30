@@ -131,7 +131,12 @@ impl PruningAwarePool {
         let slot = self.pool.insert(event)?;
 
         // Index the event for O(1) parent resolution
-        self.index.index_event(&creator, sequence, slot, event_id);
+        self.index.index_event(&creator, sequence, slot, event_id).map_err(|e| {
+            // If indexing fails (e.g., sequence too large), remove the event from the pool
+            // to maintain consistency, then convert to an appropriate error.
+            self.pool.remove(&event_id);
+            EventPoolError::InvalidEvent(format!("indexing failed: {}", e))
+        })?;
 
         Ok(slot)
     }

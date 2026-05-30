@@ -93,8 +93,8 @@ pub fn aes256gcm_decrypt_aad(
 
 /// Derive an AES-256 key from key material using HKDF-SHA256.
 ///
-/// Uses the first 16 bytes of `key_material` as the HKDF salt and the
-/// remaining 16 bytes as the input keying material (IKM). The `info`
+/// Uses a fixed domain-separated salt (`OMNIA-AES-KEY-DERIVATION`) and the
+/// full `key_material` as input keying material (IKM). The `info`
 /// parameter provides domain separation.
 ///
 /// # Errors
@@ -103,7 +103,12 @@ pub fn aes256gcm_decrypt_aad(
 /// never happen for a 32-byte output (the maximum output of HKDF-SHA256
 /// is 255 × 32 = 8160 bytes), but is handled for defensive programming.
 pub fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> Result<[u8; 32], AesGcmError> {
-    let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
+    // Use a fixed domain-separated salt instead of splitting the key material.
+    // Previously, the first 16 bytes were used as both salt and IKM (split),
+    // which meant related key material was used for both HKDF inputs.
+    // A fixed salt with domain separation ensures proper cryptographic hygiene.
+    let salt = b"OMNIA-AES-KEY-DERIVATION";
+    let hk = Hkdf::<Sha256>::new(Some(salt), key_material);
     let mut aes_key = [0u8; 32];
     hk.expand(info.as_bytes(), &mut aes_key)
         .map_err(|_| AesGcmError::InvalidKey)?;

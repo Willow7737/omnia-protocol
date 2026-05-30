@@ -41,6 +41,9 @@ real_verification = [
     "dep:ark-serialize",
     "dep:ark-snark",
 ]
+# Legacy XOR-based share encryption (v1) — deprecated, for backward compat only.
+# Enable only if you need to decrypt v1 shares. Use AES-256-GCM (v2) instead.
+legacy-xor-encryption = []
 
 [dependencies.ark-groth16]
 version = "0.4"

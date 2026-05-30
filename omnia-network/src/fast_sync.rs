@@ -28,6 +28,12 @@ use thiserror::Error;
 use crate::blake3_domain::blake3_hash_domain;
 use omnia_primitives::NodeId;
 
+/// Maximum number of rounds to request in a single GetEvents sync.
+const MAX_SYNC_ROUNDS: u64 = 10_000;
+
+/// Maximum allowed snapshot size (64 MiB).
+const MAX_SNAPSHOT_SIZE: usize = 64 * 1024 * 1024;
+
 /// Errors that can occur during fast sync.
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -296,6 +302,7 @@ impl FastSyncManager {
     /// [`SyncError::NoPeersAvailable`] if no peers have checkpoints,
     /// [`SyncError::IntegrityCheckFailed`] if the snapshot is corrupt,
     /// and other variants for protocol-level failures.
+    #[allow(unreachable_code)] // TODO: Remove when snapshot application is implemented
     pub async fn sync_to_latest(&self) -> Result<SyncResult, SyncError> {
         let network = self
             .network
@@ -324,6 +331,15 @@ impl FastSyncManager {
         // Step 5: Deserialize snapshot
         let _snapshot: SyncSnapshot = postcard::from_bytes(&snapshot_data)
             .map_err(|e| SyncError::Consensus(format!("Snapshot deserialization failed: {e}")))?;
+
+        // TODO: Apply snapshot to local state. This requires:
+        // 1. Replace local CausalGraph with snapshot.causal_graph_data
+        // 2. Reset ConsensusEngine state with snapshot.consensus_data
+        // 3. Apply delta events on top of the snapshot
+        // For now, return an error indicating this is not yet implemented.
+        return Err(SyncError::Consensus(
+            "Fast-sync snapshot application not yet implemented. Use full sync instead.".to_string()
+        ));
 
         // Step 6: Download and replay delta events
         let delta_events = self.download_delta_events(network, peer_id, target.round)?;
@@ -414,7 +430,16 @@ impl FastSyncManager {
                 checkpoint_hash: checkpoint.snapshot_hash,
             },
         ) {
-            Ok(SyncResponse::Snapshot(Some(data))) => Ok(data),
+            Ok(SyncResponse::Snapshot(Some(data))) => {
+                if data.len() > MAX_SNAPSHOT_SIZE {
+                    return Err(SyncError::Consensus(format!(
+                        "Snapshot size {} exceeds maximum {}",
+                        data.len(),
+                        MAX_SNAPSHOT_SIZE
+                    )));
+                }
+                Ok(data)
+            }
             Ok(SyncResponse::Snapshot(None)) => Err(SyncError::Network("Peer returned no snapshot data".to_string())),
             Ok(_) => Err(SyncError::Network("Unexpected response type".to_string())),
             Err(e) => Err(e),
@@ -428,11 +453,12 @@ impl FastSyncManager {
         peer_id: NodeId,
         from_round: u64,
     ) -> Result<Vec<Vec<u8>>, SyncError> {
+        let effective_to_round = from_round.saturating_add(MAX_SYNC_ROUNDS);
         match network.send_request(
             peer_id,
             SyncRequest::GetEvents {
                 from_round,
-                to_round: u64::MAX,
+                to_round: effective_to_round,
             },
         ) {
             Ok(SyncResponse::Events(events)) => Ok(events),
@@ -751,12 +777,17 @@ mod tests {
         let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
         let result = manager.sync_to_latest().await;
-        assert!(result.is_ok(), "Full sync loop should succeed");
-
-        let sync_result = result.unwrap();
-        assert_eq!(sync_result.synced_to_round, 500);
-        assert_eq!(sync_result.events_replayed, 2);
-        assert_eq!(sync_result.snapshot_hash, checkpoint.snapshot_hash);
+        // Snapshot application is not yet implemented, so sync should return an error
+        assert!(result.is_err(), "Full sync loop should fail until snapshot application is implemented");
+        match result.unwrap_err() {
+            SyncError::Consensus(msg) => {
+                assert!(
+                    msg.contains("not yet implemented"),
+                    "Expected 'not yet implemented' error, got: {msg}"
+                );
+            }
+            other => panic!("Expected SyncError::Consensus, got: {other}"),
+        }
     }
 
     #[tokio::test]
@@ -843,10 +874,11 @@ mod tests {
 
         let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
 
+        // Snapshot application is not yet implemented, so try_sync_or_fallback
+        // will catch the Consensus error and return a zero result.
         let result = manager.try_sync_or_fallback().await;
-        assert_eq!(result.synced_to_round, 300);
-        assert_eq!(result.events_replayed, 1);
-        assert_eq!(result.snapshot_hash, checkpoint.snapshot_hash);
+        assert_eq!(result.synced_to_round, 0);
+        assert_eq!(result.events_replayed, 0);
     }
 
     #[tokio::test]

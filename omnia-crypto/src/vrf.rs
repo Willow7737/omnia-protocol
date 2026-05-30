@@ -251,8 +251,12 @@ pub fn select_leader(
     round_seed: &[u8],
     round_number: u64,
 ) -> Result<NodeId, DeterministicHashError> {
-    // Filter out zero-stake candidates
-    let valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
+    // Filter out zero-stake candidates and sort by NodeId for deterministic order.
+    // HashMap::iter() has non-deterministic order, which would cause different
+    // nodes to select different leaders for the same input. Sorting by NodeId
+    // ensures all nodes walk candidates in the same order.
+    let mut valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
+    valid_candidates.sort_by(|a, b| a.0.cmp(b.0));
 
     if valid_candidates.is_empty() {
         return Err(DeterministicHashError::NoCandidates(round_number));
@@ -421,8 +425,10 @@ pub fn ecdsa_verify(
     // Step 2: Recompute the Fiat-Shamir challenge
     let c_prime = proof_hash_challenge(public_key, &h_point, &proof.gamma);
 
-    // Step 3: Verify the challenge matches
-    if c_prime != proof.c {
+    // Step 3: Verify the challenge matches (constant-time comparison)
+    // Using constant-time comparison prevents timing side-channel attacks
+    // that could leak information about the challenge value.
+    if c_prime.ct_ne(&proof.c).into() {
         return Err(DeterministicHashError::VerificationFailed(
             "Challenge mismatch: proof is invalid".to_string(),
         ));
@@ -471,6 +477,27 @@ fn proof_hash_to_curve(alpha_string: &[u8], public_key: &ed25519_dalek::Verifyin
 ///
 /// Derived deterministically from the secret key and the hash-to-curve
 /// point. Cannot be computed without knowledge of the secret key.
+///
+/// # Security Note: Inclusion of Secret Key in Gamma Computation
+///
+/// This function includes the raw secret key bytes in the BLAKE3 hash
+/// input alongside the hash-to-curve point. This is **non-standard** compared
+/// to ECVRF constructions (e.g., RFC 9381), which compute gamma as
+/// `gamma = sk * H` (a curve point multiplication) rather than hashing
+/// the secret key directly. The current construction has these implications:
+///
+/// - **No uniqueness guarantee**: A malicious prover who knows the secret key
+///   could potentially construct alternative gamma values (though ed25519-dalek
+///   produces deterministic signatures, so this is not an issue for honest
+///   participants).
+/// - **Secret key exposure risk**: If the gamma output were ever correlated
+///   with the hash input through a side channel, the secret key could be
+///   recovered. BLAKE3's one-way property mitigates this, but it's an
+///   additional attack surface compared to standard VRF constructions.
+/// - **Consensus compatibility**: Changing this construction would break
+///   consensus compatibility with existing proofs, so it is retained for
+///   backward compatibility. A future V3 construction should use
+///   `gamma = sk * H` instead.
 fn proof_compute_gamma(secret_key: &ed25519_dalek::SigningKey, h_point: &[u8; 32]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"OMNIA-ECVRF-GAMMA-V2");
@@ -517,8 +544,12 @@ pub fn select_leader_v2(
     round_number: u64,
     hash_version: HashVersion,
 ) -> Result<NodeId, DeterministicHashError> {
-    // Filter out zero-stake candidates
-    let valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
+    // Filter out zero-stake candidates and sort by NodeId for deterministic order.
+    // HashMap::iter() has non-deterministic order, which would cause different
+    // nodes to select different leaders for the same input. Sorting by NodeId
+    // ensures all nodes walk candidates in the same order.
+    let mut valid_candidates: Vec<_> = candidates.iter().filter(|(_, (_, stake))| *stake > 0).collect();
+    valid_candidates.sort_by(|a, b| a.0.cmp(b.0));
 
     if valid_candidates.is_empty() {
         return Err(DeterministicHashError::NoCandidates(round_number));

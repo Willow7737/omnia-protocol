@@ -136,17 +136,20 @@ pub fn deserialize_batch_message(data: &[u8]) -> Result<GossipBatchMessage, Goss
     })
 }
 
-/// Validate a batch gossip message.
+/// Validate a batch gossip message and return the serialized bytes.
 ///
 /// Performs the following checks:
 /// 1. Batch proof is valid
 /// 2. Serialized size does not exceed maximum
 /// 3. Event count matches the proof
 ///
+/// Returns the serialized bytes on success, avoiding redundant re-serialization
+/// by the caller.
+///
 /// # Errors
 ///
 /// Returns [`GossipBatchError`] if any validation check fails.
-pub fn validate_batch_message(msg: &GossipBatchMessage) -> Result<(), GossipBatchError> {
+pub fn validate_batch_message(msg: &GossipBatchMessage) -> Result<Vec<u8>, GossipBatchError> {
     match msg {
         GossipBatchMessage::Batch { batch } => {
             // Validate proof
@@ -154,7 +157,7 @@ pub fn validate_batch_message(msg: &GossipBatchMessage) -> Result<(), GossipBatc
                 .validate_proof()
                 .map_err(|e| GossipBatchError::ProofValidationFailed(e.to_string()))?;
 
-            // Check serialized size
+            // Check serialized size (serialize once, return the bytes)
             let serialized = serialize_batch_message(msg)?;
             if serialized.len() > MAX_BATCH_GOSSIP_SIZE {
                 return Err(GossipBatchError::BatchTooLarge {
@@ -163,11 +166,11 @@ pub fn validate_batch_message(msg: &GossipBatchMessage) -> Result<(), GossipBatc
                 });
             }
 
-            Ok(())
+            Ok(serialized)
         }
-        GossipBatchMessage::BatchAck { .. } => Ok(()),
-        GossipBatchMessage::BatchRequest { .. } => Ok(()),
-        GossipBatchMessage::BatchDigest { .. } => Ok(()),
+        GossipBatchMessage::BatchAck { .. } => Ok(serialize_batch_message(msg)?),
+        GossipBatchMessage::BatchRequest { .. } => Ok(serialize_batch_message(msg)?),
+        GossipBatchMessage::BatchDigest { .. } => Ok(serialize_batch_message(msg)?),
     }
 }
 
@@ -317,6 +320,10 @@ mod tests {
         let batch = test_batch();
         let msg = GossipBatchMessage::Batch { batch };
         assert!(validate_batch_message(&msg).is_ok());
+        // validate_batch_message now returns serialized bytes
+        let result = validate_batch_message(&msg);
+        assert!(result.is_ok());
+        assert!(!result.unwrap().is_empty());
     }
 
     #[test]
@@ -326,7 +333,8 @@ mod tests {
             merkle_root: [0u8; 32],
             event_count: 0,
         };
-        assert!(validate_batch_message(&msg).is_ok());
+        let result = validate_batch_message(&msg);
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -146,13 +146,14 @@ impl IdentityState {
                         document.id
                     )));
                 }
-                // Authorization: creator's public key must match the document's primary key
-                if let Some(caller) = caller_pubkey {
-                    if &document.public_key != caller {
-                        return Err(ShardError::ValidationFailed(
-                            "Unauthorized: creator public key must match DID document primary key".into(),
-                        ));
-                    }
+                // Authorization: caller's public key must match the document's primary key
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for CreateDid".into())
+                )?;
+                if &document.public_key != caller {
+                    return Err(ShardError::ValidationFailed(
+                        "Only the DID owner can create their DID".into(),
+                    ));
                 }
                 self.dids.insert(document.id.clone(), document.clone());
                 Ok(())
@@ -164,12 +165,13 @@ impl IdentityState {
                     .ok_or_else(|| ShardError::ValidationFailed(format!("DID not found: {did}")))?;
 
                 // Authorization check: caller must be in the document's authentication set
-                if let Some(caller) = caller_pubkey {
-                    if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed(
-                            "Unauthorized: caller not in authentication set".into(),
-                        ));
-                    }
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for UpdateDid".into())
+                )?;
+                if !doc.authentication.iter().any(|key| key == caller) {
+                    return Err(ShardError::ValidationFailed(
+                        "Unauthorized: caller not in authentication set".into(),
+                    ));
                 }
 
                 for update in updates {
@@ -225,13 +227,14 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("Owner DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                if let Some(caller) = caller_pubkey {
-                    let doc = self.dids.get(did).expect("checked above");
-                    if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed(
-                            "Unauthorized: caller not in authentication set for AddAgent".into(),
-                        ));
-                    }
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for AddAgent".into())
+                )?;
+                let doc = self.dids.get(did).expect("checked above");
+                if !doc.authentication.iter().any(|key| key == caller) {
+                    return Err(ShardError::ValidationFailed(
+                        "Unauthorized: caller not in authentication set for AddAgent".into(),
+                    ));
                 }
                 if self.agent_registry.contains_key(&agent.did) {
                     return Err(ShardError::StateConflict(format!(
@@ -251,13 +254,14 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                if let Some(caller) = caller_pubkey {
-                    let doc = self.dids.get(did).expect("checked above");
-                    if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed(
-                            "Unauthorized: caller not in authentication set for EnrollBiometric".into(),
-                        ));
-                    }
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for EnrollBiometric".into())
+                )?;
+                let doc = self.dids.get(did).expect("checked above");
+                if !doc.authentication.iter().any(|key| key == caller) {
+                    return Err(ShardError::ValidationFailed(
+                        "Unauthorized: caller not in authentication set for EnrollBiometric".into(),
+                    ));
                 }
                 let anchor = BiometricAnchor::enroll(template, algorithm);
                 self.biometric_registry.insert(did.clone(), anchor);
@@ -274,10 +278,24 @@ impl IdentityState {
                 Ok(())
             }
             IdentityOp::RevokeAgent { agent_did } => {
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for RevokeAgent".into())
+                )?;
                 let agent = self
                     .agent_registry
-                    .get_mut(agent_did)
+                    .get(agent_did)
                     .ok_or_else(|| ShardError::ValidationFailed(format!("Agent not found: {agent_did}")))?;
+                // The caller must be the DID that created this agent (owner)
+                // Look up the owner DID and verify caller is in its authentication set
+                let owner_did = &agent.owner_did;
+                let owner_doc = self.dids.get(owner_did)
+                    .ok_or_else(|| ShardError::ValidationFailed(format!("Owner DID not found: {owner_did}")))?;
+                if !owner_doc.authentication.iter().any(|key| key == caller) {
+                    return Err(ShardError::ValidationFailed(
+                        "Only the agent owner can revoke".into(),
+                    ));
+                }
+                let agent = self.agent_registry.get_mut(agent_did).unwrap();
                 agent.revoke();
                 Ok(())
             }
@@ -291,13 +309,14 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
                 // Authorization: caller must be in the DID's authentication set
-                if let Some(caller) = caller_pubkey {
-                    let doc = self.dids.get(did).expect("checked above");
-                    if !doc.authentication.iter().any(|key| key == caller) {
-                        return Err(ShardError::ValidationFailed(
-                            "Unauthorized: caller not in authentication set for ConfigureRecovery".into(),
-                        ));
-                    }
+                let caller = caller_pubkey.ok_or_else(||
+                    ShardError::ValidationFailed("Authorization required: caller_pubkey must be provided for ConfigureRecovery".into())
+                )?;
+                let doc = self.dids.get(did).expect("checked above");
+                if !doc.authentication.iter().any(|key| key == caller) {
+                    return Err(ShardError::ValidationFailed(
+                        "Unauthorized: caller not in authentication set for ConfigureRecovery".into(),
+                    ));
                 }
                 let shares = ShamirRecovery::split(secret, *threshold, *total_shares)
                     .map_err(|e| ShardError::ValidationFailed(format!("Recovery split failed: {e}")))?;
@@ -481,8 +500,10 @@ impl IdentityState {
 
         for enc in encrypted_shares {
             let plaintext = match enc.version {
+                #[cfg(feature = "legacy-xor-encryption")]
                 1 => {
                     // Legacy XOR decryption (backward compatibility)
+                    // Only available when the `legacy-xor-encryption` feature is enabled.
                     tracing::warn!(
                         "Decrypting legacy v1 XOR share for custodian {} - upgrade recommended",
                         enc.custodian
@@ -492,6 +513,13 @@ impl IdentityState {
                     key_input.push(enc.custodian);
                     let key = blake3::derive_key("OMNIA-SHARE-ENCRYPTION-KEY", &key_input);
                     xor_with_key(&enc.ciphertext, &key)
+                }
+                #[cfg(not(feature = "legacy-xor-encryption"))]
+                1 => {
+                    return Err(ShardError::ValidationFailed(
+                        "Legacy v1 XOR decryption requires the 'legacy-xor-encryption' feature flag. \
+                         Re-encrypt shares with v2 (AES-256-GCM) to decrypt without this flag.".into(),
+                    ));
                 }
                 2 => {
                     // AES-256-GCM decryption
@@ -540,8 +568,12 @@ impl Default for IdentityState {
 ///
 /// This is a simple stream cipher used for legacy v1 share encryption.
 /// XOR is its own inverse, so the same function is used
-/// for both encryption and decryption. Retained for backward compatibility
-/// with v1 encrypted shares.
+/// for both encryption and decryption.
+///
+/// **DEPRECATED**: This function is gated behind the `legacy-xor-encryption`
+/// feature flag. XOR encryption does not provide authenticated encryption
+/// and is vulnerable to known-plaintext attacks. Use AES-256-GCM (v2) instead.
+#[cfg(feature = "legacy-xor-encryption")]
 fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
     data.iter().enumerate().map(|(i, byte)| byte ^ key[i % 32]).collect()
 }
@@ -613,7 +645,7 @@ mod tests {
         let did = "did:omnia:abcd1234".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
             .unwrap();
 
         // Step 2: Configure recovery with 5 custodians, threshold=3
@@ -627,7 +659,7 @@ mod tests {
                     total_shares: 5,
                 },
                 &vc,
-                None,
+                Some(&original_pk),
             )
             .unwrap();
 
@@ -808,6 +840,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "legacy-xor-encryption")]
     fn test_share_v1_backward_compat() {
         let mut state = IdentityState::new();
         let did = "did:omnia:v1-compat".to_string();
@@ -881,7 +914,7 @@ mod tests {
         let did = "did:omnia:recovery-auth-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
             .unwrap();
 
         // Configure recovery with 5 custodians, threshold=3
@@ -895,7 +928,7 @@ mod tests {
                     total_shares: 5,
                 },
                 &vc,
-                None,
+                Some(&original_pk),
             )
             .unwrap();
 
@@ -943,7 +976,7 @@ mod tests {
         let did = "did:omnia:replay-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
-            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
             .unwrap();
 
         let secret = b"replay-prevention-secret";
@@ -956,7 +989,7 @@ mod tests {
                     total_shares: 3,
                 },
                 &vc,
-                None,
+                Some(&original_pk),
             )
             .unwrap();
 

@@ -235,11 +235,6 @@ impl ShardRouter {
         }
         self.last_nonces.insert(creator, payload.nonce);
 
-        // Persist nonce state (best-effort, log on failure)
-        if let Err(e) = self.nonce_store.save(&self.last_nonces) {
-            tracing::warn!("Failed to persist nonce state: {}", e);
-        }
-
         // Fee enforcement — deduct before routing
         let fee = self.fee_schedule.fee_for_op(&payload.operation);
         if fee > 0 {
@@ -255,7 +250,16 @@ impl ShardRouter {
             })?;
         }
 
-        self.route(event, payload.operation)
+        let result = self.route(event, payload.operation);
+
+        // Only persist nonce if operation succeeded
+        if result.is_ok() {
+            if let Err(e) = self.nonce_store.save_incremental(&creator, payload.nonce) {
+                tracing::warn!("Failed to persist nonce for creator: {}", e);
+            }
+        }
+
+        result
     }
 
     /// Get a reference to a registered shard by ID.

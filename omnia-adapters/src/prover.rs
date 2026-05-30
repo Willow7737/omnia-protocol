@@ -298,17 +298,18 @@ pub fn verify_multiple(vk: &VerifyingKey, proof_pairs: &[(Proof, Vec<ark_bn254::
         }
     }
 
-    // Generate random scalars using BLAKE3
+    // Generate random scalars using BLAKE3 for domain-separated randomness.
+    // Note: OsRng is NOT used here because these scalars are currently unused
+    // (individual verification is performed instead of true batch pairing
+    // checks). When proper batch verification is implemented, the randomness
+    // must be derived deterministically from the transcript to ensure
+    // verification is reproducible.
     let random_scalars: Vec<ark_bn254::Fr> = (0..proof_pairs.len())
         .map(|i| {
             let mut hasher = blake3::Hasher::new();
             hasher.update(b"OMNIA-BATCH-VRFY-V1");
             hasher.update(&transcript);
             hasher.update(&i.to_le_bytes());
-            // Add some OS randomness for true unpredictability
-            let mut rand_bytes = [0u8; 32];
-            rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut rand_bytes);
-            hasher.update(&rand_bytes);
             let hash = hasher.finalize();
             ark_bn254::Fr::from_be_bytes_mod_order(hash.as_bytes())
         })
@@ -365,10 +366,12 @@ mod tests {
             old[0] = i;
             let mut new = [0u8; 32];
             new[0] = i + 1;
-            let circuit = RollupCircuit::from_state_roots(old, new, 5);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let pub_input = circuit
+                .public_input()
+                .expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
-            let public_inputs = vec![Fr::from_be_bytes_mod_order(&new)];
-            proof_pairs.push((proof, public_inputs));
+            proof_pairs.push((proof, pub_input));
         }
 
         let result = verify_multiple(&vk, &proof_pairs).expect("batch verify failed");
@@ -388,10 +391,12 @@ mod tests {
             old[0] = i;
             let mut new = [0u8; 32];
             new[0] = i + 1;
-            let circuit = RollupCircuit::from_state_roots(old, new, 5);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let pub_input = circuit
+                .public_input()
+                .expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
-            let public_inputs = vec![Fr::from_be_bytes_mod_order(&new)];
-            proof_pairs.push((proof, public_inputs));
+            proof_pairs.push((proof, pub_input));
         }
 
         // 1 invalid proof (wrong public input)
@@ -399,9 +404,9 @@ mod tests {
         old[0] = 7;
         let mut new = [0u8; 32];
         new[0] = 8;
-        let circuit = RollupCircuit::from_state_roots(old, new, 5);
+        let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
         let proof = create_proof(circuit, &pk).expect("proof failed");
-        let wrong_public_inputs = vec![Fr::from(99999u64)]; // Wrong!
+        let wrong_public_inputs = vec![Fr::from(99999u64), Fr::from(99998u64)]; // Wrong!
         proof_pairs.push((proof, wrong_public_inputs));
 
         let result = verify_multiple(&vk, &proof_pairs).expect("batch verify failed");

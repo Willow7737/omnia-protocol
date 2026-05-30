@@ -167,7 +167,7 @@ pub fn build_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Blake3MerkleProof
     // Build the tree once, storing all levels from leaves to root.
     // This avoids the O(n²) behavior of rebuilding the tree for every proof.
     let mut levels: Vec<Vec<[u8; 32]>> = Vec::new();
-    let mut level = leaves.clone();
+    let mut level = leaves;
     levels.push(level.clone());
     while level.len() > 1 {
         let mut next_level = Vec::new();
@@ -319,7 +319,7 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
     // Build the tree once, storing all levels from leaves to root.
     // This avoids the O(n²) behavior of rebuilding the tree for every proof.
     let mut levels: Vec<Vec<Fr>> = Vec::new();
-    let mut level = leaves.clone();
+    let mut level = leaves;
     levels.push(level.clone());
     while level.len() > 1 {
         let mut next_level = Vec::new();

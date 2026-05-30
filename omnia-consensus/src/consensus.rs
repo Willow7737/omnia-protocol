@@ -34,9 +34,15 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 /// Supermajority threshold (>2/3)
-/// For N nodes, we need 2*N/3 + 1 for Byzantine fault tolerance
+/// For N nodes, we need 2*N/3 + 1 for Byzantine fault tolerance.
+/// For N < 4, require unanimity since the formula produces degenerate results
+/// (e.g., N=1 → 1, N=2 → 2, N=3 → 3 — none tolerate even 1 Byzantine node).
 fn supermajority(total_nodes: usize) -> usize {
-    (2 * total_nodes) / 3 + 1
+    if total_nodes < 4 {
+        total_nodes // Require unanimity for small validator sets
+    } else {
+        (2 * total_nodes) / 3 + 1
+    }
 }
 
 /// Produce a deterministic random bit (coin round) using BLAKE3.
@@ -220,6 +226,8 @@ pub enum ConsensusState {
     Famous,
     /// Event is committed (final)
     Committed,
+    /// Event was rejected from consensus (e.g., equivocation)
+    Rejected,
 }
 
 /// Information about a node's participation in consensus
@@ -306,6 +314,15 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             panic!("ConsensusConfig.round_seed must not be all zeros in debug builds");
         }
 
+        // Warn if total_nodes < 4 — BFT safety is not guaranteed
+        if config.total_nodes < 4 {
+            tracing::warn!(
+                total_nodes = config.total_nodes,
+                "ConsensusConfig.total_nodes < 4: Byzantine fault tolerance requires at least 4 validators. \
+                 Unanimity will be required for all decisions."
+            );
+        }
+
         Self {
             config,
             event_states: HashMap::new(),
@@ -365,6 +382,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
 
         // Check for equivocation — same creator + sequence, different EventId
         let seq_key = (creator, event.sequence);
+        let mut is_equivocation = false;
         if let Some(&first_id) = self.first_event_for_sequence.get(&seq_key) {
             // We've seen this (creator, sequence) before — check for equivocation
             if first_id != event_id {
@@ -381,6 +399,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                 outcome = ?outcome,
                                 "Equivocation detected — multiple events with same creator+sequence"
                             );
+                            is_equivocation = true;
                         }
                     }
                     Err(crate::causal_graph::CausalGraphError::EventPruned(_)) => {
@@ -400,6 +419,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                     outcome = ?outcome,
                                     "Equivocation detected (pruned first event) — multiple events with same creator+sequence"
                                 );
+                                is_equivocation = true;
                             }
                         }
                     }
@@ -411,6 +431,12 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             }
         } else {
             self.first_event_for_sequence.insert(seq_key, event_id);
+        }
+
+        // Reject equivocating events from entering consensus
+        if is_equivocation {
+            self.event_states.insert(event_id, ConsensusState::Rejected);
+            return Err(ConsensusError::EquivocationDetected { creator, event_id });
         }
 
         // Periodic cleanup of first_event_for_sequence to prevent unbounded growth
@@ -626,9 +652,14 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     }
 
     /// Check for optimistic confirmation (fast path)
+    ///
+    /// Only transitions to Acknowledged if the current state is Pending.
+    /// This prevents overwriting higher states like Witness, Famous, or Committed.
     fn check_optimistic_confirmation(&mut self, event: &Event) {
         if event.ack_count >= self.config.optimistic_threshold {
-            self.event_states.insert(event.id, ConsensusState::Acknowledged);
+            if let Some(ConsensusState::Pending) = self.event_states.get(&event.id) {
+                self.event_states.insert(event.id, ConsensusState::Acknowledged);
+            }
         }
     }
 
@@ -1000,6 +1031,11 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             );
         }
 
+        // C-04: Prune round_witnesses entries for rounds older than cutoff
+        // to prevent unbounded growth.
+        let min_retained_round = current_round.saturating_sub(threshold);
+        self.round_witnesses.retain(|&round, _| round > min_retained_round);
+
         removed
     }
 
@@ -1254,6 +1290,14 @@ pub enum ConsensusError {
     #[error("Node has been slashed: {0:?}")]
     /// The node has been slashed and its events are rejected
     NodeSlashed(NodeId),
+    /// Equivocation was detected — the event is rejected from consensus.
+    #[error("Equivocation detected from node {creator:?} for event {event_id:?}")]
+    EquivocationDetected {
+        /// The node that equivocated.
+        creator: NodeId,
+        /// The event ID of the equivocating event.
+        event_id: EventId,
+    },
     /// Failed to obtain entropy for random seed generation.
     #[error("entropy generation failed: {0}")]
     EntropyFailed(String),

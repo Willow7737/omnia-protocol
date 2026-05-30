@@ -105,19 +105,18 @@ impl BloomFilter {
     ///
     /// Each hash function i is: blake3(item || i as u64_le) mod num_bits
     /// This derives k independent hash functions from a single hash function.
-    fn hash_offsets(&self, item: &[u8]) -> Vec<usize> {
-        let mut offsets = Vec::with_capacity(self.num_hashes);
-        for i in 0u64..self.num_hashes as u64 {
-            // Hash: blake3(item || i_le_bytes)
+    fn hash_offsets(&self, item: &[u8]) -> [usize; 32] {
+        let mut offsets = [0usize; 32];
+        for (i, offset) in offsets.iter_mut().enumerate().take(self.num_hashes) {
             let mut hasher = blake3::Hasher::new();
             hasher.update(item);
-            hasher.update(&i.to_le_bytes());
+            hasher.update(&(i as u64).to_le_bytes());
             let hash = hasher.finalize();
             // Use the first 8 bytes as a u64 and mod by num_bits
             let mut hash_bytes = [0u8; 8];
             hash_bytes.copy_from_slice(&hash.as_bytes()[..8]);
             let hash_val = u64::from_le_bytes(hash_bytes);
-            offsets.push((hash_val % self.num_bits as u64) as usize);
+            *offset = (hash_val % self.num_bits as u64) as usize;
         }
         offsets
     }

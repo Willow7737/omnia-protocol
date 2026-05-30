@@ -179,13 +179,13 @@ async fn handle_generic_shard_op(
         operation = %body.operation,
         "Generic shard operation — not yet fully implemented"
     );
-    Ok((
-        StatusCode::OK,
+    Err((
+        StatusCode::NOT_IMPLEMENTED,
         Json(json!({
-            "status": "accepted",
+            "status": "not_implemented",
             "shard_id": shard_id,
             "operation": body.operation,
-            "note": "Shard operation accepted but full routing not yet implemented for this shard type",
+            "message": format!("Shard '{}' operations are not yet fully implemented. Use the economics shard for active operations.", shard_id),
         })),
     ))
 }

@@ -792,7 +792,13 @@ impl CausalGraph {
     /// Returns an empty vector if the event has been pruned or does not
     /// exist. Use [`Self::get_checked()`] first if you need to distinguish
     /// these cases.
-    pub fn find_concurrent(&self, event_id: &EventId) -> Vec<&Event> {
+    ///
+    /// # Arguments
+    ///
+    /// * `event_id` — The ID of the event to find concurrent events for.
+    /// * `max_results` — Maximum number of concurrent events to return.
+    ///   This bounds the O(n) scan to avoid unbounded work on large graphs.
+    pub fn find_concurrent(&self, event_id: &EventId, max_results: usize) -> Vec<&Event> {
         let Ok(event) = self.get_checked(event_id) else {
             // Event was pruned or never existed — no concurrent events to report.
             return Vec::new();
@@ -801,6 +807,7 @@ impl CausalGraph {
         self.events
             .values()
             .filter(|other| other.id != *event_id && other.vector_clock.concurrent(&event.vector_clock))
+            .take(max_results)
             .collect()
     }
 
@@ -1537,7 +1544,7 @@ mod tests {
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
-        let concurrent = graph.find_concurrent(&e1_id);
+        let concurrent = graph.find_concurrent(&e1_id, 100);
         assert!(concurrent.iter().any(|e| e.id == e2_id));
     }
 

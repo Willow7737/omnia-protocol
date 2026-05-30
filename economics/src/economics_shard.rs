@@ -141,6 +141,13 @@ impl EconomicsState {
     ) -> Result<(), EconomicsError> {
         match op {
             EconomicsOp::MintUbc { did, amount } => {
+                if !self.admin_keys.is_empty() {
+                    // Admin authorization required for minting
+                    return Err(EconomicsError::Unauthorized(
+                        "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into()
+                    ));
+                }
+                // Only allow minting when no admin keys are configured (testing mode)
                 if !self.quota.is_registered(did) {
                     self.quota.register_did(did);
                 }
@@ -151,14 +158,16 @@ impl EconomicsState {
                 // Gate work submission: only authorized submitters can mint UBC
                 // Until real ZK verification is implemented, require admin authorization
                 // when admin_keys is configured.
-                if !self.admin_keys.is_empty() {
+                if self.admin_keys.is_empty() {
+                    // When no admin keys configured, log a warning but allow (testing mode)
+                    tracing::warn!("SubmitWork accepted without admin verification - configure admin_keys for production");
+                } else {
+                    // Admin verification required
                     let submitter = event_creator.ok_or_else(|| {
                         EconomicsError::ValidationFailed("SubmitWork requires authenticated event creator".into())
                     })?;
                     if !self.is_admin(submitter) {
-                        return Err(EconomicsError::ValidationFailed(
-                            "SubmitWork is currently restricted to admin keys until real ZK verification is implemented".into(),
-                        ));
+                        return Err(EconomicsError::Unauthorized("Only admins can submit work".into()));
                     }
                 }
                 proof.validate()?;
@@ -219,6 +228,8 @@ impl EconomicsState {
         }
         let version = bytes[0];
         if version != Self::ECONOMICS_STATE_VERSION {
+            // FIXME: postcard doesn't support custom error types.
+            // Consider wrapping in a custom error type that can carry the version number.
             return Err(postcard::Error::DeserializeUnexpectedEnd);
         }
         postcard::from_bytes(&bytes[1..])

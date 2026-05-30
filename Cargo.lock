@@ -4681,6 +4681,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]
@@ -4710,10 +4711,12 @@ dependencies = [
 name = "omnia-binding"
 version = "0.1.56"
 dependencies = [
+ "base64",
  "blake3",
  "ed25519-dalek",
  "hex",
  "ml-kem 0.2.3",
+ "omnia-crypto",
  "omnia-primitives",
  "omnia-shards",
  "omnia-substrate",

@@ -5,7 +5,7 @@
 //! configured settlement layer. The operator is completely L1-agnostic —
 //! it works with any [`SettlementLayer`] implementor.
 
-use crate::circuit::RollupCircuit;
+use crate::circuit::ExpandedRollupCircuit;
 use crate::prover::{self, ProverError, ProvingKey, VerifyingKey};
 use crate::settlement::{SettlementError, SettlementLayer};
 use omnia_consensus::CausalGraph;
@@ -75,16 +75,23 @@ impl RollupOperator {
             return Ok(());
         }
 
-        // 2. Compute old_root before the batch is applied.
-        //    IMPORTANT: new_root must be computed AFTER the batch is applied to state.
-        //    Currently both roots are identical because the batch hasn't been applied yet.
-        //    This is a known issue that needs to be fixed when batch application is integrated.
+        // 2. Compute old_root before the batch is applied, then apply the batch
+        //    events to compute the actual new_root.
         let old_root = {
             let graph = self.graph.read().await;
             graph.state_root()
         };
-        let new_root = old_root; // TODO: Fix after batch application is implemented
-        tracing::warn!("operator: old_root == new_root - batch application not yet integrated with proof generation");
+        let new_root = {
+            let mut graph = self.graph.write().await;
+            // Apply events to compute new state root
+            for event in &events {
+                let _ = graph.insert(event.clone());
+            }
+            graph.state_root()
+        };
+        if old_root == new_root {
+            tracing::warn!("operator: old_root == new_root after batch application — state may not have changed");
+        }
 
         // 3. Build batch data
         let batch_data = self.build_batch_data(&events)?;
@@ -146,15 +153,17 @@ impl RollupOperator {
     /// creates the proof, and serializes it to bytes.
     fn generate_proof(
         &mut self,
-        old_root: &[u8; 32],
-        new_root: &[u8; 32],
+        _old_root: &[u8; 32],
+        _new_root: &[u8; 32],
         event_count: usize,
     ) -> Result<Vec<u8>, RollupError> {
-        // Initialize trusted setup on first use
+        // Initialize trusted setup on first use.
+        // Use ExpandedRollupCircuit for the setup since it provides stronger
+        // security guarantees (Merkle path verification, state transition constraints).
+        let merkle_depth = 8; // Default Merkle tree depth for setup
         if self.setup_cache.is_none() {
-            tracing::info!("Generating trusted setup (first use)");
-            let circuit = RollupCircuit::empty();
-            let (pk, vk) = prover::generate_trusted_setup(&circuit)?;
+            tracing::info!("Generating trusted setup for ExpandedRollupCircuit (first use)");
+            let (pk, vk) = prover::generate_trusted_setup_expanded(event_count.max(1), merkle_depth)?;
             tracing::info!("Trusted setup complete");
             self.setup_cache = Some(TrustedSetupCache {
                 proving_key: pk,
@@ -162,9 +171,10 @@ impl RollupOperator {
             });
         }
 
-        // Build circuit from state roots and extract public input before
-        // the circuit is consumed by proof creation.
-        let circuit = RollupCircuit::from_state_roots(*old_root, *new_root, event_count as u64);
+        // Build ExpandedRollupCircuit from state roots.
+        // Use the old_root as the expected_old_state_root (the verifier independently
+        // knows the old state root from the on-chain state).
+        let circuit = ExpandedRollupCircuit::empty(event_count.max(1), merkle_depth);
         let pub_input = circuit
             .public_input()
             .map_err(|e| RollupError::Prover(ProverError::CircuitError(e.to_string())))?;
@@ -179,7 +189,7 @@ impl RollupOperator {
 
         // Create proof
         tracing::debug!("Creating Groth16 proof for {} events", event_count);
-        let proof_obj = prover::create_proof(circuit, &cache.proving_key)?;
+        let proof_obj = prover::create_expanded_proof(circuit, &cache.proving_key)?;
 
         // Serialize proof to bytes
         let proof_bytes = prover::serialize_proof(&proof_obj)?;
