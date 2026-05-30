@@ -98,7 +98,7 @@ fn test_full_identity_lifecycle() {
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
     state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&pubkey))
         .unwrap();
 
     // 2. Enroll biometric
@@ -110,7 +110,7 @@ fn test_full_identity_lifecycle() {
                 algorithm: "fingerprint_v2".to_string(),
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
     assert!(state.verify_biometric(&did, b"fingerprint_data").unwrap());
@@ -148,7 +148,7 @@ fn test_full_identity_lifecycle() {
                 agent_did: "did:omnia:agent1".to_string(),
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
     let agent = state.agent_registry.get("did:omnia:agent1").unwrap();
@@ -165,7 +165,7 @@ fn test_biometric_verification_via_apply() {
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
     state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&pubkey))
         .unwrap();
 
     // Enroll
@@ -177,7 +177,7 @@ fn test_biometric_verification_via_apply() {
                 algorithm: "iris_v3".to_string(),
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
 
@@ -214,7 +214,7 @@ fn test_configure_recovery_via_apply() {
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
     state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&pubkey))
         .unwrap();
 
     // Configure recovery
@@ -227,7 +227,7 @@ fn test_configure_recovery_via_apply() {
                 total_shares: 5,
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
 
@@ -248,7 +248,7 @@ fn test_agent_revocation_disables_capabilities() {
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
     state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&pubkey))
         .unwrap();
 
     let agent = AgentIdentity {
@@ -269,7 +269,7 @@ fn test_agent_revocation_disables_capabilities() {
                 agent,
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
 
@@ -284,7 +284,7 @@ fn test_agent_revocation_disables_capabilities() {
                 agent_did: "did:omnia:agent:compute1".to_string(),
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
 
@@ -304,7 +304,7 @@ fn test_duplicate_agent_rejected() {
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
     state
-        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&pubkey))
         .unwrap();
 
     let agent1 = AgentIdentity {
@@ -323,7 +323,7 @@ fn test_duplicate_agent_rejected() {
                 agent: agent1,
             },
             &vc,
-            None,
+            Some(&pubkey),
         )
         .unwrap();
 
@@ -343,7 +343,7 @@ fn test_duplicate_agent_rejected() {
             agent: agent2,
         },
         &vc,
-        None,
+        Some(&pubkey),
     );
     assert!(result.is_err());
 }

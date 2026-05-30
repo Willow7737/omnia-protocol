@@ -125,7 +125,7 @@ impl PeerScoreTracker {
     /// Update a peer's score directly.
     ///
     /// Also prunes lowest-scored peers when the tracker exceeds
-    /// [`MAX_PEER_SCORES`] entries.
+    /// `MAX_PEER_SCORES` entries.
     pub fn update_score(&mut self, peer_id: &PeerId, score: f64) {
         self.scores.insert(*peer_id, score);
         self.prune_if_needed();
