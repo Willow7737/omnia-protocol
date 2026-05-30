@@ -60,7 +60,7 @@ impl ShardState for IdentityState {
     type Op = crate::identity::ops::IdentityOp;
 
     fn apply_op(&mut self, op: &Self::Op, event: &Event) -> Result<(), ShardError> {
-        self.apply(op, &event.vector_clock)
+        self.apply(op, &event.vector_clock, Some(&event.creator_pubkey))
     }
 
     fn snapshot(&self) -> Result<Vec<u8>, ShardError> {
@@ -114,10 +114,10 @@ impl ShardState for BiologicalState {
 impl ShardState for EconomicsState {
     type Op = omnia_economics::EconomicsOp;
 
-    fn apply_op(&mut self, op: &Self::Op, _event: &Event) -> Result<(), ShardError> {
-        // EconomicsState::apply takes (op, current_epoch).
-        // We use the state's tracked epoch.
-        self.apply(op, self.current_epoch())
+    fn apply_op(&mut self, op: &Self::Op, event: &Event) -> Result<(), ShardError> {
+        // EconomicsState::apply takes (op, current_epoch, event_creator).
+        // We use the state's tracked epoch and pass the event creator for admin gating.
+        self.apply(op, self.current_epoch(), Some(&event.creator_pubkey))
             .map_err(|e| ShardError::ValidationFailed(e.to_string()))
     }
 

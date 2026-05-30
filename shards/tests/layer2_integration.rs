@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 //! Integration test: Layer 2 wired into Layer 1
 //!
 //! Creates a Substrate with a ShardRouter, submits a financial/identity event,
@@ -35,17 +36,21 @@ async fn test_financial_shard_wired_into_substrate() {
     let mut substrate = Substrate::new(config);
 
     // 2. Create shard router with financial shard, shared via Arc<Mutex>
+    //    Set mint authority to the keypair's public key so minting works
+    let keypair = generate_keypair();
+    let account = keypair.verifying_key().to_bytes();
+
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
-    router.lock().unwrap().register(Box::new(FinancialShard::new()));
+    router
+        .lock()
+        .unwrap()
+        .register(Box::new(FinancialShard::with_mint_authority(account)));
 
     // 3. Attach router to substrate via MutexShardRouter
     let processor = MutexShardRouter::new(router.clone());
     substrate = substrate.with_shard_processor(Box::new(processor));
 
     // 4. Mint some tokens to an account
-    let keypair = generate_keypair();
-    let account = keypair.verifying_key().to_bytes();
-
     let mint_op = FinancialOp::Mint {
         to: account,
         amount: 1000,
@@ -56,7 +61,7 @@ async fn test_financial_shard_wired_into_substrate() {
         nonce: 1,
     };
 
-    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap());
+    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap()).expect("event creation should succeed");
     event.sign_with_keypair(&keypair);
 
     // 5. Submit event and run consensus
@@ -119,7 +124,7 @@ async fn test_identity_shard_wired_into_substrate() {
         nonce: 1,
     };
 
-    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap());
+    let mut event = Event::genesis(test_node(1), payload.to_bytes().unwrap()).expect("event creation should succeed");
     event.sign_with_keypair(&keypair);
 
     // 5. Submit event and run consensus

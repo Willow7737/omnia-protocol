@@ -22,6 +22,12 @@ pub enum ShamirError {
     /// Invalid share data provided.
     #[error("invalid share: {0}")]
     InvalidShare(String),
+    /// Invalid threshold parameter.
+    #[error("invalid threshold: {0}")]
+    InvalidThreshold(u8),
+    /// Invalid secret data provided.
+    #[error("invalid secret: {0}")]
+    InvalidSecret(String),
 }
 
 /// A single share in a Shamir secret sharing scheme.
@@ -40,13 +46,21 @@ impl ShamirRecovery {
     /// Split a secret into `total` shares, any `threshold` of which can
     /// reconstruct it.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `threshold < 2`, `threshold > total`, or `secret` is empty.
-    pub fn split(secret: &[u8], threshold: u8, total: u8) -> Vec<RecoveryShare> {
-        assert!(threshold >= 2, "threshold must be at least 2");
-        assert!(threshold <= total, "threshold cannot exceed total");
-        assert!(!secret.is_empty(), "secret cannot be empty");
+    /// Returns [`ShamirError::InvalidThreshold`] if `threshold < 2` or
+    /// `threshold > total`.
+    /// Returns [`ShamirError::InvalidSecret`] if `secret` is empty.
+    pub fn split(secret: &[u8], threshold: u8, total: u8) -> Result<Vec<RecoveryShare>, ShamirError> {
+        if threshold < 2 {
+            return Err(ShamirError::InvalidThreshold(threshold));
+        }
+        if threshold > total {
+            return Err(ShamirError::InvalidThreshold(threshold));
+        }
+        if secret.is_empty() {
+            return Err(ShamirError::InvalidSecret("secret cannot be empty".into()));
+        }
 
         let mut rng = rand::thread_rng();
 
@@ -78,17 +92,43 @@ impl ShamirRecovery {
                 value: share_value,
             });
         }
-        shares
+        Ok(shares)
     }
 
     /// Reconstruct the secret from at least `threshold` shares.
     ///
-    /// Returns an error if the shares list is empty or interpolation fails.
+    /// Returns an error if the shares list is empty, shares have
+    /// inconsistent lengths, duplicate indices are present, or
+    /// interpolation fails.
     pub fn reconstruct(shares: &[RecoveryShare]) -> Result<Vec<u8>, ShamirError> {
         if shares.is_empty() {
             return Err(ShamirError::InvalidShare("no shares provided".into()));
         }
         let secret_len = shares[0].value.len();
+
+        // Validate share consistency: all shares must have the same value length
+        for (i, share) in shares.iter().enumerate().skip(1) {
+            if share.value.len() != secret_len {
+                return Err(ShamirError::InvalidShare(format!(
+                    "inconsistent share lengths: share {} has {} bytes, expected {}",
+                    i,
+                    share.value.len(),
+                    secret_len
+                )));
+            }
+        }
+
+        // Check for duplicate indices
+        let mut seen_indices = std::collections::HashSet::new();
+        for share in shares {
+            if !seen_indices.insert(share.index) {
+                return Err(ShamirError::InvalidShare(format!(
+                    "duplicate share index: {}",
+                    share.index
+                )));
+            }
+        }
+
         let mut secret = Vec::with_capacity(secret_len);
 
         for byte_pos in 0..secret_len {
@@ -202,7 +242,7 @@ mod tests {
     #[test]
     fn test_split_and_reconstruct_threshold() {
         let secret = b"my super secret key";
-        let shares = ShamirRecovery::split(secret, 3, 5);
+        let shares = ShamirRecovery::split(secret, 3, 5).unwrap();
         assert_eq!(shares.len(), 5);
 
         // Reconstruct with exactly threshold shares
@@ -221,7 +261,7 @@ mod tests {
     #[test]
     fn test_insufficient_shares_reveal_nothing() {
         let secret = b"my super secret key";
-        let shares = ShamirRecovery::split(secret, 3, 5);
+        let shares = ShamirRecovery::split(secret, 3, 5).unwrap();
 
         // With fewer than threshold shares, reconstruction should produce
         // different data (not the secret)
@@ -233,10 +273,35 @@ mod tests {
     #[test]
     fn test_single_byte_secret() {
         let secret = b"\x42";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
 
         let reconstructed = ShamirRecovery::reconstruct(&shares[0..2]).unwrap();
         assert_eq!(reconstructed, secret);
+    }
+
+    #[test]
+    fn test_split_invalid_threshold() {
+        let secret = b"test";
+
+        // threshold < 2
+        assert!(ShamirRecovery::split(secret, 1, 3).is_err());
+
+        // threshold > total
+        assert!(ShamirRecovery::split(secret, 5, 3).is_err());
+    }
+
+    #[test]
+    fn test_split_empty_secret() {
+        assert!(ShamirRecovery::split(&[], 2, 3).is_err());
+    }
+
+    #[test]
+    fn test_reconstruct_duplicate_indices() {
+        let secret = b"test";
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
+        // Duplicate the first share
+        let dup_shares = vec![shares[0].clone(), shares[0].clone()];
+        assert!(ShamirRecovery::reconstruct(&dup_shares).is_err());
     }
 
     #[test]

@@ -51,7 +51,13 @@ pub fn deserialize_with_version<T: serde::de::DeserializeOwned>(bytes: &[u8]) ->
     let version = bytes[0];
     match version {
         0 => {
-            // Legacy bincode format
+            // Legacy bincode format - limit input size for safety
+            const MAX_BINCODE_INPUT_SIZE: usize = 10 * 1024 * 1024; // 10 MiB
+            if bytes.len() > MAX_BINCODE_INPUT_SIZE {
+                return Err(WireFormatError::DeserializationFailed(
+                    "legacy bincode input exceeds size limit".to_string(),
+                ));
+            }
             bincode::deserialize(&bytes[1..]).map_err(|e| WireFormatError::DeserializationFailed(e.to_string()))
         }
         1 => {

@@ -24,6 +24,8 @@ use omnia_consensus::batch::ConsensusEventBatch;
 use omnia_primitives::{NodeId, VectorClock};
 use serde::{Deserialize, Serialize};
 
+use crate::compression::{deserialize_with_compression, serialize_with_compression};
+
 /// GossipSub topic name for batch event propagation.
 pub const GOSSIP_BATCH_TOPIC: &str = "omnia_batch_events";
 
@@ -101,76 +103,37 @@ pub enum GossipBatchError {
 /// Maximum serialized size for a batch gossip message (1 MiB).
 pub const MAX_BATCH_GOSSIP_SIZE: usize = 1024 * 1024;
 
-/// Minimum payload size for batch compression (smaller payloads aren't worth compressing).
-const COMPRESSION_THRESHOLD: usize = 256;
-
-/// Compression flag for gossip messages: uncompressed.
-const COMPRESSION_NONE: u8 = 0x00;
-/// Compression flag for gossip messages: snappy compressed.
-const COMPRESSION_SNAPPY: u8 = 0x01;
-
 /// Serialize a batch gossip message with optional snappy compression.
 ///
-/// Uses the same compression strategy as the existing `serialize_compressed`
-/// function in the `gossip` module: payloads larger than the compression
-/// threshold are compressed with snappy if it reduces size.
+/// Delegates to [`crate::compression::serialize_with_compression`] and
+/// converts the error type to [`GossipBatchError`].
 ///
 /// # Errors
 ///
 /// Returns [`GossipBatchError::SerializationError`] if postcard serialization fails.
 pub fn serialize_batch_message(msg: &GossipBatchMessage) -> Result<Vec<u8>, GossipBatchError> {
-    let raw = postcard::to_allocvec(msg).map_err(|e| GossipBatchError::SerializationError(e.to_string()))?;
-
-    if raw.len() > COMPRESSION_THRESHOLD {
-        let mut encoder = snap::raw::Encoder::new();
-        let compressed = encoder
-            .compress_vec(&raw)
-            .map_err(|e| GossipBatchError::SerializationError(format!("compression: {}", e)))?;
-
-        if compressed.len() < raw.len() {
-            let mut output = Vec::with_capacity(1 + compressed.len());
-            output.push(COMPRESSION_SNAPPY);
-            output.extend_from_slice(&compressed);
-            return Ok(output);
-        }
-    }
-
-    let mut output = Vec::with_capacity(1 + raw.len());
-    output.push(COMPRESSION_NONE);
-    output.extend_from_slice(&raw);
-    Ok(output)
+    serialize_with_compression(msg).map_err(GossipBatchError::SerializationError)
 }
 
 /// Deserialize a batch gossip message with optional snappy decompression.
 ///
-/// Reads the first byte as a compression flag (same format as the
-/// existing `deserialize_compressed` function in the `gossip` module).
+/// Delegates to [`crate::compression::deserialize_with_compression`] and
+/// converts the error type to [`GossipBatchError`].
 ///
 /// # Errors
 ///
 /// Returns [`GossipBatchError::DeserializationError`] if the compression
 /// flag is unknown or postcard deserialization fails.
 pub fn deserialize_batch_message(data: &[u8]) -> Result<GossipBatchMessage, GossipBatchError> {
-    let (flag, payload) = data
-        .split_first()
-        .ok_or_else(|| GossipBatchError::InvalidMessage("empty message".to_string()))?;
-
-    let raw = match *flag {
-        COMPRESSION_NONE => payload.to_vec(),
-        COMPRESSION_SNAPPY => {
-            let mut decoder = snap::raw::Decoder::new();
-            decoder
-                .decompress_vec(payload)
-                .map_err(|e| GossipBatchError::DeserializationError(format!("decompression: {}", e)))?
+    deserialize_with_compression(data).map_err(|e| match e {
+        s if s.starts_with("unknown compression") || s.starts_with("empty payload") => {
+            GossipBatchError::InvalidMessage(s)
         }
-        _ => {
-            return Err(GossipBatchError::InvalidMessage(format!(
-                "unknown compression flag: 0x{flag:02x}"
-            )));
+        s if s.contains("decompress") || s.contains("exceeds limit") => {
+            GossipBatchError::DeserializationError(format!("decompression: {}", s))
         }
-    };
-
-    postcard::from_bytes(&raw).map_err(|e| GossipBatchError::DeserializationError(e.to_string()))
+        s => GossipBatchError::DeserializationError(s),
+    })
 }
 
 /// Validate a batch gossip message.
@@ -245,7 +208,7 @@ mod tests {
 
     fn signed_event(creator: NodeId, payload: Vec<u8>) -> Event {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(creator, payload);
+        let mut event = Event::genesis(creator, payload).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         event
     }

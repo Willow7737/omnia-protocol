@@ -50,7 +50,7 @@ impl SimNode {
 
     fn create_event(&mut self, payload: Vec<u8>) -> Event {
         self.event_counter += 1;
-        Event::genesis(self.node_id, payload)
+        Event::genesis(self.node_id, payload).expect("valid genesis event")
     }
 
     async fn submit_and_process(&mut self, event: Event) -> Vec<EventId> {
@@ -65,10 +65,12 @@ impl SimNode {
         }
     }
 
+    #[allow(dead_code)]
     async fn committed_count(&self) -> usize {
         self.consensus.get_committed().len()
     }
 
+    #[allow(dead_code)]
     async fn has_committed(&self, event_id: &EventId) -> bool {
         self.consensus.is_committed(event_id)
     }
@@ -123,6 +125,7 @@ impl SimNetwork {
     }
 }
 
+#[allow(dead_code)]
 fn node_id(idx: usize) -> NodeId {
     let mut id = [0u8; 32];
     id[0] = (idx + 1) as u8;

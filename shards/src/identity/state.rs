@@ -128,7 +128,16 @@ impl IdentityState {
     }
 
     /// Apply an identity operation, mutating state.
-    pub fn apply(&mut self, op: &IdentityOp, vc: &VectorClock) -> Result<(), ShardError> {
+    ///
+    /// The `caller_pubkey` parameter provides the public key of the event
+    /// creator for authorization checks. When `None`, authorization checks
+    /// are skipped (used in backward-compatible contexts like tests).
+    pub fn apply(
+        &mut self,
+        op: &IdentityOp,
+        vc: &VectorClock,
+        caller_pubkey: Option<&[u8; 32]>,
+    ) -> Result<(), ShardError> {
         match op {
             IdentityOp::CreateDid { document } => {
                 if self.dids.contains_key(&document.id) {
@@ -136,6 +145,14 @@ impl IdentityState {
                         "DID already exists: {}",
                         document.id
                     )));
+                }
+                // Authorization: creator's public key must match the document's primary key
+                if let Some(caller) = caller_pubkey {
+                    if &document.public_key != caller {
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: creator public key must match DID document primary key".into(),
+                        ));
+                    }
                 }
                 self.dids.insert(document.id.clone(), document.clone());
                 Ok(())
@@ -145,6 +162,15 @@ impl IdentityState {
                     .dids
                     .get_mut(did)
                     .ok_or_else(|| ShardError::ValidationFailed(format!("DID not found: {did}")))?;
+
+                // Authorization check: caller must be in the document's authentication set
+                if let Some(caller) = caller_pubkey {
+                    if !doc.authentication.iter().any(|key| key == caller) {
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set".into(),
+                        ));
+                    }
+                }
 
                 for update in updates {
                     match update {
@@ -198,6 +224,15 @@ impl IdentityState {
                 if !self.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!("Owner DID not found: {did}")));
                 }
+                // Authorization: caller must be in the DID's authentication set
+                if let Some(caller) = caller_pubkey {
+                    let doc = self.dids.get(did).expect("checked above");
+                    if !doc.authentication.iter().any(|key| key == caller) {
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for AddAgent".into(),
+                        ));
+                    }
+                }
                 if self.agent_registry.contains_key(&agent.did) {
                     return Err(ShardError::StateConflict(format!(
                         "Agent already exists: {}",
@@ -214,6 +249,15 @@ impl IdentityState {
             } => {
                 if !self.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
+                }
+                // Authorization: caller must be in the DID's authentication set
+                if let Some(caller) = caller_pubkey {
+                    let doc = self.dids.get(did).expect("checked above");
+                    if !doc.authentication.iter().any(|key| key == caller) {
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for EnrollBiometric".into(),
+                        ));
+                    }
                 }
                 let anchor = BiometricAnchor::enroll(template, algorithm);
                 self.biometric_registry.insert(did.clone(), anchor);
@@ -246,7 +290,17 @@ impl IdentityState {
                 if !self.dids.contains_key(did) {
                     return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
                 }
-                let shares = ShamirRecovery::split(secret, *threshold, *total_shares);
+                // Authorization: caller must be in the DID's authentication set
+                if let Some(caller) = caller_pubkey {
+                    let doc = self.dids.get(did).expect("checked above");
+                    if !doc.authentication.iter().any(|key| key == caller) {
+                        return Err(ShardError::ValidationFailed(
+                            "Unauthorized: caller not in authentication set for ConfigureRecovery".into(),
+                        ));
+                    }
+                }
+                let shares = ShamirRecovery::split(secret, *threshold, *total_shares)
+                    .map_err(|e| ShardError::ValidationFailed(format!("Recovery split failed: {e}")))?;
                 self.recovery_registry.insert(
                     did.clone(),
                     RecoveryConfig {
@@ -294,7 +348,8 @@ impl IdentityState {
         if !self.dids.contains_key(did) {
             return Err(ShardError::ValidationFailed(format!("DID not found: {did}")));
         }
-        let shares = ShamirRecovery::split(secret, threshold, total);
+        let shares = ShamirRecovery::split(secret, threshold, total)
+            .map_err(|e| ShardError::ValidationFailed(format!("Recovery split failed: {e}")))?;
         self.recovery_registry.insert(
             did.to_string(),
             RecoveryConfig {
@@ -557,7 +612,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:abcd1234".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         // Step 2: Configure recovery with 5 custodians, threshold=3
         let secret = b"my-super-secret-recovery-key";
@@ -570,6 +627,7 @@ mod tests {
                     total_shares: 5,
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -613,6 +671,7 @@ mod tests {
                     shares: recovering_shares,
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -646,7 +705,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"test-secret-for-aes-gcm";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
 
         // Persist and then decrypt
         state.persist_shares(&did, &shares).unwrap();
@@ -685,7 +744,7 @@ mod tests {
         let doc = DidDocument::new(did.clone(), pk, 0);
         state.dids.insert(did.clone(), doc);
 
-        let shares = ShamirRecovery::split(b"secret", 2, 3);
+        let shares = ShamirRecovery::split(b"secret", 2, 3).unwrap();
         state.persist_shares(&did, &shares).unwrap();
 
         let encrypted = state.shares.get(&did).unwrap();
@@ -703,7 +762,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"test-secret-for-aes-gcm";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
         state.persist_shares(&did, &shares).unwrap();
 
         // Verify version 2
@@ -734,7 +793,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"tamper-detection-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
         state.persist_shares(&did, &shares).unwrap();
 
         // Tamper with a ciphertext byte
@@ -757,7 +816,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"v1-backward-compat-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
 
         // Manually create v1 (XOR) encrypted shares
         let mut v1_encrypted = Vec::new();
@@ -800,7 +859,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"wrong-key-test-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3);
+        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
         state.persist_shares(&did, &shares).unwrap();
 
         // Corrupt the custodian index to use wrong decryption key
@@ -821,7 +880,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xAB; 32];
         let did = "did:omnia:recovery-auth-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         // Configure recovery with 5 custodians, threshold=3
         let secret = b"recovery-auth-secret";
@@ -834,6 +895,7 @@ mod tests {
                     total_shares: 5,
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -850,6 +912,7 @@ mod tests {
                     shares: recovering_shares,
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -879,7 +942,9 @@ mod tests {
         let original_pk: [u8; 32] = [0xCC; 32];
         let did = "did:omnia:replay-test".to_string();
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
-        state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+        state
+            .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+            .unwrap();
 
         let secret = b"replay-prevention-secret";
         state
@@ -891,6 +956,7 @@ mod tests {
                     total_shares: 3,
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -904,6 +970,7 @@ mod tests {
                     shares: shares.clone(),
                 },
                 &vc,
+                None,
             )
             .unwrap();
 
@@ -918,6 +985,7 @@ mod tests {
                     shares: shares.clone(),
                 },
                 &vc,
+                None,
             )
             .unwrap();
 

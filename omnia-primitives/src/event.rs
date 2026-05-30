@@ -129,6 +129,11 @@ pub struct EventHeader {
     pub other_parent: Option<EventId>,
 }
 
+/// Maximum number of events that can be requested in a single EventRequest
+pub const MAX_EVENT_REQUEST_LIMIT: usize = 10_000;
+/// Maximum number of known events that can be listed in an EventRequest
+pub const MAX_KNOWN_EVENTS: usize = 100_000;
+
 /// Request for missing events (used during sync)
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventRequest {
@@ -138,6 +143,24 @@ pub struct EventRequest {
     pub limit: usize,
     /// Starting from this vector clock (inclusive)
     pub since: VectorClock,
+}
+
+impl EventRequest {
+    /// Validate the request limits.
+    ///
+    /// Returns an error if `limit` exceeds [`MAX_EVENT_REQUEST_LIMIT`] or
+    /// `known_events` exceeds [`MAX_KNOWN_EVENTS`].
+    pub fn validate(&self) -> Result<(), EventValidationError> {
+        if self.limit > MAX_EVENT_REQUEST_LIMIT {
+            return Err(EventValidationError::InvalidField("limit exceeds maximum".into()));
+        }
+        if self.known_events.len() > MAX_KNOWN_EVENTS {
+            return Err(EventValidationError::InvalidField(
+                "known_events exceeds maximum".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Response to an event request
@@ -175,7 +198,7 @@ impl Event {
     /// ```ignore
     /// use omnia_substrate::{Event, VectorClock};
     /// let vc = VectorClock::with_node(creator, 1);
-    /// let event = Event::new(creator, 0, vc, None, None, vec![]);
+    /// let event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
     /// assert!(event.is_root());
     /// ```
     pub fn new(
@@ -185,10 +208,10 @@ impl Event {
         self_parent: Option<EventId>,
         other_parent: Option<EventId>,
         payload: Payload,
-    ) -> Self {
+    ) -> Result<Self, EventValidationError> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
+            .map_err(|_| EventValidationError::InvalidTimestamp)?
             .as_millis() as u64;
 
         let mut event = Self {
@@ -207,7 +230,7 @@ impl Event {
         };
 
         event.id = event.compute_hash();
-        event
+        Ok(event)
     }
 
     /// Create a genesis event (first event in the network).
@@ -219,7 +242,7 @@ impl Event {
     ///
     /// * `creator` — The node ID of the genesis event creator
     /// * `payload` — Application-specific data attached to this event
-    pub fn genesis(creator: NodeId, payload: Payload) -> Self {
+    pub fn genesis(creator: NodeId, payload: Payload) -> Result<Self, EventValidationError> {
         let vector_clock = VectorClock::with_node(creator, 1);
         Self::new(creator, 0, vector_clock, None, None, payload)
     }
@@ -232,11 +255,19 @@ impl Event {
         hasher.update(self.sequence.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
         hasher.update(self.vector_clock.to_bytes());
-        if let Some(sp) = self.self_parent {
-            hasher.update(sp);
+        match self.self_parent {
+            None => hasher.update([0u8]),
+            Some(sp) => {
+                hasher.update([1u8]);
+                hasher.update(sp);
+            }
         }
-        if let Some(op) = self.other_parent {
-            hasher.update(op);
+        match self.other_parent {
+            None => hasher.update([0u8]),
+            Some(op) => {
+                hasher.update([1u8]);
+                hasher.update(op);
+            }
         }
         hasher.update(&self.payload);
         hasher.update(self.creator_pubkey);
@@ -268,7 +299,7 @@ impl Event {
     /// ```ignore
     /// use omnia_substrate::{Event, generate_keypair};
     /// let keypair = generate_keypair();
-    /// let mut event = Event::genesis([0u8; 32], vec![]);
+    /// let mut event = Event::genesis([0u8; 32], vec![]).unwrap();
     /// event.sign_with_keypair(&keypair);
     /// assert!(event.validate().is_ok());
     /// ```
@@ -305,15 +336,15 @@ impl Event {
         pubkey.verify(&self.id, &sig).is_ok()
     }
 
-    /// Legacy sign method for backward compatibility in tests.
-    /// In production, always use `sign_with_keypair`.
-    #[deprecated(
-        since = "0.2.0",
-        note = "sign() is a no-op and will be removed. Use sign_with_keypair() instead."
-    )]
+    /// Legacy sign method — **this is intentionally a no-op**.
+    ///
+    /// Calling this method does nothing. It exists only for backward
+    /// compatibility with older call sites. To actually sign an event,
+    /// use [`sign_with_keypair()`](Self::sign_with_keypair) instead.
+    #[deprecated(since = "0.2.0", note = "sign() is a no-op - use sign_with_keypair() instead")]
     pub fn sign(&mut self, _signature: Vec<u8>) {
-        // Deprecated no-op: real signing requires a keypair via sign_with_keypair().
-        // This method will be removed in a future release.
+        // This method is intentionally a no-op for backward compatibility.
+        // Use sign_with_keypair() for actual signing.
     }
 
     /// Get the event header (lightweight metadata)
@@ -398,7 +429,7 @@ impl Event {
         // Timestamp sanity checks
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
+            .map_err(|_| EventValidationError::InvalidTimestamp)?
             .as_millis() as u64;
 
         // Reject events too far in the future
@@ -450,7 +481,7 @@ impl Event {
 
     /// Mark this event as having received an acknowledgment
     pub fn add_acknowledgment(&mut self) {
-        self.ack_count += 1;
+        self.ack_count = self.ack_count.saturating_add(1);
         if self.ack_count >= 2 {
             self.status = EventStatus::Acknowledged;
         }
@@ -461,7 +492,7 @@ impl Event {
         self.self_parent.is_none() && self.other_parent.is_none()
     }
 
-    /// Check if this event links to another event (is in its ancestry)
+    /// Check if this event directly links to another event as a parent
     pub fn links_to(&self, event_id: &EventId) -> bool {
         self.self_parent.map(|p| &p == event_id).unwrap_or(false)
             || self.other_parent.map(|p| &p == event_id).unwrap_or(false)
@@ -537,6 +568,12 @@ pub enum EventValidationError {
         /// Maximum allowed payload size in bytes
         max: usize,
     },
+    /// System clock is before Unix epoch
+    #[error("system clock is before Unix epoch")]
+    InvalidTimestamp,
+    /// A field has an invalid value
+    #[error("Invalid field: {0}")]
+    InvalidField(String),
 }
 
 impl fmt::Display for Event {
@@ -578,7 +615,7 @@ mod tests {
     fn test_event_creation() {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
-        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
 
         assert_eq!(event.creator, creator);
         assert_eq!(event.sequence, 0);
@@ -590,7 +627,7 @@ mod tests {
     #[test]
     fn test_genesis_event() {
         let creator = test_node(1);
-        let event = Event::genesis(creator, vec![]);
+        let event = Event::genesis(creator, vec![]).unwrap();
 
         assert!(event.is_root());
         assert_eq!(event.sequence, 0);
@@ -600,7 +637,7 @@ mod tests {
     fn test_event_hash_integrity() {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
-        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
 
         assert!(event.verify_hash());
     }
@@ -610,7 +647,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
 
         // Before signing, the creator_pubkey is all zeros and signature is all zeros.
         // verify_signature() may return true for the all-zeros key/signature pair
@@ -632,12 +669,12 @@ mod tests {
         let n1 = test_node(1);
         let n2 = test_node(2);
 
-        let genesis = Event::genesis(n1, vec![]);
+        let genesis = Event::genesis(n1, vec![]).unwrap();
         let genesis_id = genesis.id;
 
         let mut vc = VectorClock::with_node(n1, 2);
         vc.set(n2, 1);
-        let event = Event::new(n1, 1, vc, Some(genesis_id), None, vec![]);
+        let event = Event::new(n1, 1, vc, Some(genesis_id), None, vec![]).unwrap();
 
         assert!(event.links_to(&genesis_id));
     }
@@ -647,7 +684,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair);
 
         assert_eq!(event.status, EventStatus::Pending);
@@ -662,7 +699,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         // Event::new creates an event with all-zero signature and pubkey
-        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
 
         let result = event.validate();
         assert_eq!(result, Err(EventValidationError::UnsignedEvent));
@@ -673,7 +710,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
 
         // Set timestamp 10 minutes in the future (beyond 2-minute drift)
         let now_ms = SystemTime::now()
@@ -692,7 +729,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
 
         // Set timestamp to 2 years ago (well beyond 1-year max age)
         let now_ms = SystemTime::now()
@@ -712,7 +749,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Tamper with the payload — hash check should fail
@@ -728,7 +765,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair);
         event.status = EventStatus::Rejected;
 
@@ -741,7 +778,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![4, 5, 6]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![4, 5, 6]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // A freshly signed event with recent timestamp should pass all checks
@@ -754,7 +791,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
         event.sign_with_keypair(&keypair);
 
         let bytes = event.to_bytes().expect("test event serialization");
@@ -774,7 +811,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Replace signature with non-zero garbage that is still 64 bytes
@@ -797,11 +834,11 @@ mod tests {
         let keypair_b = test_keypair();
 
         // Sign with keypair A
-        let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair_a);
 
         // Now create a different event and sign with keypair B, then swap the ID
-        let mut other_event = Event::new(creator, 1, vc, None, None, vec![9, 9, 9]);
+        let mut other_event = Event::new(creator, 1, vc, None, None, vec![9, 9, 9]).unwrap();
         other_event.sign_with_keypair(&keypair_b);
 
         // Swap the ID and signature from other_event into event (cross-contamination)
@@ -818,7 +855,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Zero out the signature but keep the pubkey
@@ -833,7 +870,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Zero out the pubkey but keep the signature
@@ -850,7 +887,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -870,7 +907,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -911,7 +948,7 @@ mod tests {
         let creator = test_node(1);
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
-        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; 100]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; 100]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Flip a single bit in the payload
@@ -930,7 +967,7 @@ mod tests {
         let keypair = test_keypair();
         let creator_from_new = test_node(1); // arbitrary, will be overwritten
         let vc = VectorClock::with_node(creator_from_new, 1);
-        let mut event = Event::new(creator_from_new, 0, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(creator_from_new, 0, vc, None, None, vec![1, 2, 3]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // After sign_with_keypair, creator == blake3_hash_domain("omnia-creator", creator_pubkey)
@@ -948,7 +985,7 @@ mod tests {
         let keypair = test_keypair();
         let fake_creator = test_node(99); // not derived from the keypair
         let vc = VectorClock::with_node(fake_creator, 1);
-        let mut event = Event::new(fake_creator, 0, vc, None, None, vec![1, 2, 3]);
+        let mut event = Event::new(fake_creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // sign_with_keypair now sets creator = blake3(creator_pubkey), so we
@@ -975,7 +1012,7 @@ mod tests {
         let keypair = test_keypair();
         let arbitrary_creator = test_node(42);
         let vc = VectorClock::with_node(arbitrary_creator, 1);
-        let mut event = Event::new(arbitrary_creator, 0, vc, None, None, vec![]);
+        let mut event = Event::new(arbitrary_creator, 0, vc, None, None, vec![]).unwrap();
 
         // Before signing, creator is whatever was passed to Event::new
         assert_eq!(event.creator, arbitrary_creator);
@@ -994,7 +1031,7 @@ mod tests {
     fn test_tampered_creator_fails_validation() {
         let keypair = test_keypair();
         let vc = VectorClock::with_node(test_node(1), 1);
-        let mut event = Event::new(test_node(1), 0, vc, None, None, vec![]);
+        let mut event = Event::new(test_node(1), 0, vc, None, None, vec![]).unwrap();
         event.sign_with_keypair(&keypair);
 
         // Tamper: change creator to something else
@@ -1014,7 +1051,7 @@ mod tests {
         let keypair = test_keypair();
         let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let vc = VectorClock::with_node(creator, 1);
-        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]).unwrap();
         event.sign_with_keypair(&keypair);
 
         let result = event.validate();
@@ -1032,7 +1069,7 @@ mod tests {
         let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let vc = VectorClock::with_node(creator, 1);
         let oversized = vec![0u8; MAX_PAYLOAD_SIZE + 1];
-        let mut event = Event::new(creator, 0, vc, None, None, oversized);
+        let mut event = Event::new(creator, 0, vc, None, None, oversized).unwrap();
         event.sign_with_keypair(&keypair);
 
         let result = event.validate();

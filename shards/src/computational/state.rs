@@ -11,26 +11,6 @@ use serde::{Deserialize, Serialize};
 use super::ops::ComputationalOp;
 use crate::shard::ShardError;
 
-/// Minimum expected byte length for a Groth16 proof over Bn254.
-///
-/// A Groth16 proof consists of three curve points:
-/// - 2 × G1 point (48 bytes uncompressed each) = 96 bytes
-/// - 1 × G2 point (96 bytes uncompressed) = 96 bytes
-///
-/// Total minimum: 192 bytes. We use the conservative lower bound of 128
-/// to allow for compressed representations.
-const MIN_GROTH16_PROOF_LEN: usize = 128;
-
-/// Check whether the proof bytes have a plausible Groth16 layout.
-///
-/// This does **not** verify cryptographic validity — it only rejects
-/// obviously malformed proofs (too short to contain the expected
-/// curve-point data). Real verification requires the `real_verification`
-/// feature flag.
-fn is_valid_zk_proof_layout(bytes: &[u8]) -> bool {
-    bytes.len() >= MIN_GROTH16_PROOF_LEN
-}
-
 /// Status of a compute task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
@@ -231,34 +211,26 @@ impl ComputationalState {
                     // to the default placeholder verification below.
                 }
 
-                // Default (placeholder) verification: reject proofs that don't match
-                // the expected ZK proof format. When real_verification is disabled,
-                // we still validate proof structure — empty or obviously malformed
-                // proofs are rejected.
-                if proof_bytes.is_empty() {
+                // When real_verification is disabled, always reject
+                #[cfg(not(feature = "real_verification"))]
+                {
                     task.status = TaskStatus::Failed;
                     task.last_update.merge(vc);
-                    return Err(ShardError::ValidationFailed(
-                        "Proof verification failed: empty proof bytes".into(),
-                    ));
+                    Err(ShardError::ValidationFailed(
+                        "ZK proof verification requires 'real_verification' feature to be enabled".into(),
+                    ))
                 }
-                if !is_valid_zk_proof_layout(proof_bytes) {
+
+                // When real_verification is enabled but proof didn't match expected layout
+                #[cfg(feature = "real_verification")]
+                {
                     task.status = TaskStatus::Failed;
                     task.last_update.merge(vc);
-                    return Err(ShardError::ValidationFailed(
-                        "Proof verification failed: proof too short for Groth16 layout".into(),
-                    ));
+                    Err(ShardError::ValidationFailed(
+                        "ZK proof verification failed: proof does not match expected layout for real verification"
+                            .into(),
+                    ))
                 }
-                // Proof passes layout validation — placeholder accepts it.
-                // Real cryptographic verification requires the `real_verification` feature.
-                tracing::warn!(
-                    task = ?&task_id[..4],
-                    len = proof_bytes.len(),
-                    "Placeholder ZK verification: proof layout accepted without crypto verification"
-                );
-                task.status = TaskStatus::Verified;
-                task.last_update.merge(vc);
-                Ok(())
             }
         }
     }
@@ -320,14 +292,14 @@ mod tests {
             )
             .unwrap();
 
-        // 3. Verify the 1-byte proof — should fail with ValidationFailed
+        // 3. Verify the 1-byte proof — should fail without real_verification
         let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
-        assert!(result.is_err(), "1-byte malformed proof should be rejected");
+        assert!(result.is_err(), "ZK proof should be rejected without real_verification");
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("Groth16 layout"),
-                    "expected Groth16 layout error, got: {msg}"
+                    msg.contains("real_verification"),
+                    "expected real_verification error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
@@ -362,15 +334,50 @@ mod tests {
 
         // Verify the empty proof — should fail
         let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
-        assert!(result.is_err(), "empty proof should be rejected");
+        assert!(result.is_err(), "ZK proof should be rejected without real_verification");
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("empty proof bytes"),
-                    "expected empty proof error, got: {msg}"
+                    msg.contains("real_verification"),
+                    "expected real_verification error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_valid_layout_proof_also_rejected_without_real_verification() {
+        let mut state = ComputationalState::new();
+        let vc = test_vc();
+        let task_id = [0xEF; 32];
+
+        // Submit a task
+        state
+            .apply(
+                &ComputationalOp::SubmitTask {
+                    task_id,
+                    spec: vec![1, 2, 3],
+                    reward: 100,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Submit a well-formed (128+ byte) proof
+        state
+            .apply(
+                &ComputationalOp::SubmitProof {
+                    task_id,
+                    proof: vec![0u8; 192],
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Verify — should STILL fail because real_verification is not enabled
+        let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
+        assert!(result.is_err(), "ZK proof should be rejected without real_verification");
+        assert_eq!(state.tasks[&task_id].status, TaskStatus::Failed);
     }
 }

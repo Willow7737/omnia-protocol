@@ -254,7 +254,7 @@ impl SettlementAdapter for FfiSettlementAdapter {
         })
     }
 
-    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError> {
+    async fn verify_inclusion(&self, leaf: &[u8; 32], proof: &MerkleProof) -> Result<bool, SettlementError> {
         if !self.initialized {
             return Err(SettlementError::ConfigError(
                 "FFI settlement adapter not initialized".to_string(),
@@ -269,7 +269,7 @@ impl SettlementAdapter for FfiSettlementAdapter {
         // whose pointers remain valid for the duration of the FFI call.
         let c_result = unsafe {
             settlement_verify_inclusion(
-                [0u8; 32].as_ptr(), // leaf (not used in FFI currently)
+                leaf.as_ptr(), // leaf value provided by caller
                 sibling_bytes.as_ptr(),
                 proof.siblings.len(),
                 direction_bytes.as_ptr(),

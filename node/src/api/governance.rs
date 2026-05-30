@@ -6,6 +6,7 @@
 
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::Extension;
 use axum::Json;
 use omnia_economics::governance::VoteChoice;
 use serde::Deserialize;
@@ -13,6 +14,7 @@ use serde_json::{json, Value};
 use thiserror::Error;
 use utoipa::ToSchema;
 
+use crate::api::auth::CallerIdentity;
 use crate::state::AppState;
 
 /// Errors that can occur when parsing API request parameters.
@@ -120,6 +122,10 @@ pub async fn create_proposal(
 /// Casts a quadratic-weighted vote on a governance proposal.
 /// The voter's effective weight is calculated based on their stake
 /// (via `isqrt`) and reputation decay for inactive epochs.
+///
+/// The voter DID is derived from the authenticated caller identity
+/// (via the JWT `sub` claim) rather than from the request body,
+/// preventing impersonation attacks.
 #[utoipa::path(
     post,
     path = "/api/v1/governance/vote",
@@ -127,19 +133,26 @@ pub async fn create_proposal(
     responses(
         (status = 200, description = "Vote recorded"),
         (status = 400, description = "Invalid vote"),
+        (status = 401, description = "Not authenticated"),
     )
 )]
 pub async fn cast_vote(
     State(state): State<AppState>,
+    caller: Extension<CallerIdentity>,
     Json(body): Json<CastVoteRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    // Derive the voter DID from the authenticated caller identity
+    // instead of trusting the `did` field in the request body.
+    // This prevents impersonation — a caller cannot vote as someone else.
+    let voter_did = caller.caller_id.clone();
+
     let choice = parse_vote_choice(&body.choice).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     let mut economics = state.economics.lock().await;
     let current_epoch = economics.current_epoch();
 
     // Reject votes from voters with no registered stake
-    if !economics.governance.voting_weights.contains_key(&body.did) {
+    if !economics.governance.voting_weights.contains_key(&voter_did) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
@@ -148,16 +161,16 @@ pub async fn cast_vote(
         ));
     }
 
-    let effective_weight = economics.governance.effective_weight(&body.did, current_epoch);
+    let effective_weight = economics.governance.effective_weight(&voter_did, current_epoch);
 
     let result = economics
         .governance
-        .vote(&body.did, &body.proposal_id, choice, current_epoch);
+        .vote(&voter_did, &body.proposal_id, choice, current_epoch);
 
     match result {
         Ok(()) => {
             tracing::info!(
-                did = %body.did,
+                did = %voter_did,
                 proposal_id = %body.proposal_id,
                 choice = %body.choice,
                 weight = effective_weight,
@@ -168,7 +181,7 @@ pub async fn cast_vote(
                 Json(json!({
                     "status": "recorded",
                     "proposal_id": body.proposal_id,
-                    "did": body.did,
+                    "did": voter_did,
                     "choice": body.choice,
                     "effective_weight": effective_weight,
                     "epoch": current_epoch,
@@ -177,7 +190,7 @@ pub async fn cast_vote(
         }
         Err(e) => {
             tracing::warn!(
-                did = %body.did,
+                did = %voter_did,
                 proposal_id = %body.proposal_id,
                 error = %e,
                 "Failed to cast vote"
@@ -187,7 +200,7 @@ pub async fn cast_vote(
                 Json(json!({
                     "error": format!("Failed to cast vote: {e}"),
                     "proposal_id": body.proposal_id,
-                    "did": body.did,
+                    "did": voter_did,
                 })),
             ))
         }

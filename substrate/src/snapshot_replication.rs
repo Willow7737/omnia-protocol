@@ -302,7 +302,7 @@ mod tests {
     fn make_snapshot(height: u64) -> StateSnapshot {
         let mut graph = CausalGraph::new();
         let keypair = generate_keypair();
-        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
+        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         graph.insert(event).unwrap();
 

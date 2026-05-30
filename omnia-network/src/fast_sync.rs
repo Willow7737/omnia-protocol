@@ -186,7 +186,7 @@ pub fn select_target_checkpoint(
     }
 
     // Find the group with supermajority agreement and highest round
-    let supermajority = (2 * total_peers / 3) + 1;
+    let supermajority = (2 * total_peers).div_ceil(3);
     let mut best: Option<SyncCheckpoint> = None;
 
     for ((round, _), cps) in &agreement_map {

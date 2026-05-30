@@ -21,6 +21,7 @@
 
 pub mod blake3_domain;
 pub mod compact_event_encoding;
+pub mod compression;
 pub mod fast_sync;
 #[cfg(feature = "network")]
 pub mod gossip;

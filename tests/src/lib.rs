@@ -38,7 +38,7 @@ fn node_id_from_keypair(kp: &NodeKeypair) -> NodeId {
 
 fn signed_genesis(kp: &NodeKeypair) -> Event {
     let node_id = node_id_from_keypair(kp);
-    let mut event = Event::genesis(node_id, vec![]);
+    let mut event = Event::genesis(node_id, vec![]).expect("valid genesis event");
     event.sign_with_keypair(kp);
     event
 }
@@ -46,7 +46,7 @@ fn signed_genesis(kp: &NodeKeypair) -> Event {
 fn signed_child(kp: &NodeKeypair, seq: u64, parent_id: EventId) -> Event {
     let node_id = node_id_from_keypair(kp);
     let vc = VectorClock::with_node(node_id, seq + 1);
-    let mut event = Event::new(node_id, seq, vc, Some(parent_id), None, vec![]);
+    let mut event = Event::new(node_id, seq, vc, Some(parent_id), None, vec![]).expect("valid event");
     event.sign_with_keypair(kp);
     event
 }
@@ -217,7 +217,7 @@ fn payload_at_max_size_accepted() {
     let kp = generate_keypair();
     let node_id = node_id_from_keypair(&kp);
     let vc = VectorClock::with_node(node_id, 1);
-    let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]);
+    let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]).expect("valid event");
     event.sign_with_keypair(&kp);
 
     let result = event.validate();
@@ -241,7 +241,7 @@ fn payload_exceeding_max_size_rejected() {
     let node_id = node_id_from_keypair(&kp);
     let vc = VectorClock::with_node(node_id, 1);
     let oversized = MAX_PAYLOAD_SIZE + 1;
-    let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; oversized]);
+    let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; oversized]).expect("valid event");
     event.sign_with_keypair(&kp);
 
     let result = event.validate();
@@ -803,7 +803,7 @@ fn signature_verification_throughput() {
 
     for seq in 0..count {
         let vc = VectorClock::with_node(node_id, seq as u64 + 1);
-        let mut event = Event::new(node_id, seq as u64, vc, None, None, vec![]);
+        let mut event = Event::new(node_id, seq as u64, vc, None, None, vec![]).expect("valid event");
         event.sign_with_keypair(&kp);
         events.push(event);
     }

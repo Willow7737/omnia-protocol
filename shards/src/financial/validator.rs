@@ -90,14 +90,14 @@ mod tests {
     fn make_signed_event(keypair: &omnia_substrate::crypto::NodeKeypair, payload: Vec<u8>) -> Event {
         let creator = keypair.verifying_key().to_bytes();
         let vc = VectorClock::with_node(creator, 1);
-        let mut event = Event::new(creator, 0, vc, None, None, payload);
+        let mut event = Event::new(creator, 0, vc, None, None, payload).expect("event creation should succeed");
         event.sign_with_keypair(keypair);
         event
     }
 
     /// Helper: create a FinancialState with a single account having the given balance.
     fn state_with_balance(account: AccountId, balance: u64) -> FinancialState {
-        let mut state = FinancialState::new();
+        let mut state = FinancialState::with_mint_authority(account);
         state.balances.insert(account, AccountBalance::with_balance(balance));
         state.total_supply = balance;
         state
@@ -202,12 +202,12 @@ mod tests {
     #[test]
     fn test_replay_mint_same_event() {
         let target = test_account(0xCC);
-        let mut state = FinancialState::new();
+        let keypair = generate_keypair();
+        let mut state = FinancialState::with_mint_authority(keypair.verifying_key().to_bytes());
 
         let mint_op = FinancialOp::Mint { to: target, amount: 50 };
 
         // Create two identical events (same keypair, same sequence — simulating replay)
-        let keypair = generate_keypair();
         let event1 = make_signed_event(&keypair, vec![1]);
 
         // First Mint — should succeed
@@ -271,16 +271,20 @@ mod tests {
         };
         let event = make_signed_event(&sender_keypair, vec![1]);
 
-        // Even if the validator were bypassed, apply still has the
-        // decrement check. With amount 0, decrement would succeed but
-        // increment would also succeed — the balance would be unchanged.
-        // However, in practice the FinancialShard::process_event calls
-        // validate() first, so this should never reach apply().
-        // Let's verify that direct apply with amount 0 is a no-op
-        // (decrement by 0 succeeds, increment by 0 succeeds).
+        // Defense in depth: apply() also rejects zero-amount transfers,
+        // even if the validator were bypassed.
         let result = state.apply(&transfer, &event);
-        // Amount 0 is handled gracefully — balance unchanged
-        assert!(result.is_ok(), "Zero-amount transfer via apply is a no-op");
+        assert!(result.is_err(), "Zero-amount transfer should be rejected by apply");
+        match result {
+            Err(ShardError::InvalidOperation(msg)) => {
+                assert!(
+                    msg.to_lowercase().contains("greater than zero"),
+                    "Error should mention zero amount, got: {msg}"
+                );
+            }
+            Err(other) => panic!("Expected InvalidOperation, got: {other:?}"),
+            Ok(()) => panic!("Zero-amount transfer should have been rejected by apply"),
+        }
         assert_eq!(state.balance_of(&sender_pubkey), 100);
     }
 
@@ -364,7 +368,8 @@ mod tests {
     #[test]
     fn test_mint_to_new_account() {
         let new_account = test_account(0xFF);
-        let mut state = FinancialState::new();
+        let keypair = generate_keypair();
+        let mut state = FinancialState::with_mint_authority(keypair.verifying_key().to_bytes());
 
         // Verify the account doesn't exist yet
         assert_eq!(state.balance_of(&new_account), 0);
@@ -374,7 +379,6 @@ mod tests {
             to: new_account,
             amount: 200,
         };
-        let keypair = generate_keypair();
         let event = make_signed_event(&keypair, vec![1]);
 
         let result = state.apply(&mint, &event);
@@ -558,14 +562,14 @@ mod tests {
     fn test_state_serialization_after_operations() {
         let account_a = test_account(0x77);
         let account_b = test_account(0x88);
-        let mut state = FinancialState::new();
+        let keypair = generate_keypair();
+        let mut state = FinancialState::with_mint_authority(keypair.verifying_key().to_bytes());
 
         // Mint to account A
         let mint = FinancialOp::Mint {
             to: account_a,
             amount: 500,
         };
-        let keypair = generate_keypair();
         let event = make_signed_event(&keypair, vec![1]);
         state.apply(&mint, &event).unwrap();
 
@@ -585,8 +589,7 @@ mod tests {
         let authority_keypair = generate_keypair();
         let authority_pubkey: AccountId = authority_keypair.verifying_key().to_bytes();
 
-        let mut state = FinancialState::new();
-        state.mint_authority = Some(authority_pubkey);
+        let mut state = FinancialState::with_mint_authority(authority_pubkey);
 
         let target = test_account(0xAA);
         let mint = FinancialOp::Mint {

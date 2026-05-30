@@ -12,7 +12,7 @@ fuzz_target!(|data: &[u8]| {
     creator.copy_from_slice(&data[0..32]);
     let payload = data[64..].to_vec();
     let _clock = VectorClock::new();
-    let event = Event::genesis(creator, payload);
+    let event = Event::genesis(creator, payload).unwrap();
     // route_event deserializes the payload as ShardPayload,
     // so fuzzing with arbitrary bytes will exercise error paths
     let mut router = router;

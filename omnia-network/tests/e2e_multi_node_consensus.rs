@@ -136,7 +136,7 @@ impl E2ETestNode {
     /// the vector clock and creator are consistent.
     fn create_genesis_event(&mut self, payload: Vec<u8>) -> Event {
         self.sequence = 0;
-        let mut event = Event::genesis(self.node_id, payload);
+        let mut event = Event::genesis(self.node_id, payload).expect("valid genesis event");
         event.sign_with_keypair(&self.keypair);
         self.self_parent = Some(event.id);
         event
@@ -163,7 +163,8 @@ impl E2ETestNode {
             self.self_parent,
             Some(other_parent),
             payload,
-        );
+        )
+        .expect("valid event");
         event.sign_with_keypair(&self.keypair);
         self.self_parent = Some(event.id);
         event

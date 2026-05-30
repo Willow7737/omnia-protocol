@@ -11,26 +11,6 @@ use serde::{Deserialize, Serialize};
 use super::ops::BiologicalOp;
 use crate::shard::ShardError;
 
-/// Minimum expected byte length for a Groth16 proof over Bn254.
-///
-/// A Groth16 proof consists of three curve points:
-/// - 2 × G1 point (48 bytes uncompressed each) = 96 bytes
-/// - 1 × G2 point (96 bytes uncompressed) = 96 bytes
-///
-/// Total minimum: 192 bytes. We use the conservative lower bound of 128
-/// to allow for compressed representations.
-const MIN_GROTH16_PROOF_LEN: usize = 128;
-
-/// Check whether the proof bytes have a plausible Groth16 layout.
-///
-/// This does **not** verify cryptographic validity — it only rejects
-/// obviously malformed proofs (too short to contain the expected
-/// curve-point data). Real verification requires the `real_verification`
-/// feature flag.
-fn is_valid_zk_proof_layout(bytes: &[u8]) -> bool {
-    bytes.len() >= MIN_GROTH16_PROOF_LEN
-}
-
 /// A record of consent granted by a subject to a consumer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsentRecord {
@@ -215,28 +195,23 @@ impl BiologicalState {
                     // to the default placeholder verification below.
                 }
 
-                // Default (placeholder) verification: reject ZK proofs that don't match
-                // the expected format. The consent record exists (checked above), but
-                // we require a properly formatted ZK proof for QueryWithZkProof operations.
-                // When real_verification is disabled, we still validate proof structure.
-                if zk_proof.is_empty() {
-                    return Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: empty proof bytes".into(),
-                    ));
+                // When real_verification is disabled, always reject ZK proofs
+                #[cfg(not(feature = "real_verification"))]
+                {
+                    let _ = zk_proof; // suppress unused warning
+                    Err(ShardError::ValidationFailed(
+                        "ZK proof verification requires 'real_verification' feature to be enabled".into(),
+                    ))
                 }
-                if !is_valid_zk_proof_layout(zk_proof) {
-                    return Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: proof too short for Groth16 layout".into(),
-                    ));
+
+                // When real_verification is enabled but proof didn't match expected layout
+                #[cfg(feature = "real_verification")]
+                {
+                    Err(ShardError::ValidationFailed(
+                        "ZK proof verification failed: proof does not match expected layout for real verification"
+                            .into(),
+                    ))
                 }
-                // Proof passes layout validation — placeholder accepts it.
-                // Real cryptographic verification requires the `real_verification` feature.
-                tracing::warn!(
-                    subject = ?&subject[..4],
-                    len = zk_proof.len(),
-                    "Placeholder ZK verification: proof layout accepted without crypto verification"
-                );
-                Ok(())
             }
         }
     }
@@ -299,12 +274,12 @@ mod tests {
             },
             &vc,
         );
-        assert!(result.is_err(), "1-byte malformed ZK proof should be rejected");
+        assert!(result.is_err(), "ZK proof should be rejected without real_verification");
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("Groth16 layout"),
-                    "expected Groth16 layout error, got: {msg}"
+                    msg.contains("real_verification"),
+                    "expected real_verification error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
@@ -345,11 +320,45 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("empty proof bytes"),
-                    "expected empty proof error, got: {msg}"
+                    msg.contains("real_verification"),
+                    "expected real_verification error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_valid_layout_proof_also_rejected_without_real_verification() {
+        let mut state = BiologicalState::new();
+        let vc = test_vc();
+        let subject = [0xEE; 32];
+        let consumer = [0xFF; 32];
+
+        // Grant access so the consent record exists
+        state
+            .apply(
+                &BiologicalOp::GrantAccess {
+                    subject,
+                    consumer,
+                    scope: "records".into(),
+                    expires_at: 0,
+                },
+                &vc,
+            )
+            .unwrap();
+
+        // Query with a well-formed (128+ byte) ZK proof — should STILL fail
+        // because real_verification is not enabled
+        let result = state.apply(
+            &BiologicalOp::QueryWithZkProof {
+                subject,
+                consumer,
+                zk_proof: vec![0u8; 192],
+                query: "test query".into(),
+            },
+            &vc,
+        );
+        assert!(result.is_err(), "ZK proof should be rejected without real_verification");
     }
 }

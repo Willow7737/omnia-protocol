@@ -68,7 +68,7 @@ impl QuotaSystem {
     /// quota. Unspent balance from the previous epoch is forfeited
     /// to prevent hoarding.
     pub fn advance_epoch(&mut self) {
-        self.current_epoch += 1;
+        self.current_epoch = self.current_epoch.saturating_add(1);
         for token in self.tokens.values_mut() {
             token.mint_monthly(self.current_epoch);
         }

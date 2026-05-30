@@ -466,13 +466,8 @@ pub fn contribute(
         }
         // Deserialize the G1 point from the previous transcript
         let mut point_slice = &previous_transcript[offset..offset + 64];
-        let g1_point = match G1Affine::deserialize_uncompressed(&mut point_slice) {
-            Ok(p) => p,
-            Err(_) => {
-                // If deserialization fails, use the identity point
-                G1Affine::identity()
-            }
-        };
+        let g1_point = G1Affine::deserialize_uncompressed(&mut point_slice)
+            .map_err(|e| SetupError::InvalidContribution(format!("invalid G1 point at index {i}: {}", e)))?;
 
         // Multiply by secret: new_point = old_point * secret
         let new_point: G1Projective = g1_point.into_group() * secret;

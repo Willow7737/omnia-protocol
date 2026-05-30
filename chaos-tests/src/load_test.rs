@@ -215,7 +215,8 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
                 None, // no other-parent in single-node mode
                 payload,
             )
-        };
+        }
+        .expect("event creation should not fail");
 
         let event_id = event.id;
 

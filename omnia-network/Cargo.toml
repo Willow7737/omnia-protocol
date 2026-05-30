@@ -23,9 +23,6 @@ thiserror = "2.0"
 hex = "0.4"
 futures = { version = "0.3", optional = true }
 
-# Snapshot replication needs these for StateSnapshot interop
-chrono = { version = "0.4", features = ["serde"] }
-
 [features]
 default = ["network"]
 network = ["dep:libp2p", "dep:tokio", "dep:futures"]

@@ -477,7 +477,8 @@ pub struct DkgSharePackage {
 /// performing true Distributed Key Generation with Feldman VSS polynomial
 /// evaluation and share verification. See the `todo!()` in `finalize()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[deprecated(note = "This is key aggregation, not true DKG. True DKG with Feldman VSS is not yet implemented.")]
+#[deprecated(since = "0.2.0", note = "DkgSession is insecure - use FeldmanVssSession instead")]
+#[doc(hidden)]
 pub struct DkgSession {
     /// Unique session identifier.
     pub session_id: u64,
@@ -528,6 +529,7 @@ impl DkgSession {
         my_id: ParticipantId,
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> {
+        tracing::error!("DkgSession::generate_shares is deprecated and insecure. Use FeldmanVssSession instead.");
         if self.phase != DkgPhase::Init {
             return Err(DkgError::WrongPhase {
                 expected: "Init".to_string(),
@@ -556,7 +558,7 @@ impl DkgSession {
         let commitments = vec![keypair.public_key_bytes().to_vec()];
 
         // Create share packages for each participant
-        let packages: Vec<(ParticipantId, DkgSharePackage)> = self
+        let packages: Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> = self
             .participants
             .iter()
             .filter(|&&p| p != my_id)
@@ -576,9 +578,9 @@ impl DkgSession {
                     v.extend_from_slice(&participant_id);
                     v
                 };
-                let encrypted = aes256gcm_encrypt_dkg(&share_data, &share_seed, &aad);
+                let encrypted = aes256gcm_encrypt_dkg(&share_data, &share_seed, &aad)?;
 
-                (
+                Ok((
                     participant_id,
                     DkgSharePackage {
                         sender: my_id,
@@ -586,9 +588,10 @@ impl DkgSession {
                         commitments: commitments.clone(),
                         version: 2,
                     },
-                )
+                ))
             })
             .collect();
+        let packages = packages?;
 
         // Store our own commitments
         self.commitments.insert(my_id, commitments);
@@ -876,6 +879,12 @@ impl FeldmanVssSession {
         // Generate random polynomial coefficients as BLS12-381 scalars.
         // f(x) = a_0 + a_1*x + a_2*x^2 + ... + a_{t-1}*x^{t-1}
         let polynomial_coeffs: Vec<Scalar> = (0..self.threshold).map(|_| Scalar::random(rng)).collect();
+        if polynomial_coeffs[0].is_zero() {
+            return Err(DkgError::InvalidShare(
+                [0u8; 4],
+                "Constant term coefficient must not be zero".to_string(),
+            ));
+        }
         self.polynomial_coeffs = Some(polynomial_coeffs.clone());
 
         // Compute Feldman commitments: C_j = a_j * G1
@@ -904,7 +913,7 @@ impl FeldmanVssSession {
         self.received_shares.insert(my_id, self_share);
 
         // Evaluate polynomial at each participant's index and encrypt the share
-        let packages: Vec<(ParticipantId, DkgSharePackage)> = self
+        let packages: Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> = self
             .participants
             .iter()
             .enumerate()
@@ -927,9 +936,9 @@ impl FeldmanVssSession {
                     v.extend_from_slice(&participant_id);
                     v
                 };
-                let encrypted = aes256gcm_encrypt_dkg(&share_bytes, &share_seed, &aad);
+                let encrypted = aes256gcm_encrypt_dkg(&share_bytes, &share_seed, &aad)?;
 
-                (
+                Ok((
                     participant_id,
                     DkgSharePackage {
                         sender: my_id,
@@ -937,12 +946,12 @@ impl FeldmanVssSession {
                         commitments: commitments.clone(),
                         version: 2,
                     },
-                )
+                ))
             })
             .collect();
 
         self.phase = DkgPhase::ShareDistribution;
-        Ok(packages)
+        packages
     }
 
     /// Process received shares from another participant (Step 2).
@@ -1190,42 +1199,44 @@ fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 }
 
 /// Derive AES-256 key for DKG share encryption from BLAKE3 key material.
-fn derive_dkg_aes_key(key_material: &[u8; 32]) -> [u8; 32] {
+fn derive_dkg_aes_key(key_material: &[u8; 32]) -> Result<[u8; 32], DkgError> {
     use hkdf::Hkdf;
     use sha2::Sha256;
     let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
     let mut aes_key = [0u8; 32];
     hk.expand(b"OMNIA-DKG-SHARE-V1", &mut aes_key)
-        .expect("HKDF expand for 32 bytes");
-    aes_key
+        .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("HKDF expand failed: {e}")))?;
+    Ok(aes_key)
 }
 
 /// AES-256-GCM encrypt a DKG share with associated data.
-fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) -> AeadCiphertext {
+fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) -> Result<AeadCiphertext, DkgError> {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
     use rand::RngCore;
 
-    let aes_key = derive_dkg_aes_key(key_material);
-    let cipher = Aes256Gcm::new_from_slice(&aes_key).expect("AES key valid");
+    let aes_key = derive_dkg_aes_key(key_material)?;
+    let cipher = Aes256Gcm::new_from_slice(&aes_key)
+        .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("AES key init failed: {e}")))?;
     let mut nonce = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce);
     let nonce_obj = Nonce::from_slice(&nonce);
     let ciphertext = cipher
         .encrypt(nonce_obj, aes_gcm::aead::Payload { msg: plaintext, aad })
-        .expect("AES-256-GCM encryption");
-    AeadCiphertext {
+        .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("AES-256-GCM encryption failed: {e}")))?;
+    Ok(AeadCiphertext {
         ciphertext,
         nonce,
         associated_data: aad.to_vec(),
-    }
+    })
 }
 
 /// AES-256-GCM decrypt a DKG share.
 fn aes256gcm_decrypt_dkg(ct: &AeadCiphertext, key_material: &[u8; 32]) -> Result<Vec<u8>, DkgError> {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 
-    let aes_key = derive_dkg_aes_key(key_material);
-    let cipher = Aes256Gcm::new_from_slice(&aes_key).expect("AES key valid");
+    let aes_key = derive_dkg_aes_key(key_material)?;
+    let cipher = Aes256Gcm::new_from_slice(&aes_key)
+        .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("AES key init failed: {e}")))?;
     let nonce = Nonce::from_slice(&ct.nonce);
     cipher
         .decrypt(
@@ -1610,7 +1621,7 @@ mod tests {
         let data = b"dkg-share-secret";
         let key = [0xAB_u8; 32];
         let aad = b"sender||recipient";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         let pt = aes256gcm_decrypt_dkg(&ct, &key).unwrap();
         assert_eq!(pt, data.to_vec());
     }
@@ -1620,7 +1631,7 @@ mod tests {
         let data = b"tamper-test-share";
         let key = [0xCD_u8; 32];
         let aad = b"s||r";
-        let mut ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let mut ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         ct.ciphertext[0] ^= 0xFF;
         let result = aes256gcm_decrypt_dkg(&ct, &key);
         assert!(result.is_err(), "Tampered ciphertext should fail AEAD");
@@ -1631,7 +1642,7 @@ mod tests {
         let data = b"relay-attack-share";
         let key = [0xEF_u8; 32];
         let aad = b"sender1||recipient1";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         // Change AAD to simulate relay attack
         let mut ct_relayed = ct.clone();
         ct_relayed.associated_data = b"sender1||recipient2".to_vec();
@@ -1644,7 +1655,7 @@ mod tests {
         let data = b"wrong-recipient-share";
         let key = [0x11_u8; 32];
         let aad = b"s||r1";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad);
+        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         let wrong_key = [0x22_u8; 32];
         let result = aes256gcm_decrypt_dkg(&ct, &wrong_key);
         assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");

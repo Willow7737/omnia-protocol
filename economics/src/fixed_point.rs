@@ -76,6 +76,9 @@ impl DecayRate {
     /// assert_eq!(clamped.ppm(), BASIS_PPM); // Clamped to 100%
     /// ```
     pub fn new(ppm: u64) -> Self {
+        if ppm > BASIS_PPM {
+            tracing::warn!("DecayRate::new({}) clamped to maximum {}", ppm, BASIS_PPM);
+        }
         Self {
             ppm: ppm.min(BASIS_PPM),
         }
@@ -108,7 +111,7 @@ impl DecayRate {
     /// assert_eq!(rate.ppm(), 100_000);
     /// ```
     pub fn from_percent(percent: u64) -> Self {
-        Self::new(percent * 10_000)
+        Self::new(percent.saturating_mul(10_000))
     }
 
     /// Return the PPM value of this decay rate.

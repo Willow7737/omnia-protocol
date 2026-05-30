@@ -14,6 +14,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 use thiserror::Error;
 
+/// Maximum number of entries allowed in a deserialized vector clock
+pub const MAX_CLOCK_ENTRIES: usize = 10_000;
+
 /// Unique identifier for a node in the network
 pub type NodeId = [u8; 32];
 
@@ -213,6 +216,11 @@ impl VectorClock {
             return Err(VectorClockError::InvalidNodeId("insufficient bytes".to_string()));
         }
         let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+        if count > MAX_CLOCK_ENTRIES {
+            return Err(VectorClockError::InvalidNodeId(format!(
+                "clock count {count} exceeds maximum {MAX_CLOCK_ENTRIES}"
+            )));
+        }
         let mut clocks = BTreeMap::new();
         let mut offset = 4;
         for _ in 0..count {
@@ -226,7 +234,11 @@ impl VectorClock {
                     .try_into()
                     .expect("slice is exactly 8 bytes per bounds check above"),
             );
-            clocks.insert(node_id, clock);
+            if clocks.insert(node_id, clock).is_some() {
+                return Err(VectorClockError::InvalidNodeId(
+                    "duplicate node ID in vector clock bytes".to_string(),
+                ));
+            }
             offset += 40;
         }
         Ok(Self { clocks })

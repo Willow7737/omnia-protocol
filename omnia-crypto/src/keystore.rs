@@ -592,7 +592,7 @@ impl EncryptedKeyStore {
 
         // SLIP-0010 master key derivation from the seed
         // HMAC-SHA512(Key = "ed25519 seed", Data = seed)
-        let master_ikm = hmac_sha512(b"ed25519 seed", &secret_bytes);
+        let master_ikm = hmac_sha512(b"ed25519 seed", &secret_bytes)?;
         let mut key = master_ikm[..32]
             .try_into()
             .map_err(|_| KeyStoreError::Crypto("key slice error".into()))?;
@@ -610,7 +610,7 @@ impl EncryptedKeyStore {
         ];
 
         for &child_index in &derivation_path {
-            let derived = slip0010_derive_child(&key, &chain_code, child_index);
+            let derived = slip0010_derive_child(&key, &chain_code, child_index)?;
             key = derived[..32]
                 .try_into()
                 .map_err(|_| KeyStoreError::Crypto("derived key slice error".into()))?;
@@ -730,7 +730,7 @@ impl KeyRotationProof {
 /// Output format: `salt(32) || nonce(12) || ciphertext+tag`
 fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreError> {
     let salt = generate_salt();
-    let key = derive_key_hkdf(passphrase, &salt);
+    let key = derive_key_hkdf(passphrase, &salt)?;
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
@@ -785,7 +785,7 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
     let nonce = Nonce::from_slice(&data[32..44]);
     let ciphertext = &data[44..];
 
-    let key = derive_key_hkdf(passphrase, salt);
+    let key = derive_key_hkdf(passphrase, salt)?;
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
@@ -795,12 +795,12 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
 }
 
 /// Derive a 32-byte encryption key using HKDF-SHA256.
-fn derive_key_hkdf(passphrase: &str, salt: &[u8]) -> [u8; 32] {
+fn derive_key_hkdf(passphrase: &str, salt: &[u8]) -> Result<[u8; 32], KeyStoreError> {
     let hkdf = Hkdf::<Sha256>::new(Some(salt), passphrase.as_bytes());
     let mut key = [0u8; 32];
     hkdf.expand(b"omnia-keystore-v1", &mut key)
-        .expect("HKDF expand should not fail with 32-byte output");
-    key
+        .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
+    Ok(key)
 }
 
 /// Generate a random 32-byte salt.
@@ -818,17 +818,18 @@ fn generate_salt() -> [u8; 32] {
 ///
 /// Returns a 64-byte output: the first 32 bytes are the derived key,
 /// the second 32 bytes are the derived chain code.
-fn hmac_sha512(key: &[u8], data: &[u8]) -> [u8; 64] {
+fn hmac_sha512(key: &[u8], data: &[u8]) -> Result<[u8; 64], KeyStoreError> {
     use hmac::Mac;
     type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
-    let mut mac = <HmacSha512 as Mac>::new_from_slice(key).expect("HMAC can accept any key size");
+    let mut mac = <HmacSha512 as Mac>::new_from_slice(key)
+        .map_err(|e| KeyStoreError::Crypto(format!("HMAC key init failed: {e}")))?;
     mac.update(data);
     let result = mac.finalize().into_bytes();
 
     let mut output = [0u8; 64];
     output.copy_from_slice(&result);
-    output
+    Ok(output)
 }
 
 /// Derive a SLIP-0010 child key from a parent key and chain code.
@@ -839,7 +840,7 @@ fn hmac_sha512(key: &[u8], data: &[u8]) -> [u8; 64] {
 /// Returns a 64-byte array where:
 /// - Bytes 0..32 are the derived child key
 /// - Bytes 32..64 are the derived child chain code
-fn slip0010_derive_child(parent_key: &[u8; 32], chain_code: &[u8; 32], index: u32) -> [u8; 64] {
+fn slip0010_derive_child(parent_key: &[u8; 32], chain_code: &[u8; 32], index: u32) -> Result<[u8; 64], KeyStoreError> {
     // SLIP-0010: data = 0x00 || ser_256(k_par) || i (4 bytes big-endian, hardened)
     let mut data = Vec::with_capacity(1 + 32 + 4);
     data.push(0x00);
@@ -881,7 +882,7 @@ fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     note = "Use derive_key_hkdf instead — deterministic key derivation without salt is insecure"
 )]
 fn derive_key(passphrase: &str) -> [u8; 32] {
-    blake3_hash_domain(b"omnia-commitment", passphrase.as_bytes())
+    blake3_hash_domain(b"OMNIA-KEY-DERIVATION-V1", passphrase.as_bytes())
 }
 
 #[cfg(test)]
@@ -1098,8 +1099,8 @@ mod tests {
         let passphrase = "same-passphrase";
         let salt1 = [1u8; 32];
         let salt2 = [2u8; 32];
-        let key1 = derive_key_hkdf(passphrase, &salt1);
-        let key2 = derive_key_hkdf(passphrase, &salt2);
+        let key1 = derive_key_hkdf(passphrase, &salt1).expect("HKDF derive key 1");
+        let key2 = derive_key_hkdf(passphrase, &salt2).expect("HKDF derive key 2");
         assert_ne!(key1, key2, "Different salts must produce different keys from HKDF");
     }
 
@@ -1107,8 +1108,8 @@ mod tests {
     fn test_derive_key_hkdf_same_inputs() {
         let passphrase = "same-passphrase";
         let salt = [42u8; 32];
-        let key1 = derive_key_hkdf(passphrase, &salt);
-        let key2 = derive_key_hkdf(passphrase, &salt);
+        let key1 = derive_key_hkdf(passphrase, &salt).expect("HKDF derive key 1");
+        let key2 = derive_key_hkdf(passphrase, &salt).expect("HKDF derive key 2");
         assert_eq!(key1, key2, "Same passphrase and salt must produce the same key");
     }
 

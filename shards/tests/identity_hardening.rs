@@ -20,7 +20,7 @@ fn test_vc() -> VectorClock {
 #[test]
 fn test_shamir_split_and_reconstruct() {
     let secret = b"my super secret key";
-    let shares = ShamirRecovery::split(secret, 3, 5);
+    let shares = ShamirRecovery::split(secret, 3, 5).unwrap();
     assert_eq!(shares.len(), 5);
 
     // Reconstruct with exactly threshold shares
@@ -97,7 +97,9 @@ fn test_full_identity_lifecycle() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // 2. Enroll biometric
     state
@@ -108,6 +110,7 @@ fn test_full_identity_lifecycle() {
                 algorithm: "fingerprint_v2".to_string(),
             },
             &vc,
+            None,
         )
         .unwrap();
     assert!(state.verify_biometric(&did, b"fingerprint_data").unwrap());
@@ -145,6 +148,7 @@ fn test_full_identity_lifecycle() {
                 agent_did: "did:omnia:agent1".to_string(),
             },
             &vc,
+            None,
         )
         .unwrap();
     let agent = state.agent_registry.get("did:omnia:agent1").unwrap();
@@ -160,7 +164,9 @@ fn test_biometric_verification_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // Enroll
     state
@@ -171,6 +177,7 @@ fn test_biometric_verification_via_apply() {
                 algorithm: "iris_v3".to_string(),
             },
             &vc,
+            None,
         )
         .unwrap();
 
@@ -181,6 +188,7 @@ fn test_biometric_verification_via_apply() {
             template: b"iris_scan".to_vec(),
         },
         &vc,
+        None,
     );
     assert!(result.is_ok());
 
@@ -191,6 +199,7 @@ fn test_biometric_verification_via_apply() {
             template: b"wrong_scan".to_vec(),
         },
         &vc,
+        None,
     );
     assert!(result.is_err());
 }
@@ -204,7 +213,9 @@ fn test_configure_recovery_via_apply() {
     let pubkey = keypair.verifying_key().to_bytes();
     let did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     // Configure recovery
     state
@@ -216,6 +227,7 @@ fn test_configure_recovery_via_apply() {
                 total_shares: 5,
             },
             &vc,
+            None,
         )
         .unwrap();
 
@@ -235,7 +247,9 @@ fn test_agent_revocation_disables_capabilities() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     let agent = AgentIdentity {
         did: "did:omnia:agent:compute1".to_string(),
@@ -255,6 +269,7 @@ fn test_agent_revocation_disables_capabilities() {
                 agent,
             },
             &vc,
+            None,
         )
         .unwrap();
 
@@ -269,6 +284,7 @@ fn test_agent_revocation_disables_capabilities() {
                 agent_did: "did:omnia:agent:compute1".to_string(),
             },
             &vc,
+            None,
         )
         .unwrap();
 
@@ -287,7 +303,9 @@ fn test_duplicate_agent_rejected() {
     let pubkey = keypair.verifying_key().to_bytes();
     let owner_did = format!("did:omnia:{}", hex::encode(pubkey));
     let doc = DidDocument::new(owner_did.clone(), pubkey, 0);
-    state.apply(&IdentityOp::CreateDid { document: doc }, &vc).unwrap();
+    state
+        .apply(&IdentityOp::CreateDid { document: doc }, &vc, None)
+        .unwrap();
 
     let agent1 = AgentIdentity {
         did: "did:omnia:agent:dup".to_string(),
@@ -305,6 +323,7 @@ fn test_duplicate_agent_rejected() {
                 agent: agent1,
             },
             &vc,
+            None,
         )
         .unwrap();
 
@@ -324,6 +343,7 @@ fn test_duplicate_agent_rejected() {
             agent: agent2,
         },
         &vc,
+        None,
     );
     assert!(result.is_err());
 }
@@ -340,6 +360,7 @@ fn test_biometric_for_nonexistent_did_fails() {
             algorithm: "face_v1".to_string(),
         },
         &vc,
+        None,
     );
     assert!(result.is_err());
 }
@@ -347,7 +368,7 @@ fn test_biometric_for_nonexistent_did_fails() {
 #[test]
 fn test_shamir_higher_threshold() {
     let secret = b"a_32_byte_secret_key_for_testing!";
-    let shares = ShamirRecovery::split(secret, 5, 10);
+    let shares = ShamirRecovery::split(secret, 5, 10).unwrap();
     assert_eq!(shares.len(), 10);
 
     // Any 5 shares should reconstruct

@@ -65,9 +65,9 @@ fn test_multi_node_bft_finality() {
         vector_clock.set(creator, seq + 1);
 
         let event = if self_parent.is_none() {
-            Event::genesis(creator, vec![seq as u8])
+            Event::genesis(creator, vec![seq as u8]).expect("valid genesis event")
         } else {
-            Event::new(creator, seq, vector_clock.clone(), self_parent, None, vec![seq as u8])
+            Event::new(creator, seq, vector_clock.clone(), self_parent, None, vec![seq as u8]).expect("valid event")
         };
 
         let event_id = event.id;
@@ -124,7 +124,7 @@ fn test_bft_safety_with_byzantine_node() {
         vector_clock.set(honest_creator, seq + 1);
 
         let event = if self_parent.is_none() {
-            Event::genesis(honest_creator, vec![seq as u8])
+            Event::genesis(honest_creator, vec![seq as u8]).expect("valid genesis event")
         } else {
             Event::new(
                 honest_creator,
@@ -134,6 +134,7 @@ fn test_bft_safety_with_byzantine_node() {
                 None,
                 vec![seq as u8],
             )
+            .expect("valid event")
         };
 
         let event_id = event.id;
@@ -204,6 +205,7 @@ fn test_consensus_progress_with_minority_faults() {
 
             let event = if self_parents[node_idx].is_none() {
                 Event::genesis(creator, format!("round-{round}-node-{node_idx}").into_bytes())
+                    .expect("valid genesis event")
             } else {
                 Event::new(
                     creator,
@@ -213,6 +215,7 @@ fn test_consensus_progress_with_minority_faults() {
                     other_parent,
                     format!("round-{round}-node-{node_idx}").into_bytes(),
                 )
+                .expect("valid event")
             };
 
             let event_id = event.id;

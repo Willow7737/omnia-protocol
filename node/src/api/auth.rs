@@ -13,9 +13,11 @@
 //! | `OMNIA_JWT_SECRET`        | HMAC-SHA256 secret for signing/verifying   | *(required for JWT ops)* |
 //! | `OMNIA_AUTHORIZED_CALLERS` | Comma-separated list of caller IDs         | *(empty — no privileged callers)* |
 //! | `OMNIA_RATE_LIMIT_RPS`    | Max requests per second per client         | `10`                     |
+//! | `OMNIA_CORS_ORIGINS`      | Comma-separated allowed origins (or `*`)   | `*` (all origins)        |
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::time::Instant;
 
 use axum::extract::Request;
@@ -24,8 +26,10 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
+use axum::Json;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
@@ -169,11 +173,53 @@ pub struct CallerIdentity {
 // JWT helpers
 // ---------------------------------------------------------------------------
 
+/// Global cache for the JWT signing secret.
+///
+/// `None` means the cache has not been populated yet; `Some(inner)` holds
+/// the cached result of reading `OMNIA_JWT_SECRET` (where `inner` is
+/// `None` if the env var is unset). The cache persists for the process
+/// lifetime but can be reset in tests via [`reset_jwt_secret_for_test`].
+static JWT_SECRET: StdMutex<Option<Option<String>>> = StdMutex::new(None);
+
+/// Initialise the JWT secret cache. Called once at application startup.
+///
+/// This must be invoked before any request hits the auth middleware so
+/// that the secret is captured from the environment at a deterministic
+/// point. Subsequent calls are no-ops if the cache is already populated.
+pub fn init_jwt_secret() {
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_none() {
+        *guard = Some(std::env::var("OMNIA_JWT_SECRET").ok());
+    }
+}
+
 /// Read the JWT signing secret from the `OMNIA_JWT_SECRET` env var.
 ///
-/// Returns `None` if the variable is not set.
+/// Returns `None` if the variable is not set. The value is cached so
+/// that it is read at most once per process lifetime (unless explicitly
+/// reset via [`reset_jwt_secret_for_test`] in test code).
 fn jwt_secret() -> Option<String> {
-    std::env::var("OMNIA_JWT_SECRET").ok()
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    match &*guard {
+        Some(cached) => cached.clone(),
+        None => {
+            let val = std::env::var("OMNIA_JWT_SECRET").ok();
+            *guard = Some(val.clone());
+            val
+        }
+    }
+}
+
+/// Reset the JWT secret cache so the env var will be re-read on next access.
+///
+/// Only available in test builds. Necessary because `OnceLock` (or any
+/// caching mechanism) persists across test functions within the same
+/// process, and some tests need to verify behaviour when the env var is
+/// unset.
+#[cfg(test)]
+fn reset_jwt_secret_for_test() {
+    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = None;
 }
 
 /// Create a signed JWT for the given caller identity.
@@ -239,23 +285,30 @@ fn epoch_secs() -> u64 {
 /// On success the decoded [`CallerIdentity`] is stored in request extensions
 /// so handlers can retrieve it with `req.extensions().get::<CallerIdentity>()`.
 ///
-/// If `OMNIA_JWT_SECRET` is not set, the middleware **passes through** without
-/// authentication, inserting a default anonymous caller identity. This allows
-/// development and testing without JWT configuration while ensuring that
-/// production deployments (where the secret is set) enforce authentication.
+/// If `OMNIA_JWT_SECRET` is not set, the middleware **rejects the request**
+/// with 503 Service Unavailable instead of silently bypassing authentication.
+/// This prevents a critical auth bypass in production when the environment
+/// variable is accidentally unset.
 ///
 /// On failure an appropriate HTTP error response is returned immediately.
 pub async fn require_auth(mut req: Request, next: Next) -> Response {
-    // If no JWT secret is configured, skip authentication and use an
-    // anonymous identity. This keeps the API usable in development and
-    // testing without requiring JWT setup.
+    // If no JWT secret is configured, reject the request instead of
+    // silently bypassing authentication. This prevents a critical auth
+    // bypass in production when OMNIA_JWT_SECRET is accidentally unset.
     let secret = match jwt_secret() {
         Some(s) => s,
         None => {
-            req.extensions_mut().insert(CallerIdentity {
-                caller_id: "__anonymous__".to_string(),
-            });
-            return next.run(req).await;
+            // Reject all requests when JWT secret is not configured
+            // This prevents silent auth bypass in production
+            tracing::error!("OMNIA_JWT_SECRET not set - rejecting authenticated request");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "authentication not configured",
+                    "message": "OMNIA_JWT_SECRET environment variable must be set"
+                })),
+            )
+                .into_response();
         }
     };
 
@@ -322,6 +375,16 @@ pub fn require_privileged(
 // Token-bucket rate limiter
 // ---------------------------------------------------------------------------
 
+/// A single token bucket for one client, with last-access tracking
+/// for stale-bucket eviction.
+#[derive(Debug)]
+struct TrackedBucket {
+    /// The underlying token bucket.
+    bucket: Bucket,
+    /// Timestamp of the last access (consume or refill check).
+    last_access: Instant,
+}
+
 /// A single token bucket for one client.
 #[derive(Debug)]
 struct Bucket {
@@ -364,14 +427,18 @@ impl Bucket {
     }
 }
 
-/// Per-client token-bucket rate limiter.
+/// Per-client token-bucket rate limiter with stale-bucket eviction.
 ///
 /// Each distinct client key (typically an IP address) gets its own bucket.
 /// Buckets are lazily created on first request and refilled over time.
+///
+/// Stale buckets (no access for > 1 hour) are evicted when the total
+/// number of buckets exceeds 1 000, preventing unbounded memory growth
+/// from clients that connect once and never return.
 #[derive(Debug)]
 pub struct RateLimiter {
-    /// Map from client key to its token bucket.
-    buckets: Mutex<HashMap<String, Bucket>>,
+    /// Map from client key to its tracked token bucket.
+    buckets: Mutex<HashMap<String, TrackedBucket>>,
     /// Maximum burst size (tokens per bucket).
     max_tokens: f64,
     /// Sustained refill rate in tokens per second.
@@ -406,24 +473,45 @@ impl RateLimiter {
         Self::new(rps * 2, rps)
     }
 
+    /// Evict buckets that have not been accessed for over 1 hour.
+    ///
+    /// This prevents unbounded memory growth from one-off clients.
+    fn evict_stale_buckets(buckets: &mut HashMap<String, TrackedBucket>) {
+        let stale_threshold = std::time::Duration::from_secs(3600); // 1 hour
+        buckets.retain(|_, tb| tb.last_access.elapsed() < stale_threshold);
+    }
+
     /// Attempt to consume one token for the given client key.
     ///
     /// Returns `true` if the request should be allowed, `false` if the
     /// rate limit has been exceeded.
     pub async fn try_consume(&self, client_key: &str) -> bool {
         let mut buckets = self.buckets.lock().await;
-        let bucket = buckets
-            .entry(client_key.to_string())
-            .or_insert_with(|| Bucket::new(self.max_tokens, self.refill_rate));
-        bucket.try_consume()
+
+        // Evict stale buckets periodically to prevent unbounded memory growth
+        if buckets.len() > 1000 {
+            Self::evict_stale_buckets(&mut buckets);
+        }
+
+        let tb = buckets.entry(client_key.to_string()).or_insert_with(|| TrackedBucket {
+            bucket: Bucket::new(self.max_tokens, self.refill_rate),
+            last_access: Instant::now(),
+        });
+        tb.last_access = Instant::now();
+        tb.bucket.try_consume()
     }
 }
 
 /// Axum middleware that enforces per-client rate limiting.
 ///
-/// The client key is derived from the `X-Forwarded-For` or `X-Real-IP`
-/// header (set by a reverse proxy), falling back to `"__default__"` when
-/// neither header is present.
+/// The client key is derived (in priority order) from:
+/// 1. The actual peer IP from `ConnectInfo<SocketAddr>` (when available)
+/// 2. The `X-Real-IP` header (set by a trusted reverse proxy)
+/// 3. The fallback key `"unauthenticated"`
+///
+/// **Note**: `X-Forwarded-For` is intentionally **not** used because it can
+/// be spoofed by clients, causing all malicious requests to share a single
+/// rate-limit bucket and bypass per-client limits.
 ///
 /// The [`RateLimiter`] must be provided via an `Extension` layer.
 ///
@@ -433,16 +521,21 @@ pub async fn rate_limit_middleware(
     req: Request,
     next: Next,
 ) -> Response {
+    // Try to get actual peer IP from connection info first.
+    // Fallback to X-Real-IP (more reliable than X-Forwarded-For).
+    // Do NOT trust X-Forwarded-For from untrusted sources as it can be
+    // spoofed, causing all requests to share a single rate-limit bucket.
     let client_key = req
-        .headers()
-        .get("x-forwarded-for")
-        .or_else(|| req.headers().get("x-real-ip"))
-        .and_then(|v| v.to_str().ok())
-        .map(|s| {
-            // X-Forwarded-For may contain multiple IPs; use the first one.
-            s.split(',').next().unwrap_or(s).trim().to_string()
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string())
+        .or_else(|| {
+            req.headers()
+                .get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.trim().to_string())
         })
-        .unwrap_or_else(|| "__default__".to_string());
+        .unwrap_or_else(|| "unauthenticated".to_string());
 
     if limiter.try_consume(&client_key).await {
         next.run(req).await
@@ -455,23 +548,49 @@ pub async fn rate_limit_middleware(
 // CORS helper
 // ---------------------------------------------------------------------------
 
-/// Build a sensible default [`CorsLayer`] for the Omnia REST API.
+/// Build a [`CorsLayer`] for the Omnia REST API, configurable via the
+/// `OMNIA_CORS_ORIGINS` environment variable.
+///
+/// - When `OMNIA_CORS_ORIGINS` is set to `*` (or unset), all origins are
+///   allowed **with a warning** — suitable only for development.
+/// - When set to a comma-separated list of origins (e.g.
+///   `https://app.example.com,https://admin.example.com`), only those
+///   origins are permitted.
 ///
 /// Defaults:
-/// - **Origins**: any (suitable for development; tighten for production)
 /// - **Methods**: `GET`, `POST`, `PUT`, `DELETE`
-/// - **Headers**: `Authorization`, `Content-Type`
+/// - **Headers**: any (via `tower_http::cors::Any`)
 /// - **Max age**: 1 hour
 pub fn default_cors_layer() -> CorsLayer {
-    CorsLayer::permissive()
-        .allow_methods([
-            axum::http::Method::GET,
-            axum::http::Method::POST,
-            axum::http::Method::PUT,
-            axum::http::Method::DELETE,
-        ])
-        .allow_headers([AUTHORIZATION, CONTENT_TYPE])
-        .max_age(std::time::Duration::from_secs(3600))
+    let allowed_origins = std::env::var("OMNIA_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
+
+    if allowed_origins == "*" {
+        tracing::warn!("CORS allows all origins - not recommended for production");
+        CorsLayer::permissive()
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+            ])
+            .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+            .max_age(std::time::Duration::from_secs(3600))
+    } else {
+        let origins: Vec<_> = allowed_origins
+            .split(',')
+            .filter_map(|o| o.trim().parse().ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+            ])
+            .allow_headers(tower_http::cors::Any)
+            .max_age(std::time::Duration::from_secs(3600))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,12 +633,14 @@ mod tests {
     fn test_create_and_validate_token() {
         // Hold the lock for the entire test so no other test touches the
         // JWT_SECRET env var while we depend on it.
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        reset_jwt_secret_for_test();
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
         let token = create_token("caller-42", 3600).expect("create token");
         let claims = validate_token(&token).expect("validate token");
         assert_eq!(claims.sub, "caller-42");
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
     }
 
     #[test]
@@ -547,24 +668,28 @@ mod tests {
 
     #[test]
     fn test_create_token_no_secret() {
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Remove the var if it was set by a previous test, then verify
         // that create_token returns SecretNotConfigured.
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
         let result = create_token("caller-42", 3600);
         assert!(
             matches!(result, Err(AuthError::SecretNotConfigured)),
             "Expected SecretNotConfigured when OMNIA_JWT_SECRET is unset"
         );
+        reset_jwt_secret_for_test();
     }
 
     #[test]
     fn test_validate_invalid_token() {
-        let _lock = JWT_SECRET_LOCK.lock().expect("JWT_SECRET_LOCK poisoned");
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
+        reset_jwt_secret_for_test();
         let result = validate_token("not.a.valid-token");
         assert!(matches!(result, Err(AuthError::InvalidToken(_))));
         std::env::remove_var("OMNIA_JWT_SECRET");
+        reset_jwt_secret_for_test();
     }
 
     #[tokio::test]

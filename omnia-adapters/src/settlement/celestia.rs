@@ -77,14 +77,21 @@ pub struct CelestiaAdapter {
     config: CelestiaConfig,
     /// Monotonically increasing counter for generating unique tx hashes.
     counter: AtomicU64,
+    /// Cached HTTP client to avoid creating a new one on every call.
+    #[cfg(feature = "celestia")]
+    client: reqwest::Client,
 }
 
 impl CelestiaAdapter {
     /// Create a new Celestia adapter with the given configuration.
     pub fn new(config: CelestiaConfig) -> Self {
+        #[cfg(feature = "celestia")]
+        let client = reqwest::Client::new();
         Self {
             config,
             counter: AtomicU64::new(0),
+            #[cfg(feature = "celestia")]
+            client,
         }
     }
 
@@ -111,9 +118,6 @@ impl CelestiaAdapter {
 #[async_trait]
 impl SettlementAdapter for CelestiaAdapter {
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError> {
-        use reqwest::Client;
-
-        let client = Client::new();
         let tx_hash = self.mock_tx_hash(root);
 
         // POST to Celestia RPC endpoint: /submit_blob
@@ -131,7 +135,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: submitting state root to DA layer"
         );
 
-        let response = client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .header("Content-Type", "application/json")
@@ -157,10 +162,6 @@ impl SettlementAdapter for CelestiaAdapter {
     }
 
     async fn fetch_finality(&self, tx: TxHash) -> Result<FinalityProof, SettlementError> {
-        use reqwest::Client;
-
-        let client = Client::new();
-
         // GET from Celestia RPC endpoint: /data_commitment or /height
         // Poll the Celestia node for inclusion information.
         let url = format!(
@@ -174,7 +175,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: fetching finality proof"
         );
 
-        let response = client
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .send()
@@ -214,11 +216,7 @@ impl SettlementAdapter for CelestiaAdapter {
         })
     }
 
-    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError> {
-        use reqwest::Client;
-
-        let client = Client::new();
-
+    async fn verify_inclusion(&self, leaf: &[u8; 32], proof: &MerkleProof) -> Result<bool, SettlementError> {
         // Verify the Merkle proof by checking it against the Celestia DA layer.
         // In practice, we would:
         //   1. Fetch the data root from Celestia at the given height
@@ -226,7 +224,7 @@ impl SettlementAdapter for CelestiaAdapter {
         //   3. Compare the computed root with the on-chain data root
         //
         // For now, we do a local verification: compute the Merkle root from
-        // the proof and then query Celestia to confirm the root exists.
+        // the leaf and proof and then query Celestia to confirm the root exists.
 
         // First, do a local Merkle root computation to validate proof structure
         if proof.siblings.len() != proof.directions.len() {
@@ -235,9 +233,8 @@ impl SettlementAdapter for CelestiaAdapter {
             ));
         }
 
-        // Use the default leaf as the leaf value for verification
-        let default_leaf = [0u8; 32];
-        let _computed_root = compute_root_from_proof(&default_leaf, proof);
+        // Compute root from the provided leaf and proof
+        let _computed_root = compute_root_from_proof(leaf, proof);
 
         // Query Celestia for the share commitment to confirm inclusion
         let url = format!("{}/share/commitment", self.config.rpc_endpoint.trim_end_matches('/'));
@@ -247,7 +244,8 @@ impl SettlementAdapter for CelestiaAdapter {
             "CelestiaAdapter: verifying Merkle inclusion proof"
         );
 
-        let response = client
+        let response = self
+            .client
             .get(&url)
             .header("Authorization", format!("Bearer {}", self.config.auth_token))
             .send()
@@ -305,7 +303,7 @@ impl SettlementAdapter for CelestiaAdapter {
         })
     }
 
-    async fn verify_inclusion(&self, _proof: &MerkleProof) -> Result<bool, SettlementError> {
+    async fn verify_inclusion(&self, _leaf: &[u8; 32], _proof: &MerkleProof) -> Result<bool, SettlementError> {
         tracing::info!("[CelestiaAdapter/Mock] verify_inclusion: logging (celestia feature disabled)");
         // Mock: all inclusion proofs are valid
         Ok(true)
@@ -422,7 +420,7 @@ mod tests {
     async fn test_celestia_mock_verify_inclusion() {
         let adapter = CelestiaAdapter::with_defaults();
         let proof = crate::merkle::Blake3MerkleProof::new(vec![[0u8; 32]], vec![true]);
-        assert!(adapter.verify_inclusion(&proof).await.unwrap());
+        assert!(adapter.verify_inclusion(&[0u8; 32], &proof).await.unwrap());
     }
 
     #[tokio::test]

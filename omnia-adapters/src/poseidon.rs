@@ -381,9 +381,9 @@ fn mds_multiply_gadget(mds: &[[Fr; T]; T], state: &[FpVar<Fr>; T]) -> [FpVar<Fr>
 /// The round structure is: [R_F/2 full] [R_P partial] [R_F/2 full]
 #[allow(clippy::needless_range_loop)]
 fn poseidon_permutation(state: &mut [Fr; T]) -> Result<(), ZkError> {
-    let mds = generate_mds_matrix()?;
-    let rc = generate_round_constants();
-    poseidon_permutation_with_params(state, &mds, &rc)
+    let mds = &*custom::MDS_MATRIX;
+    let rc = &*custom::ROUND_CONSTANTS;
+    poseidon_permutation_with_params(state, mds, rc)
 }
 
 /// Apply the Poseidon permutation with explicit parameters (off-circuit).
@@ -457,6 +457,11 @@ fn poseidon_permutation_with_params(state: &mut [Fr; T], mds: &[[Fr; T]; T], rc:
 /// Uses approximately 243 multiplication constraints (see module-level docs).
 #[allow(clippy::needless_range_loop)]
 fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<Fr>; T]) -> Result<(), ZkError> {
+    // On-circuit parameters are regenerated each time (rather than using the
+    // cached statics) because the circuit must be fully deterministic within
+    // the R1CS constraint system — cached statics use LazyLock which is not
+    // available inside the circuit synthesis context. Regeneration is cheap
+    // compared to the constraint generation cost.
     let mds = generate_mds_matrix()?;
     let rc = generate_round_constants();
 

@@ -175,7 +175,7 @@ fn test_physical_anchor_verification() {
     );
 
     // Create commitment over the provenance log bytes (as verify() expects)
-    let commitment = make_commitment(&provenance.to_bytes(), &kp);
+    let commitment = make_commitment(&provenance.to_bytes().unwrap(), &kp);
 
     let anchor = PhysicalAnchor::new(make_rf("did:omnia:creator", rf_hash), commitment, provenance);
 
@@ -209,7 +209,7 @@ fn test_provenance_serialization_roundtrip() {
         make_commitment(b"transfer", &kp),
     );
 
-    let bytes = log.to_bytes();
+    let bytes = log.to_bytes().unwrap();
     let restored = ProvenanceLog::from_bytes(&bytes).unwrap();
 
     assert_eq!(log.item_id, restored.item_id);

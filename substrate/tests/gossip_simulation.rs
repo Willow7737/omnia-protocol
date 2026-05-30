@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 //! Real Integration Test: Multi-Node Substrate Network
 //!
 //! Spins up N Substrate instances in-memory, submits signed events, and verifies:
@@ -89,7 +90,7 @@ async fn test_three_node_event_propagation() {
     let keypair = generate_keypair();
 
     // Node 0 creates genesis event
-    let mut event = Event::genesis(test_node(1), vec![1, 2, 3]);
+    let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
     event.sign_with_keypair(&keypair);
     let event_id = event.id;
 
@@ -158,7 +159,7 @@ async fn test_consensus_finality() {
     let mut genesis_ids = Vec::new();
     for i in 0..4 {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8]);
+        let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         genesis_ids.push(event.id);
         network.submit_event(i, &event).await;
@@ -190,15 +191,15 @@ fn test_causal_ordering_preserved() {
     let n1 = test_node(1);
 
     let mut vc = VectorClock::with_node(n1, 1);
-    let e1 = Event::new(n1, 0, vc.clone(), None, None, vec![1]);
+    let e1 = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
     let e1_id = e1.id;
 
     vc.increment(n1).unwrap();
-    let e2 = Event::new(n1, 1, vc.clone(), Some(e1_id), None, vec![2]);
+    let e2 = Event::new(n1, 1, vc.clone(), Some(e1_id), None, vec![2]).expect("valid event");
     let e2_id = e2.id;
 
     vc.increment(n1).unwrap();
-    let e3 = Event::new(n1, 2, vc.clone(), Some(e2_id), None, vec![3]);
+    let e3 = Event::new(n1, 2, vc.clone(), Some(e2_id), None, vec![3]).expect("valid event");
 
     // Verify causal chain
     assert!(e1.vector_clock.happened_before(&e2.vector_clock));
@@ -217,10 +218,10 @@ fn test_concurrent_event_detection() {
     let n2 = test_node(2);
 
     let vc1 = VectorClock::with_node(n1, 1);
-    let e1 = Event::new(n1, 0, vc1.clone(), None, None, vec![1]);
+    let e1 = Event::new(n1, 0, vc1.clone(), None, None, vec![1]).expect("valid event");
 
     let vc2 = VectorClock::with_node(n2, 1);
-    let e2 = Event::new(n2, 0, vc2.clone(), None, None, vec![2]);
+    let e2 = Event::new(n2, 0, vc2.clone(), None, None, vec![2]).expect("valid event");
 
     // Events from different nodes with no parent relation should be concurrent
     assert!(e1.vector_clock.concurrent(&e2.vector_clock));
@@ -329,7 +330,7 @@ async fn test_network_event_processed_through_consensus() {
     let mut event_ids = Vec::new();
     for i in 0..4 {
         let keypair = generate_keypair();
-        let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8 + 10]);
+        let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8 + 10]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         event_ids.push(event.id);
 
@@ -378,7 +379,7 @@ async fn test_process_pending_events_drains_network_rx() {
 
     // Create and serialize an event
     let keypair = generate_keypair();
-    let mut event = Event::genesis(test_node(2), vec![1, 2, 3]);
+    let mut event = Event::genesis(test_node(2), vec![1, 2, 3]).expect("valid genesis event");
     event.sign_with_keypair(&keypair);
     let event_id = event.id;
     let bytes = event.to_bytes().expect("test event serialization");

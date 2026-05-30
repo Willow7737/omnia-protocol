@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 //! Real Multi-Node libp2p Integration Tests
 //!
 //! These tests use REAL libp2p networking (QUIC transport, GossipSub protocol)
@@ -278,7 +279,7 @@ fn create_signed_event(creator_byte: u8, payload: Vec<u8>) -> Event {
     let keypair = generate_keypair();
     let mut node_id = [0u8; 32];
     node_id[0] = creator_byte;
-    let mut event = Event::genesis(node_id, payload);
+    let mut event = Event::genesis(node_id, payload).expect("valid genesis event");
     event.sign_with_keypair(&keypair);
     event
 }

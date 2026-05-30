@@ -101,7 +101,7 @@ impl SettlementAdapter for MockSettlementAdapter {
         })
     }
 
-    async fn verify_inclusion(&self, _proof: &MerkleProof) -> Result<bool, SettlementError> {
+    async fn verify_inclusion(&self, _leaf: &[u8; 32], _proof: &MerkleProof) -> Result<bool, SettlementError> {
         tokio::time::sleep(self.latency).await;
         // Mock: all inclusion proofs are valid
         Ok(true)
@@ -147,7 +147,7 @@ mod tests {
     async fn test_mock_verify_inclusion() {
         let adapter = MockSettlementAdapter::with_latency(Duration::from_millis(0));
         let proof = crate::merkle::Blake3MerkleProof::new(vec![[0u8; 32]], vec![true]);
-        assert!(adapter.verify_inclusion(&proof).await.unwrap());
+        assert!(adapter.verify_inclusion(&[0u8; 32], &proof).await.unwrap());
     }
 
     #[test]

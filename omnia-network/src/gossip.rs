@@ -14,7 +14,8 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
 use crate::blake3_domain::blake3_hash_domain;
-use crate::network::{NetworkCommand, NetworkEvent, OmniaNetwork};
+use crate::compression::{deserialize_with_compression, serialize_with_compression};
+use crate::network::{extract_peer_id_from_multiaddr, NetworkCommand, NetworkEvent, OmniaNetwork};
 use omnia_consensus::causal_graph::{CausalGraph, CausalGraphError};
 use omnia_consensus::rate_limiter::RateLimiter;
 use omnia_primitives::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
@@ -538,12 +539,24 @@ impl GossipProtocol {
 
                     if !self.seen_events.contains(&event.id) {
                         self.seen_events.insert(event.id);
+                        // FIX 8: Enforce max_pending limit
+                        if self.pending_events.len() >= self.config.max_pending {
+                            self.pending_events.pop_front(); // drop oldest to make room
+                        }
                         self.pending_events.push_back(*event);
                         self.stats.events_received += 1;
-                        // Prune seen_events if it exceeds the bound
+                        // FIX 3: Evict random half instead of clearing everything
                         if self.seen_events.len() > MAX_SEEN_EVENTS {
-                            self.seen_events.clear();
-                            tracing::debug!("seen_events exceeded {}, cleared dedup cache", MAX_SEEN_EVENTS);
+                            let to_remove: Vec<_> =
+                                self.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
+                            for id in to_remove {
+                                self.seen_events.remove(&id);
+                            }
+                            tracing::debug!(
+                                "seen_events exceeded {}, evicted {} entries",
+                                MAX_SEEN_EVENTS,
+                                MAX_SEEN_EVENTS / 2
+                            );
                         }
                     }
                 }
@@ -562,19 +575,22 @@ impl GossipProtocol {
         // Process all pending events (both locally created and network received)
         let to_process: Vec<Event> = self.pending_events.drain(..).collect();
 
-        for event in to_process {
+        // FIX 4: Batch graph writes — acquire write lock once for all inserts
+        {
             let mut graph = self.graph.write().await;
-            match graph.insert(event.clone()) {
-                Ok(ids) => {
-                    self.stats.events_accepted += 1;
-                    inserted_ids.extend(ids);
-                }
-                Err(CausalGraphError::DuplicateEvent(_)) => {
-                    self.stats.events_rejected += 1;
-                }
-                Err(e) => {
-                    warn!("Failed to insert event: {}", e);
-                    self.stats.events_rejected += 1;
+            for event in &to_process {
+                match graph.insert(event.clone()) {
+                    Ok(ids) => {
+                        self.stats.events_accepted += 1;
+                        inserted_ids.extend(ids);
+                    }
+                    Err(CausalGraphError::DuplicateEvent(_)) => {
+                        self.stats.events_rejected += 1;
+                    }
+                    Err(e) => {
+                        warn!("Failed to insert event: {}", e);
+                        self.stats.events_rejected += 1;
+                    }
                 }
             }
         }
@@ -582,22 +598,6 @@ impl GossipProtocol {
         Ok(inserted_ids)
     }
 }
-
-/// Try to extract a PeerId from a Multiaddr that ends with /p2p/<peer-id>.
-fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
-    use libp2p::multiaddr::Protocol;
-    addr.iter().find_map(|proto| match proto {
-        Protocol::P2p(peer_id) => Some(peer_id),
-        _ => None,
-    })
-}
-
-/// Compression flag for gossip messages: uncompressed.
-const COMPRESSION_NONE: u8 = 0x00;
-/// Compression flag for gossip messages: snappy compressed.
-const COMPRESSION_SNAPPY: u8 = 0x01;
-/// Minimum payload size for compression (smaller payloads aren't worth compressing).
-const COMPRESSION_THRESHOLD: usize = 256;
 
 /// Errors from the gossip protocol
 #[derive(Error, Debug, Clone)]
@@ -638,59 +638,23 @@ pub enum GossipError {
 
 /// Serialize an event with optional snappy compression.
 ///
-/// If the serialized payload exceeds `COMPRESSION_THRESHOLD` bytes and
-/// compression reduces the size, the output is prefixed with `0x01`
-/// (snappy flag). Otherwise, the output is prefixed with `0x00` (uncompressed).
-/// This flag byte ensures forward and backward compatibility.
+/// Delegates to [`crate::compression::serialize_with_compression`] and
+/// converts the error type to [`GossipError`].
 pub fn serialize_compressed<T: Serialize>(value: &T) -> Result<Vec<u8>, GossipError> {
-    let raw = postcard::to_allocvec(value).map_err(|e| GossipError::SerializationError(e.to_string()))?;
-
-    if raw.len() > COMPRESSION_THRESHOLD {
-        let mut encoder = snap::raw::Encoder::new();
-        let compressed = encoder
-            .compress_vec(&raw)
-            .map_err(|e| GossipError::Compression(e.to_string()))?;
-
-        if compressed.len() < raw.len() {
-            let mut output = Vec::with_capacity(1 + compressed.len());
-            output.push(COMPRESSION_SNAPPY);
-            output.extend_from_slice(&compressed);
-            return Ok(output);
-        }
-    }
-
-    let mut output = Vec::with_capacity(1 + raw.len());
-    output.push(COMPRESSION_NONE);
-    output.extend_from_slice(&raw);
-    Ok(output)
+    serialize_with_compression(value).map_err(GossipError::SerializationError)
 }
 
 /// Deserialize an event with optional snappy decompression.
 ///
-/// Reads the first byte as a compression flag:
-/// - `0x00`: uncompressed payload follows
-/// - `0x01`: snappy-compressed payload follows
+/// Delegates to [`crate::compression::deserialize_with_compression`] and
+/// converts the error type to [`GossipError`].
 pub fn deserialize_compressed<T: serde::de::DeserializeOwned>(data: &[u8]) -> Result<T, GossipError> {
-    let (flag, payload) = data
-        .split_first()
-        .ok_or_else(|| GossipError::InvalidMessageFormat("empty message".to_string()))?;
-
-    let raw = match *flag {
-        COMPRESSION_NONE => payload.to_vec(),
-        COMPRESSION_SNAPPY => {
-            let mut decoder = snap::raw::Decoder::new();
-            decoder
-                .decompress_vec(payload)
-                .map_err(|e| GossipError::Compression(e.to_string()))?
-        }
-        _ => {
-            return Err(GossipError::InvalidMessageFormat(format!(
-                "unknown compression flag: 0x{flag:02x}"
-            )));
-        }
-    };
-
-    postcard::from_bytes(&raw).map_err(|e| GossipError::SerializationError(e.to_string()))
+    deserialize_with_compression(data).map_err(|e| match e {
+        s if s.starts_with("unknown compression") => GossipError::InvalidMessageFormat(s),
+        s if s.starts_with("empty payload") => GossipError::InvalidMessageFormat(s),
+        s if s.contains("decompress") || s.contains("exceeds limit") => GossipError::Compression(s),
+        s => GossipError::SerializationError(s),
+    })
 }
 
 impl From<CausalGraphError> for GossipError {
@@ -750,7 +714,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         assert!(protocol.validate_event(&event).is_ok());
@@ -762,7 +726,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         // Event::new creates events with all-zero signature and pubkey
-        let event = Event::genesis(node(2), vec![1, 2, 3]);
+        let event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
 
         let result = protocol.validate_event(&event);
         assert!(result.is_err());
@@ -776,7 +740,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         // Corrupt the signature
@@ -793,7 +757,7 @@ mod tests {
         let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
 
         // Tamper with the ID
@@ -817,7 +781,7 @@ mod tests {
         gossip.network_rx = Some(rx);
 
         // Create an unsigned event (should be rejected by validation)
-        let event = Event::genesis(node(2), vec![1, 2, 3]);
+        let event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         let bytes = event.to_bytes().expect("test event serialization");
 
         let dummy_peer_id = PeerId::random();
@@ -853,7 +817,7 @@ mod tests {
 
         // Create a properly signed event
         let keypair = generate_keypair();
-        let mut event = Event::genesis(node(2), vec![1, 2, 3]);
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
         event.sign_with_keypair(&keypair);
         let event_id = event.id;
         let bytes = event.to_bytes().expect("test event serialization");
@@ -1046,11 +1010,22 @@ mod tests {
         assert_eq!(protocol.seen_events.len(), MAX_SEEN_EVENTS + 1);
 
         // Simulate the cleanup that happens in process_pending_events
+        // (evicts half instead of clearing everything)
         if protocol.seen_events.len() > MAX_SEEN_EVENTS {
-            protocol.seen_events.clear();
+            let to_remove: Vec<_> = protocol.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
+            for id in to_remove {
+                protocol.seen_events.remove(&id);
+            }
         }
 
-        // After cleanup, it should be empty (cleared dedup cache)
-        assert!(protocol.seen_events.is_empty());
+        // After eviction, approximately half the entries should remain
+        assert!(
+            protocol.seen_events.len() > 0,
+            "Eviction should keep approximately half the entries, not clear everything"
+        );
+        assert!(
+            protocol.seen_events.len() <= MAX_SEEN_EVENTS,
+            "After eviction, size should not exceed MAX_SEEN_EVENTS"
+        );
     }
 }

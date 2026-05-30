@@ -39,7 +39,8 @@ fn test_equivocation_detection() {
         node0_self_parent,
         None,
         vec![0xAA], // Payload A
-    );
+    )
+    .unwrap();
     event_a.sign_with_keypair(&node0_keypair);
 
     let mut vc2 = node0_vc.clone();
@@ -51,7 +52,8 @@ fn test_equivocation_detection() {
         node0_self_parent,
         None,
         vec![0xBB], // Payload B (different from A)
-    );
+    )
+    .unwrap();
     event_b.sign_with_keypair(&node0_keypair);
 
     // Verify these are indeed equivocating events
@@ -119,12 +121,12 @@ fn test_equivocation_detected_by_multiple_observers() {
     // Create equivocating events
     let mut vc1 = node0_vc.clone();
     vc1.set(node0_id, node0_sequence.saturating_add(1));
-    let mut event_a = Event::new(node0_id, node0_sequence, vc1, node0_self_parent, None, vec![1]);
+    let mut event_a = Event::new(node0_id, node0_sequence, vc1, node0_self_parent, None, vec![1]).unwrap();
     event_a.sign_with_keypair(&node0_keypair);
 
     let mut vc2 = node0_vc.clone();
     vc2.set(node0_id, node0_sequence.saturating_add(1));
-    let mut event_b = Event::new(node0_id, node0_sequence, vc2, node0_self_parent, None, vec![2]);
+    let mut event_b = Event::new(node0_id, node0_sequence, vc2, node0_self_parent, None, vec![2]).unwrap();
     event_b.sign_with_keypair(&node0_keypair);
 
     assert!(SlashingEngine::check_equivocation(&event_a, &event_b));

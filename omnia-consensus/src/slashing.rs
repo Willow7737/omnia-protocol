@@ -2052,10 +2052,10 @@ mod tests {
 
         // Two events with same creator and sequence but different IDs
         let vc1 = VectorClock::with_node(n1, 1);
-        let mut e1 = Event::new(n1, 0, vc1.clone(), None, None, vec![1]);
+        let mut e1 = Event::new(n1, 0, vc1.clone(), None, None, vec![1]).expect("valid event");
         e1.sign_with_keypair(&kp);
 
-        let mut e2 = Event::new(n1, 0, vc1, None, None, vec![2]); // different payload → different id
+        let mut e2 = Event::new(n1, 0, vc1, None, None, vec![2]).expect("valid event"); // different payload → different id
         e2.sign_with_keypair(&kp);
 
         assert!(SlashingEngine::check_equivocation(&e1, &e2));
@@ -2073,10 +2073,10 @@ mod tests {
         let kp = generate_keypair();
 
         let vc = VectorClock::with_node(n1, 1);
-        let mut e1 = Event::new(n1, 0, vc.clone(), None, None, vec![1]);
+        let mut e1 = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
         e1.sign_with_keypair(&kp);
 
-        let mut e2 = Event::new(n1, 1, vc, None, None, vec![1]); // different sequence
+        let mut e2 = Event::new(n1, 1, vc, None, None, vec![1]).expect("valid event"); // different sequence
         e2.sign_with_keypair(&kp);
 
         assert!(!SlashingEngine::check_equivocation(&e1, &e2));

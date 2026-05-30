@@ -28,9 +28,14 @@ fn test_node(id: u8) -> NodeId {
 /// financial shard uses vector clocks for conflict tracking.
 fn make_signed_event(keypair: &NodeKeypair, sequence: u64, node_id: NodeId) -> Event {
     let vc = VectorClock::with_node(node_id, sequence + 1);
-    let mut event = Event::new(node_id, sequence, vc, None, None, vec![]);
+    let mut event = Event::new(node_id, sequence, vc, None, None, vec![]).expect("event creation should succeed");
     event.sign_with_keypair(keypair);
     event
+}
+
+/// Helper: create a FinancialState with mint authority set to the given keypair.
+fn state_with_mint_authority(authority_keypair: &NodeKeypair) -> FinancialState {
+    FinancialState::with_mint_authority(account_id(authority_keypair))
 }
 
 /// Helper: extract the 32-byte public key (AccountId) from a keypair.
@@ -53,7 +58,7 @@ fn test_double_spend_attack() {
     let c = account_id(&kp_c);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
 
     // Mint 100 to A
     let mint_op = FinancialOp::Mint { to: a, amount: 100 };
@@ -102,7 +107,7 @@ fn test_negative_balance_prevention() {
     let b = account_id(&kp_b);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
 
     // Mint only 50 to A
     let mint_op = FinancialOp::Mint { to: a, amount: 50 };
@@ -149,8 +154,8 @@ fn test_replay_attack_nonce_bypass() {
     let node = test_node(1);
 
     // Build two identical starting states
-    let mut state1 = FinancialState::new();
-    let mut state2 = FinancialState::new();
+    let mut state1 = state_with_mint_authority(&kp_a);
+    let mut state2 = state_with_mint_authority(&kp_a);
 
     let mint_op = FinancialOp::Mint { to: a, amount: 200 };
     let event0 = make_signed_event(&kp_a, 0, node);
@@ -196,7 +201,7 @@ fn test_concurrent_transfers_balance_consistency() {
     let c = account_id(&kp_c);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
 
     // Mint 100 to A
     let mint_op = FinancialOp::Mint { to: a, amount: 100 };
@@ -284,7 +289,7 @@ fn test_zero_amount_burn_rejected() {
     let kp_a = generate_keypair();
     let a = account_id(&kp_a);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
     // Give A some balance so the only failure reason is the zero amount
     let mint_op = FinancialOp::Mint { to: a, amount: 100 };
     let event0 = make_signed_event(&kp_a, 0, test_node(1));
@@ -314,7 +319,7 @@ fn test_burn_insufficient_balance() {
     let a = account_id(&kp_a);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
 
     // Mint only 30 to A
     let mint_op = FinancialOp::Mint { to: a, amount: 30 };
@@ -360,7 +365,7 @@ fn test_total_supply_consistency() {
     let c = account_id(&kp_c);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
     assert_eq!(state.total_supply, 0);
 
     // Mint 500 to A
@@ -370,8 +375,8 @@ fn test_total_supply_consistency() {
         .expect("mint A");
     assert_eq!(state.total_supply, 500, "mint should add to total_supply");
 
-    // Mint 300 to B
-    let event1 = make_signed_event(&kp_b, 1, node);
+    // Mint 300 to B — mint event must be signed by the mint authority (kp_a)
+    let event1 = make_signed_event(&kp_a, 1, node);
     state
         .apply(&FinancialOp::Mint { to: b, amount: 300 }, &event1)
         .expect("mint B");
@@ -421,7 +426,7 @@ fn test_transfer_to_self() {
     let a = account_id(&kp_a);
     let node = test_node(1);
 
-    let mut state = FinancialState::new();
+    let mut state = state_with_mint_authority(&kp_a);
 
     // Mint 100 to A
     let event0 = make_signed_event(&kp_a, 0, node);
