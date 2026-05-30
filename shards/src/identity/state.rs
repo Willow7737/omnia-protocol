@@ -305,7 +305,10 @@ impl IdentityState {
                 if !owner_doc.authentication.iter().any(|key| key == caller) {
                     return Err(ShardError::ValidationFailed("Only the agent owner can revoke".into()));
                 }
-                let agent = self.agent_registry.get_mut(agent_did).unwrap();
+                let agent = self
+                    .agent_registry
+                    .get_mut(agent_did)
+                    .expect("agent must exist — already verified above");
                 agent.revoke();
                 Ok(())
             }

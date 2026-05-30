@@ -1167,6 +1167,7 @@ mod tests {
     // ----- Backward compatibility tests -----
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     fn test_load_legacy_xor_keystore() {
         let dir = TempDir::new().expect("temp dir");
         let keypair = generate_keypair();
@@ -1191,6 +1192,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     fn test_load_legacy_xor_wrong_passphrase() {
         let dir = TempDir::new().expect("temp dir");
         let keypair = generate_keypair();
@@ -1211,6 +1213,7 @@ mod tests {
     // ----- Legacy XOR tests (deprecated but still tested) -----
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     #[allow(deprecated)]
     fn test_xor_encrypt_decrypt_roundtrip() {
         let data = b"hello world this is a test of encryption";
@@ -1221,6 +1224,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     #[allow(deprecated)]
     fn test_xor_encrypt_wrong_passphrase() {
         let data = b"hello world";

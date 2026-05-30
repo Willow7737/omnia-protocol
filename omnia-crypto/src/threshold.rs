@@ -1385,15 +1385,23 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Threshold must be at least 2")]
-    fn test_threshold_config_panics_below_2() {
-        ThresholdConfig::new(4, 1).unwrap();
+    fn test_threshold_config_rejects_below_2() {
+        let result = ThresholdConfig::new(4, 1);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ThresholdError::InsufficientPartials { got: 1, need: 2 }
+        ));
     }
 
     #[test]
-    #[should_panic(expected = "Threshold 5 exceeds total participants 4")]
-    fn test_threshold_config_panics_exceeds_total() {
-        ThresholdConfig::new(4, 5).unwrap();
+    fn test_threshold_config_rejects_exceeds_total() {
+        let result = ThresholdConfig::new(4, 5);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ThresholdError::UnknownSigners { found: 4, expected: 5 }
+        ));
     }
 
     #[test]

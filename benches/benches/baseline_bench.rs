@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 // Helper: create a signed event for benchmarking
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 fn create_signed_event(
     creator: NodeId,
     seq: u64,

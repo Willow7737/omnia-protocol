@@ -483,7 +483,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
             state[i] = sbox_gadget(&state[i]);
         }
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r; // suppress unused warning
@@ -495,7 +495,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
         // Partial S-box: only the first element
         state[0] = sbox_gadget(&state[0]);
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r;
@@ -509,7 +509,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
             state[i] = sbox_gadget(&state[i]);
         }
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r;

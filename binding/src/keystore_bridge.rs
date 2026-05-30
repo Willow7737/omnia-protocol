@@ -145,7 +145,7 @@ fn decrypt_secret_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, Br
         .map_err(|_| BridgeError::Crypto("Invalid nonce".into()))?;
     let ciphertext = &combined[12..];
     let aad = b"omnia-rotated-ed25519-key";
-    let decrypted = aes256gcm_decrypt_aad(ciphertext, &key, &nonce, aad)
+    let decrypted = aes256gcm_decrypt_aad(ciphertext, key, &nonce, aad)
         .map_err(|e| BridgeError::Crypto(format!("AES decryption failed: {e}")))?;
     String::from_utf8(decrypted).map_err(|e| BridgeError::Serialization(e.to_string()))
 }
@@ -395,7 +395,7 @@ impl KeyStoreBridge {
                     new_phase as u8,
                     current_round,
                     hex::encode(nonce.as_bytes()),
-                    hex::encode(&new_pubkey.ed25519)
+                    hex::encode(new_pubkey.ed25519)
                 );
                 old_keypair.sign(message.as_bytes()).to_bytes().to_vec()
             },

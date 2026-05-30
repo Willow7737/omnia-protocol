@@ -285,9 +285,8 @@ impl EthereumLiveClient {
     async fn get_wallet(&self) -> Result<&PrivateKeySigner, SettlementError> {
         self.wallet
             .get_or_try_init(|| async {
-                let key: PrivateKeySigner = self
-                    .operator_private_key
-                    .as_ref()
+                let key_str: &str = self.operator_private_key.as_ref();
+                let key: PrivateKeySigner = key_str
                     .parse()
                     .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
                 Ok(key)
