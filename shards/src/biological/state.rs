@@ -199,18 +199,18 @@ impl BiologicalState {
                 #[cfg(not(feature = "real_verification"))]
                 {
                     let _ = zk_proof; // suppress unused warning
-                    return Err(ShardError::ValidationFailed(
+                    Err(ShardError::ValidationFailed(
                         "ZK proof verification requires 'real_verification' feature to be enabled".into(),
-                    ));
+                    ))
                 }
 
                 // When real_verification is enabled but proof didn't match expected layout
                 #[cfg(feature = "real_verification")]
                 {
-                    return Err(ShardError::ValidationFailed(
+                    Err(ShardError::ValidationFailed(
                         "ZK proof verification failed: proof does not match expected layout for real verification"
                             .into(),
-                    ));
+                    ))
                 }
             }
         }
