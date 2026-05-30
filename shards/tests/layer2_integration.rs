@@ -41,7 +41,10 @@ async fn test_financial_shard_wired_into_substrate() {
     let account = keypair.verifying_key().to_bytes();
 
     let router = Arc::new(Mutex::new(ShardRouter::new_without_fees()));
-    router.lock().unwrap().register(Box::new(FinancialShard::with_mint_authority(account)));
+    router
+        .lock()
+        .unwrap()
+        .register(Box::new(FinancialShard::with_mint_authority(account)));
 
     // 3. Attach router to substrate via MutexShardRouter
     let processor = MutexShardRouter::new(router.clone());

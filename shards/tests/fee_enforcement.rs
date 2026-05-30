@@ -199,7 +199,7 @@ fn test_cross_shard_fee_deduction() {
     router.register(Box::new(IdentityShard::new()));
 
     let msg = CrossShardMessage::new(
-        ShardId::financial(),
+        ShardId::identity(),
         ShardId::identity(),
         postcard::to_allocvec(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
             document: omnia_shards::DidDocument::new(
