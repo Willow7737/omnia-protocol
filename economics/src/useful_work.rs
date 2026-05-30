@@ -142,7 +142,7 @@ impl UsefulWorkProof {
     ///
     /// The reward is proportional to the compute units consumed,
     /// at a 1:1 ratio (1 UBC per compute unit), capped at
-    /// [`MAX_REWARD_PER_PROOF`]. This ratio may be governed by a
+    /// [`UsefulWorkProof::MAX_REWARD_PER_PROOF`]. This ratio may be governed by a
     /// future on-chain parameter.
     pub fn reward_amount(&self) -> u64 {
         self.compute_units_consumed.min(Self::MAX_REWARD_PER_PROOF)
