@@ -17,6 +17,7 @@ env:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   validate:
@@ -331,6 +332,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=Omnia Node
@@ -355,11 +357,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download binary artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts/
+          pattern: omnia-node-*
           merge-multiple: false
+
+      - name: Download contract artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: omnia-rollup-contract
+          path: release-artifacts/omnia-rollup-contract/
+
+      - name: Download security audit
+        uses: actions/download-artifact@v4
+        with:
+          name: security-audit
+          path: release-artifacts/security-audit/
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: omnia-release-sbom
+          path: release-artifacts/omnia-release-sbom/
 
       - name: Consolidate release files
         run: |

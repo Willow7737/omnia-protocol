@@ -8,6 +8,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.61](https://github.com/Willow7737/omnia-protocol/compare/v0.1.60...v0.1.61) (2026-05-30)
+
+
+### Bug Fixes
+
+* **benches:** handle Result&lt;Event, EventValidationError&gt; from Event::new/genesis ([d0eaaa2](https://github.com/Willow7737/omnia-protocol/commit/d0eaaa2fa7300be1b489a402ca3ec8ad21fdface))
+* cargo fmt in layer2_integration, cross-shard source verification in fee test ([0cef080](https://github.com/Willow7737/omnia-protocol/commit/0cef0806e092efdebd2c09f571991e4ad4c79959))
+* clippy bind_instead_of_map in substrate, fix financial shard test assertions ([694f37e](https://github.com/Willow7737/omnia-protocol/commit/694f37e57a2b68f08e8c936fdd6e3045bb3b8ad1))
+* clippy needless_range_loop in merkle.rs, integration test JWT auth ([d821c9d](https://github.com/Willow7737/omnia-protocol/commit/d821c9d6929c1a8be5d2a549a7695aaa179c7b71))
+* cross-shard test failures due to mint authority and identity auth ([9e1e925](https://github.com/Willow7737/omnia-protocol/commit/9e1e9254358cf28f02fdcfebdc88c1af132d3fdf))
+* remaining Event::new()/genesis() Result unwrapping + clippy threshold.rs ([b306738](https://github.com/Willow7737/omnia-protocol/commit/b30673811c9423053ecb52fb736bad3092b5f53d))
+* remove needless return in biological/computational ZK proof error paths ([a652ab1](https://github.com/Willow7737/omnia-protocol/commit/a652ab117fd6ac89b081f37e614bc95cc2825544))
+* resolve all CI failures — Result unwrapping, fmt, clippy, auth tests ([fb25658](https://github.com/Willow7737/omnia-protocol/commit/fb256580286d2ec542a19482d1f818c832bf7620))
+* resolve all remaining CI failures — keystore Result assertions, clippy redundant closures, chaos-tests warnings, deprecated annotations ([1fcd23f](https://github.com/Willow7737/omnia-protocol/commit/1fcd23ff2507788f20b751fb80a017c4c250d12c))
+* resolve rustdoc broken intra-doc link for MAX_REWARD_PER_PROOF ([37ecaf2](https://github.com/Willow7737/omnia-protocol/commit/37ecaf279a635daf1f2c28953bc0fd22b34ab49d))
+* **security:** comprehensive security, performance, and correctness audit fixes ([98cf43a](https://github.com/Willow7737/omnia-protocol/commit/98cf43a42ee4d8d118a615bb518f53308c327f86))
+* **security:** comprehensive security, performance, and correctness audit fixes ([a6d8720](https://github.com/Willow7737/omnia-protocol/commit/a6d8720c1e23e91b0432d44365d69579af6613b4))
+
+## [0.1.60](https://github.com/Willow7737/omnia-protocol/compare/v0.1.59...v0.1.60) (2026-05-27)
+
+
+### Bug Fixes
+
+* **docker:** create stub source files before cargo generate-lockfile ([cb65ff0](https://github.com/Willow7737/omnia-protocol/commit/cb65ff0f67eaddd0bf09f9b9e751386010024f52))
+* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([aefb24b](https://github.com/Willow7737/omnia-protocol/commit/aefb24bb80a95c0cec3d88161c786d18d3f4801f))
+* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([5342f87](https://github.com/Willow7737/omnia-protocol/commit/5342f87605810dbabe79ed0c0ad024cd2bbfde48))
+
 ## [0.1.59](https://github.com/Willow7737/omnia-protocol/compare/v0.1.58...v0.1.59) (2026-05-27)
 
 
