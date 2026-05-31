@@ -221,9 +221,10 @@ impl ProvenanceLog {
         rf_proof: RfFingerprint,
         mut commitment: QuantumCommitment,
     ) -> Result<ProvenanceEvent, ProvenanceError> {
-        let prev = self.events.last().ok_or_else(|| {
-            ProvenanceError::InvalidState("Provenance log is empty \u{2014} cannot transfer".into())
-        })?;
+        let prev = self
+            .events
+            .last()
+            .ok_or_else(|| ProvenanceError::InvalidState("Provenance log is empty \u{2014} cannot transfer".into()))?;
 
         // Set the commitment's previous_hash to link to the previous commitment
         commitment.previous_hash = QuantumCommitment::compute_chain_hash(&prev.commitment.data_hash);
@@ -492,7 +493,8 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.current_holder, "did:omnia:bob");
@@ -549,13 +551,15 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        ).unwrap();
+        )
+        .unwrap();
 
         log.transfer(
             "did:omnia:charlie".to_string(),
             test_rf("did:omnia:charlie"),
             test_commitment(b"transfer2"),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(log.verify_chain());
     }
@@ -574,7 +578,8 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        ).unwrap();
+        )
+        .unwrap();
 
         let bytes = log.to_bytes().unwrap();
         let restored = ProvenanceLog::from_bytes(&bytes).unwrap();
@@ -601,7 +606,8 @@ mod tests {
                 holder.to_string(),
                 test_rf(holder),
                 test_commitment(format!("transfer{}", i + 1).as_bytes()),
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         assert_eq!(log.len(), 4); // 1 creation + 3 transfers
@@ -638,13 +644,15 @@ mod tests {
             "did:omnia:distributor".to_string(),
             test_rf("did:omnia:distributor"),
             test_commitment(b"transfer1"),
-        ).unwrap();
+        )
+        .unwrap();
 
         log.transfer(
             "did:omnia:retailer".to_string(),
             test_rf("did:omnia:retailer"),
             test_commitment(b"transfer2"),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Sanity: the untampered chain should verify
         assert!(log.verify_chain());

@@ -475,13 +475,15 @@ impl SlashingStore for RedbSlashingStore {
             let read_table = write_txn
                 .open_table(SLASHING_TABLE)
                 .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
-            match read_table
-                .get("state")
-                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
-            {
-                Some(value) => {
-                    postcard::from_bytes(value.value()).map_err(|e| SlashingStoreError::Serialization(e.to_string()))?
-                }
+            let state_bytes: Option<Vec<u8>> = {
+                let guard = read_table
+                    .get("state")
+                    .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+                guard.map(|v| v.value().to_vec())
+            };
+            match state_bytes {
+                Some(bytes) => postcard::from_bytes(&bytes)
+                    .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?,
                 None => SlashingState::default(),
             }
         };

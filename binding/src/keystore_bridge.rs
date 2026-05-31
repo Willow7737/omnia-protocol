@@ -106,9 +106,8 @@ fn derive_encryption_key(passphrase: &str) -> Result<[u8; 32], BridgeError> {
     // Hash the passphrase first to get full 32 bytes of entropy regardless of length
     let key_material = blake3::hash(passphrase.as_bytes());
     use omnia_crypto::aes_gcm::hkdf_aes_key;
-    hkdf_aes_key(key_material.as_bytes(), "omnia-rotation-state-encryption").map_err(|e| {
-        BridgeError::Crypto(format!("HKDF key derivation failed: {e}"))
-    })
+    hkdf_aes_key(key_material.as_bytes(), "omnia-rotation-state-encryption")
+        .map_err(|e| BridgeError::Crypto(format!("HKDF key derivation failed: {e}")))
 }
 
 /// Encrypt a secret string using AES-256-GCM and return base64-encoded ciphertext.
