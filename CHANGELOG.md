@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.63](https://github.com/Willow7737/omnia-protocol/compare/v0.1.62...v0.1.63) (2026-05-31)
+
+
+### Bug Fixes
+
+* E0509 cannot move out of EthereumConfig with Drop trait ([88c4e4a](https://github.com/Willow7737/omnia-protocol/commit/88c4e4a9e2382f994ac1c5154f51bbd8642cef87))
+* E0509 cannot move out of EthereumConfig with Drop trait ([5eb702d](https://github.com/Willow7737/omnia-protocol/commit/5eb702db16e1e8b1dfc63d14a003a0e78f90474c))
+
 ## [0.1.62](https://github.com/Willow7737/omnia-protocol/compare/v0.1.61...v0.1.62) (2026-05-31)
 
 
