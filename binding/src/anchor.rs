@@ -246,11 +246,13 @@ mod tests {
             [0xCDu8; 32],
         );
 
-        provenance.transfer(
-            "did:omnia:bob".to_string(),
-            test_rf("did:omnia:bob", [0x66u8; 32]),
-            test_commitment_signed(b"transfer1", &kp),
-        );
+        provenance
+            .transfer(
+                "did:omnia:bob".to_string(),
+                test_rf("did:omnia:bob", [0x66u8; 32]),
+                test_commitment_signed(b"transfer1", &kp),
+            )
+            .unwrap();
 
         let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
         let anchor = PhysicalAnchor::new(rf, commitment, provenance, CommitmentPhase::ClassicalOnly);

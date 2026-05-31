@@ -29,6 +29,7 @@ use crate::blake3_domain::blake3_hash_domain;
 use omnia_primitives::NodeId;
 
 /// Maximum number of rounds to request in a single GetEvents sync.
+#[allow(dead_code)]
 const MAX_SYNC_ROUNDS: u64 = 10_000;
 
 /// Maximum allowed snapshot size (64 MiB).
@@ -37,11 +38,13 @@ const MAX_SNAPSHOT_SIZE: usize = 64 * 1024 * 1024;
 /// Maximum number of individual events in a SyncResponse::Events.
 /// Prevents memory exhaustion from a malicious peer sending an
 /// extremely large event list.
+#[allow(dead_code)]
 const MAX_SYNC_EVENTS_COUNT: usize = 100_000;
 
 /// Maximum total bytes across all events in a SyncResponse::Events.
 /// Prevents memory exhaustion from a malicious peer sending events
 /// with very large individual payloads.
+#[allow(dead_code)]
 const MAX_SYNC_EVENTS_TOTAL_BYTES: usize = 512 * 1024 * 1024; // 512 MiB
 
 /// Errors that can occur during fast sync.
@@ -440,6 +443,7 @@ impl FastSyncManager {
     }
 
     /// Download delta events from a peer starting at a given round.
+    #[allow(dead_code)]
     fn download_delta_events(
         &self,
         network: &Arc<dyn SyncNetwork>,

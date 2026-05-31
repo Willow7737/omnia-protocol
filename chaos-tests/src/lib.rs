@@ -210,7 +210,7 @@ impl ChaosNetwork {
         let mut nodes = Vec::with_capacity(n);
         for i in 0..n {
             let mut seed = [0u8; 32];
-            seed[..8].copy_from_slice(&(i as u64).to_le_bytes()); // Non-zero to avoid debug-build panic
+            seed[..8].copy_from_slice(&((i + 1) as u64).to_le_bytes()); // Non-zero to avoid debug-build panic
             let config = ConsensusConfig {
                 total_nodes: n,
                 round_seed: seed,

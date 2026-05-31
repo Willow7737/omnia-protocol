@@ -183,6 +183,7 @@ fn build_test_app_state(port: u16) -> AppState {
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        keypair: None,
         settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
         #[cfg(feature = "zk")]
         ceremony_server: None,

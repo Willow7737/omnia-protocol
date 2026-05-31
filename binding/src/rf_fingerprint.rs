@@ -65,6 +65,19 @@ impl RfFingerprint {
         }
     }
 
+    /// Create a stub RF fingerprint for testing.
+    ///
+    /// Uses a default `VectorClock` and a confidence of 950_000 PPM (95%).
+    /// **Do not use in production** — only for test code.
+    pub fn stub(device_did: &str, spectral_hash: [u8; 32]) -> Self {
+        Self {
+            spectral_hash,
+            measured_at: VectorClock::new(),
+            device_did: device_did.to_string(),
+            confidence_ppm: 950_000,
+        }
+    }
+
     /// Verify that a device's current RF signature matches its registered
     /// fingerprint.
     ///

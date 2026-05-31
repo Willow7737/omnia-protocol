@@ -6,8 +6,6 @@
 
 use std::collections::HashMap;
 
-use redb::ReadableTable;
-
 /// Trait for nonce persistence. Implementations must be Send + Sync
 /// for use across async tasks.
 pub trait NonceStore: Send + Sync {

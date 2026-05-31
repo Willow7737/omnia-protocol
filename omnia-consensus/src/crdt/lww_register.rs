@@ -339,6 +339,7 @@ mod tests {
         let mut reg = LwwRegister::with_value(node(1), "hello");
         assert!(reg.is_set());
 
+        #[allow(deprecated)]
         reg.clear();
         assert!(!reg.is_set());
         assert_eq!(reg.get(), None);

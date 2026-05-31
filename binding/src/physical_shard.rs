@@ -119,7 +119,7 @@ impl ProvenanceTracker {
             return Err(ProvenanceTrackerError::Destroyed(format!("{:?}", &item_id[..4])));
         }
 
-        anchor.provenance_log.transfer(to_did, rf_proof, commitment);
+        anchor.provenance_log.transfer(to_did, rf_proof, commitment)?;
         Ok(())
     }
 

@@ -482,8 +482,9 @@ impl SlashingStore for RedbSlashingStore {
                 guard.map(|v| v.value().to_vec())
             };
             match state_bytes {
-                Some(bytes) => postcard::from_bytes(&bytes)
-                    .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?,
+                Some(bytes) => {
+                    postcard::from_bytes(&bytes).map_err(|e| SlashingStoreError::Serialization(e.to_string()))?
+                }
                 None => SlashingState::default(),
             }
         };
