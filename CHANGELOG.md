@@ -8,6 +8,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.64](https://github.com/Willow7737/omnia-protocol/compare/v0.1.63...v0.1.64) (2026-05-31)
+
+
+### Bug Fixes
+
+* comprehensive security and performance audit fixes across all crates ([66897c2](https://github.com/Willow7737/omnia-protocol/commit/66897c2dc145d3171a1100423d298b546ad2fb29))
+* comprehensive security and performance audit fixes across all crates ([9d4ac7b](https://github.com/Willow7737/omnia-protocol/commit/9d4ac7b3baafdcbbebdf03c674b11b065bfabd4d))
+* resolve 7 omnia-crypto test failures (keystore + threshold DKG) ([f1b4ce5](https://github.com/Willow7737/omnia-protocol/commit/f1b4ce5532d046435a24f917c647f7edea169a3b))
+* resolve all CI compilation, clippy, and formatting errors ([59cd4bd](https://github.com/Willow7737/omnia-protocol/commit/59cd4bdf2c6130c208dd52cda62921000024b7b6))
+* resolve all remaining CI compilation, clippy, and warning errors (round 2) ([da9d912](https://github.com/Willow7737/omnia-protocol/commit/da9d912e248e6a3309ec4a48d2a1a5eae8454401))
+* resolve CI test failures and rustdoc errors (round 3) ([6cc6a08](https://github.com/Willow7737/omnia-protocol/commit/6cc6a08a5cb0f86bb85bb00cbead02c6f3f4e045))
+* update version assertion in consensus state persistence test ([f94e6cd](https://github.com/Willow7737/omnia-protocol/commit/f94e6cdb81e9e12a3d2a3d88f40407bb407f8c1d))
+
 ## [0.1.63](https://github.com/Willow7737/omnia-protocol/compare/v0.1.62...v0.1.63) (2026-05-31)
 
 
