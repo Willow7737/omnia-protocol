@@ -88,7 +88,7 @@ impl UbcToken {
         self.balance = self
             .balance
             .checked_add(amount)
-            .ok_or_else(|| EconomicsError::BalanceOverflow)?;
+            .ok_or(EconomicsError::BalanceOverflow)?;
         Ok(())
     }
 }
