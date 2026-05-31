@@ -241,7 +241,11 @@ mod tests {
     fn test_ethereum_settlement_adapter_config_validation() {
         let config = EthereumConfig {
             rpc_url: "".to_string(),
-            ..Default::default()
+            contract_address: "0x0000000000000000000000000000000000000000".to_string(),
+            operator_private_key: String::new(),
+            gas_limit: 1_000_000,
+            max_fee_per_gas: None,
+            confirmation_blocks: 3,
         };
         let result = EthereumSettlementAdapter::new(config);
         assert!(result.is_err());
