@@ -31,7 +31,7 @@ fn node(id: u8) -> NodeId {
 fn signed_event(creator: NodeId, payload: Vec<u8>) -> Event {
     let keypair = generate_keypair();
     let mut event = Event::genesis(creator, payload).expect("genesis event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
     event
 }
 
@@ -354,7 +354,7 @@ fn test_bloom_filter_with_compact_encoded_events() {
     for i in 0..50u8 {
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(i), vec![i]).expect("genesis event creation");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         // Insert into bloom filter
         bloom.insert(&event.id);
@@ -408,7 +408,7 @@ fn test_compact_encoding_with_multi_node_events() {
     vc.set(node(3), 10);
 
     let mut event = Event::new(node(1), 8, vc, None, None, vec![1, 2, 3]).expect("event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
 
     // Encode for the peer
     let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
@@ -609,7 +609,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
     let mut optimized_tracked: std::collections::HashSet<EventId> = std::collections::HashSet::new();
 
     for round in 0..5 {
-        for i in 0..3 {
+        for (i, ingestor) in ingestors.iter_mut().enumerate().take(3) {
             let event = signed_event(node(i as u8 + 1), vec![round as u8, i as u8]);
             let event_id = event.id;
 
@@ -632,7 +632,7 @@ fn test_optimized_stack_identical_consensus_outcomes() {
             priority_queue.enqueue(event_id, priority);
 
             // Submit to batch ingestor
-            ingestors[i].submit(event);
+            ingestor.submit(event);
 
             optimized_tracked.insert(event_id);
         }
@@ -708,7 +708,7 @@ fn test_full_optimized_pipeline_end_to_end() {
     for i in 0..10u8 {
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(i + 1), vec![i; 32]).expect("genesis event creation");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         let event_id = event.id;
 
         // Step 1: Track in sharded state

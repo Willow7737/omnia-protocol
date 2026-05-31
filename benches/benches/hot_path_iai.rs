@@ -26,7 +26,7 @@ fn get_keypair() -> &'static NodeKeypair {
 fn create_signed_event(creator: NodeId, seq: u64, parent: Option<[u8; 32]>) -> Event {
     let vc = VectorClock::with_node(creator, seq + 1);
     let mut event = Event::new(creator, seq, vc, parent, None, vec![1, 2, 3]).expect("event creation");
-    let _ = event.sign_with_keypair(get_keypair());
+    event.sign_with_keypair(get_keypair()).expect("signing");
     event
 }
 

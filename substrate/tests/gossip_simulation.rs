@@ -91,7 +91,7 @@ async fn test_three_node_event_propagation() {
 
     // Node 0 creates genesis event
     let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
     let event_id = event.id;
 
     network.submit_event(0, &event).await;
@@ -160,7 +160,7 @@ async fn test_consensus_finality() {
     for i in 0..4 {
         let keypair = generate_keypair();
         let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         genesis_ids.push(event.id);
         network.submit_event(i, &event).await;
     }
@@ -331,7 +331,7 @@ async fn test_network_event_processed_through_consensus() {
     for i in 0..4 {
         let keypair = generate_keypair();
         let mut event = Event::genesis(test_node(i as u8 + 1), vec![i as u8 + 10]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         event_ids.push(event.id);
 
         // Insert into shared graph (simulates network receive)
@@ -380,7 +380,7 @@ async fn test_process_pending_events_drains_network_rx() {
     // Create and serialize an event
     let keypair = generate_keypair();
     let mut event = Event::genesis(test_node(2), vec![1, 2, 3]).expect("valid genesis event");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
     let event_id = event.id;
     let bytes = event.to_bytes().expect("test event serialization");
 

@@ -132,7 +132,7 @@ mod tests {
         let node = test_node(creator);
         let vc = omnia_primitives::VectorClock::with_node(node, seq + 1);
         let mut event = Event::new(node, seq, vc, None, None, payload).expect("valid event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         event
     }
 

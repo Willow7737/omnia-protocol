@@ -993,7 +993,7 @@ mod tests {
         let keypair = generate_keypair();
 
         let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         substrate.submit_event(event).await.unwrap();
 

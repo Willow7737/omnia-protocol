@@ -273,7 +273,7 @@ mod tests {
 
         // Use a real keypair for proper signing
         let keypair = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         event
     }

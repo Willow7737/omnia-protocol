@@ -250,7 +250,7 @@ impl ChaosNetwork {
         for i in 0..n {
             let mut event =
                 Event::genesis(node_ids[i], vec![(i + 1) as u8]).expect("genesis event creation should not fail");
-            let _ = event.sign_with_keypair(&keypairs[i]);
+            event.sign_with_keypair(&keypairs[i]).expect("signing");
 
             // Insert into the node's own graph (graph only needs &mut graph)
             if let Err(e) = nodes[i].graph.insert(event.clone()) {
@@ -470,7 +470,7 @@ impl ChaosNetwork {
                 Event::new(node.node_id, sequence, vc, self_parent, other_parent, payload)
             }
             .map_err(|e| anyhow::anyhow!("Event creation failed: {e}"))?;
-            let _ = event.sign_with_keypair(&node.keypair);
+            event.sign_with_keypair(&node.keypair).expect("signing");
 
             event_id = event.id;
             event

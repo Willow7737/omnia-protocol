@@ -29,7 +29,7 @@ fn test_node(id: u8) -> NodeId {
 fn make_signed_event(keypair: &NodeKeypair, sequence: u64, node_id: NodeId) -> Event {
     let vc = VectorClock::with_node(node_id, sequence + 1);
     let mut event = Event::new(node_id, sequence, vc, None, None, vec![]).expect("event creation should succeed");
-    event.sign_with_keypair(keypair);
+    event.sign_with_keypair(keypair).expect("signing");
     event
 }
 
@@ -63,7 +63,7 @@ fn test_double_spend_attack() {
     // Mint 100 to A
     let mint_op = FinancialOp::Mint { to: a, amount: 100 };
     let mut event0 = make_signed_event(&kp_a, 0, node);
-    event0.sign_with_keypair(&kp_a);
+    event0.sign_with_keypair(&kp_a).expect("signing");
     state.apply(&mint_op, &event0).expect("mint should succeed");
     assert_eq!(state.balance_of(&a), 100);
 

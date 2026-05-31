@@ -41,7 +41,7 @@ fn test_equivocation_detection() {
         vec![0xAA], // Payload A
     )
     .unwrap();
-    event_a.sign_with_keypair(&node0_keypair);
+    event_a.sign_with_keypair(&node0_keypair).expect("signing");
 
     let mut vc2 = node0_vc.clone();
     vc2.set(node0_id, node0_sequence.saturating_add(1));
@@ -54,7 +54,7 @@ fn test_equivocation_detection() {
         vec![0xBB], // Payload B (different from A)
     )
     .unwrap();
-    event_b.sign_with_keypair(&node0_keypair);
+    event_b.sign_with_keypair(&node0_keypair).expect("signing");
 
     // Verify these are indeed equivocating events
     assert_ne!(event_a.id, event_b.id, "Equivocating events must have different IDs");
@@ -122,12 +122,12 @@ fn test_equivocation_detected_by_multiple_observers() {
     let mut vc1 = node0_vc.clone();
     vc1.set(node0_id, node0_sequence.saturating_add(1));
     let mut event_a = Event::new(node0_id, node0_sequence, vc1, node0_self_parent, None, vec![1]).unwrap();
-    event_a.sign_with_keypair(&node0_keypair);
+    event_a.sign_with_keypair(&node0_keypair).expect("signing");
 
     let mut vc2 = node0_vc.clone();
     vc2.set(node0_id, node0_sequence.saturating_add(1));
     let mut event_b = Event::new(node0_id, node0_sequence, vc2, node0_self_parent, None, vec![2]).unwrap();
-    event_b.sign_with_keypair(&node0_keypair);
+    event_b.sign_with_keypair(&node0_keypair).expect("signing");
 
     assert!(SlashingEngine::check_equivocation(&event_a, &event_b));
 

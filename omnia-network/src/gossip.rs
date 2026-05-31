@@ -724,7 +724,7 @@ mod tests {
 
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         assert!(protocol.validate_event(&event).is_ok());
     }
@@ -750,7 +750,7 @@ mod tests {
 
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         // Corrupt the signature
         let mut tampered = event.clone();
@@ -767,7 +767,7 @@ mod tests {
 
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         // Tamper with the ID
         let mut tampered = event.clone();
@@ -827,7 +827,7 @@ mod tests {
         // Create a properly signed event
         let keypair = generate_keypair();
         let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         let event_id = event.id;
         let bytes = event.to_bytes().expect("test event serialization");
 
@@ -1027,7 +1027,7 @@ mod tests {
 
         // After eviction, recent entries should remain
         assert!(
-            protocol.seen_events.len() > 0,
+            !protocol.seen_events.is_empty(),
             "Eviction should keep recent entries, not clear everything"
         );
         assert!(

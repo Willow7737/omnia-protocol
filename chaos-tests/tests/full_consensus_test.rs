@@ -266,8 +266,8 @@ fn test_four_node_consensus_finality() {
         );
 
         // Log per-node committed counts for debugging
-        for i in 0..4 {
-            tracing::info!(node = i, committed = committed_sets[i].len(), "Node committed count");
+        for (i, committed_set) in committed_sets.iter().enumerate().take(4) {
+            tracing::info!(node = i, committed = committed_set.len(), "Node committed count");
         }
     }
 

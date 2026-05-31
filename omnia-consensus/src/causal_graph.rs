@@ -1467,7 +1467,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut event = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&kp);
+        event.sign_with_keypair(&kp).expect("signing");
         let id = event.id;
 
         graph.insert(event.clone()).unwrap();
@@ -1481,7 +1481,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut event = Event::genesis(n1, vec![]).expect("valid genesis event");
-        event.sign_with_keypair(&kp);
+        event.sign_with_keypair(&kp).expect("signing");
 
         graph.insert(event.clone()).unwrap();
         assert!(matches!(graph.insert(event), Err(CausalGraphError::DuplicateEvent(_))));
@@ -1494,7 +1494,7 @@ mod tests {
 
         // First insert a genesis event so sequence=0 is registered
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         graph.insert(g).unwrap();
 
         // Now try to insert an event with sequence=1 that references a
@@ -1512,19 +1512,19 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         let vc = VectorClock::with_node(n1, 2);
         let mut child = Event::new(n1, 1, vc, Some(g_id), None, vec![]).expect("valid event");
-        child.sign_with_keypair(&kp);
+        child.sign_with_keypair(&kp).expect("signing");
         let child_id = child.id;
         graph.insert(child).unwrap();
 
         let vc = VectorClock::with_node(n1, 3);
         let mut gc = Event::new(n1, 2, vc, Some(child_id), None, vec![]).expect("valid event");
-        gc.sign_with_keypair(&kp);
+        gc.sign_with_keypair(&kp).expect("signing");
         let gc_id = gc.id;
         graph.insert(gc).unwrap();
 
@@ -1544,12 +1544,12 @@ mod tests {
         let (kp2, n2) = make_keypair_and_node(2);
 
         let mut e1 = Event::genesis(n1, vec![1]).expect("valid genesis event");
-        e1.sign_with_keypair(&kp1);
+        e1.sign_with_keypair(&kp1).expect("signing");
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
         let mut e2 = Event::genesis(n2, vec![2]).expect("valid genesis event");
-        e2.sign_with_keypair(&kp2);
+        e2.sign_with_keypair(&kp2).expect("signing");
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -1563,13 +1563,13 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e1 = Event::genesis(n1, vec![]).expect("valid genesis event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
         assert!(graph.tips().any(|&t| t == e1_id));
 
         let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![]).expect("valid event");
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -1583,17 +1583,17 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         let mut a = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(g_id), None, vec![]).expect("valid event");
-        a.sign_with_keypair(&kp);
+        a.sign_with_keypair(&kp).expect("signing");
         let a_id = a.id;
         graph.insert(a).unwrap();
 
         let mut b = Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(a_id), None, vec![]).expect("valid event");
-        b.sign_with_keypair(&kp);
+        b.sign_with_keypair(&kp).expect("signing");
         let b_id = b.id;
         graph.insert(b).unwrap();
 
@@ -1613,12 +1613,12 @@ mod tests {
 
         // Create two genesis events
         let mut e1 = Event::genesis(n1, vec![]).expect("valid genesis event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         let e1_id = e1.id;
         graph.insert(e1.clone()).unwrap();
 
         let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![]).expect("valid event");
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
         let e2_id = e2.id;
         graph.insert(e2.clone()).unwrap();
 
@@ -1642,7 +1642,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         graph.insert(e).unwrap();
 
         assert!(graph.verify_integrity().is_ok());
@@ -1655,11 +1655,11 @@ mod tests {
         let (kp2, n2) = make_keypair_and_node(2);
 
         let mut e1 = Event::genesis(n1, vec![]).expect("valid genesis event");
-        e1.sign_with_keypair(&kp1);
+        e1.sign_with_keypair(&kp1).expect("signing");
         graph.insert(e1).unwrap();
 
         let mut e2 = Event::genesis(n2, vec![]).expect("valid genesis event");
-        e2.sign_with_keypair(&kp2);
+        e2.sign_with_keypair(&kp2).expect("signing");
         graph.insert(e2).unwrap();
 
         let stats = graph.stats();
@@ -1674,7 +1674,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
 
@@ -1691,7 +1691,7 @@ mod tests {
 
         let (kp1, n1) = make_keypair_and_node(1);
         let mut event = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&kp1);
+        event.sign_with_keypair(&kp1).expect("signing");
         graph.insert(event).unwrap();
 
         let root2 = graph.state_root();
@@ -1699,7 +1699,7 @@ mod tests {
 
         let (kp2, n2) = make_keypair_and_node(2);
         let mut event2 = Event::genesis(n2, vec![4, 5, 6]).expect("valid genesis event");
-        event2.sign_with_keypair(&kp2);
+        event2.sign_with_keypair(&kp2).expect("signing");
         graph.insert(event2).unwrap();
 
         let root3 = graph.state_root();
@@ -1711,7 +1711,7 @@ mod tests {
         let mut graph = CausalGraph::new();
         let (kp, n1) = make_keypair_and_node(1);
         let mut event = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&kp);
+        event.sign_with_keypair(&kp).expect("signing");
         let id = event.id;
         graph.insert(event).unwrap();
 
@@ -1758,7 +1758,7 @@ mod tests {
             } else {
                 Event::genesis(n1, vec![i]).expect("valid genesis event")
             };
-            event.sign_with_keypair(&kp);
+            event.sign_with_keypair(&kp).expect("signing");
             let id = event.id;
             graph.insert(event).unwrap();
             prev_id = Some(id);
@@ -1807,7 +1807,7 @@ mod tests {
             } else {
                 Event::genesis(node, payload).expect("valid genesis event")
             };
-            event.sign_with_keypair(kp);
+            event.sign_with_keypair(kp).expect("signing");
             let id = event.id;
             graph.insert(event).unwrap();
             prev_id = Some(id);
@@ -1962,7 +1962,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -1982,12 +1982,12 @@ mod tests {
 
         // Create two events
         let mut e1 = Event::genesis(n1, vec![1]).expect("valid genesis event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
         let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![2]).expect("valid event");
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
         let e2_id = e2.id;
         graph.insert(e2).unwrap();
 
@@ -2013,7 +2013,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -2040,7 +2040,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 1).unwrap();
@@ -2059,7 +2059,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![42]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 7).unwrap();
@@ -2085,7 +2085,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut e = Event::genesis(n1, vec![1]).expect("valid genesis event");
-        e.sign_with_keypair(&kp);
+        e.sign_with_keypair(&kp).expect("signing");
         let e_id = e.id;
         graph.insert(e).unwrap();
         graph.finalize_event_with_round(&e_id, 10).unwrap();
@@ -2121,7 +2121,7 @@ mod tests {
 
         // Create and finalize a genesis event
         let mut g = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
         graph.finalize_event_with_round(&g_id, 1).unwrap();
@@ -2178,7 +2178,7 @@ mod tests {
         let (kp, n1) = make_keypair_and_node(1);
 
         let mut g = Event::genesis(n1, vec![1, 2, 3]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         graph.insert(g).unwrap();
 
         let snapshot = GraphSnapshot::from(&graph);
@@ -2201,14 +2201,14 @@ mod tests {
 
         // Insert genesis (seq 0)
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         // Insert seq 1
         let vc = VectorClock::with_node(n1, 2);
         let mut e1 = Event::new(n1, 1, vc, Some(g_id), None, vec![]).expect("valid event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         graph.insert(e1).unwrap();
 
         // Try to insert another event with seq 0 — should fail
@@ -2234,7 +2234,7 @@ mod tests {
 
         // Insert genesis (seq 0)
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         graph.insert(g).unwrap();
 
         // Insert a second event with seq 0 but DIFFERENT content — this is
@@ -2243,7 +2243,7 @@ mod tests {
         // equivocation pattern at sequence 0.
         let mut eq_event =
             Event::new(n1, 0, VectorClock::with_node(n1, 1), None, None, vec![0xAA]).expect("valid event");
-        eq_event.sign_with_keypair(&kp);
+        eq_event.sign_with_keypair(&kp).expect("signing");
         let result = graph.insert(eq_event);
         assert!(
             result.is_ok(),
@@ -2267,19 +2267,19 @@ mod tests {
 
         // Build chain: seq 0 → 1 → 2
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         let vc1 = VectorClock::with_node(n1, 2);
         let mut e1 = Event::new(n1, 1, vc1, Some(g_id), None, vec![]).expect("valid event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         let e1_id = e1.id;
         graph.insert(e1).unwrap();
 
         let vc2 = VectorClock::with_node(n1, 3);
         let mut e2 = Event::new(n1, 2, vc2, Some(e1_id), None, vec![]).expect("valid event");
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
         graph.insert(e2).unwrap();
 
         // Now equivocate at seq 2 (same as last_known). The equivocating event
@@ -2287,7 +2287,7 @@ mod tests {
         // different payload → different hash.
         let mut eq_event =
             Event::new(n1, 2, VectorClock::with_node(n1, 3), Some(e1_id), None, vec![0xBB]).expect("valid event");
-        eq_event.sign_with_keypair(&kp);
+        eq_event.sign_with_keypair(&kp).expect("signing");
         let result = graph.insert(eq_event);
         assert!(result.is_ok(), "Equivocation at last_known sequence should be allowed");
 
@@ -2304,14 +2304,14 @@ mod tests {
 
         // Insert genesis (seq 0)
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         // Try to insert seq 3 (skipping 1, 2) — should be BUFFERED, not rejected
         let vc = VectorClock::with_node(n1, 4);
         let mut e3 = Event::new(n1, 3, vc, Some(g_id), None, vec![]).expect("valid event");
-        e3.sign_with_keypair(&kp);
+        e3.sign_with_keypair(&kp).expect("signing");
         let result = graph.insert(e3);
         // Should succeed with empty Vec (buffered)
         assert!(result.is_ok());
@@ -2328,14 +2328,14 @@ mod tests {
 
         // Insert genesis (seq 0)
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let g_id = g.id;
         graph.insert(g).unwrap();
 
         // Buffer seq 2 (skipping seq 1)
         let vc2 = VectorClock::with_node(n1, 3);
         let mut e2 = Event::new(n1, 2, vc2, Some(g_id), None, vec![]).expect("valid event");
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
         let e2_id = e2.id;
         let result = graph.insert(e2);
         assert!(result.is_ok());
@@ -2344,7 +2344,7 @@ mod tests {
         // Buffer seq 3
         let vc3 = VectorClock::with_node(n1, 4);
         let mut e3 = Event::new(n1, 3, vc3, Some(e2_id), None, vec![]).expect("valid event");
-        e3.sign_with_keypair(&kp);
+        e3.sign_with_keypair(&kp).expect("signing");
         graph.insert(e3).unwrap(); // Buffered
 
         assert_eq!(graph.buffered_sequence_count(&n1), 2);
@@ -2353,7 +2353,7 @@ mod tests {
         // Now insert seq 1 — this should drain 1, 2, 3 all at once
         let vc1 = VectorClock::with_node(n1, 2);
         let mut e1 = Event::new(n1, 1, vc1, Some(g_id), None, vec![]).expect("valid event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
         let inserted = graph.insert(e1).unwrap();
 
         // Should have inserted all 3 events
@@ -2369,13 +2369,13 @@ mod tests {
 
         // Insert genesis (seq 0)
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         graph.insert(g).unwrap();
 
         // Try to insert seq 1000 — gap of 999 exceeds MAX_SEQUENCE_GAP (512)
         let vc = VectorClock::with_node(n1, 1001);
         let mut e_big = Event::new(n1, 1000, vc, None, None, vec![]).expect("valid event");
-        e_big.sign_with_keypair(&kp);
+        e_big.sign_with_keypair(&kp).expect("signing");
         let result = graph.insert(e_big);
         assert!(matches!(result, Err(CausalGraphError::SequenceGapTooLarge { .. })));
     }
@@ -2390,14 +2390,14 @@ mod tests {
 
         // Build a chain: seq 0, 1, 2, 3, 4, 5
         let mut g = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g.sign_with_keypair(&kp);
+        g.sign_with_keypair(&kp).expect("signing");
         let mut last_id = g.id;
         graph.insert(g).unwrap();
 
         for seq in 1..=5u64 {
             let vc = VectorClock::with_node(n1, seq + 1);
             let mut e = Event::new(n1, seq, vc, Some(last_id), None, vec![]).expect("valid event");
-            e.sign_with_keypair(&kp);
+            e.sign_with_keypair(&kp).expect("signing");
             last_id = e.id;
             graph.insert(e).unwrap();
         }
@@ -2440,20 +2440,20 @@ mod tests {
 
         // Creator 1: genesis
         let mut g1 = Event::genesis(n1, vec![]).expect("valid genesis event");
-        g1.sign_with_keypair(&kp1);
+        g1.sign_with_keypair(&kp1).expect("signing");
         let g1_id = g1.id;
         graph.insert(g1).unwrap();
 
         // Creator 2: genesis — this should be fine even though creator 1 has seq 0
         let mut g2 = Event::genesis(n2, vec![]).expect("valid genesis event");
-        g2.sign_with_keypair(&kp2);
+        g2.sign_with_keypair(&kp2).expect("signing");
         let g2_id = g2.id;
         graph.insert(g2).unwrap();
 
         // Creator 2: seq 1 — should be fine
         let vc = VectorClock::with_node(n2, 2);
         let mut e2 = Event::new(n2, 1, vc, Some(g2_id), Some(g1_id), vec![]).expect("valid event");
-        e2.sign_with_keypair(&kp2);
+        e2.sign_with_keypair(&kp2).expect("signing");
         graph.insert(e2).unwrap();
 
         assert_eq!(graph.len(), 3);

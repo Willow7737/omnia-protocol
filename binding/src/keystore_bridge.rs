@@ -660,7 +660,8 @@ mod tests {
         }"#;
         let state: RotationState = serde_json::from_str(old_json).expect("deserialize old format");
         #[allow(deprecated)]
-        assert!(state.rotated_ed25519_secret.is_none());
+        let secret_is_none = state.rotated_ed25519_secret.is_none();
+        assert!(secret_is_none);
         assert!(state.rotated_ed25519_secret_encrypted.is_none());
     }
 

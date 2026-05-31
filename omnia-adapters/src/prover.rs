@@ -353,7 +353,6 @@ mod tests {
     use super::*;
     use crate::circuit::RollupCircuit;
     use ark_bn254::Fr;
-    use ark_ff::PrimeField;
 
     #[test]
     fn test_batch_verify_valid_proofs() {
@@ -400,7 +399,7 @@ mod tests {
         old[0] = 7;
         let mut new = [0u8; 32];
         new[0] = 8;
-        let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+        let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
         let proof = create_proof(circuit, &pk).expect("proof failed");
         let wrong_public_inputs = vec![Fr::from(99999u64), Fr::from(99998u64)]; // Wrong!
         proof_pairs.push((proof, wrong_public_inputs));

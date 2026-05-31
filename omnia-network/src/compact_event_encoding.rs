@@ -617,7 +617,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::genesis(node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let peer_id = node(2);
         let compact = encoder.encode(&event, &peer_id).unwrap();
@@ -679,7 +679,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::new(node(1), 0, vc, None, None, vec![]).expect("valid event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let peer_id = node(2);
         let result = encoder.encode(&event, &peer_id);
@@ -698,7 +698,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::genesis(node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let remote = VectorClock::new();
         let savings = CompactEncoder::estimate_savings(&event, &remote);

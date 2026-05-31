@@ -799,7 +799,7 @@ mod tests {
         let creator = test_node(1);
         let keypair = generate_keypair();
         let mut event = omnia_primitives::Event::genesis(creator, vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let circuit = RollupCircuitLegacy::new([0u8; 32], [1u8; 32], vec![event]);
         let proof = circuit.prove_stub();

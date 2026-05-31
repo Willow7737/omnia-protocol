@@ -255,7 +255,7 @@ mod tests {
     fn make_event(creator: [u8; 32], seq: u64) -> Event {
         let vc = VectorClock::with_node(creator, seq + 1);
         let mut event = Event::new(creator, seq, vc, None, None, vec![1, 2, 3]).expect("valid event");
-        event.sign_with_keypair(&generate_keypair());
+        event.sign_with_keypair(&generate_keypair()).expect("signing");
         event
     }
 

@@ -280,7 +280,7 @@ fn create_signed_event(creator_byte: u8, payload: Vec<u8>) -> Event {
     let mut node_id = [0u8; 32];
     node_id[0] = creator_byte;
     let mut event = Event::genesis(node_id, payload).expect("valid genesis event");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
     event
 }
 

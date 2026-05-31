@@ -23,7 +23,7 @@ fn test_node(id: u8) -> NodeId {
 fn make_signed_event(keypair: &NodeKeypair, sequence: u64, node_id: NodeId) -> Event {
     let vc = VectorClock::with_node(node_id, sequence + 1);
     let mut event = Event::new(node_id, sequence, vc, None, None, vec![]).expect("event creation should succeed");
-    event.sign_with_keypair(keypair);
+    event.sign_with_keypair(keypair).expect("signing");
     event
 }
 
