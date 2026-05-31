@@ -74,13 +74,11 @@ fn test_equivocation_triggers_slash_in_consensus() {
     event_b.sign_with_keypair(&kp);
     graph.insert(event_b.clone()).unwrap();
 
-    // Processing the equivocating event should record an equivocation offense.
-    // Since Equivocation = 500 points and slash_threshold = 500, the node should
-    // now be slashed.
+    // Processing the equivocating event should detect the equivocation,
+    // record an offense (Equivocation = 500 points ≥ slash_threshold = 500),
+    // and reject the event from consensus.
     let result = engine.process_event(&event_b, &graph);
-    // The event should still be processed (slash check is before equivocation check),
-    // but the equivocation should have been recorded.
-    assert!(result.is_ok());
+    assert!(matches!(result, Err(ConsensusError::EquivocationDetected { .. })));
 
     // The node should now be slashed
     assert!(engine.is_slashed(&n1));
@@ -176,11 +174,13 @@ fn test_slashed_node_events_rejected() {
     graph.insert(event_a.clone()).unwrap();
     engine.process_event(&event_a, &graph).unwrap();
 
-    // Now trigger slashing via equivocation
+    // Now trigger slashing via equivocation — the equivocating event is
+    // rejected from consensus, but the offense is recorded and the node is slashed.
     let mut event_b = Event::new(n1, 0, vc, None, None, vec![2]).expect("valid event");
     event_b.sign_with_keypair(&kp);
     graph.insert(event_b.clone()).unwrap();
-    engine.process_event(&event_b, &graph).unwrap();
+    let result = engine.process_event(&event_b, &graph);
+    assert!(matches!(result, Err(ConsensusError::EquivocationDetected { .. })));
 
     // Node should be slashed now
     assert!(engine.is_slashed(&n1));
