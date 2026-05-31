@@ -9,15 +9,24 @@
 
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use omnia_consensus::CausalGraph;
-use omnia_crypto::generate_keypair;
+use omnia_crypto::{generate_keypair, NodeKeypair};
 use omnia_primitives::{Event, NodeId, VectorClock};
+use std::sync::OnceLock;
+
+/// Generate the keypair once so it is not re-created on every benchmark
+/// iteration. Key generation is expensive and would dominate the measured
+/// instruction count if included in the hot path.
+static BENCH_KEYPAIR: OnceLock<NodeKeypair> = OnceLock::new();
+
+fn get_keypair() -> &'static NodeKeypair {
+    BENCH_KEYPAIR.get_or_init(generate_keypair)
+}
 
 /// Helper to create a minimal valid (signed) Event for benchmarking.
 fn create_signed_event(creator: NodeId, seq: u64, parent: Option<[u8; 32]>) -> Event {
-    let keypair = generate_keypair();
     let vc = VectorClock::with_node(creator, seq + 1);
     let mut event = Event::new(creator, seq, vc, parent, None, vec![1, 2, 3]).expect("event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(get_keypair()).expect("signing");
     event
 }
 

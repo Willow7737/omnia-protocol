@@ -141,13 +141,21 @@ impl EconomicsState {
     ) -> Result<(), EconomicsError> {
         match op {
             EconomicsOp::MintUbc { did, amount } => {
+                // SECURITY: Admin authorization required for minting when
+                // admin_keys is configured. This prevents unauthorized minting
+                // of UBC tokens. When admin_keys is empty (testing mode),
+                // minting is allowed for backward compatibility.
                 if !self.admin_keys.is_empty() {
-                    // Admin authorization required for minting
-                    return Err(EconomicsError::Unauthorized(
-                        "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into(),
-                    ));
+                    let submitter = event_creator.ok_or_else(|| {
+                        EconomicsError::ValidationFailed("MintUbc requires authenticated event creator".into())
+                    })?;
+                    if !self.is_admin(submitter) {
+                        return Err(EconomicsError::Unauthorized(
+                            "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into(),
+                        ));
+                    }
                 }
-                // Only allow minting when no admin keys are configured (testing mode)
+                // Only allow unrestricted minting when no admin keys are configured (testing mode)
                 if !self.quota.is_registered(did) {
                     self.quota.register_did(did);
                 }
@@ -173,6 +181,18 @@ impl EconomicsState {
                     }
                 }
                 proof.validate()?;
+                // SECURITY: Verify the work proof before accepting it.
+                // The verifier public key should be a well-known network parameter.
+                // TODO: Pass the actual verifier public key from network config
+                // rather than using a zeroed placeholder. This is safe for now
+                // because the `production` feature gate in `verify()` returns
+                // false (rejecting all proofs) until real ZK verification is
+                // implemented. In non-production mode, stub verification logs
+                // a warning.
+                let verifier_pubkey = [0u8; 32]; // Placeholder — must be replaced with real verifier key
+                if !proof.verify(&verifier_pubkey) {
+                    return Err(EconomicsError::WorkProofInvalid);
+                }
                 self.verified_work.insert(proof.result_hash, proof.clone());
                 let reward = proof.reward_amount();
                 self.quota.reward(did, reward)
@@ -231,7 +251,11 @@ impl EconomicsState {
         let version = bytes[0];
         if version != Self::ECONOMICS_STATE_VERSION {
             // FIXME: postcard doesn't support custom error types.
-            // Consider wrapping in a custom error type that can carry the version number.
+            // The `DeserializeUnexpectedEnd` error is misleading for a
+            // version mismatch — it implies truncated input rather than
+            // an incompatible format. Consider wrapping in a custom
+            // `EconomicsStateError` enum that can carry the version number
+            // and distinguish between "wrong version" and "truncated data".
             return Err(postcard::Error::DeserializeUnexpectedEnd);
         }
         postcard::from_bytes(&bytes[1..])

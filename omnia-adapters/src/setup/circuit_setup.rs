@@ -306,6 +306,28 @@ pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Resul
 /// between the Phase 1 ceremony and the Phase 2 keys: different SRS
 /// transcripts always produce different keys.
 ///
+/// # ⚠️ SECURITY WARNING
+///
+/// This function derives the Phase 2 "toxic waste" (the secret random
+/// values that underpin the Groth16 proving/verifying keys) **deterministically**
+/// from the SRS transcript. Anyone who knows the SRS transcript can
+/// re-derive the toxic waste and forge proofs. This is ONLY safe if:
+///
+/// 1. The SRS transcript itself is secret (i.e., the Phase 1 ceremony
+///    was run by a single trusted party in a secure environment).
+/// 2. OR the transcript is destroyed after the ceremony.
+///
+/// In a multi-party ceremony (the intended production use case), the
+/// transcript is public, which means the derived keys are **NOT secure** —
+/// any ceremony participant could reconstruct the toxic waste.
+///
+/// For production deployments with multi-party ceremonies, you MUST use
+/// a proper Phase 2 ceremony with fresh randomness contributed by each
+/// participant, NOT this deterministic derivation.
+///
+/// This function is gated behind the `test` feature and should NEVER be
+/// used in production without a proper Phase 2 ceremony.
+///
 /// # Security
 ///
 /// The deterministic seed is derived as:
@@ -324,6 +346,21 @@ pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Resul
 /// # Returns
 ///
 /// A [`CircuitKeyPair`] containing serialized proving and verifying keys.
+///
+/// # ⚠️ SECURITY WARNING (Deterministic Phase 2 Seed)
+///
+/// **This function derives Phase 2 "toxic waste" deterministically from
+/// the SRS transcript.** Anyone who knows the SRS transcript can re-derive
+/// the toxic waste and forge proofs. This is ONLY safe in a single-party
+/// trusted setup where the transcript is kept secret or destroyed.
+///
+/// In a multi-party ceremony (the intended production use case), the
+/// transcript is public, making the derived keys **NOT secure** — any
+/// participant could reconstruct the toxic waste. For production, you
+/// MUST use a proper Phase 2 ceremony with fresh randomness.
+///
+/// **Do NOT use this function in production without understanding the
+/// security implications.** See the security section below for details.
 pub fn derive_keys_deterministic_from_srs(
     srs: &PowersOfTau,
     circuit: &RollupCircuit,
@@ -619,7 +656,7 @@ mod tests {
         let mut new_root = [0u8; 32];
         new_root[0] = 0x02;
 
-        let proof_circuit = RollupCircuit::from_state_roots(old_root, new_root, 5, old_root);
+        let proof_circuit = RollupCircuit::from_state_roots(old_root, new_root, 5, old_root, new_root);
         let public_inputs = proof_circuit.public_input().expect("public inputs");
         let proof = create_proof(proof_circuit, &pk).expect("proof creation failed");
 

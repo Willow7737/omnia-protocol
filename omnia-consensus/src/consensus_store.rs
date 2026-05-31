@@ -50,6 +50,8 @@ pub enum ConsensusStoreError {
 ///
 /// - **v1**: Initial format — round, seed, committed count, validators,
 ///   equivocation tracking.
+/// - **v2**: Added `first_event_for_sequence` map for full equivocation
+///   tracking restoration after crash recovery.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusState {
     /// Current consensus round number.
@@ -64,6 +66,10 @@ pub struct ConsensusState {
     pub active_validators: Vec<NodeId>,
     /// Equivocation tracking: validator → last seen sequence.
     pub equivocation_tracking: HashMap<NodeId, u64>,
+    /// Full first_event_for_sequence map for equivocation detection restoration.
+    /// Maps (creator, sequence) → first EventId seen for that pair.
+    /// Added in v2.
+    pub first_event_for_sequence: HashMap<(NodeId, u64), [u8; 32]>,
     /// State format version for forward compatibility.
     pub version: u32,
 }
@@ -297,7 +303,8 @@ mod tests {
             last_finalized_round: 40,
             active_validators: vec![[2u8; 32]],
             equivocation_tracking: HashMap::from([([3u8; 32], 5u64)]),
-            version: 1,
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
         };
 
         store.save_state(&state).unwrap();
@@ -309,7 +316,7 @@ mod tests {
         assert_eq!(loaded.last_finalized_round, 40);
         assert_eq!(loaded.active_validators, vec![[2u8; 32]]);
         assert_eq!(loaded.equivocation_tracking.get(&[3u8; 32]), Some(&5u64));
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
     }
 
     #[test]
@@ -322,6 +329,7 @@ mod tests {
             last_finalized_round: 0,
             active_validators: vec![],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
         store.save_state(&state).unwrap();
@@ -361,6 +369,7 @@ mod tests {
             last_finalized_round: 8,
             active_validators: vec![],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 
@@ -371,6 +380,7 @@ mod tests {
             last_finalized_round: 18,
             active_validators: vec![[5u8; 32]],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 
@@ -406,6 +416,7 @@ mod tests {
             last_finalized_round: 490,
             active_validators: validators.clone(),
             equivocation_tracking: equivocation,
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 

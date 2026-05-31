@@ -41,8 +41,11 @@ pub fn verify_zk_proof(proof_bytes: &[u8], context: &str) -> Result<(), crate::s
     #[cfg(feature = "real_verification")]
     {
         // Real verification logic would go here.
-        // For now, still reject until real verification is implemented.
-        todo!("Real ZK proof verification not yet implemented")
+        // For now, reject until real verification is implemented.
+        Err(crate::shard::ShardError::ValidationFailed(format!(
+            "{}: real ZK proof verification is not yet implemented",
+            context
+        )))
     }
 
     #[cfg(not(feature = "real_verification"))]

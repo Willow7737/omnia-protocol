@@ -34,7 +34,7 @@ fn create_signed_event(
 ) -> Event {
     let keypair = generate_keypair();
     let mut event = Event::new(creator, seq, vc, self_parent, other_parent, payload).expect("event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
     event
 }
 
@@ -72,7 +72,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
                 let mut seed = [0u8; 32];
                 seed[0] = 1;
                 let config = ConsensusConfig {
-                    total_nodes: 1,
+                    total_nodes: 3,
                     round_seed: seed,
                     ..Default::default()
                 };
@@ -83,7 +83,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
 
                 // Genesis event
                 let mut genesis = Event::genesis(creator, vec![]).expect("genesis creation");
-                genesis.sign_with_keypair(&keypair);
+                genesis.sign_with_keypair(&keypair).expect("signing");
                 let genesis_id = genesis.id;
                 graph.insert(genesis).expect("genesis insert");
                 let _ = consensus.process_event(graph.get(&genesis_id).expect("genesis exists"), &graph);
@@ -101,7 +101,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
 
                     let mut event =
                         Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8; 64]).expect("event creation");
-                    event.sign_with_keypair(&keypair);
+                    event.sign_with_keypair(&keypair).expect("signing");
 
                     let event_id = event.id;
                     if graph.insert(event).is_ok() {
@@ -150,7 +150,7 @@ fn finality_latency_bench(c: &mut Criterion) {
                 let mut seed = [0u8; 32];
                 seed[0] = 1;
                 let config = ConsensusConfig {
-                    total_nodes: 1,
+                    total_nodes: 3,
                     round_seed: seed,
                     ..Default::default()
                 };
@@ -161,7 +161,7 @@ fn finality_latency_bench(c: &mut Criterion) {
 
                 let keypair = generate_keypair();
                 let mut genesis = Event::genesis(creator, vec![]).expect("genesis creation");
-                genesis.sign_with_keypair(&keypair);
+                genesis.sign_with_keypair(&keypair).expect("signing");
                 let genesis_id = genesis.id;
                 graph.insert(genesis).expect("genesis insert");
                 let _ = consensus.process_event(graph.get(&genesis_id).expect("genesis exists"), &graph);
@@ -175,7 +175,7 @@ fn finality_latency_bench(c: &mut Criterion) {
                 vc.set(creator, seq + 1);
                 let mut event =
                     Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 64]).expect("event creation");
-                event.sign_with_keypair(&keypair);
+                event.sign_with_keypair(&keypair).expect("signing");
 
                 let event_id = event.id;
                 let _ = graph.insert(event);
@@ -224,7 +224,7 @@ fn zk_proof_gen_bench(c: &mut Criterion) {
         b.iter(|| {
             let old = [1u8; 32];
             let new = [2u8; 32];
-            let circuit = RollupCircuit::from_state_roots(old, new, 1, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 1, old, new);
             let _ = create_proof(circuit, &pk);
         })
     });
@@ -278,7 +278,7 @@ fn gossip_latency_bench(c: &mut Criterion) {
                 let keypair = generate_keypair();
                 let mut local_graph = CausalGraph::new();
                 let mut genesis = Event::genesis(creator, vec![]).expect("genesis creation");
-                genesis.sign_with_keypair(&keypair);
+                genesis.sign_with_keypair(&keypair).expect("signing");
                 let genesis_id = genesis.id;
                 local_graph.insert(genesis).expect("genesis insert");
 
@@ -295,7 +295,7 @@ fn gossip_latency_bench(c: &mut Criterion) {
                 vc.set(creator, seq + 1);
                 let mut event =
                     Event::new(creator, seq, vc, Some(last_id), None, vec![1u8; 128]).expect("event creation");
-                event.sign_with_keypair(&keypair);
+                event.sign_with_keypair(&keypair).expect("signing");
 
                 // Simulate serialization + deserialization (postcard wire format)
                 let serialized = postcard::to_allocvec(&event).expect("serialize");
@@ -349,7 +349,7 @@ fn dag_insert_bench(c: &mut Criterion) {
                             vc.set(creator, seq + 1);
                             let mut event = Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32])
                                 .expect("event creation");
-                            event.sign_with_keypair(&keypair);
+                            event.sign_with_keypair(&keypair).expect("signing");
                             last_id = Some(event.id);
                             graph.insert(event).expect("pre-fill insert");
                             seq += 1;
@@ -364,7 +364,7 @@ fn dag_insert_bench(c: &mut Criterion) {
                         vc.set(creator, seq + 1);
                         let mut event =
                             Event::new(creator, seq, vc, last_id, None, vec![seq as u8; 32]).expect("event creation");
-                        event.sign_with_keypair(&keypair);
+                        event.sign_with_keypair(&keypair).expect("signing");
                         let _ = graph.insert(event);
 
                         let elapsed = start.elapsed();

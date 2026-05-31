@@ -39,7 +39,7 @@ fn node_id_from_keypair(kp: &NodeKeypair) -> NodeId {
 fn signed_genesis(kp: &NodeKeypair) -> Event {
     let node_id = node_id_from_keypair(kp);
     let mut event = Event::genesis(node_id, vec![]).expect("valid genesis event");
-    event.sign_with_keypair(kp);
+    event.sign_with_keypair(kp).expect("signing");
     event
 }
 
@@ -47,7 +47,7 @@ fn signed_child(kp: &NodeKeypair, seq: u64, parent_id: EventId) -> Event {
     let node_id = node_id_from_keypair(kp);
     let vc = VectorClock::with_node(node_id, seq + 1);
     let mut event = Event::new(node_id, seq, vc, Some(parent_id), None, vec![]).expect("valid event");
-    event.sign_with_keypair(kp);
+    event.sign_with_keypair(kp).expect("signing");
     event
 }
 
@@ -81,7 +81,7 @@ fn graph_depth_at_limit_works() {
     assert_eq!(stats.max_depth, depth);
 
     let event = graph.get(&last_id).unwrap();
-    assert!(event.verify_hash());
+    assert!(event.verify_hash().expect("verify_hash"));
 
     println!("[depth] Built chain of {depth} events, max_depth = {}", stats.max_depth);
 }
@@ -218,7 +218,7 @@ fn payload_at_max_size_accepted() {
     let node_id = node_id_from_keypair(&kp);
     let vc = VectorClock::with_node(node_id, 1);
     let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]).expect("valid event");
-    event.sign_with_keypair(&kp);
+    event.sign_with_keypair(&kp).expect("signing");
 
     let result = event.validate();
     match result {
@@ -242,7 +242,7 @@ fn payload_exceeding_max_size_rejected() {
     let vc = VectorClock::with_node(node_id, 1);
     let oversized = MAX_PAYLOAD_SIZE + 1;
     let mut event = Event::new(node_id, 0, vc, None, None, vec![0u8; oversized]).expect("valid event");
-    event.sign_with_keypair(&kp);
+    event.sign_with_keypair(&kp).expect("signing");
 
     let result = event.validate();
     assert!(result.is_err(), "oversized payload should be rejected");
@@ -541,7 +541,7 @@ fn governance_quorum_enforcement_67_percent() {
     assert_eq!(DEFAULT_QUORUM_PERCENTAGE, 67);
 
     for i in 0..10u64 {
-        gov.set_weight(&format!("voter{i}"), 100);
+        gov.set_weight(&format!("voter{i}"), 100, 0);
     }
 
     gov.create_proposal("prop1".to_string(), "test proposal".to_string(), 10, 0)
@@ -568,9 +568,9 @@ fn governance_quorum_enforcement_67_percent() {
 fn governance_quorum_met_at_67_percent() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
-    gov.set_weight("alice", 100);
-    gov.set_weight("bob", 100);
-    gov.set_weight("charlie", 100);
+    gov.set_weight("alice", 100, 0);
+    gov.set_weight("bob", 100, 0);
+    gov.set_weight("charlie", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
         .unwrap();
@@ -588,7 +588,7 @@ fn governance_quorum_met_at_67_percent() {
 #[test]
 fn governance_double_vote_prevention() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
-    gov.set_weight("alice", 100);
+    gov.set_weight("alice", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
         .unwrap();
@@ -605,9 +605,9 @@ fn governance_double_vote_prevention() {
 fn governance_quadratic_voting_weight() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
-    gov.set_weight("whale", 10_000);
-    gov.set_weight("minnow", 100);
-    gov.set_weight("dust", 1);
+    gov.set_weight("whale", 10_000, 0);
+    gov.set_weight("minnow", 100, 0);
+    gov.set_weight("dust", 1, 0);
 
     assert_eq!(*gov.voting_weights.get("whale").unwrap(), 100);
     assert_eq!(*gov.voting_weights.get("minnow").unwrap(), 10);
@@ -804,7 +804,7 @@ fn signature_verification_throughput() {
     for seq in 0..count {
         let vc = VectorClock::with_node(node_id, seq as u64 + 1);
         let mut event = Event::new(node_id, seq as u64, vc, None, None, vec![]).expect("valid event");
-        event.sign_with_keypair(&kp);
+        event.sign_with_keypair(&kp).expect("signing");
         events.push(event);
     }
 

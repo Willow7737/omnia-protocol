@@ -14,11 +14,13 @@ hex = "0.4"
 subtle = "2.5"
 thiserror = "2.0"
 ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
-bincode = { workspace = true }
+bincode = { workspace = true, optional = true }
+tracing = "0.1"
 
 [features]
 default = []
 legacy-hash = ["dep:sha2"]
+legacy-wire = ["dep:bincode"]
 
 [dev-dependencies]
 proptest = "1.4"

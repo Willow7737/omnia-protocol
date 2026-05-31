@@ -31,6 +31,11 @@ pub const MAX_TIMESTAMP_DRIFT_MS: u64 = 120_000; // 2 minutes (was 5 min)
 /// Events older than this are rejected as unreasonably stale.
 pub const MAX_EVENT_AGE_MS: u64 = 31_536_000_000;
 
+/// Maximum payload size: 1 MiB.
+/// Events exceeding this size are rejected before processing.
+/// This prevents DoS via oversized payloads.
+pub const MAX_PAYLOAD_SIZE: usize = 1024 * 1024;
+
 /// Unique identifier for an event (BLAKE3 hash of event content)
 pub type EventId = [u8; 32];
 
@@ -83,7 +88,7 @@ mod serde_array_64 {
 /// its unique identifier in the causal graph.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
-    /// Unique event identifier (SHA-256 hash of all fields except signature)
+    /// Unique event identifier (BLAKE3 hash of all fields except signature)
     pub id: EventId,
     /// The node that created this event
     pub creator: NodeId,
@@ -100,8 +105,14 @@ pub struct Event {
     /// Application-specific payload (transactions, etc.)
     pub payload: Payload,
     /// Ed25519 public key of the creator (32 bytes)
+    ///
+    /// Prefer the [`creator_pubkey()`](Self::creator_pubkey) getter for read-only access.
+    /// Direct mutation of this field after signing will invalidate the event.
     pub creator_pubkey: [u8; 32],
     /// Ed25519 signature over the event hash (64 bytes)
+    ///
+    /// Prefer the [`signature()`](Self::signature) getter for read-only access.
+    /// Direct mutation of this field after signing will invalidate the event.
     #[serde(with = "serde_array_64")]
     pub signature: [u8; 64],
     /// Current consensus status
@@ -110,6 +121,39 @@ pub struct Event {
     /// Number of acknowledgments received (for consensus tracking)
     #[serde(skip)]
     pub ack_count: u32,
+}
+
+// ── Getter methods for immutable event fields ─────────────────────────
+//
+// These getters provide a stable read-only API for event identity fields.
+// While the fields are currently `pub` for backward compatibility, callers
+// should prefer these getter methods. Direct mutation of `id`, `creator`,
+// `creator_pubkey`, or `signature` after signing will invalidate the event.
+
+impl Event {
+    /// Returns the event's unique identifier (BLAKE3 hash).
+    #[inline]
+    pub fn id(&self) -> EventId {
+        self.id
+    }
+
+    /// Returns the node ID of the event's creator.
+    #[inline]
+    pub fn creator(&self) -> NodeId {
+        self.creator
+    }
+
+    /// Returns the Ed25519 public key of the event's creator.
+    #[inline]
+    pub fn creator_pubkey(&self) -> [u8; 32] {
+        self.creator_pubkey
+    }
+
+    /// Returns the Ed25519 signature over the event hash.
+    #[inline]
+    pub fn signature(&self) -> [u8; 64] {
+        self.signature
+    }
 }
 
 /// Lightweight event header for efficient gossip
@@ -150,9 +194,14 @@ pub struct EventRequest {
 impl EventRequest {
     /// Validate the request limits.
     ///
-    /// Returns an error if `limit` exceeds [`MAX_EVENT_REQUEST_LIMIT`] or
-    /// `known_events` exceeds [`MAX_KNOWN_EVENTS`].
+    /// Returns an error if `limit` is zero, exceeds [`MAX_EVENT_REQUEST_LIMIT`],
+    /// or `known_events` exceeds [`MAX_KNOWN_EVENTS`].
     pub fn validate(&self) -> Result<(), EventValidationError> {
+        if self.limit == 0 {
+            return Err(EventValidationError::InvalidField(
+                "limit must be greater than zero".into(),
+            ));
+        }
         if self.limit > MAX_EVENT_REQUEST_LIMIT {
             return Err(EventValidationError::InvalidField("limit exceeds maximum".into()));
         }
@@ -179,7 +228,7 @@ pub struct EventBatch {
 impl Event {
     /// Create a new event (without signature — must be signed separately).
     ///
-    /// The event ID is computed as the SHA-256 hash of all fields except the
+    /// The event ID is computed as the BLAKE3 hash of all fields except the
     /// signature. The timestamp is set to the current system time. The event
     /// is created with [`EventStatus::Pending`] and zero acknowledgment count.
     ///
@@ -211,10 +260,12 @@ impl Event {
         other_parent: Option<EventId>,
         payload: Payload,
     ) -> Result<Self, EventValidationError> {
-        let timestamp = SystemTime::now()
+        let timestamp: u64 = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| EventValidationError::InvalidTimestamp)?
-            .as_millis() as u64;
+            .as_millis()
+            .try_into()
+            .map_err(|_| EventValidationError::InvalidTimestamp)?;
 
         let mut event = Self {
             id: [0u8; 32],
@@ -231,7 +282,7 @@ impl Event {
             ack_count: 0,
         };
 
-        event.id = event.compute_hash();
+        event.id = event.compute_hash()?;
         Ok(event)
     }
 
@@ -250,13 +301,19 @@ impl Event {
     }
 
     /// Compute the BLAKE3 hash of this event (used as its ID).
-    /// Includes creator_pubkey in the hash input for binding.
-    fn compute_hash(&self) -> EventId {
+    /// Includes creator_pubkey and vector_clock in the hash input for binding.
+    fn compute_hash(&self) -> Result<EventId, EventValidationError> {
         let mut hasher = blake3::Hasher::new();
         hasher.update(b"OMNIA-EVENT-ID-V2"); // Domain separation
         hasher.update(&self.creator_pubkey);
         hasher.update(&self.sequence.to_le_bytes());
         hasher.update(&self.timestamp.to_le_bytes());
+        hasher.update(
+            &self
+                .vector_clock
+                .to_bytes()
+                .map_err(|e| EventValidationError::InvalidField(format!("vector_clock serialization: {e}")))?,
+        );
         hasher.update(&self.payload);
         match self.self_parent {
             None => {
@@ -276,18 +333,22 @@ impl Event {
                 hasher.update(&op);
             }
         }
-        *hasher.finalize().as_bytes()
+        Ok(*hasher.finalize().as_bytes())
     }
 
     /// Compute the legacy SHA-256 hash (for backward compatibility).
     /// Only available with the `legacy-hash` feature flag.
     #[cfg(feature = "legacy-hash")]
-    fn compute_hash_legacy(&self) -> EventId {
+    fn compute_hash_legacy(&self) -> Result<EventId, EventValidationError> {
         let mut hasher = Sha256::new();
         hasher.update(self.creator);
         hasher.update(self.sequence.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
-        hasher.update(self.vector_clock.to_bytes());
+        hasher.update(
+            self.vector_clock
+                .to_bytes()
+                .map_err(|e| EventValidationError::InvalidField(format!("vector_clock serialization: {e}")))?,
+        );
         match self.self_parent {
             None => hasher.update([0u8]),
             Some(sp) => {
@@ -304,16 +365,16 @@ impl Event {
         }
         hasher.update(&self.payload);
         hasher.update(&self.creator_pubkey);
-        hasher.finalize().into()
+        Ok(hasher.finalize().into())
     }
 
     /// Verify that the event ID matches its content (integrity check).
     ///
     /// Uses constant-time comparison to prevent timing side-channels
     /// that could leak information about the expected hash.
-    pub fn verify_hash(&self) -> bool {
-        let computed = self.compute_hash();
-        self.id.ct_eq(&computed).into()
+    pub fn verify_hash(&self) -> Result<bool, EventValidationError> {
+        let computed = self.compute_hash()?;
+        Ok(self.id.ct_eq(&computed).into())
     }
 
     /// Sign this event with an Ed25519 keypair.
@@ -333,17 +394,18 @@ impl Event {
     /// use omnia_substrate::{Event, generate_keypair};
     /// let keypair = generate_keypair();
     /// let mut event = Event::genesis([0u8; 32], vec![]).unwrap();
-    /// event.sign_with_keypair(&keypair);
+    /// event.sign_with_keypair(&keypair).unwrap();
     /// assert!(event.validate().is_ok());
     /// ```
-    pub fn sign_with_keypair(&mut self, keypair: &NodeKeypair) {
+    pub fn sign_with_keypair(&mut self, keypair: &NodeKeypair) -> Result<(), EventValidationError> {
         self.creator_pubkey = keypair.verifying_key().to_bytes();
         // Derive creator from pubkey: creator = blake3_hash_domain("omnia-creator", creator_pubkey)
         self.creator = blake3_hash_domain(b"omnia-creator", &self.creator_pubkey);
         // Recompute hash now that pubkey and creator are set
-        self.id = self.compute_hash();
+        self.id = self.compute_hash()?;
         let sig = keypair.sign(&self.id);
         self.signature = sig.to_bytes();
+        Ok(())
     }
 
     /// Verify the event's Ed25519 signature.
@@ -376,8 +438,7 @@ impl Event {
     /// use [`sign_with_keypair()`](Self::sign_with_keypair) instead.
     #[deprecated(since = "0.2.0", note = "sign() is a no-op - use sign_with_keypair() instead")]
     pub fn sign(&mut self, _signature: Vec<u8>) {
-        // This method is intentionally a no-op for backward compatibility.
-        // Use sign_with_keypair() for actual signing.
+        tracing::warn!("sign() is deprecated and does nothing; use sign_with_keypair()");
     }
 
     /// Get the event header (lightweight metadata)
@@ -452,7 +513,7 @@ impl Event {
                 max: MAX_PAYLOAD_SIZE,
             });
         }
-        if !self.verify_hash() {
+        if !self.verify_hash()? {
             return Err(EventValidationError::InvalidHash);
         }
         if !self.verify_signature() {
@@ -460,23 +521,30 @@ impl Event {
         }
 
         // Timestamp sanity checks
-        let now_ms = SystemTime::now()
+        let now_ms: u64 = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| EventValidationError::InvalidTimestamp)?
-            .as_millis() as u64;
+            .as_millis()
+            .try_into()
+            .map_err(|_| EventValidationError::InvalidTimestamp)?;
 
         // Reject events too far in the future
-        if let Some(max_allowed) = now_ms.checked_add(MAX_TIMESTAMP_DRIFT_MS) {
-            if self.timestamp > max_allowed {
-                return Err(EventValidationError::FutureTimestamp);
-            }
+        // If checked_add overflows, the timestamp is impossibly large — reject
+        let max_allowed = now_ms
+            .checked_add(MAX_TIMESTAMP_DRIFT_MS)
+            .ok_or(EventValidationError::FutureTimestamp)?;
+        if self.timestamp > max_allowed {
+            return Err(EventValidationError::FutureTimestamp);
         }
 
         // Reject events that are unreasonably old
-        if let Some(oldest_allowed) = now_ms.checked_sub(MAX_EVENT_AGE_MS) {
-            if self.timestamp < oldest_allowed {
-                return Err(EventValidationError::AncientTimestamp);
-            }
+        // If checked_sub underflows, now_ms < MAX_EVENT_AGE_MS, meaning any
+        // historical timestamp is valid (not ancient) — but we still check
+        let oldest_allowed = now_ms
+            .checked_sub(MAX_EVENT_AGE_MS)
+            .ok_or(EventValidationError::AncientTimestamp)?;
+        if self.timestamp < oldest_allowed {
+            return Err(EventValidationError::AncientTimestamp);
         }
 
         if self.status == EventStatus::Rejected {
@@ -513,7 +581,13 @@ impl Event {
     }
 
     /// Mark this event as having received an acknowledgment with a configurable threshold.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `threshold` is zero, since a zero threshold would immediately
+    /// acknowledge any event regardless of consensus.
     pub fn add_acknowledgment_with_threshold(&mut self, threshold: u32) {
+        assert!(threshold > 0, "acknowledgment threshold must be greater than zero");
         self.ack_count = self.ack_count.saturating_add(1);
         if self.ack_count >= threshold {
             self.status = EventStatus::Acknowledged;
@@ -531,10 +605,11 @@ impl Event {
         self.self_parent.is_none() && self.other_parent.is_none()
     }
 
-    /// Check if this event directly links to another event as a parent
+    /// Check if this event directly links to another event as a parent.
+    /// Compares by reference to avoid unnecessary copies of the 32-byte EventId.
     pub fn links_to(&self, event_id: &EventId) -> bool {
-        self.self_parent.map(|p| &p == event_id).unwrap_or(false)
-            || self.other_parent.map(|p| &p == event_id).unwrap_or(false)
+        self.self_parent.as_ref().map(|p| p == event_id).unwrap_or(false)
+            || self.other_parent.as_ref().map(|p| p == event_id).unwrap_or(false)
     }
 }
 
@@ -549,11 +624,6 @@ impl EventHeader {
         self.vector_clock.concurrent(&other.vector_clock)
     }
 }
-
-/// Maximum payload size: 1 MiB.
-/// Events exceeding this size are rejected before processing.
-/// This prevents DoS via oversized payloads.
-pub const MAX_PAYLOAD_SIZE: usize = 1024 * 1024;
 
 /// Errors during event validation
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -656,7 +726,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
 
-        assert_eq!(event.creator, creator);
+        assert_eq!(event.creator(), creator);
         assert_eq!(event.sequence, 0);
         assert!(event.self_parent.is_none());
         assert!(event.other_parent.is_none());
@@ -678,7 +748,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
 
-        assert!(event.verify_hash());
+        assert!(event.verify_hash().unwrap());
     }
 
     #[test]
@@ -693,7 +763,7 @@ mod tests {
         // (they form a valid ed25519 pair), so we test the actual signing flow instead.
 
         // Sign with real keypair
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
         assert!(event.verify_signature());
         assert!(event.validate().is_ok());
 
@@ -709,7 +779,7 @@ mod tests {
         let n2 = test_node(2);
 
         let genesis = Event::genesis(n1, vec![]).unwrap();
-        let genesis_id = genesis.id;
+        let genesis_id = genesis.id();
 
         let mut vc = VectorClock::with_node(n1, 2);
         vc.set(n2, 1);
@@ -724,13 +794,22 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         assert_eq!(event.status, EventStatus::Pending);
         event.add_acknowledgment();
         assert_eq!(event.ack_count, 1);
         event.add_acknowledgment();
         assert_eq!(event.status, EventStatus::Acknowledged);
+    }
+
+    #[test]
+    #[should_panic(expected = "acknowledgment threshold must be greater than zero")]
+    fn test_add_acknowledgment_with_zero_threshold_panics() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
+        event.add_acknowledgment_with_threshold(0);
     }
 
     #[test]
@@ -757,7 +836,7 @@ mod tests {
             .unwrap_or_default()
             .as_millis() as u64;
         event.timestamp = now_ms + 600_000; // 10 minutes ahead
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert_eq!(result, Err(EventValidationError::FutureTimestamp));
@@ -777,7 +856,7 @@ mod tests {
             .as_millis() as u64;
         let two_years_ms: u64 = 2 * 365 * 24 * 60 * 60 * 1000;
         event.timestamp = now_ms - two_years_ms;
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert_eq!(result, Err(EventValidationError::AncientTimestamp));
@@ -789,7 +868,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Tamper with the payload — hash check should fail
         let mut tampered = event.clone();
@@ -805,7 +884,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
         event.status = EventStatus::Rejected;
 
         let result = event.validate();
@@ -818,7 +897,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![4, 5, 6]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // A freshly signed event with recent timestamp should pass all checks
         let result = event.validate();
@@ -831,13 +910,13 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let bytes = event.to_bytes().expect("test event serialization");
         let restored = Event::from_bytes(&bytes).expect("test event deserialization");
-        assert_eq!(event.id, restored.id);
-        assert_eq!(event.signature, restored.signature);
-        assert_eq!(event.creator_pubkey, restored.creator_pubkey);
+        assert_eq!(event.id(), restored.id());
+        assert_eq!(event.signature(), restored.signature());
+        assert_eq!(event.creator_pubkey(), restored.creator_pubkey());
     }
 
     // ── Adversarial tests (Sprint 1, Task 1.2) ────────────────────────
@@ -851,7 +930,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Replace signature with non-zero garbage that is still 64 bytes
         let mut tampered = event.clone();
@@ -874,11 +953,11 @@ mod tests {
 
         // Sign with keypair A
         let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair_a);
+        event.sign_with_keypair(&keypair_a).unwrap();
 
         // Now create a different event and sign with keypair B, then swap the ID
         let mut other_event = Event::new(creator, 1, vc, None, None, vec![9, 9, 9]).unwrap();
-        other_event.sign_with_keypair(&keypair_b);
+        other_event.sign_with_keypair(&keypair_b).unwrap();
 
         // Swap the ID and signature from other_event into event (cross-contamination)
         let mut forged = event.clone();
@@ -895,7 +974,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Zero out the signature but keep the pubkey
         event.signature = [0u8; 64];
@@ -910,7 +989,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Zero out the pubkey but keep the signature
         event.creator_pubkey = [0u8; 32];
@@ -933,7 +1012,7 @@ mod tests {
             .as_millis() as u64;
         // Set well beyond the drift limit (10 seconds margin to avoid race conditions)
         event.timestamp = now_ms + MAX_TIMESTAMP_DRIFT_MS + 10_000;
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert_eq!(result, Err(EventValidationError::FutureTimestamp));
@@ -953,7 +1032,7 @@ mod tests {
             .as_millis() as u64;
         // Set exactly 1ms older than the max age
         event.timestamp = now_ms - MAX_EVENT_AGE_MS - 1;
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert_eq!(result, Err(EventValidationError::AncientTimestamp));
@@ -988,7 +1067,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let keypair = test_keypair();
         let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; 100]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Flip a single bit in the payload
         let mut tampered = event.clone();
@@ -1007,11 +1086,11 @@ mod tests {
         let creator_from_new = test_node(1); // arbitrary, will be overwritten
         let vc = VectorClock::with_node(creator_from_new, 1);
         let mut event = Event::new(creator_from_new, 0, vc, None, None, vec![1, 2, 3]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // After sign_with_keypair, creator == blake3_hash_domain("omnia-creator", creator_pubkey)
-        let expected = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey);
-        assert_eq!(event.creator, expected);
+        let expected = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey());
+        assert_eq!(event.creator(), expected);
 
         let result = event.validate();
         assert!(result.is_ok());
@@ -1025,14 +1104,14 @@ mod tests {
         let fake_creator = test_node(99); // not derived from the keypair
         let vc = VectorClock::with_node(fake_creator, 1);
         let mut event = Event::new(fake_creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // sign_with_keypair now sets creator = blake3(creator_pubkey), so we
         // must manually tamper the creator field to simulate the old vulnerability.
         let mut tampered = event.clone();
         tampered.creator = fake_creator; // override with a non-derived identity
                                          // Recompute hash so the tampered event passes hash integrity
-        tampered.id = tampered.compute_hash();
+        tampered.id = tampered.compute_hash().unwrap();
         // Re-sign with the keypair to fix the signature
         let sig = keypair.sign(&tampered.id);
         tampered.signature = sig.to_bytes();
@@ -1054,14 +1133,14 @@ mod tests {
         let mut event = Event::new(arbitrary_creator, 0, vc, None, None, vec![]).unwrap();
 
         // Before signing, creator is whatever was passed to Event::new
-        assert_eq!(event.creator, arbitrary_creator);
+        assert_eq!(event.creator(), arbitrary_creator);
 
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // After signing, creator MUST be blake3_hash_domain("omnia-creator", creator_pubkey)
-        let expected_creator = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey);
-        assert_eq!(event.creator, expected_creator);
-        assert_ne!(event.creator, arbitrary_creator); // ensure it was actually changed
+        let expected_creator = blake3_hash_domain(b"omnia-creator", &event.creator_pubkey());
+        assert_eq!(event.creator(), expected_creator);
+        assert_ne!(event.creator(), arbitrary_creator); // ensure it was actually changed
     }
 
     /// Test that manually tampering the creator field after signing causes validation to fail.
@@ -1071,7 +1150,7 @@ mod tests {
         let keypair = test_keypair();
         let vc = VectorClock::with_node(test_node(1), 1);
         let mut event = Event::new(test_node(1), 0, vc, None, None, vec![]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         // Tamper: change creator to something else
         let mut tampered = event.clone();
@@ -1091,7 +1170,7 @@ mod tests {
         let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let vc = VectorClock::with_node(creator, 1);
         let mut event = Event::new(creator, 0, vc, None, None, vec![0u8; MAX_PAYLOAD_SIZE]).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert!(
@@ -1109,7 +1188,7 @@ mod tests {
         let vc = VectorClock::with_node(creator, 1);
         let oversized = vec![0u8; MAX_PAYLOAD_SIZE + 1];
         let mut event = Event::new(creator, 0, vc, None, None, oversized).unwrap();
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).unwrap();
 
         let result = event.validate();
         assert!(
@@ -1143,5 +1222,40 @@ mod tests {
             msg.contains(&MAX_PAYLOAD_SIZE.to_string()),
             "Error message should contain max"
         );
+    }
+
+    /// Test that EventRequest::validate rejects limit == 0.
+    #[test]
+    fn test_event_request_rejects_zero_limit() {
+        let vc = VectorClock::new();
+        let req = EventRequest {
+            known_events: vec![],
+            limit: 0,
+            since: vc,
+        };
+        let result = req.validate();
+        assert!(result.is_err(), "limit == 0 should be rejected");
+        match result {
+            Err(EventValidationError::InvalidField(msg)) => {
+                assert!(msg.contains("zero"), "Error should mention zero: {msg}");
+            }
+            other => panic!("Expected InvalidField, got {other:?}"),
+        }
+    }
+
+    /// Test getter methods on Event.
+    #[test]
+    fn test_event_getter_methods() {
+        let creator = test_node(1);
+        let vc = VectorClock::with_node(creator, 1);
+        let keypair = test_keypair();
+        let mut event = Event::new(creator, 0, vc, None, None, vec![1, 2, 3]).unwrap();
+        event.sign_with_keypair(&keypair).unwrap();
+
+        // Getter methods should return the same values as direct field access
+        assert_eq!(event.id(), event.id);
+        assert_eq!(event.creator(), event.creator);
+        assert_eq!(event.creator_pubkey(), event.creator_pubkey);
+        assert_eq!(event.signature(), event.signature);
     }
 }

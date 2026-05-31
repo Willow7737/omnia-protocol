@@ -55,6 +55,7 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     }
 
     /// Create a new register with a value
+    #[allow(deprecated)]
     pub fn with_value(node_id: NodeId, value: T) -> Self {
         let mut reg = Self::new(node_id);
         reg.set(value);
@@ -62,6 +63,16 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     }
 
     /// Set the value of the register
+    ///
+    /// # Deprecation
+    ///
+    /// This method uses the system clock for the timestamp, which can produce
+    /// non-deterministic results in distributed scenarios. Use [`Self::set_with_meta`]
+    /// for production use, which accepts explicit metadata for deterministic conflict resolution.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Uses system clock for timestamp; use `set_with_meta` for production determinism."
+    )]
     pub fn set(&mut self, value: T) {
         self.value = Some(value);
         self.timestamp = current_timestamp();
@@ -218,7 +229,7 @@ mod tests {
         assert!(!reg.is_set());
         assert_eq!(reg.get(), None);
 
-        reg.set("hello");
+        reg.set_with_meta("hello", 1, node(1), 1);
         assert!(reg.is_set());
         assert_eq!(reg.get(), Some(&"hello"));
     }
@@ -242,14 +253,10 @@ mod tests {
         let n2 = node(2);
 
         let mut a = LwwRegister::new(n1);
-        a.set("A");
-        a.timestamp = 100;
-        a.version = 1;
+        a.set_with_meta("A", 100, n1, 1);
 
         let mut b = LwwRegister::new(n2);
-        b.set("B");
-        b.timestamp = 200; // B is newer
-        b.version = 1;
+        b.set_with_meta("B", 200, n2, 1);
 
         let merged_ab = a.merged(&b);
         let merged_ba = b.merged(&a);
@@ -263,8 +270,7 @@ mod tests {
         let n1 = node(1);
 
         let mut a = LwwRegister::new(n1);
-        a.set("value");
-        a.timestamp = 100;
+        a.set_with_meta("value", 100, n1, 1);
 
         let merged = a.merged(&a);
         assert_eq!(a.get(), merged.get());
@@ -277,14 +283,10 @@ mod tests {
         let n2 = node(2); // n2 > n1
 
         let mut a = LwwRegister::new(n1);
-        a.set("from_n1");
-        a.timestamp = 100;
-        a.version = 1;
+        a.set_with_meta("from_n1", 100, n1, 1);
 
         let mut b = LwwRegister::new(n2);
-        b.set("from_n2");
-        b.timestamp = 100; // same timestamp
-        b.version = 1; // same version
+        b.set_with_meta("from_n2", 100, n2, 1);
 
         let merged = a.merged(&b);
         assert_eq!(merged.get(), Some(&"from_n2")); // n2 wins
@@ -296,14 +298,10 @@ mod tests {
         let n1 = node(1);
 
         let mut a = LwwRegister::new(n1);
-        a.set("version2");
-        a.timestamp = 200;
-        a.version = 2;
+        a.set_with_meta("version2", 200, n1, 2);
 
         let mut b = LwwRegister::new(n1);
-        b.set("version1_newer_time");
-        b.timestamp = 300; // newer timestamp
-        b.version = 1; // but older version
+        b.set_with_meta("version1_newer_time", 300, n1, 1);
 
         let merged = a.merged(&b);
         assert_eq!(merged.get(), Some(&"version2")); // version wins
@@ -324,7 +322,7 @@ mod tests {
         let mut reg = LwwRegister::new(node(1));
         let hash1 = reg.state_hash();
 
-        reg.set("hello");
+        reg.set_with_meta("hello", 1, node(1), 1);
         let hash2 = reg.state_hash();
 
         assert_ne!(hash1, hash2);
@@ -340,11 +338,12 @@ mod tests {
 
     #[test]
     fn test_numeric_values() {
-        let mut reg = LwwRegister::new(node(1));
-        reg.set(42u64);
+        let n1 = node(1);
+        let mut reg = LwwRegister::new(n1);
+        reg.set_with_meta(42u64, 1, n1, 1);
         assert_eq!(reg.get(), Some(&42));
 
-        reg.set(100);
+        reg.set_with_meta(100, 2, n1, 2);
         assert_eq!(reg.get(), Some(&100));
     }
 

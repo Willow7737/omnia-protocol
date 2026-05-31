@@ -44,8 +44,58 @@ use blst::min_sig::{
     Signature as BlstSignature,
 };
 use blst::BLST_ERROR;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+
+// ---------------------------------------------------------------------------
+// Serde helpers for fixed-size byte arrays larger than 32 bytes
+// ---------------------------------------------------------------------------
+
+/// Serde helper for serializing `[u8; 96]` as bytes.
+mod serde_array_96 {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(data: &[u8; 96], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_bytes(data)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 96], D::Error> {
+        let bytes: Vec<u8> = Vec::deserialize(d)?;
+        let mut arr = [0u8; 96];
+        if bytes.len() == 96 {
+            arr.copy_from_slice(&bytes);
+            Ok(arr)
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "expected 96 bytes, got {}",
+                bytes.len()
+            )))
+        }
+    }
+}
+
+/// Serde helper for serializing `[u8; 48]` as bytes.
+mod serde_array_48 {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(data: &[u8; 48], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_bytes(data)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 48], D::Error> {
+        let bytes: Vec<u8> = Vec::deserialize(d)?;
+        let mut arr = [0u8; 48];
+        if bytes.len() == 48 {
+            arr.copy_from_slice(&bytes);
+            Ok(arr)
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "expected 48 bytes, got {}",
+                bytes.len()
+            )))
+        }
+    }
+}
 
 /// BLS signature errors.
 #[derive(Error, Debug)]
@@ -114,12 +164,14 @@ pub struct BlsKeypair {
 
 /// A BLS public key (G2 point on BLS12-381).
 ///
-/// Stored in compressed form (96 bytes).
+/// Stored in compressed form (96 bytes). Using a fixed-size array ensures
+/// the key is always the correct length, preventing bugs where a key is
+/// constructed with the wrong number of bytes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlsPublicKey(
     /// Compressed G2 point (96 bytes).
-    #[serde(with = "serde_bytes")]
-    Vec<u8>,
+    #[serde(with = "serde_array_96")]
+    [u8; PUBLIC_KEY_SIZE],
 );
 
 impl BlsPublicKey {
@@ -129,12 +181,13 @@ impl BlsPublicKey {
 
 /// A BLS signature (G1 point on BLS12-381).
 ///
-/// Stored in compressed form (48 bytes).
+/// Stored in compressed form (48 bytes). Using a fixed-size array ensures
+/// the signature is always the correct length.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlsSignature(
     /// Compressed G1 point (48 bytes).
-    #[serde(with = "serde_bytes")]
-    Vec<u8>,
+    #[serde(with = "serde_array_48")]
+    [u8; SIGNATURE_SIZE],
 );
 
 impl BlsSignature {
@@ -249,7 +302,10 @@ impl BlsKeypair {
     /// A [`BlsPublicKey`] (the wrapped, serializable form) associated
     /// with this keypair.
     pub fn public_key(&self) -> BlsPublicKey {
-        BlsPublicKey(self.public_key.compress().as_slice().to_vec())
+        let compressed = self.public_key.compress();
+        let mut bytes = [0u8; PUBLIC_KEY_SIZE];
+        bytes.copy_from_slice(compressed.as_slice());
+        BlsPublicKey(bytes)
     }
 
     /// Get the secret key as raw bytes.
@@ -266,8 +322,11 @@ impl BlsKeypair {
     /// # Returns
     ///
     /// A 96-byte vector containing the compressed G2 public key point.
+    ///
+    /// Delegates to [`public_key()`](Self::public_key)`.`[`as_bytes()`](BlsPublicKey::as_bytes)
+    /// to ensure consistency.
     pub fn public_key_bytes(&self) -> Vec<u8> {
-        self.public_key.compress().as_slice().to_vec()
+        self.public_key().as_bytes().to_vec()
     }
 
     /// Sign a message using this keypair's secret key.
@@ -294,7 +353,10 @@ impl BlsKeypair {
     /// ```
     pub fn sign(&self, message: &[u8]) -> BlsSignature {
         let sig = self.secret_key.sign(message, BLS_DST, &[]);
-        BlsSignature(sig.compress().as_slice().to_vec())
+        let compressed = sig.compress();
+        let mut bytes = [0u8; SIGNATURE_SIZE];
+        bytes.copy_from_slice(compressed.as_slice());
+        BlsSignature(bytes)
     }
 }
 
@@ -323,7 +385,9 @@ impl BlsPublicKey {
         pk.validate()
             .map_err(|e| BlsError::InvalidPublicKey(format!("validation failed: {e:?}")))?;
 
-        Ok(BlsPublicKey(bytes.to_vec()))
+        let mut arr = [0u8; PUBLIC_KEY_SIZE];
+        arr.copy_from_slice(bytes);
+        Ok(BlsPublicKey(arr))
     }
 
     /// Get the raw bytes of the public key.
@@ -333,6 +397,11 @@ impl BlsPublicKey {
     /// A slice of the compressed G2 point bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+
+    /// Convert to the underlying fixed-size byte array.
+    pub fn into_bytes(self) -> [u8; PUBLIC_KEY_SIZE] {
+        self.0
     }
 
     /// Verify a BLS signature against this public key and message.
@@ -402,7 +471,9 @@ impl BlsSignature {
         // Validate by attempting to deserialize
         let _sig = BlstSignature::from_bytes(bytes).map_err(|e| BlsError::InvalidSignature(format!("{e:?}")))?;
 
-        Ok(BlsSignature(bytes.to_vec()))
+        let mut arr = [0u8; SIGNATURE_SIZE];
+        arr.copy_from_slice(bytes);
+        Ok(BlsSignature(arr))
     }
 
     /// Get the raw bytes of the signature.
@@ -412,6 +483,11 @@ impl BlsSignature {
     /// A slice of the compressed G1 point bytes.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
+    }
+
+    /// Convert to the underlying fixed-size byte array.
+    pub fn into_bytes(self) -> [u8; SIGNATURE_SIZE] {
+        self.0
     }
 
     /// Convert to the underlying blst signature type.
@@ -486,7 +562,13 @@ impl BlsProofOfPossession {
 /// signer appears multiple times, their signature is aggregated multiple
 /// times, which inflates their effective weight. Use
 /// [`aggregate_signatures`] (the dedup version) to deduplicate before aggregating.
-pub fn aggregate_signatures_unchecked(signatures: &[BlsSignature]) -> Result<BlsSignature, BlsError> {
+///
+/// # Visibility
+///
+/// This function is `pub(crate)` because it should only be used internally
+/// where the caller can guarantee no duplicate signers. External callers
+/// should use [`aggregate_signatures`] instead.
+pub(crate) fn aggregate_signatures_unchecked(signatures: &[BlsSignature]) -> Result<BlsSignature, BlsError> {
     if signatures.is_empty() {
         return Err(BlsError::AggregationFailed(
             "cannot aggregate empty signature set".to_string(),
@@ -511,12 +593,14 @@ pub fn aggregate_signatures_unchecked(signatures: &[BlsSignature]) -> Result<Bls
         .map_err(|e| BlsError::AggregationFailed(format!("blst aggregation: {e:?}")))?;
 
     let compressed = agg.to_signature().compress();
-    Ok(BlsSignature(compressed.to_vec()))
+    let mut bytes = [0u8; SIGNATURE_SIZE];
+    bytes.copy_from_slice(compressed.as_slice());
+    Ok(BlsSignature(bytes))
 }
 
 /// Aggregate multiple BLS signatures with duplicate signer detection and deduplication.
 ///
-/// This is the safe version of [`aggregate_signatures_unchecked`] — it takes public keys
+/// This is the safe version of the unchecked aggregation function — it takes public keys
 /// alongside signatures, detects duplicate signers, and deduplicates before
 /// aggregating. Duplicate signers (identified by their public key) are kept only
 /// once, using their first occurrence.
@@ -547,7 +631,11 @@ pub fn aggregate_signatures(signatures: &[(BlsPublicKey, BlsSignature)]) -> Resu
     // Check for duplicate signers by public key
     let mut seen = std::collections::HashSet::new();
     for (pk, _sig) in signatures {
-        let pk_bytes: [u8; 96] = pk.as_bytes().try_into().unwrap_or([0u8; 96]);
+        let pk_bytes: [u8; PUBLIC_KEY_SIZE] = pk.as_bytes().try_into().map_err(|_| {
+            BlsError::AggregationFailed(
+                "public key has unexpected length — expected {PUBLIC_KEY_SIZE} bytes".to_string(),
+            )
+        })?;
         if !seen.insert(pk_bytes) {
             return Err(BlsError::AggregationFailed(format!(
                 "duplicate signer detected: public key {} appears more than once",
@@ -560,7 +648,7 @@ pub fn aggregate_signatures(signatures: &[(BlsPublicKey, BlsSignature)]) -> Resu
         return Ok(signatures[0].1.clone());
     }
 
-    // Deserialize all signatures to blst types
+    // Deserialize all signatures to blst types and validate them
     let blst_sigs: Vec<BlstSignature> = signatures
         .iter()
         .map(|(_, s)| s.to_blst())
@@ -570,11 +658,15 @@ pub fn aggregate_signatures(signatures: &[(BlsPublicKey, BlsSignature)]) -> Resu
     // Create references for the blst aggregate function
     let sig_refs: Vec<&BlstSignature> = blst_sigs.iter().collect();
 
-    let agg = AggregateSignature::aggregate(&sig_refs, false)
+    // Use validation=true since we've already deduplicated — this enables
+    // blst's internal consistency checks during aggregation.
+    let agg = AggregateSignature::aggregate(&sig_refs, true)
         .map_err(|e| BlsError::AggregationFailed(format!("blst aggregation: {e:?}")))?;
 
     let compressed = agg.to_signature().compress();
-    Ok(BlsSignature(compressed.to_vec()))
+    let mut bytes = [0u8; SIGNATURE_SIZE];
+    bytes.copy_from_slice(compressed.as_slice());
+    Ok(BlsSignature(bytes))
 }
 
 /// Aggregate multiple BLS public keys into a single public key.
@@ -626,7 +718,9 @@ pub fn aggregate_public_keys(public_keys: &[BlsPublicKey]) -> Result<BlsPublicKe
         .map_err(|e| BlsError::AggregationFailed(format!("blst pk aggregation: {e:?}")))?;
 
     let compressed = agg.to_public_key().compress();
-    Ok(BlsPublicKey(compressed.to_vec()))
+    let mut bytes = [0u8; PUBLIC_KEY_SIZE];
+    bytes.copy_from_slice(compressed.as_slice());
+    Ok(BlsPublicKey(bytes))
 }
 
 /// Verify an aggregated BLS signature against an aggregated public key.

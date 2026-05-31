@@ -98,6 +98,18 @@ impl BiologicalState {
                 Ok(())
             }
             BiologicalOp::RevokeAccess { subject, consumer } => {
+                // Authorization: only the data subject can revoke access to their data
+                if let Some(creator) = event_creator {
+                    if creator != subject {
+                        return Err(ShardError::ValidationFailed(
+                            "Only the data subject can revoke access".into(),
+                        ));
+                    }
+                } else {
+                    return Err(ShardError::ValidationFailed(
+                        "Authorization required for RevokeAccess: event_creator must be provided".into(),
+                    ));
+                }
                 let key = (*subject, *consumer);
                 let record = self
                     .consent_registry

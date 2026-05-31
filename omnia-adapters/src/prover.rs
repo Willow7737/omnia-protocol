@@ -268,6 +268,7 @@ pub fn deserialize_verifying_key(bytes: &[u8]) -> Result<VerifyingKey, ProverErr
 /// `OMNIA-BATCH-VRFY-V1`, binding the randomness to the specific proofs
 /// being verified. This prevents the prover from manipulating the aggregation.
 pub fn verify_multiple(vk: &VerifyingKey, proof_pairs: &[(Proof, Vec<ark_bn254::Fr>)]) -> Result<bool, ProverError> {
+    #[allow(unused_imports)] // PrimeField::from_be_bytes_mod_order is used below
     use ark_ff::PrimeField;
     use ark_serialize::CanonicalSerialize;
 
@@ -353,7 +354,6 @@ mod tests {
     use super::*;
     use crate::circuit::RollupCircuit;
     use ark_bn254::Fr;
-    use ark_ff::PrimeField;
 
     #[test]
     fn test_batch_verify_valid_proofs() {
@@ -366,7 +366,7 @@ mod tests {
             old[0] = i;
             let mut new = [0u8; 32];
             new[0] = i + 1;
-            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
             let pub_input = circuit.public_input().expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
             proof_pairs.push((proof, pub_input));
@@ -389,7 +389,7 @@ mod tests {
             old[0] = i;
             let mut new = [0u8; 32];
             new[0] = i + 1;
-            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
             let pub_input = circuit.public_input().expect("public input should be available");
             let proof = create_proof(circuit, &pk).expect("proof failed");
             proof_pairs.push((proof, pub_input));
@@ -400,7 +400,7 @@ mod tests {
         old[0] = 7;
         let mut new = [0u8; 32];
         new[0] = 8;
-        let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+        let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
         let proof = create_proof(circuit, &pk).expect("proof failed");
         let wrong_public_inputs = vec![Fr::from(99999u64), Fr::from(99998u64)]; // Wrong!
         proof_pairs.push((proof, wrong_public_inputs));

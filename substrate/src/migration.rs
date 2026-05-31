@@ -114,8 +114,10 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
             .open_tree(tree_name)
             .map_err(|e| MigrationError::SledRead(e.to_string()))?;
 
-        // Create a redb table definition for this tree
-        let table_key = format!("migrated_{}", tree_name.replace(|c: char| !c.is_alphanumeric(), "_"));
+        // Create a redb table definition for this tree.
+        // Use the original tree name (sanitized) so that RedbSlashingStore
+        // and other consumers can find the data under the expected table names.
+        let table_key = tree_name.replace(|c: char| !c.is_alphanumeric(), "_");
         let table_def: TableDefinition<&[u8], &[u8]> = TableDefinition::new(&table_key);
 
         let write_txn = redb_db

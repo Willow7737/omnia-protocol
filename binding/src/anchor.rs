@@ -33,6 +33,12 @@ pub struct PhysicalAnchor {
     pub quantum_commitment: QuantumCommitment,
     /// The provenance log (chain of custody).
     pub provenance_log: ProvenanceLog,
+    /// The commitment phase used when the anchor was created/last updated.
+    /// This is stored alongside the commitment so that `verify()` uses the
+    /// correct phase instead of hardcoding `ClassicalOnly`, which would
+    /// cause verification to fail for anchors created during Hybrid or
+    /// PostQuantum phases.
+    pub commitment_phase: CommitmentPhase,
 }
 
 impl PhysicalAnchor {
@@ -48,11 +54,13 @@ impl PhysicalAnchor {
         rf_fingerprint: RfFingerprint,
         quantum_commitment: QuantumCommitment,
         provenance_log: ProvenanceLog,
+        commitment_phase: CommitmentPhase,
     ) -> Self {
         Self {
             rf_fingerprint,
             quantum_commitment,
             provenance_log,
+            commitment_phase,
         }
     }
 
@@ -89,7 +97,7 @@ impl PhysicalAnchor {
         };
         if !self
             .quantum_commitment
-            .verify(public_key, &provenance_bytes, CommitmentPhase::ClassicalOnly)
+            .verify(public_key, &provenance_bytes, self.commitment_phase)
         {
             return false;
         }
@@ -174,7 +182,7 @@ mod tests {
         // Create commitment over the provenance log bytes (as verify() expects)
         let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
-        let anchor = PhysicalAnchor::new(rf, commitment, provenance);
+        let anchor = PhysicalAnchor::new(rf, commitment, provenance, CommitmentPhase::ClassicalOnly);
 
         // Verify with matching RF and correct public key
         assert!(anchor.verify(&rf_hash, &pk));
@@ -197,7 +205,7 @@ mod tests {
         );
         let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
-        let anchor = PhysicalAnchor::new(rf, commitment, provenance);
+        let anchor = PhysicalAnchor::new(rf, commitment, provenance, CommitmentPhase::ClassicalOnly);
 
         // Verify with wrong RF should fail
         assert!(!anchor.verify(&wrong_rf, &pk));
@@ -219,7 +227,7 @@ mod tests {
         );
         let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
 
-        let anchor = PhysicalAnchor::new(rf, commitment, provenance);
+        let anchor = PhysicalAnchor::new(rf, commitment, provenance, CommitmentPhase::ClassicalOnly);
         assert!(anchor.verify_chain_only());
     }
 
@@ -245,7 +253,7 @@ mod tests {
         );
 
         let commitment = test_commitment_signed(&provenance.to_bytes().unwrap(), &kp);
-        let anchor = PhysicalAnchor::new(rf, commitment, provenance);
+        let anchor = PhysicalAnchor::new(rf, commitment, provenance, CommitmentPhase::ClassicalOnly);
         assert_eq!(anchor.current_holder(), "did:omnia:bob");
     }
 }

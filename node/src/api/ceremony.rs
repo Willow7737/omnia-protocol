@@ -161,7 +161,10 @@ pub async fn ceremony_contribute(
         };
 
         let result = {
-            let server = server.read().await;
+            // SECURITY: Use write lock because accept_contribution mutates the
+            // ceremony state (modifies the SRS). A read lock would cause
+            // undefined behavior if the RwLock is used by multiple tasks.
+            let server = server.write().await;
             server.accept_contribution(contribution)
         };
 

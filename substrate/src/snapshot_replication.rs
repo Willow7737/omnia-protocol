@@ -304,7 +304,7 @@ mod tests {
         let mut graph = CausalGraph::new();
         let keypair = generate_keypair();
         let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
         graph.insert(event).unwrap();
 
         StateSnapshot::take(&graph, &SlashingState::default(), &HashMap::new(), height)

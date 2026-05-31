@@ -166,7 +166,7 @@ impl ValidationPool {
         let event_id = event.id;
 
         // Hash integrity check
-        if !event.verify_hash() {
+        if !event.verify_hash().unwrap_or(false) {
             return ValidationResult {
                 event_id,
                 valid: false,
@@ -273,7 +273,7 @@ mod tests {
 
         // Use a real keypair for proper signing
         let keypair = ed25519_dalek::SigningKey::generate(&mut OsRng);
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         event
     }

@@ -45,7 +45,7 @@ fn bench_groth16_proof_generation(c: &mut Criterion) {
         b.iter(|| {
             let old = [1u8; 32];
             let new = [2u8; 32];
-            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
             let _ = create_proof(circuit, &pk);
         })
     });
@@ -78,7 +78,7 @@ fn bench_groth16_proof_verification(c: &mut Criterion) {
 
     let old = [1u8; 32];
     let new = [2u8; 32];
-    let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+    let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
     let proof = create_proof(circuit, &pk).expect("proof failed");
     let public_inputs = vec![Fr::from_be_bytes_mod_order(&new)];
 

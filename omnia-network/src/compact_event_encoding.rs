@@ -464,7 +464,12 @@ impl CompactEncoder {
     /// Returns the estimated number of bytes saved compared to the
     /// full event serialization.
     pub fn estimate_savings(event: &Event, peer_frontier: &VectorClock) -> usize {
-        let full_vc_bytes = event.vector_clock.to_bytes().len();
+        let full_vc_bytes = event
+            .vector_clock
+            .to_bytes()
+            .map_err(|e| e.to_string())
+            .unwrap_or_default()
+            .len();
         let delta = Self::encode_delta_clock(&event.vector_clock, peer_frontier);
         let delta_bytes = delta.to_bytes().len();
 
@@ -612,7 +617,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::genesis(node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let peer_id = node(2);
         let compact = encoder.encode(&event, &peer_id).unwrap();
@@ -674,7 +679,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::new(node(1), 0, vc, None, None, vec![]).expect("valid event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let peer_id = node(2);
         let result = encoder.encode(&event, &peer_id);
@@ -693,7 +698,7 @@ mod tests {
 
         let keypair = omnia_crypto::generate_keypair();
         let mut event = Event::genesis(node(1), vec![1, 2, 3]).expect("valid genesis event");
-        event.sign_with_keypair(&keypair);
+        event.sign_with_keypair(&keypair).expect("signing");
 
         let remote = VectorClock::new();
         let savings = CompactEncoder::estimate_savings(&event, &remote);

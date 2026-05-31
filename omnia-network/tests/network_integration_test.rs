@@ -59,10 +59,7 @@ impl SimNode {
         drop(graph);
 
         let graph = self.graph.read().await;
-        match self.consensus.process_event(&event, &graph) {
-            Ok(committed) => committed,
-            Err(_) => Vec::new(),
-        }
+        self.consensus.process_event(&event, &graph).unwrap_or_default()
     }
 
     #[allow(dead_code)]

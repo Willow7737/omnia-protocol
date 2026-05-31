@@ -177,7 +177,12 @@ fn test_physical_anchor_verification() {
     // Create commitment over the provenance log bytes (as verify() expects)
     let commitment = make_commitment(&provenance.to_bytes().unwrap(), &kp);
 
-    let anchor = PhysicalAnchor::new(make_rf("did:omnia:creator", rf_hash), commitment, provenance);
+    let anchor = PhysicalAnchor::new(
+        make_rf("did:omnia:creator", rf_hash),
+        commitment,
+        provenance,
+        CommitmentPhase::ClassicalOnly,
+    );
 
     // Verification with correct RF and public key should succeed
     assert!(anchor.verify(&rf_hash, &pk));

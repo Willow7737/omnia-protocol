@@ -269,40 +269,9 @@ pub fn select_leader(
         return Err(DeterministicHashError::NoCandidates(round_number));
     }
 
-    // Derive deterministic output for this round
-    // Use BLAKE3 to hash round_seed || round_number
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"OMNIA-LEADER-V1");
-    hasher.update(round_seed);
-    hasher.update(&round_number.to_le_bytes());
-    let hash = hasher.finalize();
-
-    // Interpret first 8 bytes of output as u64, then mod total_stake.
-    // This gives approximately uniform distribution over [0, total_stake).
-    // The bias is at most (2^64 mod total_stake) / 2^64, which is
-    // negligible for any realistic total_stake value (< 2^50).
-    let hash_u64 = u64::from_be_bytes(
-        hash.as_bytes()[..8]
-            .try_into()
-            .expect("BLAKE3 output is 32 bytes, first 8 are always valid"),
-    );
-    let target = hash_u64 % total_stake;
-
-    // Walk candidates accumulating stake until target falls within range
-    let mut cumulative: u64 = 0;
-    for (node_id, (_, stake)) in &valid_candidates {
-        cumulative += *stake;
-        if target < cumulative {
-            return Ok(**node_id);
-        }
-    }
-
-    // Should be unreachable if total_stake > 0 and math is correct.
-    // Return last candidate as fallback (should never happen).
-    Ok(*valid_candidates
-        .last()
-        .ok_or(DeterministicHashError::NoEligibleLeader(round_number))?
-        .0)
+    // Delegate to the shared inner implementation with the V1 domain tag.
+    // This replaces the inline logic to avoid duplication with select_leader_v2.
+    select_leader_inner(candidates, round_seed, round_number, "OMNIA-LEADER-V1")
 }
 
 // ---------------------------------------------------------------------------
@@ -478,9 +447,12 @@ fn proof_hash_to_curve(alpha_string: &[u8], public_key: &ed25519_dalek::Verifyin
 /// Derived deterministically from the secret key and the hash-to-curve
 /// point. Cannot be computed without knowledge of the secret key.
 ///
-/// # Security Note: Inclusion of Secret Key in Gamma Computation
+/// # ⚠️ SECURITY WARNING: Secret Key in Gamma Hash (NON-STANDARD)
 ///
-/// This function includes the raw secret key bytes in the BLAKE3 hash
+/// **This is the most significant non-standard aspect of the current VRF
+/// construction and MUST be fixed in V3.**
+///
+/// This function includes the **raw secret key bytes** in the BLAKE3 hash
 /// input alongside the hash-to-curve point. This is **non-standard** compared
 /// to ECVRF constructions (e.g., RFC 9381), which compute gamma as
 /// `gamma = sk * H` (a curve point multiplication) rather than hashing
@@ -496,8 +468,14 @@ fn proof_hash_to_curve(alpha_string: &[u8], public_key: &ed25519_dalek::Verifyin
 ///   additional attack surface compared to standard VRF constructions.
 /// - **Consensus compatibility**: Changing this construction would break
 ///   consensus compatibility with existing proofs, so it is retained for
-///   backward compatibility. A future V3 construction should use
-///   `gamma = sk * H` instead.
+///   backward compatibility.
+///
+/// # Planned V3 Fix
+///
+/// The V3 construction will replace this with `gamma = sk * H` (scalar
+/// multiplication on the curve), which is the standard ECVRF approach.
+/// This eliminates the secret key from the hash input entirely, removing
+/// the exposure risk and providing the formal uniqueness guarantee.
 fn proof_compute_gamma(secret_key: &ed25519_dalek::SigningKey, h_point: &[u8; 32]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"OMNIA-ECVRF-GAMMA-V2");
@@ -544,6 +522,26 @@ pub fn select_leader_v2(
     round_number: u64,
     hash_version: HashVersion,
 ) -> Result<NodeId, DeterministicHashError> {
+    // Delegate to the shared inner function with the version-specific domain tag.
+    let domain_tag = match hash_version {
+        HashVersion::V1 => "OMNIA-LEADER-V1",
+        HashVersion::V2 => "OMNIA-LEADER-V2",
+    };
+    select_leader_inner(candidates, round_seed, round_number, domain_tag)
+}
+
+/// Inner implementation shared by [`select_leader`] and [`select_leader_v2`].
+///
+/// Performs the actual stake-weighted leader selection using the given
+/// domain tag for BLAKE3 domain separation. Extracting this avoids
+/// duplicating the filtering, sorting, and stake-walking logic between
+/// the V1 and V2 entry points.
+fn select_leader_inner(
+    candidates: &std::collections::HashMap<NodeId, (NodeKeypair, u64)>,
+    round_seed: &[u8],
+    round_number: u64,
+    domain_tag: &str,
+) -> Result<NodeId, DeterministicHashError> {
     // Filter out zero-stake candidates and sort by NodeId for deterministic order.
     // HashMap::iter() has non-deterministic order, which would cause different
     // nodes to select different leaders for the same input. Sorting by NodeId
@@ -562,27 +560,19 @@ pub fn select_leader_v2(
         return Err(DeterministicHashError::NoCandidates(round_number));
     }
 
-    // Derive hash seed based on version
-    let hash_output = match hash_version {
-        HashVersion::V1 => {
-            // Legacy: BLAKE3("OMNIA-LEADER-V1" || round_seed || round_number)
-            let mut hasher = blake3::Hasher::new();
-            hasher.update(b"OMNIA-LEADER-V1");
-            hasher.update(round_seed);
-            hasher.update(&round_number.to_le_bytes());
-            *hasher.finalize().as_bytes()
-        }
-        HashVersion::V2 => {
-            // V2: BLAKE3("OMNIA-LEADER-V2" || round_seed || round_number)
-            let mut hasher = blake3::Hasher::new();
-            hasher.update(b"OMNIA-LEADER-V2");
-            hasher.update(round_seed);
-            hasher.update(&round_number.to_le_bytes());
-            *hasher.finalize().as_bytes()
-        }
-    };
+    // Derive hash seed using the provided domain tag
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(domain_tag.as_bytes());
+    hasher.update(round_seed);
+    hasher.update(&round_number.to_le_bytes());
+    let hash_output = *hasher.finalize().as_bytes();
 
-    // Stake-weighted selection
+    // NOTE: Modular bias. Using `hash_u64 % total_stake` introduces a
+    // negligible bias of at most `2^64 mod total_stake / 2^64`. For any
+    // realistic total_stake (< 2^50, i.e. ~1 quadrillion units of the smallest
+    // denomination), this bias is < 2^-14, which is cryptographically
+    // negligible. If total_stake ever approaches 2^63, the bias becomes
+    // significant (> 0.5) and rejection sampling should be used instead.
     let hash_u64 = u64::from_be_bytes(
         hash_output[..8]
             .try_into()

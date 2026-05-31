@@ -189,12 +189,20 @@ impl GovernanceState {
     /// means that doubling your influence requires quadrupling your
     /// stake, preventing plutocratic dominance.
     ///
+    /// **Note**: Zero-stake DIDs receive a voting weight of 1. This is
+    /// intentional — it allows for symbolic participation in governance
+    /// (e.g., abstaining or expressing an opinion) without requiring
+    /// economic stake. This ensures the protocol remains inclusive and
+    /// that governance is not purely plutocratic. The weight of 1 is
+    /// negligible in quadratic terms (1² = 1) so it cannot meaningfully
+    /// influence outcomes, but it preserves the right to participate.
+    ///
     /// Uses integer square root via Newton's method — no floating-point
     /// arithmetic.
-    pub fn set_weight(&mut self, did: &str, stake: u64) {
+    pub fn set_weight(&mut self, did: &str, stake: u64, current_epoch: u64) {
         let weight = isqrt(stake).max(1);
         self.voting_weights.insert(did.to_string(), weight);
-        self.last_active.insert(did.to_string(), 0);
+        self.last_active.insert(did.to_string(), current_epoch);
     }
 
     /// Calculate the effective voting weight for a DID at the current epoch.
@@ -450,22 +458,22 @@ mod tests {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
         // 100 stake → isqrt(100) = 10
-        gov.set_weight("alice", 100);
+        gov.set_weight("alice", 100, 0);
         assert_eq!(gov.voting_weights.get("alice"), Some(&10));
 
         // 10000 stake → isqrt(10000) = 100
-        gov.set_weight("bob", 10000);
+        gov.set_weight("bob", 10000, 0);
         assert_eq!(gov.voting_weights.get("bob"), Some(&100));
 
         // 0 stake → minimum weight of 1
-        gov.set_weight("charlie", 0);
+        gov.set_weight("charlie", 0, 0);
         assert_eq!(gov.voting_weights.get("charlie"), Some(&1));
     }
 
     #[test]
     fn test_effective_weight_at_epoch_0() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100); // base weight = 10
+        gov.set_weight("alice", 100, 0); // base weight = 10
 
         // At epoch 0, full weight (no decay yet)
         assert_eq!(gov.effective_weight("alice", 0), 10);
@@ -474,7 +482,7 @@ mod tests {
     #[test]
     fn test_effective_weight_decay() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100); // base weight = 10
+        gov.set_weight("alice", 100, 0); // base weight = 10
 
         // After voting at epoch 0, then 1 epoch of inactivity
         gov.vote("alice", "prop1", VoteChoice::For, 0).ok();
@@ -487,7 +495,7 @@ mod tests {
     #[test]
     fn test_effective_weight_determinism() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100);
+        gov.set_weight("alice", 100, 0);
 
         // Call effective_weight 10,000 times — must produce identical results
         let mut results = Vec::new();
@@ -511,7 +519,7 @@ mod tests {
     #[test]
     fn test_effective_weight_zero_decay() {
         let mut gov = GovernanceState::new(DecayRate::new(0)); // 0% decay
-        gov.set_weight("alice", 100); // base weight = 10
+        gov.set_weight("alice", 100, 0); // base weight = 10
 
         // No decay even after many epochs
         assert_eq!(gov.effective_weight("alice", 100), 10);
@@ -520,7 +528,7 @@ mod tests {
     #[test]
     fn test_effective_weight_full_decay() {
         let mut gov = GovernanceState::new(DecayRate::new(BASIS_PPM)); // 100% decay
-        gov.set_weight("alice", 100); // base weight = 10
+        gov.set_weight("alice", 100, 0); // base weight = 10
 
         // After 1 epoch of inactivity, weight is 0
         assert_eq!(gov.effective_weight("alice", 1), 0);
@@ -533,7 +541,7 @@ mod tests {
 
         // set_weight with u64::MAX stake
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("whale", u64::MAX);
+        gov.set_weight("whale", u64::MAX, 0);
         assert_eq!(gov.voting_weights.get("whale"), Some(&4294967295));
     }
 
@@ -568,10 +576,10 @@ mod tests {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
         assert_eq!(gov.eligible_voter_count(), 0);
 
-        gov.set_weight("alice", 100); // weight = 10
+        gov.set_weight("alice", 100, 0); // weight = 10
         assert_eq!(gov.eligible_voter_count(), 1);
 
-        gov.set_weight("bob", 400); // weight = 20
+        gov.set_weight("bob", 400, 0); // weight = 20
         assert_eq!(gov.eligible_voter_count(), 2);
     }
 
@@ -605,9 +613,9 @@ mod tests {
     fn test_finalize_proposal_quorum_met_and_majority() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
         // 3 eligible voters
-        gov.set_weight("alice", 100); // weight = 10
-        gov.set_weight("bob", 400); // weight = 20
-        gov.set_weight("charlie", 900); // weight = 30
+        gov.set_weight("alice", 100, 0); // weight = 10
+        gov.set_weight("bob", 400, 0); // weight = 20
+        gov.set_weight("charlie", 900, 0); // weight = 30
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
@@ -631,7 +639,7 @@ mod tests {
         // 10 eligible voters, each with weight 10 (isqrt(100))
         // total_possible_weight = 100
         for i in 0..10 {
-            gov.set_weight(&format!("voter{i}"), 100);
+            gov.set_weight(&format!("voter{i}"), 100, 0);
         }
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
@@ -647,8 +655,8 @@ mod tests {
     #[test]
     fn test_finalize_proposal_defeated() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100);
-        gov.set_weight("bob", 400);
+        gov.set_weight("alice", 100, 0);
+        gov.set_weight("bob", 400, 0);
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
@@ -663,7 +671,7 @@ mod tests {
     #[test]
     fn test_finalize_proposal_not_expired() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100);
+        gov.set_weight("alice", 100, 0);
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
@@ -682,7 +690,7 @@ mod tests {
     #[test]
     fn test_double_vote_prevention() {
         let mut gov = GovernanceState::new(DecayRate::ten_percent());
-        gov.set_weight("alice", 100); // weight = 10
+        gov.set_weight("alice", 100, 0); // weight = 10
 
         gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0).ok();
 
@@ -727,11 +735,11 @@ mod proptests {
         fn proptest_quadratic_weight_monotonic(stake in 0u64..1_000_000u64) {
             let mut gov = GovernanceState::new(DecayRate::ten_percent());
             let weight_n = {
-                gov.set_weight("node_n", stake);
+                gov.set_weight("node_n", stake, 0);
                 gov.voting_weights.get("node_n").copied().unwrap_or(0)
             };
             let weight_n1 = {
-                gov.set_weight("node_n1", stake + 1);
+                gov.set_weight("node_n1", stake + 1, 0);
                 gov.voting_weights.get("node_n1").copied().unwrap_or(0)
             };
             assert!(
@@ -746,8 +754,8 @@ mod proptests {
         #[test]
         fn proptest_quadratic_sublinear_growth(stake in 10u64..100_000u64) {
             let mut gov = GovernanceState::new(DecayRate::ten_percent());
-            gov.set_weight("a", stake);
-            gov.set_weight("b", 2 * stake);
+            gov.set_weight("a", stake, 0);
+            gov.set_weight("b", 2 * stake, 0);
             let weight_a = gov.voting_weights.get("a").copied().unwrap_or(0);
             let weight_b = gov.voting_weights.get("b").copied().unwrap_or(0);
             // sqrt(2n) < 2 * sqrt(n) for n > 0
@@ -780,7 +788,7 @@ mod proptests {
             epoch in 0u64..100u64
         ) {
             let mut gov = GovernanceState::new(DecayRate::ten_percent());
-            gov.set_weight("test", stake);
+            gov.set_weight("test", stake, 0);
             let base_weight = gov.voting_weights.get("test").copied().unwrap_or(0);
             let effective = gov.effective_weight("test", epoch);
             assert!(

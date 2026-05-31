@@ -641,7 +641,7 @@ impl DkgSession {
                     share_material.extend_from_slice(&from);
                     share_material.extend_from_slice(&my_id);
                     let share_seed = blake3::derive_key("OMNIA-DKG-SHARE-V1", &share_material);
-                    aes256gcm_decrypt_dkg(aead_ct, &share_seed)?
+                    aes256gcm_decrypt_dkg(aead_ct, &share_seed, &from, &my_id)?
                 }
                 1 => {
                     // Legacy XOR decryption
@@ -961,11 +961,13 @@ impl FeldmanVssSession {
         self.accumulated_share = Some(self_share);
         self.received_shares.insert(my_id, self_share);
 
-        // Evaluate polynomial at each participant's index and encrypt the share
+        // Evaluate polynomial at each participant's index and encrypt the share.
+        // Skip self — we already evaluated and accumulated our own share above.
         let packages: Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> = self
             .participants
             .iter()
             .enumerate()
+            .filter(|(_idx, &participant_id)| participant_id != my_id)
             .map(|(idx, &participant_id)| {
                 let eval_index = idx + 1; // 1-based index
                 let eval_point = Scalar::from_u64(eval_index as u64);
@@ -1051,7 +1053,7 @@ impl FeldmanVssSession {
                 share_material.extend_from_slice(&from);
                 share_material.extend_from_slice(&my_id);
                 let share_seed = blake3::derive_key("OMNIA-FELDMAN-VSS-V1", &share_material);
-                let decrypted = aes256gcm_decrypt_dkg(aead_ct, &share_seed)?;
+                let decrypted = aes256gcm_decrypt_dkg(aead_ct, &share_seed, &from, &my_id)?;
                 if decrypted.len() < 32 {
                     return Err(DkgError::InvalidShare(
                         from_prefix,
@@ -1076,7 +1078,12 @@ impl FeldmanVssSession {
 
         // Verify the share against Feldman commitments using BLS12-381
         // scalar field arithmetic for structural validation.
-        let own_index = self.own_index.expect("own_index must be set after generate_shares");
+        let own_index = self.own_index.ok_or_else(|| {
+            DkgError::InvalidShare(
+                from_prefix,
+                "own_index not set — call generate_shares first".to_string(),
+            )
+        })?;
 
         // Convert decrypted bytes to a BLS12-381 Scalar for verification
         let share_scalar = match Scalar::from_bytes(&share_data) {
@@ -1249,12 +1256,22 @@ fn xor_encrypt_dkg(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 }
 
 /// Derive AES-256 key for DKG share encryption from BLAKE3 key material.
+///
+/// Uses a fixed, domain-separated salt instead of splitting the key_material
+/// into salt and IKM. Splitting key_material (first 16 bytes as salt, last 16
+/// as IKM) weakened key separation because the salt was deterministic from the
+/// IKM portion. The new approach uses BLAKE3 to derive a fixed salt from the
+/// key material with a domain separator, ensuring proper HKDF extraction.
 fn derive_dkg_aes_key(key_material: &[u8; 32]) -> Result<[u8; 32], DkgError> {
     use hkdf::Hkdf;
     use sha2::Sha256;
-    let hk = Hkdf::<Sha256>::new(Some(&key_material[..16]), &key_material[16..]);
+    // Derive a fixed domain-separated salt from the full key material,
+    // rather than splitting key_material in half (which lost entropy
+    // and created a deterministic salt-IKM relationship).
+    let salt = blake3::derive_key("OMNIA-DKG-SHARE-SALT-V2", key_material);
+    let hk = Hkdf::<Sha256>::new(Some(&salt), key_material);
     let mut aes_key = [0u8; 32];
-    hk.expand(b"OMNIA-DKG-SHARE-V1", &mut aes_key)
+    hk.expand(b"OMNIA-DKG-SHARE-V2", &mut aes_key)
         .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("HKDF expand failed: {e}")))?;
     Ok(aes_key)
 }
@@ -1281,19 +1298,40 @@ fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) 
 }
 
 /// AES-256-GCM decrypt a DKG share.
-fn aes256gcm_decrypt_dkg(ct: &AeadCiphertext, key_material: &[u8; 32]) -> Result<Vec<u8>, DkgError> {
+///
+/// Computes the expected AAD from the known sender/recipient IDs embedded
+/// in the key_material derivation, rather than trusting the AAD from the wire.
+/// This prevents an attacker from tampering with the AAD field to redirect
+/// the share to a different recipient.
+fn aes256gcm_decrypt_dkg(
+    ct: &AeadCiphertext,
+    key_material: &[u8; 32],
+    expected_sender: &ParticipantId,
+    expected_recipient: &ParticipantId,
+) -> Result<Vec<u8>, DkgError> {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 
     let aes_key = derive_dkg_aes_key(key_material)?;
     let cipher = Aes256Gcm::new_from_slice(&aes_key)
         .map_err(|e| DkgError::InvalidShare([0u8; 4], format!("AES key init failed: {e}")))?;
     let nonce = Nonce::from_slice(&ct.nonce);
+
+    // Compute the expected AAD from known sender/recipient IDs instead of
+    // trusting the wire AAD. The AAD must be sender_id || recipient_id to
+    // prevent relay attacks.
+    let expected_aad = {
+        let mut v = Vec::with_capacity(64);
+        v.extend_from_slice(expected_sender);
+        v.extend_from_slice(expected_recipient);
+        v
+    };
+
     cipher
         .decrypt(
             nonce,
             aes_gcm::aead::Payload {
                 msg: &ct.ciphertext,
-                aad: &ct.associated_data,
+                aad: &expected_aad,
             },
         )
         .map_err(|_| DkgError::InvalidShare([0u8; 4], "AES-GCM decryption failed: authentication error".to_string()))
@@ -1683,9 +1721,26 @@ mod tests {
     fn test_dkg_share_encryption_round_trip() {
         let data = b"dkg-share-secret";
         let key = [0xAB_u8; 32];
-        let aad = b"sender||recipient";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
-        let pt = aes256gcm_decrypt_dkg(&ct, &key).unwrap();
+        let sender: ParticipantId = {
+            let mut s = [0u8; 32];
+            s[..7].copy_from_slice(b"sender|");
+            s
+        };
+        let recipient: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[..10].copy_from_slice(b"recipient|");
+            r
+        };
+        // AAD must match the format used by aes256gcm_decrypt_dkg:
+        // sender_id || recipient_id (raw bytes, not string)
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
+        let pt = aes256gcm_decrypt_dkg(&ct, &key, &sender, &recipient).unwrap();
         assert_eq!(pt, data.to_vec());
     }
 
@@ -1693,10 +1748,25 @@ mod tests {
     fn test_dkg_share_tamper_detected() {
         let data = b"tamper-test-share";
         let key = [0xCD_u8; 32];
-        let aad = b"s||r";
-        let mut ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
+        let sender: ParticipantId = {
+            let mut s = [0u8; 32];
+            s[0] = b's';
+            s
+        };
+        let recipient: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[0] = b'r';
+            r
+        };
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let mut ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
         ct.ciphertext[0] ^= 0xFF;
-        let result = aes256gcm_decrypt_dkg(&ct, &key);
+        let result = aes256gcm_decrypt_dkg(&ct, &key, &sender, &recipient);
         assert!(result.is_err(), "Tampered ciphertext should fail AEAD");
     }
 
@@ -1704,23 +1774,59 @@ mod tests {
     fn test_dkg_share_relay_attack_prevented() {
         let data = b"relay-attack-share";
         let key = [0xEF_u8; 32];
-        let aad = b"sender1||recipient1";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
-        // Change AAD to simulate relay attack
-        let mut ct_relayed = ct.clone();
-        ct_relayed.associated_data = b"sender1||recipient2".to_vec();
-        let result = aes256gcm_decrypt_dkg(&ct_relayed, &key);
-        assert!(result.is_err(), "Relay attack (wrong AAD) should fail AEAD");
+        let sender1: ParticipantId = {
+            let mut s = [0u8; 32];
+            s[0] = 1;
+            s
+        };
+        let recipient1: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[0] = 2;
+            r
+        };
+        let recipient2: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[0] = 3;
+            r
+        };
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender1);
+            v.extend_from_slice(&recipient1);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
+        // Decrypting with the wrong expected recipient should fail
+        let result = aes256gcm_decrypt_dkg(&ct, &key, &sender1, &recipient2);
+        assert!(
+            result.is_err(),
+            "Relay attack (wrong expected recipient) should fail AEAD"
+        );
     }
 
     #[test]
     fn test_dkg_share_wrong_recipient_fails() {
         let data = b"wrong-recipient-share";
         let key = [0x11_u8; 32];
-        let aad = b"s||r1";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
+        let sender: ParticipantId = {
+            let mut s = [0u8; 32];
+            s[0] = b's';
+            s
+        };
+        let recipient: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[0] = b'r';
+            r
+        };
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
         let wrong_key = [0x22_u8; 32];
-        let result = aes256gcm_decrypt_dkg(&ct, &wrong_key);
+        let result = aes256gcm_decrypt_dkg(&ct, &wrong_key, &sender, &recipient);
         assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");
     }
 
@@ -1843,8 +1949,8 @@ mod tests {
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
-        // Should produce packages for all participants (including self)
-        assert_eq!(packages.len(), 5);
+        // Should produce packages for all OTHER participants (excluding self)
+        assert_eq!(packages.len(), 4);
 
         // Phase should have advanced
         assert_eq!(session.phase, DkgPhase::ShareDistribution);
@@ -2471,16 +2577,13 @@ mod tests {
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
-        // Different participants should receive different encrypted shares
-        let package_for_1 = packages.iter().find(|(id, _)| *id == nodes[0]).unwrap();
+        // Different participants should receive different encrypted shares.
+        // Note: generate_shares skips the caller (nodes[0]), so packages only
+        // contain entries for nodes[1] and nodes[2].
         let package_for_2 = packages.iter().find(|(id, _)| *id == nodes[1]).unwrap();
         let package_for_3 = packages.iter().find(|(id, _)| *id == nodes[2]).unwrap();
 
         // Encrypted shares should differ (different recipients get different shares)
-        assert_ne!(
-            package_for_1.1.encrypted_shares[0].ciphertext,
-            package_for_2.1.encrypted_shares[0].ciphertext
-        );
         assert_ne!(
             package_for_2.1.encrypted_shares[0].ciphertext,
             package_for_3.1.encrypted_shares[0].ciphertext
@@ -2582,7 +2685,13 @@ mod tests {
                 if sender_idx == receiver_idx {
                     continue;
                 }
-                let (_, ref package) = all_packages[sender_idx][receiver_idx];
+                // generate_shares skips self, so find the package by recipient
+                // ID rather than using direct indexing.
+                let package = &all_packages[sender_idx]
+                    .iter()
+                    .find(|(id, _)| *id == nodes[receiver_idx])
+                    .expect("package for recipient should exist")
+                    .1;
                 let _ = sessions[receiver_idx].receive_shares(nodes[sender_idx], package);
             }
         }

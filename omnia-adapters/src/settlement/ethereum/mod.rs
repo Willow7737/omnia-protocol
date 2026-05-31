@@ -138,6 +138,7 @@ pub struct EthereumConfig {
     /// OmniaRollup contract address (0x-prefixed, 42 chars).
     pub contract_address: String,
     /// Operator private key (0x-prefixed, 64 hex chars).
+    #[serde(skip)]
     pub operator_private_key: String,
     /// Gas limit for batch submission transactions.
     pub gas_limit: u64,

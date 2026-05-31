@@ -91,7 +91,7 @@ mod tests {
         let creator = keypair.verifying_key().to_bytes();
         let vc = VectorClock::with_node(creator, 1);
         let mut event = Event::new(creator, 0, vc, None, None, payload).expect("event creation should succeed");
-        event.sign_with_keypair(keypair);
+        event.sign_with_keypair(keypair).expect("signing");
         event
     }
 

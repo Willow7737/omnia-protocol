@@ -79,6 +79,17 @@ pub struct VectorClockIndexStats {
 /// 2. `Vec[sequence]` — direct index
 ///
 /// The second step is a simple array access with no hashing.
+///
+/// # Sparse Vec Issue
+///
+/// The `creator_index` uses a `Vec<Option<usize>>` indexed by sequence
+/// number. This means if a creator has a high sequence number (e.g., 500,000)
+/// but few total events, the vector will be mostly `None` entries, wasting
+/// memory. For creators with sparse sequences, a `BTreeMap<u64, usize>`
+/// alternative would be more memory-efficient at the cost of O(log n)
+/// lookup instead of O(1). A future optimization could dynamically choose
+/// between `Vec` and `BTreeMap` based on the density of sequence entries
+/// per creator (e.g., use `BTreeMap` when fill ratio < 50%).
 pub struct VectorClockIndex {
     /// Index: `creator → sequence → slot index` in the EventPool.
     /// Each creator has a sparse vector where `vec[seq] = Some(slot_index)`.

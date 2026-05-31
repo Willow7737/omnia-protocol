@@ -62,12 +62,20 @@ impl GCounter {
     /// Get the current total value (sum of all node counts).
     ///
     /// Saturates at `u64::MAX` if the sum overflows, preserving monotonicity.
+    /// When saturation occurs, a warning is logged because the true value
+    /// is unknown and subsequent increments will not be reflected.
     pub fn value(&self) -> u64 {
         self.counts
             .values()
             .copied()
             .try_fold(0u64, |acc, v| acc.checked_add(v))
-            .unwrap_or(u64::MAX)
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    "GCounter value() saturated at u64::MAX — true sum overflows. \
+                     Subsequent increments will not be reflected in value()."
+                );
+                u64::MAX
+            })
     }
 
     /// Get the current total value, returning an error if the sum overflows.

@@ -207,7 +207,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
 pub async fn metrics_handler() -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,
-        "Metrics endpoint disabled (compile without --features metrics to enable)\n",
+        "Metrics endpoint disabled (compile WITH --features metrics to enable)\n",
     )
 }
 

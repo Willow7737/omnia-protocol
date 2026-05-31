@@ -400,7 +400,7 @@ fn run_byzantine_equivocation(config: &ChaosSuiteConfig) -> ChaosScenarioResult 
         vec![0xEE, 0x01],
     )
     .expect("event creation should not fail");
-    event_a.sign_with_keypair(&byzantine_keypair);
+    event_a.sign_with_keypair(&byzantine_keypair).expect("signing");
 
     // Create event B: same (creator, sequence), different payload = [0xEQ, 0x02]
     let mut event_b = Event::new(
@@ -412,7 +412,7 @@ fn run_byzantine_equivocation(config: &ChaosSuiteConfig) -> ChaosScenarioResult 
         vec![0xEE, 0x02],
     )
     .expect("event creation should not fail");
-    event_b.sign_with_keypair(&byzantine_keypair);
+    event_b.sign_with_keypair(&byzantine_keypair).expect("signing");
 
     // Verify that the two events have different IDs (because payloads differ)
     // but the same (creator, sequence) — this is equivocation.

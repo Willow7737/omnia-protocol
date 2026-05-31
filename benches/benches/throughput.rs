@@ -31,7 +31,7 @@ fn benchmark_event_creation(c: &mut Criterion) {
     group.bench_function("create_and_sign", |b| {
         b.iter(|| {
             let mut event = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]).expect("event creation");
-            event.sign_with_keypair(&keypair);
+            event.sign_with_keypair(&keypair).expect("signing");
             black_box(event);
         });
     });
@@ -49,16 +49,17 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
 
     // Pre-create genesis
     let mut genesis = Event::genesis(creator, vec![]).expect("genesis creation");
-    genesis.sign_with_keypair(&keypair);
+    genesis.sign_with_keypair(&keypair).expect("signing");
     graph.insert(genesis.clone()).expect("genesis insert should succeed");
 
     group.bench_function("insert_chain", |b| {
         let mut seq: u64 = 1;
+        let mut last_id = genesis.id;
         b.iter(|| {
             let vc = VectorClock::with_node(creator, seq + 1);
-            let mut event =
-                Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]).expect("event creation");
-            event.sign_with_keypair(&keypair);
+            let mut event = Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8]).expect("event creation");
+            event.sign_with_keypair(&keypair).expect("signing");
+            last_id = event.id;
             let _ = graph.insert(event);
             seq += 1;
         });
@@ -81,11 +82,14 @@ fn benchmark_vector_clock_merge(c: &mut Criterion) {
     }
 
     group.bench_function("merge_100_nodes", |b| {
-        b.iter(|| {
-            let mut result = vc_a.clone();
-            result.merge(&vc_b);
-            black_box(result);
-        });
+        b.iter_batched(
+            || vc_a.clone(),
+            |mut result| {
+                result.merge(&vc_b);
+                black_box(result);
+            },
+            criterion::BatchSize::SmallInput,
+        );
     });
 
     group.finish();
@@ -114,9 +118,9 @@ fn bench_slashing_operations(c: &mut Criterion) {
         let creator: NodeId = [0u8; 32];
         let vc = VectorClock::with_node(creator, 1);
         let mut event_a = Event::new(creator, 0, vc.clone(), None, None, vec![1, 2, 3]).expect("event creation");
-        event_a.sign_with_keypair(&keypair);
+        event_a.sign_with_keypair(&keypair).expect("signing");
         let mut event_b = Event::new(creator, 0, vc.clone(), None, None, vec![4, 5, 6]).expect("event creation");
-        event_b.sign_with_keypair(&keypair);
+        event_b.sign_with_keypair(&keypair).expect("signing");
 
         b.iter(|| {
             let _ = SlashingEngine::check_equivocation(&event_a, &event_b);

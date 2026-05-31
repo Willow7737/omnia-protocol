@@ -239,7 +239,7 @@ fn test_compact_encoding_roundtrip_preserves_data() {
     let keypair = omnia_crypto::generate_keypair();
 
     let mut event = Event::genesis(node(1), vec![1, 2, 3, 4, 5]).expect("genesis event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
 
     let peer_id = node(2);
     let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
@@ -454,7 +454,7 @@ fn test_compact_encoding_large_vector_clock() {
     }
 
     let mut event = Event::new(node(1), 0, vc, None, None, vec![1, 2, 3]).expect("event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
 
     let peer_id = node(2);
     let compact = encoder.encode(&event, &peer_id).expect("encode should succeed");
@@ -640,7 +640,7 @@ fn test_compact_encoder_frontier_updates() {
 
     // Create event from node 1
     let mut event = Event::genesis(node(1), vec![1, 2, 3]).expect("genesis event creation");
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
 
     let peer_id = node(2);
 

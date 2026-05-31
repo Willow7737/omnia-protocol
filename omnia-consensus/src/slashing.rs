@@ -538,8 +538,12 @@ impl SlashingStore for InMemorySlashingStore {
     }
 
     fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
-        let mut state = self.load()?;
-        let current = state.slash_points.get(validator).copied().unwrap_or(0);
+        // Perform decrement atomically inside a single write lock to avoid TOCTOU
+        let mut guard = self
+            .state
+            .write()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        let current = guard.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
             return Err(SlashingStoreError::Persistence(format!(
                 "Validator {:?} has no slash count to decrement",
@@ -547,8 +551,11 @@ impl SlashingStore for InMemorySlashingStore {
             )));
         }
         let decrement = amount.min(current);
-        state.slash_points.insert(*validator, current - decrement);
-        self.save(&state)
+        guard.slash_points.insert(*validator, current - decrement);
+        // Persist while holding the lock to ensure atomicity
+        let state_snapshot = guard.clone();
+        drop(guard);
+        self.save(&state_snapshot)
     }
 }
 
@@ -668,12 +675,16 @@ impl SlashingEngine {
     /// use std::path::PathBuf;
     ///
     /// // Production: persistent slashing
-    /// let engine = SlashingEngine::new(Some(PathBuf::from("./data/slashing")), 500, 2000);
+    /// let engine = SlashingEngine::new(Some(PathBuf::from("./data/slashing")), 500, 2000).unwrap();
     ///
     /// // Testing: in-memory slashing
-    /// let engine = SlashingEngine::new(None, 500, 2000);
+    /// let engine = SlashingEngine::new(None, 500, 2000).unwrap();
     /// ```
-    pub fn new(data_dir: Option<PathBuf>, slash_threshold: u64, ejection_threshold: u64) -> Self {
+    pub fn new(
+        data_dir: Option<PathBuf>,
+        slash_threshold: u64,
+        ejection_threshold: u64,
+    ) -> Result<Self, SlashingStoreError> {
         match data_dir {
             Some(path) => match RedbSlashingStore::open(&path) {
                 Ok(store) => {
@@ -681,20 +692,28 @@ impl SlashingEngine {
                         path = %path.display(),
                         "Slashing engine: using persistent redb store"
                     );
-                    Self::with_store_with_thresholds(Arc::new(store), slash_threshold, ejection_threshold)
+                    Ok(Self::with_store_with_thresholds(
+                        Arc::new(store),
+                        slash_threshold,
+                        ejection_threshold,
+                    ))
                 }
                 Err(e) => {
-                    tracing::warn!(
+                    tracing::error!(
                         error = %e,
                         path = %path.display(),
-                        "Failed to open redb store — falling back to in-memory"
+                        "Failed to open redb store — returning error instead of falling back to in-memory"
                     );
-                    Self::new_in_memory(slash_threshold, ejection_threshold)
+                    Err(SlashingStoreError::Persistence(format!(
+                        "Failed to open redb store at {}: {}",
+                        path.display(),
+                        e
+                    )))
                 }
             },
             None => {
                 tracing::info!("Slashing engine: using in-memory store (testing mode)");
-                Self::new_in_memory(slash_threshold, ejection_threshold)
+                Ok(Self::new_in_memory(slash_threshold, ejection_threshold))
             }
         }
     }
@@ -1288,6 +1307,10 @@ impl SlashingEngine {
         match history {
             Some(entries) if !entries.is_empty() => {
                 let last_offense_points = entries.pop().expect("entries is non-empty per guard above");
+                // Also pop from typed_offense_history to keep both histories in sync
+                if let Some(typed_history) = state.typed_offense_history.get_mut(node) {
+                    typed_history.pop();
+                }
                 let current = state.slash_points.get(node).copied().unwrap_or(0);
                 let new_points = current.saturating_sub(last_offense_points);
                 state.slash_points.insert(*node, new_points);
@@ -2053,10 +2076,10 @@ mod tests {
         // Two events with same creator and sequence but different IDs
         let vc1 = VectorClock::with_node(n1, 1);
         let mut e1 = Event::new(n1, 0, vc1.clone(), None, None, vec![1]).expect("valid event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
 
         let mut e2 = Event::new(n1, 0, vc1, None, None, vec![2]).expect("valid event"); // different payload → different id
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
 
         assert!(SlashingEngine::check_equivocation(&e1, &e2));
 
@@ -2074,10 +2097,10 @@ mod tests {
 
         let vc = VectorClock::with_node(n1, 1);
         let mut e1 = Event::new(n1, 0, vc.clone(), None, None, vec![1]).expect("valid event");
-        e1.sign_with_keypair(&kp);
+        e1.sign_with_keypair(&kp).expect("signing");
 
         let mut e2 = Event::new(n1, 1, vc, None, None, vec![1]).expect("valid event"); // different sequence
-        e2.sign_with_keypair(&kp);
+        e2.sign_with_keypair(&kp).expect("signing");
 
         assert!(!SlashingEngine::check_equivocation(&e1, &e2));
     }

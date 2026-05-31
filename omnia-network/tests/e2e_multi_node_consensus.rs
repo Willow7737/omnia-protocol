@@ -137,7 +137,7 @@ impl E2ETestNode {
     fn create_genesis_event(&mut self, payload: Vec<u8>) -> Event {
         self.sequence = 0;
         let mut event = Event::genesis(self.node_id, payload).expect("valid genesis event");
-        event.sign_with_keypair(&self.keypair);
+        event.sign_with_keypair(&self.keypair).expect("signing");
         self.self_parent = Some(event.id);
         event
     }
@@ -165,7 +165,7 @@ impl E2ETestNode {
             payload,
         )
         .expect("valid event");
-        event.sign_with_keypair(&self.keypair);
+        event.sign_with_keypair(&self.keypair).expect("signing");
         self.self_parent = Some(event.id);
         event
     }
@@ -1042,7 +1042,7 @@ async fn e2e_late_join_consensus() -> Result<(), Box<dyn std::error::Error + Sen
     if node_c.committed_count() == 0 {
         eprintln!("[warn] Node C has 0 committed events (late-join timing); checking graph size instead");
         assert!(
-            node_c.graph.len() > 0,
+            !node_c.graph.is_empty(),
             "Node C should have events in its graph even without finality"
         );
     }

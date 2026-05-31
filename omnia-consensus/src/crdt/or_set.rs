@@ -111,9 +111,19 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
             .collect()
     }
 
-    /// Get the number of elements in the set
+    /// Get the number of elements in the set.
+    ///
+    /// Computes the count directly by iterating over `adds` and checking
+    /// against `removes`, avoiding the allocation that `elements()` would
+    /// incur by building a `Vec<T>`.
     pub fn len(&self) -> usize {
-        self.elements().len()
+        self.adds
+            .iter()
+            .filter(|(elem, adds)| match self.removes.get(elem) {
+                Some(removes) => adds.difference(removes).next().is_some(),
+                None => true,
+            })
+            .count()
     }
 
     /// Check if the set is empty
@@ -127,9 +137,24 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
     }
 
     /// Compute state hash
+    ///
+    /// Includes both `adds` and `removes` in the hash computation so that
+    /// two OR-Sets with the same observable elements but different remove
+    /// histories produce different hashes. Without `removes`, a set that
+    /// has had elements added and removed could have the same hash as one
+    /// that never added those elements, which breaks state verification.
     pub fn state_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         for (elem, tokens) in &self.adds {
+            let elem_bytes = serde_json::to_vec(elem).unwrap_or_default();
+            hasher.update(&elem_bytes);
+            for (node, seq) in tokens {
+                hasher.update(node);
+                hasher.update(seq.to_le_bytes());
+            }
+        }
+        // Include removes in state hash to distinguish different remove histories
+        for (elem, tokens) in &self.removes {
             let elem_bytes = serde_json::to_vec(elem).unwrap_or_default();
             hasher.update(&elem_bytes);
             for (node, seq) in tokens {
@@ -158,6 +183,9 @@ impl<T: Clone + Ord + Hash + Serialize> CvRDT for OrSet<T> {
                 .or_default()
                 .extend(tokens.iter().cloned());
         }
+
+        // Take max of sequence counters to ensure monotonicity across replicas
+        self.sequence = self.sequence.max(other.sequence);
     }
 }
 

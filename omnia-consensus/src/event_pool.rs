@@ -96,6 +96,8 @@ pub struct EventPool {
     /// Number of currently occupied slots.
     occupied_count: usize,
     /// Initial capacity (pre-allocated on creation).
+    /// Retained for informational purposes (e.g., stats reporting).
+    #[allow(dead_code)]
     initial_capacity: usize,
     /// Maximum capacity (prevents unbounded growth).
     max_capacity: usize,
@@ -308,7 +310,7 @@ impl EventPool {
             return Err(EventPoolError::PoolFull(self.slots.len(), self.max_capacity));
         }
 
-        let additional = ((self.initial_capacity as f64) * self.growth_factor) as usize;
+        let additional = ((self.slots.len() as f64) * self.growth_factor) as usize;
         let additional = additional.max(1); // Grow by at least 1 slot
         let new_total = self.slots.len().saturating_add(additional).min(self.max_capacity);
         let actual_additional = new_total.saturating_sub(self.slots.len());

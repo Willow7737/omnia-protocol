@@ -23,4 +23,6 @@ pub use event::{
 };
 pub use state::{SerializableState, StateSerializeError};
 pub use vector_clock::{CausalOrder, LogicalClock, NodeId, VectorClock, VectorClockError};
-pub use wire_format::{deserialize_with_version, serialize_with_version, WireFormatError, WIRE_FORMAT_VERSION};
+pub use wire_format::{
+    deserialize_with_version, serialize_with_version, WireFormatError, MAX_POSTCARD_INPUT_SIZE, WIRE_FORMAT_VERSION,
+};

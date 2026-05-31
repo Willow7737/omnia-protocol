@@ -84,19 +84,22 @@ impl PqcKeyRotationManager {
         }
 
         // Verify the authorization signature against the current Ed25519 key
-        if let Some(ref pubkey_bytes) = self.current_ed25519_public {
-            let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(pubkey_bytes)
+        // SECURITY: The current Ed25519 public key MUST be set before submitting
+        // a rotation. If it is None, the authorization signature cannot be
+        // verified, and the rotation must be rejected — otherwise anyone could
+        // submit an unverified rotation request.
+        let pubkey_bytes = self
+            .current_ed25519_public
+            .ok_or(KeyRotationError::AuthorizationSignatureRequired)?;
+        {
+            let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_bytes)
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             let signature = ed25519_dalek::Signature::try_from(request.authorization_sig.as_slice())
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             // The message being signed includes nonce and new key commitment
             // to prevent replay attacks. The nonce is derived from the current
             // public key, binding the signature to the current key state.
-            let nonce = blake3::hash(
-                &self
-                    .current_ed25519_public
-                    .expect("current_ed25519_public must be set before rotation"),
-            );
+            let nonce = blake3::hash(&pubkey_bytes);
             let message = format!(
                 "{}:{}:{}:{}",
                 request.new_phase as u8,
@@ -149,32 +152,56 @@ impl PqcKeyRotationManager {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-
-    fn test_ed25519_key(val: u8) -> [u8; 32] {
-        [val; 32]
-    }
-
-    fn classical_key(val: u8) -> PqPublicKey {
-        PqPublicKey {
-            ed25519: test_ed25519_key(val),
-            dilithium: vec![],
-        }
-    }
+    use ed25519_dalek::Signer as _;
 
     fn hybrid_key(val: u8) -> PqPublicKey {
         PqPublicKey {
-            ed25519: test_ed25519_key(val),
+            ed25519: [val; 32],
             dilithium: vec![0u8; 1952],
         }
     }
 
+    /// Helper: create a valid authorization signature for a rotation request.
+    ///
+    /// The message format must match `PqcKeyRotationManager::submit_rotation`:
+    /// `"{new_phase_u8}:{effective_at}:{nonce_hex}:{new_key_ed25519_hex}"`
+    fn sign_rotation_request(
+        signing_key: &ed25519_dalek::SigningKey,
+        new_key: &PqPublicKey,
+        new_phase: CommitmentPhase,
+        effective_at: u64,
+    ) -> Vec<u8> {
+        let pubkey_bytes = signing_key.verifying_key().to_bytes();
+        let nonce = blake3::hash(&pubkey_bytes);
+        let message = format!(
+            "{}:{}:{}:{}",
+            new_phase as u8,
+            effective_at,
+            hex::encode(nonce.as_bytes()),
+            hex::encode(new_key.ed25519)
+        );
+        signing_key.sign(message.as_bytes()).to_bytes().to_vec()
+    }
+
+    /// Helper: create a manager with a real Ed25519 keypair for authorization.
+    fn manager_with_key(phase: CommitmentPhase) -> (PqcKeyRotationManager, ed25519_dalek::SigningKey) {
+        let mut manager = PqcKeyRotationManager::new(phase);
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        manager.set_current_ed25519_public(signing_key.verifying_key().to_bytes());
+        (manager, signing_key)
+    }
+
     #[test]
     fn test_phase_upgrade_allowed() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let (mut manager, signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
+        let new_key = hybrid_key(2);
         let request = PqcKeyRotationRequest {
-            old_key: classical_key(1),
-            new_key: hybrid_key(2),
-            authorization_sig: vec![0u8; 64],
+            old_key: PqPublicKey {
+                ed25519: signing_key.verifying_key().to_bytes(),
+                dilithium: vec![],
+            },
+            new_key: new_key.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key, CommitmentPhase::Hybrid, 100),
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
             sunset_at: 200,
@@ -184,11 +211,15 @@ mod tests {
 
     #[test]
     fn test_phase_downgrade_rejected() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::Hybrid);
+        let (mut manager, signing_key) = manager_with_key(CommitmentPhase::Hybrid);
+        let new_key = PqPublicKey {
+            ed25519: [2u8; 32],
+            dilithium: vec![],
+        };
         let request = PqcKeyRotationRequest {
             old_key: hybrid_key(1),
-            new_key: classical_key(2),
-            authorization_sig: vec![0u8; 64],
+            new_key: new_key.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key, CommitmentPhase::ClassicalOnly, 100),
             new_phase: CommitmentPhase::ClassicalOnly,
             effective_at: 100,
             sunset_at: 200,
@@ -198,12 +229,16 @@ mod tests {
 
     #[test]
     fn test_transition_period_tracking() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
-        let old_key = classical_key(1);
+        let (mut manager, signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
+        let old_key = PqPublicKey {
+            ed25519: signing_key.verifying_key().to_bytes(),
+            dilithium: vec![],
+        };
+        let new_key = hybrid_key(2);
         let request = PqcKeyRotationRequest {
             old_key: old_key.clone(),
-            new_key: hybrid_key(2),
-            authorization_sig: vec![0u8; 64],
+            new_key: new_key.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key, CommitmentPhase::Hybrid, 100),
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
             sunset_at: 200,
@@ -216,9 +251,12 @@ mod tests {
 
     #[test]
     fn test_empty_authorization_sig_rejected() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let (mut manager, _signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
         let request = PqcKeyRotationRequest {
-            old_key: classical_key(1),
+            old_key: PqPublicKey {
+                ed25519: [1u8; 32],
+                dilithium: vec![],
+            },
             new_key: hybrid_key(2),
             authorization_sig: vec![],
             new_phase: CommitmentPhase::Hybrid,
@@ -230,11 +268,15 @@ mod tests {
 
     #[test]
     fn test_process_effective_advances_phase() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let (mut manager, signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
+        let new_key = hybrid_key(2);
         let request = PqcKeyRotationRequest {
-            old_key: classical_key(1),
-            new_key: hybrid_key(2),
-            authorization_sig: vec![0u8; 64],
+            old_key: PqPublicKey {
+                ed25519: signing_key.verifying_key().to_bytes(),
+                dilithium: vec![],
+            },
+            new_key: new_key.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key, CommitmentPhase::Hybrid, 100),
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
             sunset_at: 200,
@@ -254,13 +296,17 @@ mod tests {
 
     #[test]
     fn test_full_transition_to_post_quantum() {
-        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        let (mut manager, signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
 
         // ClassicalOnly -> Hybrid
+        let new_key1 = hybrid_key(2);
         let req1 = PqcKeyRotationRequest {
-            old_key: classical_key(1),
-            new_key: hybrid_key(2),
-            authorization_sig: vec![0u8; 64],
+            old_key: PqPublicKey {
+                ed25519: signing_key.verifying_key().to_bytes(),
+                dilithium: vec![],
+            },
+            new_key: new_key1.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key1, CommitmentPhase::Hybrid, 100),
             new_phase: CommitmentPhase::Hybrid,
             effective_at: 100,
             sunset_at: 200,
@@ -270,10 +316,11 @@ mod tests {
         assert_eq!(*manager.current_phase(), CommitmentPhase::Hybrid);
 
         // Hybrid -> PostQuantum
+        let new_key2 = hybrid_key(3);
         let req2 = PqcKeyRotationRequest {
             old_key: hybrid_key(2),
-            new_key: hybrid_key(3),
-            authorization_sig: vec![0u8; 64],
+            new_key: new_key2.clone(),
+            authorization_sig: sign_rotation_request(&signing_key, &new_key2, CommitmentPhase::PostQuantum, 300),
             new_phase: CommitmentPhase::PostQuantum,
             effective_at: 300,
             sunset_at: 400,
@@ -295,5 +342,42 @@ mod tests {
 
         let e = KeyRotationError::AuthorizationSignatureRequired;
         assert!(e.to_string().contains("authorization signature required"));
+    }
+
+    #[test]
+    fn test_invalid_signature_rejected() {
+        let (mut manager, _signing_key) = manager_with_key(CommitmentPhase::ClassicalOnly);
+        let new_key = hybrid_key(2);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey {
+                ed25519: [1u8; 32],
+                dilithium: vec![],
+            },
+            new_key: new_key.clone(),
+            authorization_sig: vec![0u8; 64], // Invalid signature
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        assert!(manager.submit_rotation(request).is_err());
+    }
+
+    #[test]
+    fn test_no_ed25519_public_key_set() {
+        let mut manager = PqcKeyRotationManager::new(CommitmentPhase::ClassicalOnly);
+        // No ed25519 public key set — should reject
+        let new_key = hybrid_key(2);
+        let request = PqcKeyRotationRequest {
+            old_key: PqPublicKey {
+                ed25519: [1u8; 32],
+                dilithium: vec![],
+            },
+            new_key: new_key.clone(),
+            authorization_sig: vec![1u8; 64],
+            new_phase: CommitmentPhase::Hybrid,
+            effective_at: 100,
+            sunset_at: 200,
+        };
+        assert!(manager.submit_rotation(request).is_err());
     }
 }

@@ -22,6 +22,13 @@ use crate::nonce_store::{InMemoryNonceStore, NonceStore};
 use crate::payload::{ShardOp, ShardPayload};
 use crate::shard::{Shard, ShardError, ShardId};
 
+/// Maximum allowed gap between the submitted nonce and the last seen nonce.
+///
+/// Prevents nonce-gap attacks where a malicious actor reserves a large range
+/// of future nonces, blocking legitimate events. This constant should be
+/// tuned based on the expected concurrent event rate per creator.
+const NONCE_GAP_LIMIT: u64 = 1000;
+
 /// Routes shard events to the appropriate shard handler.
 ///
 /// The router maintains a map of `ShardId → Box<dyn Shard>` and
@@ -156,12 +163,21 @@ impl ShardRouter {
 
     /// Route a cross-shard message to its target shard.
     fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
+        // TODO: Verify cross-shard causal proof before processing.
+        // The message must include a vector clock or causal proof demonstrating
+        // that the source shard observed all events that the target shard depends on.
+        // Without this verification, a malicious source shard could fabricate
+        // cross-shard messages that violate causal ordering, leading to
+        // inconsistent state across shards. Implement causal proof verification
+        // by checking that msg.causal_proof is consistent with the target shard's
+        // observed vector clock before dispatching the inner operation.
+
         // Deserialize the inner payload for the target shard
         let inner_op: ShardOp =
             postcard::from_bytes(&msg.payload).map_err(|e| ShardError::DeserializationError(e.to_string()))?;
 
         // Verify the source shard matches the shard type that would generate this event
-        let expected_source = Self::shard_id_from_op(&inner_op);
+        let expected_source = Self::shard_id_from_op(&inner_op)?;
         if expected_source != msg.source_shard {
             return Err(ShardError::ValidationFailed(format!(
                 "cross-shard message source mismatch: expected {:?}, got {:?}",
@@ -226,14 +242,13 @@ impl ShardRouter {
                 payload.nonce, last_nonce
             )));
         }
-        // Prevent nonce gap attacks: reject nonces more than 1000 above the last seen
-        if payload.nonce > last_nonce + 1000 {
+        // Prevent nonce gap attacks: reject nonces more than NONCE_GAP_LIMIT above the last seen
+        if payload.nonce > last_nonce + NONCE_GAP_LIMIT {
             return Err(ShardError::ValidationFailed(format!(
-                "nonce {} too far ahead of last nonce {} (max gap: 1000)",
+                "nonce {} too far ahead of last nonce {} (max gap: {NONCE_GAP_LIMIT})",
                 payload.nonce, last_nonce
             )));
         }
-        self.last_nonces.insert(creator, payload.nonce);
 
         // Fee enforcement — deduct before routing
         let fee = self.fee_schedule.fee_for_op(&payload.operation);
@@ -252,8 +267,22 @@ impl ShardRouter {
 
         let result = self.route(event, payload.operation);
 
-        // Only persist nonce if operation succeeded
+        // Refund the fee if the route failed
+        if result.is_err() && fee > 0 {
+            let did = Self::pubkey_to_did(&event.creator_pubkey);
+            if let Err(e) = self.quota.reward(&did, fee) {
+                tracing::error!(
+                    did = %did,
+                    fee = fee,
+                    error = %e,
+                    "CRITICAL: Failed to refund fee after route failure — balance inconsistency"
+                );
+            }
+        }
+
+        // Only persist nonce and insert into in-memory map if operation succeeded
         if result.is_ok() {
+            self.last_nonces.insert(creator, payload.nonce);
             if let Err(e) = self.nonce_store.save_incremental(&creator, payload.nonce) {
                 tracing::warn!("Failed to persist nonce for creator: {}", e);
             }
@@ -298,15 +327,17 @@ impl ShardRouter {
     ///
     /// Maps each `ShardOp` variant to its corresponding `ShardId`.
     /// Used for cross-shard message source verification.
-    fn shard_id_from_op(op: &ShardOp) -> ShardId {
+    fn shard_id_from_op(op: &ShardOp) -> Result<ShardId, ShardError> {
         match op {
-            ShardOp::Financial(_) => ShardId::financial(),
-            ShardOp::Computational(_) => ShardId::computational(),
-            ShardOp::Physical(_) => ShardId::physical(),
-            ShardOp::Biological(_) => ShardId::biological(),
-            ShardOp::Identity(_) => ShardId::identity(),
-            ShardOp::Economics(_) => ShardId::economics(),
-            ShardOp::CrossShard(_) => ShardId::financial(), // nested cross-shard not expected
+            ShardOp::Financial(_) => Ok(ShardId::financial()),
+            ShardOp::Computational(_) => Ok(ShardId::computational()),
+            ShardOp::Physical(_) => Ok(ShardId::physical()),
+            ShardOp::Biological(_) => Ok(ShardId::biological()),
+            ShardOp::Identity(_) => Ok(ShardId::identity()),
+            ShardOp::Economics(_) => Ok(ShardId::economics()),
+            ShardOp::CrossShard(_) => Err(ShardError::ValidationFailed(
+                "Nested cross-shard messages are not supported".into(),
+            )),
         }
     }
 }

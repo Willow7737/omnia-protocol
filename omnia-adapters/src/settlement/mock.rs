@@ -103,7 +103,14 @@ impl SettlementAdapter for MockSettlementAdapter {
 
     async fn verify_inclusion(&self, _leaf: &[u8; 32], _proof: &MerkleProof) -> Result<bool, SettlementError> {
         tokio::time::sleep(self.latency).await;
-        // Mock: all inclusion proofs are valid
+        // WARNING: Mock verify_inclusion always returns true.
+        // This is intentionally insecure — it accepts any Merkle proof
+        // without verification. NEVER use MockSettlementAdapter in
+        // production; it exists solely for testing.
+        tracing::warn!(
+            "MockSettlementAdapter: verify_inclusion always returns true — \
+             not suitable for production use"
+        );
         Ok(true)
     }
 
