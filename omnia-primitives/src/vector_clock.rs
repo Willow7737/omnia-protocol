@@ -38,6 +38,12 @@ pub enum VectorClockError {
         /// The node whose clock overflowed
         node: NodeId,
     },
+    #[error("Invalid format: {0}")]
+    /// The byte data has an invalid format
+    InvalidFormat(String),
+    #[error("Duplicate node ID: {0:?}")]
+    /// A duplicate node ID was found in serialized data
+    DuplicateNode(NodeId),
 }
 
 /// VectorClock tracks the logical time across all known nodes.
@@ -98,15 +104,36 @@ impl VectorClock {
         self.clocks.insert(node_id, clock);
     }
 
-    /// Check if all entries in self are <= corresponding entries in other
-    fn all_less_equal(&self, other: &Self) -> bool {
-        self.clocks.iter().all(|(node, &clock)| clock <= other.get(node))
-    }
-
-    /// Compare this vector clock with another to determine causal ordering
+    /// Compare this vector clock with another to determine causal ordering.
+    ///
+    /// Uses a single-pass algorithm that computes both the `self ≤ other` and
+    /// `other ≤ self` relations in one iteration over the union of keys, rather
+    /// than calling `all_less_equal` twice.
     pub fn compare(&self, other: &Self) -> CausalOrder {
-        let self_leq_other = self.all_less_equal(other);
-        let other_leq_self = other.all_less_equal(self);
+        let mut self_leq_other = true;
+        let mut other_leq_self = true;
+
+        // Collect all unique node IDs from both clocks
+        let all_keys: std::collections::BTreeSet<&NodeId> = self
+            .clocks
+            .keys()
+            .chain(other.clocks.keys())
+            .collect();
+
+        for &node in &all_keys {
+            let s = self.get(node);
+            let o = other.get(node);
+            if s > o {
+                self_leq_other = false;
+            }
+            if o > s {
+                other_leq_self = false;
+            }
+            // Early exit if both are already false
+            if !self_leq_other && !other_leq_self {
+                return CausalOrder::Concurrent;
+            }
+        }
 
         match (self_leq_other, other_leq_self) {
             (true, true) => CausalOrder::Equal,
@@ -163,7 +190,11 @@ impl VectorClock {
         }
     }
 
-    /// Create a new vector clock that is the merge of self and other
+    /// Create a new vector clock that is the merge of self and other.
+    ///
+    /// **Note:** This method clones `self` before merging, which allocates.
+    /// Callers who already own `self` should prefer [`merge()`](Self::merge)
+    /// directly to avoid the unnecessary clone.
     pub fn merged(&self, other: &Self) -> Self {
         let mut result = self.clone();
         result.merge(other);
@@ -198,46 +229,68 @@ impl VectorClock {
         before - self.clocks.len()
     }
 
-    /// Serialize to bytes for network transmission
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // Simple binary format: [count:u32][(node_id:32bytes, clock:8bytes)...]
+    /// Serialize to bytes for network transmission.
+    ///
+    /// Returns an error if the number of clock entries exceeds [`MAX_CLOCK_ENTRIES`].
+    ///
+    /// Binary format: `[count:u32][(node_id:32bytes, clock:8bytes)...]`
+    pub fn to_bytes(&self) -> Result<Vec<u8>, VectorClockError> {
+        if self.clocks.len() > MAX_CLOCK_ENTRIES {
+            return Err(VectorClockError::InvalidFormat(format!(
+                "clock count {} exceeds maximum {}",
+                self.clocks.len(),
+                MAX_CLOCK_ENTRIES
+            )));
+        }
         let mut bytes = Vec::with_capacity(4 + self.clocks.len() * 40);
         bytes.extend_from_slice(&(self.clocks.len() as u32).to_le_bytes());
         for (node, clock) in &self.clocks {
             bytes.extend_from_slice(node);
             bytes.extend_from_slice(&clock.to_le_bytes());
         }
-        bytes
+        Ok(bytes)
     }
 
-    /// Deserialize from bytes
+    /// Deserialize from bytes.
+    ///
+    /// Returns an error if:
+    /// - The byte data is truncated or malformed
+    /// - The number of entries exceeds [`MAX_CLOCK_ENTRIES`]
+    /// - There are duplicate node IDs
+    /// - There is trailing data after the last entry
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, VectorClockError> {
         if bytes.len() < 4 {
-            return Err(VectorClockError::InvalidNodeId("insufficient bytes".to_string()));
+            return Err(VectorClockError::InvalidFormat("insufficient bytes".to_string()));
         }
         let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
         if count > MAX_CLOCK_ENTRIES {
-            return Err(VectorClockError::InvalidNodeId(format!(
+            return Err(VectorClockError::InvalidFormat(format!(
                 "clock count {count} exceeds maximum {MAX_CLOCK_ENTRIES}"
+            )));
+        }
+        let expected_len = 4 + count * 40;
+        if bytes.len() < expected_len {
+            return Err(VectorClockError::InvalidFormat("truncated entry".to_string()));
+        }
+        // Check for trailing data
+        if bytes.len() != expected_len {
+            return Err(VectorClockError::InvalidFormat(format!(
+                "trailing data: expected {expected_len} bytes, got {}",
+                bytes.len()
             )));
         }
         let mut clocks = BTreeMap::new();
         let mut offset = 4;
         for _ in 0..count {
-            if offset + 40 > bytes.len() {
-                return Err(VectorClockError::InvalidNodeId("truncated entry".to_string()));
-            }
             let mut node_id = [0u8; 32];
             node_id.copy_from_slice(&bytes[offset..offset + 32]);
             let clock = u64::from_le_bytes(
                 bytes[offset + 32..offset + 40]
                     .try_into()
-                    .map_err(|_| VectorClockError::InvalidNodeId("expected 8 bytes for u64".to_string()))?,
+                    .map_err(|_| VectorClockError::InvalidFormat("expected 8 bytes for u64".to_string()))?,
             );
             if clocks.insert(node_id, clock).is_some() {
-                return Err(VectorClockError::InvalidNodeId(
-                    "duplicate node ID in vector clock bytes".to_string(),
-                ));
+                return Err(VectorClockError::DuplicateNode(node_id));
             }
             offset += 40;
         }
@@ -386,7 +439,7 @@ mod tests {
         vc.set(n1, 42);
         vc.set(n2, 100);
 
-        let bytes = vc.to_bytes();
+        let bytes = vc.to_bytes().unwrap();
         let restored = VectorClock::from_bytes(&bytes).unwrap();
         assert_eq!(vc, restored);
     }
@@ -575,6 +628,60 @@ mod tests {
         // Now both have converged
         assert_eq!(vc1, vc2);
     }
+
+    // ── New tests for trailing data and error variants ──────────────────
+
+    #[test]
+    fn test_from_bytes_trailing_data_rejected() {
+        let n1 = nid(1);
+        let mut vc = VectorClock::new();
+        vc.set(n1, 42);
+
+        let mut bytes = vc.to_bytes().unwrap();
+        bytes.push(0xFF); // Add trailing byte
+        let result = VectorClock::from_bytes(&bytes);
+        assert!(result.is_err(), "Should reject trailing data");
+        match result {
+            Err(VectorClockError::InvalidFormat(msg)) => {
+                assert!(msg.contains("trailing"), "Error should mention trailing data: {msg}");
+            }
+            other => panic!("Expected InvalidFormat, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_node_error_variant() {
+        let n1 = nid(1);
+        let err = VectorClockError::DuplicateNode(n1);
+        let msg = format!("{err}");
+        assert!(msg.contains("Duplicate"), "Error message should mention duplicate: {msg}");
+    }
+
+    #[test]
+    fn test_invalid_format_error_variant() {
+        let err = VectorClockError::InvalidFormat("test".to_string());
+        let msg = format!("{err}");
+        assert!(msg.contains("test"), "Error message should contain detail: {msg}");
+    }
+
+    #[test]
+    fn test_to_bytes_exceeds_max_entries() {
+        let mut vc = VectorClock::new();
+        for i in 0..=MAX_CLOCK_ENTRIES {
+            let mut node = [0u8; 32];
+            node[0] = (i % 256) as u8;
+            node[1] = ((i / 256) % 256) as u8;
+            vc.set(node, 1);
+        }
+        let result = vc.to_bytes();
+        assert!(result.is_err(), "Should reject clock with too many entries");
+        match result {
+            Err(VectorClockError::InvalidFormat(msg)) => {
+                assert!(msg.contains("exceeds maximum"), "Error should mention exceeding maximum: {msg}");
+            }
+            other => panic!("Expected InvalidFormat, got {other:?}"),
+        }
+    }
 }
 
 /// Property-based tests for VectorClock CRDT properties.
@@ -655,7 +762,7 @@ mod proptests {
         /// Serialization roundtrip: from_bytes(to_bytes(vc)) == vc
         #[test]
         fn proptest_vc_serialization_roundtrip(vc in arb_vector_clock()) {
-            let bytes = vc.to_bytes();
+            let bytes = vc.to_bytes().unwrap();
             let restored = VectorClock::from_bytes(&bytes).unwrap();
             assert_eq!(restored, vc, "VectorClock serialization roundtrip failed!");
         }

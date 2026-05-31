@@ -32,8 +32,8 @@ fn bench_single_threaded_hashmap(c: &mut Criterion) {
     for size in [1_000, 10_000, 100_000] {
         group.bench_with_input(BenchmarkId::new("hashmap_single_thread", size), &size, |b, &size| {
             b.iter(|| {
-                let mut event_states: HashMap<[u8; 32], ConsensusState> = HashMap::new();
-                let mut event_rounds: HashMap<[u8; 32], u64> = HashMap::new();
+                let mut event_states: HashMap<[u8; 32], ConsensusState> = HashMap::with_capacity(size);
+                let mut event_rounds: HashMap<[u8; 32], u64> = HashMap::with_capacity(size);
 
                 for i in 0..size {
                     let event_id = make_event_id(i);

@@ -158,6 +158,7 @@ impl RollupCircuit {
     /// * `new` — 32-byte new state root
     /// * `event_count` — number of events in the batch
     /// * `expected_old` — 32-byte expected old state root (public input)
+    /// * `expected_new` — 32-byte expected new state root (public input)
     ///
     /// # Security
     ///
@@ -165,13 +166,13 @@ impl RollupCircuit {
     /// and `new_state_root == expected_new_state_root`, preventing a
     /// malicious prover from supplying arbitrary state roots. The `event_count`
     /// is constrained to be non-zero, preventing empty-batch proofs.
-    pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64, expected_old: [u8; 32]) -> Self {
+    pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64, expected_old: [u8; 32], expected_new: [u8; 32]) -> Self {
         Self {
             old_state_root: Some(Fr::from_be_bytes_mod_order(&old)),
             new_state_root: Some(Fr::from_be_bytes_mod_order(&new)),
             event_count: Some(Fr::from(event_count)),
             expected_old_state_root: Some(Fr::from_be_bytes_mod_order(&expected_old)),
-            expected_new_state_root: Some(Fr::from_be_bytes_mod_order(&new)),
+            expected_new_state_root: Some(Fr::from_be_bytes_mod_order(&expected_new)),
         }
     }
 
@@ -770,7 +771,7 @@ mod tests {
     fn test_circuit_from_state_roots() {
         let old = [1u8; 32];
         let new = [2u8; 32];
-        let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+        let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
 
         let public_input = circuit.public_input().expect("public input should be available");
         assert_eq!(public_input.len(), 2);

@@ -324,7 +324,7 @@ impl StabilityTestRunner {
         for i in 0..self.nodes.len() {
             let mut genesis = Event::genesis(self.nodes[i].node_id, vec![(i + 1) as u8])
                 .expect("genesis event creation should not fail");
-            genesis.sign_with_keypair(&self.keypairs[i]);
+            let _ = genesis.sign_with_keypair(&self.keypairs[i]);
 
             if let Err(e) = self.nodes[i].graph.insert(genesis.clone()) {
                 tracing::warn!(node = i, "Genesis insert failed: {}", e);
@@ -374,7 +374,7 @@ impl StabilityTestRunner {
             }
             .expect("event creation should not fail");
 
-            event.sign_with_keypair(&self.keypairs[i]);
+            let _ = event.sign_with_keypair(&self.keypairs[i]);
 
             // Insert and process on source node
             {

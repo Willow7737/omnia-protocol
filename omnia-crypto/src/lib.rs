@@ -43,7 +43,7 @@ pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreErro
 
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, aggregate_signatures_unchecked, verify_aggregate,
+    aggregate_public_keys, aggregate_signatures, verify_aggregate,
     verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 

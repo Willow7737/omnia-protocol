@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use crate::anchor::PhysicalAnchor;
 use crate::provenance::ProvenanceLog;
-use crate::quantum_commit::QuantumCommitment;
+use crate::quantum_commit::{CommitmentPhase, QuantumCommitment};
 use crate::rf_fingerprint::RfFingerprint;
 
 /// Errors that can occur during provenance tracking.
@@ -94,7 +94,7 @@ impl ProvenanceTracker {
             causal_anchor,
         );
 
-        let anchor = PhysicalAnchor::new(rf_proof, commitment, provenance_log);
+        let anchor = PhysicalAnchor::new(rf_proof, commitment, provenance_log, CommitmentPhase::ClassicalOnly);
         self.anchors.insert(item_id, anchor);
         Ok(())
     }

@@ -464,7 +464,7 @@ impl CompactEncoder {
     /// Returns the estimated number of bytes saved compared to the
     /// full event serialization.
     pub fn estimate_savings(event: &Event, peer_frontier: &VectorClock) -> usize {
-        let full_vc_bytes = event.vector_clock.to_bytes().len();
+        let full_vc_bytes = event.vector_clock.to_bytes().map_err(|e| e.to_string()).unwrap_or_default().len();
         let delta = Self::encode_delta_clock(&event.vector_clock, peer_frontier);
         let delta_bytes = delta.to_bytes().len();
 

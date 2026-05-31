@@ -552,7 +552,13 @@ impl GossipProtocol {
                         }
                         self.pending_events.push_back(*event);
                         self.stats.events_received += 1;
-                        // Evict old entries using round-based eviction
+                        // Evict old entries using round-based eviction.
+                        // Note: seen_events_round is incremented once per
+                        // *new* event processed (not per processing round),
+                        // so it effectively counts total unique events seen.
+                        // If per-round semantics are desired, this increment
+                        // should be moved to the outer loop (once per
+                        // process_pending_events call) instead of per-event.
                         self.seen_events_round += 1;
                         if self.seen_events.len() > MAX_SEEN_EVENTS {
                             let cutoff = self.seen_events_round.saturating_sub(SEEN_EVENTS_RETAIN_ROUNDS);
@@ -578,12 +584,10 @@ impl GossipProtocol {
         }
 
         // Process all pending events (both locally created and network received)
-        let to_process: Vec<Event> = self.pending_events.drain(..).collect();
-
-        // FIX 4: Batch graph writes — acquire write lock once for all inserts
+        // Use a while-let loop to avoid the unnecessary drain+collect allocation.
         {
             let mut graph = self.graph.write().await;
-            for event in to_process {
+            while let Some(event) = self.pending_events.pop_front() {
                 match graph.insert(event) {
                     Ok(ids) => {
                         self.stats.events_accepted += 1;

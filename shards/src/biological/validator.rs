@@ -37,7 +37,25 @@ impl BiologicalValidator {
             BiologicalOp::QueryWithZkProof { subject, consumer, .. } => {
                 let key = (*subject, *consumer);
                 match state.consent_registry.get(&key) {
-                    Some(record) if !record.revoked => Ok(()),
+                    Some(record) if !record.revoked => {
+                        // Check consent expiry: reject if the consent has expired
+                        if record.expires_at != 0 {
+                            // TODO: Use a proper time provider instead of a hardcoded epoch.
+                            // For now, use a simple heuristic — the caller should supply
+                            // the current time via the validator context. We use 0 as a
+                            // placeholder so that expiry checks are structurally correct.
+                            let now: u64 = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis() as u64;
+                            if record.expires_at <= now {
+                                return Err(ShardError::ValidationFailed(
+                                    "Consent has expired".into(),
+                                ));
+                            }
+                        }
+                        Ok(())
+                    }
                     Some(_) => Err(ShardError::ValidationFailed("Consent has been revoked".into())),
                     None => Err(ShardError::ValidationFailed("No consent for this query".into())),
                 }

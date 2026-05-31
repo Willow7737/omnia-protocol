@@ -166,7 +166,7 @@ impl ValidationPool {
         let event_id = event.id;
 
         // Hash integrity check
-        if !event.verify_hash() {
+        if !event.verify_hash().unwrap_or(false) {
             return ValidationResult {
                 event_id,
                 valid: false,

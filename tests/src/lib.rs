@@ -541,7 +541,7 @@ fn governance_quorum_enforcement_67_percent() {
     assert_eq!(DEFAULT_QUORUM_PERCENTAGE, 67);
 
     for i in 0..10u64 {
-        gov.set_weight(&format!("voter{i}"), 100);
+        gov.set_weight(&format!("voter{i}"), 100, 0);
     }
 
     gov.create_proposal("prop1".to_string(), "test proposal".to_string(), 10, 0)
@@ -568,9 +568,9 @@ fn governance_quorum_enforcement_67_percent() {
 fn governance_quorum_met_at_67_percent() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
-    gov.set_weight("alice", 100);
-    gov.set_weight("bob", 100);
-    gov.set_weight("charlie", 100);
+    gov.set_weight("alice", 100, 0);
+    gov.set_weight("bob", 100, 0);
+    gov.set_weight("charlie", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
         .unwrap();
@@ -588,7 +588,7 @@ fn governance_quorum_met_at_67_percent() {
 #[test]
 fn governance_double_vote_prevention() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
-    gov.set_weight("alice", 100);
+    gov.set_weight("alice", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
         .unwrap();
@@ -605,9 +605,9 @@ fn governance_double_vote_prevention() {
 fn governance_quadratic_voting_weight() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
-    gov.set_weight("whale", 10_000);
-    gov.set_weight("minnow", 100);
-    gov.set_weight("dust", 1);
+    gov.set_weight("whale", 10_000, 0);
+    gov.set_weight("minnow", 100, 0);
+    gov.set_weight("dust", 1, 0);
 
     assert_eq!(*gov.voting_weights.get("whale").unwrap(), 100);
     assert_eq!(*gov.voting_weights.get("minnow").unwrap(), 10);

@@ -7,11 +7,13 @@
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::Extension;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
 
+use crate::api::auth::CallerIdentity;
 use crate::state::AppState;
 
 /// Request body for a UBC transfer (spend) operation.
@@ -92,6 +94,7 @@ pub async fn get_balance(
 )]
 pub async fn transfer_ubc(
     State(state): State<AppState>,
+    Extension(caller): Extension<CallerIdentity>,
     Json(body): Json<TransferRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     if body.amount == 0 {
@@ -101,14 +104,28 @@ pub async fn transfer_ubc(
         ));
     }
 
+    // SECURITY: Derive from_did from the authenticated caller's identity
+    // instead of trusting the request body. This prevents authorization
+    // bypass where any user could spend any other user's UBC.
+    let from_did = caller.caller_id;
+
+    // Warn if the body's from_did doesn't match the authenticated identity
+    if body.from_did != from_did {
+        tracing::warn!(
+            authenticated_did = %from_did,
+            requested_did = %body.from_did,
+            "Transfer from_did in request body does not match authenticated caller — using authenticated identity"
+        );
+    }
+
     let mut economics = state.economics.lock().await;
 
-    // Ensure the sender is registered
-    if !economics.quota.is_registered(&body.from_did) {
+    // Ensure the sender (authenticated caller) is registered
+    if !economics.quota.is_registered(&from_did) {
         return Err((
             StatusCode::NOT_FOUND,
             Json(json!({
-                "error": format!("Sender DID not registered: {}", body.from_did),
+                "error": format!("Sender DID not registered: {}", from_did),
             })),
         ));
     }
@@ -124,13 +141,13 @@ pub async fn transfer_ubc(
     }
 
     // Perform the spend operation (UBC is soulbound — no actual transfer)
-    let result = economics.quota.spend(&body.from_did, body.amount);
+    let result = economics.quota.spend(&from_did, body.amount);
 
     match result {
         Ok(()) => {
-            let new_balance = economics.balance_of(&body.from_did).unwrap_or(0);
+            let new_balance = economics.balance_of(&from_did).unwrap_or(0);
             tracing::info!(
-                from_did = %body.from_did,
+                from_did = %from_did,
                 to_did = %body.to_did,
                 amount = body.amount,
                 new_balance = new_balance,
@@ -140,7 +157,7 @@ pub async fn transfer_ubc(
                 StatusCode::OK,
                 Json(json!({
                     "status": "completed",
-                    "from_did": body.from_did,
+                    "from_did": from_did,
                     "to_did": body.to_did,
                     "amount": body.amount,
                     "new_balance": new_balance,
@@ -150,7 +167,7 @@ pub async fn transfer_ubc(
         }
         Err(e) => {
             tracing::warn!(
-                from_did = %body.from_did,
+                from_did = %from_did,
                 amount = body.amount,
                 error = %e,
                 "UBC spend operation failed"
@@ -159,7 +176,7 @@ pub async fn transfer_ubc(
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "error": format!("Transfer failed: {e}"),
-                    "from_did": body.from_did,
+                    "from_did": from_did,
                     "amount": body.amount,
                 })),
             ))

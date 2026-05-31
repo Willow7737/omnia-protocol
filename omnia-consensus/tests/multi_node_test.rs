@@ -28,7 +28,7 @@ fn create_consensus_node(_node_id: NodeId, total_nodes: usize) -> ConsensusEngin
         round_seed: seed,
         ..Default::default()
     };
-    let slashing = SlashingEngine::new(None, DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+    let slashing = SlashingEngine::new(None, DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD).unwrap();
     let mut engine = ConsensusEngine::new(config, slashing);
     // Register all validators with equal stake
     for i in 1..=total_nodes {

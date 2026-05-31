@@ -34,6 +34,16 @@ const MAX_SYNC_ROUNDS: u64 = 10_000;
 /// Maximum allowed snapshot size (64 MiB).
 const MAX_SNAPSHOT_SIZE: usize = 64 * 1024 * 1024;
 
+/// Maximum number of individual events in a SyncResponse::Events.
+/// Prevents memory exhaustion from a malicious peer sending an
+/// extremely large event list.
+const MAX_SYNC_EVENTS_COUNT: usize = 100_000;
+
+/// Maximum total bytes across all events in a SyncResponse::Events.
+/// Prevents memory exhaustion from a malicious peer sending events
+/// with very large individual payloads.
+const MAX_SYNC_EVENTS_TOTAL_BYTES: usize = 512 * 1024 * 1024; // 512 MiB
+
 /// Errors that can occur during fast sync.
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -461,7 +471,26 @@ impl FastSyncManager {
                 to_round: effective_to_round,
             },
         ) {
-            Ok(SyncResponse::Events(events)) => Ok(events),
+            Ok(SyncResponse::Events(events)) => {
+                // Validate event count limit
+                if events.len() > MAX_SYNC_EVENTS_COUNT {
+                    return Err(SyncError::Consensus(format!(
+                        "Too many events in sync response: {} (max {})",
+                        events.len(),
+                        MAX_SYNC_EVENTS_COUNT
+                    )));
+                }
+                // Validate total byte size limit
+                let total_bytes: usize = events.iter().map(|e| e.len()).sum();
+                if total_bytes > MAX_SYNC_EVENTS_TOTAL_BYTES {
+                    return Err(SyncError::Consensus(format!(
+                        "Total event bytes in sync response: {} (max {})",
+                        total_bytes,
+                        MAX_SYNC_EVENTS_TOTAL_BYTES
+                    )));
+                }
+                Ok(events)
+            }
             Ok(_) => Err(SyncError::Network("Unexpected response type".to_string())),
             Err(e) => Err(e),
         }

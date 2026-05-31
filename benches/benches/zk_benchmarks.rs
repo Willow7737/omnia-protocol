@@ -45,7 +45,7 @@ fn bench_groth16_proof_generation(c: &mut Criterion) {
         b.iter(|| {
             let old = [1u8; 32];
             let new = [2u8; 32];
-            let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 5, old, new);
             let _ = create_proof(circuit, &pk);
         })
     });

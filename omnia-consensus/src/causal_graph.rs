@@ -10,7 +10,7 @@
 //! - Topological ordering for deterministic event sequencing
 //! - Diff calculation for efficient synchronization
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -383,7 +383,7 @@ impl CausalGraph {
         }
 
         // Validate event hash
-        if !event.verify_hash() {
+        if !event.verify_hash().unwrap_or(false) {
             return Err(CausalGraphError::InvalidEvent(format!(
                 "hash mismatch for {}",
                 hex::encode(&event_id[..8])
@@ -528,6 +528,19 @@ impl CausalGraph {
             }
         }
 
+        // O(1) depth computation: max(parent depths) + 1
+        // Check depth BEFORE applying any mutations so that the graph
+        // remains consistent if the check fails. Previously this check
+        // was after updating tips, creator index, node sequences, and
+        // frontier, which left the graph in an inconsistent state on
+        // MaxDepthExceeded.
+        let depth = max_parent_depth + 1;
+        if depth > MAX_ANCESTRY_DEPTH {
+            return Err(CausalGraphError::MaxDepthExceeded(
+                hex::encode(&event_id[..8]).to_string(),
+            ));
+        }
+
         // Remove parents from tips
         if let Some(sp) = event.self_parent {
             self.tips.remove(&sp);
@@ -560,13 +573,6 @@ impl CausalGraph {
         // Store the event
         self.events.insert(event_id, event);
 
-        // O(1) depth computation: max(parent depths) + 1
-        let depth = max_parent_depth + 1;
-        if depth > MAX_ANCESTRY_DEPTH {
-            return Err(CausalGraphError::MaxDepthExceeded(
-                hex::encode(&event_id[..8]).to_string(),
-            ));
-        }
         self.max_depth = self.max_depth.max(depth);
         self.depths.insert(event_id, depth);
 
@@ -687,6 +693,20 @@ impl CausalGraph {
     /// Returns `EventPruned` if any event on the path between `descendant`
     /// and `ancestor` has been pruned, since the parent links cannot be
     /// followed through pruned events.
+    ///
+    /// # Performance Note
+    ///
+    /// This implementation uses BFS traversal which is O(n) in the number of
+    /// events in the ancestry path. For large graphs, this can be expensive.
+    /// An optimization path is to use vector clock comparison instead:
+    /// if `descendant.vector_clock >= ancestor.vector_clock`, then `ancestor`
+    /// is guaranteed to be in the causal past of `descendant`. This would
+    /// reduce the check to O(1) (comparing vector clock entries) plus the
+    /// cost of maintaining vector clocks. However, vector clocks only track
+    /// *causal* ancestry, not *structural* ancestry (parent edges). If the
+    /// caller needs structural ancestry (specific parent links), BFS is
+    /// necessary. A hybrid approach could first check vector clocks as a
+    /// fast path, falling back to BFS only when vector clocks are inconclusive.
     pub fn is_ancestor_of(&self, descendant: &EventId, ancestor: &EventId) -> Result<bool, CausalGraphError> {
         if descendant == ancestor {
             return Ok(false);
@@ -857,26 +877,15 @@ impl CausalGraph {
             }
         }
 
-        let mut queue: VecDeque<EventId> = in_degree
+        let mut queue: BinaryHeap<EventId> = in_degree
             .iter()
             .filter(|(_, &deg)| deg == 0)
             .map(|(id, _)| *id)
             .collect();
 
-        let mut queue_vec: Vec<EventId> = queue.into_iter().collect();
-        queue_vec.sort_by(|a, b| {
-            let event_a = self.events.get(a);
-            let event_b = self.events.get(b);
-            match (event_a, event_b) {
-                (Some(ea), Some(eb)) => ea.timestamp.cmp(&eb.timestamp).then_with(|| a.cmp(b)),
-                _ => a.cmp(b), // fallback to ID comparison if event not found
-            }
-        });
-        queue = VecDeque::from(queue_vec);
-
         let mut result = Vec::new();
 
-        while let Some(current_id) = queue.pop_front() {
+        while let Some(current_id) = queue.pop() {
             result.push(current_id);
 
             if let Some(child_ids) = children.get(&current_id) {
@@ -884,7 +893,7 @@ impl CausalGraph {
                     if let Some(deg) = in_degree.get_mut(child_id) {
                         *deg -= 1;
                         if *deg == 0 {
-                            queue.push_back(*child_id);
+                            queue.push(*child_id);
                         }
                     }
                 }
@@ -1322,7 +1331,7 @@ impl CausalGraph {
                     )));
                 }
             }
-            if !event.verify_hash() {
+            if !event.verify_hash().unwrap_or(false) {
                 return Err(CausalGraphError::IntegrityError(format!(
                     "event {} has invalid hash",
                     hex::encode(&id[..8])

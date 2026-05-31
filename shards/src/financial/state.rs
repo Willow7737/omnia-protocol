@@ -67,9 +67,13 @@ impl AccountBalance {
     }
 
     /// Increment the balance by `amount`, recording the causal context.
-    pub fn increment(&mut self, amount: u64, vc: &VectorClock) {
-        self.balance += amount;
+    ///
+    /// Returns an error if the addition would overflow u64.
+    pub fn increment(&mut self, amount: u64, vc: &VectorClock) -> Result<(), ShardError> {
+        self.balance = self.balance.checked_add(amount)
+            .ok_or_else(|| ShardError::ValidationFailed("Balance overflow".into()))?;
         self.last_update.merge(vc);
+        Ok(())
     }
 
     /// Decrement the balance by `amount`, recording the causal context.
@@ -175,13 +179,13 @@ impl FinancialState {
                     return Err(ShardError::ValidationFailed("Insufficient balance".into()));
                 }
 
-                // Now apply mutations
-                let from_balance = self.balances.get_mut(&from).expect("checked above");
+                // Now apply mutations using entry API
+                let from_balance = self.balances.entry(from).or_default();
                 from_balance.decrement(*amount, vc)?;
 
                 // Credit the recipient
                 let to_balance = self.balances.entry(*to).or_default();
-                to_balance.increment(*amount, vc);
+                to_balance.increment(*amount, vc)?;
 
                 Ok(())
             }
@@ -203,8 +207,9 @@ impl FinancialState {
                 }
                 let vc = &event.vector_clock;
                 let balance = self.balances.entry(*to).or_default();
-                balance.increment(*amount, vc);
-                self.total_supply += amount;
+                balance.increment(*amount, vc)?;
+                self.total_supply = self.total_supply.checked_add(*amount)
+                    .ok_or_else(|| ShardError::ValidationFailed("Total supply overflow".into()))?;
                 Ok(())
             }
             FinancialOp::Burn { from, amount } => {

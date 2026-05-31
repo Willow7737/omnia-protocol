@@ -64,7 +64,7 @@ pub use omnia_network;
 // Re-export commonly used types
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, aggregate_signatures_unchecked, verify_aggregate,
+    aggregate_public_keys, aggregate_signatures, verify_aggregate,
     verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
@@ -452,7 +452,14 @@ impl Substrate {
             config.slashing_data_dir.clone(),
             config.slash_threshold,
             config.ejection_threshold,
-        );
+        )
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                error = %e,
+                "Failed to open slashing store — falling back to in-memory"
+            );
+            SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold)
+        });
 
         // Create consensus store if persistence is configured
         let consensus_store: Option<Arc<dyn ConsensusStore>> =

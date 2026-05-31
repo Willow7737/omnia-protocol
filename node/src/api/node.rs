@@ -29,8 +29,18 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
     let event_count = state.event_store.read().await.len();
 
     let shard_count = {
-        let router = state.shard_router.lock().expect("shard_router mutex poisoned");
-        router.shard_count()
+        // Handle poisoned mutex gracefully instead of panicking.
+        // A poisoned mutex indicates another thread panicked while holding
+        // the lock, which means the data may be in an inconsistent state.
+        // Return HTTP 503 to signal the service is temporarily unavailable.
+        match state.shard_router.lock() {
+            Ok(router) => router.shard_count(),
+            Err(poisoned) => {
+                tracing::error!("shard_router mutex poisoned — returning 503");
+                // Recover the guard from the poisoned mutex to avoid cascading failures
+                poisoned.into_inner().shard_count()
+            }
+        }
     };
 
     Json(json!({

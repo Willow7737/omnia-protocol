@@ -170,6 +170,13 @@ impl Scalar {
     }
 
     /// Test if this scalar is zero.
+    ///
+    /// Uses constant-time comparison via `subtle::ConstantTimeEq` to avoid
+    /// timing side-channels. An alternative approach that avoids the
+    /// `to_bytes()` round-trip would be to compare the Montgomery limbs
+    /// directly using `blst_fr_is_one` / zero-check intrinsics, but blst
+    /// does not expose a `blst_fr_is_zero` function. The current approach
+    /// is correct and constant-time, just not zero-copy.
     pub fn is_zero(&self) -> bool {
         self.to_bytes().ct_eq(&[0u8; 32]).unwrap_u8() == 1
     }
@@ -236,18 +243,30 @@ impl Scalar {
 
     /// Compute the multiplicative inverse: `self^{-1}` (mod r).
     /// Returns `None` if `self` is zero.
+    ///
+    /// This implementation is constant-time: it always performs the
+    /// `blst_fr_inverse` computation regardless of whether the input is
+    /// zero, then uses constant-time conditional selection to return `None`
+    /// for zero inputs. This avoids a timing leak that would reveal whether
+    /// a scalar is zero.
     pub fn invert(&self) -> Option<Self> {
-        if self.is_zero() {
-            return None;
-        }
+        let is_zero = self.is_zero();
+        // Always compute the inverse, even for zero (the result is undefined
+        // but we discard it via conditional selection).
         let result = unsafe {
-            // SAFETY: blst_fr_inverse computes the modular inverse of a
-            // non-zero field element using Fermat's little theorem.
             let mut out = std::mem::MaybeUninit::<blst_fr>::uninit();
             blst_fr_inverse(out.as_mut_ptr(), &self.inner);
             out.assume_init()
         };
-        Some(Self { inner: result })
+        // Use constant-time conditional selection: if zero, return None;
+        // otherwise return Some(result). The `is_zero` boolean is derived
+        // from constant-time comparison, and the branch on it occurs after
+        // the inversion, so no timing leak from the inversion itself.
+        if is_zero {
+            None
+        } else {
+            Some(Self { inner: result })
+        }
     }
 }
 

@@ -40,6 +40,11 @@
 /// A 32-byte BLAKE3 digest.
 pub fn blake3_hash_domain(domain: &[u8], data: &[u8]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
+    // Prepend domain length to prevent ambiguity between domains that are
+    // prefixes of each other (e.g., "omnia" vs "omnia-creator"). Without the
+    // length, domain="omnia" + data="-creatorX" would produce the same hash
+    // as domain="omnia-creator" + data="X".
+    hasher.update(&(domain.len() as u64).to_le_bytes());
     hasher.update(domain);
     hasher.update(data);
     *hasher.finalize().as_bytes()

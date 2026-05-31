@@ -269,9 +269,13 @@ impl SettlementAdapter for CelestiaAdapter {
         }
 
         // TODO: Fetch the actual on-chain data root from Celestia RPC and compare
-        // it with computed_root. The current implementation does NOT verify that
-        // the computed root matches the on-chain data root, which means a
-        // malicious Celestia node could return a fake commitment.
+        // it with computed_root. The current implementation computes the root
+        // locally but never verifies it against the on-chain data root, which
+        // means a malicious Celestia node could serve a valid-looking but
+        // incorrect commitment. The verify_inclusion method MUST:
+        //   1. Fetch the on-chain data root hash at the given height
+        //   2. Compare it with `computed_root`
+        //   3. Return `false` if they don't match
         // This MUST be fixed before mainnet.
         tracing::warn!("Celestia inclusion verification incomplete: computed root not compared against on-chain data");
 

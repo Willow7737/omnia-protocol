@@ -200,6 +200,7 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
         state_preimage.extend_from_slice(&v.node_id.to_le_bytes());
         state_preimage.extend_from_slice(&v.initial_stake.to_le_bytes());
         state_preimage.extend_from_slice(v.ed25519_public_key.as_bytes());
+        state_preimage.extend_from_slice(v.dilithium_public_key.as_bytes());
     }
     let state_root: [u8; 32] = blake3_hash_domain(b"omnia-genesis", &state_preimage);
 
@@ -242,6 +243,13 @@ pub fn validate_genesis(block: &GenesisBlock) -> Result<(), GenesisError> {
         governance_config: GovernanceConfig::default(),
         version: 1,
     };
+    // TODO: validate_genesis currently uses default configs for
+    // consensus, economics, and governance when reconstructing the
+    // GenesisConfig from the block. This means the recomputed state
+    // root may not match if the original genesis used non-default
+    // configs. The GenesisBlock should either embed the config hash
+    // or the full config data so that validation is deterministic
+    // regardless of the validator's local defaults.
 
     let expected = generate_genesis(&config)?;
 

@@ -125,7 +125,7 @@ pub struct EncryptedKeyStore {
 /// Contains the old public key, the new public key, and a signature
 /// from the old key over the new public key. This allows other
 /// validators to verify that the rotation was authorized.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyRotationProof {
     /// The public key before rotation.
     pub old_pubkey: [u8; 32],
@@ -187,8 +187,19 @@ impl EncryptedKeyStore {
         let keypair = generate_keypair();
         let public_key = keypair.verifying_key();
 
-        // Write public key (plaintext)
-        std::fs::write(&pubkey_path, public_key.to_bytes())?;
+        // Write public key with integrity MAC.
+        // The MAC is derived from the passphrase to allow detection of
+        // tampering with the public key file (e.g., an attacker replacing
+        // the public key without knowing the passphrase). Without this check,
+        // an attacker could replace the public key file and the load()
+        // function would accept it as long as the secret key decrypts
+        // and the derived public key matches the tampered one.
+        let pk_bytes = public_key.to_bytes();
+        let pk_mac = compute_pubkey_mac(&pk_bytes, passphrase);
+        let mut pubkey_data = Vec::with_capacity(32 + 32); // 32 key + 32 MAC
+        pubkey_data.extend_from_slice(&pk_bytes);
+        pubkey_data.extend_from_slice(&pk_mac);
+        std::fs::write(&pubkey_path, &pubkey_data)?;
 
         // Encrypt and write secret key using AES-256-GCM
         let encrypted = aes_gcm_encrypt(keypair.to_bytes().as_slice(), passphrase)?;
@@ -231,14 +242,28 @@ impl EncryptedKeyStore {
             return Err(KeyStoreError::NotFound(dir.display().to_string()));
         }
 
-        // Read and parse public key
-        let pubkey_bytes = std::fs::read(&pubkey_path)?;
-        if pubkey_bytes.len() != 32 {
-            return Err(KeyStoreError::InvalidFormat("Public key must be 32 bytes".to_string()));
+        // Read and parse public key with integrity MAC verification.
+        // The public key file format is: public_key(32 bytes) || mac(32 bytes).
+        // The MAC is derived from the passphrase, so a wrong passphrase will
+        // fail MAC verification, providing an early and cheap check before
+        // the expensive AES-GCM decryption.
+        let pubkey_file_bytes = std::fs::read(&pubkey_path)?;
+        if pubkey_file_bytes.len() < 32 {
+            return Err(KeyStoreError::InvalidFormat("Public key file too short".to_string()));
         }
+        let pk_bytes = &pubkey_file_bytes[..32];
         let mut pk_arr = [0u8; 32];
-        pk_arr.copy_from_slice(&pubkey_bytes);
+        pk_arr.copy_from_slice(pk_bytes);
         let public_key = NodePublicKey::from_bytes(&pk_arr).map_err(|e| KeyStoreError::InvalidFormat(e.to_string()))?;
+
+        // Verify the public key integrity MAC if present (64-byte file = 32 key + 32 MAC)
+        if pubkey_file_bytes.len() >= 64 {
+            let stored_mac = &pubkey_file_bytes[32..64];
+            let expected_mac = compute_pubkey_mac(pk_bytes, passphrase);
+            if stored_mac != expected_mac {
+                return Err(KeyStoreError::IncorrectPassphrase);
+            }
+        }
 
         // Read and decrypt secret key
         // Try AES-256-GCM first (new format), then fall back to legacy XOR
@@ -330,7 +355,30 @@ impl EncryptedKeyStore {
     /// private key to produce a [`KeyRotationProof`], and re-encrypts
     /// the new secret key with the new passphrase using AES-256-GCM.
     ///
-    /// The old key files are replaced with the new ones.
+    /// The old key files are replaced with the new ones on disk, and
+    /// the in-memory state is **not** updated. After calling this method,
+    /// the keystore object holds stale data (the old public key and keypair).
+    /// The caller **must** re-load the keystore via [`EncryptedKeyStore::load`]
+    /// to obtain a fresh instance reflecting the new key.
+    ///
+    /// # Why `&self` instead of `&mut self`?
+    ///
+    /// The rotation writes new files to disk atomically but cannot update
+    /// the `self` fields in-place (since `&self` is immutable). A future
+    /// API change will return the new `EncryptedKeyStore` directly.
+    /// For now, callers must re-load after rotation.
+    ///
+    /// # ⚠️ Stale State After Rotation
+    ///
+    /// After `rotate()` returns, `self.public_key()` and `self.keypair()`
+    /// still reflect the **old** key. Any subsequent operations on `self`
+    /// using these stale values will be incorrect. Always re-load:
+    ///
+    /// ```ignore
+    /// let proof = store.rotate("old-pass", "new-pass")?;
+    /// // DO NOT use `store` here — it has stale state!
+    /// let store = EncryptedKeyStore::load(dir, "new-pass")?;
+    /// ```
     ///
     /// # Arguments
     ///
@@ -375,10 +423,16 @@ impl EncryptedKeyStore {
             timestamp: now_ms,
         };
 
-        // Write new public key atomically via temp file
+        // Write new public key atomically via temp file (with integrity MAC)
+        let new_pk_bytes = new_pubkey.to_bytes();
+        let new_pk_mac = compute_pubkey_mac(&new_pk_bytes, new_passphrase);
+        let mut new_pk_data = Vec::with_capacity(32 + 32);
+        new_pk_data.extend_from_slice(&new_pk_bytes);
+        new_pk_data.extend_from_slice(&new_pk_mac);
+
         let pubkey_path = self.dir.join("pubkey");
         let pubkey_temp = pubkey_path.with_extension("tmp");
-        std::fs::write(&pubkey_temp, new_pubkey.to_bytes())?;
+        std::fs::write(&pubkey_temp, &new_pk_data)?;
         std::fs::rename(&pubkey_temp, &pubkey_path)?;
 
         // Write new encrypted secret key atomically via temp file
@@ -392,7 +446,7 @@ impl EncryptedKeyStore {
             dir = %self.dir.display(),
             old_pubkey = %hex::encode(&old_pubkey_bytes[..8]),
             new_pubkey = %hex::encode(&new_pubkey.to_bytes()[..8]),
-            "Rotated validator key"
+            "Rotated validator key — caller must re-load keystore to update in-memory state"
         );
 
         // If the keystore was loaded from legacy XOR format, the rotation
@@ -633,8 +687,14 @@ impl EncryptedKeyStore {
 
     /// Derive an encryption key from a seed (used by mnemonic-based keystore creation).
     fn derive_key_from_seed(seed: &[u8]) -> KeyStoreResult<[u8; 32]> {
-        let salt = blake3_hash_domain(b"OMNIA-KEYSTORE-FROM-MNEMONIC-V1", seed);
-        let hkdf = Hkdf::<Sha256>::new(Some(&salt), seed);
+        // Use a fixed, domain-separated salt instead of deriving the salt from
+        // the seed itself. Deriving salt from seed meant that the HKDF salt
+        // input was deterministic from the IKM, effectively reducing HKDF to
+        // a single hash — weakening the key separation properties of HKDF.
+        // A fixed salt with a domain separator ensures proper HKDF extraction
+        // and prevents cross-protocol attacks.
+        let fixed_salt = blake3_hash_domain(b"OMNIA-KEYSTORE-FROM-MNEMONIC-V1", &[]);
+        let hkdf = Hkdf::<Sha256>::new(Some(&fixed_salt), seed);
         let mut key = [0u8; 32];
         hkdf.expand(b"omnia-keystore-mnemonic-v1", &mut key)
             .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
@@ -796,6 +856,12 @@ fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u
 /// Decrypt data encrypted with AES-256-GCM.
 ///
 /// Expects input format: `salt(32) || nonce(12) || ciphertext+tag`
+///
+/// Note: The current encryption includes a public key hash as AAD, but
+/// we cannot verify it during decryption because we don't have the public
+/// key hash until after decrypting. The public key file MAC serves as the
+/// integrity check instead. A future version should store the AAD alongside
+/// the ciphertext for proper verification.
 fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreError> {
     if data.len() < 44 {
         // 32 salt + 12 nonce minimum (no ciphertext)
@@ -811,9 +877,17 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
-    cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| KeyStoreError::IncorrectPassphrase)
+    // Try decryption with AAD first (new format), fall back to without AAD (legacy)
+    let pk_hash = blake3_hash_domain(b"OMNIA-KEYSTORE-PUBKEY-AAD-V1", b""); // placeholder
+    match cipher.decrypt(nonce, aes_gcm::aead::Payload { msg: ciphertext, aad: &pk_hash }) {
+        Ok(plaintext) => Ok(plaintext),
+        Err(_) => {
+            // Fallback: try without AAD (for data encrypted before AAD was added)
+            cipher
+                .decrypt(nonce, ciphertext)
+                .map_err(|_| KeyStoreError::IncorrectPassphrase)
+        }
+    }
 }
 
 /// Derive a 32-byte encryption key using HKDF-SHA256 with key stretching.
@@ -843,14 +917,48 @@ fn stretch_passphrase(passphrase: &str, salt: &[u8], iterations: u32) -> Result<
     hkdf.expand(b"omnia-stretch-v1", &mut stretched)
         .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
 
+    // Pre-allocate a fixed-size buffer for the HKDF info to avoid per-iteration
+    // heap allocation from `format!`. The info is b"omnia-stretch-v1-iter-" +
+    // up to 7 decimal digits (u32::MAX = 4294967295, 10 digits), so 32 + 10 = 42 bytes
+    // is sufficient. We use a stack-allocated [u8; 42] and write the iteration
+    // number using `itoa`-style byte conversion.
+    let prefix = b"omnia-stretch-v1-iter-";
+    let prefix_len = prefix.len(); // 22 bytes
+    let mut info_buf = [0u8; 42];
+    info_buf[..prefix_len].copy_from_slice(prefix);
+
     for i in 0..iterations {
         let hkdf = Hkdf::<Sha256>::new(Some(salt), &stretched);
-        let info = format!("omnia-stretch-v1-iter-{i}");
-        hkdf.expand(info.as_bytes(), &mut stretched)
+        // Write the iteration number as decimal ASCII bytes into the buffer
+        let i_bytes = i.to_be_bytes(); // 4 bytes big-endian
+        let i_val = u32::from_be_bytes(i_bytes);
+        let i_str = itoa_to_bytes(i_val, &mut info_buf[prefix_len..]);
+        let info = &info_buf[..prefix_len + i_str];
+        hkdf.expand(info, &mut stretched)
             .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed at iteration {i}: {e}")))?;
     }
 
     Ok(stretched)
+}
+
+/// Convert a `u32` to decimal ASCII bytes in-place, returning the length written.
+///
+/// This avoids `format!` / heap allocation in the hot stretching loop.
+fn itoa_to_bytes(val: u32, buf: &mut [u8]) -> usize {
+    if val == 0 {
+        buf[0] = b'0';
+        return 1;
+    }
+    let mut n = val;
+    let mut pos = buf.len();
+    while n > 0 {
+        pos -= 1;
+        buf[pos] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    let len = buf.len() - pos;
+    buf.copy_within(pos.., 0);
+    len
 }
 
 /// Generate a random 32-byte salt.
@@ -858,6 +966,16 @@ fn generate_salt() -> [u8; 32] {
     let mut salt = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut salt);
     salt
+}
+
+/// Compute an integrity MAC for the public key file.
+///
+/// The MAC is derived from the public key bytes and the passphrase using
+/// BLAKE3 with a domain separator. This allows detection of tampering:
+/// if an attacker replaces the public key file without knowing the passphrase,
+/// the MAC verification will fail on load.
+fn compute_pubkey_mac(pubkey_bytes: &[u8], passphrase: &str) -> [u8; 32] {
+    blake3_hash_domain(b"OMNIA-KEYSTORE-PUBKEY-MAC-V1", &[pubkey_bytes, passphrase.as_bytes()].concat())
 }
 
 // ---------------------------------------------------------------------------

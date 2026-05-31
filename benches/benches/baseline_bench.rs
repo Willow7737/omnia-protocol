@@ -72,7 +72,7 @@ fn tx_throughput_bench(c: &mut Criterion) {
                 let mut seed = [0u8; 32];
                 seed[0] = 1;
                 let config = ConsensusConfig {
-                    total_nodes: 1,
+                    total_nodes: 3,
                     round_seed: seed,
                     ..Default::default()
                 };
@@ -150,7 +150,7 @@ fn finality_latency_bench(c: &mut Criterion) {
                 let mut seed = [0u8; 32];
                 seed[0] = 1;
                 let config = ConsensusConfig {
-                    total_nodes: 1,
+                    total_nodes: 3,
                     round_seed: seed,
                     ..Default::default()
                 };
@@ -224,7 +224,7 @@ fn zk_proof_gen_bench(c: &mut Criterion) {
         b.iter(|| {
             let old = [1u8; 32];
             let new = [2u8; 32];
-            let circuit = RollupCircuit::from_state_roots(old, new, 1, old);
+            let circuit = RollupCircuit::from_state_roots(old, new, 1, old, new);
             let _ = create_proof(circuit, &pk);
         })
     });

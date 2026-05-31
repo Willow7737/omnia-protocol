@@ -54,11 +54,13 @@ fn benchmark_graph_insertion(c: &mut Criterion) {
 
     group.bench_function("insert_chain", |b| {
         let mut seq: u64 = 1;
+        let mut last_id = genesis.id;
         b.iter(|| {
             let vc = VectorClock::with_node(creator, seq + 1);
             let mut event =
-                Event::new(creator, seq, vc, Some(genesis.id), None, vec![seq as u8]).expect("event creation");
+                Event::new(creator, seq, vc, Some(last_id), None, vec![seq as u8]).expect("event creation");
             event.sign_with_keypair(&keypair);
+            last_id = event.id;
             let _ = graph.insert(event);
             seq += 1;
         });
@@ -81,11 +83,14 @@ fn benchmark_vector_clock_merge(c: &mut Criterion) {
     }
 
     group.bench_function("merge_100_nodes", |b| {
-        b.iter(|| {
-            let mut result = vc_a.clone();
-            result.merge(&vc_b);
-            black_box(result);
-        });
+        b.iter_batched(
+            || vc_a.clone(),
+            |mut result| {
+                result.merge(&vc_b);
+                black_box(result);
+            },
+            criterion::BatchSize::SmallInput,
+        );
     });
 
     group.finish();

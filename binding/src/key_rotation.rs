@@ -84,19 +84,22 @@ impl PqcKeyRotationManager {
         }
 
         // Verify the authorization signature against the current Ed25519 key
-        if let Some(ref pubkey_bytes) = self.current_ed25519_public {
-            let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(pubkey_bytes)
+        // SECURITY: The current Ed25519 public key MUST be set before submitting
+        // a rotation. If it is None, the authorization signature cannot be
+        // verified, and the rotation must be rejected — otherwise anyone could
+        // submit an unverified rotation request.
+        let pubkey_bytes = self
+            .current_ed25519_public
+            .ok_or(KeyRotationError::AuthorizationSignatureRequired)?;
+        {
+            let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pubkey_bytes)
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             let signature = ed25519_dalek::Signature::try_from(request.authorization_sig.as_slice())
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             // The message being signed includes nonce and new key commitment
             // to prevent replay attacks. The nonce is derived from the current
             // public key, binding the signature to the current key state.
-            let nonce = blake3::hash(
-                &self
-                    .current_ed25519_public
-                    .expect("current_ed25519_public must be set before rotation"),
-            );
+            let nonce = blake3::hash(&pubkey_bytes);
             let message = format!(
                 "{}:{}:{}:{}",
                 request.new_phase as u8,

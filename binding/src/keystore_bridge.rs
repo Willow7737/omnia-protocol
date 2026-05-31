@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use ed25519_dalek::Verifier;
 use omnia_substrate::crypto::{NodeKeypair, Signer};
 use omnia_substrate::keystore::{EncryptedKeyStore, KeyStoreError};
 use serde::{Deserialize, Serialize};
@@ -95,24 +96,23 @@ pub struct SignatureBundle {
 }
 
 /// Derive a 32-byte AES encryption key from the keystore passphrase using HKDF.
-fn derive_encryption_key(passphrase: &str) -> [u8; 32] {
+///
+/// Returns an error if HKDF derivation fails instead of falling back to a
+/// weak hardcoded key. The previous fallback used a static label as the
+/// BLAKE3 key, which meant any attacker knowing the fallback logic could
+/// derive the encryption key without the passphrase — a critical security
+/// weakness.
+fn derive_encryption_key(passphrase: &str) -> Result<[u8; 32], BridgeError> {
     use omnia_crypto::aes_gcm::hkdf_aes_key;
     let mut key_material = [0u8; 32];
     let passphrase_bytes = passphrase.as_bytes();
     let len = passphrase_bytes.len().min(32);
     key_material[..len].copy_from_slice(&passphrase_bytes[..len]);
-    match hkdf_aes_key(&key_material, "omnia-rotation-state-encryption") {
-        Ok(key) => key,
-        Err(_) => {
-            // Fallback: use BLAKE3 to derive key if HKDF fails
-            // Pad the key to 32 bytes for keyed_hash
-            let mut key = [0u8; 32];
-            let label = b"omnia-rotation-encryption-fb!";
-            key[..label.len()].copy_from_slice(label);
-            let hash = blake3::keyed_hash(&key, passphrase.as_bytes());
-            *hash.as_bytes()
-        }
-    }
+    hkdf_aes_key(&key_material, "omnia-rotation-state-encryption")
+        .map_err(|e| BridgeError::Crypto(format!(
+            "HKDF key derivation failed — cannot derive encryption key from passphrase: {e}. \
+             Ensure the omnia-crypto AES module is properly initialized."
+        )))
 }
 
 /// Encrypt a secret string using AES-256-GCM and return base64-encoded ciphertext.
@@ -233,7 +233,7 @@ impl KeyStoreBridge {
 
         // Restore rotated Ed25519 keypair from persisted state (if any).
         // Prefer the encrypted field; fall back to plaintext for backward compat.
-        let encryption_key = derive_encryption_key(passphrase);
+        let encryption_key = derive_encryption_key(passphrase)?;
         let rotated_keypair = if let Some(ref encrypted) = rotation_state.rotated_ed25519_secret_encrypted {
             let decrypted_hex = decrypt_secret_with_key(encrypted, &encryption_key)?;
             let bytes = hex::decode(&decrypted_hex)
@@ -376,20 +376,36 @@ impl KeyStoreBridge {
             // for replay protection. The caller's auth_signature serves as proof
             // of intent; we re-sign with the proper format.
             authorization_sig: {
-                // Verify caller's auth signature is valid (proves intent)
-                let caller_sig = ed25519_dalek::Signature::try_from(auth_signature);
-                if caller_sig.is_err() {
-                    return Err(BridgeError::InvalidState(
+                // SECURITY: Verify the caller's auth_signature against the keystore's
+                // public key BEFORE generating the internal authorization signature.
+                // Without this check, anyone can submit a rotation request with a
+                // fabricated signature and it would be accepted.
+                let caller_sig = ed25519_dalek::Signature::try_from(auth_signature)
+                    .map_err(|_| BridgeError::InvalidState(
                         "Invalid authorization signature format".into(),
-                    ));
-                }
-                // Sign with the ORIGINAL keystore key (not the rotated keypair)
-                // for replay protection with nonce + new_key commitment.
+                    ))?;
+                let verifying_key = self.keystore.public_key();
+                // Construct the same message that the caller should have signed
+                let nonce = blake3::hash(&self.keystore.public_key().to_bytes());
+                let auth_message = format!(
+                    "{}:{}:{}:{}",
+                    new_phase as u8,
+                    current_round,
+                    hex::encode(nonce.as_bytes()),
+                    hex::encode(new_pubkey.ed25519)
+                );
+                verifying_key
+                    .verify(auth_message.as_bytes(), &caller_sig)
+                    .map_err(|_| BridgeError::InvalidState(
+                        "Authorization signature verification failed — caller is not authorized".into(),
+                    ))?;
+
+                // Now sign with the ORIGINAL keystore key for replay protection
+                // with nonce + new_key commitment.
                 let old_keypair = self
                     .keystore
                     .keypair()
                     .ok_or_else(|| BridgeError::Crypto("No keystore keypair available for signing".into()))?;
-                let nonce = blake3::hash(&self.keystore.public_key().to_bytes());
                 let message = format!(
                     "{}:{}:{}:{}",
                     new_phase as u8,

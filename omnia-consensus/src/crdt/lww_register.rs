@@ -55,6 +55,7 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     }
 
     /// Create a new register with a value
+    #[allow(deprecated)]
     pub fn with_value(node_id: NodeId, value: T) -> Self {
         let mut reg = Self::new(node_id);
         reg.set(value);
@@ -62,6 +63,16 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     }
 
     /// Set the value of the register
+    ///
+    /// # Deprecation
+    ///
+    /// This method uses the system clock for the timestamp, which can produce
+    /// non-deterministic results in distributed scenarios. Use [`Self::set_with_meta`]
+    /// for production use, which accepts explicit metadata for deterministic conflict resolution.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Uses system clock for timestamp; use `set_with_meta` for production determinism."
+    )]
     pub fn set(&mut self, value: T) {
         self.value = Some(value);
         self.timestamp = current_timestamp();

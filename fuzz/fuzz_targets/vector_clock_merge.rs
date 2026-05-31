@@ -1,4 +1,14 @@
+//! Fuzz target: Vector clock merge (raw binary format)
+//!
+//! This target tests vector clock merge using a custom binary format
+//! where 33-byte chunks are interpreted as (NodeId, counter) pairs.
+//! It is intentionally kept separate from `fuzz_vector_clock_merge.rs`,
+//! which uses postcard deserialization and also verifies CRDT properties
+//! (idempotency, commutativity). The two targets exercise different
+//! code paths and input grammars, so both are retained.
+
 #![no_main]
+
 use libfuzzer_sys::fuzz_target;
 use omnia_primitives::VectorClock;
 

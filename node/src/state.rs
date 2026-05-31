@@ -38,6 +38,14 @@ const MAX_STORED_EVENTS: usize = 100_000;
 ///
 /// When the store exceeds `MAX_STORED_EVENTS`, the oldest 10% of
 /// entries are removed to prevent unbounded memory growth.
+///
+/// NOTE: The current eviction strategy uses `HashMap::keys().take(n)`,
+/// which has non-deterministic iteration order — the "oldest 10%" claim
+/// is inaccurate. For true LRU eviction, consider replacing `HashMap`
+/// with `IndexMap` (which preserves insertion order) so that the first
+/// N entries are guaranteed to be the oldest inserted. This would also
+/// make eviction deterministic across nodes, which is important for
+/// consensus-critical state.
 pub async fn store_event(
     event_store: &Arc<RwLock<HashMap<String, StoredEvent>>>,
     event_id: String,
@@ -46,6 +54,9 @@ pub async fn store_event(
     let mut store = event_store.write().await;
     if store.len() >= MAX_STORED_EVENTS {
         // Remove oldest 10% to make room
+        // TODO: Use IndexMap for deterministic insertion-order eviction.
+        // HashMap::keys() iteration order is non-deterministic, so this
+        // may evict recent entries instead of the oldest ones.
         let to_remove = MAX_STORED_EVENTS / 10;
         let keys: Vec<_> = store.keys().take(to_remove).cloned().collect();
         for key in keys {

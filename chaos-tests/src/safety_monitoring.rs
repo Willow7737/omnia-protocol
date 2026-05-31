@@ -341,7 +341,7 @@ impl SafetyMonitor {
             let mut genesis =
                 Event::genesis(node.node_id, vec![(i + 1) as u8]).expect("genesis event creation should not fail");
             // Use the node's own identity keypair for signing (not a random one)
-            genesis.sign_with_keypair(&node.keypair);
+            let _ = genesis.sign_with_keypair(&node.keypair);
 
             if let Err(e) = node.graph.insert(genesis.clone()) {
                 tracing::warn!(node = i, "Genesis insert failed: {}", e);
@@ -397,7 +397,7 @@ impl SafetyMonitor {
 
         // Use the node's own identity keypair for signing (not a random one)
         let keypair = self.nodes[source_idx].keypair.clone();
-        event.sign_with_keypair(&keypair);
+        let _ = event.sign_with_keypair(&keypair);
 
         let event_id = event.id;
 

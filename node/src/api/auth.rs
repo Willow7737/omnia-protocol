@@ -597,7 +597,10 @@ pub fn default_cors_layer() -> CorsLayer {
     let allowed_origins = std::env::var("OMNIA_CORS_ORIGINS").unwrap_or_else(|_| "*".to_string());
 
     if allowed_origins == "*" {
-        tracing::warn!("CORS allows all origins - not recommended for production");
+        tracing::warn!(
+            "SECURITY: CORS allows all origins (*) — this is suitable only for local development. \
+             Set OMNIA_CORS_ORIGINS to a comma-separated list of allowed origins for production."
+        );
         CorsLayer::permissive()
             .allow_methods([
                 axum::http::Method::GET,

@@ -75,7 +75,7 @@ impl SignatureScheme {
     pub fn version(&self) -> SchemeVersion {
         match self {
             SignatureScheme::Ed25519V1 => SchemeVersion::V1,
-            SignatureScheme::HybridV1 => SchemeVersion::V1,
+            SignatureScheme::HybridV1 => SchemeVersion::V2,
             SignatureScheme::DilithiumV2 => SchemeVersion::V2,
         }
     }

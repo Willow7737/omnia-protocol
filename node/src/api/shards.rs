@@ -127,6 +127,10 @@ async fn handle_economics_op(
     let econ_op = parse_economics_op(body).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     let node_id = state.config.node_id_bytes();
+    // TODO: Replace ephemeral keypair with the node's persistent keypair.
+    // Using generate_keypair() creates a new keypair per request, meaning events
+    // cannot be verified as originating from this node. The node's identity key
+    // from the keystore should be used instead for event signing.
     let keypair = generate_keypair();
     let mut event = Event::genesis(node_id, Vec::new()).map_err(|e| {
         (
@@ -134,11 +138,21 @@ async fn handle_economics_op(
             Json(json!({"error": format!("Invalid event: {e}")})),
         )
     })?;
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
+    ))?;
 
     let shard_op = ShardOp::Economics(econ_op);
 
-    let mut router = state.shard_router.lock().expect("shard_router mutex poisoned");
+    // Handle poisoned mutex gracefully instead of panicking.
+    let mut router = match state.shard_router.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::error!("shard_router mutex poisoned — recovering guard");
+            poisoned.into_inner()
+        }
+    };
     match router.route(&event, shard_op) {
         Ok(()) => {
             tracing::info!(operation = %body.operation, "Economics operation processed successfully");

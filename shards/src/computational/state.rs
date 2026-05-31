@@ -172,11 +172,15 @@ impl ComputationalState {
                             let public_inputs: Vec<ark_bn254::Fr> = vec![];
 
                             if public_inputs.is_empty() {
-                                tracing::warn!(
+                                tracing::error!(
                                     task = ?&task_id[..4],
-                                    "ZK proof verification with empty public inputs — accepting without meaningful verification. \
-                                     Compute proper public inputs from the task spec for real security."
+                                    "ZK proof verification rejected: empty public inputs — proof binds to no statement"
                                 );
+                                task.status = TaskStatus::Failed;
+                                task.last_update.merge(vc);
+                                return Err(ShardError::ValidationFailed(
+                                    "ZK proof verification failed: empty public inputs are not accepted".into(),
+                                ));
                             }
 
                             match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {

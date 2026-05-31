@@ -118,7 +118,7 @@ fn test_identity_did_lifecycle() {
     // the event's creator_pubkey (set by sign_with_keypair)
     let owner_keypair = generate_keypair();
     let owner_pubkey = owner_keypair.verifying_key().to_bytes();
-    let did = "did:omnia:abcdef1234567890".to_string();
+    let did = format!("did:omnia:{}", hex::encode(owner_pubkey));
 
     // Create a DID — the document's public_key must match the signing key
     let doc = omnia_shards::DidDocument::new(did.clone(), owner_pubkey, 1000);

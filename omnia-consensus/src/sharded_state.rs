@@ -293,6 +293,17 @@ impl ShardedConsensusState {
     ///
     /// Acquires a read lock on every shard and the global state to compute
     /// total tracked events, committed count, and per-shard load.
+    ///
+    /// # Lock Contention
+    ///
+    /// This method acquires 256 read locks (one per shard) plus the global
+    /// read lock. On a busy system with many concurrent writers, this can
+    /// cause contention because each shard lock must be acquired sequentially.
+    /// An optimization path would be to maintain approximate counters (e.g.,
+    /// per-shard `AtomicUsize` for event count) that can be read without
+    /// acquiring the RwLock, trading exact consistency for lower contention.
+    /// The committed count and per-shard loads would then be eventually
+    /// consistent rather than transactionally consistent.
     pub fn stats(&self) -> ShardedConsensusStats {
         let mut total_tracked = 0usize;
         let mut shard_loads = Vec::with_capacity(NUM_SHARDS);

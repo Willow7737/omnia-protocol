@@ -14,7 +14,7 @@ use omnia_economics::{DecayRate, GovernanceState};
 #[test]
 fn test_effective_weight_determinism_10k() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
-    gov.set_weight("did:omnia:alice", 100); // base weight = 10
+    gov.set_weight("did:omnia:alice", 100, 0); // base weight = 10
 
     let first = gov.effective_weight("did:omnia:alice", 5);
     for _ in 0..10_000 {
@@ -35,17 +35,17 @@ fn test_effective_weight_edge_cases() {
     assert_eq!(gov.effective_weight("unknown", 0), 0);
 
     // Zero inactive epochs
-    gov.set_weight("did:omnia:alice", 100); // base weight = 10
+    gov.set_weight("did:omnia:alice", 100, 0); // base weight = 10
     assert_eq!(gov.effective_weight("did:omnia:alice", 0), 10);
 
     // Decay rate = 0 PPM (no decay ever)
     let mut gov_no_decay = GovernanceState::new(DecayRate::new(0));
-    gov_no_decay.set_weight("did:omnia:alice", 100);
+    gov_no_decay.set_weight("did:omnia:alice", 100, 0);
     assert_eq!(gov_no_decay.effective_weight("did:omnia:alice", 1000), 10);
 
     // Decay rate = BASIS_PPM (100% decay, instant zero)
     let mut gov_full_decay = GovernanceState::new(DecayRate::new(BASIS_PPM));
-    gov_full_decay.set_weight("did:omnia:alice", 100);
+    gov_full_decay.set_weight("did:omnia:alice", 100, 0);
     assert_eq!(gov_full_decay.effective_weight("did:omnia:alice", 1), 0);
 }
 
@@ -55,15 +55,15 @@ fn test_quadratic_voting_isqrt() {
     let mut gov = GovernanceState::new(DecayRate::ten_percent());
 
     // 100 stake → isqrt(100) = 10
-    gov.set_weight("did:omnia:alice", 100);
+    gov.set_weight("did:omnia:alice", 100, 0);
     assert_eq!(gov.voting_weights.get("did:omnia:alice"), Some(&10));
 
     // 0 stake → minimum weight of 1
-    gov.set_weight("did:omnia:zero", 0);
+    gov.set_weight("did:omnia:zero", 0, 0);
     assert_eq!(gov.voting_weights.get("did:omnia:zero"), Some(&1));
 
     // Large value: u64::MAX → isqrt(u64::MAX) = 4294967295
-    gov.set_weight("did:omnia:whale", u64::MAX);
+    gov.set_weight("did:omnia:whale", u64::MAX, 0);
     assert_eq!(gov.voting_weights.get("did:omnia:whale"), Some(&4294967295));
 }
 

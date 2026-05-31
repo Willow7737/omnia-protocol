@@ -5,9 +5,9 @@
 //! ensures that feeding arbitrary deserialized events to the consensus
 //! engine never panics.
 //!
-//! Note: process_event requires a &CausalGraph, so we create a minimal
-//! empty graph for each fuzz input. Events without valid parents in the
-//! graph will be rejected, but the rejection must be an error, not a panic.
+//! Events are first inserted into a mutable CausalGraph so that
+//! process_event can perform ancestry queries. Events that fail graph
+//! insertion are still fed to consensus (which will reject them).
 
 #![no_main]
 
@@ -26,11 +26,18 @@ fuzz_target!(|data: &[u8]| {
             ..ConsensusConfig::default()
         };
         let mut engine = ConsensusEngine::new(config, slashing);
-        let graph = CausalGraph::new();
+        let mut graph = CausalGraph::new();
 
         for event in events {
+            // Try inserting the event into the graph first so that
+            // process_event can perform ancestry queries. If graph
+            // insertion fails, we still feed the event to consensus
+            // (which must handle missing-parent errors gracefully).
+            let event_id = event.id;
+            let _ = graph.insert(event.clone());
+            let graph_event = graph.get(&event_id).unwrap_or(&event);
             // process_event must never panic, even on invalid inputs
-            let _ = engine.process_event(&event, &graph);
+            let _ = engine.process_event(graph_event, &graph);
         }
     }
 });

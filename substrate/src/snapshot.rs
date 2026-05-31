@@ -44,6 +44,12 @@ use crate::slashing::SlashingState;
 /// Current snapshot format version.
 const SNAPSHOT_VERSION: u32 = 1;
 
+/// Maximum allowed snapshot size during deserialization (64 MiB).
+///
+/// Prevents memory-exhaustion attacks where a crafted snapshot
+/// causes the node to allocate an arbitrarily large buffer.
+const MAX_SNAPSHOT_SIZE: usize = 64 * 1024 * 1024;
+
 /// A complete state snapshot.
 ///
 /// Contains all the state needed to reconstruct a node at a given height,
@@ -188,6 +194,13 @@ impl StateSnapshot {
     /// Returns [`SnapshotError::Serialization`] if deserialization fails,
     /// or [`SnapshotError::UnsupportedVersion`] if the version is not `1`.
     pub fn from_bytes(data: &[u8]) -> Result<Self, SnapshotError> {
+        if data.len() > MAX_SNAPSHOT_SIZE {
+            return Err(SnapshotError::Serialization(format!(
+                "snapshot size {} bytes exceeds maximum {} bytes",
+                data.len(),
+                MAX_SNAPSHOT_SIZE
+            )));
+        }
         let snapshot: Self = postcard::from_bytes(data).map_err(|e| SnapshotError::Serialization(e.to_string()))?;
         if snapshot.version != SNAPSHOT_VERSION {
             return Err(SnapshotError::UnsupportedVersion(snapshot.version));
@@ -202,7 +215,11 @@ impl StateSnapshot {
     /// Returns [`SnapshotError::Io`] if the file cannot be written.
     pub fn write_to_file(&self, path: &Path) -> Result<(), SnapshotError> {
         let bytes = self.to_bytes()?;
-        std::fs::write(path, bytes)?;
+        // Write to a temporary file first, then atomically rename.
+        // This prevents corruption if the process crashes mid-write.
+        let tmp_path = path.with_extension("tmp");
+        std::fs::write(&tmp_path, &bytes)?;
+        std::fs::rename(&tmp_path, path)?;
         Ok(())
     }
 

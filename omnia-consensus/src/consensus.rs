@@ -72,6 +72,16 @@ fn coin_round(round_number: u64, seed: &[u8; 32]) -> bool {
     hash.as_bytes()[0] & 1 == 1
 }
 
+/// Default round seed value (all zeros).
+///
+/// **WARNING**: This default is intentionally insecure and must NOT be used
+/// in production. It exists solely for backward compatibility in deserialization
+/// and testing. Production configurations must use [`ConsensusConfig::with_random_seed`]
+/// or explicitly set `round_seed` to a cryptographically random value.
+const fn default_round_seed() -> [u8; 32] {
+    [0u8; 32]
+}
+
 /// Consensus configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusConfig {
@@ -88,7 +98,11 @@ pub struct ConsensusConfig {
     /// Randomness seed for deterministic hash-based leader selection.
     ///
     /// Updated each round from the previous round's output to ensure
-    /// unpredictability. Must not be all zeros in production.
+    /// unpredictability. **Must not be all zeros in production** — use
+    /// [`ConsensusConfig::with_random_seed`] or set this field explicitly.
+    /// The default `ConsensusConfig::default()` uses a cryptographically
+    /// random seed via `with_random_seed(4)`.
+    #[serde(default = "default_round_seed")]
     pub round_seed: [u8; 32],
     /// Maximum duration (in milliseconds) a round may take before advancing.
     /// Default: 30_000 (30 seconds).
@@ -103,17 +117,26 @@ pub struct ConsensusConfig {
 
 impl Default for ConsensusConfig {
     fn default() -> Self {
-        Self {
-            total_nodes: 4, // Default to 4 nodes (tolerates 1 Byzantine)
-            commit_delay_rounds: 1,
-            optimistic_confirmation: true,
-            optimistic_threshold: 3, // >2/3 of 4
-            max_look_ahead: 10,
-            round_seed: [0u8; 32], // Must be set before production use
-            round_timeout_ms: 30_000,
-            max_consecutive_timeouts: 3,
-            max_sequence_entries: 10_000,
-        }
+        // Use with_random_seed to generate a cryptographically random seed.
+        // Falls back to all-zero seed only if the system entropy source is
+        // unavailable (should never happen on a properly configured host).
+        Self::with_random_seed(4).unwrap_or_else(|_| {
+            tracing::error!(
+                "⚠️  getrandom failed — falling back to insecure all-zero round_seed. \
+                 This MUST NOT happen in production."
+            );
+            Self {
+                total_nodes: 4,
+                commit_delay_rounds: 1,
+                optimistic_confirmation: true,
+                optimistic_threshold: 3,
+                max_look_ahead: 10,
+                round_seed: [0u8; 32], // Insecure fallback — should never be reached
+                round_timeout_ms: 30_000,
+                max_consecutive_timeouts: 3,
+                max_sequence_entries: 10_000,
+            }
+        })
     }
 }
 
@@ -1107,7 +1130,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// Returns [`ConsensusError`] if the state version is unsupported.
     #[cfg(feature = "persistent-storage")]
     fn restore_state(&mut self, state: PersistedConsensusState) -> Result<(), ConsensusError> {
-        if state.version != 1 {
+        if state.version < 1 || state.version > 2 {
             return Err(ConsensusError::Config(format!(
                 "Unsupported consensus state version: {}",
                 state.version
@@ -1128,6 +1151,25 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             let info = self.node_info.entry(*validator).or_default();
             info.current_round = state.current_round;
             info.last_witness_round = state.current_round + 1;
+        }
+
+        // Restore first_event_for_sequence map from v2 snapshots.
+        // For v1 snapshots, this field is empty and equivocation tracking
+        // will rebuild from the equivocation_tracking summary.
+        //
+        // TODO: Persisting `first_event_for_sequence` is critical for crash
+        // recovery. Without it, a restarted node cannot detect equivocation
+        // for events that arrived before the crash. The v2 snapshot format
+        // includes this map, but we should also consider:
+        //   1. Bounding the map size via periodic compaction (already done
+        //      in process_event via cleanup_stale_sequences, but persisted
+        //      entries may accumulate across restarts).
+        //   2. Rebuilding the map from the causal graph on recovery when the
+        //      snapshot is stale or from a v1 format.
+        //   3. Persisting the map incrementally (e.g., as a WAL) rather than
+        //      only at round boundaries to reduce the window of data loss.
+        if state.version >= 2 {
+            self.first_event_for_sequence = state.first_event_for_sequence;
         }
 
         // Start the round timer for the restored round
@@ -1180,7 +1222,8 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             last_finalized_round: current_round.saturating_sub(self.config.commit_delay_rounds),
             active_validators: self.node_info.keys().cloned().collect(),
             equivocation_tracking,
-            version: 1,
+            first_event_for_sequence: self.first_event_for_sequence.clone(),
+            version: 2,
         };
 
         store.save_state(&state)?;

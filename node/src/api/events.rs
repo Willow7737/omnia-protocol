@@ -102,6 +102,10 @@ pub async fn submit_event(
     let node_id = state.config.node_id_bytes();
 
     // Create and sign a substrate event
+    // TODO: Replace ephemeral keypair with the node's persistent keypair.
+    // Using generate_keypair() creates a new keypair per request, meaning events
+    // cannot be verified as originating from this node. The node's identity key
+    // from the keystore should be used instead for event signing.
     let keypair = generate_keypair();
     let mut event = Event::genesis(node_id, payload_bytes.clone()).map_err(|e| {
         (
@@ -109,7 +113,10 @@ pub async fn submit_event(
             Json(json!({"error": format!("Invalid event: {e}")})),
         )
     })?;
-    event.sign_with_keypair(&keypair);
+    event.sign_with_keypair(&keypair).map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
+    ))?;
 
     let event_id_hex = hex::encode(event.id);
     let creator_hex = hex::encode(&event.creator[..4]);

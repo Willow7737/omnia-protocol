@@ -271,13 +271,6 @@ impl SlashingUndoManager {
             .collect()
     }
 
-    /// Get all undo records for a specific validator (alias for `history`).
-    ///
-    /// Kept for backward compatibility.
-    pub fn undo_history(&self, node: &NodeId) -> Vec<&SlashingUndoRecord> {
-        self.history(node)
-    }
-
     /// Check whether an undo is currently allowed for the given validator at the
     /// given round (i.e., the rate limit has not been exceeded).
     pub fn can_undo(&self, validator_id: &NodeId, current_round: u64) -> bool {

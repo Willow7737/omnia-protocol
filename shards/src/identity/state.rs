@@ -10,13 +10,14 @@
 //! - Privacy-preserving biometric anchors
 //! - AI agent identity with capability-based access control
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
 
 use super::agent::AgentIdentity;
 use super::biometric::BiometricAnchor;
+use super::did::validate_did;
 use super::ops::{Did, DidUpdate, IdentityOp};
 use super::recovery::{RecoveryShare, ShamirRecovery};
 use crate::shard::ShardError;
@@ -113,6 +114,10 @@ pub struct IdentityState {
     pub agent_registry: HashMap<Did, AgentIdentity>,
     /// Biometric anchors keyed by DID.
     pub biometric_registry: HashMap<Did, BiometricAnchor>,
+    /// Set of used share index combinations per DID to prevent replay.
+    /// Keyed by DID, value is a set of sorted share-index tuples that have
+    /// already been used for recovery.
+    pub used_recovery_shares: HashMap<Did, HashSet<Vec<u8>>>,
 }
 
 impl IdentityState {
@@ -124,6 +129,7 @@ impl IdentityState {
             shares: HashMap::new(),
             agent_registry: HashMap::new(),
             biometric_registry: HashMap::new(),
+            used_recovery_shares: HashMap::new(),
         }
     }
 
@@ -140,6 +146,11 @@ impl IdentityState {
     ) -> Result<(), ShardError> {
         match op {
             IdentityOp::CreateDid { document } => {
+                // Validate DID format
+                validate_did(&document.id).map_err(|e| ShardError::ValidationFailed(
+                    format!("Invalid DID format: {e}")
+                ))?;
+
                 if self.dids.contains_key(&document.id) {
                     return Err(ShardError::StateConflict(format!(
                         "DID already exists: {}",
@@ -186,6 +197,12 @@ impl IdentityState {
                             }
                         }
                         DidUpdate::RemoveAuthentication { public_key } => {
+                            // Prevent removing ALL authentication keys — at least one must remain
+                            if doc.authentication.len() <= 1 {
+                                return Err(ShardError::ValidationFailed(
+                                    "Cannot remove the last authentication key — at least one must remain".into(),
+                                ));
+                            }
                             doc.authentication.retain(|pk| pk != public_key);
                         }
                         DidUpdate::AddService { service_id, endpoint } => {
@@ -206,6 +223,15 @@ impl IdentityState {
                     return Err(ShardError::ValidationFailed("Insufficient recovery shares".into()));
                 }
 
+                // Anti-replay: check that this exact set of share indices has not been used before
+                let mut share_indices: Vec<u8> = shares.iter().map(|s| s.index).collect();
+                share_indices.sort();
+                if self.used_recovery_shares.get(did).map_or(false, |used| used.contains(&share_indices)) {
+                    return Err(ShardError::ValidationFailed(
+                        "Replay detected: this set of recovery shares has already been used".into(),
+                    ));
+                }
+
                 // Reconstruct the secret from the provided shares
                 let reconstructed = ShamirRecovery::reconstruct(shares)
                     .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}")))?;
@@ -217,6 +243,12 @@ impl IdentityState {
 
                 // Use complete_recovery() to properly update the DID document
                 self.complete_recovery(did, &new_public_key, vc)?;
+
+                // Mark this share set as used to prevent replay
+                self.used_recovery_shares
+                    .entry(did.clone())
+                    .or_default()
+                    .insert(share_indices);
 
                 Ok(())
             }
@@ -480,13 +512,13 @@ impl IdentityState {
 
             // Derive AES-256 key via HKDF-SHA256 from BLAKE3-derived key material
             let key_material = blake3::derive_key("OMNIA-SHARE-AES-KEY-V2", &key_input);
-            let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2");
+            let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2")?;
 
             // Generate random 96-bit nonce
             let nonce = generate_nonce();
 
             // AES-256-GCM encrypt
-            let ciphertext = aes256gcm_encrypt(&share.value, &aes_key, &nonce, &key_input);
+            let ciphertext = aes256gcm_encrypt(&share.value, &aes_key, &nonce, &key_input)?;
 
             encrypted.push(EncryptedShare {
                 custodian: share.index,
@@ -543,7 +575,7 @@ impl IdentityState {
                     key_input.extend_from_slice(SHARE_ENCRYPTION_DOMAIN);
                     key_input.push(enc.custodian);
                     let key_material = blake3::derive_key("OMNIA-SHARE-AES-KEY-V2", &key_input);
-                    let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2");
+                    let aes_key = hkdf_aes_key(&key_material, "OMNIA-SHARE-ENCRYPT-V2")?;
                     aes256gcm_decrypt(&enc.ciphertext, &aes_key, &enc.nonce, &key_input)?
                 }
                 _ => {
@@ -598,8 +630,10 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 ///
 /// Delegates to [`omnia_crypto::hkdf_aes_key`] to avoid duplicating the
 /// HKDF key-derivation pattern that already exists in the crypto crate.
-fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> [u8; 32] {
-    omnia_crypto::hkdf_aes_key(key_material, info).expect("HKDF key derivation should not fail for valid 32-byte input")
+fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> Result<[u8; 32], ShardError> {
+    omnia_crypto::hkdf_aes_key(key_material, info).map_err(|e| {
+        ShardError::ValidationFailed(format!("HKDF key derivation failed: {e}"))
+    })
 }
 
 /// Generate a random 96-bit nonce for AES-256-GCM.
@@ -613,9 +647,10 @@ fn generate_nonce() -> [u8; 12] {
 ///
 /// Delegates to [`omnia_crypto::aes256gcm_encrypt_aad`] to avoid duplicating
 /// the AES-GCM encryption pattern that already exists in the crypto crate.
-fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Vec<u8> {
-    omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad)
-        .expect("AES-256-GCM encryption should not fail with valid key")
+fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, ShardError> {
+    omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad).map_err(|e| {
+        ShardError::ValidationFailed(format!("AES-256-GCM encryption failed: {e}"))
+    })
 }
 
 /// AES-256-GCM decrypt with associated data.
@@ -658,7 +693,7 @@ mod tests {
 
         // Step 1: Create a DID
         let original_pk: [u8; 32] = [0xAB; 32];
-        let did = "did:omnia:abcd1234".to_string();
+        let did = format!("did:omnia:{}", hex::encode(original_pk));
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
@@ -927,7 +962,7 @@ mod tests {
 
         // Create a DID
         let original_pk: [u8; 32] = [0xAB; 32];
-        let did = "did:omnia:recovery-auth-test".to_string();
+        let did = format!("did:omnia:{}", hex::encode(original_pk));
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
@@ -989,7 +1024,7 @@ mod tests {
         let vc = VectorClock::new();
 
         let original_pk: [u8; 32] = [0xCC; 32];
-        let did = "did:omnia:replay-test".to_string();
+        let did = format!("did:omnia:{}", hex::encode(original_pk));
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
@@ -1026,8 +1061,8 @@ mod tests {
         let doc_after_first = state.dids.get(&did).unwrap();
         assert_eq!(doc_after_first.recovery_count, 1);
 
-        // Second recovery with same shares
-        state
+        // Second recovery with same shares should fail (replay prevention)
+        let replay_result = state
             .apply(
                 &IdentityOp::RecoverDid {
                     did: did.clone(),
@@ -1035,12 +1070,20 @@ mod tests {
                 },
                 &vc,
                 None,
-            )
-            .unwrap();
+            );
+
+        assert!(replay_result.is_err(), "Recovery with same shares should be rejected as replay");
+        match replay_result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => {
+                assert!(msg.to_lowercase().contains("replay"), "Expected replay error, got: {msg}");
+            }
+            other => panic!("expected ValidationFailed, got {other:?}"),
+        }
 
         let doc_after_second = state.dids.get(&did).unwrap();
-        assert_eq!(doc_after_second.recovery_count, 2);
-        // The same key should not be duplicated
+        // recovery_count should still be 1 since the second recovery was rejected
+        assert_eq!(doc_after_second.recovery_count, 1);
+        // The recovered key should be in authentication exactly once
         let key = derive_identity_key(secret);
         let key_count = doc_after_second.authentication.iter().filter(|k| **k == key).count();
         assert_eq!(key_count, 1, "Same key should not be duplicated in authentication");

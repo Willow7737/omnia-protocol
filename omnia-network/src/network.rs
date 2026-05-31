@@ -127,7 +127,18 @@ impl PeerScoreTracker {
     /// Also prunes lowest-scored peers when the tracker exceeds
     /// `MAX_PEER_SCORES` entries.
     pub fn update_score(&mut self, peer_id: &PeerId, score: f64) {
-        self.scores.insert(*peer_id, score);
+        // Guard against NaN poisoning: NaN values break all comparisons
+        // (NaN != NaN, NaN < x is false, NaN > x is false), which would
+        // corrupt sorting, graylisting, and pruning logic.
+        if score.is_nan() {
+            tracing::warn!(
+                peer = ?peer_id,
+                "Rejecting NaN score for peer — treating as 0.0"
+            );
+            self.scores.insert(*peer_id, 0.0);
+        } else {
+            self.scores.insert(*peer_id, score);
+        }
         self.prune_if_needed();
     }
 
@@ -279,8 +290,21 @@ pub fn check_version_compatibility(local: &str, remote: &str) -> VersionCompatib
     let local_parts: Vec<&str> = local.split('.').collect();
     let remote_parts: Vec<&str> = remote.split('.').collect();
 
-    let local_major = local_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-    let remote_major = remote_parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let local_major = local_parts.first().and_then(|s| s.parse::<u32>().ok());
+    let remote_major = remote_parts.first().and_then(|s| s.parse::<u32>().ok());
+
+    // If either version string cannot be parsed, treat as incompatible.
+    // A malformed version string (e.g., "not-a-version") indicates a
+    // protocol violation and should never be treated as compatible.
+    let (local_major, remote_major) = match (local_major, remote_major) {
+        (Some(l), Some(r)) => (l, r),
+        _ => {
+            return VersionCompatibility::Incompatible {
+                local: local.to_string(),
+                remote: remote.to_string(),
+            };
+        }
+    };
 
     if local_major != remote_major {
         VersionCompatibility::Incompatible {

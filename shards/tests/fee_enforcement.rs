@@ -203,7 +203,7 @@ fn test_cross_shard_fee_deduction() {
         ShardId::identity(),
         postcard::to_allocvec(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
             document: omnia_shards::DidDocument::new(
-                "did:omnia:cross-test".to_string(),
+                format!("did:omnia:{}", hex::encode(keypair.verifying_key().to_bytes())),
                 keypair.verifying_key().to_bytes(),
                 0,
             ),
@@ -310,7 +310,7 @@ fn test_fee_deduction_matches_schedule() {
 fn test_identity_fee_is_lower_than_financial() {
     let schedule = FeeSchedule::standard();
     let identity_fee = schedule.fee_for_op(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
-        document: omnia_shards::DidDocument::new("did:omnia:test".to_string(), [0u8; 32], 0),
+        document: omnia_shards::DidDocument::new(format!("did:omnia:{}", hex::encode([0u8; 32])), [0u8; 32], 0),
     }));
     let financial_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: [0u8; 32] }));
 

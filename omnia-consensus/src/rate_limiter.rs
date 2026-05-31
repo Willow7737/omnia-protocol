@@ -84,7 +84,7 @@ impl RateLimiter {
         let refill =
             elapsed_secs * self.refill_rate + (self.refill_rate as u64 * elapsed_nanos as u64 / 1_000_000_000) as u32;
         if refill > 0 {
-            bucket.tokens = (bucket.tokens + refill).min(self.max_tokens);
+            bucket.tokens = bucket.tokens.saturating_add(refill).min(self.max_tokens);
             bucket.last_refill = now;
         }
 

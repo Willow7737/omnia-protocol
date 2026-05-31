@@ -100,21 +100,9 @@ pub trait CvRDT: Clone {
 /// Op-based CRDTs replicate only the operations, not full state.
 /// More efficient for large data structures but require reliable broadcast.
 ///
-/// **Note**: This trait is currently unused (AUDIT-8). It is retained as a
-/// design placeholder for future operation-based CRDT support. The protocol
-/// currently uses only state-based CRDTs ([`CvRDT`]). If operation-based
-/// CRDTs are not needed, this trait can be removed in a future cleanup.
-#[deprecated(
-    since = "0.1.56",
-    note = "Unused — the protocol uses CvRDT exclusively. Remove if not needed by v0.2.0."
-)]
-pub trait CmRDT {
-    /// The operation type for this CRDT
-    type Operation;
-
-    /// Apply an operation to this CRDT
-    fn apply(&mut self, op: &Self::Operation);
-}
+/// **Note**: This trait was deprecated in v0.1.56 and has been removed.
+/// The protocol uses only state-based CRDTs ([`CvRDT`]). If operation-based
+/// CRDTs are needed in the future, this trait can be re-introduced.
 
 /// Trait for CRDTs that can be used as account state
 ///
@@ -187,7 +175,7 @@ impl AccountCRDT for AccountBalance {
         // different causal histories (AUDIT-10).
         use omnia_primitives::blake3_hash_domain;
         let counter_hash = self.counter.state_hash();
-        let vc_bytes = self.vector_clock.to_bytes();
+        let vc_bytes = self.vector_clock.to_bytes().unwrap_or_default();
         blake3_hash_domain(
             b"omnia-account-balance",
             &[counter_hash.as_slice(), vc_bytes.as_slice()].concat(),

@@ -173,7 +173,8 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         round_seed: seed,
         ..Default::default()
     };
-    let slashing = SlashingEngine::new(None, DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD);
+    let slashing = SlashingEngine::new(None, DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD)
+        .expect("failed to create slashing engine");
     let mut consensus = ConsensusEngine::new(consensus_config, slashing);
     consensus.register_validator(node_id, 10_000);
     let mut graph = CausalGraph::new();

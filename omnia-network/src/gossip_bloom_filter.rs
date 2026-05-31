@@ -90,9 +90,7 @@ impl BloomFilter {
 
     /// Clear the filter, removing all entries.
     fn clear(&mut self) {
-        for byte in &mut self.bits {
-            *byte = 0;
-        }
+        self.bits.fill(0);
         self.count = 0;
     }
 
