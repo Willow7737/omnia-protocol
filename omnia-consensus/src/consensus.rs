@@ -1748,7 +1748,7 @@ mod tests {
         assert_eq!(loaded.round_seed, [1u8; 32]);
         assert_eq!(loaded.committed_events, 1000);
         assert_eq!(loaded.last_finalized_round, 40);
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
     }
 
     #[test]
