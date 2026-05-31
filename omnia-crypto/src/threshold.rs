@@ -1721,8 +1721,6 @@ mod tests {
     fn test_dkg_share_encryption_round_trip() {
         let data = b"dkg-share-secret";
         let key = [0xAB_u8; 32];
-        let aad = b"sender||recipient";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         let sender: ParticipantId = {
             let mut s = [0u8; 32];
             s[..7].copy_from_slice(b"sender|");
@@ -1733,6 +1731,15 @@ mod tests {
             r[..10].copy_from_slice(b"recipient|");
             r
         };
+        // AAD must match the format used by aes256gcm_decrypt_dkg:
+        // sender_id || recipient_id (raw bytes, not string)
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
         let pt = aes256gcm_decrypt_dkg(&ct, &key, &sender, &recipient).unwrap();
         assert_eq!(pt, data.to_vec());
     }
@@ -1741,7 +1748,6 @@ mod tests {
     fn test_dkg_share_tamper_detected() {
         let data = b"tamper-test-share";
         let key = [0xCD_u8; 32];
-        let aad = b"s||r";
         let sender: ParticipantId = {
             let mut s = [0u8; 32];
             s[0] = b's';
@@ -1752,7 +1758,13 @@ mod tests {
             r[0] = b'r';
             r
         };
-        let mut ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let mut ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
         ct.ciphertext[0] ^= 0xFF;
         let result = aes256gcm_decrypt_dkg(&ct, &key, &sender, &recipient);
         assert!(result.is_err(), "Tampered ciphertext should fail AEAD");
@@ -1762,13 +1774,12 @@ mod tests {
     fn test_dkg_share_relay_attack_prevented() {
         let data = b"relay-attack-share";
         let key = [0xEF_u8; 32];
-        let aad = b"sender1||recipient1";
         let sender1: ParticipantId = {
             let mut s = [0u8; 32];
             s[0] = 1;
             s
         };
-        let _recipient1: ParticipantId = {
+        let recipient1: ParticipantId = {
             let mut r = [0u8; 32];
             r[0] = 2;
             r
@@ -1778,7 +1789,13 @@ mod tests {
             r[0] = 3;
             r
         };
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender1);
+            v.extend_from_slice(&recipient1);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
         // Decrypting with the wrong expected recipient should fail
         let result = aes256gcm_decrypt_dkg(&ct, &key, &sender1, &recipient2);
         assert!(
@@ -1791,9 +1808,6 @@ mod tests {
     fn test_dkg_share_wrong_recipient_fails() {
         let data = b"wrong-recipient-share";
         let key = [0x11_u8; 32];
-        let aad = b"s||r1";
-        let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
-        let wrong_key = [0x22_u8; 32];
         let sender: ParticipantId = {
             let mut s = [0u8; 32];
             s[0] = b's';
@@ -1804,6 +1818,14 @@ mod tests {
             r[0] = b'r';
             r
         };
+        let aad = {
+            let mut v = Vec::with_capacity(64);
+            v.extend_from_slice(&sender);
+            v.extend_from_slice(&recipient);
+            v
+        };
+        let ct = aes256gcm_encrypt_dkg(data, &key, &aad).unwrap();
+        let wrong_key = [0x22_u8; 32];
         let result = aes256gcm_decrypt_dkg(&ct, &wrong_key, &sender, &recipient);
         assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");
     }
@@ -1927,8 +1949,8 @@ mod tests {
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
-        // Should produce packages for all participants (including self)
-        assert_eq!(packages.len(), 5);
+        // Should produce packages for all OTHER participants (excluding self)
+        assert_eq!(packages.len(), 4);
 
         // Phase should have advanced
         assert_eq!(session.phase, DkgPhase::ShareDistribution);
@@ -2555,16 +2577,13 @@ mod tests {
         let mut rng = rand::thread_rng();
         let packages = session.generate_shares(nodes[0], &mut rng).unwrap();
 
-        // Different participants should receive different encrypted shares
-        let package_for_1 = packages.iter().find(|(id, _)| *id == nodes[0]).unwrap();
+        // Different participants should receive different encrypted shares.
+        // Note: generate_shares skips the caller (nodes[0]), so packages only
+        // contain entries for nodes[1] and nodes[2].
         let package_for_2 = packages.iter().find(|(id, _)| *id == nodes[1]).unwrap();
         let package_for_3 = packages.iter().find(|(id, _)| *id == nodes[2]).unwrap();
 
         // Encrypted shares should differ (different recipients get different shares)
-        assert_ne!(
-            package_for_1.1.encrypted_shares[0].ciphertext,
-            package_for_2.1.encrypted_shares[0].ciphertext
-        );
         assert_ne!(
             package_for_2.1.encrypted_shares[0].ciphertext,
             package_for_3.1.encrypted_shares[0].ciphertext
@@ -2666,7 +2685,13 @@ mod tests {
                 if sender_idx == receiver_idx {
                     continue;
                 }
-                let (_, ref package) = all_packages[sender_idx][receiver_idx];
+                // generate_shares skips self, so find the package by recipient
+                // ID rather than using direct indexing.
+                let package = &all_packages[sender_idx]
+                    .iter()
+                    .find(|(id, _)| *id == nodes[receiver_idx])
+                    .expect("package for recipient should exist")
+                    .1;
                 let _ = sessions[receiver_idx].receive_shares(nodes[sender_idx], package);
             }
         }

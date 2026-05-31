@@ -1085,9 +1085,10 @@ mod tests {
 
         let loaded = EncryptedKeyStore::load(dir.path(), "test-passphrase").expect("load");
         assert!(loaded.keypair.is_some());
-        // The public key should match the file on disk
+        // The public key should match the first 32 bytes of the file on disk.
+        // The pubkey file stores 32 bytes of key + 32 bytes of MAC.
         let pubkey_bytes = std::fs::read(dir.path().join("pubkey")).expect("read pubkey");
-        assert_eq!(loaded.public_key.to_bytes().as_slice(), pubkey_bytes.as_slice());
+        assert_eq!(loaded.public_key.to_bytes().as_slice(), &pubkey_bytes[..32]);
     }
 
     #[test]
