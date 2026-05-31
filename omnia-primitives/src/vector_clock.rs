@@ -114,11 +114,7 @@ impl VectorClock {
         let mut other_leq_self = true;
 
         // Collect all unique node IDs from both clocks
-        let all_keys: std::collections::BTreeSet<&NodeId> = self
-            .clocks
-            .keys()
-            .chain(other.clocks.keys())
-            .collect();
+        let all_keys: std::collections::BTreeSet<&NodeId> = self.clocks.keys().chain(other.clocks.keys()).collect();
 
         for &node in &all_keys {
             let s = self.get(node);
@@ -654,7 +650,10 @@ mod tests {
         let n1 = nid(1);
         let err = VectorClockError::DuplicateNode(n1);
         let msg = format!("{err}");
-        assert!(msg.contains("Duplicate"), "Error message should mention duplicate: {msg}");
+        assert!(
+            msg.contains("Duplicate"),
+            "Error message should mention duplicate: {msg}"
+        );
     }
 
     #[test]
@@ -677,7 +676,10 @@ mod tests {
         assert!(result.is_err(), "Should reject clock with too many entries");
         match result {
             Err(VectorClockError::InvalidFormat(msg)) => {
-                assert!(msg.contains("exceeds maximum"), "Error should mention exceeding maximum: {msg}");
+                assert!(
+                    msg.contains("exceeds maximum"),
+                    "Error should mention exceeding maximum: {msg}"
+                );
             }
             other => panic!("Expected InvalidFormat, got {other:?}"),
         }

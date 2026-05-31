@@ -52,7 +52,9 @@ pub trait SerializableState: Serialize + DeserializeOwned + Sized {
     /// Checks the version prefix byte before deserializing.
     fn from_state_bytes(bytes: &[u8]) -> Result<Self, StateSerializeError> {
         if bytes.is_empty() {
-            return Err(StateSerializeError::Deserialize("empty data — missing version byte".to_string()));
+            return Err(StateSerializeError::Deserialize(
+                "empty data — missing version byte".to_string(),
+            ));
         }
         let version = bytes[0];
         if version != STATE_FORMAT_VERSION {
@@ -110,7 +112,10 @@ mod tests {
         assert!(result.is_err());
         match result {
             Err(StateSerializeError::Deserialize(msg)) => {
-                assert!(msg.contains("unsupported"), "Error should mention unsupported version: {msg}");
+                assert!(
+                    msg.contains("unsupported"),
+                    "Error should mention unsupported version: {msg}"
+                );
             }
             other => panic!("Expected Deserialize error, got {other:?}"),
         }

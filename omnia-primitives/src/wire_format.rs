@@ -161,10 +161,7 @@ mod tests {
         let mut bytes = vec![1u8]; // version 1
         bytes.extend(vec![0u8; MAX_POSTCARD_INPUT_SIZE]); // exceeds limit
         let result: Result<TestMsg, _> = deserialize_with_version(&bytes);
-        assert!(
-            result.is_err(),
-            "Should reject input exceeding MAX_POSTCARD_INPUT_SIZE"
-        );
+        assert!(result.is_err(), "Should reject input exceeding MAX_POSTCARD_INPUT_SIZE");
         match result {
             Err(WireFormatError::DeserializationFailed(msg)) => {
                 assert!(msg.contains("size limit"), "Error should mention size limit: {msg}");

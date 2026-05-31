@@ -166,7 +166,13 @@ impl RollupCircuit {
     /// and `new_state_root == expected_new_state_root`, preventing a
     /// malicious prover from supplying arbitrary state roots. The `event_count`
     /// is constrained to be non-zero, preventing empty-batch proofs.
-    pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64, expected_old: [u8; 32], expected_new: [u8; 32]) -> Self {
+    pub fn from_state_roots(
+        old: [u8; 32],
+        new: [u8; 32],
+        event_count: u64,
+        expected_old: [u8; 32],
+        expected_new: [u8; 32],
+    ) -> Self {
         Self {
             old_state_root: Some(Fr::from_be_bytes_mod_order(&old)),
             new_state_root: Some(Fr::from_be_bytes_mod_order(&new)),

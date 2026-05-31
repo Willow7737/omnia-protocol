@@ -138,10 +138,12 @@ async fn handle_economics_op(
             Json(json!({"error": format!("Invalid event: {e}")})),
         )
     })?;
-    event.sign_with_keypair(&keypair).map_err(|e| (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
-    ))?;
+    event.sign_with_keypair(&keypair).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
+        )
+    })?;
 
     let shard_op = ShardOp::Economics(econ_op);
 

@@ -485,8 +485,7 @@ impl FastSyncManager {
                 if total_bytes > MAX_SYNC_EVENTS_TOTAL_BYTES {
                     return Err(SyncError::Consensus(format!(
                         "Total event bytes in sync response: {} (max {})",
-                        total_bytes,
-                        MAX_SYNC_EVENTS_TOTAL_BYTES
+                        total_bytes, MAX_SYNC_EVENTS_TOTAL_BYTES
                     )));
                 }
                 Ok(events)

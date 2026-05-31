@@ -103,7 +103,7 @@ pub trait CvRDT: Clone {
 /// **Note**: This trait was deprecated in v0.1.56 and has been removed.
 /// The protocol uses only state-based CRDTs ([`CvRDT`]). If operation-based
 /// CRDTs are needed in the future, this trait can be re-introduced.
-
+///
 /// Trait for CRDTs that can be used as account state
 ///
 /// Account state CRDTs must support:

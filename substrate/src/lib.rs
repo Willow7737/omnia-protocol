@@ -64,8 +64,8 @@ pub use omnia_network;
 // Re-export commonly used types
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, verify_aggregate,
-    verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
+    aggregate_public_keys, aggregate_signatures, verify_aggregate, verify_aggregate_with_pop, BlsError, BlsKeypair,
+    BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
 pub use consensus::{

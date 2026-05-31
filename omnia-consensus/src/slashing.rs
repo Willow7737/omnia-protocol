@@ -680,7 +680,11 @@ impl SlashingEngine {
     /// // Testing: in-memory slashing
     /// let engine = SlashingEngine::new(None, 500, 2000).unwrap();
     /// ```
-    pub fn new(data_dir: Option<PathBuf>, slash_threshold: u64, ejection_threshold: u64) -> Result<Self, SlashingStoreError> {
+    pub fn new(
+        data_dir: Option<PathBuf>,
+        slash_threshold: u64,
+        ejection_threshold: u64,
+    ) -> Result<Self, SlashingStoreError> {
         match data_dir {
             Some(path) => match RedbSlashingStore::open(&path) {
                 Ok(store) => {
@@ -688,7 +692,11 @@ impl SlashingEngine {
                         path = %path.display(),
                         "Slashing engine: using persistent redb store"
                     );
-                    Ok(Self::with_store_with_thresholds(Arc::new(store), slash_threshold, ejection_threshold))
+                    Ok(Self::with_store_with_thresholds(
+                        Arc::new(store),
+                        slash_threshold,
+                        ejection_threshold,
+                    ))
                 }
                 Err(e) => {
                     tracing::error!(
@@ -696,10 +704,11 @@ impl SlashingEngine {
                         path = %path.display(),
                         "Failed to open redb store — returning error instead of falling back to in-memory"
                     );
-                    return Err(SlashingStoreError::Persistence(format!(
+                    Err(SlashingStoreError::Persistence(format!(
                         "Failed to open redb store at {}: {}",
-                        path.display(), e
-                    )));
+                        path.display(),
+                        e
+                    )))
                 }
             },
             None => {

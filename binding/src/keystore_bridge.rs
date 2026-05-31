@@ -108,11 +108,12 @@ fn derive_encryption_key(passphrase: &str) -> Result<[u8; 32], BridgeError> {
     let passphrase_bytes = passphrase.as_bytes();
     let len = passphrase_bytes.len().min(32);
     key_material[..len].copy_from_slice(&passphrase_bytes[..len]);
-    hkdf_aes_key(&key_material, "omnia-rotation-state-encryption")
-        .map_err(|e| BridgeError::Crypto(format!(
+    hkdf_aes_key(&key_material, "omnia-rotation-state-encryption").map_err(|e| {
+        BridgeError::Crypto(format!(
             "HKDF key derivation failed — cannot derive encryption key from passphrase: {e}. \
              Ensure the omnia-crypto AES module is properly initialized."
-        )))
+        ))
+    })
 }
 
 /// Encrypt a secret string using AES-256-GCM and return base64-encoded ciphertext.
@@ -381,9 +382,7 @@ impl KeyStoreBridge {
                 // Without this check, anyone can submit a rotation request with a
                 // fabricated signature and it would be accepted.
                 let caller_sig = ed25519_dalek::Signature::try_from(auth_signature)
-                    .map_err(|_| BridgeError::InvalidState(
-                        "Invalid authorization signature format".into(),
-                    ))?;
+                    .map_err(|_| BridgeError::InvalidState("Invalid authorization signature format".into()))?;
                 let verifying_key = self.keystore.public_key();
                 // Construct the same message that the caller should have signed
                 let nonce = blake3::hash(&self.keystore.public_key().to_bytes());
@@ -396,9 +395,11 @@ impl KeyStoreBridge {
                 );
                 verifying_key
                     .verify(auth_message.as_bytes(), &caller_sig)
-                    .map_err(|_| BridgeError::InvalidState(
-                        "Authorization signature verification failed — caller is not authorized".into(),
-                    ))?;
+                    .map_err(|_| {
+                        BridgeError::InvalidState(
+                            "Authorization signature verification failed — caller is not authorized".into(),
+                        )
+                    })?;
 
                 // Now sign with the ORIGINAL keystore key for replay protection
                 // with nonce + new_key commitment.

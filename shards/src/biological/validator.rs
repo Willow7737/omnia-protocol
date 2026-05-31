@@ -49,9 +49,7 @@ impl BiologicalValidator {
                                 .unwrap_or_default()
                                 .as_millis() as u64;
                             if record.expires_at <= now {
-                                return Err(ShardError::ValidationFailed(
-                                    "Consent has expired".into(),
-                                ));
+                                return Err(ShardError::ValidationFailed("Consent has expired".into()));
                             }
                         }
                         Ok(())

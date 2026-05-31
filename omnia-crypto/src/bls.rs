@@ -633,7 +633,7 @@ pub fn aggregate_signatures(signatures: &[(BlsPublicKey, BlsSignature)]) -> Resu
     for (pk, _sig) in signatures {
         let pk_bytes: [u8; PUBLIC_KEY_SIZE] = pk.as_bytes().try_into().map_err(|_| {
             BlsError::AggregationFailed(
-                "public key has unexpected length — expected {PUBLIC_KEY_SIZE} bytes".to_string()
+                "public key has unexpected length — expected {PUBLIC_KEY_SIZE} bytes".to_string(),
             )
         })?;
         if !seen.insert(pk_bytes) {

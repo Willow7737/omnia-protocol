@@ -1079,7 +1079,10 @@ impl FeldmanVssSession {
         // Verify the share against Feldman commitments using BLS12-381
         // scalar field arithmetic for structural validation.
         let own_index = self.own_index.ok_or_else(|| {
-            DkgError::InvalidShare(from_prefix, "own_index not set — call generate_shares first".to_string())
+            DkgError::InvalidShare(
+                from_prefix,
+                "own_index not set — call generate_shares first".to_string(),
+            )
         })?;
 
         // Convert decrypted bytes to a BLS12-381 Scalar for verification
@@ -1300,7 +1303,12 @@ fn aes256gcm_encrypt_dkg(plaintext: &[u8], key_material: &[u8; 32], aad: &[u8]) 
 /// in the key_material derivation, rather than trusting the AAD from the wire.
 /// This prevents an attacker from tampering with the AAD field to redirect
 /// the share to a different recipient.
-fn aes256gcm_decrypt_dkg(ct: &AeadCiphertext, key_material: &[u8; 32], expected_sender: &ParticipantId, expected_recipient: &ParticipantId) -> Result<Vec<u8>, DkgError> {
+fn aes256gcm_decrypt_dkg(
+    ct: &AeadCiphertext,
+    key_material: &[u8; 32],
+    expected_sender: &ParticipantId,
+    expected_recipient: &ParticipantId,
+) -> Result<Vec<u8>, DkgError> {
     use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 
     let aes_key = derive_dkg_aes_key(key_material)?;
@@ -1716,10 +1724,14 @@ mod tests {
         let aad = b"sender||recipient";
         let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         let sender: ParticipantId = {
-            let mut s = [0u8; 32]; s[..7].copy_from_slice(b"sender|"); s
+            let mut s = [0u8; 32];
+            s[..7].copy_from_slice(b"sender|");
+            s
         };
         let recipient: ParticipantId = {
-            let mut r = [0u8; 32]; r[..10].copy_from_slice(b"recipient|"); r
+            let mut r = [0u8; 32];
+            r[..10].copy_from_slice(b"recipient|");
+            r
         };
         let pt = aes256gcm_decrypt_dkg(&ct, &key, &sender, &recipient).unwrap();
         assert_eq!(pt, data.to_vec());
@@ -1731,10 +1743,14 @@ mod tests {
         let key = [0xCD_u8; 32];
         let aad = b"s||r";
         let sender: ParticipantId = {
-            let mut s = [0u8; 32]; s[0] = b's'; s
+            let mut s = [0u8; 32];
+            s[0] = b's';
+            s
         };
         let recipient: ParticipantId = {
-            let mut r = [0u8; 32]; r[0] = b'r'; r
+            let mut r = [0u8; 32];
+            r[0] = b'r';
+            r
         };
         let mut ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         ct.ciphertext[0] ^= 0xFF;
@@ -1748,18 +1764,27 @@ mod tests {
         let key = [0xEF_u8; 32];
         let aad = b"sender1||recipient1";
         let sender1: ParticipantId = {
-            let mut s = [0u8; 32]; s[0] = 1; s
+            let mut s = [0u8; 32];
+            s[0] = 1;
+            s
         };
-        let recipient1: ParticipantId = {
-            let mut r = [0u8; 32]; r[0] = 2; r
+        let _recipient1: ParticipantId = {
+            let mut r = [0u8; 32];
+            r[0] = 2;
+            r
         };
         let recipient2: ParticipantId = {
-            let mut r = [0u8; 32]; r[0] = 3; r
+            let mut r = [0u8; 32];
+            r[0] = 3;
+            r
         };
         let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         // Decrypting with the wrong expected recipient should fail
         let result = aes256gcm_decrypt_dkg(&ct, &key, &sender1, &recipient2);
-        assert!(result.is_err(), "Relay attack (wrong expected recipient) should fail AEAD");
+        assert!(
+            result.is_err(),
+            "Relay attack (wrong expected recipient) should fail AEAD"
+        );
     }
 
     #[test]
@@ -1770,10 +1795,14 @@ mod tests {
         let ct = aes256gcm_encrypt_dkg(data, &key, aad).unwrap();
         let wrong_key = [0x22_u8; 32];
         let sender: ParticipantId = {
-            let mut s = [0u8; 32]; s[0] = b's'; s
+            let mut s = [0u8; 32];
+            s[0] = b's';
+            s
         };
         let recipient: ParticipantId = {
-            let mut r = [0u8; 32]; r[0] = b'r'; r
+            let mut r = [0u8; 32];
+            r[0] = b'r';
+            r
         };
         let result = aes256gcm_decrypt_dkg(&ct, &wrong_key, &sender, &recipient);
         assert!(result.is_err(), "Wrong key should fail AES-GCM decryption");

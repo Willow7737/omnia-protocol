@@ -70,7 +70,9 @@ impl AccountBalance {
     ///
     /// Returns an error if the addition would overflow u64.
     pub fn increment(&mut self, amount: u64, vc: &VectorClock) -> Result<(), ShardError> {
-        self.balance = self.balance.checked_add(amount)
+        self.balance = self
+            .balance
+            .checked_add(amount)
             .ok_or_else(|| ShardError::ValidationFailed("Balance overflow".into()))?;
         self.last_update.merge(vc);
         Ok(())
@@ -208,7 +210,9 @@ impl FinancialState {
                 let vc = &event.vector_clock;
                 let balance = self.balances.entry(*to).or_default();
                 balance.increment(*amount, vc)?;
-                self.total_supply = self.total_supply.checked_add(*amount)
+                self.total_supply = self
+                    .total_supply
+                    .checked_add(*amount)
                     .ok_or_else(|| ShardError::ValidationFailed("Total supply overflow".into()))?;
                 Ok(())
             }

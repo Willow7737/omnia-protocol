@@ -1737,7 +1737,8 @@ mod tests {
             last_finalized_round: 40,
             active_validators: vec![[2u8; 32]],
             equivocation_tracking: HashMap::from([([3u8; 32], 5u64)]),
-            version: 1,
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
         };
 
         store.save_state(&state).unwrap();
@@ -1789,6 +1790,7 @@ mod tests {
             last_finalized_round: 0,
             active_validators: vec![],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
         store.save_state(&state).unwrap();
@@ -1849,6 +1851,7 @@ mod tests {
             last_finalized_round: 8,
             active_validators: vec![node(1)],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 999, // Unsupported version
         };
         store.save_state(&bad_state).unwrap();

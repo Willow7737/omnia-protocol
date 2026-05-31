@@ -147,9 +147,8 @@ impl IdentityState {
         match op {
             IdentityOp::CreateDid { document } => {
                 // Validate DID format
-                validate_did(&document.id).map_err(|e| ShardError::ValidationFailed(
-                    format!("Invalid DID format: {e}")
-                ))?;
+                validate_did(&document.id)
+                    .map_err(|e| ShardError::ValidationFailed(format!("Invalid DID format: {e}")))?;
 
                 if self.dids.contains_key(&document.id) {
                     return Err(ShardError::StateConflict(format!(
@@ -226,7 +225,11 @@ impl IdentityState {
                 // Anti-replay: check that this exact set of share indices has not been used before
                 let mut share_indices: Vec<u8> = shares.iter().map(|s| s.index).collect();
                 share_indices.sort();
-                if self.used_recovery_shares.get(did).map_or(false, |used| used.contains(&share_indices)) {
+                if self
+                    .used_recovery_shares
+                    .get(did)
+                    .is_some_and(|used| used.contains(&share_indices))
+                {
                     return Err(ShardError::ValidationFailed(
                         "Replay detected: this set of recovery shares has already been used".into(),
                     ));
@@ -631,9 +634,8 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 /// Delegates to [`omnia_crypto::hkdf_aes_key`] to avoid duplicating the
 /// HKDF key-derivation pattern that already exists in the crypto crate.
 fn hkdf_aes_key(key_material: &[u8; 32], info: &str) -> Result<[u8; 32], ShardError> {
-    omnia_crypto::hkdf_aes_key(key_material, info).map_err(|e| {
-        ShardError::ValidationFailed(format!("HKDF key derivation failed: {e}"))
-    })
+    omnia_crypto::hkdf_aes_key(key_material, info)
+        .map_err(|e| ShardError::ValidationFailed(format!("HKDF key derivation failed: {e}")))
 }
 
 /// Generate a random 96-bit nonce for AES-256-GCM.
@@ -648,9 +650,8 @@ fn generate_nonce() -> [u8; 12] {
 /// Delegates to [`omnia_crypto::aes256gcm_encrypt_aad`] to avoid duplicating
 /// the AES-GCM encryption pattern that already exists in the crypto crate.
 fn aes256gcm_encrypt(plaintext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &[u8]) -> Result<Vec<u8>, ShardError> {
-    omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad).map_err(|e| {
-        ShardError::ValidationFailed(format!("AES-256-GCM encryption failed: {e}"))
-    })
+    omnia_crypto::aes256gcm_encrypt_aad(plaintext, key, nonce, aad)
+        .map_err(|e| ShardError::ValidationFailed(format!("AES-256-GCM encryption failed: {e}")))
 }
 
 /// AES-256-GCM decrypt with associated data.
@@ -1062,20 +1063,25 @@ mod tests {
         assert_eq!(doc_after_first.recovery_count, 1);
 
         // Second recovery with same shares should fail (replay prevention)
-        let replay_result = state
-            .apply(
-                &IdentityOp::RecoverDid {
-                    did: did.clone(),
-                    shares: shares.clone(),
-                },
-                &vc,
-                None,
-            );
+        let replay_result = state.apply(
+            &IdentityOp::RecoverDid {
+                did: did.clone(),
+                shares: shares.clone(),
+            },
+            &vc,
+            None,
+        );
 
-        assert!(replay_result.is_err(), "Recovery with same shares should be rejected as replay");
+        assert!(
+            replay_result.is_err(),
+            "Recovery with same shares should be rejected as replay"
+        );
         match replay_result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
-                assert!(msg.to_lowercase().contains("replay"), "Expected replay error, got: {msg}");
+                assert!(
+                    msg.to_lowercase().contains("replay"),
+                    "Expected replay error, got: {msg}"
+                );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
         }

@@ -113,10 +113,12 @@ pub async fn submit_event(
             Json(json!({"error": format!("Invalid event: {e}")})),
         )
     })?;
-    event.sign_with_keypair(&keypair).map_err(|e| (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
-    ))?;
+    event.sign_with_keypair(&keypair).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
+        )
+    })?;
 
     let event_id_hex = hex::encode(event.id);
     let creator_hex = hex::encode(&event.creator[..4]);

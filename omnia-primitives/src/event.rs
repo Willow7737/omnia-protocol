@@ -198,7 +198,9 @@ impl EventRequest {
     /// or `known_events` exceeds [`MAX_KNOWN_EVENTS`].
     pub fn validate(&self) -> Result<(), EventValidationError> {
         if self.limit == 0 {
-            return Err(EventValidationError::InvalidField("limit must be greater than zero".into()));
+            return Err(EventValidationError::InvalidField(
+                "limit must be greater than zero".into(),
+            ));
         }
         if self.limit > MAX_EVENT_REQUEST_LIMIT {
             return Err(EventValidationError::InvalidField("limit exceeds maximum".into()));
@@ -306,9 +308,12 @@ impl Event {
         hasher.update(&self.creator_pubkey);
         hasher.update(&self.sequence.to_le_bytes());
         hasher.update(&self.timestamp.to_le_bytes());
-        hasher.update(&self.vector_clock.to_bytes().map_err(|e| {
-            EventValidationError::InvalidField(format!("vector_clock serialization: {e}"))
-        })?);
+        hasher.update(
+            &self
+                .vector_clock
+                .to_bytes()
+                .map_err(|e| EventValidationError::InvalidField(format!("vector_clock serialization: {e}")))?,
+        );
         hasher.update(&self.payload);
         match self.self_parent {
             None => {
@@ -339,9 +344,11 @@ impl Event {
         hasher.update(self.creator);
         hasher.update(self.sequence.to_le_bytes());
         hasher.update(self.timestamp.to_le_bytes());
-        hasher.update(self.vector_clock.to_bytes().map_err(|e| {
-            EventValidationError::InvalidField(format!("vector_clock serialization: {e}"))
-        })?);
+        hasher.update(
+            self.vector_clock
+                .to_bytes()
+                .map_err(|e| EventValidationError::InvalidField(format!("vector_clock serialization: {e}")))?,
+        );
         match self.self_parent {
             None => hasher.update([0u8]),
             Some(sp) => {

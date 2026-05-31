@@ -329,6 +329,7 @@ mod tests {
             last_finalized_round: 0,
             active_validators: vec![],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
         store.save_state(&state).unwrap();
@@ -368,6 +369,7 @@ mod tests {
             last_finalized_round: 8,
             active_validators: vec![],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 
@@ -378,6 +380,7 @@ mod tests {
             last_finalized_round: 18,
             active_validators: vec![[5u8; 32]],
             equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 
@@ -413,6 +416,7 @@ mod tests {
             last_finalized_round: 490,
             active_validators: validators.clone(),
             equivocation_tracking: equivocation,
+            first_event_for_sequence: HashMap::new(),
             version: 1,
         };
 

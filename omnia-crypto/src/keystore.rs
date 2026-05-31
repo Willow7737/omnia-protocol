@@ -879,7 +879,13 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
 
     // Try decryption with AAD first (new format), fall back to without AAD (legacy)
     let pk_hash = blake3_hash_domain(b"OMNIA-KEYSTORE-PUBKEY-AAD-V1", b""); // placeholder
-    match cipher.decrypt(nonce, aes_gcm::aead::Payload { msg: ciphertext, aad: &pk_hash }) {
+    match cipher.decrypt(
+        nonce,
+        aes_gcm::aead::Payload {
+            msg: ciphertext,
+            aad: &pk_hash,
+        },
+    ) {
         Ok(plaintext) => Ok(plaintext),
         Err(_) => {
             // Fallback: try without AAD (for data encrypted before AAD was added)
@@ -975,7 +981,10 @@ fn generate_salt() -> [u8; 32] {
 /// if an attacker replaces the public key file without knowing the passphrase,
 /// the MAC verification will fail on load.
 fn compute_pubkey_mac(pubkey_bytes: &[u8], passphrase: &str) -> [u8; 32] {
-    blake3_hash_domain(b"OMNIA-KEYSTORE-PUBKEY-MAC-V1", &[pubkey_bytes, passphrase.as_bytes()].concat())
+    blake3_hash_domain(
+        b"OMNIA-KEYSTORE-PUBKEY-MAC-V1",
+        &[pubkey_bytes, passphrase.as_bytes()].concat(),
+    )
 }
 
 // ---------------------------------------------------------------------------
