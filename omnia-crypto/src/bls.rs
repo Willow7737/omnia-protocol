@@ -122,6 +122,11 @@ pub struct BlsPublicKey(
     Vec<u8>,
 );
 
+impl BlsPublicKey {
+    /// Size of the inner data in bytes.
+    pub const SIZE: usize = PUBLIC_KEY_SIZE;
+}
+
 /// A BLS signature (G1 point on BLS12-381).
 ///
 /// Stored in compressed form (48 bytes).
@@ -131,6 +136,11 @@ pub struct BlsSignature(
     #[serde(with = "serde_bytes")]
     Vec<u8>,
 );
+
+impl BlsSignature {
+    /// Size of the inner data in bytes.
+    pub const SIZE: usize = SIGNATURE_SIZE;
+}
 
 impl BlsKeypair {
     /// Generate a new BLS keypair.
@@ -196,7 +206,7 @@ impl BlsKeypair {
     ///
     /// A [`BlsKeypair`] with the given scalar as the secret key, or
     /// [`BlsError::KeyGenerationFailed`] if the scalar bytes are invalid.
-    pub fn from_scalar(scalar_bytes: &[u8; SECRET_KEY_SIZE], _g1_pk_bytes: &[u8; 48]) -> Result<Self, BlsError> {
+    pub fn from_scalar(scalar_bytes: &[u8; SECRET_KEY_SIZE], g1_pk_bytes: &[u8; 48]) -> Result<Self, BlsError> {
         // Construct the blst SecretKey from raw scalar bytes.
         // Scalar::to_bytes() outputs little-endian bytes, but
         // BlstSecretKey::from_bytes() expects big-endian (it uses
@@ -206,6 +216,19 @@ impl BlsKeypair {
 
         let sk = BlstSecretKey::from_bytes(&be_bytes)
             .map_err(|e| BlsError::KeyGenerationFailed(format!("invalid scalar for sk: {e:?}")))?;
+
+        // Validate the G1 public key: derive G1 from the scalar and compare
+        // with the provided G1 bytes. This ensures the caller is providing
+        // the correct public key for the given secret key scalar.
+        let expected_g1 = crate::bls12_381_scalar::scalar_to_g1_public_key(
+            &crate::bls12_381_scalar::Scalar::from_bytes(scalar_bytes)
+                .ok_or_else(|| BlsError::KeyGenerationFailed("invalid scalar bytes".to_string()))?,
+        );
+        if expected_g1 != *g1_pk_bytes {
+            return Err(BlsError::KeyGenerationFailed(
+                "G1 public key does not match the scalar secret key".to_string(),
+            ));
+        }
 
         // Derive the G2 public key from the scalar: pk_g2 = sk * G2.
         // blst min_sig uses G2 for public keys and G1 for signatures.
@@ -442,7 +465,7 @@ impl BlsProofOfPossession {
     }
 }
 
-/// Aggregate multiple BLS signatures into a single signature.
+/// Aggregate multiple BLS signatures without checking for duplicate signers.
 ///
 /// Combines N G1 points (signatures) into one by point addition.
 /// The resulting aggregate signature can be verified against the
@@ -462,22 +485,8 @@ impl BlsProofOfPossession {
 /// This function does **not** check for duplicate signers. If the same
 /// signer appears multiple times, their signature is aggregated multiple
 /// times, which inflates their effective weight. Use
-/// [`aggregate_signatures_dedup`] to deduplicate before aggregating.
-///
-/// # Example
-///
-/// ```ignore
-/// use omnia_substrate::bls::{BlsKeypair, aggregate_signatures};
-///
-/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
-/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
-/// let msg = b"same message";
-///
-/// let sig1 = kp1.sign(msg);
-/// let sig2 = kp2.sign(msg);
-/// let agg_sig = aggregate_signatures(&[sig1, sig2])?;
-/// ```
-pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature, BlsError> {
+/// [`aggregate_signatures`] (the dedup version) to deduplicate before aggregating.
+pub fn aggregate_signatures_unchecked(signatures: &[BlsSignature]) -> Result<BlsSignature, BlsError> {
     if signatures.is_empty() {
         return Err(BlsError::AggregationFailed(
             "cannot aggregate empty signature set".to_string(),
@@ -507,7 +516,7 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
 
 /// Aggregate multiple BLS signatures with duplicate signer detection and deduplication.
 ///
-/// This is the safe version of [`aggregate_signatures`] — it takes public keys
+/// This is the safe version of [`aggregate_signatures_unchecked`] — it takes public keys
 /// alongside signatures, detects duplicate signers, and deduplicates before
 /// aggregating. Duplicate signers (identified by their public key) are kept only
 /// once, using their first occurrence.
@@ -528,24 +537,7 @@ pub fn aggregate_signatures(signatures: &[BlsSignature]) -> Result<BlsSignature,
 /// [`BlsError::AggregationFailed`] with a descriptive message. This
 /// prevents the same signer from having disproportionate weight in the
 /// aggregate signature.
-///
-/// # Example
-///
-/// ```ignore
-/// use omnia_substrate::bls::{BlsKeypair, aggregate_signatures_dedup};
-///
-/// let kp1 = BlsKeypair::generate(&[1u8; 32])?;
-/// let kp2 = BlsKeypair::generate(&[2u8; 32])?;
-/// let msg = b"same message";
-///
-/// let sig1 = kp1.sign(msg);
-/// let sig2 = kp2.sign(msg);
-/// let agg_sig = aggregate_signatures_dedup(&[
-///     (kp1.public_key(), sig1),
-///     (kp2.public_key(), sig2),
-/// ])?;
-/// ```
-pub fn aggregate_signatures_dedup(signatures: &[(BlsPublicKey, BlsSignature)]) -> Result<BlsSignature, BlsError> {
+pub fn aggregate_signatures(signatures: &[(BlsPublicKey, BlsSignature)]) -> Result<BlsSignature, BlsError> {
     if signatures.is_empty() {
         return Err(BlsError::AggregationFailed(
             "cannot aggregate empty signature set".to_string(),
@@ -668,7 +660,7 @@ pub fn aggregate_public_keys(public_keys: &[BlsPublicKey]) -> Result<BlsPublicKe
 ///
 /// let sig1 = kp1.sign(msg);
 /// let sig2 = kp2.sign(msg);
-/// let agg_sig = aggregate_signatures(&[sig1, sig2])?;
+/// let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2])?;
 /// let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()])?;
 ///
 /// verify_aggregate(msg, &agg_pk, &agg_sig)?;
@@ -790,7 +782,7 @@ mod tests {
         let sig2 = kp2.sign(msg);
         let sig3 = kp3.sign(msg);
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2, sig3]).expect("aggregation should succeed");
+        let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2, sig3]).expect("aggregation should succeed");
         assert_eq!(agg_sig.0.len(), SIGNATURE_SIZE);
     }
 
@@ -814,7 +806,7 @@ mod tests {
         let sig2 = kp2.sign(msg);
         let sig3 = kp3.sign(msg);
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2, sig3]).expect("sig aggregation should succeed");
+        let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2, sig3]).expect("sig aggregation should succeed");
         let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key(), kp3.public_key()])
             .expect("pk aggregation should succeed");
 
@@ -823,7 +815,7 @@ mod tests {
 
     #[test]
     fn test_bls_aggregate_empty_fails() {
-        let result = aggregate_signatures(&[]);
+        let result = aggregate_signatures_unchecked(&[]);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), BlsError::AggregationFailed(_)));
 
@@ -837,7 +829,7 @@ mod tests {
         let msg = b"single signer";
         let sig = kp.sign(msg);
 
-        let agg_sig = aggregate_signatures(std::slice::from_ref(&sig)).expect("single sig aggregation");
+        let agg_sig = aggregate_signatures_unchecked(std::slice::from_ref(&sig)).expect("single sig aggregation");
         let agg_pk = aggregate_public_keys(&[kp.public_key()]).expect("single pk aggregation");
 
         verify_aggregate(msg, &agg_pk, &agg_sig).expect("single aggregate should verify");
@@ -882,7 +874,7 @@ mod tests {
         let sig1 = kp1.sign(b"message one");
         let sig2 = kp2.sign(b"message two");
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2]).expect("aggregation should succeed");
+        let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2]).expect("aggregation should succeed");
         let agg_pk = aggregate_public_keys(&[kp1.public_key(), kp2.public_key()]).expect("pk aggregation");
 
         // Aggregate verify against a single message should fail
@@ -924,7 +916,7 @@ mod tests {
         let pop1 = BlsProofOfPossession::generate(&kp1);
         let pop2 = BlsProofOfPossession::generate(&kp2);
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2]).unwrap();
+        let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2]).unwrap();
 
         // Both PoPs valid → verification succeeds
         assert!(verify_aggregate_with_pop(
@@ -949,7 +941,7 @@ mod tests {
         let kp3 = BlsKeypair::generate(&[30u8; 32]).unwrap();
         let pop3 = BlsProofOfPossession::generate(&kp3);
 
-        let agg_sig = aggregate_signatures(&[sig1, sig2]).unwrap();
+        let agg_sig = aggregate_signatures_unchecked(&[sig1, sig2]).unwrap();
 
         // PoP mismatch: pop3 is for kp3, not kp2 → verification fails
         assert!(!verify_aggregate_with_pop(

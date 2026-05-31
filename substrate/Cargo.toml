@@ -80,6 +80,7 @@ persistent-storage = ["omnia-consensus/persistent-storage"]
 network = ["dep:omnia-network", "omnia-network/network", "dep:snap"]
 zk = ["dep:omnia-adapters", "omnia-adapters/arkworks"]
 ethereum-live = ["dep:omnia-adapters", "omnia-adapters/ethereum-live"]
+deprecated-dkg = ["omnia-crypto/deprecated-dkg"]
 
 [dev-dependencies]
 tokio-test = "0.4"

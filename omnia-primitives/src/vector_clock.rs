@@ -232,7 +232,7 @@ impl VectorClock {
             let clock = u64::from_le_bytes(
                 bytes[offset + 32..offset + 40]
                     .try_into()
-                    .expect("slice is exactly 8 bytes per bounds check above"),
+                    .map_err(|_| VectorClockError::InvalidNodeId("expected 8 bytes for u64".to_string()))?,
             );
             if clocks.insert(node_id, clock).is_some() {
                 return Err(VectorClockError::InvalidNodeId(

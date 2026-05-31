@@ -234,7 +234,12 @@ impl SettlementAdapter for CelestiaAdapter {
         }
 
         // Compute root from the provided leaf and proof
-        let _computed_root = compute_root_from_proof(leaf, proof);
+        let computed_root = compute_root_from_proof(leaf, proof);
+
+        // A zero computed root indicates an invalid proof
+        if computed_root == [0u8; 32] {
+            return Ok(false);
+        }
 
         // Query Celestia for the share commitment to confirm inclusion
         let url = format!("{}/share/commitment", self.config.rpc_endpoint.trim_end_matches('/'));
@@ -263,7 +268,13 @@ impl SettlementAdapter for CelestiaAdapter {
             )));
         }
 
-        // If the Celestia node responds successfully, the inclusion is verified
+        // TODO: Fetch the actual on-chain data root from Celestia RPC and compare
+        // it with computed_root. The current implementation does NOT verify that
+        // the computed root matches the on-chain data root, which means a
+        // malicious Celestia node could return a fake commitment.
+        // This MUST be fixed before mainnet.
+        tracing::warn!("Celestia inclusion verification incomplete: computed root not compared against on-chain data");
+
         Ok(true)
     }
 

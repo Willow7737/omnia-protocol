@@ -43,17 +43,19 @@ pub use keystore::{EncryptedKeyStore, KeyPurpose, KeyRotationProof, KeyStoreErro
 
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, aggregate_signatures_dedup, verify_aggregate,
+    aggregate_public_keys, aggregate_signatures, aggregate_signatures_unchecked, verify_aggregate,
     verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 
 #[cfg(feature = "bls")]
-#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
-    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager,
-    ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult, FeldmanVssSession, KeyShare,
+    PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
+
+#[cfg(all(feature = "bls", feature = "deprecated-dkg"))]
+#[allow(deprecated)]
+pub use threshold::DkgSession;
 
 pub use vrf::{
     deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,

@@ -49,8 +49,8 @@ pub fn deserialize_with_compression<T: DeserializeOwned>(data: &[u8]) -> Result<
     }
     let compression = data[0];
     let payload = &data[1..];
-    let decompressed = match compression {
-        COMPRESSION_NONE => payload.to_vec(),
+    match compression {
+        COMPRESSION_NONE => postcard::from_bytes(payload).map_err(|e| e.to_string()),
         COMPRESSION_SNAPPY => {
             // Check the declared decompressed size before allocating.
             let decompressed_len = snap::raw::decompress_len(payload).map_err(|e| e.to_string())?;
@@ -61,9 +61,9 @@ pub fn deserialize_with_compression<T: DeserializeOwned>(data: &[u8]) -> Result<
                 ));
             }
             let mut decoder = snap::raw::Decoder::new();
-            decoder.decompress_vec(payload).map_err(|e| e.to_string())?
+            let decompressed = decoder.decompress_vec(payload).map_err(|e| e.to_string())?;
+            postcard::from_bytes(&decompressed).map_err(|e| e.to_string())
         }
-        _ => return Err(format!("unknown compression algorithm: {}", compression)),
-    };
-    postcard::from_bytes(&decompressed).map_err(|e| e.to_string())
+        _ => Err(format!("unknown compression algorithm: {}", compression)),
+    }
 }

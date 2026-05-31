@@ -89,8 +89,21 @@ impl PqcKeyRotationManager {
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
             let signature = ed25519_dalek::Signature::try_from(request.authorization_sig.as_slice())
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;
-            // The message being signed is the rotation request details
-            let message = format!("{}:{}", request.new_phase as u8, request.effective_at);
+            // The message being signed includes nonce and new key commitment
+            // to prevent replay attacks. The nonce is derived from the current
+            // public key, binding the signature to the current key state.
+            let nonce = blake3::hash(
+                &self
+                    .current_ed25519_public
+                    .expect("current_ed25519_public must be set before rotation"),
+            );
+            let message = format!(
+                "{}:{}:{}:{}",
+                request.new_phase as u8,
+                request.effective_at,
+                hex::encode(nonce.as_bytes()),
+                hex::encode(request.new_key.ed25519)
+            );
             verifying_key
                 .verify(message.as_bytes(), &signature)
                 .map_err(|_| KeyRotationError::InvalidAuthorizationSignature)?;

@@ -3,7 +3,7 @@
 //! Refactored from std::sync::Mutex to tokio::sync::RwLock to prevent deadlocks
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -27,10 +27,12 @@ const MAX_PENDING_EVENTS: usize = 100_000;
 const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 
 /// Maximum number of seen event IDs to retain for dedup.
-/// When exceeded, the entire set is cleared (it is only a dedup cache,
-/// losing old entries is acceptable — at worst, a duplicate event is
-/// reprocessed idempotently).
+/// When exceeded, entries older than SEEN_EVENTS_RETAIN_ROUNDS processing
+/// rounds are evicted.
 const MAX_SEEN_EVENTS: usize = 100_000;
+
+/// Number of processing rounds to retain seen event IDs before eviction.
+const SEEN_EVENTS_RETAIN_ROUNDS: u64 = 10_000;
 
 /// Configuration for the gossip protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,7 +191,9 @@ pub struct GossipProtocol {
     stats: GossipStats,
     last_sync: Instant,
     running: bool,
-    seen_events: HashSet<[u8; 32]>,
+    seen_events: HashMap<[u8; 32], u64>,
+    /// Monotonically increasing round counter for seen_events eviction.
+    seen_events_round: u64,
     /// Tracks when each peer was last heard from (for partition detection).
     last_seen: HashMap<PeerId, Instant>,
     /// Whether a partition is currently detected (to avoid duplicate events).
@@ -212,7 +216,8 @@ impl GossipProtocol {
             stats: GossipStats::default(),
             last_sync: Instant::now(),
             running: false,
-            seen_events: HashSet::new(),
+            seen_events: HashMap::new(),
+            seen_events_round: 0,
             last_seen: HashMap::new(),
             partition_active: false,
             rate_limiter,
@@ -537,25 +542,25 @@ impl GossipProtocol {
                         continue;
                     }
 
-                    if !self.seen_events.contains(&event.id) {
-                        self.seen_events.insert(event.id);
+                    if !self.seen_events.contains_key(&event.id) {
+                        self.seen_events.insert(event.id, self.seen_events_round);
                         // FIX 8: Enforce max_pending limit
                         if self.pending_events.len() >= self.config.max_pending {
-                            self.pending_events.pop_front(); // drop oldest to make room
+                            if let Some(dropped) = self.pending_events.pop_front() {
+                                tracing::warn!("Pending events queue overflow - dropping event {:?}", dropped.id);
+                            }
                         }
                         self.pending_events.push_back(*event);
                         self.stats.events_received += 1;
-                        // FIX 3: Evict random half instead of clearing everything
+                        // Evict old entries using round-based eviction
+                        self.seen_events_round += 1;
                         if self.seen_events.len() > MAX_SEEN_EVENTS {
-                            let to_remove: Vec<_> =
-                                self.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
-                            for id in to_remove {
-                                self.seen_events.remove(&id);
-                            }
+                            let cutoff = self.seen_events_round.saturating_sub(SEEN_EVENTS_RETAIN_ROUNDS);
+                            self.seen_events.retain(|_, &mut round| round > cutoff);
                             tracing::debug!(
-                                "seen_events exceeded {}, evicted {} entries",
+                                "seen_events exceeded {}, evicted entries older than round {}",
                                 MAX_SEEN_EVENTS,
-                                MAX_SEEN_EVENTS / 2
+                                cutoff
                             );
                         }
                     }
@@ -578,8 +583,8 @@ impl GossipProtocol {
         // FIX 4: Batch graph writes — acquire write lock once for all inserts
         {
             let mut graph = self.graph.write().await;
-            for event in &to_process {
-                match graph.insert(event.clone()) {
+            for event in to_process {
+                match graph.insert(event) {
                     Ok(ids) => {
                         self.stats.events_accepted += 1;
                         inserted_ids.extend(ids);
@@ -1003,25 +1008,23 @@ mod tests {
             id[1] = ((i >> 8) & 0xFF) as u8;
             id[2] = ((i >> 16) & 0xFF) as u8;
             id[3] = ((i >> 24) & 0xFF) as u8;
-            protocol.seen_events.insert(id);
+            protocol.seen_events.insert(id, i as u64);
         }
 
-        // The set should have exactly MAX_SEEN_EVENTS + 1 entries
+        // The map should have exactly MAX_SEEN_EVENTS + 1 entries
         assert_eq!(protocol.seen_events.len(), MAX_SEEN_EVENTS + 1);
 
-        // Simulate the cleanup that happens in process_pending_events
-        // (evicts half instead of clearing everything)
+        // Simulate the round-based cleanup that happens in process_pending_events
+        protocol.seen_events_round = (MAX_SEEN_EVENTS + 1) as u64;
         if protocol.seen_events.len() > MAX_SEEN_EVENTS {
-            let to_remove: Vec<_> = protocol.seen_events.iter().take(MAX_SEEN_EVENTS / 2).copied().collect();
-            for id in to_remove {
-                protocol.seen_events.remove(&id);
-            }
+            let cutoff = protocol.seen_events_round.saturating_sub(SEEN_EVENTS_RETAIN_ROUNDS);
+            protocol.seen_events.retain(|_, &mut round| round > cutoff);
         }
 
-        // After eviction, approximately half the entries should remain
+        // After eviction, recent entries should remain
         assert!(
             protocol.seen_events.len() > 0,
-            "Eviction should keep approximately half the entries, not clear everything"
+            "Eviction should keep recent entries, not clear everything"
         );
         assert!(
             protocol.seen_events.len() <= MAX_SEEN_EVENTS,

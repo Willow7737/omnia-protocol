@@ -357,6 +357,20 @@ pub fn scalar_to_g1_public_key(scalar: &Scalar) -> [u8; G1_COMPRESSED_SIZE] {
     }
 }
 
+/// Validate that a byte slice represents a valid compressed G1 point on BLS12-381.
+///
+/// Returns `true` if the bytes can be successfully decompressed as a G1 point,
+/// `false` otherwise. This is used for commitment verification in DKG.
+pub fn validate_g1_point(bytes: &[u8]) -> bool {
+    if bytes.len() != G1_COMPRESSED_SIZE {
+        return false;
+    }
+    unsafe {
+        let mut pt = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+        blst_p1_uncompress(pt.as_mut_ptr(), bytes.as_ptr()) == BLST_ERROR::BLST_SUCCESS
+    }
+}
+
 /// Aggregate multiple compressed G1 points by point addition.
 ///
 /// Deserializes each 48-byte compressed G1 point, adds them together
@@ -368,7 +382,7 @@ pub fn scalar_to_g1_public_key(scalar: &Scalar) -> [u8; G1_COMPRESSED_SIZE] {
 /// * `points` — Slice of 48-byte compressed G1 point references
 ///
 /// * `Returns` — Compressed G1 point as `[u8; 48]`, or `None` if any point is invalid.
-pub fn aggregate_g1_points(points: &[&Vec<u8>]) -> Option<[u8; G1_COMPRESSED_SIZE]> {
+pub fn aggregate_g1_points(points: &[&[u8]]) -> Option<[u8; G1_COMPRESSED_SIZE]> {
     if points.is_empty() {
         return None;
     }
@@ -561,13 +575,11 @@ pub fn reconstruct_secret(shares: &[(usize, Scalar)]) -> Option<Scalar> {
         return None;
     }
 
-    // Check for duplicate indices
-    let indices: Vec<usize> = shares.iter().map(|(i, _)| *i).collect();
-    for i in 0..indices.len() {
-        for j in (i + 1)..indices.len() {
-            if indices[i] == indices[j] {
-                return None;
-            }
+    // Check for duplicate indices using HashSet (O(n) instead of O(n²))
+    let mut seen_indices = std::collections::HashSet::new();
+    for (idx, _) in shares {
+        if !seen_indices.insert(*idx) {
+            return None; // Duplicate index
         }
     }
 

@@ -76,4 +76,8 @@ pub enum EconomicsError {
     /// A validation check failed (e.g., unauthorized operation).
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
+
+    /// Unauthorized operation (e.g., minting without admin key).
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
 }

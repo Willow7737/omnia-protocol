@@ -24,6 +24,7 @@
 //! - `merkle_proof_directions` — Direction bits for each event's Merkle path
 
 use ark_bn254::Fr;
+use ark_ff::PrimeField;
 use ark_ff::Zero;
 use ark_r1cs_std::alloc::AllocVar;
 use ark_r1cs_std::boolean::Boolean;
@@ -108,9 +109,11 @@ impl BatchProofCircuit {
 
         let event_count = Fr::from(num_events as u64);
 
-        // Compute batch_id as Poseidon(merkle_root, event_count)
-        // For the circuit, we compute this inside generate_constraints
-        let batch_id = None; // Will be computed in-circuit
+        // Compute batch_id off-circuit as Poseidon(merkle_root, event_count)
+        // so the circuit can verify it matches the in-circuit computation.
+        let batch_id = crate::poseidon::poseidon_hash_offchain(merkle_root, event_count)
+            .ok()
+            .unwrap_or(Fr::zero());
 
         let merkle_siblings: Vec<Vec<Option<Fr>>> = merkle_proofs
             .iter()
@@ -124,7 +127,7 @@ impl BatchProofCircuit {
 
         Self {
             batch_merkle_root: Some(merkle_root),
-            batch_id,
+            batch_id: Some(batch_id),
             event_count: Some(event_count),
             event_hashes: event_hashes.into_iter().map(Some).collect(),
             merkle_siblings,
@@ -205,6 +208,15 @@ impl ConstraintSynthesizer<Fr> for BatchProofCircuit {
 
         // Constrain event_count to match the number of events
         event_count.enforce_equal(&FpVar::constant(Fr::from(num_events as u64)))?;
+
+        // If the batch is empty (num_events == 0), the merkle_root must be the
+        // domain-separated empty root, preventing a malicious prover from claiming
+        // an arbitrary root for an empty batch.
+        if num_events == 0 {
+            let empty_root_bytes = blake3::derive_key("OMNIA-MERKLE-EMPTY-ROOT", &[]);
+            let empty_root_fr = Fr::from_be_bytes_mod_order(&empty_root_bytes);
+            batch_merkle_root.enforce_equal(&FpVar::constant(empty_root_fr))?;
+        }
 
         // For each event: verify Merkle inclusion path
         // All paths should converge to the same Merkle root

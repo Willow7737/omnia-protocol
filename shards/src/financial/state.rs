@@ -106,6 +106,8 @@ pub struct FinancialState {
     ///
     /// TODO: Replace with on-chain governance for mint authorization.
     pub mint_authority: Option<[u8; 32]>,
+    /// Result of the last BalanceQuery, stored for retrieval.
+    last_query_result: Option<u64>,
 }
 
 impl FinancialState {
@@ -122,6 +124,7 @@ impl FinancialState {
             balances: HashMap::new(),
             total_supply: 0,
             mint_authority: None,
+            last_query_result: None,
         }
     }
 
@@ -133,7 +136,13 @@ impl FinancialState {
             balances: HashMap::new(),
             total_supply: 0,
             mint_authority: Some(mint_authority),
+            last_query_result: None,
         }
+    }
+
+    /// Get the result of the last BalanceQuery.
+    pub fn last_query_result(&self) -> Option<u64> {
+        self.last_query_result
     }
 
     /// Get the balance of an account (0 if the account doesn't exist).
@@ -218,8 +227,10 @@ impl FinancialState {
                 self.total_supply -= amount;
                 Ok(())
             }
-            FinancialOp::BalanceQuery { .. } => {
-                // Read-only — no state mutation.
+            FinancialOp::BalanceQuery { account } => {
+                let balance = self.balances.get(account).map(|b| b.balance).unwrap_or(0);
+                // Store the queried balance for retrieval
+                self.last_query_result = Some(balance);
                 Ok(())
             }
         }

@@ -105,6 +105,9 @@ impl PeerScoreTracker {
         Self { scores: HashMap::new() }
     }
 
+    /// Maximum number of peer scores to retain before pruning.
+    const MAX_PEER_SCORES: usize = 10_000;
+
     /// Record a validation result for a peer's message.
     ///
     /// Valid messages add +1.0 to the peer's score; invalid messages
@@ -115,6 +118,32 @@ impl PeerScoreTracker {
             *score += 1.0;
         } else {
             *score -= 10.0;
+        }
+        self.prune_if_needed();
+    }
+
+    /// Update a peer's score directly.
+    ///
+    /// Also prunes lowest-scored peers when the tracker exceeds
+    /// `MAX_PEER_SCORES` entries.
+    pub fn update_score(&mut self, peer_id: &PeerId, score: f64) {
+        self.scores.insert(*peer_id, score);
+        self.prune_if_needed();
+    }
+
+    /// Prune lowest-scored peers when the tracker exceeds MAX_PEER_SCORES.
+    fn prune_if_needed(&mut self) {
+        if self.scores.len() > Self::MAX_PEER_SCORES {
+            let mut entries: Vec<_> = self.scores.iter().collect();
+            entries.sort_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal));
+            let to_remove: Vec<_> = entries
+                .iter()
+                .take(entries.len() - Self::MAX_PEER_SCORES / 2)
+                .map(|(peer, _)| **peer)
+                .collect();
+            for peer in to_remove {
+                self.scores.remove(&peer);
+            }
         }
     }
 
@@ -382,10 +411,9 @@ impl OmniaNetwork {
             .build()?;
 
         // ── Kademlia DHT config (H-4) ────────────────────────────────
-        let kademlia_config = libp2p::kad::Config::new(
-            StreamProtocol::try_from_owned(config.dht_protocol.clone())
-                .expect("DHT protocol name must be a valid StreamProtocol"),
-        );
+        let stream_protocol = StreamProtocol::try_from_owned(config.dht_protocol.clone())
+            .map_err(|e| format!("Invalid DHT protocol name: {e}"))?;
+        let kademlia_config = libp2p::kad::Config::new(stream_protocol);
 
         // ── AutoNAT config ───────────────────────────────────────────
         let autonat_config = libp2p::autonat::Config {
@@ -462,7 +490,7 @@ impl OmniaNetwork {
             }
         }
 
-        let (event_tx, event_rx) = mpsc::channel(1000);
+        let (event_tx, event_rx) = mpsc::channel(10_000);
 
         // Periodic Kademlia bootstrap every 5 minutes
         let kademlia_bootstrap_interval = tokio::time::interval(std::time::Duration::from_secs(300));
@@ -577,14 +605,17 @@ impl OmniaNetwork {
                 message,
                 ..
             })) => {
-                let _ = self
+                if let Err(e) = self
                     .event_tx
                     .send(NetworkEvent::GossipReceived {
                         topic: message.topic.to_string(),
                         data: message.data,
                         propagation_source,
                     })
-                    .await;
+                    .await
+                {
+                    tracing::warn!("Dropped gossip event - channel full: {}", e);
+                }
             }
             // H-4: Kademlia DHT event handling
             SwarmEvent::Behaviour(OmniaBehaviourEvent::Kademlia(event)) => {
@@ -643,10 +674,14 @@ impl OmniaNetwork {
                 tracing::info!("Listening on {}", address);
             }
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                let _ = self.event_tx.send(NetworkEvent::PeerConnected(peer_id)).await;
+                if let Err(e) = self.event_tx.send(NetworkEvent::PeerConnected(peer_id)).await {
+                    tracing::warn!("Dropped peer connected event - channel full: {}", e);
+                }
             }
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                let _ = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await;
+                if let Err(e) = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await {
+                    tracing::warn!("Dropped peer disconnected event - channel full: {}", e);
+                }
             }
             _ => {}
         }

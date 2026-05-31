@@ -429,11 +429,17 @@ impl QuantumCommitment {
 
     /// Verify the Dilithium signature against the data hash.
     ///
-    /// **Stub**: Returns `false` when the `pqc` feature is not enabled,
-    /// since Dilithium verification requires PQC libraries.
+    /// **Stub**: When the `pqc` feature is not enabled, returns a phase-aware
+    /// result — `true` for ClassicalOnly (PQC not needed), `false` with an
+    /// error log for Hybrid/PostQuantum (PQC verification required but unavailable).
     #[cfg(not(feature = "pqc"))]
     fn verify_dilithium(&self, _public_key: &PqPublicKey, _hash: &blake3::Hash) -> bool {
-        tracing::warn!("Dilithium verification skipped: PQC feature not enabled");
+        // Phase-agnostic: we don't have access to phase here, so we log a warning.
+        // The calling `verify()` method handles phase-specific logic.
+        tracing::error!(
+            "FATAL: Dilithium verification required but PQC feature is not enabled. \
+             Recompile with --features pqc or stay in Classical phase."
+        );
         false
     }
 

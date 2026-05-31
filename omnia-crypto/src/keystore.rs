@@ -249,48 +249,51 @@ impl EncryptedKeyStore {
             match aes_gcm_decrypt(&encrypted_seckey, passphrase) {
                 Ok(plain) => (plain, false),
                 Err(_) => {
-                    // Fallback: try legacy XOR decryption
-                    //
-                    // DEPRECATION WARNING: The XOR fallback will be removed in a future
-                    // release. XOR encryption provides no authentication and is vulnerable
-                    // to tampering. Keystores loaded via this path are automatically
-                    // upgraded to AES-256-GCM on the next write/rotate, but the fallback
-                    // itself will be removed in v0.4.0. Migrate all keystores by running
-                    // `rotate()` with the current passphrase.
-                    tracing::warn!(
-                        "⚠️  DEPRECATED: XOR keystore fallback used. \
-                         This fallback will be removed in v0.4.0. \
-                         Migrate by calling rotate() with the current passphrase to upgrade \
-                         to AES-256-GCM."
-                    );
-                    #[allow(deprecated)]
-                    let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
-                    if xor_decrypted.len() == 32 {
-                        tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
-                        (xor_decrypted, true)
-                    } else {
-                        return Err(KeyStoreError::IncorrectPassphrase);
+                    // XOR fallback removed for security (downgrade attack vector).
+                    // If you need to migrate a legacy XOR keystore, enable the
+                    // `legacy-xor` feature flag.
+                    #[cfg(feature = "legacy-xor")]
+                    {
+                        tracing::warn!(
+                            "⚠️  DEPRECATED: XOR keystore fallback used. \
+                             This fallback will be removed in v0.4.0. \
+                             Migrate by calling rotate() with the current passphrase to upgrade \
+                             to AES-256-GCM."
+                        );
+                        #[allow(deprecated)]
+                        let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+                        if xor_decrypted.len() == 32 {
+                            tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
+                            (xor_decrypted, true)
+                        } else {
+                            return Err(KeyStoreError::IncorrectPassphrase);
+                        }
                     }
+                    #[cfg(not(feature = "legacy-xor"))]
+                    return Err(KeyStoreError::IncorrectPassphrase);
                 }
             }
         } else {
-            // Too short for AES-256-GCM, try legacy XOR
-            //
-            // DEPRECATION WARNING: See above — this fallback will be removed in v0.4.0.
-            tracing::warn!(
-                "⚠️  DEPRECATED: XOR keystore fallback used (short ciphertext). \
-                 This fallback will be removed in v0.4.0. \
-                 Migrate by calling rotate() with the current passphrase to upgrade \
-                 to AES-256-GCM."
-            );
-            #[allow(deprecated)]
-            let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
-            if xor_decrypted.len() == 32 {
-                tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
-                (xor_decrypted, true)
-            } else {
-                return Err(KeyStoreError::IncorrectPassphrase);
+            // Too short for AES-256-GCM — try legacy XOR only if feature enabled
+            #[cfg(feature = "legacy-xor")]
+            {
+                tracing::warn!(
+                    "⚠️  DEPRECATED: XOR keystore fallback used (short ciphertext). \
+                     This fallback will be removed in v0.4.0. \
+                     Migrate by calling rotate() with the current passphrase to upgrade \
+                     to AES-256-GCM."
+                );
+                #[allow(deprecated)]
+                let xor_decrypted = xor_decrypt(&encrypted_seckey, passphrase);
+                if xor_decrypted.len() == 32 {
+                    tracing::warn!("⚠️  Loaded keystore with deprecated XOR encryption — will upgrade to AES-256-GCM on next write/rotate");
+                    (xor_decrypted, true)
+                } else {
+                    return Err(KeyStoreError::IncorrectPassphrase);
+                }
             }
+            #[cfg(not(feature = "legacy-xor"))]
+            return Err(KeyStoreError::IncorrectPassphrase);
         };
 
         if decrypted.len() != 32 {
@@ -372,14 +375,18 @@ impl EncryptedKeyStore {
             timestamp: now_ms,
         };
 
-        // Write new public key
+        // Write new public key atomically via temp file
         let pubkey_path = self.dir.join("pubkey");
-        std::fs::write(&pubkey_path, new_pubkey.to_bytes())?;
+        let pubkey_temp = pubkey_path.with_extension("tmp");
+        std::fs::write(&pubkey_temp, new_pubkey.to_bytes())?;
+        std::fs::rename(&pubkey_temp, &pubkey_path)?;
 
-        // Write new encrypted secret key using AES-256-GCM
+        // Write new encrypted secret key atomically via temp file
         let seckey_path = self.dir.join("seckey.enc");
+        let seckey_temp = seckey_path.with_extension("tmp");
         let encrypted = aes_gcm_encrypt(new_keypair.to_bytes().as_slice(), new_passphrase)?;
-        std::fs::write(&seckey_path, encrypted)?;
+        std::fs::write(&seckey_temp, encrypted)?;
+        std::fs::rename(&seckey_temp, &seckey_path)?;
 
         tracing::info!(
             dir = %self.dir.display(),
@@ -456,10 +463,12 @@ impl EncryptedKeyStore {
         data_dir: &Path,
     ) -> KeyStoreResult<Self> {
         let seed = mnemonic.to_seed(passphrase.unwrap_or(""));
-        // Derive the Ed25519 keypair deterministically from the mnemonic
+        // Use first 32 bytes of 64-byte seed for Ed25519 key derivation
+        // and last 32 bytes for encryption key derivation.
+        // Previously both used the same first 32 bytes, which meant the
+        // encryption key was deterministically derivable from the Ed25519 key.
         let keypair = Self::derive_ed25519_keypair_from_seed(&seed[..32]);
-        // Derive the keystore encryption key from the BIP-39 seed
-        let encryption_key = Self::derive_key_from_seed(&seed[..32])?;
+        let encryption_key = Self::derive_key_from_seed(&seed[32..64])?;
         Self::initialize_with_deterministic_key(data_dir, &encryption_key, keypair)
     }
 
@@ -750,9 +759,24 @@ fn aes_gcm_encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
 }
 
 /// Encrypt data using AES-256-GCM with a pre-derived key.
+///
+/// Always generates a random 32-byte salt and derives the encryption key
+/// via HKDF with that random salt, even when the key material is already
+/// derived. This ensures proper key separation and prevents nonce-reuse
+/// vulnerabilities.
 fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u8>> {
-    let cipher =
-        Aes256Gcm::new_from_slice(key).map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
+    // Generate a random salt for key derivation even for pre-derived keys.
+    // This ensures proper key separation and avoids deterministic encryption.
+    let salt = generate_salt();
+
+    // Derive the actual encryption key via HKDF with the random salt
+    let hkdf = Hkdf::<Sha256>::new(Some(&salt), key);
+    let mut derived_key = [0u8; 32];
+    hkdf.expand(b"omnia-keystore-mnemonic-enc-v1", &mut derived_key)
+        .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
+
+    let cipher = Aes256Gcm::new_from_slice(&derived_key)
+        .map_err(|_| KeyStoreError::InvalidFormat("AES key derivation failed".into()))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
@@ -763,8 +787,6 @@ fn aes_gcm_encrypt_with_key(data: &[u8], key: &[u8; 32]) -> KeyStoreResult<Vec<u
         .map_err(|e| KeyStoreError::EncryptionFailed(e.to_string()))?;
 
     let mut output = Vec::with_capacity(32 + 12 + ciphertext.len());
-    // Use a fixed salt for mnemonic-derived keys (the key itself is already derived with salt)
-    let salt = [0u8; 32]; // Zero salt since key is already derived via HKDF
     output.extend_from_slice(&salt);
     output.extend_from_slice(&nonce_bytes);
     output.extend_from_slice(&ciphertext);
@@ -794,13 +816,41 @@ fn aes_gcm_decrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>, KeyStoreErr
         .map_err(|_| KeyStoreError::IncorrectPassphrase)
 }
 
-/// Derive a 32-byte encryption key using HKDF-SHA256.
+/// Derive a 32-byte encryption key using HKDF-SHA256 with key stretching.
+///
+/// Applies 600,000 iterations of HKDF-expand as an intermediate stretching
+/// step before the final key derivation. This makes brute-force attacks on
+/// passphrases significantly more expensive (approximately 600K times slower
+/// per guess compared to a single HKDF invocation).
 fn derive_key_hkdf(passphrase: &str, salt: &[u8]) -> Result<[u8; 32], KeyStoreError> {
-    let hkdf = Hkdf::<Sha256>::new(Some(salt), passphrase.as_bytes());
+    let stretched = stretch_passphrase(passphrase, salt, 600_000)?;
+    let hkdf = Hkdf::<Sha256>::new(Some(salt), &stretched);
     let mut key = [0u8; 32];
     hkdf.expand(b"omnia-keystore-v1", &mut key)
         .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
     Ok(key)
+}
+
+/// Stretch a passphrase using iterative HKDF-expand.
+///
+/// Applies HKDF-expand in a loop for the specified number of iterations.
+/// Each iteration takes the previous output as input keying material.
+/// This provides key stretching similar to PBKDF2 but using HKDF-expand,
+/// making brute-force attacks on low-entropy passphrases much more expensive.
+fn stretch_passphrase(passphrase: &str, salt: &[u8], iterations: u32) -> Result<[u8; 32], KeyStoreError> {
+    let hkdf = Hkdf::<Sha256>::new(Some(salt), passphrase.as_bytes());
+    let mut stretched = [0u8; 32];
+    hkdf.expand(b"omnia-stretch-v1", &mut stretched)
+        .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed: {e}")))?;
+
+    for i in 0..iterations {
+        let hkdf = Hkdf::<Sha256>::new(Some(salt), &stretched);
+        let info = format!("omnia-stretch-v1-iter-{i}");
+        hkdf.expand(info.as_bytes(), &mut stretched)
+            .map_err(|e| KeyStoreError::Crypto(format!("HKDF expand failed at iteration {i}: {e}")))?;
+    }
+
+    Ok(stretched)
 }
 
 /// Generate a random 32-byte salt.
@@ -859,7 +909,7 @@ fn slip0010_derive_child(parent_key: &[u8; 32], chain_code: &[u8; 32], index: u3
 /// **Deprecated**: Use [`aes_gcm_encrypt`] instead. This function provides
 /// no authentication, no salt, and no IV — it is not suitable for production.
 #[deprecated(since = "0.2.0", note = "Use aes_gcm_encrypt instead — XOR encryption is not secure")]
-#[allow(deprecated)]
+#[allow(deprecated, dead_code)]
 fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     let key = derive_key(passphrase);
     data.iter().enumerate().map(|(i, &b)| b ^ key[i % key.len()]).collect()
@@ -869,7 +919,7 @@ fn xor_encrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
 ///
 /// **Deprecated**: Use [`aes_gcm_decrypt`] instead.
 #[deprecated(since = "0.2.0", note = "Use aes_gcm_decrypt instead — XOR encryption is not secure")]
-#[allow(deprecated)]
+#[allow(deprecated, dead_code)]
 fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     xor_encrypt(data, passphrase)
 }
@@ -881,6 +931,7 @@ fn xor_decrypt(data: &[u8], passphrase: &str) -> Vec<u8> {
     since = "0.2.0",
     note = "Use derive_key_hkdf instead — deterministic key derivation without salt is insecure"
 )]
+#[allow(dead_code)]
 fn derive_key(passphrase: &str) -> [u8; 32] {
     blake3_hash_domain(b"OMNIA-KEY-DERIVATION-V1", passphrase.as_bytes())
 }
@@ -1116,6 +1167,7 @@ mod tests {
     // ----- Backward compatibility tests -----
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     fn test_load_legacy_xor_keystore() {
         let dir = TempDir::new().expect("temp dir");
         let keypair = generate_keypair();
@@ -1140,6 +1192,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     fn test_load_legacy_xor_wrong_passphrase() {
         let dir = TempDir::new().expect("temp dir");
         let keypair = generate_keypair();
@@ -1160,6 +1213,7 @@ mod tests {
     // ----- Legacy XOR tests (deprecated but still tested) -----
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     #[allow(deprecated)]
     fn test_xor_encrypt_decrypt_roundtrip() {
         let data = b"hello world this is a test of encryption";
@@ -1170,6 +1224,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "legacy-xor")]
     #[allow(deprecated)]
     fn test_xor_encrypt_wrong_passphrase() {
         let data = b"hello world";

@@ -84,8 +84,9 @@ impl ReplicationConfig {
     /// Returns the primary snapshot directory (first replica dir).
     ///
     /// Used by [`find_latest_snapshot`] as the default search location.
-    pub fn primary_dir(&self) -> &PathBuf {
-        self.replica_dirs.first().expect("replica_dirs must not be empty")
+    /// Returns an error if no replica directories are configured.
+    pub fn primary_dir(&self) -> Result<&PathBuf, &'static str> {
+        self.replica_dirs.first().ok_or("No replica directories configured")
     }
 }
 
@@ -370,7 +371,7 @@ mod tests {
     #[test]
     fn test_replication_config_primary_dir() {
         let config = ReplicationConfig::new(PathBuf::from("/tmp/test-snapshots"));
-        assert_eq!(config.primary_dir(), &PathBuf::from("/tmp/test-snapshots"));
+        assert_eq!(config.primary_dir().unwrap(), &PathBuf::from("/tmp/test-snapshots"));
     }
 
     #[test]

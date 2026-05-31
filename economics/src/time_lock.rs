@@ -64,6 +64,9 @@ pub struct TimeLockConfig {
     /// Whether to enforce the lock duration strictly (no early withdrawals).
     ///
     /// Default: true. Set to false only in testing.
+    /// TODO: Currently unused - enforcement is handled by `is_mature()` check.
+    /// Will be used for configurable grace periods in future versions.
+    #[allow(dead_code)]
     pub strict_enforcement: bool,
 }
 

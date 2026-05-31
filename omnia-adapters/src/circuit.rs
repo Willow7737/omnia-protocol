@@ -116,8 +116,10 @@ impl OperationType {
 /// R1CS circuit for proving valid L2 state transitions.
 ///
 /// The circuit takes an old state root, a new state root, and an event count
-/// as witnesses, and enforces that `new_state_root == expected_new_state_root`
-/// where `expected_new_state_root` is a public input.
+/// as witnesses, and enforces:
+/// - `old_state_root == expected_old_state_root` (public input)
+/// - `new_state_root == expected_new_state_root` (public input)
+/// - `event_count != 0` (batch must contain at least one event)
 ///
 /// # Witnesses (private)
 ///
@@ -127,7 +129,8 @@ impl OperationType {
 ///
 /// # Public inputs
 ///
-/// - `expected_new_state_root` — the state root that the verifier expects
+/// - `expected_old_state_root` — the state root the verifier expects before the batch
+/// - `expected_new_state_root` — the state root that the verifier expects after the batch
 #[derive(Clone)]
 pub struct RollupCircuit {
     /// The state root before the batch was applied (witness).
@@ -136,6 +139,8 @@ pub struct RollupCircuit {
     new_state_root: Option<Fr>,
     /// The number of events in the batch (witness).
     event_count: Option<Fr>,
+    /// The expected old state root (public input).
+    expected_old_state_root: Option<Fr>,
     /// The expected new state root (public input).
     expected_new_state_root: Option<Fr>,
 }
@@ -152,35 +157,38 @@ impl RollupCircuit {
     /// * `old` — 32-byte old state root
     /// * `new` — 32-byte new state root
     /// * `event_count` — number of events in the batch
+    /// * `expected_old` — 32-byte expected old state root (public input)
     ///
     /// # Security
     ///
-    /// The `expected_new_state_root` is set from the `new` parameter,
-    /// meaning the circuit will enforce that the witness new state root
-    /// matches the public input. A proof is only valid if the prover
-    /// knows a witness that satisfies this constraint.
-    pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64) -> Self {
+    /// The circuit enforces both `old_state_root == expected_old_state_root`
+    /// and `new_state_root == expected_new_state_root`, preventing a
+    /// malicious prover from supplying arbitrary state roots. The `event_count`
+    /// is constrained to be non-zero, preventing empty-batch proofs.
+    pub fn from_state_roots(old: [u8; 32], new: [u8; 32], event_count: u64, expected_old: [u8; 32]) -> Self {
         Self {
             old_state_root: Some(Fr::from_be_bytes_mod_order(&old)),
             new_state_root: Some(Fr::from_be_bytes_mod_order(&new)),
             event_count: Some(Fr::from(event_count)),
+            expected_old_state_root: Some(Fr::from_be_bytes_mod_order(&expected_old)),
             expected_new_state_root: Some(Fr::from_be_bytes_mod_order(&new)),
         }
     }
 
-    /// Returns the public input for this circuit instance.
+    /// Returns the public inputs for this circuit instance.
     ///
-    /// The public input is the expected new state root. This is used
-    /// by the verifier to check the proof without knowing the witnesses.
+    /// The public inputs are `[expected_old_state_root, expected_new_state_root]`.
+    /// These are used by the verifier to check the proof without knowing
+    /// the witnesses.
     ///
     /// # Errors
     ///
-    /// Returns [`SynthesisError::AssignmentMissing`] if the expected
-    /// new state root has not been assigned.
+    /// Returns [`SynthesisError::AssignmentMissing`] if either expected
+    /// state root has not been assigned.
     pub fn public_input(&self) -> Result<Vec<Fr>, SynthesisError> {
-        self.expected_new_state_root
-            .map(|v| vec![v])
-            .ok_or(SynthesisError::AssignmentMissing)
+        let old = self.expected_old_state_root.ok_or(SynthesisError::AssignmentMissing)?;
+        let new = self.expected_new_state_root.ok_or(SynthesisError::AssignmentMissing)?;
+        Ok(vec![old, new])
     }
 
     /// Create a circuit with no assignments (for trusted setup).
@@ -188,11 +196,15 @@ impl RollupCircuit {
     /// The structure (number of witnesses, public inputs, and constraints)
     /// is the same regardless of the actual values. This method produces
     /// a circuit suitable for generating the trusted setup keys.
+    ///
+    /// Note: uses `Fr::from(1u64)` for event_count to satisfy the
+    /// non-zero constraint.
     pub fn empty() -> Self {
         Self {
             old_state_root: Some(Fr::zero()),
             new_state_root: Some(Fr::zero()),
-            event_count: Some(Fr::zero()),
+            event_count: Some(Fr::from(1u64)),
+            expected_old_state_root: Some(Fr::zero()),
             expected_new_state_root: Some(Fr::zero()),
         }
     }
@@ -213,19 +225,28 @@ impl ConstraintSynthesizer<Fr> for RollupCircuit {
             self.event_count.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
-        // Allocate public input
+        // Allocate public inputs
+        let expected_old_state_root =
+            FpVar::<Fr>::new_input(ark_relations::ns!(cs, "expected_old_state_root"), || {
+                self.expected_old_state_root.ok_or(SynthesisError::AssignmentMissing)
+            })?;
+
         let expected_new_state_root =
             FpVar::<Fr>::new_input(ark_relations::ns!(cs, "expected_new_state_root"), || {
                 self.expected_new_state_root.ok_or(SynthesisError::AssignmentMissing)
             })?;
 
-        // Constraint 1: new_state_root == expected_new_state_root
+        // Constraint 1: old_state_root == expected_old_state_root
+        // This prevents a malicious prover from using an arbitrary old root.
+        old_state_root.enforce_equal(&expected_old_state_root)?;
+
+        // Constraint 2: new_state_root == expected_new_state_root
         new_state_root.enforce_equal(&expected_new_state_root)?;
 
-        // old_state_root and event_count are witnesses that participate in the
-        // circuit structure. They are not constrained further in this skeleton,
-        // but will be used when Merkle path verification is added.
-        let _ = (old_state_root, event_count);
+        // Constraint 3: event_count must be non-zero
+        // A batch with zero events should not produce a valid state transition proof.
+        let is_zero = event_count.is_zero()?;
+        is_zero.enforce_equal(&Boolean::constant(false))?;
 
         Ok(())
     }
@@ -619,8 +640,9 @@ impl ConstraintSynthesizer<Fr> for ExpandedRollupCircuit {
 
             // Allocate Merkle path witnesses and verify inclusion
             let proof = &self.merkle_proofs[i];
+            let path_witness = proof.as_ref().ok_or(SynthesisError::AssignmentMissing)?;
             let mut current = event_hash.clone();
-            if let Some(ref path_witness) = proof {
+            {
                 for j in 0..path_witness.siblings.len() {
                     let sibling = FpVar::<Fr>::new_witness(cs.clone(), || {
                         path_witness.siblings[j].ok_or(SynthesisError::AssignmentMissing)
@@ -748,19 +770,21 @@ mod tests {
     fn test_circuit_from_state_roots() {
         let old = [1u8; 32];
         let new = [2u8; 32];
-        let circuit = RollupCircuit::from_state_roots(old, new, 5);
+        let circuit = RollupCircuit::from_state_roots(old, new, 5, old);
 
         let public_input = circuit.public_input().expect("public input should be available");
-        assert_eq!(public_input.len(), 1);
-        assert_eq!(public_input[0], Fr::from_be_bytes_mod_order(&new));
+        assert_eq!(public_input.len(), 2);
+        assert_eq!(public_input[0], Fr::from_be_bytes_mod_order(&old)); // expected_old
+        assert_eq!(public_input[1], Fr::from_be_bytes_mod_order(&new)); // expected_new
     }
 
     #[test]
     fn test_circuit_empty_public_input() {
         let circuit = RollupCircuit::empty();
         let public_input = circuit.public_input().expect("public input should be available");
-        assert_eq!(public_input.len(), 1);
-        assert_eq!(public_input[0], Fr::zero());
+        assert_eq!(public_input.len(), 2);
+        assert_eq!(public_input[0], Fr::zero()); // expected_old
+        assert_eq!(public_input[1], Fr::zero()); // expected_new
     }
 
     #[test]

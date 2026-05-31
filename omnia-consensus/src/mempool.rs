@@ -4,7 +4,7 @@
 //! in a leader's block proposal. It is bounded to prevent unbounded memory
 //! growth under load.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use omnia_primitives::{Event, EventId};
 
@@ -25,9 +25,14 @@ pub enum MempoolError {
 ///
 /// Events are stored in FIFO order. When a leader produces a block,
 /// it drains up to `max_block_events` from the front of the queue.
+///
+/// Internally maintains a `HashMap<EventId, usize>` index alongside the
+/// `VecDeque` for O(1) lookups by event ID.
 #[derive(Debug)]
 pub struct Mempool {
     events: VecDeque<Event>,
+    /// Index for O(1) lookups by event ID.
+    event_index: HashMap<EventId, usize>,
     max_size: usize,
 }
 
@@ -36,6 +41,7 @@ impl Mempool {
     pub fn new(max_size: usize) -> Self {
         Self {
             events: VecDeque::with_capacity(max_size.min(1024)),
+            event_index: HashMap::with_capacity(max_size.min(1024)),
             max_size,
         }
     }
@@ -50,14 +56,21 @@ impl Mempool {
                 max: self.max_size,
             });
         }
+        let event_id = event.id;
         self.events.push_back(event);
+        // Index is the position of the newly inserted event
+        self.event_index.insert(event_id, self.events.len() - 1);
+        // Note: after drain/remove, indices become stale. We rebuild lazily.
         Ok(())
     }
 
     /// Drain up to `limit` events from the mempool for block production.
     pub fn drain_up_to(&mut self, limit: usize) -> Vec<Event> {
         let count = limit.min(self.events.len());
-        self.events.drain(..count).collect()
+        let drained: Vec<Event> = self.events.drain(..count).collect();
+        // Clear and rebuild the index after drain since indices are invalidated
+        self.rebuild_index();
+        drained
     }
 
     /// Get the number of events in the mempool.
@@ -80,9 +93,20 @@ impl Mempool {
     /// Returns `true` if the event was found and removed, `false` otherwise.
     /// This is used to avoid proposing events that have already been
     /// inserted into the graph by another path (e.g., via `submit_event`).
+    ///
+    /// After removal, the index is rebuilt since VecDeque indices shift.
     pub fn remove_by_id(&mut self, event_id: &EventId) -> bool {
+        if let Some(pos) = self.event_index.get(event_id).copied() {
+            if pos < self.events.len() && self.events[pos].id == *event_id {
+                self.events.remove(pos);
+                self.rebuild_index();
+                return true;
+            }
+        }
+        // Fallback: linear scan in case index is stale
         if let Some(pos) = self.events.iter().position(|e| &e.id == event_id) {
             self.events.remove(pos);
+            self.rebuild_index();
             true
         } else {
             false
@@ -91,7 +115,21 @@ impl Mempool {
 
     /// Check if the mempool contains an event with the given ID.
     pub fn contains(&self, event_id: &EventId) -> bool {
+        if let Some(&pos) = self.event_index.get(event_id) {
+            if pos < self.events.len() && self.events[pos].id == *event_id {
+                return true;
+            }
+        }
+        // Fallback: linear scan in case index is stale
         self.events.iter().any(|e| &e.id == event_id)
+    }
+
+    /// Rebuild the event_index from scratch after mutations that invalidate indices.
+    fn rebuild_index(&mut self) {
+        self.event_index.clear();
+        for (i, event) in self.events.iter().enumerate() {
+            self.event_index.insert(event.id, i);
+        }
     }
 }
 

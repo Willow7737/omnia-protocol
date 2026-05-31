@@ -12,6 +12,7 @@ repository = { workspace = true }
 omnia-substrate = { path = "../substrate", default-features = false }
 omnia-shards = { path = "../shards" }
 omnia-primitives = { path = "../omnia-primitives" }
+omnia-crypto = { path = "../omnia-crypto", features = ["keystore"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
 postcard = { version = "1", features = ["alloc"] }
@@ -25,6 +26,7 @@ serde_bytes = "0.11"
 subtle = "2"
 hex = "0.4"
 ml-kem = { version = "0.2", features = ["zeroize"], optional = true }
+base64 = "0.22"
 
 [features]
 default = []

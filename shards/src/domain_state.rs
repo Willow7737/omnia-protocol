@@ -102,7 +102,7 @@ impl ShardState for BiologicalState {
     type Op = crate::biological::ops::BiologicalOp;
 
     fn apply_op(&mut self, op: &Self::Op, event: &Event) -> Result<(), ShardError> {
-        self.apply(op, &event.vector_clock)
+        self.apply(op, &event.vector_clock, Some(&event.creator_pubkey))
     }
 
     fn snapshot(&self) -> Result<Vec<u8>, ShardError> {

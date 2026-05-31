@@ -48,6 +48,12 @@ mod serde_array_64 {
 /// Maximum size for a delta clock in bytes.
 pub const DEFAULT_MAX_DELTA_CLOCK_SIZE: usize = 1024;
 
+/// Maximum number of entries in a delta clock (prevents untrusted allocation).
+const MAX_DELTA_CLOCK_ENTRIES: usize = 10_000;
+
+/// Maximum encoded size for delta clock data (1 MiB).
+const MAX_DELTA_CLOCK_ENCODED_SIZE: usize = 1_000_000;
+
 /// Default truncation bytes for event IDs.
 pub const DEFAULT_ID_TRUNCATION_BYTES: usize = 16;
 
@@ -82,6 +88,9 @@ pub enum EncodingError {
     /// Delta clock application failed.
     #[error("Delta clock application failed: {0}")]
     DeltaApplicationFailed(String),
+    /// Invalid format (e.g., untrusted count exceeds maximum).
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
 }
 
 /// Delta-encoded vector clock — only entries where local > remote.
@@ -126,8 +135,26 @@ impl DeltaClock {
 
     /// Decode a delta clock from bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self, EncodingError> {
+        if data.len() > MAX_DELTA_CLOCK_ENCODED_SIZE {
+            return Err(EncodingError::InvalidFormat("Delta clock data too large".to_string()));
+        }
         let mut offset = 0usize;
         let count = decode_varint(data, &mut offset)? as usize;
+        if count > MAX_DELTA_CLOCK_ENTRIES {
+            return Err(EncodingError::InvalidFormat(format!(
+                "Delta clock entry count {} exceeds maximum {}",
+                count, MAX_DELTA_CLOCK_ENTRIES
+            )));
+        }
+        // Check remaining data is sufficient for count entries
+        // Minimum per entry: 32 bytes NodeId + 1 byte minimum varint
+        let remaining = data.len().saturating_sub(offset);
+        let required = count.saturating_mul(33); // NodeId(32) + min varint(1)
+        if remaining < required {
+            return Err(EncodingError::InvalidFormat(
+                "Insufficient data for delta clock entries".to_string(),
+            ));
+        }
         let mut entries = Vec::with_capacity(count);
         for _ in 0..count {
             if offset + 32 > data.len() {

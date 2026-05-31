@@ -112,12 +112,24 @@ impl UsefulWorkProof {
     /// public API should be stable — the implementation will be upgraded
     /// to real cryptographic verification without changing the call site.
     pub fn verify(&self, _verifier_pubkey: &[u8; 32]) -> bool {
-        // A non-zero result hash, positive compute units, and non-empty
-        // signature are the minimum validity requirements for the stub.
-        // Real verification will replace this with cryptographic proof checking.
-        self.result_hash.iter().any(|&b| b != 0)
-            && self.compute_units_consumed > 0
-            && !self.verifier_signature.is_empty()
+        #[cfg(feature = "production")]
+        {
+            // In production mode, stub verification is disabled
+            // TODO: Implement real ZK proof or VDF verification
+            tracing::error!("Production mode requires real work verification - stub not allowed");
+            return false;
+        }
+        #[cfg(not(feature = "production"))]
+        {
+            // Development/testing mode: allow stub verification with warning
+            let is_valid = self.result_hash.iter().any(|&b| b != 0)
+                && self.compute_units_consumed > 0
+                && !self.verifier_signature.is_empty();
+            if is_valid {
+                tracing::warn!("Work proof accepted with stub verification - NOT production safe");
+            }
+            is_valid
+        }
     }
 
     /// Validate the internal consistency of the proof.

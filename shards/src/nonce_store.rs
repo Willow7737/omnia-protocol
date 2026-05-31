@@ -14,6 +14,19 @@ pub trait NonceStore: Send + Sync {
 
     /// Save all nonces (replaces existing data).
     fn save(&self, nonces: &HashMap<[u8; 32], u64>) -> Result<(), NonceStoreError>;
+
+    /// Save a single nonce entry incrementally, without rewriting the entire store.
+    ///
+    /// This is preferred over `save()` for per-event persistence because it
+    /// avoids the overhead of serializing the full nonce map on every event.
+    /// The default implementation falls back to a full save, but concrete
+    /// implementations (like `RedbNonceStore`) can override this for efficiency.
+    fn save_incremental(&self, creator: &[u8; 32], nonce: u64) -> Result<(), NonceStoreError> {
+        // Default: load, update, and save the full map
+        let mut nonces = self.load()?;
+        nonces.insert(*creator, nonce);
+        self.save(&nonces)
+    }
 }
 
 /// Errors from nonce store operations.
@@ -65,6 +78,15 @@ impl NonceStore for InMemoryNonceStore {
             .lock()
             .map_err(|e| NonceStoreError::Io(std::io::Error::other(e.to_string())))?;
         *stored = nonces.clone();
+        Ok(())
+    }
+
+    fn save_incremental(&self, creator: &[u8; 32], nonce: u64) -> Result<(), NonceStoreError> {
+        let mut stored = self
+            .nonces
+            .lock()
+            .map_err(|e| NonceStoreError::Io(std::io::Error::other(e.to_string())))?;
+        stored.insert(*creator, nonce);
         Ok(())
     }
 }
@@ -155,6 +177,24 @@ impl NonceStore for RedbNonceStore {
                     .insert(key.as_slice(), value.as_slice())
                     .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
             }
+        }
+        write_txn.commit().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        Ok(())
+    }
+
+    fn save_incremental(&self, creator: &[u8; 32], nonce: u64) -> Result<(), NonceStoreError> {
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(NONCE_TABLE)
+                .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
+            let value = postcard::to_allocvec(&nonce).map_err(|e| NonceStoreError::Serialization(e.to_string()))?;
+            table
+                .insert(creator.as_slice(), value.as_slice())
+                .map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         }
         write_txn.commit().map_err(|e| NonceStoreError::Redb(e.to_string()))?;
         Ok(())

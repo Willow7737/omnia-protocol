@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 
 // ---------------------------------------------------------------------------
 // JWT Claims
@@ -443,6 +443,9 @@ pub struct RateLimiter {
     max_tokens: f64,
     /// Sustained refill rate in tokens per second.
     refill_rate: f64,
+    /// Whether to trust X-Real-IP header for client identification.
+    /// Only enable this when running behind a known, trusted proxy.
+    trust_proxy_headers: bool,
 }
 
 impl RateLimiter {
@@ -457,20 +460,45 @@ impl RateLimiter {
             buckets: Mutex::new(HashMap::new()),
             max_tokens: max_tokens as f64,
             refill_rate: refill_rate as f64,
+            trust_proxy_headers: false,
+        }
+    }
+
+    /// Create a new rate limiter with configurable proxy header trust.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_tokens` — maximum burst size (bucket capacity)
+    /// * `refill_rate` — sustained rate in requests per second
+    /// * `trust_proxy_headers` — whether to trust X-Real-IP header
+    pub fn with_proxy_trust(max_tokens: u64, refill_rate: u64, trust_proxy_headers: bool) -> Self {
+        Self {
+            buckets: Mutex::new(HashMap::new()),
+            max_tokens: max_tokens as f64,
+            refill_rate: refill_rate as f64,
+            trust_proxy_headers,
         }
     }
 
     /// Build a [`RateLimiter`] from the `OMNIA_RATE_LIMIT_RPS` env var.
     ///
     /// Defaults to 10 requests/second with a burst of 20 if the variable
-    /// is not set or cannot be parsed.
+    /// is not set or cannot be parsed. Proxy header trust is controlled
+    /// by `OMNIA_TRUST_PROXY_HEADERS` (defaults to `false`).
     pub fn from_env() -> Self {
         let rps = std::env::var("OMNIA_RATE_LIMIT_RPS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(10);
+        let trust_proxy_headers = std::env::var("OMNIA_TRUST_PROXY_HEADERS")
+            .ok()
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        if trust_proxy_headers {
+            tracing::warn!("X-Real-IP header trust enabled — only use behind a trusted proxy");
+        }
         // Burst is 2× the sustained rate
-        Self::new(rps * 2, rps)
+        Self::with_proxy_trust(rps * 2, rps, trust_proxy_headers)
     }
 
     /// Evict buckets that have not been accessed for over 1 hour.
@@ -522,7 +550,7 @@ pub async fn rate_limit_middleware(
     next: Next,
 ) -> Response {
     // Try to get actual peer IP from connection info first.
-    // Fallback to X-Real-IP (more reliable than X-Forwarded-For).
+    // Only trust X-Real-IP if explicitly enabled (behind a known proxy).
     // Do NOT trust X-Forwarded-For from untrusted sources as it can be
     // spoofed, causing all requests to share a single rate-limit bucket.
     let client_key = req
@@ -530,10 +558,14 @@ pub async fn rate_limit_middleware(
         .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip().to_string())
         .or_else(|| {
-            req.headers()
-                .get("x-real-ip")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.trim().to_string())
+            if limiter.trust_proxy_headers {
+                req.headers()
+                    .get("x-real-ip")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.trim().to_string())
+            } else {
+                None
+            }
         })
         .unwrap_or_else(|| "unauthenticated".to_string());
 
@@ -580,15 +612,13 @@ pub fn default_cors_layer() -> CorsLayer {
             .split(',')
             .filter_map(|o| o.trim().parse().ok())
             .collect();
+        if origins.is_empty() {
+            tracing::warn!("No valid CORS origins parsed — using restrictive defaults");
+        }
         CorsLayer::new()
             .allow_origin(origins)
-            .allow_methods([
-                axum::http::Method::GET,
-                axum::http::Method::POST,
-                axum::http::Method::PUT,
-                axum::http::Method::DELETE,
-            ])
-            .allow_headers(tower_http::cors::Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
             .max_age(std::time::Duration::from_secs(3600))
     }
 }

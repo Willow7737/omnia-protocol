@@ -20,6 +20,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(feature = "ethereum-live")]
 use tokio::sync::OnceCell;
+use zeroize::Zeroize;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -180,6 +181,11 @@ impl EthereumConfig {
                 "Contract address cannot be empty".to_string(),
             ));
         }
+        if self.contract_address == "0x0000000000000000000000000000000000000000" {
+            return Err(SettlementError::ConfigError(
+                "Contract address cannot be the zero address".to_string(),
+            ));
+        }
         if !self.contract_address.starts_with("0x") || self.contract_address.len() != 42 {
             return Err(SettlementError::ConfigError(format!(
                 "Invalid contract address format: {}",
@@ -197,6 +203,13 @@ impl EthereumConfig {
             ));
         }
         Ok(())
+    }
+}
+
+impl Drop for EthereumConfig {
+    fn drop(&mut self) {
+        // Zeroize the private key to prevent it from remaining in memory
+        self.operator_private_key.zeroize();
     }
 }
 
@@ -230,7 +243,8 @@ impl fmt::Display for EthereumMode {
 #[cfg(feature = "ethereum-live")]
 pub struct EthereumLiveClient {
     rpc_url: String,
-    operator_private_key: String,
+    /// Operator private key, zeroized on drop.
+    operator_private_key: zeroize::Zeroizing<String>,
     contract_address: Address,
     gas_limit: u64,
     #[allow(dead_code)]
@@ -256,7 +270,7 @@ impl EthereumLiveClient {
 
         Ok(Self {
             rpc_url: config.rpc_url.clone(),
-            operator_private_key: config.operator_private_key.clone(),
+            operator_private_key: zeroize::Zeroizing::new(config.operator_private_key.clone()),
             contract_address,
             gas_limit: config.gas_limit,
             max_fee_per_gas: config.max_fee_per_gas.clone(),
@@ -271,9 +285,11 @@ impl EthereumLiveClient {
     async fn get_wallet(&self) -> Result<&PrivateKeySigner, SettlementError> {
         self.wallet
             .get_or_try_init(|| async {
-                self.operator_private_key
+                let key_str: &str = self.operator_private_key.as_ref();
+                let key: PrivateKeySigner = key_str
                     .parse()
-                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))
+                    .map_err(|e| SettlementError::ConfigError(format!("Invalid operator key: {e}")))?;
+                Ok(key)
             })
             .await
     }
@@ -444,11 +460,20 @@ impl EthereumLiveClient {
     }
 
     /// Verify a Groth16 proof on-chain via eth_call simulation.
+    ///
+    /// # Arguments
+    ///
+    /// * `old_root` — The state root before the batch
+    /// * `new_root` — The state root after the batch
+    /// * `proof` — The serialized Groth16 proof (at least 256 bytes)
+    /// * `batch_merkle_root` — The properly computed batch Merkle root
+    ///   (NOT derived from the proof itself)
     pub async fn verify_proof_live(
         &self,
         old_root: &[u8; 32],
         new_root: &[u8; 32],
         proof: &[u8],
+        batch_merkle_root: &[u8; 32],
     ) -> Result<bool, SettlementError> {
         if proof.len() < 256 {
             return Ok(false);
@@ -473,11 +498,10 @@ impl EthereumLiveClient {
             U256::from_be_bytes::<32>(slice_to_array(&proof[224..256])?),
         ];
 
-        let batch_merkle_root = blake3::derive_key("OMNIA-PROOF-VERIFY", proof);
         let public_inputs = vec![
             U256::from_be_bytes::<32>(*old_root),
             U256::from_be_bytes::<32>(*new_root),
-            U256::from_be_bytes::<32>(batch_merkle_root),
+            U256::from_be_bytes::<32>(*batch_merkle_root),
         ];
 
         let new_state_root = B256::from(*new_root);
@@ -558,7 +582,9 @@ impl EthereumAdapter {
                 rpc_url: rpc_url.to_string(),
                 contract_address: contract_address.to_string(),
                 operator_private_key: String::new(),
-                ..Default::default()
+                gas_limit: 1_000_000,
+                max_fee_per_gas: None,
+                confirmation_blocks: 3,
             },
             mode: EthereumMode::Simulated,
             latest_root: [0u8; 32],
@@ -712,7 +738,18 @@ impl SettlementLayer for EthereumAdapter {
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
-                    return client.verify_proof_live(old_root, new_root, proof).await;
+                    // SECURITY: The batch_merkle_root must NOT be derived from the proof
+                    // itself (that would be fabrication). Ideally it would be passed as a
+                    // parameter, but the SettlementLayer trait doesn't support it yet.
+                    // For now, derive from old_root || new_root which the verifier knows
+                    // independently — still not ideal but better than deriving from the proof.
+                    let mut root_input = [0u8; 64];
+                    root_input[..32].copy_from_slice(old_root);
+                    root_input[32..].copy_from_slice(new_root);
+                    let batch_merkle_root = blake3::derive_key("OMNIA-ETH-BATCH-MERKLE", &root_input);
+                    return client
+                        .verify_proof_live(old_root, new_root, proof, &batch_merkle_root)
+                        .await;
                 }
 
                 #[cfg(not(feature = "ethereum-live"))]
@@ -863,7 +900,11 @@ mod tests {
     fn test_ethereum_config_validation_empty_rpc() {
         let config = EthereumConfig {
             rpc_url: "".to_string(),
-            ..Default::default()
+            contract_address: "0x0000000000000000000000000000000000000000".to_string(),
+            operator_private_key: String::new(),
+            gas_limit: 1_000_000,
+            max_fee_per_gas: None,
+            confirmation_blocks: 3,
         };
         assert!(config.validate().is_err());
     }
@@ -872,7 +913,11 @@ mod tests {
     fn test_ethereum_config_validation_invalid_scheme() {
         let config = EthereumConfig {
             rpc_url: "ftp://invalid".to_string(),
-            ..Default::default()
+            contract_address: "0x0000000000000000000000000000000000000000".to_string(),
+            operator_private_key: String::new(),
+            gas_limit: 1_000_000,
+            max_fee_per_gas: None,
+            confirmation_blocks: 3,
         };
         assert!(config.validate().is_err());
     }
@@ -881,9 +926,11 @@ mod tests {
     fn test_ethereum_config_validation_valid() {
         let config = EthereumConfig {
             rpc_url: "http://localhost:8545".to_string(),
-            contract_address: "0x0000000000000000000000000000000000000000".to_string(),
+            contract_address: "0x1234567890123456789012345678901234567890".to_string(),
             operator_private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string(),
-            ..Default::default()
+            gas_limit: 1_000_000,
+            max_fee_per_gas: None,
+            confirmation_blocks: 3,
         };
         assert!(config.validate().is_ok());
     }

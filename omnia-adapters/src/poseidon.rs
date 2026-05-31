@@ -457,13 +457,13 @@ fn poseidon_permutation_with_params(state: &mut [Fr; T], mds: &[[Fr; T]; T], rc:
 /// Uses approximately 243 multiplication constraints (see module-level docs).
 #[allow(clippy::needless_range_loop)]
 fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<Fr>; T]) -> Result<(), ZkError> {
-    // On-circuit parameters are regenerated each time (rather than using the
-    // cached statics) because the circuit must be fully deterministic within
-    // the R1CS constraint system — cached statics use LazyLock which is not
-    // available inside the circuit synthesis context. Regeneration is cheap
-    // compared to the constraint generation cost.
-    let mds = generate_mds_matrix()?;
-    let rc = generate_round_constants();
+    // Use the cached LazyLock statics for deterministic parameters.
+    // This avoids regenerating the MDS matrix and round constants on every
+    // circuit synthesis call, which was a performance issue (each regeneration
+    // involves 195 BLAKE3 hashes for round constants plus field inversions
+    // for the MDS matrix).
+    let mds = &*custom::MDS_MATRIX;
+    let rc = &*custom::ROUND_CONSTANTS;
 
     let mut rc_idx = 0;
 
@@ -483,7 +483,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
             state[i] = sbox_gadget(&state[i]);
         }
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r; // suppress unused warning
@@ -495,7 +495,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
         // Partial S-box: only the first element
         state[0] = sbox_gadget(&state[0]);
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r;
@@ -509,7 +509,7 @@ fn poseidon_permutation_gadget(_cs: ConstraintSystemRef<Fr>, state: &mut [FpVar<
             state[i] = sbox_gadget(&state[i]);
         }
         // MDS matrix (linear — free in R1CS)
-        let new_state = mds_multiply_gadget(&mds, state);
+        let new_state = mds_multiply_gadget(mds, state);
         *state = new_state;
 
         let _ = r;

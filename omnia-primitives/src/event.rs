@@ -16,10 +16,12 @@ use ed25519_dalek::{
     Signature as EdSignature, Signer, SigningKey as NodeKeypair, Verifier, VerifyingKey as NodePublicKey,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
+
+#[cfg(feature = "legacy-hash")]
+use sha2::{Digest, Sha256};
 
 /// Maximum allowed clock drift for event timestamps (2 minutes in milliseconds).
 /// Events with timestamps more than this far in the future are rejected.
@@ -29,7 +31,7 @@ pub const MAX_TIMESTAMP_DRIFT_MS: u64 = 120_000; // 2 minutes (was 5 min)
 /// Events older than this are rejected as unreasonably stale.
 pub const MAX_EVENT_AGE_MS: u64 = 31_536_000_000;
 
-/// Unique identifier for an event (SHA-256 hash of event content)
+/// Unique identifier for an event (BLAKE3 hash of event content)
 pub type EventId = [u8; 32];
 
 /// Payload data attached to an event (opaque to the substrate)
@@ -247,9 +249,40 @@ impl Event {
         Self::new(creator, 0, vector_clock, None, None, payload)
     }
 
-    /// Compute the SHA-256 hash of this event (used as its ID).
+    /// Compute the BLAKE3 hash of this event (used as its ID).
     /// Includes creator_pubkey in the hash input for binding.
     fn compute_hash(&self) -> EventId {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"OMNIA-EVENT-ID-V2"); // Domain separation
+        hasher.update(&self.creator_pubkey);
+        hasher.update(&self.sequence.to_le_bytes());
+        hasher.update(&self.timestamp.to_le_bytes());
+        hasher.update(&self.payload);
+        match self.self_parent {
+            None => {
+                hasher.update(&[0u8]);
+            }
+            Some(sp) => {
+                hasher.update(&[1u8]);
+                hasher.update(&sp);
+            }
+        }
+        match self.other_parent {
+            None => {
+                hasher.update(&[0u8]);
+            }
+            Some(op) => {
+                hasher.update(&[1u8]);
+                hasher.update(&op);
+            }
+        }
+        *hasher.finalize().as_bytes()
+    }
+
+    /// Compute the legacy SHA-256 hash (for backward compatibility).
+    /// Only available with the `legacy-hash` feature flag.
+    #[cfg(feature = "legacy-hash")]
+    fn compute_hash_legacy(&self) -> EventId {
         let mut hasher = Sha256::new();
         hasher.update(self.creator);
         hasher.update(self.sequence.to_le_bytes());
@@ -270,7 +303,7 @@ impl Event {
             }
         }
         hasher.update(&self.payload);
-        hasher.update(self.creator_pubkey);
+        hasher.update(&self.creator_pubkey);
         hasher.finalize().into()
     }
 
@@ -479,12 +512,18 @@ impl Event {
             .map_err(|e| EventValidationError::DeserializationError(format!("{e}")))
     }
 
-    /// Mark this event as having received an acknowledgment
-    pub fn add_acknowledgment(&mut self) {
+    /// Mark this event as having received an acknowledgment with a configurable threshold.
+    pub fn add_acknowledgment_with_threshold(&mut self, threshold: u32) {
         self.ack_count = self.ack_count.saturating_add(1);
-        if self.ack_count >= 2 {
+        if self.ack_count >= threshold {
             self.status = EventStatus::Acknowledged;
         }
+    }
+
+    /// Mark this event as having received an acknowledgment.
+    /// Uses the default threshold of 2 for backward compatibility.
+    pub fn add_acknowledgment(&mut self) {
+        self.add_acknowledgment_with_threshold(2);
     }
 
     /// Check if this event is a root (no parents)

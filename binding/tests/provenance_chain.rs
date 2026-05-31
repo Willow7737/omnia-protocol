@@ -357,7 +357,7 @@ fn test_binding_layer_with_physical_shard() {
         item_id: item,
         new_owner: [0x22u8; 32],
     };
-    physical_state.apply(&transfer_op, &vc, None).unwrap();
+    physical_state.apply(&transfer_op, &vc, Some([0x11u8; 32])).unwrap();
 
     // Simultaneously transfer in the Binding Layer
     tracker

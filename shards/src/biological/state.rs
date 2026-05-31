@@ -54,7 +54,16 @@ impl BiologicalState {
     }
 
     /// Apply a biological operation, mutating state.
-    pub fn apply(&mut self, op: &BiologicalOp, vc: &VectorClock) -> Result<(), ShardError> {
+    ///
+    /// The `event_creator` parameter provides the public key of the event
+    /// creator for authorization checks. When `None`, operations that
+    /// require authorization will be rejected.
+    pub fn apply(
+        &mut self,
+        op: &BiologicalOp,
+        vc: &VectorClock,
+        event_creator: Option<&[u8; 32]>,
+    ) -> Result<(), ShardError> {
         match op {
             BiologicalOp::GrantAccess {
                 subject,
@@ -62,6 +71,18 @@ impl BiologicalState {
                 scope,
                 expires_at,
             } => {
+                // Authorization: only the data subject can grant access to their data
+                if let Some(creator) = event_creator {
+                    if creator != subject {
+                        return Err(ShardError::ValidationFailed(
+                            "Only the data subject can grant access".into(),
+                        ));
+                    }
+                } else {
+                    return Err(ShardError::ValidationFailed(
+                        "Authorization required for GrantAccess: event_creator must be provided".into(),
+                    ));
+                }
                 let key = (*subject, *consumer);
                 self.consent_registry.insert(
                     key,
@@ -159,6 +180,14 @@ impl BiologicalState {
                             // as field elements. For now, we use an empty public input list which
                             // verifies that the proof is valid for a circuit with no public inputs.
                             let public_inputs: Vec<ark_bn254::Fr> = vec![];
+
+                            if public_inputs.is_empty() {
+                                tracing::warn!(
+                                    subject = ?&subject[..4],
+                                    "ZK proof verification with empty public inputs — accepting without meaningful verification. \
+                                     Compute proper public inputs from the biological context for real security."
+                                );
+                            }
 
                             match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
                                 Ok(true) => {
@@ -261,6 +290,7 @@ mod tests {
                     expires_at: 0,
                 },
                 &vc,
+                Some(&subject),
             )
             .unwrap();
 
@@ -273,6 +303,7 @@ mod tests {
                 query: "test query".into(),
             },
             &vc,
+            None,
         );
         assert!(result.is_err(), "ZK proof should be rejected without real_verification");
         match result.unwrap_err() {
@@ -303,6 +334,7 @@ mod tests {
                     expires_at: 0,
                 },
                 &vc,
+                Some(&subject),
             )
             .unwrap();
 
@@ -315,6 +347,7 @@ mod tests {
                 query: "test query".into(),
             },
             &vc,
+            None,
         );
         assert!(result.is_err(), "empty ZK proof should be rejected");
         match result.unwrap_err() {
@@ -345,6 +378,7 @@ mod tests {
                     expires_at: 0,
                 },
                 &vc,
+                Some(&subject),
             )
             .unwrap();
 
@@ -358,6 +392,7 @@ mod tests {
                 query: "test query".into(),
             },
             &vc,
+            None,
         );
         assert!(result.is_err(), "ZK proof should be rejected without real_verification");
     }

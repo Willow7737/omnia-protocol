@@ -138,7 +138,7 @@ pub async fn submit_event(
         status: status.clone(),
     };
 
-    state.event_store.write().await.insert(event_id_hex.clone(), stored);
+    crate::state::store_event(&state.event_store, event_id_hex.clone(), stored).await;
 
     // Increment the events counter
     #[cfg(feature = "metrics")]

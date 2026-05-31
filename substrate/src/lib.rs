@@ -64,7 +64,7 @@ pub use omnia_network;
 // Re-export commonly used types
 #[cfg(feature = "bls")]
 pub use bls::{
-    aggregate_public_keys, aggregate_signatures, aggregate_signatures_dedup, verify_aggregate,
+    aggregate_public_keys, aggregate_signatures, aggregate_signatures_unchecked, verify_aggregate,
     verify_aggregate_with_pop, BlsError, BlsKeypair, BlsProofOfPossession, BlsPublicKey, BlsSignature,
 };
 pub use causal_graph::{CausalGraph, CausalGraphError, GraphSnapshot, GraphStats, PrunedEventMetadata};
@@ -113,12 +113,14 @@ pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoReco
 pub use snapshot::{SnapshotError, StateSnapshot};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
-#[allow(deprecated)] // DkgSession is deprecated but re-exported for backward compatibility
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSession, DkgSharePackage, DkgVerificationResult,
-    FeldmanVssSession, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager,
-    ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult, FeldmanVssSession, KeyShare,
+    PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
 };
+
+#[cfg(all(feature = "bls", feature = "deprecated-dkg"))]
+#[allow(deprecated)]
+pub use threshold::DkgSession;
 pub use vrf::{
     deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,
     DeterministicHashError, DeterministicOutput, EcdsaProofOutput, HashVersion,
@@ -150,6 +152,30 @@ pub const TARGET_TPS: u32 = 10_000;
 
 /// Target latency for finality (milliseconds)
 pub const TARGET_FINALITY_MS: u64 = 5_000;
+
+/// Parse the consensus seed from the `OMNIA_CONSENSUS_SEED` environment variable.
+///
+/// Accepts a hex-encoded 64-character (32-byte) seed for cryptographic strength.
+/// If the environment variable is not set or is invalid, generates a random seed.
+fn parse_consensus_seed() -> [u8; 32] {
+    if let Ok(hex_seed) = std::env::var("OMNIA_CONSENSUS_SEED") {
+        // Accept hex-encoded 64-character seed
+        if hex_seed.len() == 64 {
+            if let Ok(bytes) = hex::decode(&hex_seed) {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                return arr;
+            }
+        }
+        tracing::warn!("OMNIA_CONSENSUS_SEED must be 64 hex characters. Using random seed.");
+    }
+
+    let mut seed = [0u8; 32];
+    getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
+        seed[0] = 1; // Non-zero fallback
+    });
+    seed
+}
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -326,66 +352,20 @@ impl SubstrateConfig {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4);
-        let seed = std::env::var("OMNIA_CONSENSUS_SEED")
-            .ok()
-            .map(|s| {
-                let mut arr = [0u8; 32];
-                let bytes = s.as_bytes();
-                let len = bytes.len().min(32);
-                arr[..len].copy_from_slice(&bytes[..len]);
-                arr
-            })
-            .unwrap_or_else(|| {
-                let mut seed = [0u8; 32];
-                getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
-                    seed[0] = 1; // Non-zero fallback
-                });
-                seed
-            });
-        Self {
-            node_id,
-            #[cfg(feature = "network")]
-            gossip: GossipConfig::default(),
-            consensus: ConsensusConfig {
-                total_nodes,
-                round_seed: seed,
-                ..Default::default()
-            },
-            total_nodes,
-            slashing_data_dir: None,
-            slash_threshold: DEFAULT_SLASH_THRESHOLD,
-            ejection_threshold: DEFAULT_EJECTION_THRESHOLD,
-            max_payload_size: MAX_PAYLOAD_SIZE,
-            nonce_data_dir: None,
-            snapshot_interval: 10_000,
-            pruning_depth: 0,
-            mempool_size: 10_000,
-            max_block_events: 500,
-            consensus_data_dir: None,
-            fast_sync: false,
-        }
+        let seed = parse_consensus_seed();
+        Self::build_config(node_id, total_nodes, seed)
     }
 
     /// Create a substrate configuration with a custom network size.
     ///
     /// Slashing defaults to in-memory mode with standard thresholds.
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
-        let seed = std::env::var("OMNIA_CONSENSUS_SEED")
-            .ok()
-            .map(|s| {
-                let mut arr = [0u8; 32];
-                let bytes = s.as_bytes();
-                let len = bytes.len().min(32);
-                arr[..len].copy_from_slice(&bytes[..len]);
-                arr
-            })
-            .unwrap_or_else(|| {
-                let mut seed = [0u8; 32];
-                getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
-                    seed[0] = 1; // Non-zero fallback
-                });
-                seed
-            });
+        let seed = parse_consensus_seed();
+        Self::build_config(node_id, total_nodes, seed)
+    }
+
+    /// Build a substrate configuration with the given parameters.
+    fn build_config(node_id: NodeId, total_nodes: usize, seed: [u8; 32]) -> Self {
         Self {
             node_id,
             #[cfg(feature = "network")]

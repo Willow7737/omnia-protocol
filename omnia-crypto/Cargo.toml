@@ -31,6 +31,8 @@ default = ["keystore"]
 bls = ["dep:blst", "dep:getrandom", "dep:aes-gcm", "dep:hkdf"]
 pqc = ["dep:pqc_dilithium", "dep:ml-kem"]
 keystore = ["dep:aes-gcm", "dep:bip39", "dep:hkdf"]
+deprecated-dkg = []
+legacy-xor = []
 
 [dev-dependencies]
 tempfile = "3"

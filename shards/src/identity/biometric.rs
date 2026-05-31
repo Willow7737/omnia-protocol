@@ -55,6 +55,12 @@ impl BiometricAnchor {
 
     /// Verify a fresh template against the stored commitment.
     ///
+    /// **IMPORTANT**: This performs exact hash comparison, which is suitable for
+    /// template hash verification but NOT for real biometric data that has natural
+    /// variance between readings. For production biometric verification, implement
+    /// fuzzy matching (e.g., Hamming distance threshold for iris, cosine similarity
+    /// for face embeddings) instead of exact hash comparison.
+    ///
     /// Returns `true` if the fresh template matches the enrolled template
     /// (i.e., BLAKE3(salt || fresh_template) == commitment), `false` otherwise.
     pub fn verify(&self, fresh_template: &[u8]) -> bool {

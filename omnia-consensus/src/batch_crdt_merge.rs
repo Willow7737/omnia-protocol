@@ -22,7 +22,7 @@
 
 use omnia_primitives::NodeId;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error;
 
 use crate::crdt::{CvRDT, GCounter, LwwRegister, OrSet};
@@ -135,6 +135,86 @@ pub struct BatchMergeResult {
 /// let result = merger.apply_batch(&ops).unwrap();
 /// assert_eq!(result.applied_count, 1);
 /// ```
+/// Selective snapshot of only the CRDT keys modified during a batch.
+///
+/// Instead of cloning the entire state for rollback, this struct captures
+/// only the keys that were touched, which is significantly cheaper when
+/// the merger manages many CRDTs but a batch only touches a few.
+struct CrdtSnapshot {
+    modified_g_counters: HashMap<String, GCounter>,
+    modified_or_sets: HashMap<String, OrSet<Vec<u8>>>,
+    modified_lww_registers: HashMap<String, LwwRegister<Vec<u8>>>,
+    /// Keys that did not exist before the batch — on rollback, remove them.
+    new_g_counter_keys: HashSet<String>,
+    new_or_set_keys: HashSet<String>,
+    new_lww_register_keys: HashSet<String>,
+}
+
+impl CrdtSnapshot {
+    /// Create an empty snapshot.
+    fn new() -> Self {
+        Self {
+            modified_g_counters: HashMap::new(),
+            modified_or_sets: HashMap::new(),
+            modified_lww_registers: HashMap::new(),
+            new_g_counter_keys: HashSet::new(),
+            new_or_set_keys: HashSet::new(),
+            new_lww_register_keys: HashSet::new(),
+        }
+    }
+
+    /// Snapshot a G-Counter key if it hasn't been snapshotted yet.
+    fn snapshot_g_counter(&mut self, key: &str, counter: Option<&GCounter>) {
+        if self.modified_g_counters.contains_key(key) {
+            return; // Already snapshotted
+        }
+        match counter {
+            Some(c) => {
+                self.modified_g_counters.insert(key.to_string(), c.clone());
+            }
+            None => {
+                // Key doesn't exist yet — mark as new so we remove it on rollback
+                self.new_g_counter_keys.insert(key.to_string());
+            }
+        }
+    }
+
+    /// Snapshot an OR-Set key if it hasn't been snapshotted yet.
+    fn snapshot_or_set(&mut self, key: &str, set: Option<&OrSet<Vec<u8>>>) {
+        if self.modified_or_sets.contains_key(key) {
+            return;
+        }
+        match set {
+            Some(s) => {
+                self.modified_or_sets.insert(key.to_string(), s.clone());
+            }
+            None => {
+                self.new_or_set_keys.insert(key.to_string());
+            }
+        }
+    }
+
+    /// Snapshot an LWW-Register key if it hasn't been snapshotted yet.
+    fn snapshot_lww_register(&mut self, key: &str, reg: Option<&LwwRegister<Vec<u8>>>) {
+        if self.modified_lww_registers.contains_key(key) {
+            return;
+        }
+        match reg {
+            Some(r) => {
+                self.modified_lww_registers.insert(key.to_string(), r.clone());
+            }
+            None => {
+                self.new_lww_register_keys.insert(key.to_string());
+            }
+        }
+    }
+}
+
+/// Merger for applying batches of CRDT operations atomically.
+///
+/// Maintains G-Counters, OR-Sets, and LWW-Registers, validating
+/// each operation in a batch for overflow and consistency before
+/// committing the entire batch.
 pub struct BatchCrdtMerger {
     /// G-Counters keyed by identifier
     g_counters: BTreeMap<String, GCounter>,
@@ -196,10 +276,21 @@ impl BatchCrdtMerger {
         // Phase 1: Validate all operations (dry run)
         self.validate_batch(ops)?;
 
-        // Snapshot for rollback
-        let g_counters_snapshot = self.g_counters.clone();
-        let or_sets_snapshot = self.or_sets.clone();
-        let lww_registers_snapshot = self.lww_registers.clone();
+        // Selective snapshot for rollback — only snapshot keys that will be modified.
+        let mut snapshot = CrdtSnapshot::new();
+        for op in ops {
+            match op {
+                CrdtBatchOp::GCounterIncrement { key, .. } => {
+                    snapshot.snapshot_g_counter(key, self.g_counters.get(key));
+                }
+                CrdtBatchOp::OrSetAdd { key, .. } | CrdtBatchOp::OrSetRemove { key, .. } => {
+                    snapshot.snapshot_or_set(key, self.or_sets.get(key));
+                }
+                CrdtBatchOp::LwwRegisterUpdate { key, .. } => {
+                    snapshot.snapshot_lww_register(key, self.lww_registers.get(key));
+                }
+            }
+        }
 
         // Phase 2: Apply all operations
         // We know all operations are valid, so we can apply them without
@@ -212,10 +303,8 @@ impl BatchCrdtMerger {
                 CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
                     let counter = self.g_counters.entry(key.clone()).or_default();
                     if counter.increment(*node_id, *amount).is_err() {
-                        // Rollback
-                        self.g_counters = g_counters_snapshot;
-                        self.or_sets = or_sets_snapshot;
-                        self.lww_registers = lww_registers_snapshot;
+                        // Rollback using selective snapshot
+                        self.rollback(snapshot);
                         return Err(BatchCrdtError::OperationFailed {
                             index,
                             reason: "G-Counter overflow after validation".to_string(),
@@ -257,28 +346,62 @@ impl BatchCrdtMerger {
         })
     }
 
+    /// Roll back to the selective snapshot, restoring only the modified keys.
+    fn rollback(&mut self, snapshot: CrdtSnapshot) {
+        // Restore modified G-Counters
+        for (key, counter) in snapshot.modified_g_counters {
+            self.g_counters.insert(key, counter);
+        }
+        // Remove keys that were newly created during the batch
+        for key in snapshot.new_g_counter_keys {
+            self.g_counters.remove(&key);
+        }
+
+        // Restore modified OR-Sets
+        for (key, set) in snapshot.modified_or_sets {
+            self.or_sets.insert(key, set);
+        }
+        for key in snapshot.new_or_set_keys {
+            self.or_sets.remove(&key);
+        }
+
+        // Restore modified LWW-Registers
+        for (key, reg) in snapshot.modified_lww_registers {
+            self.lww_registers.insert(key, reg);
+        }
+        for key in snapshot.new_lww_register_keys {
+            self.lww_registers.remove(&key);
+        }
+    }
+
     /// Validate a batch of operations without applying them.
     ///
     /// Performs dry-run validation: checks for overflows, invalid keys,
-    /// and other constraint violations.
+    /// and other constraint violations. Tracks accumulated state across
+    /// ops in the batch so that, e.g., two increments to the same
+    /// (key, node_id) that individually are fine but together overflow
+    /// are correctly rejected.
     fn validate_batch(&self, ops: &[CrdtBatchOp]) -> Result<(), BatchCrdtError> {
+        // Track accumulated increments per (key, node_id) across the batch
+        let mut pending_increments: HashMap<(String, NodeId), u64> = HashMap::new();
+
         for (index, op) in ops.iter().enumerate() {
             match op {
                 CrdtBatchOp::GCounterIncrement { key, node_id, amount } => {
-                    // Check if increment would overflow
-                    if let Some(counter) = self.g_counters.get(key) {
-                        let current = counter.node_value(node_id);
-                        if current.checked_add(*amount).is_none() {
-                            return Err(BatchCrdtError::OperationFailed {
-                                index,
-                                reason: format!(
-                                    "G-Counter overflow: {} + {} exceeds u64::MAX for key '{}'",
-                                    current, amount, key
-                                ),
-                            });
-                        }
+                    // Check if increment would overflow against current + accumulated state
+                    let current = self.g_counters.get(key).map(|c| c.node_value(node_id)).unwrap_or(0);
+                    let pending = pending_increments.get(&(key.clone(), *node_id)).copied().unwrap_or(0);
+                    if current
+                        .checked_add(pending)
+                        .and_then(|v| v.checked_add(*amount))
+                        .is_none()
+                    {
+                        return Err(BatchCrdtError::ValidationFailed(format!(
+                            "G-Counter overflow at op {}: {} + {} + {} exceeds u64::MAX for key '{}'",
+                            index, current, pending, amount, key
+                        )));
                     }
-                    // For a new counter, any amount <= u64::MAX is valid
+                    pending_increments.insert((key.clone(), *node_id), pending + amount);
                 }
                 CrdtBatchOp::OrSetAdd { .. } => {
                     // OR-Set adds always succeed (they just create a new token)
