@@ -381,17 +381,21 @@ impl KeyStoreBridge {
                 // public key BEFORE generating the internal authorization signature.
                 // Without this check, anyone can submit a rotation request with a
                 // fabricated signature and it would be accepted.
+                //
+                // The caller signs a message WITHOUT the new public key because
+                // they cannot know it — the new key is generated inside rotate().
+                // The bridge then creates an internal signature with the full format
+                // (including the new key) for replay protection in the rotation request.
                 let caller_sig = ed25519_dalek::Signature::try_from(auth_signature)
                     .map_err(|_| BridgeError::InvalidState("Invalid authorization signature format".into()))?;
                 let verifying_key = self.keystore.public_key();
-                // Construct the same message that the caller should have signed
+                // Construct the message that the caller signed (without new_key)
                 let nonce = blake3::hash(&self.keystore.public_key().to_bytes());
                 let auth_message = format!(
-                    "{}:{}:{}:{}",
+                    "{}:{}:{}",
                     new_phase as u8,
                     current_round,
-                    hex::encode(nonce.as_bytes()),
-                    hex::encode(new_pubkey.ed25519)
+                    hex::encode(nonce.as_bytes())
                 );
                 verifying_key
                     .verify(auth_message.as_bytes(), &caller_sig)
@@ -556,20 +560,21 @@ mod tests {
     use tempfile::TempDir;
 
     /// Helper: sign a rotation authorization message with the current signing key.
+    ///
+    /// The caller signs a message WITHOUT the new public key (since it isn't known
+    /// at signing time — the bridge generates the new key inside `rotate()`).
+    /// The bridge verifies this auth message, then internally creates the full-format
+    /// signature (with new_key) for the rotation request.
     fn sign_rotation_auth(bridge: &KeyStoreBridge, new_phase: CommitmentPhase, current_round: u64) -> Vec<u8> {
         let keypair = bridge.current_signing_key().expect("signing key");
-        // Message format must match PqcKeyRotationManager::submit_rotation
+        // Message format matches the bridge's caller auth verification:
+        // "{new_phase_u8}:{current_round}:{nonce_hex}" (without new_key)
         let nonce = blake3::hash(&bridge.keystore.public_key().to_bytes());
         let message = format!(
-            "{}:{}:{}:{}",
+            "{}:{}:{}",
             new_phase as u8,
             current_round,
-            hex::encode(nonce.as_bytes()),
-            // The new key isn't known at signing time; the manager verifies
-            // against the new_key from the request, but we sign before creating
-            // the request. The old format still works because the bridge
-            // creates the signature before calling submit_rotation.
-            "" // placeholder for new_public_key — will be verified differently
+            hex::encode(nonce.as_bytes())
         );
         keypair.sign(message.as_bytes()).to_bytes().to_vec()
     }

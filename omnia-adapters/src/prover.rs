@@ -268,6 +268,7 @@ pub fn deserialize_verifying_key(bytes: &[u8]) -> Result<VerifyingKey, ProverErr
 /// `OMNIA-BATCH-VRFY-V1`, binding the randomness to the specific proofs
 /// being verified. This prevents the prover from manipulating the aggregation.
 pub fn verify_multiple(vk: &VerifyingKey, proof_pairs: &[(Proof, Vec<ark_bn254::Fr>)]) -> Result<bool, ProverError> {
+    #[allow(unused_imports)] // PrimeField::from_be_bytes_mod_order is used below
     use ark_ff::PrimeField;
     use ark_serialize::CanonicalSerialize;
 

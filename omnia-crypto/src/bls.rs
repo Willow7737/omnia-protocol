@@ -600,7 +600,7 @@ pub(crate) fn aggregate_signatures_unchecked(signatures: &[BlsSignature]) -> Res
 
 /// Aggregate multiple BLS signatures with duplicate signer detection and deduplication.
 ///
-/// This is the safe version of [`aggregate_signatures_unchecked`] — it takes public keys
+/// This is the safe version of the unchecked aggregation function — it takes public keys
 /// alongside signatures, detects duplicate signers, and deduplicates before
 /// aggregating. Duplicate signers (identified by their public key) are kept only
 /// once, using their first occurrence.
