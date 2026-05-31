@@ -114,7 +114,9 @@ pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness, Operat
 
 // MerkleProof and BLAKE3 tree functions are always available.
 // MerkleProof<H> is generic over hash function (Blake3/Poseidon) for type safety.
-pub use merkle::{build_merkle_tree, compute_root_from_proof, Blake3, Blake3MerkleProof, HashFunction, MerkleError, MerkleProof};
+pub use merkle::{
+    build_merkle_tree, compute_root_from_proof, Blake3, Blake3MerkleProof, HashFunction, MerkleError, MerkleProof,
+};
 #[cfg(feature = "arkworks")]
 pub use merkle::{build_poseidon_merkle_tree, Poseidon, PoseidonMerkleProof};
 

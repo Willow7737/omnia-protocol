@@ -838,10 +838,17 @@ impl ChaosNetwork {
                 continue;
             }
             visited.insert(id);
-            let event = self.nodes[source_idx].graph.get(&id).cloned()
+            let event = self.nodes[source_idx]
+                .graph
+                .get(&id)
+                .cloned()
                 .ok_or_else(|| anyhow::anyhow!("Event {:?} not found in source graph", &id[..4]))?;
-            if let Some(op) = event.other_parent { stack.push(op); }
-            if let Some(sp) = event.self_parent { stack.push(sp); }
+            if let Some(op) = event.other_parent {
+                stack.push(op);
+            }
+            if let Some(sp) = event.self_parent {
+                stack.push(sp);
+            }
             result.push(event);
         }
         result.reverse(); // Parents first for correct insertion order

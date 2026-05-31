@@ -101,7 +101,7 @@ impl UsefulWorkProof {
             compute_units_consumed,
             verifier_signature,
         };
-        proof.validate()?;  // Validate on construction
+        proof.validate()?; // Validate on construction
         Ok(proof)
     }
 

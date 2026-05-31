@@ -352,8 +352,9 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> Result<([u8; 32], Vec<P
         while i < level.len() {
             let left = level[i];
             let right = if i + 1 < level.len() { level[i + 1] } else { Fr::zero() };
-            let hash = poseidon_hash_to_fr(left, right)
-                .map_err(|e| MerkleError::HashFailed(format!("Poseidon hash failed in Merkle tree construction: {e}")))?;
+            let hash = poseidon_hash_to_fr(left, right).map_err(|e| {
+                MerkleError::HashFailed(format!("Poseidon hash failed in Merkle tree construction: {e}"))
+            })?;
             next_level.push(hash);
             i += 2;
         }

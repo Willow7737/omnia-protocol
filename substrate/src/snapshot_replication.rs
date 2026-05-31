@@ -156,9 +156,8 @@ pub fn replicate_snapshot(snapshot: &StateSnapshot, config: &ReplicationConfig) 
         }
     }
 
-    let primary = primary_path.ok_or_else(|| {
-        SnapshotError::Serialization("No replica directories configured".into())
-    })?;
+    let primary =
+        primary_path.ok_or_else(|| SnapshotError::Serialization("No replica directories configured".into()))?;
     Ok(primary)
 }
 

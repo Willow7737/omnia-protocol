@@ -33,6 +33,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use redb::ReadableTable;
 use serde::{Deserialize, Serialize};
 
 use omnia_primitives::Event;
@@ -478,8 +479,9 @@ impl SlashingStore for RedbSlashingStore {
                 .get("state")
                 .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
             {
-                Some(value) => postcard::from_bytes(value.value())
-                    .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?,
+                Some(value) => {
+                    postcard::from_bytes(value.value()).map_err(|e| SlashingStoreError::Serialization(e.to_string()))?
+                }
                 None => SlashingState::default(),
             }
         };
@@ -494,8 +496,7 @@ impl SlashingStore for RedbSlashingStore {
         let decrement = amount.min(current);
         state.slash_points.insert(*validator, current - decrement);
 
-        let bytes = postcard::to_allocvec(&state)
-            .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
+        let bytes = postcard::to_allocvec(&state).map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
         {
             let mut table = write_txn
                 .open_table(SLASHING_TABLE)

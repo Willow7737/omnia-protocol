@@ -280,7 +280,8 @@ mod tests {
         let event = make_test_event(0);
         let event_id = event.id;
 
-        pool.submit(ValidationTask::ValidateEvent(Box::new(event))).expect("submit should succeed");
+        pool.submit(ValidationTask::ValidateEvent(Box::new(event)))
+            .expect("submit should succeed");
         thread::sleep(std::time::Duration::from_millis(100));
 
         let results = pool.drain_results();
@@ -305,7 +306,8 @@ mod tests {
         for seq in 0..num_events {
             let event = make_test_event(seq as u64);
             event_ids.push(event.id);
-            pool.submit(ValidationTask::ValidateEvent(Box::new(event))).expect("submit should succeed");
+            pool.submit(ValidationTask::ValidateEvent(Box::new(event)))
+                .expect("submit should succeed");
         }
 
         // Give workers time to process

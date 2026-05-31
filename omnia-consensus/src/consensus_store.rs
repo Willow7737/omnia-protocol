@@ -21,6 +21,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use redb::ReadableTable;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

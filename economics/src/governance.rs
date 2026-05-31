@@ -388,7 +388,9 @@ impl GovernanceState {
         }
 
         // Proposal passes: set execution_time with time-lock delay.
-        let proposal = self.proposals.get_mut(proposal_id)
+        let proposal = self
+            .proposals
+            .get_mut(proposal_id)
             .ok_or_else(|| EconomicsError::ProposalNotFound(proposal_id.to_string()))?;
         proposal.execution_time = Some(current_time_ms.saturating_add(self.time_lock_ms));
 

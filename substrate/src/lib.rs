@@ -175,7 +175,7 @@ fn parse_consensus_seed() -> [u8; 32] {
     let mut seed = [0u8; 32];
     getrandom::getrandom(&mut seed).expect(
         "Failed to generate random consensus seed — cryptographic RNG is unavailable. \
-         Set OMNIA_CONSENSUS_SEED environment variable or ensure system RNG is functional."
+         Set OMNIA_CONSENSUS_SEED environment variable or ensure system RNG is functional.",
     );
     seed
 }
@@ -761,10 +761,7 @@ impl Substrate {
 
         #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
-            gossip
-                .broadcast_event(event)
-                .await
-                .map_err(SubstrateError::from)?;
+            gossip.broadcast_event(event).await.map_err(SubstrateError::from)?;
         }
 
         Ok(())

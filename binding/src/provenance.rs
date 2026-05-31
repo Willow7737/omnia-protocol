@@ -222,7 +222,7 @@ impl ProvenanceLog {
         mut commitment: QuantumCommitment,
     ) -> Result<ProvenanceEvent, ProvenanceError> {
         let prev = self.events.last().ok_or_else(|| {
-            ProvenanceError::InvalidState("Provenance log is empty \u2014 cannot transfer".into())
+            ProvenanceError::InvalidState("Provenance log is empty \u{2014} cannot transfer".into())
         })?;
 
         // Set the commitment's previous_hash to link to the previous commitment
@@ -325,7 +325,7 @@ impl ProvenanceLog {
     /// `true` if the chain is intact, `false` if any link is broken.
     pub fn verify_chain(&self) -> bool {
         if self.events.is_empty() {
-            return false; // Empty log is invalid \u2014 must have at least a Created event
+            return false; // Empty log is invalid \u{2014} must have at least a Created event
         }
 
         // First event must be a Created event with genesis previous_hash

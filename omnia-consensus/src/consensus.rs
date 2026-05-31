@@ -147,7 +147,7 @@ impl ConsensusConfig {
     pub fn validate(&self) -> Result<(), ConsensusError> {
         if self.round_seed == [0u8; 32] {
             return Err(ConsensusError::EntropyFailed(
-                "round_seed must not be all zeros — this would compromise leader selection".to_string()
+                "round_seed must not be all zeros — this would compromise leader selection".to_string(),
             ));
         }
         Ok(())
@@ -985,7 +985,11 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
 
         self.update_round_seed_from_timeout(next);
 
-        tracing::info!("Round {} timed out, advancing to round {} (normal liveness mechanism)", current, next);
+        tracing::info!(
+            "Round {} timed out, advancing to round {} (normal liveness mechanism)",
+            current,
+            next
+        );
     }
 
     /// Derive a new round seed from the current seed and round number

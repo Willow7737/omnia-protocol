@@ -10,7 +10,7 @@
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use omnia_consensus::CausalGraph;
 use omnia_crypto::{generate_keypair, NodeKeypair};
-use omnia_primitives::{Event, NodeId, VectorClock, blake3_hash_domain};
+use omnia_primitives::{blake3_hash_domain, Event, NodeId, VectorClock};
 use std::sync::OnceLock;
 
 /// Generate the keypair once so it is not re-created on every benchmark

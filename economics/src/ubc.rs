@@ -85,7 +85,9 @@ impl UbcToken {
     /// overflow `u64`. This should never happen in practice but is
     /// checked to prevent silent balance truncation via `saturating_add`.
     pub fn reward(&mut self, amount: u64) -> Result<(), EconomicsError> {
-        self.balance = self.balance.checked_add(amount)
+        self.balance = self
+            .balance
+            .checked_add(amount)
             .ok_or_else(|| EconomicsError::BalanceOverflow)?;
         Ok(())
     }

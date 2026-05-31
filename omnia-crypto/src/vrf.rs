@@ -105,7 +105,10 @@ mod serde_array_64 {
             arr.copy_from_slice(&bytes);
             Ok(arr)
         } else {
-            Err(serde::de::Error::custom(format!("expected 64 bytes, got {}", bytes.len())))
+            Err(serde::de::Error::custom(format!(
+                "expected 64 bytes, got {}",
+                bytes.len()
+            )))
         }
     }
 }

@@ -82,9 +82,9 @@ impl RollupOperator {
         let old_root = graph.state_root();
         // Apply events to compute new state root
         for event in &events {
-            graph.insert(event.clone()).map_err(|e| {
-                RollupError::Serialization(format!("Failed to insert event into causal graph: {e}"))
-            })?;
+            graph
+                .insert(event.clone())
+                .map_err(|e| RollupError::Serialization(format!("Failed to insert event into causal graph: {e}")))?;
         }
         let new_root = graph.state_root();
         drop(graph);

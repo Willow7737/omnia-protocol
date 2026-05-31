@@ -210,7 +210,7 @@ impl EconomicsState {
                 }
                 if self.verified_work.contains_key(&proof.result_hash) {
                     return Err(EconomicsError::InvalidOperation(
-                        "Duplicate work proof — this result hash has already been submitted".into()
+                        "Duplicate work proof — this result hash has already been submitted".into(),
                     ));
                 }
                 self.verified_work.insert(proof.result_hash, proof.clone());

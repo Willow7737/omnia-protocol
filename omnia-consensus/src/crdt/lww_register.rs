@@ -119,7 +119,10 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     /// This method uses the system clock for the timestamp, which can produce
     /// non-deterministic results in distributed scenarios. Use [`Self::clear_with_meta`]
     /// for production use, which accepts explicit metadata for deterministic clearing.
-    #[deprecated(since = "0.2.0", note = "Uses system clock for timestamp; use clear_with_meta() for determinism")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Uses system clock for timestamp; use clear_with_meta() for determinism"
+    )]
     pub fn clear(&mut self) {
         self.value = None;
         self.timestamp = current_timestamp();
