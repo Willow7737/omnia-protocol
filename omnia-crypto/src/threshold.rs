@@ -316,7 +316,7 @@ impl ThresholdKeyManager {
                 .key_shares
                 .get(&partial.participant)
                 .map(|s| s.public_key())
-                .ok_or_else(|| ThresholdError::InvalidParticipant(partial.participant))?;
+                .ok_or(ThresholdError::InvalidParticipant(partial.participant))?;
             pubkey
                 .verify(message, &partial.signature)
                 .map_err(|_| ThresholdError::InvalidSignature(partial.participant))?;
@@ -1003,7 +1003,7 @@ impl FeldmanVssSession {
             .iter()
             .filter(|&&participant_id| participant_id != my_id)
             .map(|&participant_id| {
-                let eval_index = (self.participants.iter().position(|p| p == &participant_id).unwrap() + 1) as u64;
+                let eval_index = (self.participants.iter().position(|p| p == &participant_id).expect("participant must exist in participants list") + 1) as u64;
                 let eval_point = Scalar::from_u64(eval_index);
                 let share = bls12_381_scalar::polynomial_evaluate(&polynomial_coeffs, &eval_point);
                 let share_bytes = share.to_bytes();

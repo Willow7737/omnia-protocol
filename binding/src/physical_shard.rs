@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use crate::anchor::PhysicalAnchor;
-use crate::provenance::ProvenanceLog;
+use crate::provenance::{ProvenanceError, ProvenanceLog};
 use crate::quantum_commit::{CommitmentPhase, QuantumCommitment};
 use crate::rf_fingerprint::RfFingerprint;
 
@@ -39,6 +39,9 @@ pub enum ProvenanceTrackerError {
     /// RF verification failed.
     #[error("RF verification failed for item: {0}")]
     RfVerificationFailed(String),
+    /// Provenance log error.
+    #[error("Provenance error: {0}")]
+    Provenance(#[from] ProvenanceError),
 }
 
 /// A tracker that maintains provenance logs for physical items.

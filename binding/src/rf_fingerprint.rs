@@ -99,21 +99,6 @@ impl RfFingerprint {
         let similarity_ppm = (256u64 - distance as u64) * 1_000_000 / 256;
         similarity_ppm >= self.confidence_ppm
     }
-
-    /// Create a dummy/stub RF fingerprint for testing.
-    ///
-    /// In a real deployment, the spectral hash would be computed from
-    /// actual RF measurements via feature extraction and hashing. This
-    /// stub simply uses the provided bytes directly.
-    #[cfg(test)]
-    pub fn stub(device_did: &str, hash_bytes: [u8; 32]) -> Self {
-        Self {
-            spectral_hash: hash_bytes,
-            measured_at: VectorClock::new(),
-            device_did: device_did.to_string(),
-            confidence_ppm: 950_000, // 95% in PPM
-        }
-    }
 }
 
 /// Compute the Hamming distance between two 32-byte arrays.
