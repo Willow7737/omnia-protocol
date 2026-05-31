@@ -8,6 +8,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.62](https://github.com/Willow7737/omnia-protocol/compare/v0.1.61...v0.1.62) (2026-05-31)
+
+
+### Features
+
+* comprehensive security & performance audit fixes - production hardening ([e88aadd](https://github.com/Willow7737/omnia-protocol/commit/e88aadd46544c26f08f6ddfae65ee26ab141e4e7))
+
+
+### Bug Fixes
+
+* identity_hardening tests and rustdoc broken link ([0c69bec](https://github.com/Willow7737/omnia-protocol/commit/0c69beca28c3b9c468405ac68a76c80e1e0312e5))
+* resolve all CI failures — compilation errors, test failures, fmt and warnings ([f3def05](https://github.com/Willow7737/omnia-protocol/commit/f3def057e4337279a3700eb037073ecb0af7fa60))
+* resolve remaining CI failures - zk_benchmarks, clippy, crypto tests ([74c1aa0](https://github.com/Willow7737/omnia-protocol/commit/74c1aa037312db96712b23eb8b5ac42f5e7d0218))
+* **security:** comprehensive security, performance, and correctness audit fixes ([b05c520](https://github.com/Willow7737/omnia-protocol/commit/b05c52023f168952aa063697d028170d5cf773a6))
+* update slashing tests to expect EquivocationDetected error ([0fd09c0](https://github.com/Willow7737/omnia-protocol/commit/0fd09c03d02c97705477034abf1e2a89feb8fed8))
+
 ## [0.1.61](https://github.com/Willow7737/omnia-protocol/compare/v0.1.60...v0.1.61) (2026-05-30)
 
 
