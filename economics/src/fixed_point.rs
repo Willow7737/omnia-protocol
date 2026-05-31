@@ -266,13 +266,14 @@ pub fn isqrt(n: u64) -> u64 {
 pub trait BasisPpmExt {
     /// Multiply `self` by a PPM fraction: `(self * ppm) / BASIS_PPM`.
     ///
-    /// Uses saturating arithmetic to prevent overflow on large values.
+    /// Uses u128 intermediate arithmetic to avoid premature truncation
+    /// from saturating_mul before the division.
     fn mul_ppm(self, ppm: u64) -> u64;
 }
 
 impl BasisPpmExt for u64 {
     fn mul_ppm(self, ppm: u64) -> u64 {
-        self.saturating_mul(ppm).saturating_div(BASIS_PPM)
+        ((self as u128 * ppm as u128) / BASIS_PPM as u128) as u64
     }
 }
 

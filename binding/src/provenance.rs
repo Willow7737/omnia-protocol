@@ -125,6 +125,9 @@ pub enum ProvenanceError {
     /// Invalid log structure.
     #[error("invalid log: {0}")]
     InvalidLog(String),
+    /// Invalid state for the requested operation.
+    #[error("invalid state: {0}")]
+    InvalidState(String),
 }
 
 /// An append-only provenance log for a single physical item.
@@ -217,11 +220,10 @@ impl ProvenanceLog {
         to: String,
         rf_proof: RfFingerprint,
         mut commitment: QuantumCommitment,
-    ) -> ProvenanceEvent {
-        let prev = self
-            .events
-            .last()
-            .expect("provenance log always has at least one event");
+    ) -> Result<ProvenanceEvent, ProvenanceError> {
+        let prev = self.events.last().ok_or_else(|| {
+            ProvenanceError::InvalidState("Provenance log is empty \u2014 cannot transfer".into())
+        })?;
 
         // Set the commitment's previous_hash to link to the previous commitment
         commitment.previous_hash = QuantumCommitment::compute_chain_hash(&prev.commitment.data_hash);
@@ -241,7 +243,7 @@ impl ProvenanceLog {
         };
         self.events.push(event.clone());
         self.current_holder = to;
-        event
+        Ok(event)
     }
 
     /// Record a verification event for the item.
@@ -323,7 +325,7 @@ impl ProvenanceLog {
     /// `true` if the chain is intact, `false` if any link is broken.
     pub fn verify_chain(&self) -> bool {
         if self.events.is_empty() {
-            return true;
+            return false; // Empty log is invalid \u2014 must have at least a Created event
         }
 
         // First event must be a Created event with genesis previous_hash
@@ -490,7 +492,7 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        );
+        ).unwrap();
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.current_holder, "did:omnia:bob");
@@ -547,13 +549,13 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        );
+        ).unwrap();
 
         log.transfer(
             "did:omnia:charlie".to_string(),
             test_rf("did:omnia:charlie"),
             test_commitment(b"transfer2"),
-        );
+        ).unwrap();
 
         assert!(log.verify_chain());
     }
@@ -572,7 +574,7 @@ mod tests {
             "did:omnia:bob".to_string(),
             test_rf("did:omnia:bob"),
             test_commitment(b"transfer1"),
-        );
+        ).unwrap();
 
         let bytes = log.to_bytes().unwrap();
         let restored = ProvenanceLog::from_bytes(&bytes).unwrap();
@@ -599,7 +601,7 @@ mod tests {
                 holder.to_string(),
                 test_rf(holder),
                 test_commitment(format!("transfer{}", i + 1).as_bytes()),
-            );
+            ).unwrap();
         }
 
         assert_eq!(log.len(), 4); // 1 creation + 3 transfers
@@ -636,13 +638,13 @@ mod tests {
             "did:omnia:distributor".to_string(),
             test_rf("did:omnia:distributor"),
             test_commitment(b"transfer1"),
-        );
+        ).unwrap();
 
         log.transfer(
             "did:omnia:retailer".to_string(),
             test_rf("did:omnia:retailer"),
             test_commitment(b"transfer2"),
-        );
+        ).unwrap();
 
         // Sanity: the untampered chain should verify
         assert!(log.verify_chain());

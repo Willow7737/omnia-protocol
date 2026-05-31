@@ -78,7 +78,15 @@ impl UbcToken {
     /// Unlike `mint_monthly`, this is additive — it increases the
     /// current balance without resetting it. This allows identities
     /// to earn extra compute capacity by contributing to the network.
-    pub fn reward(&mut self, amount: u64) {
-        self.balance = self.balance.saturating_add(amount);
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EconomicsError::BalanceOverflow`] if the addition would
+    /// overflow `u64`. This should never happen in practice but is
+    /// checked to prevent silent balance truncation via `saturating_add`.
+    pub fn reward(&mut self, amount: u64) -> Result<(), EconomicsError> {
+        self.balance = self.balance.checked_add(amount)
+            .ok_or_else(|| EconomicsError::BalanceOverflow)?;
+        Ok(())
     }
 }

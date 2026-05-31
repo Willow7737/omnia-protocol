@@ -101,7 +101,7 @@ impl PqcKeyRotationManager {
             // public key, binding the signature to the current key state.
             let nonce = blake3::hash(&pubkey_bytes);
             let message = format!(
-                "{}:{}:{}:{}",
+                "omnia-key-rotation:{:03}:{:020}:{}:{}",
                 request.new_phase as u8,
                 request.effective_at,
                 hex::encode(nonce.as_bytes()),
@@ -174,7 +174,7 @@ mod tests {
         let pubkey_bytes = signing_key.verifying_key().to_bytes();
         let nonce = blake3::hash(&pubkey_bytes);
         let message = format!(
-            "{}:{}:{}:{}",
+            "omnia-key-rotation:{:03}:{:020}:{}:{}",
             new_phase as u8,
             effective_at,
             hex::encode(nonce.as_bytes()),

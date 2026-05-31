@@ -109,6 +109,12 @@ pub fn migrate_sled_to_redb(sled_path: &Path, redb_path: &Path) -> MigrationResu
 
     tracing::info!(trees = tree_names.len(), "Found sled trees to migrate");
 
+    tracing::warn!(
+        "Starting sled → redb migration for {} trees. Note: migration is NOT atomic — \
+         if interrupted, some trees may be migrated and others not. Restart migration to resume.",
+        tree_names.len()
+    );
+
     for tree_name in &tree_names {
         let tree = sled_db
             .open_tree(tree_name)

@@ -264,6 +264,8 @@ impl TimeLockVoting {
                     total_released += stake.amount;
                 }
             }
+            // Compact the Vec to remove released entries, preventing unbounded growth
+            stakes.retain(|s| !s.released);
             if total_released > 0 {
                 tracing::info!(
                     owner = ?&owner[..4],

@@ -190,6 +190,9 @@ pub fn verify_proof(vk: &VerifyingKey, public_inputs: &[ark_bn254::Fr], proof: &
 ///
 /// Returns [`ProverError::SerializationError`] if serialization fails.
 pub fn serialize_proof(proof: &Proof) -> Result<Vec<u8>, ProverError> {
+    // TODO: Use serialize_compressed() for smaller proof size (~192 bytes vs ~384 bytes).
+    // Currently using uncompressed for compatibility with the verifier. Compressed
+    // serialization includes subgroup checks that provide additional security.
     let mut bytes = Vec::new();
     proof
         .serialize_uncompressed(&mut bytes)
@@ -321,6 +324,9 @@ pub fn verify_multiple(vk: &VerifyingKey, proof_pairs: &[(Proof, Vec<ark_bn254::
     // with MSM aggregation. For now, we verify each proof individually
     // but with the random scalar binding for future optimization.
     // TODO: Implement proper batch verification using random linear combinations.
+    // TODO: The random_scalars are computed but not yet used for batch verification.
+    // Once proper batch verification is implemented, these will be used to combine
+    // individual verification equations. For now, we verify each proof individually.
     for (i, (proof, inputs)) in proof_pairs.iter().enumerate() {
         let _r_i = &random_scalars[i]; // Used for binding in future batch verification
         let result = verify_proof(vk, inputs, proof)?;

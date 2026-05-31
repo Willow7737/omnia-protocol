@@ -75,20 +75,19 @@ impl RollupOperator {
             return Ok(());
         }
 
-        // 2. Compute old_root before the batch is applied, then apply the batch
-        //    events to compute the actual new_root.
-        let old_root = {
-            let graph = self.graph.read().await;
-            graph.state_root()
-        };
-        let new_root = {
-            let mut graph = self.graph.write().await;
-            // Apply events to compute new state root
-            for event in &events {
-                let _ = graph.insert(event.clone());
-            }
-            graph.state_root()
-        };
+        // 2. Compute old_root and apply events within the same write lock
+        //    to prevent TOCTOU race condition (old_root must be read while
+        //    holding the write lock to guarantee atomicity).
+        let mut graph = self.graph.write().await;
+        let old_root = graph.state_root();
+        // Apply events to compute new state root
+        for event in &events {
+            graph.insert(event.clone()).map_err(|e| {
+                RollupError::Serialization(format!("Failed to insert event into causal graph: {e}"))
+            })?;
+        }
+        let new_root = graph.state_root();
+        drop(graph);
         if old_root == new_root {
             tracing::warn!("operator: old_root == new_root after batch application — state may not have changed");
         }

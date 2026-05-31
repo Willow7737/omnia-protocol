@@ -283,6 +283,18 @@ async fn main() -> Result<()> {
         }
     };
 
+    // Generate a persistent keypair for the node. This keypair is used for
+    // signing all events and shard operations, ensuring that events can be
+    // verified as originating from this node. Unlike ephemeral keypairs
+    // (generate_keypair() per request), a persistent keypair provides
+    // cryptographic identity continuity.
+    // TODO: Support loading an existing keypair from the keystore via CLI flag.
+    let node_keypair = omnia_substrate::crypto::generate_keypair();
+    tracing::info!(
+        pubkey = %hex::encode(&node_keypair.verifying_key().to_bytes()[..8]),
+        "Persistent node keypair generated for event signing"
+    );
+
     let app_state = AppState {
         config: config.clone(),
         substrate: Arc::clone(&substrate_for_consensus),
@@ -295,6 +307,7 @@ async fn main() -> Result<()> {
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(AtomicBool::new(false)),
+        keypair: Some(node_keypair),
         settlement,
         #[cfg(feature = "zk")]
         ceremony_server,
@@ -621,6 +634,13 @@ const KEY_DERIVATION_CONTEXT: &str = "omnia-keygen-aes256gcm";
 /// (an attacker can try billions of guesses per second). This function applies
 /// 100,000 rounds of BLAKE3 derivation to slow down brute-force attacks while
 /// maintaining deterministic output (same passphrase always produces the same key).
+///
+/// SECURITY NOTE: BLAKE3-based key derivation with 100K iterations is used for
+/// passphrase stretching. This provides moderate protection but is NOT as strong
+/// as memory-hard functions like Argon2id. For production deployments with
+/// user-supplied passphrases, consider migrating to Argon2id with appropriate
+/// parameters (time=3, memory=64MB, parallelism=4).
+/// TODO: Replace with argon2 crate for production-grade key derivation.
 fn stretch_passphrase(pass: &str, context: &str) -> [u8; 32] {
     let mut key = blake3::derive_key(context, pass.as_bytes());
     for _ in 0..100_000 {

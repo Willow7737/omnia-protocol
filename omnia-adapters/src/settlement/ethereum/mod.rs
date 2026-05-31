@@ -271,6 +271,11 @@ impl EthereumLiveClient {
 
         Ok(Self {
             rpc_url: config.rpc_url.clone(),
+            // SECURITY NOTE: The clone() creates a non-zeroized copy of the private key
+            // before wrapping in Zeroizing. The original String in config remains in memory
+            // until dropped. For better security, parse the key directly from config without
+            // cloning, or zeroize the config field after first use.
+            // TODO: Use Zeroizing<String> in the config struct itself.
             operator_private_key: zeroize::Zeroizing::new(config.operator_private_key.clone()),
             contract_address,
             gas_limit: config.gas_limit,

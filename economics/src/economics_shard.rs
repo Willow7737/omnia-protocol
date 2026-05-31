@@ -86,6 +86,11 @@ pub struct EconomicsState {
     pub verified_work: HashMap<[u8; 32], UsefulWorkProof>,
     /// Admin keys authorized to submit work during the pre-ZK phase.
     pub admin_keys: HashSet<[u8; 32]>,
+    /// Verifier public key for work-proof verification.
+    ///
+    /// When `None`, verification falls back to an all-zeros key with a loud
+    /// warning — this is INSECURE and MUST be overridden in production.
+    pub verifier_pubkey: Option<[u8; 32]>,
 }
 
 impl EconomicsState {
@@ -102,6 +107,7 @@ impl EconomicsState {
             governance: GovernanceState::new(DecayRate::ten_percent()),
             verified_work: HashMap::new(),
             admin_keys: HashSet::new(),
+            verifier_pubkey: None,
         }
     }
 
@@ -112,6 +118,7 @@ impl EconomicsState {
             governance: GovernanceState::new(decay_rate),
             verified_work: HashMap::new(),
             admin_keys: HashSet::new(),
+            verifier_pubkey: None,
         }
     }
 
@@ -189,9 +196,22 @@ impl EconomicsState {
                 // false (rejecting all proofs) until real ZK verification is
                 // implemented. In non-production mode, stub verification logs
                 // a warning.
-                let verifier_pubkey = [0u8; 32]; // Placeholder — must be replaced with real verifier key
+                // SECURITY: Use a configurable verifier public key. The all-zeros default
+                // allows any forged proof to pass — this MUST be overridden in production.
+                let verifier_pubkey = self.verifier_pubkey.unwrap_or_else(|| {
+                    tracing::error!(
+                        "No verifier public key configured — work proof verification is INSECURE. \
+                         Set a proper verifier key before deploying to production."
+                    );
+                    [0u8; 32]
+                });
                 if !proof.verify(&verifier_pubkey) {
                     return Err(EconomicsError::WorkProofInvalid);
+                }
+                if self.verified_work.contains_key(&proof.result_hash) {
+                    return Err(EconomicsError::InvalidOperation(
+                        "Duplicate work proof — this result hash has already been submitted".into()
+                    ));
                 }
                 self.verified_work.insert(proof.result_hash, proof.clone());
                 let reward = proof.reward_amount();

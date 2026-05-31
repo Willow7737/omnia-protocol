@@ -10,9 +10,6 @@ use libfuzzer_sys::fuzz_target;
 use omnia_primitives::Event;
 
 fuzz_target!(|data: &[u8]| {
-    // Test that event deserialization never panics on arbitrary input
-    let _ = postcard::from_bytes::<Event>(data);
-
     // If deserialization succeeds, test that validation doesn't panic
     if let Ok(event) = postcard::from_bytes::<Event>(data) {
         // Validation should return Err, not panic

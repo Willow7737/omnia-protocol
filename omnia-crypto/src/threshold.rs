@@ -59,6 +59,12 @@ pub enum ThresholdError {
     /// The participant is not registered in the key manager.
     #[error("participant {prefix:?} not registered", prefix = .0)]
     ParticipantNotRegistered([u8; 4]),
+    /// An invalid participant was referenced in the signature set.
+    #[error("invalid participant: {0:?}")]
+    InvalidParticipant(NodeId),
+    /// An individual partial signature failed verification.
+    #[error("invalid partial signature from participant {0:?}")]
+    InvalidSignature(NodeId),
 }
 
 /// Configuration for threshold signature operations.
@@ -300,7 +306,23 @@ impl ThresholdKeyManager {
 
         let signers: Vec<NodeId> = unique_partials.iter().map(|p| p.participant).collect();
 
-        // Aggregate the BLS signatures
+        // Verify each individual partial signature before aggregation.
+        // This prevents a single invalid or malicious signature from corrupting
+        // the aggregate — without this check, aggregate_signatures_unchecked
+        // would silently produce an invalid aggregate that only fails at
+        // verify() time, making it hard to attribute blame.
+        for partial in &unique_partials {
+            let pubkey = self
+                .key_shares
+                .get(&partial.participant)
+                .map(|s| s.public_key())
+                .ok_or_else(|| ThresholdError::InvalidParticipant(partial.participant))?;
+            pubkey
+                .verify(message, &partial.signature)
+                .map_err(|_| ThresholdError::InvalidSignature(partial.participant))?;
+        }
+
+        // Aggregate the BLS signatures (now safe — all partials verified)
         let aggregate_signature = crate::bls::aggregate_signatures_unchecked(
             &unique_partials.iter().map(|p| p.signature.clone()).collect::<Vec<_>>(),
         )?;
@@ -842,7 +864,8 @@ pub struct FeldmanVssSession {
     /// This participant's polynomial coefficients as BLS12-381 scalars.
     /// Only the first `threshold` coefficients are used.
     /// `None` until `generate_shares()` is called.
-    pub polynomial_coeffs: Option<Vec<Scalar>>,
+    /// Private — the first coefficient (a_0) is the secret key.
+    polynomial_coeffs: Option<Vec<Scalar>>,
     /// Feldman commitments from each participant.
     /// Maps participant_id → list of commitment bytes (BLS public keys).
     pub commitments: HashMap<ParticipantId, Vec<Vec<u8>>>,
@@ -886,6 +909,15 @@ impl FeldmanVssSession {
             own_id: None,
             own_index: None,
         })
+    }
+
+    /// Returns the polynomial coefficients.
+    ///
+    /// # Security Warning
+    ///
+    /// The first coefficient (a_0) is the secret key. Only expose in controlled contexts.
+    pub fn coefficients(&self) -> Option<&[Scalar]> {
+        self.polynomial_coeffs.as_deref()
     }
 
     /// Generate shares for all participants (Step 1).
@@ -963,14 +995,16 @@ impl FeldmanVssSession {
 
         // Evaluate polynomial at each participant's index and encrypt the share.
         // Skip self — we already evaluated and accumulated our own share above.
+        // BUG FIX: Previously used enumerate() on the filtered iterator, which gave
+        // wrong indices when my_id was not the last participant. Now we use the
+        // participant's original position in the full participants list.
         let packages: Result<Vec<(ParticipantId, DkgSharePackage)>, DkgError> = self
             .participants
             .iter()
-            .enumerate()
-            .filter(|(_idx, &participant_id)| participant_id != my_id)
-            .map(|(idx, &participant_id)| {
-                let eval_index = idx + 1; // 1-based index
-                let eval_point = Scalar::from_u64(eval_index as u64);
+            .filter(|&&participant_id| participant_id != my_id)
+            .map(|&participant_id| {
+                let eval_index = (self.participants.iter().position(|p| p == &participant_id).unwrap() + 1) as u64;
+                let eval_point = Scalar::from_u64(eval_index);
                 let share = bls12_381_scalar::polynomial_evaluate(&polynomial_coeffs, &eval_point);
                 let share_bytes = share.to_bytes();
 

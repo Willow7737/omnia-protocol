@@ -35,6 +35,15 @@ use ark_r1cs_std::select::CondSelectGadget;
 use ark_relations::r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
 use crate::merkle::{self, Poseidon};
+use thiserror::Error;
+
+/// Errors that can occur during batch proof construction.
+#[derive(Debug, Clone, Error)]
+pub enum BatchProofError {
+    /// An input to the batch proof circuit was invalid.
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+}
 
 /// Target batch size for proof aggregation (100 transactions).
 pub const BATCH_PROOF_TARGET_SIZE: usize = 100;
@@ -99,7 +108,7 @@ impl BatchProofCircuit {
         event_hashes: Vec<Fr>,
         merkle_root: Fr,
         merkle_proofs: Vec<merkle::MerkleProof<Poseidon>>,
-    ) -> Self {
+    ) -> Result<Self, BatchProofError> {
         let num_events = event_hashes.len();
         assert_eq!(
             merkle_proofs.len(),
@@ -111,9 +120,11 @@ impl BatchProofCircuit {
 
         // Compute batch_id off-circuit as Poseidon(merkle_root, event_count)
         // so the circuit can verify it matches the in-circuit computation.
+        // SECURITY: Propagate Poseidon errors instead of silently defaulting
+        // to Fr::zero(), which would produce a batch_id that never matches
+        // the in-circuit computation.
         let batch_id = crate::poseidon::poseidon_hash_offchain(merkle_root, event_count)
-            .ok()
-            .unwrap_or(Fr::zero());
+            .map_err(|e| BatchProofError::InvalidInput(format!("Poseidon hash failed for batch_id: {e}")))?;
 
         let merkle_siblings: Vec<Vec<Option<Fr>>> = merkle_proofs
             .iter()
@@ -125,14 +136,14 @@ impl BatchProofCircuit {
             .map(|proof| proof.directions.iter().map(|d| Some(*d)).collect())
             .collect();
 
-        Self {
+        Ok(Self {
             batch_merkle_root: Some(merkle_root),
             batch_id: Some(batch_id),
             event_count: Some(event_count),
             event_hashes: event_hashes.into_iter().map(Some).collect(),
             merkle_siblings,
             merkle_directions,
-        }
+        })
     }
 
     /// Create an empty circuit suitable for trusted setup.

@@ -84,7 +84,7 @@ impl RfFingerprint {
         let distance = hamming_distance(&self.spectral_hash, current_measurement);
         // Integer PPM-based similarity: (256 - distance) * 1_000_000 / 256
         let similarity_ppm = (256u64 - distance as u64) * 1_000_000 / 256;
-        similarity_ppm > self.confidence_ppm
+        similarity_ppm >= self.confidence_ppm
     }
 
     /// Create a dummy/stub RF fingerprint for testing.
@@ -92,6 +92,7 @@ impl RfFingerprint {
     /// In a real deployment, the spectral hash would be computed from
     /// actual RF measurements via feature extraction and hashing. This
     /// stub simply uses the provided bytes directly.
+    #[cfg(test)]
     pub fn stub(device_did: &str, hash_bytes: [u8; 32]) -> Self {
         Self {
             spectral_hash: hash_bytes,
@@ -166,8 +167,10 @@ mod tests {
             "did:omnia:test".to_string(),
             1_500_000, // Should be clamped to 1_000_000
         );
-        // With confidence_ppm 1_000_000 (clamped from 1_500_000), similarity must be > 1_000_000
-        // which is impossible, so even identical hashes won't match
-        assert!(!fp.verify(&[0u8; 32]));
+        // With confidence_ppm 1_000_000 (clamped from 1_500_000), similarity_ppm
+        // for identical hashes is 1_000_000 which IS >= 1_000_000, so they match.
+        // This is correct: confidence_ppm=1_000_000 means "require 100% similarity",
+        // and identical fingerprints have 100% similarity.
+        assert!(fp.verify(&[0u8; 32]));
     }
 }

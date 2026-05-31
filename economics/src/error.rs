@@ -6,7 +6,7 @@
 use thiserror::Error;
 
 /// Errors that can occur during economics operations.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, PartialEq, Error)]
 pub enum EconomicsError {
     /// Insufficient UBC balance for a spend operation.
     #[error("Insufficient UBC: have {have}, need {need}")]
@@ -80,4 +80,16 @@ pub enum EconomicsError {
     /// Unauthorized operation (e.g., minting without admin key).
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
+
+    /// Duplicate work proof submitted.
+    #[error("Duplicate work proof: result hash already submitted")]
+    DuplicateWorkProof,
+
+    /// Balance overflow — operation would exceed maximum balance.
+    #[error("Balance overflow: operation would exceed maximum balance")]
+    BalanceOverflow,
+
+    /// Invalid operation (generic catch-all for domain errors).
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
 }

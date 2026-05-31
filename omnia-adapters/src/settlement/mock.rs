@@ -63,8 +63,9 @@ impl MockSettlementAdapter {
     /// Generate a deterministic mock transaction hash from state root and counter.
     fn mock_tx_hash(&self, root: [u8; 32]) -> TxHash {
         let count = self.counter.fetch_add(1, Ordering::Relaxed);
-        let mut input = root.to_vec();
-        input.extend_from_slice(&count.to_le_bytes());
+        let mut input = [0u8; 40];
+        input[..32].copy_from_slice(&root);
+        input[32..].copy_from_slice(&count.to_le_bytes());
         let hash = blake3::derive_key("OMNIA-MOCK-SETTLEMENT-TX", &input);
         TxHash(hash)
     }

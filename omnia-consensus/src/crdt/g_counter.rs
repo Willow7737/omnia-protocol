@@ -15,7 +15,6 @@
 use super::CvRDT;
 use omnia_primitives::NodeId;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use thiserror::Error;
 
@@ -98,12 +97,12 @@ impl GCounter {
 
     /// Compute a state hash for verification
     pub fn state_hash(&self) -> [u8; 32] {
-        let mut hasher = Sha256::new();
+        let mut hasher = blake3::Hasher::new();
         for (node, count) in &self.counts {
             hasher.update(node);
-            hasher.update(count.to_le_bytes());
+            hasher.update(&count.to_le_bytes());
         }
-        hasher.finalize().into()
+        *hasher.finalize().as_bytes()
     }
 
     /// Get the number of nodes that have contributed

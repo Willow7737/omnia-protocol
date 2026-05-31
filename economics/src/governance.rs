@@ -17,7 +17,7 @@
 //! identical results across all platforms (x86, ARM, etc.), preventing
 //! consensus divergence.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -147,8 +147,8 @@ pub struct GovernanceState {
     /// `current_time_ms + time_lock_ms`.
     pub time_lock_ms: u64,
     /// Tracks which (proposal_id, did) pairs have already voted, preventing
-    /// double-voting. The value is always `true` when present.
-    pub voted: HashMap<(String, String), bool>,
+    /// double-voting.
+    pub voted: HashSet<(String, String)>,
 }
 
 impl GovernanceState {
@@ -178,7 +178,7 @@ impl GovernanceState {
             proposals: HashMap::new(),
             quorum_percentage: DEFAULT_QUORUM_PERCENTAGE,
             time_lock_ms: DEFAULT_TIME_LOCK_MS,
-            voted: HashMap::new(),
+            voted: HashSet::new(),
         }
     }
 
@@ -199,10 +199,12 @@ impl GovernanceState {
     ///
     /// Uses integer square root via Newton's method — no floating-point
     /// arithmetic.
-    pub fn set_weight(&mut self, did: &str, stake: u64, current_epoch: u64) {
+    pub fn set_weight(&mut self, did: &str, stake: u64, _current_epoch: u64) {
         let weight = isqrt(stake).max(1);
         self.voting_weights.insert(did.to_string(), weight);
-        self.last_active.insert(did.to_string(), current_epoch);
+        // Note: We intentionally do NOT update last_active here.
+        // set_weight is an admin operation, not a vote. Updating last_active
+        // would prevent inactivity decay, which should only reset on actual voting.
     }
 
     /// Calculate the effective voting weight for a DID at the current epoch.
@@ -278,7 +280,7 @@ impl GovernanceState {
     ) -> Result<(), EconomicsError> {
         // Check for double-vote before tallying
         let vote_key = (proposal_id.to_string(), did.to_string());
-        if self.voted.contains_key(&vote_key) {
+        if self.voted.contains(&vote_key) {
             return Err(EconomicsError::DuplicateVote(proposal_id.to_string()));
         }
 
@@ -305,7 +307,7 @@ impl GovernanceState {
         self.last_active.insert(did.to_string(), current_epoch);
 
         // Record that this DID has voted on this proposal
-        self.voted.insert(vote_key, true);
+        self.voted.insert(vote_key);
 
         Ok(())
     }
@@ -386,7 +388,8 @@ impl GovernanceState {
         }
 
         // Proposal passes: set execution_time with time-lock delay.
-        let proposal = self.proposals.get_mut(proposal_id).expect("proposal was found above");
+        let proposal = self.proposals.get_mut(proposal_id)
+            .ok_or_else(|| EconomicsError::ProposalNotFound(proposal_id.to_string()))?;
         proposal.execution_time = Some(current_time_ms.saturating_add(self.time_lock_ms));
 
         Ok(())
@@ -401,6 +404,7 @@ impl GovernanceState {
     ///
     /// This is used for quorum computation: a proposal passes quorum when
     /// the total weight of votes cast ≥ `quorum_percentage`% of this total.
+    #[deprecated(note = "Use total_effective_voting_weight() instead — this method does not account for decay")]
     pub fn total_voting_weight(&self) -> u64 {
         self.voting_weights.values().copied().fold(0u64, u64::saturating_add)
     }
@@ -421,6 +425,10 @@ impl GovernanceState {
     /// Remove expired proposals from the active set.
     ///
     /// Returns the number of proposals removed.
+    // TODO: cleanup_expired iterates proposals twice (once to collect expired IDs,
+    // once with retain). This could be optimized to a single pass using
+    // HashMap::drain_filter (nightly) or by iterating once and collecting IDs,
+    // then doing both removals in sequence.
     pub fn cleanup_expired(&mut self, current_epoch: u64) -> usize {
         let expired_ids: Vec<String> = self
             .proposals
@@ -431,7 +439,7 @@ impl GovernanceState {
 
         self.proposals.retain(|_, p| !p.is_expired(current_epoch));
         for id in &expired_ids {
-            self.voted.retain(|key, _| !key.0.eq(id));
+            self.voted.retain(|key| !key.0.eq(id));
         }
         expired_ids.len()
     }

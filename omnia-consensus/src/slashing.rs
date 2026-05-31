@@ -61,7 +61,10 @@ fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .unwrap_or_else(|e| {
+            tracing::error!("System clock is before UNIX epoch: {e} — using 0 as timestamp");
+            0
+        })
 }
 
 /// Categorizes the type of Byzantine offense committed by a validator.
@@ -136,6 +139,12 @@ pub enum SlashOutcome {
 }
 
 /// Graded penalty system for graduated slashing.
+///
+/// # Non-Determinism Warning
+/// The `burn_percentage: f64` field uses floating-point arithmetic which is
+/// non-deterministic across platforms (x86 vs ARM). In a blockchain context,
+/// different nodes may compute different slash amounts. Consider migrating to
+/// fixed-point (basis points as u64 where 10000 = 100%) in a future version.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SlashPenalty {
     /// First offense below threshold: warning + small stake burn.
@@ -453,7 +462,28 @@ impl SlashingStore for RedbSlashingStore {
     }
 
     fn decrement_slash_count_by(&self, validator: &[u8; 32], amount: u64) -> Result<(), SlashingStoreError> {
-        let mut state = self.load()?;
+        // Perform the entire read-modify-write inside a single redb write
+        // transaction to eliminate the TOCTOU race that existed when load()
+        // and save() used separate transactions.
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+
+        let mut state = {
+            let read_table = write_txn
+                .open_table(SLASHING_TABLE)
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+            match read_table
+                .get("state")
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?
+            {
+                Some(value) => postcard::from_bytes(value.value())
+                    .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?,
+                None => SlashingState::default(),
+            }
+        };
+
         let current = state.slash_points.get(validator).copied().unwrap_or(0);
         if current == 0 {
             return Err(SlashingStoreError::Persistence(format!(
@@ -463,7 +493,21 @@ impl SlashingStore for RedbSlashingStore {
         }
         let decrement = amount.min(current);
         state.slash_points.insert(*validator, current - decrement);
-        self.save(&state)
+
+        let bytes = postcard::to_allocvec(&state)
+            .map_err(|e| SlashingStoreError::Serialization(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(SLASHING_TABLE)
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+            table
+                .insert("state", bytes.as_slice())
+                .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        Ok(())
     }
 }
 

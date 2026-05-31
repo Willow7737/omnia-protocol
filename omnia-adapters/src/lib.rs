@@ -108,13 +108,13 @@ pub use proof_bundle::{L1Anchor, ProofBundle, ProofBundleError};
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "arkworks")]
-pub use batch_proof_circuit::{BatchProofCircuit, BATCH_PROOF_TARGET_SIZE};
+pub use batch_proof_circuit::{BatchProofCircuit, BatchProofError, BATCH_PROOF_TARGET_SIZE};
 #[cfg(feature = "arkworks")]
 pub use circuit::{EventWitness, ExpandedRollupCircuit, MerklePathWitness, OperationType};
 
 // MerkleProof and BLAKE3 tree functions are always available.
 // MerkleProof<H> is generic over hash function (Blake3/Poseidon) for type safety.
-pub use merkle::{build_merkle_tree, compute_root_from_proof, Blake3, Blake3MerkleProof, HashFunction, MerkleProof};
+pub use merkle::{build_merkle_tree, compute_root_from_proof, Blake3, Blake3MerkleProof, HashFunction, MerkleError, MerkleProof};
 #[cfg(feature = "arkworks")]
 pub use merkle::{build_poseidon_merkle_tree, Poseidon, PoseidonMerkleProof};
 

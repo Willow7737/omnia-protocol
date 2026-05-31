@@ -16,7 +16,7 @@ use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
 use omnia_shards::{EconomicsOp, ShardOp};
-use omnia_substrate::{generate_keypair, Event};
+use omnia_substrate::Event;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
@@ -127,11 +127,15 @@ async fn handle_economics_op(
     let econ_op = parse_economics_op(body).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     let node_id = state.config.node_id_bytes();
-    // TODO: Replace ephemeral keypair with the node's persistent keypair.
-    // Using generate_keypair() creates a new keypair per request, meaning events
-    // cannot be verified as originating from this node. The node's identity key
-    // from the keystore should be used instead for event signing.
-    let keypair = generate_keypair();
+    // Use the node's persistent keypair for signing — events must be
+    // verifiable as originating from this node. Ephemeral keypairs would
+    // make signature verification meaningless.
+    let keypair = state.keypair.clone().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "No persistent keypair configured"})),
+        )
+    })?;
     let mut event = Event::genesis(node_id, Vec::new()).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,

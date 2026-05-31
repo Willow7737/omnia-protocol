@@ -103,8 +103,9 @@ impl CelestiaAdapter {
     /// Generate a deterministic mock transaction hash from state root and counter.
     fn mock_tx_hash(&self, root: [u8; 32]) -> TxHash {
         let count = self.counter.fetch_add(1, Ordering::Relaxed);
-        let mut input = root.to_vec();
-        input.extend_from_slice(&count.to_le_bytes());
+        let mut input = [0u8; 40];
+        input[..32].copy_from_slice(&root);
+        input[32..].copy_from_slice(&count.to_le_bytes());
         let hash = blake3::derive_key("OMNIA-CELESTIA-SETTLEMENT-TX", &input);
         TxHash(hash)
     }
@@ -268,6 +269,10 @@ impl SettlementAdapter for CelestiaAdapter {
             )));
         }
 
+        // CRITICAL TODO: The computed root is NEVER compared against the on-chain data root.
+        // A malicious Celestia node could serve any data. This must be implemented before
+        // mainnet deployment by fetching the on-chain data root hash and comparing it
+        // with the computed root.
         // TODO: Fetch the actual on-chain data root from Celestia RPC and compare
         // it with computed_root. The current implementation computes the root
         // locally but never verifies it against the on-chain data root, which

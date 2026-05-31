@@ -1,4 +1,7 @@
 //! Shared compression utilities for gossip messages.
+//!
+// TODO: Replace String-based error type with a structured CompressionError enum
+// for better error handling and pattern matching in callers.
 
 use serde::{de::DeserializeOwned, Serialize};
 

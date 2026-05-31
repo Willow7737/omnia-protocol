@@ -556,10 +556,17 @@ impl OmniaNetwork {
     }
 
     /// Run the network event loop. This should be spawned on a tokio task.
-    pub async fn run(&mut self) {
+    ///
+    /// The `shutdown` channel allows graceful termination: when the sender
+    /// side is dropped or sends `true`, the loop exits cleanly.
+    pub async fn run(mut self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
         use futures::StreamExt;
         loop {
             tokio::select! {
+                _ = shutdown.changed() => {
+                    tracing::info!("Network event loop shutting down");
+                    break;
+                }
                 event = self.swarm.select_next_some() => {
                     self.handle_swarm_event(event).await;
                 }

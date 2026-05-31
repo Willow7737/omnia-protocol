@@ -159,7 +159,6 @@ pub const TARGET_FINALITY_MS: u64 = 5_000;
 /// If the environment variable is not set or is invalid, generates a random seed.
 fn parse_consensus_seed() -> [u8; 32] {
     if let Ok(hex_seed) = std::env::var("OMNIA_CONSENSUS_SEED") {
-        // Accept hex-encoded 64-character seed
         if hex_seed.len() == 64 {
             if let Ok(bytes) = hex::decode(&hex_seed) {
                 let mut arr = [0u8; 32];
@@ -167,13 +166,17 @@ fn parse_consensus_seed() -> [u8; 32] {
                 return arr;
             }
         }
-        tracing::warn!("OMNIA_CONSENSUS_SEED must be 64 hex characters. Using random seed.");
+        tracing::warn!(
+            "OMNIA_CONSENSUS_SEED must be 64 hex characters (provided: {} chars). Using random seed.",
+            hex_seed.len()
+        );
     }
 
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).unwrap_or_else(|_| {
-        seed[0] = 1; // Non-zero fallback
-    });
+    getrandom::getrandom(&mut seed).expect(
+        "Failed to generate random consensus seed — cryptographic RNG is unavailable. \
+         Set OMNIA_CONSENSUS_SEED environment variable or ensure system RNG is functional."
+    );
     seed
 }
 
@@ -348,10 +351,12 @@ impl SubstrateConfig {
     /// Production callers should set `slashing_data_dir` before
     /// constructing the substrate.
     pub fn new(node_id: NodeId) -> Self {
-        let total_nodes = std::env::var("OMNIA_TOTAL_NODES")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(4);
+        let total_nodes: usize = std::env::var("OMNIA_TOTAL_NODES")
+            .map(|v| v.parse().unwrap_or(4))
+            .unwrap_or_else(|_| {
+                tracing::warn!("OMNIA_TOTAL_NODES not set, defaulting to 4 — configure this for production");
+                4
+            });
         let seed = parse_consensus_seed();
         Self::build_config(node_id, total_nodes, seed)
     }
@@ -725,19 +730,13 @@ impl Substrate {
     /// is still processed through consensus but a warning is logged and
     /// it will not be available for block proposals.
     ///
-    /// FIND-HIGH-005 FIX: The event is wrapped in `Arc<Event>` to avoid
-    /// triple cloning in the hot path (graph insert, mempool insert, gossip
-    /// broadcast). Each consumer receives an `Arc::clone` instead of a full
-    /// `Event` clone.
     pub async fn submit_event(&mut self, event: Event) -> Result<()> {
         event.validate().map_err(SubstrateError::from)?;
 
-        // Wrap in Arc to avoid triple clone (FIND-HIGH-005)
-        let event_arc = Arc::new(event);
-
+        // Remove Arc, use event directly with clones
         {
             let mut graph = self.graph.write().await;
-            let inserted_ids = graph.insert((*event_arc).clone()).map_err(SubstrateError::from)?;
+            let inserted_ids = graph.insert(event.clone()).map_err(SubstrateError::from)?;
             self.unprocessed_events.extend(inserted_ids);
         }
 
@@ -745,17 +744,17 @@ impl Substrate {
 
         let graph = self.graph.read().await;
         self.consensus
-            .process_event(&event_arc, &graph)
+            .process_event(&event, &graph)
             .map_err(SubstrateError::from)?;
         drop(graph);
 
         // Also add to mempool for block proposal when we are the leader.
         // If the mempool is full, log a warning but do not fail — the event
         // has already been processed through consensus.
-        if let Err(e) = self.mempool.insert((*event_arc).clone()) {
+        if let Err(e) = self.mempool.insert(event.clone()) {
             tracing::warn!(
                 "Mempool full, event {} not queued for proposal: {}",
-                hex::encode(&event_arc.id[..4]),
+                hex::encode(&event.id[..4]),
                 e
             );
         }
@@ -763,7 +762,7 @@ impl Substrate {
         #[cfg(feature = "network")]
         if let Some(ref mut gossip) = self.gossip {
             gossip
-                .broadcast_event((*event_arc).clone())
+                .broadcast_event(event)
                 .await
                 .map_err(SubstrateError::from)?;
         }
