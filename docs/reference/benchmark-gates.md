@@ -26,6 +26,8 @@ Event size: 64 bytes (default)
 
 ### Results (v0.1.48)
 
+> **Reproduction**: Run `cargo bench --bench baseline_bench` and `cargo bench --bench throughput` for current measurements. The v0.1.48 micro-benchmarks used `total_nodes=3` with 1 registered validator.
+
 | Metric | Value |
 |--------|-------|
 | **Sustained TPS** | 7,190 events/sec |

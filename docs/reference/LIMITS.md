@@ -93,15 +93,16 @@ tested at scale) are marked with ⏳.
 
 ## 7. Throughput Benchmarks (Release Build)
 
-All benchmarks run on a single thread, release profile (`lto = "fat"`, `codegen-units = 1`).
+All benchmarks run on a single thread, release profile. Limit verification tests use the workspace default profile (`lto = "fat"`, `codegen-units = 1`). The v0.1.48 micro-benchmarks used a different profile (opt-level=2, no LTO, codegen-units=16).
 
 | Benchmark | Rate | Latency | Conditions |
 |:---|---:|---:|:---|
-| CausalGraph insertion | **1,417** evt/s | ~706 μs/evt | 10K events, 0B payload, linear chain |
-| ConsensusEngine processing | **9,029** evt/s | ~111 μs/evt | 1K events, 0B payload, linear chain |
-| Ed25519 signature verification | **26,935** sig/s | ~37 μs/sig | 1K signatures, standalone |
+| CausalGraph insertion (full cycle) | ~**1,400** evt/s | ~700 μs/evt | 10K events, 0B payload, linear chain; includes create+sign+insert |
+| CausalGraph insertion only | ~**55,000** evt/s (est.) | ~18 μs/evt | DAG insert p50 from Criterion benchmarks; insertion only, no signing |
+| ConsensusEngine processing | ~**9,000** evt/s | ~111 μs/evt | 1K events, 0B payload, linear chain; total_nodes=4 |
+| Ed25519 signature verification | ~**27,000** sig/s (est.) | ~37 μs/sig | 1K signatures, simple test timing; not a Criterion benchmark |
 | VRF leader selection | **10,000** sel/s | — | 150 candidates, 10K rounds |
-| CRDT batch merge | ~100K ops/s | — | 100 batches × 1K ops each |
+| CRDT batch merge | ~100K ops/s (est.) | — | Estimated from BatchCrdtMerger; no dedicated benchmark exists |
 
 ### Memory Estimates
 
@@ -154,6 +155,8 @@ Tested with 150 candidates (stake 110–1,510), 10,000 rounds:
 | omnia-chaos-tests | 84 | ✅ |
 | Limit verification | 39 | ✅ |
 | **Total** | **1,315** | **All passing** |
+
+> Note: Test counts vary by feature configuration. The 1,382 figure includes feature-gated tests (BLS, arkworks/ark-bn254, etc.) that are only compiled when those features are enabled.
 
 ---
 

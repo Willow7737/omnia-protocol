@@ -5,6 +5,8 @@
 This document measures the performance impact of batch event processing vs.
 single-event processing in the Omnia Protocol, based on v0.1.48 micro-benchmark data.
 
+> **Note**: The original v0.1.48 benchmarks referenced `omnia-bench-standalone` and `omnia-zk-bench` binaries which have been consolidated into the `omnia-benches` Criterion suite. To reproduce: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`, `cargo bench --bench zk_benchmarks --features full`
+
 ## Benchmark Scenarios
 
 ### 1. Per-Event CPU Cost: Single vs. Batched

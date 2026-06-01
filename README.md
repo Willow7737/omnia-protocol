@@ -8,7 +8,7 @@
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
   <img src="https://img.shields.io/badge/Tests-1,382_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
-  <img src="https://img.shields.io/badge/Lines-79,876-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
+  <img src="https://img.shields.io/badge/Lines-81,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/Phases_0--5-Complete-brightgreen?style=for-the-badge" alt="Phases 0-5">
@@ -112,7 +112,7 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 | `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ |
 | `tests/` | Integration tests | 39 | ✅ |
 
-**Total: 219 Rust source files, 79,876 lines, 1,382 tests — all passing.**
+**Total: 224 Rust source files, 81,000+ lines, 1,382 tests — all passing.**
 
 ---
 
@@ -344,17 +344,17 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 | Metric | Measured | Conditions |
 |--------|----------|------------|
-| **Synchronous pipeline** | ~7,190 evt/s | Release build, single-node, no async |
+| **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async |
 | **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead |
-| **Finality latency p50** | 93 µs | Synchronous, single-node |
-| **Graph insert p50** | 18 µs | O(1) amortized, 0→1000 events |
-| **Ed25519 verify** | ~26,935 sig/s | Standalone |
-| **Groth16 prove (expanded)** | ~88 ms/event | BN254, R1CS |
-| **Groth16 verify** | ~2.7 ms | Single proof |
-| **VRF compute** | ~19 µs | Ed25519 + BLAKE3 |
-| **CRDT batch merge** | ~100K ops/s | 1K ops/batch |
+| **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node |
+| **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events |
+| **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone |
+| **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark) | BN254, R1CS |
+| **Groth16 verify** | ~2.7 ms (Criterion benchmark) | Single proof |
+| **VRF compute** | ~19 µs (Criterion benchmark) | Ed25519 + BLAKE3 |
+| **CRDT batch merge** | ~100K ops/s (est., no dedicated benchmark) | 1K ops/batch |
 
-> These are **measured** numbers from benchmark suites, not aspirational targets. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead.
+> Numbers marked (est.) are approximate and environment-dependent, not from rigorous Criterion benchmarks. Numbers marked (Criterion benchmark) or (v0.1.48 micro-benchmark) come from reproducible benchmark suites. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead. For reproduction, run: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`, `cargo bench --bench zk_benchmarks --features full`
 
 ---
 

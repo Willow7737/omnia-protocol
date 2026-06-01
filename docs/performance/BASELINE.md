@@ -45,6 +45,8 @@ Event size: 64–256 bytes (default 64)
 | **DAG insert p50 (1000 events)** | 18.28 µs |
 | **Gossip propagation p50 (sim)** | 38.93 µs |
 
+> **Note**: The v0.1.48 micro-benchmarks used `total_nodes=3` with 1 registered validator in the Criterion benchmark code, not `total_nodes=1` as sometimes documented. The effective behavior is single-node trivial finality since only 1 validator participates.
+
 ### Multi-Node BFT E2E Results (v0.1.53)
 
 Multi-node BFT finality has been validated through **real libp2p networking** (QUIC transport, GossipSub protocol) in `omnia-network/tests/e2e_multi_node_consensus.rs`:
@@ -132,7 +134,7 @@ Simulated multi-node BFT also passes (`omnia-consensus/tests/multi_node_test.rs`
 3. **DAG insertion is O(1) amortized** — p50 stays flat at ~18 µs from empty graph to 1000-event graph.
 4. **Sharding is effective** — ShardedConsensusState matches raw HashMap throughput and scales well with 4 threads (5M ops/sec).
 5. **ZK proof generation is the bottleneck** — expanded circuit proof generation at ~79ms/event limits practical batch sizes. This is expected for Groth16 on BN254.
-6. **Poseidon hash is ~5,000× slower than BLAKE3** (~95 µs vs ~0.02 µs). This is the expected trade-off for ZK-compatible hash functions.
+6. **Poseidon hash is significantly slower than BLAKE3** (~95 µs vs ~0.02 µs per hash, ~5,000× ratio). This is the expected trade-off for ZK-compatible hash functions.
 
 ### Throughput Bottleneck Analysis
 With the true pipeline throughput at ~7,190 events/sec, the remaining bottlenecks for real-world deployment are:
