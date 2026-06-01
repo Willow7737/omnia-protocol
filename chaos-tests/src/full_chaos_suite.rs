@@ -525,7 +525,7 @@ fn run_message_loss(config: &ChaosSuiteConfig) -> ChaosScenarioResult {
     for round in 0..config.rounds_per_scenario {
         for i in 0..n {
             let payload = vec![round as u8, i as u8];
-            if let Err(_) = network.submit_event(i, payload) {
+            if network.submit_event(i, payload).is_err() {
                 failures += 1;
             }
         }
