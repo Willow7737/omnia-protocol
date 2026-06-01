@@ -83,7 +83,7 @@ fn test_ubc_mint_monthly_no_double_reset() {
 fn test_ubc_reward_additive() {
     let mut token = UbcToken::new("did:omnia:alice".to_string(), 1000, 0);
     token.spend(500).unwrap();
-    token.reward(300);
+    token.reward(300).unwrap();
     assert_eq!(token.balance, 800);
 }
 
@@ -141,14 +141,14 @@ fn test_useful_work_proof_validate() {
         nonzero_hash(),
         100,
         vec![1, 2, 3, 4],
-    );
-    assert!(proof.validate().is_ok());
+    )
+    .expect("valid proof should construct");
     assert_eq!(proof.reward_amount(), 100);
 }
 
 #[test]
 fn test_useful_work_proof_zero_compute_units() {
-    let proof = UsefulWorkProof::new(
+    let result = UsefulWorkProof::new(
         UsefulWorkType::DistributedStorage {
             data_hash: nonzero_hash(),
             storage_duration: 86400000,
@@ -157,7 +157,7 @@ fn test_useful_work_proof_zero_compute_units() {
         0,
         vec![1, 2, 3, 4],
     );
-    assert!(matches!(proof.validate(), Err(EconomicsError::WorkProofInvalid)));
+    assert!(matches!(result, Err(EconomicsError::WorkProofInvalid)));
 }
 
 #[test]
@@ -306,7 +306,8 @@ fn test_economics_state_full_lifecycle() {
         nonzero_hash(),
         500, // 500 compute units → 500 UBC reward
         vec![1, 2, 3, 4],
-    );
+    )
+    .expect("valid proof should construct");
     state
         .apply(
             &EconomicsOp::SubmitWork {

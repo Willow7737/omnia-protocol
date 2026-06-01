@@ -6,6 +6,7 @@
 
 // omnia-substrate is deprecated but omnia-node still uses its Substrate
 // runtime and SlashingEngine types. Allow deprecated at crate level.
+use omnia_substrate::crypto::NodeKeypair;
 use omnia_substrate::SlashingEngine;
 use omnia_substrate::Substrate;
 
@@ -284,6 +285,16 @@ pub struct AppState {
     /// When `true`, the node is still catching up with the network
     /// and should not be considered ready to serve traffic.
     pub is_syncing: Arc<AtomicBool>,
+    /// Persistent node keypair for signing events and shard operations.
+    ///
+    /// This keypair is loaded or generated at startup and used for all
+    /// event signing operations. Using a persistent keypair ensures that
+    /// events can be verified as originating from this node, unlike
+    /// ephemeral keypairs which create a new key per request.
+    ///
+    /// If `None`, API endpoints that require signing will return
+    /// `500 Internal Server Error`.
+    pub keypair: Option<NodeKeypair>,
     /// Settlement adapter for L1 batch submissions.
     ///
     /// Uses `MockSettlementAdapter` by default (zero alloy, MSRV 1.88).

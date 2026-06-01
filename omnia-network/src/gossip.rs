@@ -26,6 +26,9 @@ const MAX_EVENTS_PER_GOSSIP: usize = 100;
 const MAX_PENDING_EVENTS: usize = 100_000;
 const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 
+/// Constant topic name for Omnia events gossip. Avoids per-call allocation.
+const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
+
 /// Maximum number of seen event IDs to retain for dedup.
 /// When exceeded, entries older than SEEN_EVENTS_RETAIN_ROUNDS processing
 /// rounds are evicted.
@@ -307,14 +310,21 @@ impl GossipProtocol {
             .to_bytes()
             .map_err(|e| GossipError::SerializationError(e.to_string()))?;
         let bytes_len = bytes.len();
+        let event_id_prefix = &event.id[..4];
         if let Some(ref cmd_tx) = self.network_cmd_tx {
-            cmd_tx
+            let result = cmd_tx
                 .send(NetworkCommand::Publish {
-                    topic: "omnia_events".to_string(),
+                    topic: OMNIA_EVENTS_TOPIC.to_string(),
                     data: bytes,
                 })
-                .await
-                .map_err(|e| GossipError::NetworkError(e.to_string()))?;
+                .await;
+            if let Err(e) = result {
+                tracing::error!(
+                    "Event {} inserted into local graph but FAILED to publish to network: {e}. \
+                     Local node has event but peers may not. Manual intervention may be required.",
+                    hex::encode(event_id_prefix)
+                );
+            }
         }
 
         self.stats.events_sent += 1;
@@ -531,10 +541,11 @@ impl GossipProtocol {
                     if let Err(e) = self.validate_event(&event) {
                         warn!("Gossip event rejected (validation): {:?}", e);
                         // Track signature-specific rejections
+                        // TODO: Replace with structured error types from libp2p for reliable detection
                         if matches!(
                             e,
                             GossipError::ValidationFailed(ref msg)
-                            if msg.contains("signature") || msg.contains("unsigned")
+                            if msg.to_lowercase().contains("signature") || msg.to_lowercase().contains("invalid")
                         ) {
                             self.stats.messages_rejected_invalid_sig += 1;
                         }

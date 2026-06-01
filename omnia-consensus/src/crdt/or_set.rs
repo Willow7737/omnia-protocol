@@ -146,7 +146,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
     pub fn state_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         for (elem, tokens) in &self.adds {
-            let elem_bytes = serde_json::to_vec(elem).unwrap_or_default();
+            let elem_bytes = postcard::to_allocvec(elem).unwrap_or_default();
             hasher.update(&elem_bytes);
             for (node, seq) in tokens {
                 hasher.update(node);
@@ -155,7 +155,7 @@ impl<T: Clone + Ord + Hash + Serialize> OrSet<T> {
         }
         // Include removes in state hash to distinguish different remove histories
         for (elem, tokens) in &self.removes {
-            let elem_bytes = serde_json::to_vec(elem).unwrap_or_default();
+            let elem_bytes = postcard::to_allocvec(elem).unwrap_or_default();
             hasher.update(&elem_bytes);
             for (node, seq) in tokens {
                 hasher.update(node);

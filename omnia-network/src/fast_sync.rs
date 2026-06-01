@@ -29,6 +29,7 @@ use crate::blake3_domain::blake3_hash_domain;
 use omnia_primitives::NodeId;
 
 /// Maximum number of rounds to request in a single GetEvents sync.
+#[allow(dead_code)]
 const MAX_SYNC_ROUNDS: u64 = 10_000;
 
 /// Maximum allowed snapshot size (64 MiB).
@@ -37,11 +38,13 @@ const MAX_SNAPSHOT_SIZE: usize = 64 * 1024 * 1024;
 /// Maximum number of individual events in a SyncResponse::Events.
 /// Prevents memory exhaustion from a malicious peer sending an
 /// extremely large event list.
+#[allow(dead_code)]
 const MAX_SYNC_EVENTS_COUNT: usize = 100_000;
 
 /// Maximum total bytes across all events in a SyncResponse::Events.
 /// Prevents memory exhaustion from a malicious peer sending events
 /// with very large individual payloads.
+#[allow(dead_code)]
 const MAX_SYNC_EVENTS_TOTAL_BYTES: usize = 512 * 1024 * 1024; // 512 MiB
 
 /// Errors that can occur during fast sync.
@@ -312,7 +315,6 @@ impl FastSyncManager {
     /// [`SyncError::NoPeersAvailable`] if no peers have checkpoints,
     /// [`SyncError::IntegrityCheckFailed`] if the snapshot is corrupt,
     /// and other variants for protocol-level failures.
-    #[allow(unreachable_code)] // TODO: Remove when snapshot application is implemented
     pub async fn sync_to_latest(&self) -> Result<SyncResult, SyncError> {
         let network = self
             .network
@@ -342,30 +344,14 @@ impl FastSyncManager {
         let _snapshot: SyncSnapshot = postcard::from_bytes(&snapshot_data)
             .map_err(|e| SyncError::Consensus(format!("Snapshot deserialization failed: {e}")))?;
 
-        // TODO: Apply snapshot to local state. This requires:
+        // TODO: Apply snapshot to local state and replay delta events. This requires:
         // 1. Replace local CausalGraph with snapshot.causal_graph_data
         // 2. Reset ConsensusEngine state with snapshot.consensus_data
-        // 3. Apply delta events on top of the snapshot
+        // 3. Download and replay delta events on top of the snapshot
         // For now, return an error indicating this is not yet implemented.
-        return Err(SyncError::Consensus(
+        Err(SyncError::Consensus(
             "Fast-sync snapshot application not yet implemented. Use full sync instead.".to_string(),
-        ));
-
-        // Step 6: Download and replay delta events
-        let delta_events = self.download_delta_events(network, peer_id, target.round)?;
-
-        tracing::info!(
-            synced_to_round = target.round,
-            events_replayed = delta_events.len(),
-            snapshot_hash = ?&target.snapshot_hash[..8],
-            "Fast-sync completed"
-        );
-
-        Ok(SyncResult {
-            synced_to_round: target.round,
-            events_replayed: delta_events.len() as u64,
-            snapshot_hash: target.snapshot_hash,
-        })
+        ))
     }
 
     /// Attempt fast-sync, returning a result for the caller to decide
@@ -457,6 +443,7 @@ impl FastSyncManager {
     }
 
     /// Download delta events from a peer starting at a given round.
+    #[allow(dead_code)]
     fn download_delta_events(
         &self,
         network: &Arc<dyn SyncNetwork>,

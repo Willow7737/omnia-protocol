@@ -116,6 +116,10 @@ impl ReplicationConfig {
 /// let path = replicate_snapshot(&snapshot, &config)?;
 /// ```
 pub fn replicate_snapshot(snapshot: &StateSnapshot, config: &ReplicationConfig) -> Result<PathBuf, SnapshotError> {
+    if config.replica_dirs.is_empty() {
+        return Err(SnapshotError::Serialization("No replica directories configured".into()));
+    }
+
     // Verify integrity before writing (if configured)
     if config.verify_on_import {
         snapshot.verify()?;
@@ -152,7 +156,9 @@ pub fn replicate_snapshot(snapshot: &StateSnapshot, config: &ReplicationConfig) 
         }
     }
 
-    Ok(primary_path.expect("at least one replica dir must exist"))
+    let primary =
+        primary_path.ok_or_else(|| SnapshotError::Serialization("No replica directories configured".into()))?;
+    Ok(primary)
 }
 
 /// Find the latest snapshot in the configured snapshot directories.

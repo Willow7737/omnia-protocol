@@ -10,7 +10,7 @@
 use iai_callgrind::{black_box, library_benchmark, library_benchmark_group, main};
 use omnia_consensus::CausalGraph;
 use omnia_crypto::{generate_keypair, NodeKeypair};
-use omnia_primitives::{Event, NodeId, VectorClock};
+use omnia_primitives::{blake3_hash_domain, Event, NodeId, VectorClock};
 use std::sync::OnceLock;
 
 /// Generate the keypair once so it is not re-created on every benchmark
@@ -23,10 +23,12 @@ fn get_keypair() -> &'static NodeKeypair {
 }
 
 /// Helper to create a minimal valid (signed) Event for benchmarking.
-fn create_signed_event(creator: NodeId, seq: u64, parent: Option<[u8; 32]>) -> Event {
+fn create_signed_event(seq: u64, parent: Option<[u8; 32]>) -> Event {
+    let kp = get_keypair();
+    let creator = blake3_hash_domain(b"omnia-creator", &kp.verifying_key().to_bytes());
     let vc = VectorClock::with_node(creator, seq + 1);
     let mut event = Event::new(creator, seq, vc, parent, None, vec![1, 2, 3]).expect("event creation");
-    event.sign_with_keypair(get_keypair()).expect("signing");
+    event.sign_with_keypair(kp).expect("signing");
     event
 }
 
@@ -49,19 +51,17 @@ fn bench_vector_clock_merge_100() {
 
 #[library_benchmark]
 fn bench_event_validate() {
-    let creator: NodeId = [0u8; 32];
-    let event = create_signed_event(creator, 0, None);
+    let event = create_signed_event(0, None);
     event.validate().unwrap();
     black_box(());
 }
 
 #[library_benchmark]
 fn bench_causal_graph_insert() {
-    let creator: NodeId = [0u8; 32];
     let mut graph = CausalGraph::new();
-    let genesis = create_signed_event(creator, 0, None);
+    let genesis = create_signed_event(0, None);
     let _ = graph.insert(genesis.clone());
-    let event = create_signed_event(creator, 1, Some(genesis.id));
+    let event = create_signed_event(1, Some(genesis.id));
     let _ = black_box(graph.insert(event));
 }
 

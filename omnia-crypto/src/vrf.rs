@@ -85,7 +85,32 @@ pub struct DeterministicOutput {
     /// The 32-byte deterministic hash output.
     pub output: [u8; 32],
     /// The Ed25519 signature proof over the input (64 bytes).
-    pub proof: Vec<u8>,
+    #[serde(with = "serde_array_64")]
+    pub proof: [u8; 64],
+}
+
+/// Serde helper for serializing `[u8; 64]` as bytes.
+/// Serde only natively implements Serialize/Deserialize for arrays up to size 32.
+mod serde_array_64 {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(data: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_bytes(data)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
+        let bytes: Vec<u8> = Vec::deserialize(d)?;
+        let mut arr = [0u8; 64];
+        if bytes.len() == 64 {
+            arr.copy_from_slice(&bytes);
+            Ok(arr)
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "expected 64 bytes, got {}",
+                bytes.len()
+            )))
+        }
+    }
 }
 
 /// Compute a deterministic hash output for the given input using the provided keypair.
@@ -117,7 +142,7 @@ pub struct DeterministicOutput {
 pub fn deterministic_compute(keypair: &NodeKeypair, input: &[u8]) -> DeterministicOutput {
     // Sign the input to produce the signature proof
     let signature = keypair.sign(input);
-    let proof = signature.to_bytes().to_vec();
+    let proof = signature.to_bytes();
 
     // Derive the output from the public key and signature
     // Using blake3 with domain separation
@@ -164,12 +189,8 @@ pub fn deterministic_verify(
     input: &[u8],
     det_output: &DeterministicOutput,
 ) -> Result<(), DeterministicHashError> {
-    // Deserialize the proof back into an Ed25519 signature
-    let proof_bytes: [u8; 64] = det_output
-        .proof
-        .as_slice()
-        .try_into()
-        .map_err(|_| DeterministicHashError::VerificationFailed("Proof must be 64 bytes".to_string()))?;
+    // The proof is already [u8; 64] — use it directly
+    let proof_bytes = det_output.proof;
 
     let signature = Signature::from_bytes(&proof_bytes);
     // ed25519-dalek 2.x Signature::from_bytes is infallible for [u8; 64]
@@ -476,6 +497,11 @@ fn proof_hash_to_curve(alpha_string: &[u8], public_key: &ed25519_dalek::Verifyin
 /// multiplication on the curve), which is the standard ECVRF approach.
 /// This eliminates the secret key from the hash input entirely, removing
 /// the exposure risk and providing the formal uniqueness guarantee.
+//
+// SECURITY WARNING: This gamma computation includes the raw secret key bytes in the hash.
+// If gamma is ever exposed through a side channel or stored, the secret key could potentially
+// be recovered. DO NOT log, persist, or transmit gamma values.
+// TODO (V3): Replace with proper scalar multiplication: gamma = sk * H(message)
 fn proof_compute_gamma(secret_key: &ed25519_dalek::SigningKey, h_point: &[u8; 32]) -> [u8; 32] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"OMNIA-ECVRF-GAMMA-V2");

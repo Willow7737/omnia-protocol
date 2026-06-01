@@ -115,7 +115,7 @@ impl ChaosNode {
         let node_id: NodeId =
             omnia_substrate::blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
         let mut seed = [0u8; 32];
-        seed[0] = (index as u8) + 1; // Non-zero to avoid debug-build panic
+        seed[..8].copy_from_slice(&(index as u64).to_le_bytes()); // Non-zero to avoid debug-build panic
         let config = ConsensusConfig {
             total_nodes,
             round_seed: seed,
@@ -210,7 +210,7 @@ impl ChaosNetwork {
         let mut nodes = Vec::with_capacity(n);
         for i in 0..n {
             let mut seed = [0u8; 32];
-            seed[0] = (i as u8) + 1; // Non-zero to avoid debug-build panic
+            seed[..8].copy_from_slice(&((i + 1) as u64).to_le_bytes()); // Non-zero to avoid debug-build panic
             let config = ConsensusConfig {
                 total_nodes: n,
                 round_seed: seed,
@@ -819,66 +819,40 @@ impl ChaosNetwork {
     /// topological order (parents first).
     ///
     /// This is a read-only operation (takes `&self`).
+    /// Uses an iterative approach with an explicit stack to avoid stack
+    /// overflow on deep event graphs.
     fn collect_missing_ancestors(
         &self,
         source_idx: usize,
         event_id: EventId,
         target_idx: usize,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut result = Vec::new();
+        let mut stack = vec![event_id];
         let mut visited = HashSet::new();
-        self.collect_missing_ancestors_inner(source_idx, event_id, target_idx, &mut visited, &mut result)?;
-        Ok(result)
-    }
-
-    /// Recursive helper for `collect_missing_ancestors`.
-    ///
-    /// Visits parents before children, so the result is in topological order.
-    fn collect_missing_ancestors_inner(
-        &self,
-        source_idx: usize,
-        event_id: EventId,
-        target_idx: usize,
-        visited: &mut HashSet<EventId>,
-        result: &mut Vec<Event>,
-    ) -> anyhow::Result<()> {
-        if visited.contains(&event_id) {
-            return Ok(());
-        }
-        visited.insert(event_id);
-
-        // Skip if target already has this event
-        if self.nodes[target_idx].graph.contains(&event_id) {
-            return Ok(());
-        }
-
-        // Get the event from the source's graph
-        let event = self.nodes[source_idx]
-            .graph
-            .get(&event_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Event {} not found in source node {}",
-                    hex::encode(&event_id[..4]),
-                    source_idx
-                )
-            })?
-            .clone();
-
-        // Recursively collect parents first
-        if let Some(sp) = event.self_parent {
-            self.collect_missing_ancestors_inner(source_idx, sp, target_idx, visited, result)?;
-        }
-        if let Some(op) = event.other_parent {
-            self.collect_missing_ancestors_inner(source_idx, op, target_idx, visited, result)?;
-        }
-
-        // Double-check: target might have received it via parent propagation
-        if !self.nodes[target_idx].graph.contains(&event_id) {
+        let mut result = Vec::new();
+        while let Some(id) = stack.pop() {
+            if visited.contains(&id) {
+                continue;
+            }
+            if self.nodes[target_idx].graph.contains(&id) {
+                continue;
+            }
+            visited.insert(id);
+            let event = self.nodes[source_idx]
+                .graph
+                .get(&id)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Event {:?} not found in source graph", &id[..4]))?;
+            if let Some(op) = event.other_parent {
+                stack.push(op);
+            }
+            if let Some(sp) = event.self_parent {
+                stack.push(sp);
+            }
             result.push(event);
         }
-
-        Ok(())
+        result.reverse(); // Parents first for correct insertion order
+        Ok(result)
     }
 
     /// Insert a single event into a target node's graph and process it

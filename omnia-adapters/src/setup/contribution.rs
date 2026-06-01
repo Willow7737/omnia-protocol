@@ -247,6 +247,8 @@ fn verify_pok(proof: &ContributionProof, old_transcript_hash: &[u8], new_transcr
     let lhs: G1Projective = g1 * response;
     let rhs: G1Projective = commitment.into_group() + pk * challenge;
 
+    // TODO: Use subtle::ConstantTimeEq for the comparison to prevent timing
+    // side-channel attacks: lhs.ct_eq(&rhs).into()
     lhs == rhs
 }
 

@@ -103,17 +103,11 @@ pub struct SignatureBundle {
 /// derive the encryption key without the passphrase — a critical security
 /// weakness.
 fn derive_encryption_key(passphrase: &str) -> Result<[u8; 32], BridgeError> {
+    // Hash the passphrase first to get full 32 bytes of entropy regardless of length
+    let key_material = blake3::hash(passphrase.as_bytes());
     use omnia_crypto::aes_gcm::hkdf_aes_key;
-    let mut key_material = [0u8; 32];
-    let passphrase_bytes = passphrase.as_bytes();
-    let len = passphrase_bytes.len().min(32);
-    key_material[..len].copy_from_slice(&passphrase_bytes[..len]);
-    hkdf_aes_key(&key_material, "omnia-rotation-state-encryption").map_err(|e| {
-        BridgeError::Crypto(format!(
-            "HKDF key derivation failed — cannot derive encryption key from passphrase: {e}. \
-             Ensure the omnia-crypto AES module is properly initialized."
-        ))
-    })
+    hkdf_aes_key(key_material.as_bytes(), "omnia-rotation-state-encryption")
+        .map_err(|e| BridgeError::Crypto(format!("HKDF key derivation failed: {e}")))
 }
 
 /// Encrypt a secret string using AES-256-GCM and return base64-encoded ciphertext.
@@ -412,7 +406,7 @@ impl KeyStoreBridge {
                     .keypair()
                     .ok_or_else(|| BridgeError::Crypto("No keystore keypair available for signing".into()))?;
                 let message = format!(
-                    "{}:{}:{}:{}",
+                    "omnia-key-rotation:{:03}:{:020}:{}:{}",
                     new_phase as u8,
                     current_round,
                     hex::encode(nonce.as_bytes()),

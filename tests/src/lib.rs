@@ -916,7 +916,7 @@ fn provenance_log_deep_chain() {
         let rf = RfFingerprint::stub(&holder, [0x55u8; 32]);
         let commitment =
             QuantumCommitment::new_classical(format!("transfer{i}").as_bytes(), vec![0u8; 64], VectorClock::new());
-        log.transfer(holder, rf, commitment);
+        log.transfer(holder, rf, commitment).unwrap();
     }
 
     assert_eq!(log.len(), transfer_count + 1);

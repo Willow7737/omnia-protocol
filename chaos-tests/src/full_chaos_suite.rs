@@ -525,18 +525,7 @@ fn run_message_loss(config: &ChaosSuiteConfig) -> ChaosScenarioResult {
     for round in 0..config.rounds_per_scenario {
         for i in 0..n {
             let payload = vec![round as u8, i as u8];
-            if let Ok(()) = network.submit_event(i, payload) {
-                let committed = network.nodes[i].consensus.get_committed();
-                for event_id in committed {
-                    bloom.insert(&event_id);
-                    let priority = if event_id[0] % 4 == 0 {
-                        GossipPriority::Critical
-                    } else {
-                        GossipPriority::Normal
-                    };
-                    priority_queue.enqueue(event_id, priority);
-                }
-            } else {
+            if network.submit_event(i, payload).is_err() {
                 failures += 1;
             }
         }
@@ -545,6 +534,19 @@ fn run_message_loss(config: &ChaosSuiteConfig) -> ChaosScenarioResult {
     // Re-sync to compensate for lost messages
     network.advance(5);
     network.warmup();
+
+    // Populate bloom filter from ALL nodes' committed events (after sync)
+    for node in &network.nodes {
+        for event_id in node.consensus.get_committed() {
+            bloom.insert(&event_id);
+            let priority = if event_id[0] % 4 == 0 {
+                GossipPriority::Critical
+            } else {
+                GossipPriority::Normal
+            };
+            priority_queue.enqueue(event_id, priority);
+        }
+    }
 
     let safety = network.check_safety();
     let liveness = network.check_liveness();

@@ -34,7 +34,7 @@
 //! let store = EncryptedKeyStore::create("./keys", "my-secure-passphrase")?;
 //!
 //! // Load an existing key store
-//! let loaded = EncryptedKeyStore::load("./keys", "my-secure-passphrase")?;
+//! let mut loaded = EncryptedKeyStore::load("./keys", "my-secure-passphrase")?;
 //!
 //! // Rotate the key
 //! let proof = loaded.rotate("my-secure-passphrase", "new-secure-passphrase")?;
@@ -356,29 +356,7 @@ impl EncryptedKeyStore {
     /// the new secret key with the new passphrase using AES-256-GCM.
     ///
     /// The old key files are replaced with the new ones on disk, and
-    /// the in-memory state is **not** updated. After calling this method,
-    /// the keystore object holds stale data (the old public key and keypair).
-    /// The caller **must** re-load the keystore via [`EncryptedKeyStore::load`]
-    /// to obtain a fresh instance reflecting the new key.
-    ///
-    /// # Why `&self` instead of `&mut self`?
-    ///
-    /// The rotation writes new files to disk atomically but cannot update
-    /// the `self` fields in-place (since `&self` is immutable). A future
-    /// API change will return the new `EncryptedKeyStore` directly.
-    /// For now, callers must re-load after rotation.
-    ///
-    /// # ⚠️ Stale State After Rotation
-    ///
-    /// After `rotate()` returns, `self.public_key()` and `self.keypair()`
-    /// still reflect the **old** key. Any subsequent operations on `self`
-    /// using these stale values will be incorrect. Always re-load:
-    ///
-    /// ```ignore
-    /// let proof = store.rotate("old-pass", "new-pass")?;
-    /// // DO NOT use `store` here — it has stale state!
-    /// let store = EncryptedKeyStore::load(dir, "new-pass")?;
-    /// ```
+    /// the in-memory state is updated to reflect the new keypair.
     ///
     /// # Arguments
     ///
@@ -389,7 +367,7 @@ impl EncryptedKeyStore {
     ///
     /// - [`KeyStoreError::IncorrectPassphrase`] if the old passphrase is wrong.
     /// - [`KeyStoreError::Io`] if key files cannot be written.
-    pub fn rotate(&self, old_passphrase: &str, new_passphrase: &str) -> KeyStoreResult<KeyRotationProof> {
+    pub fn rotate(&mut self, old_passphrase: &str, new_passphrase: &str) -> KeyStoreResult<KeyRotationProof> {
         // Ensure we have the keypair loaded
         let old_keypair = self
             .keypair
@@ -446,19 +424,26 @@ impl EncryptedKeyStore {
             dir = %self.dir.display(),
             old_pubkey = %hex::encode(&old_pubkey_bytes[..8]),
             new_pubkey = %hex::encode(&new_pubkey.to_bytes()[..8]),
-            "Rotated validator key — caller must re-load keystore to update in-memory state"
+            "Rotated validator key — in-memory state updated"
         );
 
         // If the keystore was loaded from legacy XOR format, the rotation
         // automatically re-encrypts with AES-256-GCM (above), completing
-        // the upgrade. The caller should re-load the keystore to get an
-        // instance with needs_upgrade = false.
+        // the upgrade.
         if self.needs_upgrade {
             tracing::info!(
                 dir = %self.dir.display(),
                 "Legacy XOR keystore automatically upgraded to AES-256-GCM via rotation"
             );
         }
+
+        // Update in-memory state to reflect the new keypair.
+        // Previously, rotate() used &self (immutable) and left the keystore
+        // with stale keys — a critical bug since the old keys were still
+        // usable for signing after rotation.
+        self.public_key = new_pubkey;
+        self.keypair = Some(new_keypair);
+        self.needs_upgrade = false;
 
         Ok(proof)
     }
@@ -1118,16 +1103,20 @@ mod tests {
     #[test]
     fn test_rotate_key() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "old-pass").expect("create");
+        let mut store = EncryptedKeyStore::create(dir.path(), "old-pass").expect("create");
 
         let proof = store.rotate("old-pass", "new-pass").expect("rotate");
 
         // Verify the rotation proof
         assert!(proof.verify(), "Rotation proof should be valid");
 
-        // Load with new passphrase should work
+        // In-memory state should now reflect the new key
+        assert_eq!(store.public_key.to_bytes(), proof.new_pubkey);
+
+        // Load with new passphrase should work and match
         let loaded = EncryptedKeyStore::load(dir.path(), "new-pass").expect("load with new passphrase");
         assert_eq!(loaded.public_key.to_bytes(), proof.new_pubkey);
+        assert_eq!(store.public_key.to_bytes(), loaded.public_key.to_bytes());
 
         // Load with old passphrase should fail
         let result = EncryptedKeyStore::load(dir.path(), "old-pass");
@@ -1137,7 +1126,7 @@ mod tests {
     #[test]
     fn test_rotate_wrong_old_passphrase() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "correct").expect("create");
+        let mut store = EncryptedKeyStore::create(dir.path(), "correct").expect("create");
 
         let result = store.rotate("wrong", "new-pass");
         assert!(result.is_err(), "Wrong old passphrase should fail");
@@ -1146,7 +1135,7 @@ mod tests {
     #[test]
     fn test_rotation_proof_verify_valid() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
+        let mut store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
         let proof = store.rotate("pass", "new-pass").expect("rotate");
         assert!(proof.verify());
     }
@@ -1154,7 +1143,7 @@ mod tests {
     #[test]
     fn test_rotation_proof_verify_tampered() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
+        let mut store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
         let mut proof = store.rotate("pass", "new-pass").expect("rotate");
 
         // Tamper with the new pubkey
@@ -1165,7 +1154,7 @@ mod tests {
     #[test]
     fn test_rotation_proof_timestamp() {
         let dir = TempDir::new().expect("temp dir");
-        let store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
+        let mut store = EncryptedKeyStore::create(dir.path(), "pass").expect("create");
         let proof = store.rotate("pass", "new-pass").expect("rotate");
 
         // Timestamp should be recent (within last 60 seconds)

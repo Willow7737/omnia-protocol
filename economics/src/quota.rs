@@ -26,13 +26,19 @@ pub const DEFAULT_EPOCH_DURATION_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 /// rewarding, and querying balances.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuotaSystem {
-    /// Current epoch number (incremented on each `advance_epoch` call).
+    /// Current epoch number.
+    /// # Warning
+    /// This field is pub for backward compatibility but direct modification
+    /// bypasses advance_epoch() validation. Prefer advance_epoch() for mutations.
     pub current_epoch: u64,
     /// Duration of one epoch in milliseconds.
     pub epoch_duration_ms: u64,
     /// Default monthly UBC quota assigned to new DIDs.
     pub default_quota: u64,
-    /// DID → UBC token mapping.
+    /// Token registry.
+    /// # Warning  
+    /// This field is pub for backward compatibility but direct modification
+    /// bypasses register_did() validation. Prefer register_did() for mutations.
     pub tokens: HashMap<String, UbcToken>,
 }
 
@@ -95,8 +101,7 @@ impl QuotaSystem {
             .tokens
             .get_mut(did)
             .ok_or_else(|| EconomicsError::DidNotRegistered(did.to_string()))?;
-        token.reward(amount);
-        Ok(())
+        token.reward(amount)
     }
 
     /// Query the current UBC balance of a DID.

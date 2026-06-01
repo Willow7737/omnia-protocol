@@ -522,7 +522,7 @@ impl QuantumCommitment {
         type EncapKey = <MlKem768 as KemCore>::EncapsulationKey;
         let ek_bytes: [u8; ML_KEM_768_ENCAPSULATION_KEY_SIZE] = self
             .kyber_key
-            .clone()
+            .as_slice()
             .try_into()
             .map_err(|_| KyberError::InvalidEncapsulationKey(self.kyber_key.len()))?;
         let ek_encoded: ml_kem::Encoded<EncapKey> = ek_bytes.into();

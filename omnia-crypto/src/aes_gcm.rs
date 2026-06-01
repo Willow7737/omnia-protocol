@@ -97,6 +97,15 @@ pub fn aes256gcm_decrypt_aad(
 /// full `key_material` as input keying material (IKM). The `info`
 /// parameter provides domain separation.
 ///
+/// # Security Note
+///
+/// This function uses a fixed, hardcoded salt (`b"OMNIA-AES-KEY-DERIVATION"`).
+/// HKDF's security proof assumes the salt varies. A fixed salt means the same
+/// `key_material` always produces the same derived key. This is acceptable for
+/// single-derivation contexts (e.g., keystore encryption) but NOT for contexts
+/// where multiple keys are derived from the same material with different salts.
+/// For multi-key derivation, use a caller-provided random salt.
+///
 /// # Errors
 ///
 /// Returns [`AesGcmError::InvalidKey`] if HKDF expand fails, which should

@@ -115,6 +115,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, EnvGuard) 
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(AtomicBool::new(false)),
+        keypair: Some(omnia_substrate::crypto::generate_keypair()),
         settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
         #[cfg(feature = "zk")]
         ceremony_server: None,

@@ -46,12 +46,15 @@ fn main() {
     // compile (for documentation and type-checking), but the `extern "C"`
     // block and `FfiSettlementAdapter` impl that reference the FFI
     // symbols require `has_settlement_lib` as well.
-    if std::path::Path::new("lib/libsettlement.a").exists() || std::path::Path::new("lib/settlement.lib").exists() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
+    let settlement_lib = std::path::Path::new(&manifest_dir).join("lib/libsettlement.a");
+    let settlement_lib_win = std::path::Path::new(&manifest_dir).join("lib/settlement.lib");
+    if settlement_lib.exists() || settlement_lib_win.exists() {
         println!("cargo:rustc-cfg=has_settlement_lib");
         // REMOVED: Force-enabling features from build scripts violates Cargo conventions.
         // The `settlement-ffi` feature must be explicitly enabled via --features or Cargo.toml.
         // println!("cargo:rustc-cfg=feature=\"settlement-ffi\"");
-        println!("cargo:rustc-link-search=native=lib");
+        println!("cargo:rustc-link-search=native={}/lib", manifest_dir);
         println!("cargo:rustc-link-lib=static=settlement");
     }
 

@@ -20,7 +20,7 @@
 
 use omnia_primitives::EventId;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 /// Priority levels for gossip events.
 ///
@@ -130,6 +130,8 @@ impl PriorityQueueConfig {
 pub struct PriorityGossipQueue {
     /// Queues per priority level, indexed by priority value.
     queues: [VecDeque<EventId>; 4],
+    /// Set of event IDs currently in any queue, for O(1) contains checks.
+    seen: HashSet<EventId>,
     /// Configuration for capacity limits.
     config: PriorityQueueConfig,
     /// Total number of events ever enqueued (for statistics).
@@ -148,6 +150,7 @@ impl PriorityGossipQueue {
                 VecDeque::new(), // High
                 VecDeque::new(), // Critical
             ],
+            seen: HashSet::new(),
             config,
             total_enqueued: 0,
             total_dropped: 0,
@@ -169,10 +172,13 @@ impl PriorityGossipQueue {
 
         // If at capacity, drop the oldest event
         if queue.len() >= max {
-            queue.pop_front();
-            self.total_dropped += 1;
+            if let Some(dropped) = queue.pop_front() {
+                self.seen.remove(&dropped);
+                self.total_dropped += 1;
+            }
         }
 
+        self.seen.insert(event_id);
         queue.push_back(event_id);
         self.total_enqueued += 1;
     }
@@ -185,6 +191,7 @@ impl PriorityGossipQueue {
         for priority in GossipPriority::all_descending() {
             let queue = &mut self.queues[*priority as usize];
             if let Some(event_id) = queue.pop_front() {
+                self.seen.remove(&event_id);
                 return Some(event_id);
             }
         }
@@ -256,11 +263,12 @@ impl PriorityGossipQueue {
         for queue in &mut self.queues {
             queue.clear();
         }
+        self.seen.clear();
     }
 
     /// Check if a specific event ID is in the queue at any priority level.
     pub fn contains(&self, event_id: &EventId) -> bool {
-        self.queues.iter().any(|q| q.iter().any(|id| id == event_id))
+        self.seen.contains(event_id)
     }
 
     /// Remove a specific event ID from the queue (if present).
@@ -270,6 +278,7 @@ impl PriorityGossipQueue {
         for queue in &mut self.queues {
             if let Some(pos) = queue.iter().position(|id| id == event_id) {
                 queue.remove(pos);
+                self.seen.remove(event_id);
                 return true;
             }
         }

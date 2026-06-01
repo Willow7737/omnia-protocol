@@ -141,6 +141,18 @@ impl Default for ConsensusConfig {
 }
 
 impl ConsensusConfig {
+    /// Validates the consensus configuration.
+    /// Returns an error if the round_seed is all zeros (which would make
+    /// leader selection fully deterministic and predictable).
+    pub fn validate(&self) -> Result<(), ConsensusError> {
+        if self.round_seed == [0u8; 32] {
+            return Err(ConsensusError::EntropyFailed(
+                "round_seed must not be all zeros — this would compromise leader selection".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Create a config with a cryptographically random round seed.
     pub fn with_random_seed(total_nodes: usize) -> Result<Self, ConsensusError> {
         let mut seed = [0u8; 32];
@@ -973,7 +985,11 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
 
         self.update_round_seed_from_timeout(next);
 
-        tracing::warn!("Advanced from round {} to round {} due to timeout", current, next);
+        tracing::info!(
+            "Round {} timed out, advancing to round {} (normal liveness mechanism)",
+            current,
+            next
+        );
     }
 
     /// Derive a new round seed from the current seed and round number

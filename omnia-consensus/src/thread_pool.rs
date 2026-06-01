@@ -22,7 +22,7 @@
 //! let pool = ValidationPool::new(4, Arc::clone(&state));
 //!
 //! // Submit events for validation
-//! pool.submit(ValidationTask::ValidateEvent(event));
+//! pool.submit(ValidationTask::ValidateEvent(event))?;
 //!
 //! // Collect results
 //! let results = pool.drain_results();
@@ -198,16 +198,10 @@ impl ValidationPool {
     ///
     /// Tasks are distributed across workers in round-robin fashion.
     /// If the target worker's channel is disconnected (e.g., the worker
-    /// panicked), the task is silently dropped.
-    pub fn submit(&self, task: ValidationTask) {
+    /// panicked), returns `Err(task)` so the caller can handle the failure.
+    pub fn submit(&self, task: ValidationTask) -> Result<(), ValidationTask> {
         let worker_idx = self.next_worker.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % self.num_workers;
-        if let Err(e) = self.senders[worker_idx].send(task) {
-            tracing::warn!(
-                worker_idx,
-                error = %e,
-                "failed to submit task to worker (channel disconnected?)"
-            );
-        }
+        self.senders[worker_idx].send(task).map_err(|e| e.0)
     }
 
     /// Drain all collected results.
@@ -286,9 +280,8 @@ mod tests {
         let event = make_test_event(0);
         let event_id = event.id;
 
-        pool.submit(ValidationTask::ValidateEvent(Box::new(event)));
-
-        // Give workers time to process
+        pool.submit(ValidationTask::ValidateEvent(Box::new(event)))
+            .expect("submit should succeed");
         thread::sleep(std::time::Duration::from_millis(100));
 
         let results = pool.drain_results();
@@ -313,7 +306,8 @@ mod tests {
         for seq in 0..num_events {
             let event = make_test_event(seq as u64);
             event_ids.push(event.id);
-            pool.submit(ValidationTask::ValidateEvent(Box::new(event)));
+            pool.submit(ValidationTask::ValidateEvent(Box::new(event)))
+                .expect("submit should succeed");
         }
 
         // Give workers time to process
@@ -343,8 +337,8 @@ mod tests {
         let event = make_test_event(0);
 
         // Submit the same event twice
-        pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
-        pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
+        let _ = pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
+        let _ = pool.submit(ValidationTask::ValidateEvent(Box::new(event.clone())));
 
         // Give workers time to process
         thread::sleep(std::time::Duration::from_millis(200));

@@ -361,6 +361,11 @@ pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Resul
 ///
 /// **Do NOT use this function in production without understanding the
 /// security implications.** See the security section below for details.
+/// # ⚠️ SECURITY WARNING
+/// This function derives toxic waste (secret key) from the public transcript.
+/// It is INSECURE for multi-party ceremonies. The derived keys should NEVER be
+/// used in production. This function exists only for testing and single-party
+/// setups. For production, use a proper multi-party computation ceremony.
 pub fn derive_keys_deterministic_from_srs(
     srs: &PowersOfTau,
     circuit: &RollupCircuit,

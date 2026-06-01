@@ -184,6 +184,13 @@ impl GossipBloomFilter {
     /// The filter size and number of hash functions are calculated
     /// automatically based on these parameters.
     pub fn new(expected_items: usize, fp_rate: f64) -> Self {
+        if fp_rate <= 0.0 || fp_rate >= 1.0 {
+            tracing::warn!(
+                "False positive rate {} is out of range (0, 1) exclusive. Clamping to (0.001, 0.999)",
+                fp_rate
+            );
+        }
+        let fp_rate = fp_rate.clamp(0.001, 0.999);
         let (num_bits, num_hashes) = Self::calculate_parameters(expected_items, fp_rate);
         let active = BloomFilter::new(num_bits, num_hashes);
         let inactive = BloomFilter::new(num_bits, num_hashes);

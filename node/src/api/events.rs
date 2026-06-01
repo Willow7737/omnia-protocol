@@ -8,7 +8,7 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use omnia_substrate::{generate_keypair, Event};
+use omnia_substrate::Event;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
@@ -101,12 +101,15 @@ pub async fn submit_event(
 
     let node_id = state.config.node_id_bytes();
 
-    // Create and sign a substrate event
-    // TODO: Replace ephemeral keypair with the node's persistent keypair.
-    // Using generate_keypair() creates a new keypair per request, meaning events
-    // cannot be verified as originating from this node. The node's identity key
-    // from the keystore should be used instead for event signing.
-    let keypair = generate_keypair();
+    // Use the node's persistent keypair for signing — events must be
+    // verifiable as originating from this node. Ephemeral keypairs would
+    // make signature verification meaningless.
+    let keypair = state.keypair.clone().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "No persistent keypair configured"})),
+        )
+    })?;
     let mut event = Event::genesis(node_id, payload_bytes.clone()).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
@@ -125,43 +128,65 @@ pub async fn submit_event(
     let timestamp = event.timestamp;
 
     // Attempt to submit to the substrate
-    let status = {
+    let submit_result = {
         let mut substrate = state.substrate.write().await;
-        match substrate.submit_event(event).await {
-            Ok(()) => "submitted".to_string(),
-            Err(e) => {
-                tracing::warn!(event_id = %event_id_hex, error = %e, "Event submission failed");
-                "submission_failed".to_string()
-            }
+        substrate.submit_event(event).await
+    };
+
+    match submit_result {
+        Ok(()) => {
+            // Store the simplified event representation with "submitted" status
+            let stored = StoredEvent {
+                id: event_id_hex.clone(),
+                creator: creator_hex,
+                sequence: 0,
+                timestamp,
+                payload: body.payload.clone(),
+                event_type: body.event_type.clone(),
+                status: "submitted".to_string(),
+            };
+
+            crate::state::store_event(&state.event_store, event_id_hex.clone(), stored).await;
+
+            // Increment the events counter
+            #[cfg(feature = "metrics")]
+            state.metrics.events_submitted.inc();
+
+            tracing::info!(event_id = %event_id_hex, status = "submitted", "Event submitted via API");
+
+            Ok((
+                StatusCode::CREATED,
+                Json(json!({
+                    "event_id": event_id_hex,
+                    "status": "submitted",
+                })),
+            ))
         }
-    };
+        Err(e) => {
+            tracing::warn!(event_id = %event_id_hex, error = %e, "Event submission failed");
 
-    // Store the simplified event representation
-    let stored = StoredEvent {
-        id: event_id_hex.clone(),
-        creator: creator_hex,
-        sequence: 0,
-        timestamp,
-        payload: body.payload.clone(),
-        event_type: body.event_type.clone(),
-        status: status.clone(),
-    };
+            // Store the event with "submission_failed" status for diagnostics
+            let stored = StoredEvent {
+                id: event_id_hex.clone(),
+                creator: creator_hex,
+                sequence: 0,
+                timestamp,
+                payload: body.payload.clone(),
+                event_type: body.event_type.clone(),
+                status: "submission_failed".to_string(),
+            };
 
-    crate::state::store_event(&state.event_store, event_id_hex.clone(), stored).await;
+            crate::state::store_event(&state.event_store, event_id_hex.clone(), stored).await;
 
-    // Increment the events counter
-    #[cfg(feature = "metrics")]
-    state.metrics.events_submitted.inc();
-
-    tracing::info!(event_id = %event_id_hex, status = %status, "Event submitted via API");
-
-    Ok((
-        StatusCode::CREATED,
-        Json(json!({
-            "event_id": event_id_hex,
-            "status": status,
-        })),
-    ))
+            Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": format!("Event submission failed: {e}"),
+                    "event_id": event_id_hex,
+                })),
+            ))
+        }
+    }
 }
 
 /// Handler for `GET /api/v1/events/:id`.

@@ -37,10 +37,30 @@
 //! ```
 
 /// Default leaf value for the Sparse Merkle Tree (all zeros).
+///
+/// # Security Note
+/// When the number of nodes at a level is odd, the missing sibling defaults to
+/// `[0u8; 32]`. This creates a theoretical second-preimage vulnerability: an
+/// attacker could craft a node whose hash equals `[0u8; 32]`, allowing a different
+/// tree structure to produce the same root. For production, consider using
+/// domain-separated padding: `blake3::derive_key("OMNIA-MERKLE-PADDING", &level[i])`.
+/// The BLAKE3 collision resistance makes this practically infeasible today.
 pub const DEFAULT_LEAF: [u8; 32] = [0u8; 32];
 
 /// Maximum depth of the Merkle tree (256-bit keys).
 pub const MERKLE_DEPTH: usize = 32;
+
+// ---------------------------------------------------------------------------
+// Merkle error type
+// ---------------------------------------------------------------------------
+
+/// Errors that can occur during Merkle tree operations.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum MerkleError {
+    /// A hash computation failed during Merkle tree construction.
+    #[error("Hash failed: {0}")]
+    HashFailed(String),
+}
 
 // ---------------------------------------------------------------------------
 // Hash function marker types for type-level Merkle proof safety
@@ -302,13 +322,18 @@ pub fn fr_to_hash(val: &Fr) -> [u8; 32] {
 /// not compile if passed a `MerkleProof<Blake3>`, preventing the C-06
 /// Merkle tree mismatch vulnerability.
 #[cfg(feature = "arkworks")]
-pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<PoseidonMerkleProof>) {
+pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> Result<([u8; 32], Vec<PoseidonMerkleProof>), MerkleError> {
     if items.is_empty() {
         // Use a domain-separated hash for the empty root to avoid collision with DEFAULT_LEAF
         let empty_root = blake3::derive_key("OMNIA-MERKLE-EMPTY-ROOT", &[]);
+        // NOTE: The empty root for Poseidon trees is computed using BLAKE3, which is
+        // inconsistent with the Poseidon hashing used for non-empty trees. This is
+        // intentional — Poseidon cannot hash empty input. The BLAKE3 empty root serves
+        // as a domain-separated sentinel that cannot collide with any Poseidon-computed
+        // internal node.
         let mut root = [0u8; 32];
         root.copy_from_slice(&empty_root[..32]);
-        return (root, vec![]);
+        return Ok((root, vec![]));
     }
 
     use ark_ff::Zero;
@@ -327,7 +352,9 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
         while i < level.len() {
             let left = level[i];
             let right = if i + 1 < level.len() { level[i + 1] } else { Fr::zero() };
-            let hash = poseidon_hash_to_fr(left, right).unwrap_or(Fr::zero());
+            let hash = poseidon_hash_to_fr(left, right).map_err(|e| {
+                MerkleError::HashFailed(format!("Poseidon hash failed in Merkle tree construction: {e}"))
+            })?;
             next_level.push(hash);
             i += 2;
         }
@@ -359,7 +386,7 @@ pub fn build_poseidon_merkle_tree(items: &[[u8; 32]]) -> ([u8; 32], Vec<Poseidon
     let root = levels
         .last()
         .expect("at least one level must exist after tree construction")[0];
-    (fr_to_hash(&root), proofs)
+    Ok((fr_to_hash(&root), proofs))
 }
 
 // ---------------------------------------------------------------------------
@@ -485,7 +512,7 @@ mod arkworks_tests {
         let (blake3_root, _) = build_merkle_tree(&items);
 
         // Build Poseidon-based Merkle tree
-        let (poseidon_root, _) = build_poseidon_merkle_tree(&items);
+        let (poseidon_root, _) = build_poseidon_merkle_tree(&items).unwrap();
 
         // The two trees must produce different roots because they use
         // different hash functions (BLAKE3 vs Poseidon)
@@ -497,7 +524,7 @@ mod arkworks_tests {
 
     #[test]
     fn test_poseidon_merkle_tree_empty() {
-        let (root, proofs) = build_poseidon_merkle_tree(&[]);
+        let (root, proofs) = build_poseidon_merkle_tree(&[]).unwrap();
         // Empty root uses domain-separated hash, not all-zeros (avoids collision with DEFAULT_LEAF)
         assert_ne!(root, [0u8; 32]);
         assert!(proofs.is_empty());
@@ -506,8 +533,8 @@ mod arkworks_tests {
     #[test]
     fn test_poseidon_merkle_tree_deterministic() {
         let items: Vec<[u8; 32]> = vec![[42u8; 32], [99u8; 32]];
-        let (root1, _) = build_poseidon_merkle_tree(&items);
-        let (root2, _) = build_poseidon_merkle_tree(&items);
+        let (root1, _) = build_poseidon_merkle_tree(&items).unwrap();
+        let (root2, _) = build_poseidon_merkle_tree(&items).unwrap();
         assert_eq!(root1, root2, "Poseidon Merkle tree must be deterministic");
     }
 }

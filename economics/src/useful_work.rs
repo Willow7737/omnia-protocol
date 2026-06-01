@@ -86,18 +86,23 @@ pub struct UsefulWorkProof {
 
 impl UsefulWorkProof {
     /// Create a new useful work proof.
+    ///
+    /// Validates the proof on construction, ensuring compute units are
+    /// non-zero and the result hash is not entirely zeros.
     pub fn new(
         work_type: UsefulWorkType,
         result_hash: [u8; 32],
         compute_units_consumed: u64,
         verifier_signature: Vec<u8>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, EconomicsError> {
+        let proof = Self {
             work_type,
             result_hash,
             compute_units_consumed,
             verifier_signature,
-        }
+        };
+        proof.validate()?; // Validate on construction
+        Ok(proof)
     }
 
     /// Verify that the proof is valid and the work was actually done.

@@ -199,8 +199,11 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
     for v in &sorted_validators {
         state_preimage.extend_from_slice(&v.node_id.to_le_bytes());
         state_preimage.extend_from_slice(&v.initial_stake.to_le_bytes());
-        state_preimage.extend_from_slice(v.ed25519_public_key.as_bytes());
-        state_preimage.extend_from_slice(v.dilithium_public_key.as_bytes());
+        // Decode hex to raw bytes for deterministic hashing
+        let ed25519_bytes = hex::decode(&v.ed25519_public_key).unwrap_or_default();
+        state_preimage.extend_from_slice(&ed25519_bytes);
+        let dilithium_bytes = hex::decode(&v.dilithium_public_key).unwrap_or_default();
+        state_preimage.extend_from_slice(&dilithium_bytes);
     }
     let state_root: [u8; 32] = blake3_hash_domain(b"omnia-genesis", &state_preimage);
 

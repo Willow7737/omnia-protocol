@@ -113,15 +113,42 @@ impl<T: Clone + Serialize> LwwRegister<T> {
     }
 
     /// Clear the value
+    ///
+    /// # Deprecation
+    ///
+    /// This method uses the system clock for the timestamp, which can produce
+    /// non-deterministic results in distributed scenarios. Use [`Self::clear_with_meta`]
+    /// for production use, which accepts explicit metadata for deterministic clearing.
+    #[deprecated(
+        since = "0.2.0",
+        note = "Uses system clock for timestamp; use clear_with_meta() for determinism"
+    )]
     pub fn clear(&mut self) {
         self.value = None;
         self.timestamp = current_timestamp();
         self.version += 1;
     }
 
+    /// Clear the value with explicit metadata for deterministic behavior.
+    ///
+    /// Use this in production instead of [`Self::clear`] to ensure all nodes
+    /// compute the same state when clearing the register.
+    pub fn clear_with_meta(&mut self, timestamp: u64, version: u64) {
+        self.value = None;
+        self.timestamp = timestamp;
+        self.version = version;
+    }
+
     /// Compare two registers to determine which write wins
     ///
     /// Returns true if self should win over other
+    ///
+    /// # Security Note
+    /// The tiebreaker `self.node_id > other.node_id` is deterministic but arbitrary —
+    /// it gives an advantage to nodes with lexicographically larger IDs. An attacker
+    /// could generate keys with high node IDs to win all ties. Consider using a
+    /// hash-based tiebreaker (e.g., blake3(round_seed || node_id_a || node_id_b))
+    /// in a future version.
     fn should_win(&self, other: &Self) -> bool {
         // Higher version wins
         if self.version != other.version {
@@ -312,6 +339,7 @@ mod tests {
         let mut reg = LwwRegister::with_value(node(1), "hello");
         assert!(reg.is_set());
 
+        #[allow(deprecated)]
         reg.clear();
         assert!(!reg.is_set());
         assert_eq!(reg.get(), None);

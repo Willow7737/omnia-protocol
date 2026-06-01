@@ -81,8 +81,10 @@ impl RateLimiter {
         let elapsed_secs = elapsed.as_secs() as u32;
         let elapsed_nanos = elapsed.subsec_nanos();
         // Fractional refill: add refill_rate * elapsed_secs + (refill_rate * elapsed_nanos / 1_000_000_000)
-        let refill =
-            elapsed_secs * self.refill_rate + (self.refill_rate as u64 * elapsed_nanos as u64 / 1_000_000_000) as u32;
+        // Use u128 intermediate to prevent u64*u64 multiplication overflow
+        let refill = ((elapsed_secs as u128 * self.refill_rate as u128
+            + (self.refill_rate as u128 * elapsed_nanos as u128 / 1_000_000_000))
+            .min(u32::MAX as u128)) as u32;
         if refill > 0 {
             bucket.tokens = bucket.tokens.saturating_add(refill).min(self.max_tokens);
             bucket.last_refill = now;
