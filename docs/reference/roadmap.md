@@ -78,7 +78,7 @@
 
 ## Phase 5: Testnet Launch & Validation ✅ Complete
 
-- ✅ C-1: Real performance benchmarking (~527 events/sec single-node)
+- ✅ C-1: Real performance benchmarking (~7,190 events/sec synchronous; ~527 events/sec async single-node)
 - ✅ H-1: Multi-node BFT testnet validation
 - ✅ H-2: VRF migration to ECVRF per RFC 9381
 - ✅ H-3: Genesis tooling — network bootstrap procedure
@@ -98,7 +98,7 @@
 5. ✅ GossipSub topic name mismatch — topic names aligned to underscore variants; scoring config matches
 6. ✅ `KeyStoreBridge::rotate()` — now persists rotated keypair to keystore on disk
 
-### v0.1.56 Audit Findings — Medium Priority (15 Remaining)
+### v0.1.56 Audit Findings — Medium Priority (14 Remaining)
 7. `CmRDT` trait is dead code (never implemented)
 8. `AccountBalance::merge` doesn't merge `vector_clock`
 9. Mixed SHA-256/BLAKE3 in CRDT `state_hash()`
@@ -107,7 +107,7 @@
 12. PQC feature declared but no implementation code
 13. PriorityGossipQueue / GossipBloomFilter / CompactEncoder implemented but not integrated
 14. Pipeline workers are stubs (log only, no actual processing)
-15. Event submission uses ephemeral keypairs instead of node's persistent key
+15. ✅ Event submission now uses node's persistent keypair (AUDIT-16)
 16. `UsefulWorkProof::verify_stub()` is the only verification method
 17. `UsefulWorkType` variant fields are private (can't construct externally)
 18. `TimeLockVoting` lacks `Serialize`/`Deserialize`
@@ -132,7 +132,7 @@
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
-12. Bitcoin/Solana/Celestia settlement adapters
+12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
 13. Mobile wallet
 14. Throughput optimization (multi-threaded, sharded consensus)
 

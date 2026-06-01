@@ -32,7 +32,7 @@ Phase 0 delivered the core protocol: a causal graph consensus engine, six domain
 
 ---
 
-## Phase 1: Hardening — Code Quality Sprint
+## Phase 1: Hardening — Code Quality
 
 **Status**: ✅ Complete
 
@@ -144,7 +144,7 @@ Phase 5 captured real benchmark data (~527 events/sec single-node), validated mu
 
 ### What Changed for Users
 
-- **All Users**: The "10K+ TPS" aspirational claim has been replaced with honest measured data: ~527 events/sec single-node. This transparency allows realistic planning.
+- **All Users**: Aspirational throughput claims have been replaced with honest measured data: ~7,190 events/sec synchronous single-node, ~527 events/sec async single-node. This transparency allows realistic planning.
 - **Operators**: Genesis tooling enables network bootstrapping with a validated initial validator set. VRF leader selection now uses a standard ECVRF construction.
 - **Developers**: Poseidon dual-hash foundation enables future migration to Filecoin/Neptune reference parameters. Bug bounty program is active ($100–$50,000).
 - **Architects**: External audit package assembled. Side-channel audit for ZK and binding crates completed.
@@ -153,7 +153,7 @@ Phase 5 captured real benchmark data (~527 events/sec single-node), validated mu
 
 | Capability | Implementation | Notes |
 |-----------|---------------|-------|
-| Real benchmarks | ✅ | ~527 events/sec, ZK setup ~423ms expanded |
+| Real benchmarks | ✅ | ~7,190 evt/s sync; ~527 evt/s async single-node |
 | Multi-node BFT | ✅ | 4-node test validated |
 | ECVRF (RFC 9381) | ✅ | V2 with Fiat-Shamir + Ed25519 |
 | Genesis tooling | ✅ | GenesisConfig, ValidatorInfo, TOML templates |
@@ -182,7 +182,7 @@ Phase 5 captured real benchmark data (~527 events/sec single-node), validated mu
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
-12. Bitcoin/Solana/Celestia settlement adapters
+12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
 13. Mobile wallet
 14. Throughput optimization (multi-threaded, sharded consensus)
 
