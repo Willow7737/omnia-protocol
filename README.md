@@ -7,11 +7,11 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-1,099_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
-  <img src="https://img.shields.io/badge/Lines-75,280-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
+  <img src="https://img.shields.io/badge/Tests-1,382_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Lines-79,876-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/Phase_0-93%25-brightgreen?style=for-the-badge" alt="Phase 0">
+  <img src="https://img.shields.io/badge/Phases_0--5-Complete-brightgreen?style=for-the-badge" alt="Phases 0-5">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
@@ -54,23 +54,23 @@
 ├──────────────────────────────────────────────────┤
 │  PHASE 0: ZK-Rollup (Settlement Layer)          │ ✅ IMPLEMENTED
 ├──────────────────────────────────────────────────┤
-│  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINT 0-4
+│  THROUGHPUT OPT: Sharded State + Batch + Pool   │ ✅ SPRINTS 0-5
 │  + Compact Encoding + Bloom + Priority Gossip   │
 ├──────────────────────────────────────────────────┤
 │  PHASE 0 REMEDIATION: Critical Security Fixes   │ ✅ COMPLETE
 │  + Feldman VSS DKG + SRS Binding + Auth Fixes   │
 ├──────────────────────────────────────────────────┤
-│  NODE INTEGRATION: Background Consensus Loop    │ ✅ FIXED
+│  NODE INTEGRATION: Background Consensus Loop    │ ✅ COMPLETE
 │  + Pipeline Router Workers + P2P Network Task   │
 ├──────────────────────────────────────────────────┤
-│  MERKLE TYPE SAFETY: Generic MerkleProof<H>     │ ✅ FIXED
+│  MERKLE TYPE SAFETY: Generic MerkleProof<H>     │ ✅ COMPLETE
 │  + Blake3/Poseidon markers prevent mismatch     │
 ├──────────────────────────────────────────────────┤
-│  CEREMONY API: Wired to CeremonyServer          │ ✅ FIXED
+│  CEREMONY API: Wired to CeremonyServer          │ ✅ COMPLETE
 ├──────────────────────────────────────────────────┤
-│  PLACEHOLDER FIXES: Reject invalid proofs        │ ✅ FIXED
+│  PLACEHOLDER FIXES: Reject invalid proofs        │ ✅ COMPLETE
 ├──────────────────────────────────────────────────┤
-│  v0.1.56 AUDIT: 7 High / 16 Medium Findings     │ 🔄 TRACKED
+│  v0.1.56 AUDIT: 7 High / 16 Medium Findings     │ 🔄 IN PROGRESS
 └──────────────────────────────────────────────────┘
 ```
 
@@ -97,21 +97,22 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 | Crate | Purpose | Tests | Status |
 |-------|---------|-------|--------|
-| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 57 | ✅ 90% |
-| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC, DKG | 189 | ✅ 75% |
-| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs, slashing | 284 | ✅ 80% |
-| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 103 | ✅ 80% |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 129 | ✅ 70% |
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 62 | ✅ 80% |
-| `shards/` | 6 domain shards + cross-shard messaging | 113 | ✅ 75% |
-| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 83 | ✅ 70% |
-| `economics/` | UBC token, quota, governance, useful work | 88 | ✅ 65% |
-| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | 25 | ✅ 55% |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss, integration | 82 | ✅ 80% |
-| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ 70% |
-| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ 85% |
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 68 | ✅ |
+| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC, DKG | 189 | ✅ |
+| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs, slashing | 294 | ✅ |
+| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 126 | ✅ |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 149 | ✅ |
+| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 72 | ✅ |
+| `shards/` | 6 domain shards + cross-shard messaging | 120 | ✅ |
+| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 86 | ✅ |
+| `economics/` | UBC token, quota, governance, useful work | 88 | ✅ |
+| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | 67 | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | 84 | ✅ |
+| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
+| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ |
+| `tests/` | Integration tests | 39 | ✅ |
 
-**Total: 209 Rust source files, 75,280 lines, 1,315 tests — all passing.**
+**Total: 219 Rust source files, 79,876 lines, 1,382 tests — all passing.**
 
 ---
 
@@ -149,12 +150,11 @@ cargo bench --no-run
 - FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
 
 ### Layer 3: Binding Layer ✅
-- Append-only provenance log (CRDT)
+- Append-only provenance log (CRDT) with BLAKE3 hash-chain integrity
 - Physical anchor (RF + quantum + provenance)
 - ProvenanceTracker with create/transfer/verify/destroy lifecycle
 - Hybrid PQC signatures (Ed25519 + CRYSTALS-Dilithium)
-- ✅ Real PQC signatures (Ed25519 + CRYSTALS-Dilithium hybrid verification)
-- ✅ PqcKeyRotationManager for post-quantum key rotation (3-phase migration)
+- PqcKeyRotationManager for post-quantum key rotation (3-phase migration)
 - ⚠️ **STUB**: RF fingerprinting (needs SDR hardware; see [stub inventory](docs/stub-inventory.md))
 
 ### Layer 4: Identity Hardening ✅
@@ -175,29 +175,29 @@ cargo bench --no-run
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- ✅ Celestia adapter with RPC integration (`celestia` feature)
+- Celestia adapter with RPC integration (`celestia` feature)
 - ⚠️ **STUB**: Bitcoin, Solana, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
 - L2 operator with batch builder (TOCTOU race condition fixed)
-- ✅ ZK circuit (arkworks R1CS + Groth16 on BN254)
-- ✅ Expanded circuit with Merkle path verification + per-event state transition constraints
-- ✅ SRS-to-key derivation with cryptographic binding (`derive_keys_deterministic_from_srs`)
+- ZK circuit (arkworks R1CS + Groth16 on BN254)
+- Expanded circuit with Merkle path verification + per-event state transition constraints
+- SRS-to-key derivation with cryptographic binding (`derive_keys_deterministic_from_srs`)
 - Sparse Merkle tree proofs (BLAKE3 off-circuit)
 - Event pruning for sustainability
 - ⚠️ Placeholder: ExpandedRollupCircuit uses Poseidon hash (production-ready, but parameters use Cauchy MDS + BLAKE3 round constants, not Grain LFSR from paper)
 
 ### Phase 0 Remediation ✅
-- ✅ **Coin round** integrated into fame determination (breaks split-vote deadlocks)
-- ✅ **Feldman VSS DKG** replaces deprecated key aggregation (`FeldmanVssSession`)
-- ✅ **SRS binding** in key derivation (`derive_keys_deterministic_from_srs`)
-- ✅ **Multi-node integration test** with in-memory consensus simulation
-- ✅ **Financial shard** burn authorization (creator must match `from`)
-- ✅ **Physical shard** transfer authorization (caller must be current owner)
-- ✅ **Bounded sequence tracking** (`max_sequence_entries` in `ConsensusConfig`)
-- ✅ **RollupOperator** race condition fix (single atomic read lock)
-- ✅ **BLS duplicate signer detection** (`aggregate_signatures_dedup`)
-- ✅ **SLIP-0010 key derivation** (HMAC-SHA512, BIP-44 path for Ed25519)
-- ✅ **Domain shard verification** (`real_verification` feature gate)
-- ✅ **Chaos suite** fixes (byzantine equivocation actually generates conflicts)
+- **Coin round** integrated into fame determination (breaks split-vote deadlocks)
+- **Feldman VSS DKG** replaces deprecated key aggregation (`FeldmanVssSession`)
+- **SRS binding** in key derivation (`derive_keys_deterministic_from_srs`)
+- **Multi-node integration test** with in-memory consensus simulation
+- **Financial shard** burn authorization (creator must match `from`)
+- **Physical shard** transfer authorization (caller must be current owner)
+- **Bounded sequence tracking** (`max_sequence_entries` in `ConsensusConfig`)
+- **RollupOperator** race condition fix (single atomic read lock)
+- **BLS duplicate signer detection** (`aggregate_signatures_dedup`)
+- **SLIP-0010 key derivation** (HMAC-SHA512, BIP-44 path for Ed25519)
+- **Domain shard verification** (`real_verification` feature gate)
+- **Chaos suite** fixes (byzantine equivocation actually generates conflicts)
 
 ---
 
@@ -208,13 +208,12 @@ cargo bench --no-run
 | Real RF fingerprinting | ⚠️ **STUB** | Needs HackRF/USRP hardware |
 | Bitcoin settlement adapter | ⚠️ **STUB** | Implements trait, returns hardcoded values |
 | Solana settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
-| ✅ Celestia settlement adapter | ✅ **IMPLEMENTED** | Real RPC via `celestia` feature |
 | Cosmos settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
 | Proof-of-useful-work | ⚠️ **STUB** | 3 types defined, no real verification |
-| Mobile wallet | 🌑 Not started | Planned for Phase 1 |
-| Validator network | 🌑 Not started | Single-node operator for Phase 0 |
-| Conviction voting | 🌑 Not started | Planned for Phase 1 |
-| Delegation | 🌑 Not started | Planned for Phase 1 |
+| Mobile wallet | 🌑 Not started | Planned for post-testnet |
+| Validator network | 🌑 Not started | Single-node operator currently |
+| Conviction voting | 🌑 Not started | Planned for post-testnet |
+| Delegation | 🌑 Not started | Planned for post-testnet |
 | Production ZK hash gadget | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
 
 > **Full stub inventory**: See [docs/stub-inventory.md](docs/stub-inventory.md) for detailed documentation of all stubs and partial implementations.
@@ -232,35 +231,86 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 ## 🗺️ Implementation Roadmap
 
-### Phase 0: The Seed ✅ In Progress
+### Phase 0: The Seed ✅ Complete
 *Goal: Proof of Concept*
-- ✅ Causal graph consensus (Rust, 75+ tests)
+- ✅ Causal graph consensus (Rust, 68 primitives tests + 294 consensus tests)
 - ✅ Self-sovereign identity system (DIDs, Shamir, biometrics)
 - ✅ Universal Basic Compute (UBC)
 - ✅ 6 domain shards with cross-shard messaging
 - ✅ Settlement-agnostic ZK-rollup architecture
-- ✅ Full ZK circuit (arkworks R1CS)
-- ✅ Real PQC signatures (Dilithium)
-- ✅ Local testnet (multi-node integration tests)
+- ✅ Full ZK circuit (arkworks R1CS + Groth16 + Poseidon)
+- ✅ Real PQC signatures (ML-KEM-768 / FIPS-203)
+- ✅ REST API with JWT auth, rate limiting, CORS
+- ✅ Encrypted keystore (AES-256-GCM)
+- ✅ Gradual slashing (3-tier: Warning → Jail → Ejection)
+- ✅ BFT consensus with VRF leader selection
+- ✅ Docker 5-node testnet + monitoring stack
 
-### Sprint 2 Completed 🎉
-- ✅ Real ZK proofs: arkworks R1CS + Groth16 proof system on BN254 curve
-- ✅ Real PQC signatures: ed25519-dalek + pqc_dilithium hybrid verification
-- ✅ Fee mechanism: FeeSchedule + QuotaSystem enforcement in ShardRouter
-- ✅ Slashing: SlashingEngine with equivocation/liveness/invalid attestation detection
-- ✅ Fixed-point governance decay: PPM arithmetic replacing f64 in consensus-critical paths
-- ✅ Real libp2p QUIC multi-node integration test (#[ignore] + CI cron)
+### Phase 1: Hardening ✅ Complete
+*Goal: Code Quality*
+- ✅ Typed error migration — 34 `thiserror` enums
+- ✅ `unwrap()` replacement — `#![deny(clippy::unwrap_used)]` on all crates
+- ✅ E2E REST API Integration Tests — 19 test functions
+- ✅ Code coverage integration — `cargo llvm-cov` in CI
+- ✅ RUSTSEC advisory review — stale ignores removed
+- ✅ Documentation sprint — 50+ discrepancy fixes
+- ✅ Solidity Groth16 Verifier — production-quality with BN254 precompiles
+- ✅ Rustdoc coverage — 35 documentation items
 
-### Sprint 3 Completed 🎉
-- ✅ Expanded ZK circuit: Merkle path verification + per-event state transition constraints
-- ✅ TLA+ formal verification: consensus safety, agreement, validity, no-equivocation invariants
-- ✅ Persistent slashing state: redb-backed `RedbSlashingStore` with graceful fallback
-- ✅ Binary entrypoint: `omnia-node` with CLI, health/metrics HTTP, graceful shutdown
-- ✅ REST API: axum + utoipa Swagger UI with events/shards/governance/economics/node endpoints
-- ✅ Chaos testing: partitions, crash recovery, byzantine behavior, message loss
-- ✅ Security audit preparation: scope, attack surface, self-assessment documentation
+### Phase 2: Cryptographic Key Management & ZK Hardening ✅ Complete
+*Goal: Security Closure*
+- ✅ SSS recovery flow with encrypted shares and key derivation
+- ✅ Trusted setup ceremony with real EC scalar multiplication
+- ✅ ZK circuit dummy fields populated with event semantics constraints
+- ✅ ZK-SNARK benchmark suite
+- ✅ Groth16 batch verification
+- ✅ PQC key rotation with encrypted keystore
+- ✅ Gradual slashing with jail/suspension and events
+- ✅ BIP-39 mnemonic support
+- ✅ DKG for threshold signatures (Feldman VSS)
+- ✅ Complete sled removal (migrated to redb)
+- ✅ ADRs 010–014
 
-### Phase 0 Throughput Optimization (Sprint 0–4) ✅ Complete
+### Phase 3: Network Optimization & Security Closure ✅ Complete
+*Goal: Production Network Readiness*
+- ✅ SSS/DKG share encryption — XOR to AES-256-GCM
+- ✅ ZK circuit trusted setup dummy values + transcript hash initialization
+- ✅ Leader selection wired into consensus block production
+- ✅ Kademlia DHT + NAT Traversal
+- ✅ GossipSub peer scoring configuration
+- ✅ Consensus state persistence across restarts
+- ✅ Real Ethereum settlement adapter (Alloy, `ethereum-live` feature flag)
+- ✅ ML-KEM-768 key encapsulation (FIPS-203, KyberSlash eliminated)
+- ✅ Fast-sync protocol with BLAKE3 checkpoints
+- ✅ Message compression (Snappy for >256 bytes)
+- ✅ Load testing infrastructure
+- ✅ RUSTSEC advisory cleanup
+
+### Phase 4: Mainnet Readiness ✅ Complete
+*Goal: Production Hardening*
+- ✅ Real Ethereum settlement with Alloy
+- ✅ Gradual slashing implementation — ADR-011
+- ✅ Migrate pqc_kyber → ml-kem (fix KyberSlash, FIPS-203)
+- ✅ Fast-sync P2P automation
+- ✅ Separate liveness and readiness probes
+- ✅ Multi-party trusted setup ceremony automation
+- ✅ Documentation sprint — ADRs 015–021
+- ✅ Load testing baseline capture
+- ✅ Supply chain hardening (cargo-vet, cargo-deny, SBOM)
+
+### Phase 5: Testnet Launch & Validation ✅ Complete
+*Goal: Performance Validation*
+- ✅ Real performance benchmarking (~7,190 events/sec synchronous; ~527 events/sec async single-node)
+- ✅ Multi-node BFT testnet validation (3-node E2E via real libp2p)
+- ✅ VRF migration to ECVRF per RFC 9381
+- ✅ Genesis tooling — network bootstrap procedure
+- ✅ Ethereum testnet integration test
+- ✅ Poseidon dual-hash transition foundation
+- ✅ Bug bounty program ($100–$50,000, 90-day embargo)
+- ✅ External audit preparation package
+- ✅ Side-channel audit for ZK and binding crates
+
+### Phase 0 Throughput Optimization (Sprints 0–5) ✅ Complete
 - ✅ Sprint 0: Baseline benchmarks, 3-node testnet Docker Compose, monitoring stack
 - ✅ Sprint 1: `ShardedConsensusState` — 256-shard RwLock for parallel event processing
 - ✅ Sprint 2: `BatchIngestor` + `ConsensusEventBatch` — amortized validation & proof generation
@@ -271,26 +321,40 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 **Optimization Results**: ~40% wire size reduction, O(1) duplicate detection, priority-based finality propagation, pre-allocated graph insertion with slot reuse.
 
-### Phase 1: The Root 📋 Planned
-*Goal: Independence*
-- 📋 Standalone validator network
-- 📋 Real RF fingerprinting (SDR hardware)
-- 📋 Production ZK hash gadget (✅ Poseidon already implemented)
-- 📋 Mobile wallet
-- 📋 Conviction voting & delegation
-- 📋 Bitcoin/Solana/Cosmos settlement adapters (Celestia ✅ done)
+### Post-Phase 5: Audit & Hardening 🔄 In Progress
+- ✅ 7 high-priority audit findings remediated (BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS, DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence)
+- ✅ 1 medium-priority finding remediated (signature dedup)
+- ✅ Event submission now uses node's persistent keypair (not ephemeral)
+- 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
+- 📋 External security audit
+- 📋 Public testnet launch
 
-### Phase 2: The Trunk 🔮 Long-term Vision
-*Goal: Decentralization*
-- ✅ Quantum-resistant cryptography (Ed25519 + CRYSTALS-Dilithium hybrid)
-- 🔮 Hardware mesh networks
-- 🔮 Proof-of-useful-work (production)
+### Future Phases
 
-### Phase 3: The Canopy 🔮 Long-term Vision
-*Goal: Universality*
-- 🔮 Relativistic consensus for interplanetary operation
-- 🔮 Full physical-digital fusion
-- 🔮 Post-human governance
+| Phase | Goal | Status |
+|-------|------|--------|
+| Phase 6: Public Testnet | Multi-node testnet, external audit | 📋 Planned |
+| Phase 7: Mainnet | Sybil resistance, GC, formal verification | 📋 Planned |
+| Phase 8: Decentralization | Hardware mesh, production PoUW | 📋 Long-term |
+| Phase 9: Universality | Relativistic consensus, physical-digital fusion | 📋 Long-term |
+
+---
+
+## 📈 Honest Performance Numbers
+
+| Metric | Measured | Conditions |
+|--------|----------|------------|
+| **Synchronous pipeline** | ~7,190 evt/s | Release build, single-node, no async |
+| **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead |
+| **Finality latency p50** | 93 µs | Synchronous, single-node |
+| **Graph insert p50** | 18 µs | O(1) amortized, 0→1000 events |
+| **Ed25519 verify** | ~26,935 sig/s | Standalone |
+| **Groth16 prove (expanded)** | ~88 ms/event | BN254, R1CS |
+| **Groth16 verify** | ~2.7 ms | Single proof |
+| **VRF compute** | ~19 µs | Ed25519 + BLAKE3 |
+| **CRDT batch merge** | ~100K ops/s | 1K ops/batch |
+
+> These are **measured** numbers from benchmark suites, not aspirational targets. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead.
 
 ---
 

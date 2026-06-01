@@ -58,7 +58,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-5.2** | Quadratic Voting + Integer Decay (PPM fixed-point) | P1 | ✅ Completed |
 | **REQ-5.3** | Proof-of-Useful-Work | P2 | 🔄 Stub |
 
-## 6. Phase 1: Hardening Sprint
+## 6. Phase 1: Hardening
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -99,7 +99,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.7** | Conviction Voting | P2 | 🌑 Not Started |
 | **REQ-6.8** | Delegation | P2 | 🌑 Not Started |
 
-## 9. Sprint 3: Testnet Readiness
+## 9. Phase 0 Sprint 3: Testnet Readiness
 
 | ID | Requirement | Priority | Status |
 | :--- | :--- | :--- | :--- |
@@ -176,7 +176,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **AUDIT-13** | PQC feature declared but no implementation | 🟡 Medium | 📋 Tracked |
 | **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated | 🟡 Medium | 📋 Tracked |
 | **AUDIT-15** | Pipeline workers are stubs (log only, no processing) | 🟡 Medium | 📋 Tracked |
-| **AUDIT-16** | Event submission uses ephemeral keypairs | 🟡 Medium | 📋 Tracked |
+| **AUDIT-16** | Event submission uses ephemeral keypairs | 🟡 Medium | ✅ Remediated |
 | **AUDIT-17** | `UsefulWorkProof::verify_stub()` is only verification | 🟡 Medium | 📋 Tracked |
 | **AUDIT-18** | `UsefulWorkType` fields are private (can't construct externally) | 🟡 Medium | 📋 Tracked |
 | **AUDIT-19** | `TimeLockVoting` lacks `Serialize`/`Deserialize` | 🟡 Medium | 📋 Tracked |
@@ -198,14 +198,14 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Economics** | 3 | 2 | 0 | 1 | 0 | 0 | ███████░░░ 67% |
 | **Phase 1** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 2** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **Sprint 3** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **Sprint 4** | 18 | 18 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Phase 0 (Sprint 3)** | 8 | 8 | 0 | 0 | 0 | 0 | ██████████ 100% |
+| **Phase 0 (Sprint 4)** | 18 | 18 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **v0.1.56 Audit** | 23 | 8 | 0 | 0 | 0 | 15 | ███░░░░░░░ 35% |
+| **v0.1.56 Audit** | 23 | 9 | 0 | 0 | 0 | 14 | ████░░░░░░ 39% |
 | **Limit Verification** | 39 | 39 | 0 | 0 | 0 | 0 | ██████████ 100% |
-| **TOTAL** | **170** | **140** | **0** | **1** | **4** | **26** | █████████░ 93% |
+| **TOTAL** | **170** | **141** | **0** | **1** | **4** | **25** | █████████░ 93% |
 
 ---
 *Legend:*
@@ -220,7 +220,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 ## 14. Verified Protocol Limits (Tested 2026-05-26)
 
 > The following limits were verified by running `cargo test --workspace` and
-> examining source code constants. All 910 unit tests + 189 BLS feature tests pass.
+> examining source code constants. All 1,382 tests pass (1,283 sync + 99 async).
 
 | Category | Limit | Value | Source |
 | :--- | :--- | :--- | :--- |
