@@ -8,6 +8,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.65](https://github.com/Willow7737/omnia-protocol/compare/v0.1.64...v0.1.65) (2026-06-01)
+
+
+### Bug Fixes
+
+* apply cargo fmt to threshold.rs, provide keypair in test AppState constructors ([f0a5776](https://github.com/Willow7737/omnia-protocol/commit/f0a577624febec84b55a0634072a03174b578e32))
+* clippy ok_or_else → ok_or in economics/src/ubc.rs ([1995699](https://github.com/Willow7737/omnia-protocol/commit/19956999ff7132c3a1fffad4c0d9a9a9ea95f944))
+* clippy redundant_pattern_matching in chaos-tests ([e9e6399](https://github.com/Willow7737/omnia-protocol/commit/e9e63997aa679d67411eef00bedf523580d8c516))
+* comprehensive security and performance audit — 110 issues resolved ([eb6b87d](https://github.com/Willow7737/omnia-protocol/commit/eb6b87dc2a53accb80c1f28843f3becab92e5c9b))
+* comprehensive security and performance audit — 110 issues resolved ([5b2ca8e](https://github.com/Willow7737/omnia-protocol/commit/5b2ca8ee463167212f36cd6db5bef0071a26a752))
+* resolve all remaining CI failures across workspace ([c8e6067](https://github.com/Willow7737/omnia-protocol/commit/c8e6067fba4625176a648aac2c79f0cd9768ef33))
+* resolve CI failures — add ReadableTable imports, fix unicode escapes, apply cargo fmt ([4173d04](https://github.com/Willow7737/omnia-protocol/commit/4173d04b5441f0be9edc50b26f9c196278bcb09c))
+* resolve E0277 From&lt;ProvenanceError&gt; impl, clippy ok_or/unwrap errors, remove duplicate stub() ([bb19ab6](https://github.com/Willow7737/omnia-protocol/commit/bb19ab6b4856cc014c59a7c528f8384a80c286c2))
+* resolve E0597 lifetime issue, remove unused import, fix remaining fmt issues ([1b52498](https://github.com/Willow7737/omnia-protocol/commit/1b524983a1496c98342e2247d48a9810c16ca00c))
+
 ## [0.1.64](https://github.com/Willow7737/omnia-protocol/compare/v0.1.63...v0.1.64) (2026-05-31)
 
 
