@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.66](https://github.com/Willow7737/omnia-protocol/compare/v0.1.65...v0.1.66) (2026-06-01)
+
+
+### Documentation
+
+* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([71f7ab7](https://github.com/Willow7737/omnia-protocol/commit/71f7ab7a2694e0f045cce0957874c00919d77955))
+* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([dc6ee7b](https://github.com/Willow7737/omnia-protocol/commit/dc6ee7be100d7acf242e2a7d27cab5eb9b065f26))
+
 ## [0.1.65](https://github.com/Willow7737/omnia-protocol/compare/v0.1.64...v0.1.65) (2026-06-01)
 
 
