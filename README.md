@@ -69,9 +69,7 @@
 │  CEREMONY API: Wired to CeremonyServer          │ ✅ COMPLETE
 ├──────────────────────────────────────────────────┤
 │  PLACEHOLDER FIXES: Reject invalid proofs        │ ✅ COMPLETE
-├──────────────────────────────────────────────────┤
-│  v0.1.56 AUDIT: 7 High / 16 Medium Findings     │ 🔄 IN PROGRESS
-└──────────────────────────────────────────────────┘
+├──────────────────────────────────────────────────┘
 ```
 
 ---
