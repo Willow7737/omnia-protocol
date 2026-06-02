@@ -270,46 +270,16 @@ async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
 async fn test_auth_node_info() {
     let server = setup_server(None).await;
     let client = reqwest::Client::new();
-    let valid_token = make_valid_token(REGULAR_CALLER);
-    let expired_token = make_expired_token(JWT_SECRET);
-    let wrong_secret_token = make_wrong_secret_token();
 
-    // No auth → 401
+    // No auth → 200 (node/info is a public endpoint for dashboards)
     let resp = client
         .get(format!("{}/api/v1/node/info", server.base_url))
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 401, "No auth should yield 401");
-
-    // Valid JWT → 200
-    let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
-        .bearer_auth(&valid_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200, "Valid JWT should yield 200");
+    assert_eq!(resp.status(), 200, "Public endpoint should be accessible without auth");
     let body: Value = resp.json().await.unwrap();
     assert!(body["node_id"].is_string(), "Response should contain node_id");
-
-    // Expired JWT → 401
-    let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
-        .bearer_auth(&expired_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 401, "Expired JWT should yield 401");
-
-    // Wrong-secret JWT → 401
-    let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
-        .bearer_auth(&wrong_secret_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 401, "Wrong-secret JWT should yield 401");
 }
 
 // ---- GET /api/v1/node/peers ----
@@ -318,46 +288,16 @@ async fn test_auth_node_info() {
 async fn test_auth_node_peers() {
     let server = setup_server(None).await;
     let client = reqwest::Client::new();
-    let valid_token = make_valid_token(REGULAR_CALLER);
-    let expired_token = make_expired_token(JWT_SECRET);
-    let wrong_secret_token = make_wrong_secret_token();
 
-    // No auth → 401
+    // No auth → 200 (node/peers is a public endpoint for dashboards)
     let resp = client
         .get(format!("{}/api/v1/node/peers", server.base_url))
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 401);
-
-    // Valid JWT → 200
-    let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
-        .bearer_auth(&valid_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.status(), 200, "Public endpoint should be accessible without auth");
     let body: Value = resp.json().await.unwrap();
     assert!(body["peers"].is_array(), "Response should contain peers array");
-
-    // Expired JWT → 401
-    let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
-        .bearer_auth(&expired_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 401);
-
-    // Wrong-secret JWT → 401
-    let resp = client
-        .get(format!("{}/api/v1/node/peers", server.base_url))
-        .bearer_auth(&wrong_secret_token)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 401);
 }
 
 // ---- POST /api/v1/events ----
