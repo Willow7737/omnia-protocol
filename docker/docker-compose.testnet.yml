@@ -53,7 +53,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=2
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001/p2p/bootstrap
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/4001
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
@@ -76,7 +76,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=3
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001/p2p/bootstrap
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/tcp/4001
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/tcp/4001
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
