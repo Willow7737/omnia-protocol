@@ -129,8 +129,13 @@ services:
       dockerfile: Dockerfile
     container_name: omnia-web
     environment:
+      # Runtime server-side env vars — used by the API proxy to reach nodes
+      # via Docker DNS (not localhost, which refers to the web container itself)
+      - OMNIA_NODE_INTERNAL_URLS=http://omnia-bootstrap:8080,http://omnia-node-1:8080,http://omnia-node-2:8080,http://omnia-node-3:8080,http://omnia-node-4:8080
+      - OMNIA_API_URL=http://omnia-bootstrap:8080
+      # Build-time env vars — baked into the JS bundle at image build time
+      - NEXT_PUBLIC_LIVE_MODE=true
       - NEXT_PUBLIC_OMNIA_API_URL=http://localhost:9090
-      - NEXT_PUBLIC_OMNIA_NODE_URLS=http://localhost:9090,http://localhost:9091,http://localhost:9092,http://localhost:9093,http://localhost:9094
       - NEXT_PUBLIC_POLL_INTERVAL_MS=5000
     ports:
       - "3001:3000"
