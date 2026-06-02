@@ -144,6 +144,14 @@ services:
     depends_on:
       omnia-bootstrap:
         condition: service_healthy
+      omnia-node-1:
+        condition: service_started
+      omnia-node-2:
+        condition: service_started
+      omnia-node-3:
+        condition: service_started
+      omnia-node-4:
+        condition: service_started
     profiles:
       - web
 
