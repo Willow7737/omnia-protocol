@@ -488,12 +488,33 @@ async fn spawn_background_tasks(
         tokio::spawn(async move {
             tracing::info!("P2P network initialization started");
 
-            // Parse listen address into a Multiaddr for libp2p
-            let listen_multiaddr: Multiaddr = match listen_addr.parse() {
-                Ok(addr) => addr,
-                Err(e) => {
-                    tracing::error!(error = %e, addr = %listen_addr, "Failed to parse listen address as Multiaddr");
-                    return;
+            // Parse listen address into a Multiaddr for libp2p.
+            // Support both multiaddr format (e.g., "/ip4/0.0.0.0/udp/4001/quic-v1")
+            // and plain host:port format (e.g., "0.0.0.0:4001") which is converted
+            // to a QUIC multiaddr since the swarm only supports QUIC by default.
+            let listen_multiaddr: Multiaddr = if listen_addr.starts_with('/') {
+                // Already a multiaddr — parse directly
+                match listen_addr.parse() {
+                    Ok(addr) => addr,
+                    Err(e) => {
+                        tracing::error!(error = %e, addr = %listen_addr, "Failed to parse listen address as Multiaddr");
+                        return;
+                    }
+                }
+            } else {
+                // Plain host:port format — convert to QUIC multiaddr.
+                // The default swarm transport is QUIC-only, so we convert
+                // "0.0.0.0:4001" to "/ip4/0.0.0.0/udp/4001/quic-v1".
+                let quic_addr = format!("/ip4/0.0.0.0/udp/{listen_addr}/quic-v1");
+                match quic_addr.parse() {
+                    Ok(addr) => {
+                        tracing::info!(original = %listen_addr, converted = %addr, "Converted host:port listen address to QUIC multiaddr");
+                        addr
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, original = %listen_addr, attempted = %quic_addr, "Failed to convert listen address to QUIC multiaddr");
+                        return;
+                    }
                 }
             };
 

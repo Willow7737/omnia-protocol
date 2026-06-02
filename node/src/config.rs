@@ -319,8 +319,16 @@ pub struct CliArgs {
     #[arg(long, env = "OMNIA_NODE_ID", default_value = "1")]
     pub node_id: u64,
 
-    /// P2P listen address.
-    #[arg(long, env = "OMNIA_LISTEN_ADDR", default_value = "0.0.0.0:4001")]
+    /// P2P listen address (multiaddr format).
+    ///
+    /// The libp2p swarm uses QUIC transport by default. The listen address
+    /// must be a valid multiaddr that matches a configured transport:
+    /// - QUIC: `/ip4/0.0.0.0/udp/4001/quic-v1` (default, recommended)
+    /// - TCP: `/ip4/0.0.0.0/tcp/4001` (only if TCP fallback is enabled)
+    ///
+    /// A plain `host:port` string (e.g., `0.0.0.0:4001`) is automatically
+    /// converted to `/ip4/0.0.0.0/udp/{port}/quic-v1` for QUIC compatibility.
+    #[arg(long, env = "OMNIA_LISTEN_ADDR", default_value = "/ip4/0.0.0.0/udp/4001/quic-v1")]
     pub listen_addr: String,
 
     /// Comma-separated list of bootstrap peer multiaddresses.
