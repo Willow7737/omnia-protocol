@@ -140,7 +140,5 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         // Body size limit — reject oversized request bodies (10 MiB)
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024));
 
-    Router::new()
-        .merge(public_routes)
-        .merge(authenticated_routes)
+    Router::new().merge(public_routes).merge(authenticated_routes)
 }
