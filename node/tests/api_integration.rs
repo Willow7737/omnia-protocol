@@ -1001,11 +1001,7 @@ async fn test_error_format_401_unauthorized() {
     let auth_url = format!("{}/api/v1/events", server.base_url);
 
     // --- Missing auth header ---
-    let resp = client
-        .get(&auth_url)
-        .send()
-        .await
-        .unwrap();
+    let resp = client.get(&auth_url).send().await.unwrap();
     assert_eq!(resp.status(), 401);
     let body: Value = resp.json().await.unwrap();
     assert!(
@@ -1021,12 +1017,7 @@ async fn test_error_format_401_unauthorized() {
 
     // --- Expired token ---
     let expired_token = make_expired_token(JWT_SECRET);
-    let resp = client
-        .get(&auth_url)
-        .bearer_auth(&expired_token)
-        .send()
-        .await
-        .unwrap();
+    let resp = client.get(&auth_url).bearer_auth(&expired_token).send().await.unwrap();
     assert_eq!(resp.status(), 401);
     let body: Value = resp.json().await.unwrap();
     assert!(
@@ -1041,12 +1032,7 @@ async fn test_error_format_401_unauthorized() {
 
     // --- Invalid (wrong-secret) token ---
     let wrong_token = make_wrong_secret_token();
-    let resp = client
-        .get(&auth_url)
-        .bearer_auth(&wrong_token)
-        .send()
-        .await
-        .unwrap();
+    let resp = client.get(&auth_url).bearer_auth(&wrong_token).send().await.unwrap();
     assert_eq!(resp.status(), 401);
     let body: Value = resp.json().await.unwrap();
     assert!(
