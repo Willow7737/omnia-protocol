@@ -12,6 +12,7 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
+      - OMNIA_CORS_ORIGINS=*
     ports:
       - "9090:8080/tcp"
     networks:
@@ -38,6 +39,7 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
+      - OMNIA_CORS_ORIGINS=*
     ports:
       - "9091:8080/tcp"
     networks:
@@ -61,6 +63,7 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
+      - OMNIA_CORS_ORIGINS=*
     ports:
       - "9092:8080/tcp"
     networks:
@@ -84,6 +87,7 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
+      - OMNIA_CORS_ORIGINS=*
     ports:
       - "9093:8080/tcp"
     networks:
@@ -107,6 +111,7 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
+      - OMNIA_CORS_ORIGINS=*
     ports:
       - "9094:8080/tcp"
     networks:
@@ -116,6 +121,26 @@ services:
     depends_on:
       omnia-bootstrap:
         condition: service_healthy
+
+  # ── Omnia Web Dashboard ───────────────────────────────────────────────
+  omnia-web:
+    build:
+      context: https://github.com/Willow7737/omnia-web.git#main
+      dockerfile: Dockerfile
+    container_name: omnia-web
+    environment:
+      - NEXT_PUBLIC_OMNIA_API_URL=http://localhost:9090
+      - NEXT_PUBLIC_OMNIA_NODE_URLS=http://localhost:9090,http://localhost:9091,http://localhost:9092,http://localhost:9093,http://localhost:9094
+      - NEXT_PUBLIC_POLL_INTERVAL_MS=5000
+    ports:
+      - "3001:3000"
+    networks:
+      - omnia-testnet
+    depends_on:
+      omnia-bootstrap:
+        condition: service_healthy
+    profiles:
+      - web
 
   prometheus:
     image: prom/prometheus:latest
