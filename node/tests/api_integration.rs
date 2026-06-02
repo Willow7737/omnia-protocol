@@ -996,9 +996,13 @@ async fn test_error_format_401_unauthorized() {
     let server = setup_server(None).await;
     let client = reqwest::Client::new();
 
+    // Use an authenticated endpoint (events) — public endpoints like node/info
+    // always return 200 regardless of auth state.
+    let auth_url = format!("{}/api/v1/events", server.base_url);
+
     // --- Missing auth header ---
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(&auth_url)
         .send()
         .await
         .unwrap();
@@ -1018,7 +1022,7 @@ async fn test_error_format_401_unauthorized() {
     // --- Expired token ---
     let expired_token = make_expired_token(JWT_SECRET);
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(&auth_url)
         .bearer_auth(&expired_token)
         .send()
         .await
@@ -1038,7 +1042,7 @@ async fn test_error_format_401_unauthorized() {
     // --- Invalid (wrong-secret) token ---
     let wrong_token = make_wrong_secret_token();
     let resp = client
-        .get(format!("{}/api/v1/node/info", server.base_url))
+        .get(&auth_url)
         .bearer_auth(&wrong_token)
         .send()
         .await
