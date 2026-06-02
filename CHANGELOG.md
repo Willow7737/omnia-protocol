@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.67](https://github.com/Willow7737/omnia-protocol/compare/v0.1.66...v0.1.67) (2026-06-02)
+
+
+### Bug Fixes
+
+* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
+* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
+
 ## [0.1.66](https://github.com/Willow7737/omnia-protocol/compare/v0.1.65...v0.1.66) (2026-06-02)
 
 
