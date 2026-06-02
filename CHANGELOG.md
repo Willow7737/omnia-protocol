@@ -8,6 +8,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.68](https://github.com/Willow7737/omnia-protocol/compare/v0.1.67...v0.1.68) (2026-06-02)
+
+
+### Features
+
+* make node info/peers API public + add web dashboard to Docker Compose ([01c2ffe](https://github.com/Willow7737/omnia-protocol/commit/01c2ffe52fa6d0190398a65ffe5042bf69ad6671))
+
+
+### Bug Fixes
+
+* **fmt:** collapse method chains to single lines in test ([383c0ac](https://github.com/Willow7737/omnia-protocol/commit/383c0ac71f5280fb78abdc1eef2287b187331fcd))
+* **fmt:** collapse Router::new() chain to single line ([1b67d23](https://github.com/Willow7737/omnia-protocol/commit/1b67d2351eac74ed6ef14b13cdc68b7ba2646b93))
+* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
+* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
+* **test:** use authenticated endpoint in 401 error format test ([4953cea](https://github.com/Willow7737/omnia-protocol/commit/4953cea39a93601bacdc8f649abebe1ed3bfed45))
+* update auth integration tests for public node info/peers endpoints ([a960240](https://github.com/Willow7737/omnia-protocol/commit/a960240e03b4bfa871b0ab19b29c8a64363f093b))
+* update auth integration tests for public node info/peers endpoints ([7d064e8](https://github.com/Willow7737/omnia-protocol/commit/7d064e87ca26175cbc574057da332a2a53819c21))
+
 ## [0.1.67](https://github.com/Willow7737/omnia-protocol/compare/v0.1.66...v0.1.67) (2026-06-02)
 
 
