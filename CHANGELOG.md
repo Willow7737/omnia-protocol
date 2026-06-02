@@ -8,6 +8,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.66](https://github.com/Willow7737/omnia-protocol/compare/v0.1.65...v0.1.66) (2026-06-02)
+
+
+### Bug Fixes
+
+* chaos test message loss flaky assert + Docker missing ENTRYPOINT ([a60f9c0](https://github.com/Willow7737/omnia-protocol/commit/a60f9c048411d5286b8572a97b990773b34a79e2))
+
+
+### Documentation
+
+* benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([79186fa](https://github.com/Willow7737/omnia-protocol/commit/79186fa83738f4adf405c14bf0712ac08d03e04e))
+* benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([31d330b](https://github.com/Willow7737/omnia-protocol/commit/31d330b0aaed791c68ed3294d7c63c0c77586c55))
+* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([71f7ab7](https://github.com/Willow7737/omnia-protocol/commit/71f7ab7a2694e0f045cce0957874c00919d77955))
+* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([dc6ee7b](https://github.com/Willow7737/omnia-protocol/commit/dc6ee7be100d7acf242e2a7d27cab5eb9b065f26))
+
 ## [0.1.65](https://github.com/Willow7737/omnia-protocol/compare/v0.1.64...v0.1.65) (2026-06-01)
 
 
