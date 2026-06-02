@@ -123,7 +123,7 @@ The new `PruningAwarePool` uses:
 
 ```bash
 # Run current CausalGraph baseline
-cargo run --release -p omnia-bench-standalone
+cargo bench --bench baseline_bench -- dag_insert
 
 # Run PruningAwarePool benchmarks (when implemented)
 cargo bench --bench throughput -- graph-insert

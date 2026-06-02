@@ -21,15 +21,20 @@
 The micro-benchmarks are run via standalone benchmark harnesses that directly invoke crate APIs. This is Phase A (micro-benchmarks) as recommended in the v0.1.47 code review. Phase B (integration benchmarks after node wiring) and Phase C (network benchmarks after multi-node testnet) will follow.
 
 ```bash
-# Consensus/Crypto micro-benchmarks
-cargo run --release -p omnia-bench-standalone
+# Baseline consensus/crypto/VRF benchmarks
+cargo bench --bench baseline_bench
 
-# ZK micro-benchmarks (requires arkworks)
-cargo run --release -p omnia-zk-bench
+# Throughput benchmarks
+cargo bench --bench throughput
 
-# VRF micro-benchmarks
-cargo run --release --bin omnia-vrf-bench
+# ZK benchmarks (requires arkworks)
+cargo bench --bench zk_benchmarks --features full
+
+# Sharding benchmarks
+cargo bench --bench sharding_bench
 ```
+
+> **Note**: The v0.1.48 numbers were originally captured via standalone benchmark harnesses (`omnia-bench-standalone`, `omnia-zk-bench`, `omnia-vrf-bench`) that have since been consolidated into the `omnia-benches` Criterion suite. The current reproduction path is the Criterion benchmarks listed above.
 
 ### Configuration
 
@@ -320,10 +325,11 @@ omnia_node_memory_rss_bytes
 To detect regressions between runs, compare baseline numbers against this report:
 
 ```bash
-# Run micro-benchmarks
-cargo run --release -p omnia-bench-standalone
-cargo run --release -p omnia-zk-bench
-cargo run --release --bin omnia-vrf-bench
+# Run Criterion benchmarks
+cargo bench --bench baseline_bench
+cargo bench --bench throughput
+cargo bench --bench zk_benchmarks --features full
+cargo bench --bench sharding_bench
 
 # Compare with baseline
 # (manual comparison — see this document for reference values)

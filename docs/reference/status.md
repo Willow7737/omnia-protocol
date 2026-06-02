@@ -271,13 +271,15 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 | Scenario | Measured | Notes |
 | :--- | :--- | :--- |
-| CausalGraph insertion (10K events) | ~1,417 evt/s | Release build, linear chain, 0B payload |
-| ConsensusEngine processing (1K events) | ~9,029 evt/s | Release build, linear chain |
-| Ed25519 signature verification (1K sigs) | ~26,935 sig/s | Standalone verify |
-| VRF leader selection (150 candidates) | ~10,000 sel/s | 100% unique leader distribution |
-| CRDT batch merge (1K ops/batch) | ~100K ops/s | 100 batches |
+| CausalGraph insertion (10K events) | ~1,400 evt/s (full cycle: create+sign+insert) | Release build, linear chain, 0B payload; includes signing |
+| ConsensusEngine processing (1K events) | ~9,000 evt/s | Release build, linear chain; total_nodes=4 |
+| Ed25519 signature verification (1K sigs) | ~27,000 sig/s (est.) | Test timing, not Criterion benchmark |
+| VRF leader selection (150 candidates) | ~10,000 sel/s (est.) | 100% unique leader distribution |
+| CRDT batch merge (1K ops/batch) | ~100K ops/s (est., no dedicated benchmark) | 100 batches |
 
 > See [docs/reference/LIMITS.md](./LIMITS.md) for the complete verified limits reference.
+
+> **Accuracy note**: Numbers marked (est.) are approximate and environment-dependent. They come from simple test timings (`omnia-limit-verification`), not from rigorous Criterion benchmarks. For reproducible benchmark results, run the Criterion suite: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`.
 
 ---
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
