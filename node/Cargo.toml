@@ -45,7 +45,7 @@ anyhow = "1"
 thiserror = "2"
 
 # JWT creation and validation — industry-standard HMAC-SHA256 tokens
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 
 # Tower middleware for HTTP concerns (CORS, etc.)
 tower-http = { version = "0.6", features = ["cors"] }
