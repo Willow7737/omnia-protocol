@@ -20,7 +20,7 @@ hex = "0.4"
 thiserror = "2.0"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.6", features = ["v4", "serde"] }
+uuid = { version = "1.23", features = ["v4", "serde"] }
 
 # Compact binary serialization — postcard replaces unmaintained bincode (RUSTSEC-2025-0141)
 postcard = { version = "1", features = ["alloc"] }
