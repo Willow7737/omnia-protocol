@@ -1,7 +1,7 @@
 # Omnia Protocol — Verified Limits & Benchmarks
 
 > **Audience**: Performance engineers, validators, integrators
-> **Last Verified**: 2026-05-26 (v0.1.56, release build)
+> **Last Verified**: 2026-06-02 (v0.1.68, release build)
 > **Test Suite**: `omnia-limit-verification` (39 tests, all passing)
 
 This document records every absolute limit in the Omnia Protocol, verified by

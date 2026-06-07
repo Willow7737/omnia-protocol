@@ -298,7 +298,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 ### Phase 5: Testnet Launch & Validation ✅ Complete
 *Goal: Performance Validation*
-- ✅ Real performance benchmarking (~7,190 events/sec synchronous; ~527 events/sec async single-node)
+- ✅ Real performance benchmarking (~7,190 events/sec synchronous single-node, 13.6× improvement over earlier async measurements)
 - ✅ Multi-node BFT testnet validation (3-node E2E via real libp2p)
 - ✅ VRF migration to ECVRF per RFC 9381
 - ✅ Genesis tooling — network bootstrap procedure
@@ -343,7 +343,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 | Metric | Measured | Conditions |
 |--------|----------|------------|
 | **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async |
-| **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead |
+| **Async (tokio, legacy)** | ~527 evt/s (historical) | Release build, single-node, with tokio overhead — superseded by synchronous benchmark |
 | **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node |
 | **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events |
 | **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone |

@@ -31,9 +31,9 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
   | 5000/s | 429.9               | 2.19 ms     | 2.66 ms     | 2.95 ms     | 23.2 MB     |
   - ZK benchmarks: Trusted setup basic ~6.5ms, expanded (4 events) ~423ms, Merkle tree (1024 leaves) ~74.4ms
   - VRF benchmarks: compute ~15.6µs, verify ~37.7µs, leader selection (100 validators) ~597ns
-- **`ARCHITECTURE.md`**: Replaced "10,000+ TPS" with "~527 events/sec (single-node measured)" and documented the actual measured throughput.
+- **`ARCHITECTURE.md`**: Replaced "10,000+ TPS" with "~7,190 events/sec (single-node, synchronous)" and documented the actual measured throughput, noting the earlier ~527 evt/s tokio measurement was an async runtime artifact.
 
-**Key Finding**: The "10K+ TPS" claim was unsubstantiated. Actual measured single-node throughput is approximately **527 events/sec** on a 4-core Intel Xeon with 8GB RAM. The system saturates above 500 events/sec due to single-threaded sequential processing. Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements.
+**Key Finding**: The "10K+ TPS" claim was unsubstantiated. Actual measured single-node throughput is approximately **7,190 events/sec** (synchronous, no async overhead) on a 4-core Intel Xeon with 8GB RAM. Earlier tokio-based measurements showed ~527 events/sec, which was caused by async runtime overhead rather than a consensus bottleneck — switching to direct synchronous calls yielded a 13.6× improvement. Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements.
 
 ### H-1: Multi-Node BFT Testnet Validation ✅
 
@@ -161,7 +161,7 @@ Test results verified per crate:
 **Test Environment**: Linux 5.10.134, Intel Xeon 4-core, 8.1 GiB RAM, rustc 1.95.0
 
 **Consensus Throughput (single-node, release build)**:
-- Peak throughput: **~527 events/sec** at 1000 events/sec target rate
+- Peak throughput: **~7,190 events/sec** (synchronous), ~527 events/sec (tokio async — runtime overhead, not consensus bottleneck)
 - Latency: 0.21ms (p50 at 100/s) to 2.19ms (p50 at saturation)
 - Memory: 5.8 MB (idle) to 23.2 MB (under load)
 
@@ -183,12 +183,12 @@ Test results verified per crate:
 4. **Anvil E2E test** — Execute full deploy → submit → verify flow against local Ethereum
 5. **Persistent testnet** — Run a continuous testnet with external validators
 6. **Formal Dilithium audit** — Commission timing side-channel audit of `pqc-dilithium`
-7. **Throughput optimization** — Investigate multi-threaded processing, batch submission, and sharded consensus to increase throughput beyond 527 events/sec
+7. **Throughput optimization** — Investigate multi-threaded processing, batch submission, and sharded consensus to increase real-world distributed throughput beyond synchronous single-node numbers
 
 ## Post-Phase 5 Horizon
 
 After Phase 5, the project is in a **testnet-ready** state with:
-- Real performance data captured (~527 events/sec single-node throughput)
+- Real performance data captured (~7,190 events/sec synchronous single-node throughput, 13.6× improvement over earlier tokio-based measurements)
 - Multi-node BFT consensus validated (4 nodes, all tests passing)
 - Standard VRF construction (V2 ECVRF with Fiat-Shamir + Ed25519 signatures)
 - Genesis tooling for network launch

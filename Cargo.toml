@@ -18,7 +18,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.56"
+version = "0.1.68"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"
