@@ -78,7 +78,7 @@
 
 ## Phase 5: Testnet Launch & Validation ✅ Complete
 
-- ✅ C-1: Real performance benchmarking (~7,190 events/sec synchronous; ~527 events/sec async single-node)
+- ✅ C-1: Real performance benchmarking (~7,190 events/sec synchronous single-node; 13.6× improvement over initial tokio-based measurements)
 - ✅ H-1: Multi-node BFT testnet validation
 - ✅ H-2: VRF migration to ECVRF per RFC 9381
 - ✅ H-3: Genesis tooling — network bootstrap procedure

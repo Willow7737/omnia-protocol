@@ -298,7 +298,7 @@ histogram_quantile(0.99, rate(omnia_dag_insertion_latency_seconds_bucket[5m]))
 
 > **Note on Merkle discrepancy**: The v0.1.48 Merkle benchmarks use `omnia-adapters::merkle::build_merkle_tree` which may include Poseidon hash computation (each hash ~95 µs), while the v0.1.43 baseline likely used BLAKE3-based Merkle construction. The Poseidon-based tree is correct for ZK compatibility but significantly slower — this is an expected and acceptable trade-off.
 
-> **Note on TPS improvement**: The previous ~527 events/sec measurement was from `chaos-tests/src/load_test.rs` which uses tokio async runtime with sleep-based rate limiting, incurring significant overhead. The v0.1.48 measurement uses direct synchronous calls, eliminating async overhead and yielding the true single-node processing pipeline throughput of ~7,190 events/sec.
+> **Note on TPS improvement**: The initial tokio-based measurement was from `chaos-tests/src/load_test.rs` which uses tokio async runtime with sleep-based rate limiting, incurring significant overhead. The v0.1.48 measurement uses direct synchronous calls, eliminating async overhead and yielding the true single-node processing pipeline throughput of ~7,190 events/sec — a 13.6× improvement.
 
 ---
 

@@ -1,7 +1,7 @@
 {
-  "_comment": "Baseline performance values from v0.1.52 (2026-05-24). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated ZK baselines to reflect actual expanded circuit performance (100 events, merkle_depth=8).",
-  "version": "0.1.52",
-  "timestamp": "2026-05-24",
+  "_comment": "Baseline performance values from v0.1.68 (2026-06-07). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated ZK baselines to reflect actual expanded circuit performance (100 events, merkle_depth=8).",
+  "version": "0.1.68",
+  "timestamp": "2026-06-07",
   "environment": {
     "os": "Linux (GitHub Actions ubuntu-latest, x86_64)",
     "cpu": "4 cores",

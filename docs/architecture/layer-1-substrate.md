@@ -103,7 +103,7 @@ See [ADR-012](../reference/adr-index.md#adr-012-vrf-construction-choice) for the
 | Property | Blockchain | Causal Graph (Omnia) |
 |----------|-----------|---------------------|
 | Ordering | Total (sequential) | Partial (parallel) |
-| Throughput | ~100-1000 TPS | ~527 events/sec (single-node measured) |
+| Throughput | ~100-1000 TPS | ~7,190 events/sec (single-node measured, synchronous) |
 | Latency | ~12s block time | Not yet benchmarked at scale |
 | Concurrency | None (single chain) | Automatic (DAG) |
 | Finality | Probabilistic | Deterministic (BFT) |
@@ -128,7 +128,7 @@ See `substrate/RESEARCH.md` for detailed comparative analysis.
 
 ## Performance
 
-⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Actual measured single-node throughput is ~527 events/sec** (see [benchmark-gates.md](../reference/benchmark-gates.md) for full benchmark results). Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements. CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
+⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Actual measured single-node throughput is ~7,190 events/sec** (synchronous; see [benchmark-gates.md](../reference/benchmark-gates.md) for full benchmark results). Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements. CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
 
 ## Testing Strategy
 

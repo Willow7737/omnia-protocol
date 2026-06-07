@@ -79,7 +79,7 @@ Simulated multi-node BFT also passes (`omnia-consensus/tests/multi_node_test.rs`
 | 1000/s | 527.2               | 527.2               | 1.91 ms     | 2.25 ms     | 2.78 ms     | 22.5 MB     |
 | 5000/s | 429.9               | 429.9               | 2.19 ms     | 2.66 ms     | 2.95 ms     | 23.2 MB     |
 
-> The previous ~527 events/sec ceiling was caused by tokio async runtime overhead, not the consensus pipeline itself. Direct synchronous calls yield ~7,190 events/sec — a 13.6× improvement.
+> The initial tokio-based measurement ceiling was caused by async runtime overhead, not the consensus pipeline itself. Direct synchronous calls yield ~7,190 events/sec — a 13.6× improvement.
 
 ## ZK Performance
 
@@ -130,7 +130,7 @@ Simulated multi-node BFT also passes (`omnia-consensus/tests/multi_node_test.rs`
 
 ### v0.1.48 Assessment
 1. **All 10 Phase 0 sprint targets MET** — every metric is well within the target threshold, often by 2-3 orders of magnitude.
-2. **True pipeline throughput is ~7,190 events/sec** — the previous ~527 events/sec ceiling was a measurement artifact from tokio async runtime overhead, not a consensus bottleneck.
+2. **True pipeline throughput is ~7,190 events/sec** — the initial tokio-based measurement ceiling was a measurement artifact from async runtime overhead, not a consensus bottleneck.
 3. **DAG insertion is O(1) amortized** — p50 stays flat at ~18 µs from empty graph to 1000-event graph.
 4. **Sharding is effective** — ShardedConsensusState matches raw HashMap throughput and scales well with 4 threads (5M ops/sec).
 5. **ZK proof generation is the bottleneck** — expanded circuit proof generation at ~79ms/event limits practical batch sizes. This is expected for Groth16 on BN254.
@@ -155,7 +155,7 @@ To reach higher real-world throughput, consider:
 |------|------|-----------|-------|
 | v0.1.53 (2026-05-24) | Multi-node E2E, real P2P, 3 nodes | 4/5 tests PASS | First real multi-node testnet validation via libp2p/QUIC |
 | v0.1.48 (2026-05-23) | Micro-benchmark, synchronous, release build | ~7,190 events/sec | True pipeline throughput, no async overhead |
-| v0.1.47 (2026-05-20) | Load test, tokio async, release build | ~527 events/sec | First real benchmark capture; tokio overhead |
+| v0.1.47 (2026-05-20) | Load test, tokio async, release build | ~527 events/sec | First real benchmark capture; tokio overhead (13.6× slower than sync) |
 | v0.1.43 (2026-05-19) | Load test, tokio async, release build | ~527 events/sec | Same as v0.1.47 |
 
 ---

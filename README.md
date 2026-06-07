@@ -11,7 +11,8 @@
   <img src="https://img.shields.io/badge/Lines-81,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/Phases_0--5-Complete-brightgreen?style=for-the-badge" alt="Phases 0-5">
+  <img src="https://img.shields.io/badge/Phases_0--4-Complete-brightgreen?style=for-the-badge" alt="Phases 0-4">
+  <img src="https://img.shields.io/badge/Phase_5-Validated-yellow?style=for-the-badge" alt="Phase 5">
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
@@ -296,9 +297,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Load testing baseline capture
 - ✅ Supply chain hardening (cargo-vet, cargo-deny, SBOM)
 
-### Phase 5: Testnet Launch & Validation ✅ Complete
+### Phase 5: Testnet Launch & Validation ✅ Validated
 *Goal: Performance Validation*
-- ✅ Real performance benchmarking (~7,190 events/sec synchronous; ~527 events/sec async single-node)
+- ✅ Real performance benchmarking (~7,190 events/sec synchronous single-node; ~13.6× improvement over initial tokio-based measurements)
 - ✅ Multi-node BFT testnet validation (3-node E2E via real libp2p)
 - ✅ VRF migration to ECVRF per RFC 9381
 - ✅ Genesis tooling — network bootstrap procedure
@@ -343,7 +344,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 | Metric | Measured | Conditions |
 |--------|----------|------------|
 | **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async |
-| **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead |
+| **Async (tokio)** | Obsoleted by sync benchmark | Previous tokio-based measurement was an artifact of async runtime overhead, not a consensus limit |
 | **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node |
 | **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events |
 | **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone |
@@ -353,6 +354,10 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 | **CRDT batch merge** | ~100K ops/s (est., no dedicated benchmark) | 1K ops/batch |
 
 > Numbers marked (est.) are approximate and environment-dependent, not from rigorous Criterion benchmarks. Numbers marked (Criterion benchmark) or (v0.1.48 micro-benchmark) come from reproducible benchmark suites. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead. For reproduction, run: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`, `cargo bench --bench zk_benchmarks --features full`
+
+### ZK Throughput Bottleneck
+
+The consensus pipeline can process ~7,190 events/sec, but Groth16 proof generation for the expanded circuit runs at ~88 ms/event (~11.4 events/sec). This creates a **~560× throughput gap** between consensus and ZK settlement. In practice, ZK rollups will batch events and generate proofs asynchronously — the pipeline design decouples consensus from proof generation so that slow proving does not block transaction finality. This is the expected trade-off for Groth16 on BN254 and will be addressed with hardware acceleration, proof aggregation, or alternative SNARK constructions in future phases.
 
 ---
 

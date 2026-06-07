@@ -91,7 +91,7 @@ The true pipeline throughput is ~7,190 events/sec (measured without tokio overhe
 
 ### Gate Rationale
 
-- **Throughput**: 80% threshold allows for ~20% variance due to environmental factors while catching real regressions. The jump from ~527 to ~7,190 events/sec was a methodology fix, not a code improvement.
+- **Throughput**: 80% threshold allows for ~20% variance due to environmental factors while catching real regressions. The jump from initial tokio-based measurements to ~7,190 events/sec was a methodology fix, not a code improvement.
 - **Latency**: 3× threshold for p99 allows for normal variance while catching genuine degradation. True regressions typically show 5-10× degradation.
 - **DAG insert**: 5× threshold because insert operations are fast (~18 µs) and even small perturbations can cause percentage-wise large swings that are not regressions.
 - **ZK operations**: 2× threshold because these are compute-bound and should be highly deterministic.
