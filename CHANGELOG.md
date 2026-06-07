@@ -8,6 +8,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.69](https://github.com/Willow7737/omnia-protocol/compare/v0.1.68...v0.1.69) (2026-06-07)
+
+
+### Features
+
+* add local testnet startup script ([d5d0d4e](https://github.com/Willow7737/omnia-protocol/commit/d5d0d4e3d1d0e1acce267490b3dc9fb4e8d6f87d))
+* **docker:** add server-side env vars for web dashboard proxy ([dcd420b](https://github.com/Willow7737/omnia-protocol/commit/dcd420bef9f2c6e7377f5f681e10ec184ab44510))
+* **docker:** add server-side env vars for web dashboard proxy ([6898423](https://github.com/Willow7737/omnia-protocol/commit/6898423174960f4fc1435dea6087800a69ee55b6))
+
+
+### Bug Fixes
+
+* resolve CI --locked failure, align versions, correct documentation ([0518b37](https://github.com/Willow7737/omnia-protocol/commit/0518b374719e0754ac08aa8eace9eda65804e66e))
+
 ## [0.1.68](https://github.com/Willow7737/omnia-protocol/compare/v0.1.67...v0.1.68) (2026-06-02)
 
 
