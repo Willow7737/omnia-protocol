@@ -90,7 +90,7 @@ utoipa = "5"
 # Swagger UI embeds ~11MB of JS/CSS assets into the binary.
 # Make it optional so release builds can omit it and meet the ≤12MB target.
 # Enable with --features swagger-ui for development.
-utoipa-swagger-ui = { version = "8", features = ["axum"], optional = true }  # Interactive API docs UI
+utoipa-swagger-ui = { version = "9", features = ["axum"], optional = true }  # Interactive API docs UI
 
 [features]
 default = ["full"]
