@@ -230,6 +230,17 @@ pub struct GraphStats {
 /// event data is removed from the graph, but this struct preserves enough
 /// information to maintain the DAG structure and respond to queries about
 /// the event's existence.
+///
+/// # Fix History (C-3, audit v0.1.68)
+///
+/// The `content_hash` field was added so that the consensus layer can
+/// distinguish **duplicate submissions** of a pruned event from **true
+/// equivocations**. Without it, the only check available was
+/// `metadata.event_id != event_id`, which is tautologically true at the
+/// equivocation-check branch point (we already knew the IDs differed).
+/// See [`Event::content_hash`] for details.
+///
+/// [`Event::content_hash`]: omnia_primitives::event::Event::content_hash
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrunedEventMetadata {
     /// The event ID (hash).
@@ -242,6 +253,15 @@ pub struct PrunedEventMetadata {
     pub depth: usize,
     /// The round at which the event was finalized.
     pub finalized_round: u64,
+    /// Deterministic content hash of the original event, used to detect
+    /// equivocation after the full event has been pruned.
+    ///
+    /// Populated by `prune_finalized` from `event.content_hash()`. Older
+    /// serialized metadata (pre-fix) will deserialize with all-zero bytes;
+    /// the consensus layer treats an all-zero hash as "unknown" and falls
+    /// back to the legacy (tautological) check rather than risk false
+    /// equivocation accusations.
+    pub content_hash: [u8; 32],
 }
 
 /// The core causal graph — a DAG of events
@@ -1223,6 +1243,7 @@ impl CausalGraph {
                     sequence: event.sequence,
                     depth: depth_val,
                     finalized_round,
+                    content_hash: event.content_hash(),
                 };
                 self.pruned_events.insert(*id, metadata);
                 self.pruned_order.push_back(*id);
@@ -2151,6 +2172,7 @@ mod tests {
                 sequence: i as u64,
                 depth: i as usize,
                 finalized_round: i as u64,
+                content_hash: [0u8; 32],
             };
             graph.pruned_events.insert(id, meta);
             graph.pruned_order.push_back(id);

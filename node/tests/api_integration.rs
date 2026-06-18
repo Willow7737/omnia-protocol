@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 //! Comprehensive E2E REST API integration tests for the Omnia node.
 //!
 //! This test suite covers every API endpoint across all authentication

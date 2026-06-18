@@ -82,6 +82,10 @@ chrono = { version = "0.4", features = ["serde"] }
 # UUID generation for event and proposal identifiers
 uuid = { version = "1", features = ["v4"] }
 
+# Insertion-order-preserving HashMap for deterministic LRU-style eviction
+# in the in-memory event store (H-5 fix, audit v0.1.68).
+indexmap = "2"
+
 # HTTP client for ceremony server communication
 reqwest = { version = "0.12", features = ["json"], optional = true }
 

@@ -156,7 +156,7 @@ services:
       - web
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.52.0  # M-23 fix (audit v0.1.68): pin to specific version
     container_name: omnia-prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -169,7 +169,7 @@ services:
       - monitoring
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.0  # M-23 fix (audit v0.1.68): pin to specific version
     container_name: omnia-grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}

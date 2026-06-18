@@ -441,6 +441,50 @@ impl Event {
         tracing::warn!("sign() is deprecated and does nothing; use sign_with_keypair()");
     }
 
+    /// Deterministic content hash used for equivocation detection.
+    ///
+    /// This hash does **not** include `event_id` itself — only the semantic
+    /// content that would differ between two genuinely different events
+    /// created by the same `creator` at the same `sequence` number.
+    ///
+    /// Two events with identical `creator`, `sequence`, `timestamp`,
+    /// `payload`, and parents will produce the same `content_hash`.
+    /// This is the foundation for distinguishing **duplicate submissions**
+    /// (same content, same EventId — silently dropped) from **true
+    /// equivocations** (same `(creator, sequence)` but different content —
+    /// slashed) when the original event has been pruned from the graph
+    /// and only [`PrunedEventMetadata`] is available.
+    ///
+    /// # Fix History
+    ///
+    /// Audit finding C-3 (v0.1.68): the previous pruned-metadata
+    /// equivocation check `metadata.event_id != event_id` was tautological
+    /// — it was always true at that branch point because we had already
+    /// established `first_id != event_id`. As a result, *every* re-submission
+    /// of a pruned event was flagged as an equivocation. Comparing content
+    /// hashes instead correctly distinguishes duplicates from equivocations.
+    ///
+    /// [`PrunedEventMetadata`]: ../../omnia_consensus/causal_graph/struct.PrunedEventMetadata.html
+    pub fn content_hash(&self) -> [u8; 32] {
+        use blake3::Hasher;
+        let mut hasher = Hasher::new();
+        hasher.update(b"omnia-content-hash-v1");
+        hasher.update(self.creator_pubkey);
+        hasher.update(&self.sequence.to_le_bytes());
+        hasher.update(&self.timestamp.to_le_bytes());
+        hasher.update(&self.payload);
+        // Include parent hashes to make parallel forks detectable
+        if let Some(sp) = self.self_parent {
+            hasher.update(b"self:");
+            hasher.update(&sp);
+        }
+        if let Some(op) = self.other_parent {
+            hasher.update(b"other:");
+            hasher.update(&op);
+        }
+        *hasher.finalize().as_bytes()
+    }
+
     /// Get the event header (lightweight metadata)
     pub fn header(&self) -> EventHeader {
         EventHeader {

@@ -1,4 +1,3 @@
-#![allow(deprecated)]
 //! # Omnia Node Binary
 //!
 //! The `omnia-node` binary runs a full Omnia Protocol node with:
@@ -166,8 +165,14 @@ async fn main() -> Result<()> {
     let node_id_bytes = config.node_id_bytes();
     let slashing_dir = config.slashing_dir();
 
-    // Create the substrate runtime with slashing persistence configured
-    let mut substrate_config = SubstrateConfig::new(node_id_bytes);
+    // Create the substrate runtime with slashing persistence configured.
+    //
+    // H-12 fix (audit v0.1.68): use `try_new` instead of `new` so that an
+    // invalid `OMNIA_CONSENSUS_SEED` env var produces a clean error and
+    // exit, rather than silently falling back to a random seed (which
+    // would cause the node to fork off the network).
+    let mut substrate_config = SubstrateConfig::try_new(node_id_bytes)
+        .context("Failed to parse OMNIA_CONSENSUS_SEED — fix the env var or unset it to use a random seed")?;
     substrate_config.slashing_data_dir = Some(slashing_dir.to_path_buf());
     substrate_config.max_payload_size = config.max_payload_size;
     substrate_config.pruning_depth = config.pruning_depth;
@@ -255,6 +260,27 @@ async fn main() -> Result<()> {
         }
     };
 
+    // H-10 fix (audit v0.1.68): emit a loud startup warning if the node is
+    // configured with a non-live (stub/mock) settlement adapter. Operators
+    // running a "production" node with MockSettlementAdapter, or with one
+    // of the stub adapters (Bitcoin/Solana/Cosmos/Celestia — all return
+    // `NotImplemented`), need to know that `submit_root()` calls will fail
+    // and no real settlement will happen.
+    //
+    // Per the strategy doc:
+    //   - Ethereum live adapter: production-ready (or close enough for testnet)
+    //   - Bitcoin / Solana / Cosmos / Celestia adapters: STUBS, return NotImplemented
+    //   - Mock adapter: testing only
+    if !settlement.is_live() {
+        tracing::warn!(
+            "Settlement adapter is NOT a live L1 (is_live() == false). \
+             All SettlementAdapter::submit_root() calls will return \
+             NotImplemented or be no-ops. Do not use in production. \
+             Enable --features ethereum-live and configure EthereumConfig \
+             for real settlement."
+        );
+    }
+
     // Initialize Prometheus metrics
     #[cfg(feature = "metrics")]
     let metrics = NodeMetrics::new().context("Failed to initialize Prometheus metrics")?;
@@ -301,7 +327,7 @@ async fn main() -> Result<()> {
         slashing: Arc::new(Mutex::new(slashing_engine)),
         shard_router: shared_shard_router,
         economics: Arc::new(Mutex::new(economics)),
-        event_store: Arc::new(RwLock::new(std::collections::HashMap::new())),
+        event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
         #[cfg(feature = "metrics")]
         metrics: Arc::new(metrics),

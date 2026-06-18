@@ -39,9 +39,17 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at `conduct@omnia.protocol`.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported
+to the community leaders responsible for enforcement by opening a private security
+advisory at <https://github.com/Willow7737/omnia-protocol/security/advisories/new>,
+or by contacting any maintainer directly via GitHub mentions.
 All complaints will be reviewed and investigated promptly and fairly.
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
+
+> **L-15 fix (audit v0.1.68):** The previous `conduct@omnia.protocol` email
+> address was non-functional (no mail server configured). Reports should go
+> through GitHub's private security advisory flow until a dedicated email
+> address is set up.
 
 ## Enforcement Guidelines
 

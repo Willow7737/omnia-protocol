@@ -18,7 +18,12 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.56"
+# L-23 fix (audit v0.1.68): align workspace version with the latest
+# CHANGELOG entry (0.1.67, released 2026-06-02). Previously the workspace
+# was pinned at 0.1.56 while CHANGELOG documented releases up to 0.1.67,
+# creating a mismatch between source-of-truth version metadata and the
+# release history.
+version = "0.1.67"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"

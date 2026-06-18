@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 //! Real Multi-Node libp2p Integration Tests
 //!
 //! These tests use REAL libp2p networking (QUIC transport, GossipSub protocol)

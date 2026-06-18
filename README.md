@@ -110,7 +110,9 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 | `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ |
 | `tests/` | Integration tests | 39 | ✅ |
 
-**Total: 224 Rust source files, 81,000+ lines, 1,382 tests — all passing.**
+**Total: 224 Rust source files, 81,000+ lines.** L-20 fix (audit v0.1.68):
+the previously hardcoded test count (`1,382 tests`) goes stale as tests are
+added or removed — run `cargo test --workspace` for the current count.
 
 ---
 
@@ -237,11 +239,11 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ 6 domain shards with cross-shard messaging
 - ✅ Settlement-agnostic ZK-rollup architecture
 - ✅ Full ZK circuit (arkworks R1CS + Groth16 + Poseidon)
-- ✅ Real PQC signatures (ML-KEM-768 / FIPS-203)
+- ✅ Real PQC signatures (ML-KEM-768 / FIPS-203 algorithm; NIST certification of this Rust implementation is **not** claimed. PQC features require `--features pqc` and are not production-ready.)
 - ✅ REST API with JWT auth, rate limiting, CORS
 - ✅ Encrypted keystore (AES-256-GCM)
 - ✅ Gradual slashing (3-tier: Warning → Jail → Ejection)
-- ✅ BFT consensus with VRF leader selection
+- ✅ BFT consensus with deterministic hash-based leader selection (ECVRF migration planned — see ADR-012 and `omnia-crypto/src/vrf.rs`)
 - ✅ Docker 5-node testnet + monitoring stack
 
 ### Phase 1: Hardening ✅ Complete
@@ -278,7 +280,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ GossipSub peer scoring configuration
 - ✅ Consensus state persistence across restarts
 - ✅ Real Ethereum settlement adapter (Alloy, `ethereum-live` feature flag)
-- ✅ ML-KEM-768 key encapsulation (FIPS-203, KyberSlash eliminated)
+- ✅ ML-KEM-768 key encapsulation (FIPS-203 algorithm; implementation not NIST-certified. Requires `--features pqc`.)
 - ✅ Fast-sync protocol with BLAKE3 checkpoints
 - ✅ Message compression (Snappy for >256 bytes)
 - ✅ Load testing infrastructure
@@ -340,16 +342,23 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 ## 📈 Honest Performance Numbers
 
-| Metric | Measured | Conditions |
-|--------|----------|------------|
-| **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async |
-| **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead |
-| **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node |
-| **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events |
-| **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone |
-| **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark) | BN254, R1CS |
-| **Groth16 verify** | ~2.7 ms (Criterion benchmark) | Single proof |
-| **VRF compute** | ~19 µs (Criterion benchmark) | Ed25519 + BLAKE3 |
+> **L-19 fix (audit v0.1.68):** Hardware specifications were missing from
+> the original benchmark table, making the numbers irreproducible. The
+> "Hardware" column below is now mandatory. Numbers measured on the
+> reference benchmark machine (AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux
+> 6.8, `rustc 1.91.0`). Re-run `cargo bench --bench baseline_bench` on
+> your own hardware for comparable figures.
+
+| Metric | Measured | Conditions | Hardware |
+|--------|----------|------------|----------|
+| **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Async (tokio)** | ~527 evt/s | Release build, single-node, with tokio overhead | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark) | BN254, R1CS | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Groth16 verify** | ~2.7 ms (Criterion benchmark) | Single proof | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **VRF compute** | ~19 µs (Criterion benchmark) | Ed25519 + BLAKE3 | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
 | **CRDT batch merge** | ~100K ops/s (est., no dedicated benchmark) | 1K ops/batch |
 
 > Numbers marked (est.) are approximate and environment-dependent, not from rigorous Criterion benchmarks. Numbers marked (Criterion benchmark) or (v0.1.48 micro-benchmark) come from reproducible benchmark suites. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead. For reproduction, run: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`, `cargo bench --bench zk_benchmarks --features full`

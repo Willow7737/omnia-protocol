@@ -11,8 +11,9 @@ node_id = 1
 # HTTP API server port
 http_port = 8080
 
-# P2P network listen address
-listen_addr = "0.0.0.0:4001"
+# P2P network listen address (multiaddr format — L-31 fix, audit v0.1.68)
+# Use a libp2p multiaddr such as /ip4/0.0.0.0/tcp/4001 or /ip4/0.0.0.0/udp/4001/quic-v1
+listen_addr = "/ip4/0.0.0.0/tcp/4001"
 
 # Directory for persistent data storage (redb DB, slashing state, etc.)
 data_dir = "./data"
