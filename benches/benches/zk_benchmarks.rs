@@ -9,6 +9,18 @@
 //! - Groth16 proof verification
 //! - Merkle tree construction
 //! - Trusted setup / key generation
+//!
+//! # CI Time Budget
+//!
+//! The `expanded_circuit/16` benchmark takes ~1.5 s per iteration. With
+//! criterion's default 100 samples that would be ~150 s just for
+//! measurement, which exceeds CI's job timeout and causes the run to be
+//! canceled. To keep the full suite runnable in CI, the
+//! `groth16_proof_generation` group uses a reduced `sample_size(10)` and
+//! a 30-second `measurement_time` cap. This is the minimum sample count
+//! criterion allows and still produces statistically useful results.
+
+use std::time::Duration;
 
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
@@ -36,6 +48,12 @@ fn bench_poseidon_hash(c: &mut Criterion) {
 
 fn bench_groth16_proof_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("groth16_proof_generation");
+
+    // The expanded_circuit/16 benchmark takes ~1.5s per iteration.
+    // Criterion's default 100 samples would need ~150s, which exceeds
+    // CI's job timeout. Reduce to 10 samples (criterion's minimum) and
+    // cap measurement time at 30s so the full suite completes in CI.
+    group.sample_size(10).measurement_time(Duration::from_secs(30));
 
     // Basic circuit
     let circuit = RollupCircuit::empty();
