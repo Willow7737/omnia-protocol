@@ -187,7 +187,7 @@ impl PeerScoreTracker {
     ///
     /// Call this on a fixed interval (e.g., every 10 minutes) to drop
     /// scores for peers that haven't been seen recently. This is a
-    /// defense-in-depth measure alongside [`remove_peer`] — it catches
+    /// defense-in-depth measure alongside [`Self::remove_peer`] — it catches
     /// any peers that disconnected without firing `ConnectionClosed`
     /// (e.g., due to a network partition where we never received the
     /// close event).
