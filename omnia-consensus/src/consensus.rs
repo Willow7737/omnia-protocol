@@ -458,7 +458,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                 // (legacy pre-fix metadata) and fall back to
                                 // the legacy tautological check rather than
                                 // risk false equivocation accusations.
-                                let is_equivocation = if metadata.content_hash == [0u8; 32] {
+                                let detected_equivocation = if metadata.content_hash == [0u8; 32] {
                                     // Legacy metadata: cannot tell. Be
                                     // conservative and flag as equivocation
                                     // (matches pre-fix behaviour for
@@ -469,7 +469,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                     metadata.content_hash != incoming_hash
                                 };
 
-                                if is_equivocation {
+                                if detected_equivocation {
                                     let outcome = self.slashing.record_offense(creator, SlashOffense::Equivocation);
                                     tracing::warn!(
                                         node = ?&creator[..4],
@@ -479,6 +479,9 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                         outcome = ?outcome,
                                         "Equivocation detected (pruned first event) — multiple events with same creator+sequence"
                                     );
+                                    // Propagate to the outer `is_equivocation`
+                                    // flag so the post-match check rejects
+                                    // the event with EquivocationDetected.
                                     is_equivocation = true;
                                 } else {
                                     tracing::debug!(
@@ -1941,9 +1944,10 @@ mod tests {
     /// comparisons only reflect the semantic fields we care about.
     fn make_event_with_fixed_timestamp(creator: NodeId, sequence: u64, payload: Vec<u8>) -> Event {
         let mut event = Event::new(creator, sequence, VectorClock::new(), None, None, payload).unwrap();
-        event.timestamp = 1_700_000_000_000; // fixed
-        // content_hash() does not depend on the event's `id` field, so we
-        // do not need to recompute it here.
+        // Use a fixed timestamp so that content_hash comparisons only
+        // reflect creator / sequence / payload / parents. The event's `id`
+        // field is not used by content_hash(), so we don't recompute it.
+        event.timestamp = 1_700_000_000_000;
         event
     }
 

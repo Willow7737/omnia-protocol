@@ -4886,7 +4886,7 @@ dependencies = [
  "clap",
  "hex",
  "http-body-util",
- "indexmap",
+ "indexmap 2.14.0",
  "jsonwebtoken",
  "omnia-adapters",
  "omnia-binding",

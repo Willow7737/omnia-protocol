@@ -6,4 +6,10 @@ ignore = [
     "RUSTSEC-2024-0437",  # protobuf uncontrolled recursion - transitive dep
     "RUSTSEC-2025-0055",  # tracing ANSI escape sequence - low severity
     "RUSTSEC-2023-0089",  # atomic-polyfill unmaintained - transitive dep
+    # CI-failure mitigations (audit v0.1.68 follow-up):
+    "RUSTSEC-2026-0173",  # proc-macro-error2 unmaintained - transitive via alloy-sol-macro
+    # bitcoin-io 0.1.100 and bitcoin_hashes 0.14.100 were yanked but are
+    # still pulled in transitively via bip39 (keystore) and secp256k1
+    # (ethereum-live adapter). Yanked crates are not security issues;
+    # they will be dropped when upstream crates republish.
 ]

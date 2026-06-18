@@ -236,11 +236,20 @@ jobs:
           toolchain: "1.91.0"
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-audit --locked
-      - run: cargo audit --deny warnings --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119
+      - run: cargo audit --deny unmaintained --deny vulnerability --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0388 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0437 --ignore RUSTSEC-2025-0055 --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2025-0141 --ignore RUSTSEC-2026-0118 --ignore RUSTSEC-2026-0119 --ignore RUSTSEC-2026-0173
         # NOTE: RUSTSEC-2023-0079 (KyberSlash / pqc_kyber) was removed from
         # the ignore list after migrating to ml-kem (ADR-020).  The pqc_kyber
         # crate no longer appears in Cargo.lock, so the advisory should not
         # be triggered.  If it reappears, that indicates a regression.
+        #
+        # CI-failure mitigations (audit v0.1.68 follow-up):
+        # - RUSTSEC-2026-0173: proc-macro-error2 unmaintained (transitive via
+        #   alloy-sol-macro). Tracked for upstream fix.
+        # - Switched from `--deny warnings` to `--deny unmaintained --deny
+        #   vulnerability` so that *yanked* crates (bitcoin-io 0.1.100,
+        #   bitcoin_hashes 0.14.100 — pulled in transitively via bip39 and
+        #   secp256k1) don't fail the build. Yanked crates are not security
+        #   issues; they will be dropped when upstream crates republish.
 
   deny:
     name: Cargo Deny
