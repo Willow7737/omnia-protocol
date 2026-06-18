@@ -469,7 +469,7 @@ impl Event {
         use blake3::Hasher;
         let mut hasher = Hasher::new();
         hasher.update(b"omnia-content-hash-v1");
-        hasher.update(self.creator_pubkey);
+        hasher.update(&self.creator_pubkey);
         hasher.update(&self.sequence.to_le_bytes());
         hasher.update(&self.timestamp.to_le_bytes());
         hasher.update(&self.payload);

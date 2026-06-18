@@ -452,9 +452,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                         //   - Duplicate submission (same content) → not slashable
                         //   - True equivocation (different content) → slash
                         if let Some(metadata) = graph.get_pruned_metadata(&first_id) {
-                            if metadata.creator == creator
-                                && metadata.sequence == event.sequence
-                            {
+                            if metadata.creator == creator && metadata.sequence == event.sequence {
                                 let incoming_hash = event.content_hash();
                                 // Treat an all-zero stored hash as "unknown"
                                 // (legacy pre-fix metadata) and fall back to
@@ -1941,11 +1939,7 @@ mod tests {
 
     /// Helper: build an Event with a fixed timestamp so that content_hash
     /// comparisons only reflect the semantic fields we care about.
-    fn make_event_with_fixed_timestamp(
-        creator: NodeId,
-        sequence: u64,
-        payload: Vec<u8>,
-    ) -> Event {
+    fn make_event_with_fixed_timestamp(creator: NodeId, sequence: u64, payload: Vec<u8>) -> Event {
         let mut event = Event::new(creator, sequence, VectorClock::new(), None, None, payload).unwrap();
         event.timestamp = 1_700_000_000_000; // fixed
         // content_hash() does not depend on the event's `id` field, so we

@@ -431,9 +431,7 @@ fn test_failed_operation_does_not_refund_fee() {
     assert!(result.is_err(), "Route should fail (no shards registered)");
 
     let balance_after = router.quota_balance(&did).expect("DID registered");
-    let fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery {
-        account: creator,
-    }));
+    let fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }));
     assert!(
         balance_after < balance_before,
         "Fee should be burned, not refunded. before={balance_before}, after={balance_after}"

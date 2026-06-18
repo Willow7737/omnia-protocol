@@ -233,8 +233,10 @@ pub fn try_parse_consensus_seed() -> Result<[u8; 32], ConsensusSeedError> {
                     expected: 64,
                 });
             }
-            let bytes = hex::decode(&hex_str)
-                .map_err(|e| ConsensusSeedError::InvalidHex { source: e, raw: hex_str })?;
+            let bytes = hex::decode(&hex_str).map_err(|e| ConsensusSeedError::InvalidHex {
+                source: e,
+                raw: hex_str,
+            })?;
             if bytes.len() != 32 {
                 return Err(ConsensusSeedError::InvalidLength {
                     actual: bytes.len() * 2, // hex char count
@@ -497,10 +499,7 @@ impl SubstrateConfig {
 
     /// Like [`SubstrateConfig::with_network_size`] but propagates
     /// consensus-seed errors (H-12 fix).
-    pub fn try_with_network_size(
-        node_id: NodeId,
-        total_nodes: usize,
-    ) -> Result<Self, ConsensusSeedError> {
+    pub fn try_with_network_size(node_id: NodeId, total_nodes: usize) -> Result<Self, ConsensusSeedError> {
         let seed = try_parse_consensus_seed()?;
         Ok(Self::build_config(node_id, total_nodes, seed))
     }

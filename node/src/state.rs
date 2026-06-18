@@ -65,11 +65,7 @@ pub type EventStore = IndexMap<String, StoredEvent>;
 /// H-5 fix (audit v0.1.68): previously used `HashMap::keys().take(n)`,
 /// which has non-deterministic iteration order — the "oldest 10%" claim
 /// was inaccurate and could evict recently-inserted entries instead.
-pub async fn store_event(
-    event_store: &Arc<RwLock<EventStore>>,
-    event_id: String,
-    stored: StoredEvent,
-) {
+pub async fn store_event(event_store: &Arc<RwLock<EventStore>>, event_id: String, stored: StoredEvent) {
     let mut store = event_store.write().await;
     if store.len() >= MAX_STORED_EVENTS {
         // Remove oldest 10% by insertion order (deterministic).
