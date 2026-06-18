@@ -14,10 +14,10 @@
 #![deny(clippy::unwrap_used)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-// omnia-substrate is deprecated but omnia-node still uses its Substrate
-// runtime and re-exported types extensively. Allow deprecated until the
-// node is migrated to use the split crates directly.
-#![allow(deprecated)]
+// C-2 fix (audit v0.1.68): the previous `#![allow(deprecated)]` suppressed
+// warnings from the (now-removed) crate-level `#![deprecated]` annotation on
+// omnia-substrate. With that annotation removed, deprecated warnings are
+// allowed to surface again so we catch accidental use of deprecated APIs.
 
 pub mod api;
 pub mod config;

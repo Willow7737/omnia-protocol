@@ -265,19 +265,26 @@ impl ShardRouter {
             })?;
         }
 
+        // Capture the operation's debug representation before `route()` moves it.
+        // C-6 fix (audit v0.1.68): fees are NON-REFUNDABLE — we log on failure
+        // for observability, but the fee is burned regardless of outcome.
+        let op_debug = format!("{:?}", payload.operation);
         let result = self.route(event, payload.operation);
 
-        // Refund the fee if the route failed
-        if result.is_err() && fee > 0 {
-            let did = Self::pubkey_to_did(&event.creator_pubkey);
-            if let Err(e) = self.quota.reward(&did, fee) {
-                tracing::error!(
-                    did = %did,
-                    fee = fee,
-                    error = %e,
-                    "CRITICAL: Failed to refund fee after route failure — balance inconsistency"
-                );
-            }
+        // Previously, a failed `route()` refunded the fee via `quota.reward()`.
+        // This defeats the anti-spam purpose of fees — an attacker can spam
+        // the network with deliberately-invalid operations at zero cost. The
+        // fee is now burned on attempt regardless of outcome, which is the
+        // standard anti-spam model in fee-based systems.
+        //
+        // We only log the failure here for observability.
+        if let Err(ref e) = result {
+            tracing::debug!(
+                operation = %op_debug,
+                fee_burned = fee,
+                error = %e,
+                "Operation failed; fee non-refundable (cost of attempting)"
+            );
         }
 
         // Only persist nonce and insert into in-memory map if operation succeeded
@@ -318,9 +325,26 @@ impl ShardRouter {
         self.shards.len()
     }
 
-    /// Convert a public key to a DID string.
+    /// Convert a creator public key to a DID string.
+    ///
+    /// DIDs are derived as `did:omnia:<hex(pubkey)>` so that each Ed25519
+    /// public key maps to exactly one DID. This is used internally for
+    /// quota lookups but is exposed publicly for callers that need to
+    /// pre-fund a DID before its first operation.
     pub fn pubkey_to_did(pubkey: &[u8; 32]) -> String {
         format!("did:omnia:{}", hex::encode(pubkey))
+    }
+
+    /// Look up the current UBC quota balance for a DID.
+    ///
+    /// Returns `None` if the DID is not registered in the quota system.
+    ///
+    /// This accessor exists primarily for tests and observability — it
+    /// allows verifying that fee deductions (and lack of refunds, per
+    /// the C-6 fix) behaved as expected without exposing the entire
+    /// `QuotaSystem` internals.
+    pub fn quota_balance(&self, did: &str) -> Option<u64> {
+        self.quota.balance_of(did)
     }
 
     /// Determine which shard an operation belongs to.

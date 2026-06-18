@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 //! Integration tests for the Omnia node HTTP API
 //!
 //! These tests start the full HTTP server and verify that each
@@ -19,7 +18,6 @@ use omnia_shards::{
 };
 use omnia_substrate::{Substrate, SubstrateConfig};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -109,7 +107,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, EnvGuard) 
         slashing: Arc::new(Mutex::new(slashing)),
         shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
         economics: Arc::new(Mutex::new(economics)),
-        event_store: Arc::new(RwLock::new(HashMap::new())),
+        event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
         #[cfg(feature = "metrics")]
         metrics: Arc::new(metrics),

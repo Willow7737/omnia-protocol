@@ -30,6 +30,8 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+// H-6 fix (audit v0.1.68): pull in Zeroize derives for secret key material.
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Errors that can occur during threshold signature operations.
 #[derive(Error, Debug)]
@@ -151,13 +153,35 @@ impl ThresholdConfig {
 /// Note: `KeyShare` does not implement `Serialize`/`Deserialize` because
 /// `BlsKeypair` contains raw blst types that are not serializable. For
 /// persistence, serialize the keypair's secret key bytes separately.
-#[derive(Debug, Clone)]
+///
+/// # H-6 — Secret material handling (audit v0.1.68)
+///
+/// The `participant` and `index` fields are not secret and are skipped
+/// by `Zeroize`. The `keypair` field holds secret BLS key material that
+/// *should* be zeroized on drop — however, the underlying `blst::SecretKey`
+/// type does not currently expose a safe Rust API for in-place zeroization,
+/// and refactoring `BlsKeypair` to store raw `[u8; 32]` bytes is an
+/// invasive change deferred to a follow-up.
+///
+/// In the meantime, callers who handle `KeyShare` should:
+///   1. Avoid logging or serializing the keypair.
+///   2. Drop `KeyShare` instances as soon as they are no longer needed.
+///   3. Use `BlsKeypair::secret_key_bytes()` explicitly only when needed.
+///
+/// See `AUDIT_FIX_NOTES.md` for the deferred follow-up plan.
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct KeyShare {
     /// The participant's identifier (typically their NodeId).
+    #[zeroize(skip)]
     pub participant: NodeId,
     /// The participant's index in the polynomial evaluation (1-based).
+    #[zeroize(skip)]
     pub index: usize,
     /// The participant's BLS keypair (used for partial signing).
+    ///
+    /// Marked `#[zeroize(skip)]` because `BlsKeypair` does not implement
+    /// `Zeroize` — see the H-6 note above.
+    #[zeroize(skip)]
     pub keypair: BlsKeypair,
 }
 

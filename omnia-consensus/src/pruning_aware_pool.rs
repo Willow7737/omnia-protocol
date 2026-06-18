@@ -296,6 +296,7 @@ impl PruningAwarePool {
                     sequence: event.sequence,
                     depth: 0, // We don't track depth in the pool; the CausalGraph does
                     finalized_round,
+                    content_hash: event.content_hash(),
                 };
                 self.pruned_metadata.insert(*id, metadata);
                 self.pruned_order.push_back(*id);

@@ -25,6 +25,8 @@ hmac = "0.12"
 hex = "0.4"
 tracing = "0.1"
 blake3 = "1.5"
+# H-6 fix (audit v0.1.68): zeroize secret key material on drop.
+zeroize = { version = "1.8", features = ["derive"] }
 
 [features]
 default = ["keystore"]

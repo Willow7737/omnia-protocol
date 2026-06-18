@@ -18,6 +18,8 @@ members = [
 resolver = "2"
 
 [workspace.package]
+# L-23 fix (audit v0.1.68): aligned with latest CHANGELOG entry.
+# Main branch already at 0.1.68 — keep that version.
 version = "0.1.68"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]

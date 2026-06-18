@@ -260,7 +260,7 @@ mod tests {
         let quota = omnia_economics::QuotaSystem::default_system();
         let shard_router = ShardRouter::new(fee_schedule, quota);
 
-        let event_store: HashMap<String, StoredEvent> = (0..event_count)
+        let event_store: indexmap::IndexMap<String, StoredEvent> = (0..event_count)
             .map(|i| {
                 let key = format!("event_{i}");
                 let event = StoredEvent {

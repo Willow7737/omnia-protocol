@@ -4,17 +4,24 @@
 //! all HTTP handlers via `axum::extract::State`, and the `NodeMetrics`
 //! struct that tracks Prometheus counters and gauges.
 
-// omnia-substrate is deprecated but omnia-node still uses its Substrate
-// runtime and SlashingEngine types. Allow deprecated at crate level.
+// C-2 fix (audit v0.1.68): the previous comment referenced the now-removed
+// crate-level `#![deprecated]` annotation on omnia-substrate. That
+// annotation has been removed and the suppression is no longer needed.
 use omnia_substrate::crypto::NodeKeypair;
 use omnia_substrate::SlashingEngine;
 use omnia_substrate::Substrate;
 
-use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Instant;
+
+// H-5 fix (audit v0.1.68): use IndexMap for the in-memory event store so
+// that eviction is deterministic (oldest by insertion order, not arbitrary
+// HashMap iteration order). IndexMap preserves insertion order while keeping
+// O(1) lookup/insert/remove, which is exactly what we need for an LRU-style
+// bounded cache.
+use indexmap::IndexMap;
 
 #[cfg(feature = "metrics")]
 use prometheus::{Histogram, IntCounter, IntGauge};
@@ -35,33 +42,41 @@ use crate::config::NodeConfig;
 /// When this limit is reached, the oldest 10% of events are evicted.
 const MAX_STORED_EVENTS: usize = 100_000;
 
-/// Store an event in the bounded event store with LRU eviction.
+/// Type alias for the in-memory event store.
+///
+/// Uses `IndexMap` (insertion-order preserving) rather than `HashMap`
+/// so that eviction at capacity is deterministic — the oldest 10% by
+/// insertion order are removed, not arbitrary entries chosen by
+/// HashMap iteration order. This is important for consensus-critical
+/// state: if two honest nodes evict *different* events for the same
+/// EventId, they may diverge in their responses to status queries.
+///
+/// H-5 fix (audit v0.1.68).
+pub type EventStore = IndexMap<String, StoredEvent>;
+
+/// Store an event in the bounded event store with deterministic LRU eviction.
 ///
 /// When the store exceeds `MAX_STORED_EVENTS`, the oldest 10% of
-/// entries are removed to prevent unbounded memory growth.
+/// entries (by insertion order) are removed to prevent unbounded
+/// memory growth. `IndexMap::shift_remove_index(0)` removes the
+/// first-inserted entry, guaranteeing deterministic eviction order
+/// across nodes.
 ///
-/// NOTE: The current eviction strategy uses `HashMap::keys().take(n)`,
+/// H-5 fix (audit v0.1.68): previously used `HashMap::keys().take(n)`,
 /// which has non-deterministic iteration order — the "oldest 10%" claim
-/// is inaccurate. For true LRU eviction, consider replacing `HashMap`
-/// with `IndexMap` (which preserves insertion order) so that the first
-/// N entries are guaranteed to be the oldest inserted. This would also
-/// make eviction deterministic across nodes, which is important for
-/// consensus-critical state.
-pub async fn store_event(
-    event_store: &Arc<RwLock<HashMap<String, StoredEvent>>>,
-    event_id: String,
-    stored: StoredEvent,
-) {
+/// was inaccurate and could evict recently-inserted entries instead.
+pub async fn store_event(event_store: &Arc<RwLock<EventStore>>, event_id: String, stored: StoredEvent) {
     let mut store = event_store.write().await;
     if store.len() >= MAX_STORED_EVENTS {
-        // Remove oldest 10% to make room
-        // TODO: Use IndexMap for deterministic insertion-order eviction.
-        // HashMap::keys() iteration order is non-deterministic, so this
-        // may evict recent entries instead of the oldest ones.
+        // Remove oldest 10% by insertion order (deterministic).
         let to_remove = MAX_STORED_EVENTS / 10;
-        let keys: Vec<_> = store.keys().take(to_remove).cloned().collect();
-        for key in keys {
-            store.remove(&key);
+        for _ in 0..to_remove {
+            // shift_remove_index(0) removes the first entry and shifts
+            // subsequent entries down — so the next iteration's index 0
+            // is again the oldest remaining entry.
+            if store.shift_remove_index(0).is_none() {
+                break; // store emptied early
+            }
         }
     }
     store.insert(event_id, stored);
@@ -272,7 +287,10 @@ pub struct AppState {
     /// Economics state — UBC token balances, governance, and quota tracking.
     pub economics: Arc<Mutex<EconomicsState>>,
     /// In-memory event store for API retrieval.
-    pub event_store: Arc<RwLock<HashMap<String, StoredEvent>>>,
+    ///
+    /// Uses `IndexMap` for deterministic insertion-order eviction
+    /// (see [`store_event`] and the `EventStore` type alias). H-5 fix.
+    pub event_store: Arc<RwLock<EventStore>>,
     /// Known peers in the network.
     pub peers: Arc<RwLock<Vec<PeerInfo>>>,
     /// Prometheus metrics counters and gauges.

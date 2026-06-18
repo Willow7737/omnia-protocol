@@ -220,7 +220,9 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 ## 14. Verified Protocol Limits (Tested 2026-05-26)
 
 > The following limits were verified by running `cargo test --workspace` and
-> examining source code constants. All 1,382 tests pass (1,283 sync + 99 async).
+> examining source code constants. L-17 fix (audit v0.1.68): the hardcoded
+> test count previously listed here goes stale as tests are added/removed —
+> run `cargo test --workspace` for the current count.
 
 | Category | Limit | Value | Source |
 | :--- | :--- | :--- | :--- |

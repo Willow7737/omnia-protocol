@@ -391,3 +391,56 @@ fn test_different_ops_different_fees() {
     assert_eq!(schedule.cross_shard_fee, 15);
     assert_eq!(schedule.default_fee, 3);
 }
+
+// ---------------------------------------------------------------------------
+// C-6 regression: fees are non-refundable when an operation fails after
+// the fee was deducted. (Audit v0.1.68.)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_failed_operation_does_not_refund_fee() {
+    // Build a router with NO shards registered. route_event will:
+    //   1. Pass the payload size check (small payload)
+    //   2. Successfully deserialize the ShardPayload
+    //   3. Successfully deduct the fee from the DID's quota
+    //   4. Call route() which returns UnknownShard (no shards registered)
+    //
+    // Pre-C-6: the fee would be refunded, leaving balance unchanged.
+    // Post-C-6: the fee is burned and balance decreases by fee amount.
+    let schedule = FeeSchedule::standard();
+    let mut quota = QuotaSystem::new(1000, 30 * 24 * 60 * 60 * 1000);
+    let keypair = generate_keypair();
+    let did = ShardRouter::pubkey_to_did(&keypair.verifying_key().to_bytes());
+    quota.register_did(&did);
+
+    let creator = keypair.verifying_key().to_bytes();
+    // Compute the expected fee before `schedule` is moved into the router.
+    let expected_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }));
+
+    // No shards registered — route() will fail with UnknownShard.
+    let mut router = ShardRouter::new(schedule, quota);
+
+    let payload = ShardPayload {
+        shard_id: ShardId::financial(),
+        operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
+        nonce: 1,
+    };
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
+
+    // Snapshot balance before
+    let balance_before = router.quota_balance(&did).expect("DID registered");
+
+    let result = router.route_event(&event);
+    assert!(result.is_err(), "Route should fail (no shards registered)");
+
+    let balance_after = router.quota_balance(&did).expect("DID registered");
+    assert!(
+        balance_after < balance_before,
+        "Fee should be burned, not refunded. before={balance_before}, after={balance_after}"
+    );
+    assert_eq!(
+        balance_before - balance_after,
+        expected_fee,
+        "Exactly the fee amount should be burned"
+    );
+}

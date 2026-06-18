@@ -4806,6 +4806,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]
@@ -4885,6 +4886,7 @@ dependencies = [
  "clap",
  "hex",
  "http-body-util",
+ "indexmap 2.14.0",
  "jsonwebtoken",
  "omnia-adapters",
  "omnia-binding",

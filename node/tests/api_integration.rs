@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 //! Comprehensive E2E REST API integration tests for the Omnia node.
 //!
 //! This test suite covers every API endpoint across all authentication
@@ -21,7 +20,6 @@
 //! they must be run with `-- --test-threads=1` to avoid race conditions
 //! between parallel test instances.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -178,7 +176,7 @@ fn build_test_app_state(port: u16) -> AppState {
         slashing: Arc::new(Mutex::new(slashing)),
         shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
         economics: Arc::new(Mutex::new(economics)),
-        event_store: Arc::new(RwLock::new(HashMap::new())),
+        event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
