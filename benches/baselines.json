@@ -17,7 +17,10 @@
       "unit": "events_per_sec",
       "baseline": 7000,
       "direction": "higher_is_better",
-      "source_bench": "tx_throughput/sustained_tps_single_node"
+      "source_bench": "tx_throughput/sustained_tps_single_node",
+      "gated": false,
+      "gated_short": "runner variance (±30%) exceeds gate threshold (25%) — gate is noise",
+      "gated_reason": "EXCLUDED from regression gate because GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range), but the gate threshold is 25%. When variance exceeds threshold, the gate cannot reliably detect real regressions and produces false alarms on legitimate runner dips. The benchmark is reported informatively (displayed in CI output) but does NOT fail CI. To re-enable gating, either (1) move to a self-hosted runner with stable CPU affinity, or (2) run 5+ CI runs, take the median as the new baseline, and set threshold to 10-15%. See AUDIT_FIX_NOTES.md 'Benchmark Throughput Investigation' section for the full analysis. The latency metrics (finality_latency_p99, dag_insert_p50, gossip_propagation_p50) with <4% variance remain gated and reliable."
     },
     "finality_latency_p99": {
       "description": "Finality latency p99 (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency)",

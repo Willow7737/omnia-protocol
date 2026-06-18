@@ -147,7 +147,15 @@ def check_regressions(
 ) -> list[dict]:
     """Check each measured benchmark against its baseline.
 
-    Returns a list of regression reports. An empty list means all clear.
+    Returns a list of per-benchmark reports. Each report has a "status" of:
+      - "OK"        — measured, within threshold (passes gate)
+      - "REGRESSION"— measured, exceeds threshold (fails gate)
+      - "MISSING"   — no measurement found for this benchmark
+      - "SKIP"      — measured, but "gated": false in baselines.json;
+                      reported informatively but does NOT fail CI
+
+    An empty regression-count means the gate passes. SKIP and MISSING
+    do not count as regressions.
     """
     regressions = []
     bench_defs = baselines.get("benchmarks", {})
@@ -157,6 +165,9 @@ def check_regressions(
         direction = definition.get("direction", "lower_is_better")
         baseline_val = definition["baseline"]
         unit = definition.get("unit", "ns")
+        # "gated" defaults to true for backward compatibility. When false,
+        # the benchmark is reported (SKIP status) but does not fail CI.
+        gated = definition.get("gated", True)
 
         # Find the measured value — two-pass approach:
         # 1. First try the most specific key (__thrpt for throughput)
@@ -217,6 +228,25 @@ def check_regressions(
         else:
             # Latency: regression means measured is HIGHER than baseline.
             is_regression = pct_change > threshold_pct
+
+        # If the benchmark is excluded from gating ("gated": false), report
+        # it as SKIP regardless of whether it would have been a regression.
+        # The measurement is still displayed for observability, but it does
+        # NOT count toward the regression total and does NOT fail CI.
+        if not gated:
+            regressions.append({
+                "key": key,
+                "status": "SKIP",
+                "baseline": baseline_val,
+                "measured": measured_val,
+                "pct_change": round(pct_change, 2),
+                "direction": direction,
+                "unit": unit,
+                "description": definition.get("description", ""),
+                "gated_short": definition.get("gated_short", ""),
+                "gated_reason": definition.get("gated_reason", ""),
+            })
+            continue
 
         if is_regression:
             regressions.append({
@@ -320,6 +350,7 @@ def main():
     ok_count = 0
     regression_count = 0
     missing_count = 0
+    skip_count = 0
 
     for r in results:
         status = r["status"]
@@ -354,9 +385,31 @@ def main():
         elif status == "MISSING":
             missing_count += 1
             print(f"  ⚠️  {r['key']}: {r['message']}")
+        elif status == "SKIP":
+            skip_count += 1
+            pct = r["pct_change"]
+            unit = r["unit"]
+            if unit == "events_per_sec":
+                baseline_str = f"{r['baseline']:.0f} ops/s"
+                measured_str = f"{r['measured']:.0f} ops/s"
+            else:
+                baseline_str = format_ns(r["baseline"])
+                measured_str = format_ns(r["measured"])
+            if pct > 0.1:
+                arrow = "↑"
+            elif pct < -0.1:
+                arrow = "↓"
+            else:
+                arrow = "→"
+            # SKIP benchmarks are displayed for observability but do NOT
+            # count toward the regression total and do NOT fail CI.
+            # Prefer gated_short for a readable one-line summary; the full
+            # gated_reason is in baselines.json for details.
+            short_reason = r.get("gated_short") or r.get("gated_reason", "") or "excluded from gate"
+            print(f"  ⏭️  {r['key']}: {measured_str} (baseline: {baseline_str}, {arrow} {pct:+.1f}%) — UNGATED: {short_reason}")
 
     print(f"\n{'='*70}")
-    print(f"  Summary: {ok_count} passed, {regression_count} regressions, {missing_count} missing")
+    print(f"  Summary: {ok_count} passed, {regression_count} regressions, {missing_count} missing, {skip_count} ungated")
     print(f"{'='*70}\n")
 
     if regression_count > 0:
@@ -365,6 +418,9 @@ def main():
 
     if missing_count > 0:
         print("::warning::Some benchmarks were not measured — results may be incomplete")
+
+    if skip_count > 0:
+        print(f"::notice::{skip_count} benchmark(s) excluded from gate (see baselines.json 'gated': false) — reported informatively only")
 
     print("Benchmark regression gate PASSED ✅")
     sys.exit(0)
