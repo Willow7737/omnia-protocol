@@ -189,20 +189,33 @@ def check_regressions(
             })
             continue
 
-        # Calculate regression percentage
-        if direction == "higher_is_better":
-            # For throughput: regression means measured is LOWER than baseline
-            if baseline_val == 0:
-                pct_change = 0
-            else:
-                pct_change = ((baseline_val - measured_val) / baseline_val) * 100
-            is_regression = pct_change > threshold_pct
+        # Calculate regression percentage.
+        #
+        # Sign convention (fixed 2026-06-19 per mentor review):
+        #   pct_change = ((measured - baseline) / baseline) * 100
+        #
+        #   - POSITIVE pct_change  →  measured went UP
+        #   - NEGATIVE pct_change  →  measured went DOWN
+        #
+        # Display interpretation (intuitive, direction-agnostic):
+        #   - higher_is_better (throughput): +74.1% = improvement, -10% = regression
+        #   - lower_is_better  (latency):    +5.9% = regression, -10% = improvement
+        #
+        # The regression *threshold check* is direction-aware:
+        #   - higher_is_better: regression when measured dropped by > threshold%
+        #     (i.e., pct_change < -threshold)
+        #   - lower_is_better:  regression when measured climbed by > threshold%
+        #     (i.e., pct_change > threshold)
+        if baseline_val == 0:
+            pct_change = 0
         else:
-            # For latency: regression means measured is HIGHER than baseline
-            if baseline_val == 0:
-                pct_change = 0
-            else:
-                pct_change = ((measured_val - baseline_val) / baseline_val) * 100
+            pct_change = ((measured_val - baseline_val) / baseline_val) * 100
+
+        if direction == "higher_is_better":
+            # Throughput: regression means measured is LOWER than baseline.
+            is_regression = pct_change < -threshold_pct
+        else:
+            # Latency: regression means measured is HIGHER than baseline.
             is_regression = pct_change > threshold_pct
 
         if is_regression:
@@ -321,7 +334,19 @@ def main():
             else:
                 baseline_str = format_ns(r["baseline"])
                 measured_str = format_ns(r["measured"])
-            arrow = "↓" if direction == "higher_is_better" and pct > 0 else "↑" if direction == "lower_is_better" and pct > 0 else "→"
+            # Arrow shows the direction of change (measured vs baseline),
+            # independent of whether that direction is good or bad:
+            #   ↑ = measured went UP (higher than baseline)
+            #   ↓ = measured went DOWN (lower than baseline)
+            #   → = no change (within 0.1%)
+            # The pct_change sign already encodes good/bad via the
+            # direction-aware convention documented above.
+            if pct > 0.1:
+                arrow = "↑"
+            elif pct < -0.1:
+                arrow = "↓"
+            else:
+                arrow = "→"
             print(f"  ✅ {r['key']}: {measured_str} (baseline: {baseline_str}, {arrow} {pct:+.1f}%)")
         elif status == "REGRESSION":
             regression_count += 1

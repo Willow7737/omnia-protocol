@@ -445,3 +445,103 @@ pass; existing tests should not regress.
    `Zeroize` derive).
 3. Land the deferred Phase 1/Phase 3 items as focused follow-up PRs.
 4. Update `CHANGELOG.md` with the applied fixes.
+
+---
+
+## Addendum: Benchmark Throughput Investigation (2026-06-19)
+
+### Observation
+
+The 2026-06-19 CI benchmark run reported `consensus_throughput: 12,190
+ops/s` against a baseline of `7,000 ops/s` — a 74% improvement. The
+mentor correctly flagged this as suspicious since the audit fixes
+(C-3, C-6, H-5, H-6, H-8, H-9, H-10, H-12, M-10, A-2) are correctness
+and hardening fixes, not hot-path optimizations. C-8 (pipeline workers)
+was explicitly deferred.
+
+### Investigation
+
+I diffed every change to the consensus hot path between the baseline
+(commit `0518b37`, 2026-06-07) and the current HEAD:
+
+```
+$ git diff 0518b37..HEAD --stat -- omnia-consensus/src/causal_graph.rs \
+      omnia-consensus/src/consensus.rs omnia-primitives/src/event.rs
+ omnia-consensus/src/causal_graph.rs |  22 +++++
+ omnia-consensus/src/consensus.rs    | 141 ++++++++++++++++++++++++++++++++----
+ omnia-primitives/src/event.rs       |  44 +++++++++++
+ 3 files changed, 191 insertions(+), 16 deletions(-)
+```
+
+All changes are **additive** and confined to code paths that the
+throughput benchmark does NOT exercise:
+
+1. **`Event::content_hash()`** (omnia-primitives/src/event.rs) — a new
+   method that BLAKE3-hashes the event's semantic content. It is only
+   called from:
+   - `CausalGraph::prune_finalized()` — not called by the bench (fresh
+     graph per iteration).
+   - `PruningAwarePool::prune_finalized()` — same.
+   - The `Err(EventPruned(_))` branch of `ConsensusEngine::process_event()`
+     — only reached when the first event for a (creator, sequence) has
+     been pruned, which never happens in the bench.
+   - Unit tests.
+
+2. **`PrunedEventMetadata.content_hash` field** (omnia-consensus/src/
+   causal_graph.rs) — a new `[u8; 32]` field populated only during
+   `prune_finalized()`. Does not affect `insert()` or the non-pruned
+   `process_event()` path.
+
+3. **`ConsensusEngine::process_event()` pruned-metadata branch**
+   (omnia-consensus/src/consensus.rs) — the only code change (not just
+   comments) is inside the `Err(crate::causal_graph::CausalGraphError::
+   EventPruned(_))` arm. The `Ok(first_event)` arm (which the bench
+   hits) and the `if self.event_states.contains_key(&event_id)` early
+   return are unchanged.
+
+The throughput benchmark (`baseline_bench.rs:tx_throughput_bench`) uses
+`b.iter_batched()` with a fresh `CausalGraph` + `ConsensusEngine` per
+batch, inserts a genesis event, then inserts 1000 child events calling
+`graph.insert()` + `consensus.process_event()` per iteration. No
+pruning occurs. The `first_event_for_sequence` map is populated but
+never triggers the pruned-metadata branch because no events are pruned.
+
+### Conclusion
+
+**The 74% throughput improvement is NOT attributable to any code change
+in this branch.** The most likely explanation is **GitHub Actions
+runner variance**:
+
+- GitHub Actions `ubuntu-latest` runners have heterogeneous CPU
+  generations (Intel Skylake vs Cascade Lake vs AMD EPYC, with clock
+  speeds ranging from ~2.7 GHz to ~3.8 GHz).
+- The baseline was recorded on 2026-06-07; the measurement was recorded
+  on 2026-06-19. The runner allocated on 06-19 may have been a faster
+  CPU generation.
+- A 74% variance is larger than typical but not implausible for a
+  CPU-bound synthetic benchmark on shared cloud infrastructure.
+- The other latency benchmarks (finality, DAG insert, gossip) all moved
+  by <4%, which is consistent with runner variance rather than a
+  systematic code change (a real hot-path optimization would also
+  improve those).
+
+### Recommendation
+
+1. **Do not update the baseline** to 12,190 ops/s. The baseline should
+   reflect a reproducible measurement, not a single lucky run. Leave it
+   at 7,000 ops/s and monitor over multiple CI runs to establish whether
+   12K is the new steady state or an outlier.
+
+2. **Consider pinning the runner type** by using `runs-on: ubuntu-22.04`
+   or a specific GitHub-hosted runner label that maps to a consistent
+   CPU generation. (This is a CI infrastructure change, not a code
+   change.)
+
+3. **The regression gate threshold of 25%** is appropriately wide for
+   this variance. Tightening it would produce false-positive regressions
+   on slower runners.
+
+4. **For production capacity planning**, use the multi-node chaos-test
+   numbers (not these single-node synthetic benchmarks) once they are
+   available. The `baselines.json` `_caveat` field now documents this
+   explicitly.
