@@ -265,10 +265,12 @@ impl ShardRouter {
             })?;
         }
 
+        // Capture the operation's debug representation before `route()` moves it.
+        // C-6 fix (audit v0.1.68): fees are NON-REFUNDABLE — we log on failure
+        // for observability, but the fee is burned regardless of outcome.
+        let op_debug = format!("{:?}", payload.operation);
         let result = self.route(event, payload.operation);
 
-        // C-6 fix (audit v0.1.68): fees are NON-REFUNDABLE.
-        //
         // Previously, a failed `route()` refunded the fee via `quota.reward()`.
         // This defeats the anti-spam purpose of fees — an attacker can spam
         // the network with deliberately-invalid operations at zero cost. The
@@ -278,7 +280,7 @@ impl ShardRouter {
         // We only log the failure here for observability.
         if let Err(ref e) = result {
             tracing::debug!(
-                operation = ?payload.operation,
+                operation = %op_debug,
                 fee_burned = fee,
                 error = %e,
                 "Operation failed; fee non-refundable (cost of attempting)"
