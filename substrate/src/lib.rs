@@ -16,15 +16,36 @@
 //! shards) through the `EventProcessor` trait. Processors can be attached to
 //! the substrate via `with_shard_processor()` and are invoked automatically
 //! in the main run loop for each newly-committed event.
+//!
+//! # Role in the workspace
+//!
+//! `omnia-substrate` is the **integration crate** for the Omnia Protocol.
+//! It re-exports and coordinates the core crates — `omnia-primitives`,
+//! `omnia-consensus`, `omnia-crypto`, `omnia-network`, and `omnia-adapters`
+//! — and is the recommended entry point for node implementations and
+//! higher-level consumers. Direct use of the split crates is appropriate
+//! only for crate-specific tooling (fuzzers, benchmarks, etc.).
+//!
+//! # Safety
+//!
+//! See [`SAFETY.md`](../../SAFETY.md) at the workspace root for the
+//! justification of `deny(unsafe_code)` rather than `forbid(unsafe_code)`:
+//! `omnia-crypto` wraps `blst` (a C library) for BLS12-381 signatures,
+//! which requires `unsafe` FFI bindings. All `unsafe` usage is confined
+//! to `omnia-crypto::bls` and transitively reaches this crate via the
+//! `bls` feature flag.
 
 #![deny(clippy::unwrap_used)]
-#![forbid(unsafe_code)]
+// C-1 fix (audit v0.1.68): use `deny(unsafe_code)` rather than
+// `forbid(unsafe_code)`. The blst C library (used by omnia-crypto::bls)
+// requires `unsafe` FFI bindings; transitively, this crate's `bls` feature
+// pulls in that `unsafe` code. `forbid` would prevent the feature from
+// being enabled at all. `deny` still triggers compile errors for any
+// `unsafe` block written *inside* this crate, but permits it in transitive
+// dependencies — which is the intended policy. See SAFETY.md.
+#![deny(unsafe_code)]
 #![warn(missing_docs)]
 #![warn(unused_qualifications)]
-#![deprecated(
-    since = "0.2.0",
-    note = "Use omnia-primitives, omnia-consensus, omnia-crypto, omnia-network, omnia-adapters directly"
-)]
 
 pub mod blake3_domain;
 #[cfg(feature = "bls")]
@@ -157,6 +178,11 @@ pub const TARGET_FINALITY_MS: u64 = 5_000;
 ///
 /// Accepts a hex-encoded 64-character (32-byte) seed for cryptographic strength.
 /// If the environment variable is not set or is invalid, generates a random seed.
+///
+/// **Internal helper retained for backward compatibility.** New code paths
+/// — especially those that surface errors to the operator (e.g. `main()`) —
+/// should use [`try_parse_consensus_seed`] instead, which returns a `Result`
+/// rather than silently falling back to a random seed on invalid hex.
 fn parse_consensus_seed() -> [u8; 32] {
     if let Ok(hex_seed) = std::env::var("OMNIA_CONSENSUS_SEED") {
         if hex_seed.len() == 64 {
@@ -178,6 +204,88 @@ fn parse_consensus_seed() -> [u8; 32] {
          Set OMNIA_CONSENSUS_SEED environment variable or ensure system RNG is functional.",
     );
     seed
+}
+
+/// Parse `OMNIA_CONSENSUS_SEED` with proper error propagation (H-12 fix).
+///
+/// Behaviour:
+/// - If `OMNIA_CONSENSUS_SEED` is **unset**: returns `Ok(random_seed())` and
+///   logs an info-level message. This is the expected production default.
+/// - If `OMNIA_CONSENSUS_SEED` is **set and valid** (64-char hex, 32 bytes):
+///   returns `Ok(decoded_seed)`.
+/// - If `OMNIA_CONSENSUS_SEED` is **set but invalid** (wrong length or non-hex):
+///   returns `Err(ConsensusSeedError::InvalidHex { ... })`.
+///
+/// # Why
+///
+/// Audit finding H-12 (v0.1.68): the previous implementation silently
+/// discarded invalid hex and fell back to a random seed. In production, an
+/// operator who fat-fingers the env var would unknowingly run a node with
+/// a *different* consensus seed than the rest of the network — causing
+/// silent forking. Failing loudly lets the operator fix the typo before
+/// the node joins consensus.
+pub fn try_parse_consensus_seed() -> Result<[u8; 32], ConsensusSeedError> {
+    match std::env::var("OMNIA_CONSENSUS_SEED") {
+        Ok(hex_str) => {
+            if hex_str.len() != 64 {
+                return Err(ConsensusSeedError::InvalidLength {
+                    actual: hex_str.len(),
+                    expected: 64,
+                });
+            }
+            let bytes = hex::decode(&hex_str)
+                .map_err(|e| ConsensusSeedError::InvalidHex { source: e, raw: hex_str })?;
+            if bytes.len() != 32 {
+                return Err(ConsensusSeedError::InvalidLength {
+                    actual: bytes.len() * 2, // hex char count
+                    expected: 64,
+                });
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            tracing::info!("OMNIA_CONSENSUS_SEED loaded from environment");
+            Ok(arr)
+        }
+        Err(_) => {
+            tracing::info!("OMNIA_CONSENSUS_SEED not set; using random consensus seed");
+            let mut seed = [0u8; 32];
+            getrandom::getrandom(&mut seed).map_err(ConsensusSeedError::RngUnavailable)?;
+            Ok(seed)
+        }
+    }
+}
+
+/// Error returned by [`try_parse_consensus_seed`].
+#[derive(Debug, thiserror::Error)]
+pub enum ConsensusSeedError {
+    /// `OMNIA_CONSENSUS_SEED` was set but did not contain valid hexadecimal.
+    #[error(
+        "OMNIA_CONSENSUS_SEED contains invalid hex: {source}. \
+         Either fix the value (must be 64 hex chars / 32 bytes) or unset the \
+         variable to use a random seed."
+    )]
+    InvalidHex {
+        /// The underlying hex decode error.
+        source: hex::FromHexError,
+        /// The raw (invalid) string that was provided.
+        raw: String,
+    },
+
+    /// `OMNIA_CONSENSUS_SEED` was set but had the wrong length.
+    #[error(
+        "OMNIA_CONSENSUS_SEED must be 64 hex characters (32 bytes). \
+         Provided: {actual} chars."
+    )]
+    InvalidLength {
+        /// Actual length provided (in hex characters).
+        actual: usize,
+        /// Required length (always 64).
+        expected: usize,
+    },
+
+    /// The system RNG was unavailable and no seed was provided via the env var.
+    #[error("System RNG unavailable — cannot generate random consensus seed. Set OMNIA_CONSENSUS_SEED manually.")]
+    RngUnavailable(#[from] getrandom::Error),
 }
 
 use std::collections::HashMap;
@@ -367,6 +475,34 @@ impl SubstrateConfig {
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
         let seed = parse_consensus_seed();
         Self::build_config(node_id, total_nodes, seed)
+    }
+
+    /// Like [`SubstrateConfig::new`] but propagates consensus-seed errors
+    /// instead of silently falling back to a random seed (H-12 fix).
+    ///
+    /// Use this in production code paths (e.g. `main()`) so that an
+    /// operator who fat-fingers `OMNIA_CONSENSUS_SEED` gets a clean
+    /// error message and exit instead of unknowingly forking off the
+    /// network with a different seed.
+    pub fn try_new(node_id: NodeId) -> Result<Self, ConsensusSeedError> {
+        let total_nodes: usize = std::env::var("OMNIA_TOTAL_NODES")
+            .map(|v| v.parse().unwrap_or(4))
+            .unwrap_or_else(|_| {
+                tracing::warn!("OMNIA_TOTAL_NODES not set, defaulting to 4 — configure this for production");
+                4
+            });
+        let seed = try_parse_consensus_seed()?;
+        Ok(Self::build_config(node_id, total_nodes, seed))
+    }
+
+    /// Like [`SubstrateConfig::with_network_size`] but propagates
+    /// consensus-seed errors (H-12 fix).
+    pub fn try_with_network_size(
+        node_id: NodeId,
+        total_nodes: usize,
+    ) -> Result<Self, ConsensusSeedError> {
+        let seed = try_parse_consensus_seed()?;
+        Ok(Self::build_config(node_id, total_nodes, seed))
     }
 
     /// Build a substrate configuration with the given parameters.

@@ -401,7 +401,41 @@ impl RedbSlashingStore {
     /// let state = store.load().unwrap();
     /// ```
     pub fn open(path: &Path) -> Result<Self, SlashingStoreError> {
-        let db = redb::Database::create(path).map_err(|e| SlashingStoreError::Persistence(e.to_string()))?;
+        // M-10 fix (audit v0.1.68): recover from a corrupt slashing database
+        // instead of crashing. If `redb::Database::create()` fails (which can
+        // happen when the file exists but is corrupt), we:
+        //   1. Rename the corrupt file to `<path>.corrupt` for forensic review.
+        //   2. Log an ERROR (not WARN — slash history loss is serious).
+        //   3. Create a fresh database and continue.
+        //
+        // The previous behaviour was a fatal error: a corrupt slashing DB
+        // would prevent the node from starting at all, which is worse for
+        // liveness than losing slash history (the operator can manually
+        // review the .corrupt file and re-apply slashes if needed).
+        let db = match redb::Database::create(path) {
+            Ok(db) => db,
+            Err(e) => {
+                // Backup corrupt file (best-effort — if rename fails, we
+                // still try to create fresh).
+                let backup = path.with_extension("db.corrupt");
+                if let Err(rename_err) = std::fs::rename(path, &backup) {
+                    tracing::error!(
+                        corrupt_path = %path.display(),
+                        backup_path = %backup.display(),
+                        error = %rename_err,
+                        "Could not rename corrupt slashing DB — will attempt to remove and recreate"
+                    );
+                    let _ = std::fs::remove_file(path);
+                }
+                tracing::error!(
+                    corrupt_backup = %backup.display(),
+                    original_error = %e,
+                    "Slashing database was corrupt — renamed to .corrupt and starting fresh. \
+                     ALL SLASH HISTORY IS LOST. Manual review required before rejoining consensus."
+                );
+                redb::Database::create(path).map_err(|e2| SlashingStoreError::Persistence(e2.to_string()))?
+            }
+        };
         // Ensure the table exists
         let write_txn = db
             .begin_write()

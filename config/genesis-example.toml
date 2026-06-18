@@ -4,6 +4,15 @@
 # Use with: omnia-node genesis-init --config genesis.toml --output genesis.bin
 #
 # Minimum 3 validators required for BFT safety (f=1).
+#
+# L-30 fix (audit v0.1.68): `node_id` should be a hex-encoded 32-byte
+# NodeId (BLAKE3 hash of the validator's Ed25519 public key, domain-separated
+# with b"omnia-creator"). The small integer values shown below are placeholders
+# for the example — replace with the real hex NodeId for each validator before
+# generating genesis. Example:
+#   node_id = "01ab2c3d4e5f60718293a4b5c6d7e8f0011223344556677889900aabbccddee"
+# The `omnia-node keygen` command prints the corresponding NodeId for a freshly
+# generated keypair.
 
 chain_id = 1
 network_name = "omnia-mainnet"

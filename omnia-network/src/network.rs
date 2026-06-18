@@ -169,6 +169,46 @@ impl PeerScoreTracker {
     pub fn is_graylisted(&self, peer: &PeerId) -> bool {
         self.get_score(peer) < -100.0
     }
+
+    /// Remove a peer's score entry entirely.
+    ///
+    /// Call this from the libp2p `SwarmEvent::ConnectionClosed` handler so
+    /// that disconnected peers don't accumulate in the score map forever.
+    /// H-9 fix (audit v0.1.68): previously, peer scores were never cleaned
+    /// up, leading to unbounded memory growth for nodes that cycled through
+    /// many transient peers (e.g., mobile clients, NAT'd nodes).
+    pub fn remove_peer(&mut self, peer: &PeerId) {
+        if self.scores.remove(peer).is_some() {
+            tracing::debug!(peer = ?peer, "Removed peer score on disconnect");
+        }
+    }
+
+    /// Periodically clean up stale peer score entries.
+    ///
+    /// Call this on a fixed interval (e.g., every 10 minutes) to drop
+    /// scores for peers that haven't been seen recently. This is a
+    /// defense-in-depth measure alongside [`remove_peer`] — it catches
+    /// any peers that disconnected without firing `ConnectionClosed`
+    /// (e.g., due to a network partition where we never received the
+    /// close event).
+    ///
+    /// H-9 fix (audit v0.1.68).
+    pub fn cleanup_stale(&mut self, max_age: std::time::Duration, last_seen: &HashMap<PeerId, std::time::Instant>) {
+        let cutoff = std::time::Instant::now()
+            .checked_sub(max_age)
+            .unwrap_or_else(std::time::Instant::now);
+        let stale_peers: Vec<_> = last_seen
+            .iter()
+            .filter(|(_, seen)| **seen < cutoff)
+            .map(|(peer, _)| *peer)
+            .collect();
+        for peer in &stale_peers {
+            self.scores.remove(peer);
+        }
+        if !stale_peers.is_empty() {
+            tracing::debug!(count = stale_peers.len(), "Cleaned up stale peer scores");
+        }
+    }
 }
 
 impl Default for PeerScoreTracker {
@@ -710,6 +750,10 @@ impl OmniaNetwork {
                 }
             }
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                // H-9 fix (audit v0.1.68): clean up the peer's application
+                // score on disconnect so the score map doesn't grow
+                // unboundedly as peers churn.
+                self.peer_score_tracker.remove_peer(&peer_id);
                 if let Err(e) = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await {
                     tracing::warn!("Dropped peer disconnected event - channel full: {}", e);
                 }

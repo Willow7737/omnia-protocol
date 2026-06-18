@@ -170,6 +170,38 @@ pub enum CommitmentPhase {
 }
 
 impl QuantumCommitment {
+    /// One-time module initialization.
+    ///
+    /// **Call this at startup** before any `QuantumCommitment` operation.
+    /// It emits a log warning if the `pqc` cargo feature is not enabled,
+    /// so operators are explicitly aware that PQC functionality is running
+    /// in stub mode and is **not production-ready**.
+    ///
+    /// H-8 fix (audit v0.1.68): the previous code silently fell back to
+    /// stub signatures when `pqc` was not compiled in. This gave the false
+    /// impression that PQC was active when it wasn't. The warning is now
+    /// logged at startup so there is no ambiguity.
+    pub fn init() {
+        #[cfg(not(feature = "pqc"))]
+        {
+            tracing::warn!(
+                "PQC feature not compiled in. QuantumCommitment is using \
+                 placeholder implementations (no Dilithium signatures, no \
+                 ML-KEM-768 key encapsulation). Do NOT use in production. \
+                 Rebuild with `--features pqc` to enable real PQC."
+            );
+        }
+        #[cfg(feature = "pqc")]
+        {
+            tracing::info!(
+                "PQC feature enabled. QuantumCommitment will use real \
+                 ML-KEM-768 key encapsulation. Note: the underlying \
+                 ml-kem Rust crate implements the FIPS-203 algorithm but \
+                 has not been NIST-certified — treat as experimental."
+            );
+        }
+    }
+
     /// Create a new quantum commitment from data and a classical Ed25519
     /// signature.
     ///
