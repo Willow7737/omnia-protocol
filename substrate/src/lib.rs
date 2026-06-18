@@ -224,7 +224,7 @@ fn parse_consensus_seed() -> [u8; 32] {
 /// a *different* consensus seed than the rest of the network — causing
 /// silent forking. Failing loudly lets the operator fix the typo before
 /// the node joins consensus.
-pub fn try_parse_consensus_seed() -> Result<[u8; 32], ConsensusSeedError> {
+pub fn try_parse_consensus_seed() -> ConsensusSeedResult<[u8; 32]> {
     match std::env::var("OMNIA_CONSENSUS_SEED") {
         Ok(hex_str) => {
             if hex_str.len() != 64 {
@@ -289,6 +289,13 @@ pub enum ConsensusSeedError {
     #[error("System RNG unavailable — cannot generate random consensus seed. Set OMNIA_CONSENSUS_SEED manually.")]
     RngUnavailable(#[from] getrandom::Error),
 }
+
+/// Result alias for operations that can fail with [`ConsensusSeedError`].
+///
+/// Defined separately from the crate-wide `Result<T>` (which uses
+/// `SubstrateError`) because consensus-seed parsing produces a more
+/// specific error type that callers may want to match on directly.
+pub type ConsensusSeedResult<T> = std::result::Result<T, ConsensusSeedError>;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -486,7 +493,7 @@ impl SubstrateConfig {
     /// operator who fat-fingers `OMNIA_CONSENSUS_SEED` gets a clean
     /// error message and exit instead of unknowingly forking off the
     /// network with a different seed.
-    pub fn try_new(node_id: NodeId) -> Result<Self, ConsensusSeedError> {
+    pub fn try_new(node_id: NodeId) -> ConsensusSeedResult<Self> {
         let total_nodes: usize = std::env::var("OMNIA_TOTAL_NODES")
             .map(|v| v.parse().unwrap_or(4))
             .unwrap_or_else(|_| {
@@ -499,7 +506,7 @@ impl SubstrateConfig {
 
     /// Like [`SubstrateConfig::with_network_size`] but propagates
     /// consensus-seed errors (H-12 fix).
-    pub fn try_with_network_size(node_id: NodeId, total_nodes: usize) -> Result<Self, ConsensusSeedError> {
+    pub fn try_with_network_size(node_id: NodeId, total_nodes: usize) -> ConsensusSeedResult<Self> {
         let seed = try_parse_consensus_seed()?;
         Ok(Self::build_config(node_id, total_nodes, seed))
     }
