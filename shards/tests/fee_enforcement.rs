@@ -413,10 +413,13 @@ fn test_failed_operation_does_not_refund_fee() {
     let did = ShardRouter::pubkey_to_did(&keypair.verifying_key().to_bytes());
     quota.register_did(&did);
 
+    let creator = keypair.verifying_key().to_bytes();
+    // Compute the expected fee before `schedule` is moved into the router.
+    let expected_fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }));
+
     // No shards registered — route() will fail with UnknownShard.
     let mut router = ShardRouter::new(schedule, quota);
 
-    let creator = keypair.verifying_key().to_bytes();
     let payload = ShardPayload {
         shard_id: ShardId::financial(),
         operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
@@ -431,14 +434,13 @@ fn test_failed_operation_does_not_refund_fee() {
     assert!(result.is_err(), "Route should fail (no shards registered)");
 
     let balance_after = router.quota_balance(&did).expect("DID registered");
-    let fee = schedule.fee_for_op(&ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }));
     assert!(
         balance_after < balance_before,
         "Fee should be burned, not refunded. before={balance_before}, after={balance_after}"
     );
     assert_eq!(
         balance_before - balance_after,
-        fee,
+        expected_fee,
         "Exactly the fee amount should be burned"
     );
 }

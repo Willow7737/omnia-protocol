@@ -60,7 +60,7 @@ fn test_provenance_chain_lifecycle() {
     assert!(log.verify_chain());
 
     // Step 2: Transfer to distributor
-    log.transfer(
+    let _ = log.transfer(
         "did:omnia:distributor".to_string(),
         make_rf("did:omnia:distributor", [0x22u8; 32]),
         make_commitment(b"transfer_factory_dist", &kp),
@@ -70,7 +70,7 @@ fn test_provenance_chain_lifecycle() {
     assert!(log.verify_chain());
 
     // Step 3: Transfer to retailer
-    log.transfer(
+    let _ = log.transfer(
         "did:omnia:retailer".to_string(),
         make_rf("did:omnia:retailer", [0x33u8; 32]),
         make_commitment(b"transfer_dist_retail", &kp),
@@ -80,7 +80,7 @@ fn test_provenance_chain_lifecycle() {
     assert!(log.verify_chain());
 
     // Step 4: Transfer to customer
-    log.transfer(
+    let _ = log.transfer(
         "did:omnia:customer".to_string(),
         make_rf("did:omnia:customer", [0x44u8; 32]),
         make_commitment(b"transfer_retail_customer", &kp),
@@ -208,7 +208,7 @@ fn test_provenance_serialization_roundtrip() {
         [0xBBu8; 32],
     );
 
-    log.transfer(
+    let _ = log.transfer(
         "did:omnia:next".to_string(),
         make_rf("did:omnia:next", [0xCCu8; 32]),
         make_commitment(b"transfer", &kp),
