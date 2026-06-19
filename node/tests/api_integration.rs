@@ -188,6 +188,41 @@ fn build_test_app_state(port: u16) -> AppState {
     }
 }
 
+/// Start a test HTTP server on a random port, with optional pre-registration
+/// of DIDs in the economics state.
+///
+/// `pre_register_dids` is a closure that receives the `EconomicsState` before
+/// the server starts, allowing tests to register DIDs and mint UBC directly.
+/// This is needed because the shard router's `EconomicsShard` has its own
+/// internal state that is disconnected from `AppState.economics` — operations
+/// sent through the shard API endpoint don't reach the economics handlers.
+async fn start_test_server_with_economics<F>(pre_register: F) -> (String, tokio::task::JoinHandle<()>, Arc<Mutex<EconomicsState>>)
+where
+    F: FnOnce(&mut EconomicsState),
+{
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().unwrap().port();
+
+    let mut app_state = build_test_app_state(port);
+    {
+        let mut econ = app_state.economics.lock().await;
+        pre_register(&mut econ);
+    }
+    let economics_clone = Arc::clone(&app_state.economics);
+
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    (format!("http://127.0.0.1:{port}"), handle, economics_clone)
+}
+
 /// Start a test HTTP server on a random port.
 ///
 /// Reads `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, and
@@ -1166,40 +1201,13 @@ async fn test_error_format_429_rate_limited() {
 // auth-only tests miss.
 // ===========================================================================
 
-/// Helper: register a DID in the quota system, then mint UBC to it.
-/// Both steps are needed because `mint` adds balance but doesn't register
-/// the DID — `get_balance` and `transfer` check `quota.is_registered()`.
-async fn register_and_mint_to_did(server: &TestServer, did: &str, amount: u64) {
-    let client = reqwest::Client::new();
-    let admin_token = make_valid_token(ADMIN_CALLER);
-
-    // Step 1: Register the DID in the quota system
-    let register_body = json!({
-        "operation": "register",
-        "params": {"did": did}
-    });
-    let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
-        .bearer_auth(&admin_token)
-        .json(&register_body)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200, "Register {did} should succeed");
-
-    // Step 2: Mint UBC to the registered DID
-    let mint_body = json!({
-        "operation": "mint",
-        "params": {"did": did, "amount": amount}
-    });
-    let resp = client
-        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
-        .bearer_auth(&admin_token)
-        .json(&mint_body)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200, "Mint to {did} should succeed");
+/// Helper: register a DID in the economics state and mint UBC to it.
+/// Called BEFORE the server starts, directly on the AppState.economics
+/// instance that the handlers read from. (The shard router's EconomicsShard
+/// has a separate internal state that is disconnected from AppState.economics.)
+fn register_and_mint(econ: &mut EconomicsState, did: &str, amount: u64) {
+    econ.quota.register_did(did);
+    let _ = econ.quota.reward(did, amount);
 }
 
 // ---- governance: create_proposal 409 Conflict (duplicate) ----
@@ -1313,16 +1321,23 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
 
 #[tokio::test]
 async fn test_get_balance_registered_did_returns_200() {
-    let server = setup_server(None).await;
-    register_and_mint_to_did(&server, "did:test:balance-check", 5000).await;
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
 
+    let (base_url, handle, _econ) =
+        start_test_server_with_economics(|econ| {
+            register_and_mint(econ, "did:test:balance-check", 5000);
+        })
+        .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
     let resp = client
-        .get(format!(
-            "{}/api/v1/economics/balance/did:test:balance-check",
-            server.base_url
-        ))
+        .get(format!("{base_url}/api/v1/economics/balance/did:test:balance-check"))
         .bearer_auth(&token)
         .send()
         .await
@@ -1336,6 +1351,9 @@ async fn test_get_balance_registered_did_returns_200() {
         "Balance should reflect minted amount"
     );
     assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
+
+    drop(handle);
+    drop(lock);
 }
 
 // ---- economics: transfer 400 zero amount ----
@@ -1372,12 +1390,23 @@ async fn test_transfer_zero_amount_returns_400() {
 
 #[tokio::test]
 async fn test_transfer_success_returns_200() {
-    let server = setup_server(None).await;
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
 
-    // Mint to the caller (REGULAR_CALLER is the JWT sub claim, which
-    // becomes from_did in the handler) and to the recipient.
-    register_and_mint_to_did(&server, REGULAR_CALLER, 10_000).await;
-    register_and_mint_to_did(&server, "did:test:recipient", 100).await;
+    // Pre-register both DIDs in AppState.economics (the instance the
+    // transfer handler reads from). REGULAR_CALLER is the JWT sub claim
+    // which becomes from_did in the handler.
+    let (base_url, handle, _econ) =
+        start_test_server_with_economics(|econ| {
+            register_and_mint(econ, REGULAR_CALLER, 10_000);
+            register_and_mint(econ, "did:test:recipient", 100);
+        })
+        .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1389,7 +1418,7 @@ async fn test_transfer_success_returns_200() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{base_url}/api/v1/economics/transfer"))
         .bearer_auth(&token)
         .json(&body)
         .send()
@@ -1404,17 +1433,30 @@ async fn test_transfer_success_returns_200() {
         body["new_balance"].as_u64().unwrap() >= 9_500,
         "New balance should reflect the spent amount"
     );
+
+    drop(handle);
+    drop(lock);
 }
 
 // ---- economics: transfer 400 insufficient balance ----
 
 #[tokio::test]
 async fn test_transfer_insufficient_balance_returns_400() {
-    let server = setup_server(None).await;
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
 
     // Mint a small amount to the caller, not enough for the transfer.
-    register_and_mint_to_did(&server, REGULAR_CALLER, 100).await;
-    register_and_mint_to_did(&server, "did:test:recipient", 100).await;
+    let (base_url, handle, _econ) =
+        start_test_server_with_economics(|econ| {
+            register_and_mint(econ, REGULAR_CALLER, 100);
+            register_and_mint(econ, "did:test:recipient", 100);
+        })
+        .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1426,7 +1468,7 @@ async fn test_transfer_insufficient_balance_returns_400() {
     });
 
     let resp = client
-        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .post(format!("{base_url}/api/v1/economics/transfer"))
         .bearer_auth(&token)
         .json(&body)
         .send()
@@ -1439,4 +1481,7 @@ async fn test_transfer_insufficient_balance_returns_400() {
         body["error"].as_str().unwrap().contains("Transfer failed"),
         "Error should mention transfer failure"
     );
+
+    drop(handle);
+    drop(lock);
 }
