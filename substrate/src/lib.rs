@@ -1091,6 +1091,10 @@ mod tests {
     use crate::crypto::generate_keypair;
     use crate::event::Event;
 
+    /// Serializes tests that modify OMNIA_CONSENSUS_SEED.
+    /// Without this, parallel test threads race on the env var.
+    static SEED_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn test_node(id: u8) -> NodeId {
         let mut node = [0u8; 32];
         node[0] = id;
@@ -1193,6 +1197,7 @@ mod tests {
 
     #[test]
     fn test_try_parse_consensus_seed_unset_returns_ok() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let result = try_parse_consensus_seed();
         assert!(result.is_ok(), "Unset seed should return Ok(random seed)");
@@ -1203,6 +1208,7 @@ mod tests {
 
     #[test]
     fn test_try_parse_consensus_seed_valid_hex() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let hex_seed = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
         std::env::set_var("OMNIA_CONSENSUS_SEED", hex_seed);
         let result = try_parse_consensus_seed();
@@ -1215,6 +1221,7 @@ mod tests {
 
     #[test]
     fn test_try_parse_consensus_seed_invalid_hex() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // 64 chars long (passes length check) but contains non-hex chars
         std::env::set_var(
             "OMNIA_CONSENSUS_SEED",
@@ -1231,6 +1238,7 @@ mod tests {
 
     #[test]
     fn test_try_parse_consensus_seed_wrong_length() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("OMNIA_CONSENSUS_SEED", "0102"); // too short
         let result = try_parse_consensus_seed();
         assert!(result.is_err(), "Wrong-length seed should return Err");
@@ -1260,6 +1268,7 @@ mod tests {
 
     #[test]
     fn test_try_new_returns_config() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::try_new(test_node(1));
         assert!(config.is_ok(), "try_new should succeed with no seed set");
@@ -1268,6 +1277,7 @@ mod tests {
 
     #[test]
     fn test_try_with_network_size_returns_config() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::try_with_network_size(test_node(1), 7);
         assert!(config.is_ok(), "try_with_network_size should succeed");
@@ -1278,6 +1288,7 @@ mod tests {
 
     #[test]
     fn test_try_new_invalid_seed_returns_err() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("OMNIA_CONSENSUS_SEED", "bad");
         let result = SubstrateConfig::try_new(test_node(1));
         assert!(result.is_err(), "Invalid seed should propagate error");
