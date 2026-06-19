@@ -8,6 +8,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.69](https://github.com/Willow7737/omnia-protocol/compare/v0.1.68...v0.1.69) (2026-06-19)
+
+
+### Features
+
+* add local testnet startup script ([d5d0d4e](https://github.com/Willow7737/omnia-protocol/commit/d5d0d4e3d1d0e1acce267490b3dc9fb4e8d6f87d))
+* **docker:** add server-side env vars for web dashboard proxy ([dcd420b](https://github.com/Willow7737/omnia-protocol/commit/dcd420bef9f2c6e7377f5f681e10ec184ab44510))
+* **docker:** add server-side env vars for web dashboard proxy ([6898423](https://github.com/Willow7737/omnia-protocol/commit/6898423174960f4fc1435dea6087800a69ee55b6))
+* **docker:** web depends on all nodes for reliable live data ([04fdce4](https://github.com/Willow7737/omnia-protocol/commit/04fdce42be72855af9f0307bef7c65d5d6b32789))
+
+
+### Bug Fixes
+
+* **audit-v0.1.68:** apply Phase 1-5 fixes from OMNIA_FIX_STRATEGY ([51ee76f](https://github.com/Willow7737/omnia-protocol/commit/51ee76fa43ec99ff4ec036e260380830ff46ab2c))
+* **bench:** exclude consensus_throughput from regression gate (variance &gt; threshold) ([f2a2046](https://github.com/Willow7737/omnia-protocol/commit/f2a204606c0714e3129e8c52adc55700e1cdac08))
+* **bench:** exclude consensus_throughput from regression gate (variance &gt; threshold) ([8e55417](https://github.com/Willow7737/omnia-protocol/commit/8e5541730927bebdc6caf3fd26bb1acab9333bb6))
+* capture payload.operation debug before move in route_event ([2ea298b](https://github.com/Willow7737/omnia-protocol/commit/2ea298b4243b339fefc289039aee3503263c0de3))
+* resolve CI --locked failure, align versions, correct documentation ([0518b37](https://github.com/Willow7737/omnia-protocol/commit/0518b374719e0754ac08aa8eace9eda65804e66e))
+* resolve CI failures — blake3 borrow, fmt, Cargo.lock deps ([193b57c](https://github.com/Willow7737/omnia-protocol/commit/193b57c8ebe70d5c87243e2c623f1a116eaa8e4e))
+* resolve remaining CI failures — shadow var, fmt, audit, lock ([0c3920d](https://github.com/Willow7737/omnia-protocol/commit/0c3920d1d05200e128d3449709b90f89d225779a))
+* resolve Result type alias conflict and invalid cargo audit flag ([4f28c17](https://github.com/Willow7737/omnia-protocol/commit/4f28c17ed9a42440e3ce1f4a0b9bd4e541e12150))
+* rustdoc broken intra-doc link to remove_peer ([6f12652](https://github.com/Willow7737/omnia-protocol/commit/6f126525c5345b98496039078f4e8fc61a54fd3d))
+* test compilation errors from H-5 IndexMap migration and C-6 test ([70421e9](https://github.com/Willow7737/omnia-protocol/commit/70421e9acb50b582d0c5b343ee266d03fd7b8d93))
+
+
+### Performance
+
+* **bench:** reduce ZK expanded_circuit sample size to avoid CI timeout ([a0672c0](https://github.com/Willow7737/omnia-protocol/commit/a0672c0b424cb48889340a26e62aff318a4aacf9))
+* **bench:** reduce ZK expanded_circuit sample size to avoid CI timeout ([5afd408](https://github.com/Willow7737/omnia-protocol/commit/5afd408b33d0e6884618b092b2d8115bba7a588a))
+
 ## [0.1.68](https://github.com/Willow7737/omnia-protocol/compare/v0.1.67...v0.1.68) (2026-06-02)
 
 
