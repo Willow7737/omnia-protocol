@@ -225,7 +225,6 @@ mod tests {
     use omnia_economics::EconomicsState;
     use omnia_shards::ShardRouter;
     use omnia_substrate::Substrate;
-    use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::atomic::AtomicBool;
     use std::time::Instant;

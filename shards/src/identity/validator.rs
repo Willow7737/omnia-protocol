@@ -123,6 +123,7 @@ mod tests {
     use super::super::agent::AgentIdentity;
     use super::super::recovery::RecoveryShare;
     use super::super::state::RecoveryConfig;
+    use crate::Did;
     use crate::payload::ShardOp;
     use omnia_substrate::VectorClock;
 
