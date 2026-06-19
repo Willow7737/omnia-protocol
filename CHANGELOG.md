@@ -8,6 +8,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.70](https://github.com/Willow7737/omnia-protocol/compare/v0.1.69...v0.1.70) (2026-06-19)
+
+
+### Bug Fixes
+
+* 2 test failures from authorization checks + unused mut warning ([86d7427](https://github.com/Willow7737/omnia-protocol/commit/86d74277737e6545021222735b24c41900a5660b))
+* 4 test failures — error serialization + DID registration ([c9f02a5](https://github.com/Willow7737/omnia-protocol/commit/c9f02a5f0ce7bd401b2fc510cd0d1ae0f452d0ac))
+* apply rustfmt formatting to test modules ([6a6e733](https://github.com/Willow7737/omnia-protocol/commit/6a6e733ca576e2b1b6bdd66ec9a04998cf9bfd0b))
+* apply rustfmt to start_test_server_with_economics signature + calls ([3d7b27c](https://github.com/Willow7737/omnia-protocol/commit/3d7b27c5f689328fcec61daa669b63ba052d1f39))
+* **ci:** pin iai-callgrind-runner to 0.13.4 to match library version ([d2bf8ec](https://github.com/Willow7737/omnia-protocol/commit/d2bf8ec1278ed10855bc4b807e5fe40edf1037d8))
+* **ci:** pin iai-callgrind-runner to 0.13.4 to match library version ([3eab61b](https://github.com/Willow7737/omnia-protocol/commit/3eab61b760158cc9fbe49a5815a970f844aed131))
+* env var race causing test_mint_ubc_admin_ok 403 failure ([e154a18](https://github.com/Willow7737/omnia-protocol/commit/e154a1804d865460e7cfb06c16695c1d0613574e))
+* missing type imports in validator test modules + unused HashMap ([fa5043a](https://github.com/Willow7737/omnia-protocol/commit/fa5043abb7ac3fb70d84e7c97b5b0a5afda06261))
+* pre-register DIDs directly on AppState.economics for handler tests ([0c2d071](https://github.com/Willow7737/omnia-protocol/commit/0c2d071e8b77168a9070137ca70db4e9a6586ac4))
+* rustfmt — collapse ENV_LOCK to single line, wrap format! call ([14990d4](https://github.com/Willow7737/omnia-protocol/commit/14990d455472ec13d774f141244dcd265143c07e))
+* rustfmt — wrap long set_var string literal ([689a513](https://github.com/Willow7737/omnia-protocol/commit/689a513041f0ac0c8e5a74184ebf981e308ded6b))
+* rustfmt + compile errors in new test modules ([ec5247c](https://github.com/Willow7737/omnia-protocol/commit/ec5247c2c7e34348e2a3921dbae1b5fe1cd0ecc9))
+* serialize env-var-dependent tests with std::sync::Mutex ([45d9869](https://github.com/Willow7737/omnia-protocol/commit/45d9869a3064523a212268c72a2216a895c7ef7b))
+* trim vote choice whitespace + add handler branch coverage ([8799f38](https://github.com/Willow7737/omnia-protocol/commit/8799f38df2f99a08fcdbf91c872a310a5cfc820b))
+* use 64-char invalid-hex string for InvalidHex test ([d3883c2](https://github.com/Willow7737/omnia-protocol/commit/d3883c270f4fbd1491431c96cf48abc79d2da379))
+* use std::sync::Mutex for ENV_LOCK + rustfmt import order ([b4725d5](https://github.com/Willow7737/omnia-protocol/commit/b4725d541c67cff54387bc8d7372f35a67921bbd))
+* wrap long assert! in crdt/mod.rs test ([3142426](https://github.com/Willow7737/omnia-protocol/commit/3142426f3bd388ae5d815e53c016057e98e391d7))
+
+
+### Documentation
+
+* honest C-4 status + coverage measurement caveat ([4b66ffa](https://github.com/Willow7737/omnia-protocol/commit/4b66ffa61f8de1750f604a20a6f32eac8c630646))
+
+
+### Tests
+
+* add coverage for 0% modules — stub adapters + shard validators ([94fed9c](https://github.com/Willow7737/omnia-protocol/commit/94fed9c40433f70b205ad6ca5f1f46a9b79a2331))
+* add coverage for 0% modules — stub adapters + shard validators ([9aa04fa](https://github.com/Willow7737/omnia-protocol/commit/9aa04fa7b9899d5f21e69263dc94047f52e93c1f))
+* add real coverage for substrate/lib.rs, crdt/mod.rs, domain_state.rs ([0f8d6ad](https://github.com/Willow7737/omnia-protocol/commit/0f8d6adcc1334c7992e5141a3ae7b2b8554e8577))
+* add real coverage for substrate/lib.rs, crdt/mod.rs, domain_state.rs ([d2b8fdf](https://github.com/Willow7737/omnia-protocol/commit/d2b8fdf2e0d8cf3df32d5135d4aacf785003f2fd))
+* remove stub adapter tests, add real coverage for identity + API ([ec10de0](https://github.com/Willow7737/omnia-protocol/commit/ec10de01b612f6c134a8e6af5b24e5589ea30a2b))
+
 ## [0.1.69](https://github.com/Willow7737/omnia-protocol/compare/v0.1.68...v0.1.69) (2026-06-19)
 
 
