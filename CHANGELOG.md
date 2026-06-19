@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.70](https://github.com/Willow7737/omnia-protocol/compare/v0.1.69...v0.1.70) (2026-06-19)
+
+
+### Bug Fixes
+
+* **ci:** pin iai-callgrind-runner to 0.13.4 to match library version ([d2bf8ec](https://github.com/Willow7737/omnia-protocol/commit/d2bf8ec1278ed10855bc4b807e5fe40edf1037d8))
+* **ci:** pin iai-callgrind-runner to 0.13.4 to match library version ([3eab61b](https://github.com/Willow7737/omnia-protocol/commit/3eab61b760158cc9fbe49a5815a970f844aed131))
+
 ## [0.1.69](https://github.com/Willow7737/omnia-protocol/compare/v0.1.68...v0.1.69) (2026-06-19)
 
 
