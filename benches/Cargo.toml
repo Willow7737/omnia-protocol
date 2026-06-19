@@ -18,6 +18,11 @@ omnia-node = { path = "../node" }
 omnia-substrate = { path = "../substrate" }
 
 criterion = { version = "0.5", features = ["html_reports"] }
+# iai-callgrind library version must match the iai-callgrind-runner binary
+# installed in CI. The CI workflow (bench.yml) pins the runner to 0.13.4
+# via `cargo install iai-callgrind-runner --version 0.13.4` to match this
+# library version. If you bump this version, also update the CI install
+# command AND regenerate Cargo.lock (cargo update -p iai-callgrind).
 iai-callgrind = "0.13"
 tokio = { version = "1.38", features = ["full"] }
 rand = "0.8"
