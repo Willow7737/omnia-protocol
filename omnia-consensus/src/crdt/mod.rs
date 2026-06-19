@@ -192,3 +192,143 @@ impl Default for AccountBalance {
         Self::new()
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    fn node(id: u8) -> NodeId {
+        let mut n = [0u8; 32];
+        n[0] = id;
+        n
+    }
+
+    #[test]
+    fn test_account_balance_new() {
+        let bal = AccountBalance::new();
+        assert_eq!(bal.value(), 0);
+        assert!(bal.last_updater.is_none());
+    }
+
+    #[test]
+    fn test_account_balance_increment() {
+        let mut bal = AccountBalance::new();
+        bal.increment(node(1), 100).unwrap();
+        assert_eq!(bal.value(), 100);
+        assert_eq!(bal.last_updater, Some(node(1)));
+    }
+
+    #[test]
+    fn test_account_balance_increment_multiple_nodes() {
+        let mut bal = AccountBalance::new();
+        bal.increment(node(1), 100).unwrap();
+        bal.increment(node(2), 200).unwrap();
+        assert_eq!(bal.value(), 300);
+        assert_eq!(bal.last_updater, Some(node(2)));
+    }
+
+    #[test]
+    fn test_account_balance_merge() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let mut b = AccountBalance::new();
+        b.increment(node(2), 200).unwrap();
+
+        a.merge(&b);
+        assert_eq!(a.value(), 300);
+    }
+
+    #[test]
+    fn test_account_balance_merge_idempotent() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let b = a.clone();
+
+        a.merge(&b);
+        assert_eq!(
+            a.value(),
+            100,
+            "Merging with self should not change value (idempotency)"
+        );
+    }
+
+    #[test]
+    fn test_account_balance_merge_commutative() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let mut b = AccountBalance::new();
+        b.increment(node(2), 200).unwrap();
+
+        let ab = a.merged(&b);
+        let ba = b.merged(&a);
+        assert_eq!(ab.value(), ba.value(), "Merge should be commutative");
+    }
+
+    #[test]
+    fn test_account_balance_state_hash_deterministic() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let mut b = AccountBalance::new();
+        b.increment(node(1), 100).unwrap();
+
+        assert_eq!(a.state_hash(), b.state_hash(), "Same state should produce same hash");
+    }
+
+    #[test]
+    fn test_account_balance_state_hash_differs_for_different_state() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let mut b = AccountBalance::new();
+        b.increment(node(1), 200).unwrap();
+
+        assert_ne!(
+            a.state_hash(),
+            b.state_hash(),
+            "Different values should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_account_balance_last_update() {
+        let mut bal = AccountBalance::new();
+        bal.increment(node(1), 100).unwrap();
+        let vc = bal.last_update();
+        assert!(
+            vc.get(&node(1)) > 0,
+            "Vector clock should have node 1 with non-zero value"
+        );
+    }
+
+    #[test]
+    fn test_account_balance_default() {
+        let bal = AccountBalance::default();
+        assert_eq!(bal.value(), 0);
+    }
+
+    #[test]
+    fn test_cvrdt_merged_returns_new_instance() {
+        let mut a = AccountBalance::new();
+        a.increment(node(1), 100).unwrap();
+
+        let mut b = AccountBalance::new();
+        b.increment(node(2), 200).unwrap();
+
+        let merged = a.merged(&b);
+        assert_eq!(merged.value(), 300);
+        // Original should be unchanged
+        assert_eq!(a.value(), 100);
+    }
+
+    #[test]
+    fn test_account_balance_increment_zero_amount() {
+        let mut bal = AccountBalance::new();
+        bal.increment(node(1), 0).unwrap();
+        assert_eq!(bal.value(), 0);
+    }
+}

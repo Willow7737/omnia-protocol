@@ -58,7 +58,7 @@ const REGULAR_CALLER: &str = "regular-caller";
 /// Integration tests that set `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`,
 /// or `OMNIA_RATE_LIMIT_RPS` must hold this lock for the entire test duration
 /// to prevent race conditions with parallel test execution.
-static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> = std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
 
 // ---------------------------------------------------------------------------
 // RAII guard — removes environment variables when dropped
@@ -188,31 +188,29 @@ fn build_test_app_state(port: u16) -> AppState {
     }
 }
 
-/// Start a test HTTP server on a random port, with optional pre-registration
-/// of DIDs in the economics state.
-///
-/// `pre_register_dids` is a closure that receives the `EconomicsState` before
-/// the server starts, allowing tests to register DIDs and mint UBC directly.
-/// This is needed because the shard router's `EconomicsShard` has its own
-/// internal state that is disconnected from `AppState.economics` — operations
-/// sent through the shard API endpoint don't reach the economics handlers.
-async fn start_test_server_with_economics<F>(
-    pre_register: F,
-) -> (String, tokio::task::JoinHandle<()>, Arc<Mutex<EconomicsState>>)
+/// Like `setup_server` but allows pre-registering DIDs in the economics
+/// state before the server starts. Uses the same ENV_LOCK + EnvGuard pattern
+/// as `setup_server` to avoid env var races with parallel tests.
+async fn setup_server_with_economics<F>(pre_register: F) -> TestServer
 where
     F: FnOnce(&mut EconomicsState),
 {
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+    std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
     let port = listener.local_addr().unwrap().port();
 
-    let mut app_state = build_test_app_state(port);
+    let app_state = build_test_app_state(port);
     {
         let mut econ = app_state.economics.lock().await;
         pre_register(&mut econ);
     }
-    let economics_clone = Arc::clone(&app_state.economics);
 
     let app = http::build_http_router().with_state(app_state);
 
@@ -222,7 +220,18 @@ where
 
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    (format!("http://127.0.0.1:{port}"), handle, economics_clone)
+    let base_url = format!("http://127.0.0.1:{port}");
+
+    let env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+    };
+
+    TestServer {
+        base_url,
+        _handle: handle,
+        _env_guard: env_guard,
+        _lock: lock,
+    }
 }
 
 /// Start a test HTTP server on a random port.
@@ -255,7 +264,7 @@ struct TestServer {
     base_url: String,
     _handle: tokio::task::JoinHandle<()>,
     _env_guard: EnvGuard,
-    _lock: tokio::sync::MutexGuard<'static, ()>,
+    _lock: std::sync::MutexGuard<'static, ()>,
 }
 
 /// Set up a test server with JWT authentication and optional rate limiting.
@@ -268,7 +277,7 @@ struct TestServer {
 /// The env vars and the serialisation lock are released when the returned
 /// [`TestServer`] is dropped.
 async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
-    let lock = ENV_LOCK.lock().await;
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     // Set auth env vars
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
@@ -1323,22 +1332,18 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
 
 #[tokio::test]
 async fn test_get_balance_registered_did_returns_200() {
-    let lock = ENV_LOCK.lock().await;
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-
-    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+    let server = setup_server_with_economics(|econ| {
         register_and_mint(econ, "did:test:balance-check", 5000);
     })
     .await;
 
-    let _env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
-    };
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
     let resp = client
-        .get(format!("{base_url}/api/v1/economics/balance/did:test:balance-check"))
+        .get(format!(
+            "{}/api/v1/economics/balance/did:test:balance-check",
+            server.base_url
+        ))
         .bearer_auth(&token)
         .send()
         .await
@@ -1352,9 +1357,6 @@ async fn test_get_balance_registered_did_returns_200() {
         "Balance should reflect minted amount"
     );
     assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
-
-    drop(handle);
-    drop(lock);
 }
 
 // ---- economics: transfer 400 zero amount ----
@@ -1391,22 +1393,11 @@ async fn test_transfer_zero_amount_returns_400() {
 
 #[tokio::test]
 async fn test_transfer_success_returns_200() {
-    let lock = ENV_LOCK.lock().await;
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-
-    // Pre-register both DIDs in AppState.economics (the instance the
-    // transfer handler reads from). REGULAR_CALLER is the JWT sub claim
-    // which becomes from_did in the handler.
-    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+    let server = setup_server_with_economics(|econ| {
         register_and_mint(econ, REGULAR_CALLER, 10_000);
         register_and_mint(econ, "did:test:recipient", 100);
     })
     .await;
-
-    let _env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
-    };
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1418,7 +1409,7 @@ async fn test_transfer_success_returns_200() {
     });
 
     let resp = client
-        .post(format!("{base_url}/api/v1/economics/transfer"))
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
         .bearer_auth(&token)
         .json(&body)
         .send()
@@ -1433,29 +1424,17 @@ async fn test_transfer_success_returns_200() {
         body["new_balance"].as_u64().unwrap() >= 9_500,
         "New balance should reflect the spent amount"
     );
-
-    drop(handle);
-    drop(lock);
 }
 
 // ---- economics: transfer 400 insufficient balance ----
 
 #[tokio::test]
 async fn test_transfer_insufficient_balance_returns_400() {
-    let lock = ENV_LOCK.lock().await;
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-
-    // Mint a small amount to the caller, not enough for the transfer.
-    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+    let server = setup_server_with_economics(|econ| {
         register_and_mint(econ, REGULAR_CALLER, 100);
         register_and_mint(econ, "did:test:recipient", 100);
     })
     .await;
-
-    let _env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
-    };
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1467,7 +1446,7 @@ async fn test_transfer_insufficient_balance_returns_400() {
     });
 
     let resp = client
-        .post(format!("{base_url}/api/v1/economics/transfer"))
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
         .bearer_auth(&token)
         .json(&body)
         .send()
@@ -1480,7 +1459,4 @@ async fn test_transfer_insufficient_balance_returns_400() {
         body["error"].as_str().unwrap().contains("Transfer failed"),
         "Error should mention transfer failure"
     );
-
-    drop(handle);
-    drop(lock);
 }
