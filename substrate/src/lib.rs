@@ -1216,7 +1216,10 @@ mod tests {
     #[test]
     fn test_try_parse_consensus_seed_invalid_hex() {
         // 64 chars long (passes length check) but contains non-hex chars
-        std::env::set_var("OMNIA_CONSENSUS_SEED", "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
+        std::env::set_var(
+            "OMNIA_CONSENSUS_SEED",
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        );
         let result = try_parse_consensus_seed();
         assert!(result.is_err(), "Invalid hex should return Err");
         match result.unwrap_err() {
