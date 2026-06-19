@@ -210,8 +210,12 @@ pub async fn cast_vote(
 /// Parse a vote choice string into a `VoteChoice` enum.
 ///
 /// Accepts case-insensitive values: "for", "against", "abstain".
+/// Leading/trailing whitespace is trimmed before matching, so a user
+/// who accidentally includes a leading space (e.g. " for") still gets
+/// their vote counted. This matters in a governance context — a silent
+/// rejection due to whitespace is a correctness issue, not user error.
 fn parse_vote_choice(s: &str) -> Result<VoteChoice, ApiParseError> {
-    match s.to_lowercase().as_str() {
+    match s.trim().to_lowercase().as_str() {
         "for" => Ok(VoteChoice::For),
         "against" => Ok(VoteChoice::Against),
         "abstain" => Ok(VoteChoice::Abstain),
@@ -261,10 +265,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_vote_choice_with_whitespace() {
-        // Whitespace is NOT trimmed — " for " should fail
-        let result = parse_vote_choice(" for ");
-        assert!(result.is_err());
+    fn test_parse_vote_choice_with_whitespace_trimmed() {
+        // Whitespace IS trimmed — " for " should parse as For.
+        // This prevents silent rejection of votes with accidental leading/
+        // trailing spaces, which is a correctness issue in governance.
+        assert_eq!(parse_vote_choice(" for ").unwrap(), VoteChoice::For);
+        assert_eq!(parse_vote_choice("\tagainst\t").unwrap(), VoteChoice::Against);
+        assert_eq!(parse_vote_choice(" abstain").unwrap(), VoteChoice::Abstain);
     }
 
     #[test]

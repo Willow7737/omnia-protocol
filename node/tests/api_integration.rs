@@ -1157,3 +1157,259 @@ async fn test_error_format_429_rate_limited() {
         "Should have received at least one 429 response to verify its format"
     );
 }
+
+// ===========================================================================
+//  6. HANDLER BUSINESS-LOGIC BRANCH TESTS
+//
+// The auth tests above verify 401 behavior. These tests verify the
+// handler's business-logic branches (200, 400, 404, 409) that the
+// auth-only tests miss.
+// ===========================================================================
+
+/// Helper: register a DID in the economics system via the admin mint
+/// endpoint, giving it UBC balance.
+async fn mint_to_did(server: &TestServer, did: &str, amount: u64) {
+    let client = reqwest::Client::new();
+    let admin_token = make_valid_token(ADMIN_CALLER);
+    let body = json!({
+        "operation": "mint",
+        "params": {"did": did, "amount": amount}
+    });
+    let resp = client
+        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .bearer_auth(&admin_token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "Mint to {did} should succeed");
+}
+
+// ---- governance: create_proposal 409 Conflict (duplicate) ----
+
+#[tokio::test]
+async fn test_create_proposal_duplicate_returns_409() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "id": "proposal-dup-test",
+        "description": "First creation",
+        "expires_at_epoch": 100
+    });
+
+    // First creation → 201
+    let resp = client
+        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    // Duplicate creation → 409
+    let resp = client
+        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 409, "Duplicate proposal should return 409 Conflict");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].as_str().unwrap().contains("Failed to create proposal"));
+}
+
+// ---- governance: cast_vote 400 invalid choice ----
+
+#[tokio::test]
+async fn test_cast_vote_invalid_choice_returns_400() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "did": "did:test:voter",
+        "proposal_id": "proposal-1",
+        "choice": "yes"  // Invalid — must be for/against/abstain
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    // Should get 400 for invalid choice, NOT 401 (auth passed) and NOT
+    // the "no stake" 400 (the choice parse happens before the stake check).
+    assert_eq!(resp.status(), 400, "Invalid vote choice should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("invalid vote choice"),
+        "Error should mention invalid vote choice, got: {body}"
+    );
+}
+
+// ---- governance: cast_vote with whitespace-trimmed choice ----
+
+#[tokio::test]
+async fn test_cast_vote_whitespace_choice_trimmed() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "did": "did:test:voter",
+        "proposal_id": "proposal-1",
+        "choice": " for "  // Whitespace should be trimmed
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    // Should NOT get the "invalid vote choice" 400 — trimming worked.
+    // It will still get 400 for "no stake", but the error message should
+    // NOT mention "invalid vote choice".
+    assert_eq!(resp.status(), 400, "Should get 400 for no stake, not for invalid choice");
+    let body: Value = resp.json().await.unwrap();
+    let error = body["error"].as_str().unwrap();
+    assert!(
+        !error.contains("invalid vote choice"),
+        "Whitespace should be trimmed — choice should parse as 'for'. Got error: {error}"
+    );
+}
+
+// ---- economics: get_balance 200 (registered DID) ----
+
+#[tokio::test]
+async fn test_get_balance_registered_did_returns_200() {
+    let server = setup_server(None).await;
+    mint_to_did(&server, "did:test:balance-check", 5000).await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+    let resp = client
+        .get(format!("{}/api/v1/economics/balance/did:test:balance-check", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "Registered DID should return 200");
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["did"].as_str().unwrap(), "did:test:balance-check");
+    assert!(body["balance"].as_u64().unwrap() >= 5000, "Balance should reflect minted amount");
+    assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
+}
+
+// ---- economics: transfer 400 zero amount ----
+
+#[tokio::test]
+async fn test_transfer_zero_amount_returns_400() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": "did:test:sender",
+        "to_did": "did:test:recipient",
+        "amount": 0
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400, "Zero amount should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("must be greater than zero"),
+        "Error should mention zero amount"
+    );
+}
+
+// ---- economics: transfer 200 success ----
+
+#[tokio::test]
+async fn test_transfer_success_returns_200() {
+    let server = setup_server(None).await;
+
+    // Mint to the caller (REGULAR_CALLER is the JWT sub claim, which
+    // becomes from_did in the handler) and to the recipient.
+    mint_to_did(&server, REGULAR_CALLER, 10_000).await;
+    mint_to_did(&server, "did:test:recipient", 100).await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 500
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "Valid transfer should return 200");
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["status"].as_str().unwrap(), "completed");
+    assert_eq!(body["amount"].as_u64().unwrap(), 500);
+    assert!(
+        body["new_balance"].as_u64().unwrap() >= 9_500,
+        "New balance should reflect the spent amount"
+    );
+}
+
+// ---- economics: transfer 400 insufficient balance ----
+
+#[tokio::test]
+async fn test_transfer_insufficient_balance_returns_400() {
+    let server = setup_server(None).await;
+
+    // Mint a small amount to the caller, not enough for the transfer.
+    mint_to_did(&server, REGULAR_CALLER, 100).await;
+    mint_to_did(&server, "did:test:recipient", 100).await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 10_000  // Much more than the 100 balance
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400, "Insufficient balance should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("Transfer failed"),
+        "Error should mention transfer failure"
+    );
+}
