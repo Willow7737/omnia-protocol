@@ -69,3 +69,91 @@ impl BiologicalValidator {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::super::ops::{ConsumerId, SubjectId};
+    use super::*;
+    use crate::payload::ShardOp;
+
+    fn subject() -> SubjectId {
+        [0xAA; 32]
+    }
+    fn consumer() -> ConsumerId {
+        [0xBB; 32]
+    }
+
+    #[test]
+    fn test_grant_access_empty_scope_rejected() {
+        let state = BiologicalState::new();
+        let op = BiologicalOp::GrantAccess {
+            subject: subject(),
+            consumer: consumer(),
+            scope: String::new(),
+            expires_at: 0,
+        };
+        let result = BiologicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::InvalidOperation(msg) => assert!(msg.contains("Scope")),
+            other => panic!("Expected InvalidOperation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_grant_access_valid_scope_accepted() {
+        let state = BiologicalState::new();
+        let op = BiologicalOp::GrantAccess {
+            subject: subject(),
+            consumer: consumer(),
+            scope: "lab-results".into(),
+            expires_at: 0,
+        };
+        assert!(BiologicalValidator::validate(&state, &op).is_ok());
+    }
+
+    #[test]
+    fn test_revoke_access_no_consent_rejected() {
+        let state = BiologicalState::new();
+        let op = BiologicalOp::RevokeAccess {
+            subject: subject(),
+            consumer: consumer(),
+        };
+        let result = BiologicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => assert!(msg.contains("Consent record not found")),
+            other => panic!("Expected ValidationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_query_with_zk_proof_no_consent_rejected() {
+        let state = BiologicalState::new();
+        let op = BiologicalOp::QueryWithZkProof {
+            subject: subject(),
+            consumer: consumer(),
+            zk_proof: vec![0xAA],
+            query: "count".into(),
+        };
+        let result = BiologicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => assert!(msg.contains("No consent")),
+            other => panic!("Expected ValidationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_validate_shard_op_wrong_variant_rejected() {
+        let state = BiologicalState::new();
+        let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
+        let result = BiologicalValidator::validate_shard_op(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::InvalidOperation(msg) => assert!(msg.contains("Not a Biological")),
+            other => panic!("Expected InvalidOperation, got {other:?}"),
+        }
+    }
+}

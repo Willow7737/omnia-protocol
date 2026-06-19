@@ -146,7 +146,8 @@ pub async fn cast_vote(
     // This prevents impersonation — a caller cannot vote as someone else.
     let voter_did = caller.caller_id.clone();
 
-    let choice = parse_vote_choice(&body.choice).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+    let choice = parse_vote_choice(&body.choice)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e.to_string()}))))?;
 
     let mut economics = state.economics.lock().await;
     let current_epoch = economics.current_epoch();
@@ -210,11 +211,85 @@ pub async fn cast_vote(
 /// Parse a vote choice string into a `VoteChoice` enum.
 ///
 /// Accepts case-insensitive values: "for", "against", "abstain".
+/// Leading/trailing whitespace is trimmed before matching, so a user
+/// who accidentally includes a leading space (e.g. " for") still gets
+/// their vote counted. This matters in a governance context — a silent
+/// rejection due to whitespace is a correctness issue, not user error.
 fn parse_vote_choice(s: &str) -> Result<VoteChoice, ApiParseError> {
-    match s.to_lowercase().as_str() {
+    match s.trim().to_lowercase().as_str() {
         "for" => Ok(VoteChoice::For),
         "against" => Ok(VoteChoice::Against),
         "abstain" => Ok(VoteChoice::Abstain),
         other => Err(ApiParseError::InvalidVoteChoice(other.to_string())),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_vote_choice_for() {
+        assert_eq!(parse_vote_choice("for").unwrap(), VoteChoice::For);
+        // Case-insensitive
+        assert_eq!(parse_vote_choice("FOR").unwrap(), VoteChoice::For);
+        assert_eq!(parse_vote_choice("For").unwrap(), VoteChoice::For);
+    }
+
+    #[test]
+    fn test_parse_vote_choice_against() {
+        assert_eq!(parse_vote_choice("against").unwrap(), VoteChoice::Against);
+        assert_eq!(parse_vote_choice("AGAINST").unwrap(), VoteChoice::Against);
+    }
+
+    #[test]
+    fn test_parse_vote_choice_abstain() {
+        assert_eq!(parse_vote_choice("abstain").unwrap(), VoteChoice::Abstain);
+        assert_eq!(parse_vote_choice("ABSTAIN").unwrap(), VoteChoice::Abstain);
+    }
+
+    #[test]
+    fn test_parse_vote_choice_invalid() {
+        let result = parse_vote_choice("yes");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiParseError::InvalidVoteChoice(s) => assert!(s.contains("yes")),
+            other => panic!("Expected InvalidVoteChoice, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vote_choice_empty_string() {
+        let result = parse_vote_choice("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_vote_choice_with_whitespace_trimmed() {
+        // Whitespace IS trimmed — " for " should parse as For.
+        // This prevents silent rejection of votes with accidental leading/
+        // trailing spaces, which is a correctness issue in governance.
+        assert_eq!(parse_vote_choice(" for ").unwrap(), VoteChoice::For);
+        assert_eq!(parse_vote_choice("\tagainst\t").unwrap(), VoteChoice::Against);
+        assert_eq!(parse_vote_choice(" abstain").unwrap(), VoteChoice::Abstain);
+    }
+
+    #[test]
+    fn test_api_parse_error_display() {
+        let e = ApiParseError::InvalidVoteChoice("maybe".into());
+        assert_eq!(
+            e.to_string(),
+            "invalid vote choice: 'maybe'. Must be 'for', 'against', or 'abstain'"
+        );
+
+        let e = ApiParseError::MissingParameter("did".into());
+        assert_eq!(e.to_string(), "missing parameter: did");
+
+        let e = ApiParseError::InvalidParameter("amount".into());
+        assert_eq!(e.to_string(), "invalid parameter: amount");
+
+        let e = ApiParseError::UnknownOperation("foo".into());
+        assert_eq!(e.to_string(), "unknown operation: 'foo'");
     }
 }

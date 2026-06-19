@@ -183,3 +183,71 @@ pub async fn transfer_ubc(
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transfer_request_deserializes_valid() {
+        let json = r#"{"from_did":"did:omnia:abc","to_did":"did:omnia:def","amount":100}"#;
+        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from_did, "did:omnia:abc");
+        assert_eq!(req.to_did, "did:omnia:def");
+        assert_eq!(req.amount, 100);
+    }
+
+    #[test]
+    fn test_transfer_request_rejects_missing_amount() {
+        let json = r#"{"from_did":"did:omnia:abc","to_did":"did:omnia:def"}"#;
+        let result: Result<TransferRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_request_rejects_missing_from_did() {
+        let json = r#"{"to_did":"did:omnia:def","amount":100}"#;
+        let result: Result<TransferRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_request_rejects_missing_to_did() {
+        let json = r#"{"from_did":"did:omnia:abc","amount":100}"#;
+        let result: Result<TransferRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_request_accepts_zero_amount() {
+        // The handler rejects amount==0 at runtime, but deserialization
+        // itself should succeed — the validation is in the handler, not
+        // the type. This test documents that boundary.
+        let json = r#"{"from_did":"a","to_did":"b","amount":0}"#;
+        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.amount, 0);
+    }
+
+    #[test]
+    fn test_transfer_request_accepts_large_amount() {
+        let json = r#"{"from_did":"a","to_did":"b","amount":18446744073709551615}"#;
+        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.amount, u64::MAX);
+    }
+
+    #[test]
+    fn test_transfer_request_rejects_negative_amount() {
+        // u64 can't be negative, but serde_json should reject a negative literal
+        let json = r#"{"from_did":"a","to_did":"b","amount":-1}"#;
+        let result: Result<TransferRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transfer_request_rejects_non_numeric_amount() {
+        let json = r#"{"from_did":"a","to_did":"b","amount":"lots"}"#;
+        let result: Result<TransferRequest, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+}

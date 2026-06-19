@@ -83,3 +83,94 @@ impl PhysicalValidator {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::super::ops::{ItemId, OwnerId};
+    use super::*;
+    use crate::payload::ShardOp;
+
+    fn item_id() -> ItemId {
+        [0xDD; 32]
+    }
+    fn owner() -> OwnerId {
+        [0xEE; 32]
+    }
+
+    #[test]
+    fn test_anchor_item_new_accepted() {
+        let state = PhysicalState::new();
+        let op = PhysicalOp::AnchorItem {
+            item_id: item_id(),
+            owner: owner(),
+            metadata: vec![1, 2, 3],
+        };
+        assert!(PhysicalValidator::validate(&state, &op).is_ok());
+    }
+
+    #[test]
+    fn test_anchor_item_duplicate_rejected() {
+        let mut state = PhysicalState::new();
+        // Simulate an existing anchored item
+        state.provenance.insert(
+            item_id(),
+            vec![super::super::state::ProvenanceEvent {
+                event_type: "anchor".into(),
+                owner: owner(),
+                clock: omnia_substrate::VectorClock::new(),
+                metadata: vec![],
+            }],
+        );
+        let op = PhysicalOp::AnchorItem {
+            item_id: item_id(),
+            owner: owner(),
+            metadata: vec![1, 2, 3],
+        };
+        let result = PhysicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::StateConflict(msg) => assert!(msg.contains("Item already anchored")),
+            other => panic!("Expected StateConflict, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_transfer_ownership_item_not_found_rejected() {
+        let state = PhysicalState::new();
+        let op = PhysicalOp::TransferOwnership {
+            item_id: item_id(),
+            new_owner: [0xFF; 32],
+        };
+        let result = PhysicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => assert!(msg.contains("Item not found")),
+            other => panic!("Expected ValidationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_verify_chain_item_not_found_rejected() {
+        let state = PhysicalState::new();
+        let op = PhysicalOp::VerifyChain { item_id: item_id() };
+        let result = PhysicalValidator::validate(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::ValidationFailed(msg) => assert!(msg.contains("Item not found")),
+            other => panic!("Expected ValidationFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_validate_shard_op_wrong_variant_rejected() {
+        let state = PhysicalState::new();
+        let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
+        let result = PhysicalValidator::validate_shard_op(&state, &op);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ShardError::InvalidOperation(msg) => assert!(msg.contains("Not a Physical")),
+            other => panic!("Expected InvalidOperation, got {other:?}"),
+        }
+    }
+}

@@ -188,6 +188,43 @@ fn build_test_app_state(port: u16) -> AppState {
     }
 }
 
+/// Start a test HTTP server on a random port, with optional pre-registration
+/// of DIDs in the economics state.
+///
+/// `pre_register_dids` is a closure that receives the `EconomicsState` before
+/// the server starts, allowing tests to register DIDs and mint UBC directly.
+/// This is needed because the shard router's `EconomicsShard` has its own
+/// internal state that is disconnected from `AppState.economics` — operations
+/// sent through the shard API endpoint don't reach the economics handlers.
+async fn start_test_server_with_economics<F>(
+    pre_register: F,
+) -> (String, tokio::task::JoinHandle<()>, Arc<Mutex<EconomicsState>>)
+where
+    F: FnOnce(&mut EconomicsState),
+{
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().unwrap().port();
+
+    let mut app_state = build_test_app_state(port);
+    {
+        let mut econ = app_state.economics.lock().await;
+        pre_register(&mut econ);
+    }
+    let economics_clone = Arc::clone(&app_state.economics);
+
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    (format!("http://127.0.0.1:{port}"), handle, economics_clone)
+}
+
 /// Start a test HTTP server on a random port.
 ///
 /// Reads `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, and
@@ -1156,4 +1193,294 @@ async fn test_error_format_429_rate_limited() {
         got_429,
         "Should have received at least one 429 response to verify its format"
     );
+}
+
+// ===========================================================================
+//  6. HANDLER BUSINESS-LOGIC BRANCH TESTS
+//
+// The auth tests above verify 401 behavior. These tests verify the
+// handler's business-logic branches (200, 400, 404, 409) that the
+// auth-only tests miss.
+// ===========================================================================
+
+/// Helper: register a DID in the economics state and mint UBC to it.
+/// Called BEFORE the server starts, directly on the AppState.economics
+/// instance that the handlers read from. (The shard router's EconomicsShard
+/// has a separate internal state that is disconnected from AppState.economics.)
+fn register_and_mint(econ: &mut EconomicsState, did: &str, amount: u64) {
+    econ.quota.register_did(did);
+    let _ = econ.quota.reward(did, amount);
+}
+
+// ---- governance: create_proposal 409 Conflict (duplicate) ----
+
+#[tokio::test]
+async fn test_create_proposal_duplicate_returns_409() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "id": "proposal-dup-test",
+        "description": "First creation",
+        "expires_at_epoch": 100
+    });
+
+    // First creation → 201
+    let resp = client
+        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+
+    // Duplicate creation → 409
+    let resp = client
+        .post(format!("{}/api/v1/governance/proposals", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 409, "Duplicate proposal should return 409 Conflict");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].as_str().unwrap().contains("Failed to create proposal"));
+}
+
+// ---- governance: cast_vote 400 invalid choice ----
+
+#[tokio::test]
+async fn test_cast_vote_invalid_choice_returns_400() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "did": "did:test:voter",
+        "proposal_id": "proposal-1",
+        "choice": "yes"  // Invalid — must be for/against/abstain
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    // Should get 400 for invalid choice, NOT 401 (auth passed) and NOT
+    // the "no stake" 400 (the choice parse happens before the stake check).
+    assert_eq!(resp.status(), 400, "Invalid vote choice should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("invalid vote choice"),
+        "Error should mention invalid vote choice, got: {body}"
+    );
+}
+
+// ---- governance: cast_vote with whitespace-trimmed choice ----
+
+#[tokio::test]
+async fn test_cast_vote_whitespace_choice_trimmed() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "did": "did:test:voter",
+        "proposal_id": "proposal-1",
+        "choice": " for "  // Whitespace should be trimmed
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/governance/vote", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    // Should NOT get the "invalid vote choice" 400 — trimming worked.
+    // It will still get 400 for "no stake", but the error message should
+    // NOT mention "invalid vote choice".
+    assert_eq!(
+        resp.status(),
+        400,
+        "Should get 400 for no stake, not for invalid choice"
+    );
+    let body: Value = resp.json().await.unwrap();
+    let error = body["error"].as_str().unwrap();
+    assert!(
+        !error.contains("invalid vote choice"),
+        "Whitespace should be trimmed — choice should parse as 'for'. Got error: {error}"
+    );
+}
+
+// ---- economics: get_balance 200 (registered DID) ----
+
+#[tokio::test]
+async fn test_get_balance_registered_did_returns_200() {
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, "did:test:balance-check", 5000);
+    })
+    .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+    let resp = client
+        .get(format!("{base_url}/api/v1/economics/balance/did:test:balance-check"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "Registered DID should return 200");
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["did"].as_str().unwrap(), "did:test:balance-check");
+    assert!(
+        body["balance"].as_u64().unwrap() >= 5000,
+        "Balance should reflect minted amount"
+    );
+    assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
+
+    drop(handle);
+    drop(lock);
+}
+
+// ---- economics: transfer 400 zero amount ----
+
+#[tokio::test]
+async fn test_transfer_zero_amount_returns_400() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": "did:test:sender",
+        "to_did": "did:test:recipient",
+        "amount": 0
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400, "Zero amount should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("must be greater than zero"),
+        "Error should mention zero amount"
+    );
+}
+
+// ---- economics: transfer 200 success ----
+
+#[tokio::test]
+async fn test_transfer_success_returns_200() {
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+
+    // Pre-register both DIDs in AppState.economics (the instance the
+    // transfer handler reads from). REGULAR_CALLER is the JWT sub claim
+    // which becomes from_did in the handler.
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 500
+    });
+
+    let resp = client
+        .post(format!("{base_url}/api/v1/economics/transfer"))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "Valid transfer should return 200");
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["status"].as_str().unwrap(), "completed");
+    assert_eq!(body["amount"].as_u64().unwrap(), 500);
+    assert!(
+        body["new_balance"].as_u64().unwrap() >= 9_500,
+        "New balance should reflect the spent amount"
+    );
+
+    drop(handle);
+    drop(lock);
+}
+
+// ---- economics: transfer 400 insufficient balance ----
+
+#[tokio::test]
+async fn test_transfer_insufficient_balance_returns_400() {
+    let lock = ENV_LOCK.lock().await;
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+
+    // Mint a small amount to the caller, not enough for the transfer.
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 100);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+
+    let _env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
+    };
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 10_000  // Much more than the 100 balance
+    });
+
+    let resp = client
+        .post(format!("{base_url}/api/v1/economics/transfer"))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400, "Insufficient balance should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("Transfer failed"),
+        "Error should mention transfer failure"
+    );
+
+    drop(handle);
+    drop(lock);
 }
