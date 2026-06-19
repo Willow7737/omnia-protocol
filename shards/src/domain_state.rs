@@ -126,3 +126,144 @@ impl ShardState for EconomicsState {
             .map_err(|e| ShardError::SerializationError(e.to_string()))
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use omnia_substrate::{crypto::generate_keypair, Event, NodeId, VectorClock};
+
+    fn test_node(id: u8) -> NodeId {
+        let mut n = [0u8; 32];
+        n[0] = id;
+        n
+    }
+
+    /// Create a signed Event for testing shard state apply_op calls.
+    fn make_event() -> Event {
+        let keypair = generate_keypair();
+        let creator = test_node(1);
+        let mut event = Event::genesis(creator, vec![]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+        event
+    }
+
+    #[test]
+    fn test_financial_state_apply_op_balance_query() {
+        use crate::financial::ops::FinancialOp;
+        let mut state = FinancialState::new();
+        let event = make_event();
+        let op = FinancialOp::BalanceQuery { account: test_node(1) };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_financial_state_snapshot() {
+        let state = FinancialState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_identity_state_apply_op_create_did() {
+        use crate::identity::ops::IdentityOp;
+        use crate::identity::state::DidDocument;
+        let mut state = IdentityState::new();
+        let event = make_event();
+        let op = IdentityOp::CreateDid {
+            document: DidDocument::new("did:omnia:test".to_string(), [0x42; 32], 0),
+        };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_identity_state_snapshot() {
+        let state = IdentityState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_computational_state_apply_op_submit_task() {
+        use crate::computational::ops::ComputationalOp;
+        let mut state = ComputationalState::new();
+        let event = make_event();
+        let op = ComputationalOp::SubmitTask {
+            task_id: [0xAA; 32],
+            spec: vec![1, 2, 3],
+            reward: 100,
+        };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_computational_state_snapshot() {
+        let state = ComputationalState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_physical_state_apply_op_anchor_item() {
+        use crate::physical::ops::PhysicalOp;
+        let mut state = PhysicalState::new();
+        let event = make_event();
+        let op = PhysicalOp::AnchorItem {
+            item_id: [0xBB; 32],
+            owner: [0xCC; 32],
+            metadata: vec![],
+        };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_physical_state_snapshot() {
+        let state = PhysicalState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_biological_state_apply_op_grant_access() {
+        use crate::biological::ops::BiologicalOp;
+        let mut state = BiologicalState::new();
+        let event = make_event();
+        let op = BiologicalOp::GrantAccess {
+            subject: [0xDD; 32],
+            consumer: [0xEE; 32],
+            scope: "lab-results".to_string(),
+            expires_at: 0,
+        };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_biological_state_snapshot() {
+        let state = BiologicalState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_economics_state_apply_op_register_did() {
+        let mut state = EconomicsState::new();
+        let event = make_event();
+        let op = omnia_economics::EconomicsOp::RegisterDid {
+            did: "did:omnia:test".to_string(),
+        };
+        assert!(state.apply_op(&op, &event).is_ok());
+    }
+
+    #[test]
+    fn test_economics_state_snapshot() {
+        let state = EconomicsState::new();
+        let bytes = state.snapshot();
+        assert!(bytes.is_ok());
+        assert!(!bytes.unwrap().is_empty());
+    }
+}

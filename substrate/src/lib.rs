@@ -1188,4 +1188,302 @@ mod tests {
         let e = EventProcessorError::Internal("oops".to_string());
         assert!(e.to_string().contains("oops"));
     }
+
+    // ── H-12: try_parse_consensus_seed tests ───────────────────────────
+
+    #[test]
+    fn test_try_parse_consensus_seed_unset_returns_ok() {
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+        let result = try_parse_consensus_seed();
+        assert!(result.is_ok(), "Unset seed should return Ok(random seed)");
+        let seed = result.unwrap();
+        // Random seed is 32 bytes — extremely unlikely to be all zeros
+        assert_ne!(seed, [0u8; 32], "Random seed should not be all zeros");
+    }
+
+    #[test]
+    fn test_try_parse_consensus_seed_valid_hex() {
+        let hex_seed = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+        std::env::set_var("OMNIA_CONSENSUS_SEED", hex_seed);
+        let result = try_parse_consensus_seed();
+        assert!(result.is_ok(), "Valid hex seed should parse");
+        let seed = result.unwrap();
+        assert_eq!(seed[0], 0x01);
+        assert_eq!(seed[31], 0x20);
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+    }
+
+    #[test]
+    fn test_try_parse_consensus_seed_invalid_hex() {
+        std::env::set_var("OMNIA_CONSENSUS_SEED", "not-valid-hex-zzzzzz");
+        let result = try_parse_consensus_seed();
+        assert!(result.is_err(), "Invalid hex should return Err");
+        match result.unwrap_err() {
+            ConsensusSeedError::InvalidHex { .. } => {}
+            other => panic!("Expected InvalidHex, got {other:?}"),
+        }
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+    }
+
+    #[test]
+    fn test_try_parse_consensus_seed_wrong_length() {
+        std::env::set_var("OMNIA_CONSENSUS_SEED", "0102"); // too short
+        let result = try_parse_consensus_seed();
+        assert!(result.is_err(), "Wrong-length seed should return Err");
+        match result.unwrap_err() {
+            ConsensusSeedError::InvalidLength { .. } => {}
+            other => panic!("Expected InvalidLength, got {other:?}"),
+        }
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+    }
+
+    #[test]
+    fn test_consensus_seed_error_display() {
+        let e = ConsensusSeedError::InvalidLength { actual: 10, expected: 64 };
+        assert!(e.to_string().contains("64 hex characters"));
+        assert!(e.to_string().contains("10"));
+
+        let hex_err = hex::decode("zz").unwrap_err();
+        let e = ConsensusSeedError::InvalidHex {
+            source: hex_err,
+            raw: "zz".into(),
+        };
+        assert!(e.to_string().contains("invalid hex"));
+    }
+
+    #[test]
+    fn test_try_new_returns_config() {
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+        let config = SubstrateConfig::try_new(test_node(1));
+        assert!(config.is_ok(), "try_new should succeed with no seed set");
+        assert_eq!(config.unwrap().node_id, test_node(1));
+    }
+
+    #[test]
+    fn test_try_with_network_size_returns_config() {
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+        let config = SubstrateConfig::try_with_network_size(test_node(1), 7);
+        assert!(config.is_ok(), "try_with_network_size should succeed");
+        let config = config.unwrap();
+        assert_eq!(config.total_nodes, 7);
+        assert_eq!(config.consensus.total_nodes, 7);
+    }
+
+    #[test]
+    fn test_try_new_invalid_seed_returns_err() {
+        std::env::set_var("OMNIA_CONSENSUS_SEED", "bad");
+        let result = SubstrateConfig::try_new(test_node(1));
+        assert!(result.is_err(), "Invalid seed should propagate error");
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+    }
+
+    // ── Substrate API tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_substrate_config_defaults() {
+        let config = SubstrateConfig::new(test_node(1));
+        assert_eq!(config.node_id, test_node(1));
+        assert_eq!(config.total_nodes, 4); // default
+        assert_eq!(config.slash_threshold, DEFAULT_SLASH_THRESHOLD);
+        assert_eq!(config.ejection_threshold, DEFAULT_EJECTION_THRESHOLD);
+        assert_eq!(config.max_payload_size, MAX_PAYLOAD_SIZE);
+        assert_eq!(config.pruning_depth, 0);
+        assert!(config.slashing_data_dir.is_none());
+        assert!(config.nonce_data_dir.is_none());
+        assert!(config.consensus_data_dir.is_none());
+    }
+
+    #[test]
+    fn test_mempool_accessors() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        assert_eq!(substrate.mempool().len(), 0);
+
+        // Insert an event into the mempool
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(test_node(1), vec![]).expect("genesis");
+        event.sign_with_keypair(&keypair).expect("signing");
+        substrate.mempool_mut().insert(event).expect("mempool insert");
+        assert_eq!(substrate.mempool().len(), 1);
+    }
+
+    #[test]
+    fn test_add_validator() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        assert!(substrate.validator_candidates.is_empty());
+
+        let keypair = generate_keypair();
+        substrate.add_validator(test_node(2), keypair, 10_000);
+        assert_eq!(substrate.validator_candidates.len(), 1);
+        assert!(substrate.validator_candidates.contains_key(&test_node(2)));
+    }
+
+    #[test]
+    fn test_with_shard_processor() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        struct CountingProcessor {
+            count: Arc<AtomicUsize>,
+        }
+        impl EventProcessor for CountingProcessor {
+            fn process_event(&mut self, _event: &Event) -> std::result::Result<(), EventProcessorError> {
+                self.count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let count = Arc::new(AtomicUsize::new(0));
+        let processor = CountingProcessor { count: Arc::clone(&count) };
+
+        let config = SubstrateConfig::new(test_node(1));
+        let substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
+        assert!(substrate.shard_processor.is_some());
+    }
+
+    #[test]
+    fn test_with_validator_candidates() {
+        let config = SubstrateConfig::new(test_node(1));
+        let keypair = generate_keypair();
+        let mut candidates = HashMap::new();
+        candidates.insert(test_node(2), (keypair, 10_000u64));
+
+        let substrate = Substrate::new(config).with_validator_candidates(candidates);
+        assert_eq!(substrate.validator_candidates.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_is_finalized_and_finalized_events() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        let keypair = generate_keypair();
+
+        let mut event = Event::genesis(test_node(1), vec![1]).expect("genesis");
+        event.sign_with_keypair(&keypair).expect("signing");
+        let event_id = event.id;
+
+        // Before submission: not finalized
+        assert!(!substrate.is_finalized(&event_id));
+        assert!(substrate.finalized_events().is_empty());
+
+        substrate.submit_event(event).await.unwrap();
+
+        // After submission: may or may not be finalized depending on consensus,
+        // but is_finalized should not panic
+        let _ = substrate.is_finalized(&event_id);
+        let _ = substrate.finalized_events();
+    }
+
+    #[test]
+    fn test_consensus_stats() {
+        let config = SubstrateConfig::new(test_node(1));
+        let substrate = Substrate::new(config);
+        let stats = substrate.consensus_stats();
+        // Fresh substrate: round 0, no committed events
+        assert_eq!(stats.current_round, 0);
+    }
+
+    #[tokio::test]
+    async fn test_process_consensus_empty() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        // No events submitted — process_consensus should return empty
+        let committed = substrate.process_consensus().await;
+        assert!(committed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_consensus_round_empty() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        // Should not panic with empty state
+        substrate.process_consensus_round().await;
+    }
+
+    #[tokio::test]
+    async fn test_process_event_processors_no_processor() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        // No shard processor attached — should be a no-op
+        substrate.process_event_processors().await;
+    }
+
+    #[tokio::test]
+    async fn test_process_event_processors_with_processor() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        struct CountingProcessor {
+            count: Arc<AtomicUsize>,
+        }
+        impl EventProcessor for CountingProcessor {
+            fn process_event(&mut self, _event: &Event) -> std::result::Result<(), EventProcessorError> {
+                self.count.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+
+        let count = Arc::new(AtomicUsize::new(0));
+        let processor = CountingProcessor { count: Arc::clone(&count) };
+
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
+
+        // Submit an event with non-empty payload so the processor sees it
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(test_node(1), vec![1, 2, 3]).expect("genesis");
+        event.sign_with_keypair(&keypair).expect("signing");
+        substrate.submit_event(event).await.unwrap();
+
+        // Process event processors — should forward the event
+        substrate.process_event_processors().await;
+        assert_eq!(count.load(Ordering::SeqCst), 1, "Processor should have been called once");
+    }
+
+    #[test]
+    fn test_substrate_error_variants() {
+        // Test all From conversions
+        let vc_err = VectorClockError::InvalidNodeId("test".to_string());
+        let substrate_err: SubstrateError = vc_err.into();
+        assert!(matches!(substrate_err, SubstrateError::VectorClock(_)));
+
+        let cg_err = CausalGraphError::DuplicateEvent("test".to_string());
+        let substrate_err: SubstrateError = cg_err.into();
+        assert!(matches!(substrate_err, SubstrateError::CausalGraph(_)));
+
+        let ev_err = EventValidationError::UnsignedEvent;
+        let substrate_err: SubstrateError = ev_err.into();
+        assert!(matches!(substrate_err, SubstrateError::EventValidation(_)));
+
+        let config_err = SubstrateError::Config("bad config".into());
+        assert!(config_err.to_string().contains("Configuration error"));
+    }
+
+    #[tokio::test]
+    async fn test_submit_invalid_event_returns_error() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+
+        // Unsigned event should fail validation
+        let event = Event::genesis(test_node(1), vec![]).expect("genesis");
+        // Note: NOT signing the event
+        let result = substrate.submit_event(event).await;
+        assert!(result.is_err(), "Unsigned event should be rejected");
+    }
+
+    #[tokio::test]
+    async fn test_stats_after_submit() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        let keypair = generate_keypair();
+
+        let mut event = Event::genesis(test_node(1), vec![]).expect("genesis");
+        event.sign_with_keypair(&keypair).expect("signing");
+        substrate.submit_event(event).await.unwrap();
+
+        let stats = substrate.stats().await;
+        assert_eq!(stats.graph.total_events, 1);
+        assert!(!stats.running);
+    }
 }
