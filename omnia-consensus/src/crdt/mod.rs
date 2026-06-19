@@ -248,7 +248,11 @@ mod tests {
         let b = a.clone();
 
         a.merge(&b);
-        assert_eq!(a.value(), 100, "Merging with self should not change value (idempotency)");
+        assert_eq!(
+            a.value(),
+            100,
+            "Merging with self should not change value (idempotency)"
+        );
     }
 
     #[test]
@@ -272,11 +276,7 @@ mod tests {
         let mut b = AccountBalance::new();
         b.increment(node(1), 100).unwrap();
 
-        assert_eq!(
-            a.state_hash(),
-            b.state_hash(),
-            "Same state should produce same hash"
-        );
+        assert_eq!(a.state_hash(), b.state_hash(), "Same state should produce same hash");
     }
 
     #[test]
@@ -299,7 +299,7 @@ mod tests {
         let mut bal = AccountBalance::new();
         bal.increment(node(1), 100).unwrap();
         let vc = bal.last_update();
-        assert!(vc.get(&node(1)).is_some(), "Vector clock should have node 1");
+        assert!(vc.get(&node(1)) > 0, "Vector clock should have node 1 with non-zero value");
     }
 
     #[test]

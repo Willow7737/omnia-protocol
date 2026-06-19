@@ -1239,7 +1239,10 @@ mod tests {
 
     #[test]
     fn test_consensus_seed_error_display() {
-        let e = ConsensusSeedError::InvalidLength { actual: 10, expected: 64 };
+        let e = ConsensusSeedError::InvalidLength {
+            actual: 10,
+            expected: 64,
+        };
         assert!(e.to_string().contains("64 hex characters"));
         assert!(e.to_string().contains("10"));
 
@@ -1335,7 +1338,9 @@ mod tests {
         }
 
         let count = Arc::new(AtomicUsize::new(0));
-        let processor = CountingProcessor { count: Arc::clone(&count) };
+        let processor = CountingProcessor {
+            count: Arc::clone(&count),
+        };
 
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
@@ -1381,7 +1386,7 @@ mod tests {
         let substrate = Substrate::new(config);
         let stats = substrate.consensus_stats();
         // Fresh substrate: round 0, no committed events
-        assert_eq!(stats.current_round, 0);
+        assert_eq!(stats.current_max_round, 0);
     }
 
     #[tokio::test]
@@ -1425,7 +1430,9 @@ mod tests {
         }
 
         let count = Arc::new(AtomicUsize::new(0));
-        let processor = CountingProcessor { count: Arc::clone(&count) };
+        let processor = CountingProcessor {
+            count: Arc::clone(&count),
+        };
 
         let config = SubstrateConfig::new(test_node(1));
         let mut substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
@@ -1438,7 +1445,11 @@ mod tests {
 
         // Process event processors — should forward the event
         substrate.process_event_processors().await;
-        assert_eq!(count.load(Ordering::SeqCst), 1, "Processor should have been called once");
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            1,
+            "Processor should have been called once"
+        );
     }
 
     #[test]
