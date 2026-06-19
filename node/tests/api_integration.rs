@@ -196,7 +196,9 @@ fn build_test_app_state(port: u16) -> AppState {
 /// This is needed because the shard router's `EconomicsShard` has its own
 /// internal state that is disconnected from `AppState.economics` — operations
 /// sent through the shard API endpoint don't reach the economics handlers.
-async fn start_test_server_with_economics<F>(pre_register: F) -> (String, tokio::task::JoinHandle<()>, Arc<Mutex<EconomicsState>>)
+async fn start_test_server_with_economics<F>(
+    pre_register: F,
+) -> (String, tokio::task::JoinHandle<()>, Arc<Mutex<EconomicsState>>)
 where
     F: FnOnce(&mut EconomicsState),
 {
@@ -1325,11 +1327,10 @@ async fn test_get_balance_registered_did_returns_200() {
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
 
-    let (base_url, handle, _econ) =
-        start_test_server_with_economics(|econ| {
-            register_and_mint(econ, "did:test:balance-check", 5000);
-        })
-        .await;
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, "did:test:balance-check", 5000);
+    })
+    .await;
 
     let _env_guard = EnvGuard {
         keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
@@ -1397,12 +1398,11 @@ async fn test_transfer_success_returns_200() {
     // Pre-register both DIDs in AppState.economics (the instance the
     // transfer handler reads from). REGULAR_CALLER is the JWT sub claim
     // which becomes from_did in the handler.
-    let (base_url, handle, _econ) =
-        start_test_server_with_economics(|econ| {
-            register_and_mint(econ, REGULAR_CALLER, 10_000);
-            register_and_mint(econ, "did:test:recipient", 100);
-        })
-        .await;
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
 
     let _env_guard = EnvGuard {
         keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
@@ -1447,12 +1447,11 @@ async fn test_transfer_insufficient_balance_returns_400() {
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
 
     // Mint a small amount to the caller, not enough for the transfer.
-    let (base_url, handle, _econ) =
-        start_test_server_with_economics(|econ| {
-            register_and_mint(econ, REGULAR_CALLER, 100);
-            register_and_mint(econ, "did:test:recipient", 100);
-        })
-        .await;
+    let (base_url, handle, _econ) = start_test_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 100);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
 
     let _env_guard = EnvGuard {
         keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS"],
