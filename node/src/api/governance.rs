@@ -146,7 +146,8 @@ pub async fn cast_vote(
     // This prevents impersonation — a caller cannot vote as someone else.
     let voter_did = caller.caller_id.clone();
 
-    let choice = parse_vote_choice(&body.choice).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+    let choice = parse_vote_choice(&body.choice)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e.to_string()}))))?;
 
     let mut economics = state.economics.lock().await;
     let current_epoch = economics.current_epoch();

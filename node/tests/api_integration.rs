@@ -1166,19 +1166,36 @@ async fn test_error_format_429_rate_limited() {
 // auth-only tests miss.
 // ===========================================================================
 
-/// Helper: register a DID in the economics system via the admin mint
-/// endpoint, giving it UBC balance.
-async fn mint_to_did(server: &TestServer, did: &str, amount: u64) {
+/// Helper: register a DID in the quota system, then mint UBC to it.
+/// Both steps are needed because `mint` adds balance but doesn't register
+/// the DID — `get_balance` and `transfer` check `quota.is_registered()`.
+async fn register_and_mint_to_did(server: &TestServer, did: &str, amount: u64) {
     let client = reqwest::Client::new();
     let admin_token = make_valid_token(ADMIN_CALLER);
-    let body = json!({
+
+    // Step 1: Register the DID in the quota system
+    let register_body = json!({
+        "operation": "register",
+        "params": {"did": did}
+    });
+    let resp = client
+        .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
+        .bearer_auth(&admin_token)
+        .json(&register_body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "Register {did} should succeed");
+
+    // Step 2: Mint UBC to the registered DID
+    let mint_body = json!({
         "operation": "mint",
         "params": {"did": did, "amount": amount}
     });
     let resp = client
         .post(format!("{}/api/v1/shards/economics/operations", server.base_url))
         .bearer_auth(&admin_token)
-        .json(&body)
+        .json(&mint_body)
         .send()
         .await
         .unwrap();
@@ -1297,7 +1314,7 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
 #[tokio::test]
 async fn test_get_balance_registered_did_returns_200() {
     let server = setup_server(None).await;
-    mint_to_did(&server, "did:test:balance-check", 5000).await;
+    register_and_mint_to_did(&server, "did:test:balance-check", 5000).await;
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1359,8 +1376,8 @@ async fn test_transfer_success_returns_200() {
 
     // Mint to the caller (REGULAR_CALLER is the JWT sub claim, which
     // becomes from_did in the handler) and to the recipient.
-    mint_to_did(&server, REGULAR_CALLER, 10_000).await;
-    mint_to_did(&server, "did:test:recipient", 100).await;
+    register_and_mint_to_did(&server, REGULAR_CALLER, 10_000).await;
+    register_and_mint_to_did(&server, "did:test:recipient", 100).await;
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
@@ -1396,8 +1413,8 @@ async fn test_transfer_insufficient_balance_returns_400() {
     let server = setup_server(None).await;
 
     // Mint a small amount to the caller, not enough for the transfer.
-    mint_to_did(&server, REGULAR_CALLER, 100).await;
-    mint_to_did(&server, "did:test:recipient", 100).await;
+    register_and_mint_to_did(&server, REGULAR_CALLER, 100).await;
+    register_and_mint_to_did(&server, "did:test:recipient", 100).await;
 
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
