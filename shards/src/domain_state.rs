@@ -171,9 +171,9 @@ mod tests {
 
     #[test]
     fn test_identity_state_apply_op_create_did() {
+        use crate::format_did;
         use crate::identity::ops::IdentityOp;
         use crate::identity::state::DidDocument;
-        use crate::format_did;
         let mut state = IdentityState::new();
         let (event, pubkey) = make_event();
         // DID must be derived from the same pubkey as the event creator,

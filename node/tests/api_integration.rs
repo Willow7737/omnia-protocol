@@ -58,7 +58,8 @@ const REGULAR_CALLER: &str = "regular-caller";
 /// Integration tests that set `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`,
 /// or `OMNIA_RATE_LIMIT_RPS` must hold this lock for the entire test duration
 /// to prevent race conditions with parallel test execution.
-static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> = std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
 
 // ---------------------------------------------------------------------------
 // RAII guard — removes environment variables when dropped
@@ -195,7 +196,7 @@ async fn setup_server_with_economics<F>(pre_register: F) -> TestServer
 where
     F: FnOnce(&mut EconomicsState),
 {
-    let lock = ENV_LOCK.lock().await;
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
@@ -264,7 +265,7 @@ struct TestServer {
     base_url: String,
     _handle: tokio::task::JoinHandle<()>,
     _env_guard: EnvGuard,
-    _lock: tokio::sync::MutexGuard<'static, ()>,
+    _lock: std::sync::MutexGuard<'static, ()>,
 }
 
 /// Set up a test server with JWT authentication and optional rate limiting.
@@ -277,7 +278,7 @@ struct TestServer {
 /// The env vars and the serialisation lock are released when the returned
 /// [`TestServer`] is dropped.
 async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
-    let lock = ENV_LOCK.lock().await;
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
     // Set auth env vars
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
