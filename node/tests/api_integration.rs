@@ -58,8 +58,7 @@ const REGULAR_CALLER: &str = "regular-caller";
 /// Integration tests that set `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`,
 /// or `OMNIA_RATE_LIMIT_RPS` must hold this lock for the entire test duration
 /// to prevent race conditions with parallel test execution.
-static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> = std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
 
 // ---------------------------------------------------------------------------
 // RAII guard — removes environment variables when dropped
@@ -1341,7 +1340,10 @@ async fn test_get_balance_registered_did_returns_200() {
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
     let resp = client
-        .get(format!("{}/api/v1/economics/balance/did:test:balance-check", server.base_url))
+        .get(format!(
+            "{}/api/v1/economics/balance/did:test:balance-check",
+            server.base_url
+        ))
         .bearer_auth(&token)
         .send()
         .await
