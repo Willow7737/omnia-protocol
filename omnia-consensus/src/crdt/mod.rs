@@ -299,7 +299,10 @@ mod tests {
         let mut bal = AccountBalance::new();
         bal.increment(node(1), 100).unwrap();
         let vc = bal.last_update();
-        assert!(vc.get(&node(1)) > 0, "Vector clock should have node 1 with non-zero value");
+        assert!(
+            vc.get(&node(1)) > 0,
+            "Vector clock should have node 1 with non-zero value"
+        );
     }
 
     #[test]
