@@ -268,11 +268,34 @@ Migrating to `u32` basis points requires:
 is likely to introduce subtle bugs (e.g., mismatched BPS denominators,
 serialization breakage for existing persisted slashing state).
 
-**Recommendation:** Land C-4 as a focused follow-up PR after this branch
-is merged. The non-determinism risk is real but bounded — `f64` arithmetic
-on identical inputs is *usually* deterministic across x86/ARM for the
-specific operations used (`*` and `/`), and slashing decisions are
-human-reviewable after the fact.
+**Honest status (updated 2026-06-20):** C-4 is still deferred and the
+risk profile has worsened since the original assessment. The coverage
+report shows `slashing.rs` at 81.14% region coverage but only 57.74%
+function coverage — 71 of 168 functions have never been exercised by
+tests. This means:
+1. The `f64` arithmetic is running in untested code paths, so any
+   cross-platform non-determinism would go undetected until production.
+2. The deferred C-4 fix would need to modify 30+ sites in a file where
+   most functions aren't tested — the migration itself can't be verified
+   without first improving the test coverage.
+3. The two problems compound: untested code with non-deterministic
+   arithmetic is the worst combination for a slashing module.
+
+**Revised recommendation:** C-4 should be the FIRST priority after this
+branch merges, but it must be preceded by targeted test coverage for the
+71 untested slashing functions — particularly the penalty computation,
+burn amount calculation, and state persistence paths. The migration
+sequence should be:
+  1. Add tests for the 71 untested slashing functions (target: 80%+ function coverage).
+  2. Migrate `f64` → `u32` basis points with `checked_mul`/`checked_div`.
+  3. Add a serde migration layer for existing persisted `f64` state.
+  4. Verify all slashing tests pass on both x86 and ARM.
+
+**Mitigation (unchanged):** The non-determinism risk is real but bounded
+— `f64` arithmetic on identical inputs is *usually* deterministic across
+x86/ARM for the specific operations used (`*` and `/`), and slashing
+decisions are human-reviewable after the fact. But "usually" is not
+"always," and "human-reviewable" is not "correct."
 
 ### C-5 — Asymmetric JWT (Ed25519) (Phase 3, deferred)
 
@@ -400,6 +423,22 @@ follow-up "docs cleanup" PR.
 ---
 
 ## Verification Status
+
+**Coverage measurement caveat (2026-06-20):** The coverage report counts
+test functions as covered regions. Files where large test modules were
+added inline (`substrate/src/lib.rs`, `crdt/mod.rs`, `domain_state.rs`)
+show inflated region counts and percentages because the test code itself
+is ~100% covered. The CI workflow should use `--ignore-tests` to get
+production-only coverage numbers:
+
+```yaml
+cargo llvm-cov --workspace --exclude omnia-fuzz --ignore-tests --summary-only
+```
+
+Approximate production-only coverage for the three targeted files:
+- `substrate/src/lib.rs`: ~64% (reported 77%, test code inflates by ~13%)
+- `crdt/mod.rs`: ~95% (reported 97%, test code is small relative to production)
+- `domain_state.rs`: ~90% (reported 95%, test code is ~54% of the file)
 
 **Compile check:** NOT RUN. The environment does not have `cargo`/`rustc`
 installed. All changes were made by carefully reading the existing code
