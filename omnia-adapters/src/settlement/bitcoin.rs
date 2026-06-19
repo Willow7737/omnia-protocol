@@ -69,3 +69,89 @@ impl SettlementLayer for BitcoinAdapter {
         ))
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bitcoin_chain_id() {
+        let adapter = BitcoinAdapter;
+        assert_eq!(adapter.chain_id(), "bitcoin");
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_post_batch_not_implemented() {
+        let adapter = BitcoinAdapter;
+        let result = adapter.post_batch(b"test").await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_verify_proof_not_implemented() {
+        let adapter = BitcoinAdapter;
+        let result = adapter.verify_proof(&[0u8; 32], &[1u8; 32], &[0xAA]).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_latest_state_root_not_implemented() {
+        let adapter = BitcoinAdapter;
+        let result = adapter.latest_state_root().await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_deposit_not_implemented() {
+        let adapter = BitcoinAdapter;
+        let result = adapter.deposit("did:omnia:test", 100).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_request_withdrawal_not_implemented() {
+        let adapter = BitcoinAdapter;
+        let result = adapter.request_withdrawal("did:omnia:test", 100).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bitcoin_submit_batch_not_implemented() {
+        use crate::proof_bundle::L1Anchor;
+        let adapter = BitcoinAdapter;
+        let bundle = ProofBundle::new(
+            [0u8; 32],
+            [1u8; 32],
+            vec![],
+            [0u8; 32],
+            L1Anchor::new(1, 0, 0),
+        );
+        let result = adapter.submit_batch(&bundle).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SettlementError::NotImplemented(msg) => assert!(msg.contains("Bitcoin")),
+            other => panic!("Expected NotImplemented, got {other:?}"),
+        }
+    }
+}
