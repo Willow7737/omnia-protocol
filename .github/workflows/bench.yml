@@ -128,10 +128,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y valgrind
 
       # iai-callgrind requires the iai-callgrind-runner binary to be installed
-      # separately from the library crate. The runner version must match the
-      # library version used in benches/Cargo.toml.
+      # separately from the library crate. The runner version MUST match the
+      # library version in benches/Cargo.toml (currently 0.13.4). Pinning the
+      # version here prevents CI breakage when a newer runner is published to
+      # crates.io (e.g., the 0.16.1 runner is incompatible with the 0.13
+      # library and produces: "iai-callgrind-runner (0.16.1) is newer than
+      # iai-callgrind (0.13.4)"). When bumping the library version in
+      # benches/Cargo.toml, update this pin to match.
       - name: Install iai-callgrind runner
-        run: cargo install iai-callgrind-runner
+        run: cargo install iai-callgrind-runner --version 0.13.4 --locked
 
       # iai-callgrind requires the benchmark binary to be built first
       - name: Build iai-callgrind benchmarks
