@@ -207,7 +207,7 @@ where
         .expect("Failed to bind to random port");
     let port = listener.local_addr().unwrap().port();
 
-    let mut app_state = build_test_app_state(port);
+    let app_state = build_test_app_state(port);
     {
         let mut econ = app_state.economics.lock().await;
         pre_register(&mut econ);
