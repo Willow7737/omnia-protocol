@@ -119,12 +119,12 @@ impl IdentityValidator {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::*;
     use super::super::agent::AgentIdentity;
     use super::super::recovery::RecoveryShare;
     use super::super::state::RecoveryConfig;
-    use crate::Did;
+    use super::*;
     use crate::payload::ShardOp;
+    use crate::Did;
     use omnia_substrate::VectorClock;
 
     fn test_did() -> Did {
@@ -243,8 +243,14 @@ mod tests {
         let op = IdentityOp::RecoverDid {
             did: test_did(),
             shares: vec![
-                RecoveryShare { index: 1, value: vec![0xAA] },
-                RecoveryShare { index: 2, value: vec![0xBB] },
+                RecoveryShare {
+                    index: 1,
+                    value: vec![0xAA],
+                },
+                RecoveryShare {
+                    index: 2,
+                    value: vec![0xBB],
+                },
             ],
         };
         let result = IdentityValidator::validate(&state, &op);
@@ -268,8 +274,14 @@ mod tests {
         let op = IdentityOp::RecoverDid {
             did: test_did(),
             shares: vec![
-                RecoveryShare { index: 1, value: vec![0xAA] },
-                RecoveryShare { index: 2, value: vec![0xBB] },
+                RecoveryShare {
+                    index: 1,
+                    value: vec![0xAA],
+                },
+                RecoveryShare {
+                    index: 2,
+                    value: vec![0xBB],
+                },
             ],
         };
         assert!(IdentityValidator::validate(&state, &op).is_ok());

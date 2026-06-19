@@ -45,8 +45,8 @@ impl ComputationalValidator {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::*;
     use super::super::ops::TaskId;
+    use super::*;
     use crate::payload::ShardOp;
 
     fn task_id() -> TaskId {

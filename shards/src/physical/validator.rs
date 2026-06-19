@@ -87,8 +87,8 @@ impl PhysicalValidator {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::*;
     use super::super::ops::{ItemId, OwnerId};
+    use super::*;
     use crate::payload::ShardOp;
 
     fn item_id() -> ItemId {

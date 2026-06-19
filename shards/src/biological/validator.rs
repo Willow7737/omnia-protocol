@@ -73,8 +73,8 @@ impl BiologicalValidator {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::*;
     use super::super::ops::{ConsumerId, SubjectId};
+    use super::*;
     use crate::payload::ShardOp;
 
     fn subject() -> SubjectId {

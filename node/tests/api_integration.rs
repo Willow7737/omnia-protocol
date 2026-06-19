@@ -1279,7 +1279,11 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
     // Should NOT get the "invalid vote choice" 400 — trimming worked.
     // It will still get 400 for "no stake", but the error message should
     // NOT mention "invalid vote choice".
-    assert_eq!(resp.status(), 400, "Should get 400 for no stake, not for invalid choice");
+    assert_eq!(
+        resp.status(),
+        400,
+        "Should get 400 for no stake, not for invalid choice"
+    );
     let body: Value = resp.json().await.unwrap();
     let error = body["error"].as_str().unwrap();
     assert!(
@@ -1298,7 +1302,10 @@ async fn test_get_balance_registered_did_returns_200() {
     let client = reqwest::Client::new();
     let token = make_valid_token(REGULAR_CALLER);
     let resp = client
-        .get(format!("{}/api/v1/economics/balance/did:test:balance-check", server.base_url))
+        .get(format!(
+            "{}/api/v1/economics/balance/did:test:balance-check",
+            server.base_url
+        ))
         .bearer_auth(&token)
         .send()
         .await
@@ -1307,7 +1314,10 @@ async fn test_get_balance_registered_did_returns_200() {
     assert_eq!(resp.status(), 200, "Registered DID should return 200");
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["did"].as_str().unwrap(), "did:test:balance-check");
-    assert!(body["balance"].as_u64().unwrap() >= 5000, "Balance should reflect minted amount");
+    assert!(
+        body["balance"].as_u64().unwrap() >= 5000,
+        "Balance should reflect minted amount"
+    );
     assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
 }
 

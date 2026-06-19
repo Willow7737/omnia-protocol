@@ -277,7 +277,10 @@ mod tests {
     #[test]
     fn test_api_parse_error_display() {
         let e = ApiParseError::InvalidVoteChoice("maybe".into());
-        assert_eq!(e.to_string(), "invalid vote choice: 'maybe'. Must be 'for', 'against', or 'abstain'");
+        assert_eq!(
+            e.to_string(),
+            "invalid vote choice: 'maybe'. Must be 'for', 'against', or 'abstain'"
+        );
 
         let e = ApiParseError::MissingParameter("did".into());
         assert_eq!(e.to_string(), "missing parameter: did");
