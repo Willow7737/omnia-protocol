@@ -177,7 +177,7 @@ let encrypted = xor_encrypt_dkg(&share_data, &share_seed);
 
 **Severity:** High
 **Category:** Cryptographic Integrity
-**Location:** `zk/src/circuit.rs:479-510`
+**Location:** `omnia-adapters/src/circuit.rs:479-510`
 **Status:** Open
 
 ### Description
@@ -249,7 +249,7 @@ pub fn empty(num_events: usize, merkle_depth: usize) -> Self {
 
 **Severity:** Medium
 **Category:** Cryptographic Integrity
-**Location:** `zk/src/setup/powers_of_tau.rs:113`
+**Location:** `omnia-adapters/src/setup/powers_of_tau.rs:113`
 **Status:** Open
 
 ### Description

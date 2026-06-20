@@ -18,7 +18,7 @@ The spec mandates:
 - blake3 should be 1.5+
 
 This audit covers two crates with cryptographic dependencies:
-- **`omnia-zk`** (`zk/Cargo.toml`): ZK proof system (ark-* crates, Poseidon hash, Powers of Tau)
+- **`omnia-adapters`** (`omnia-adapters/Cargo.toml`): ZK proof system (ark-* crates, Poseidon hash, Powers of Tau)
 - **`omnia-binding`** (`binding/Cargo.toml`): Post-quantum commitments and RF fingerprinting
 
 ## Audit Results
@@ -40,7 +40,7 @@ ed25519-dalek 2.x supersedes the 1.x line which had side-channel vulnerabilities
 | Field | Value |
 |-------|-------|
 | **Specified** | ≥ 1.5 |
-| **zk/Cargo.toml** | `"1.5"` |
+| **omnia-adapters/Cargo.toml** | `"1.5"` |
 | **binding/Cargo.toml** | `"1.5"` |
 | **Assessment** | ✅ **Safe** |
 
@@ -77,9 +77,9 @@ pub fn sign_post_quantum(data: &[u8], dilithium_keypair: &pqc_dilithium::Keypair
 
 The `ark-*` ecosystem provides the Groth16 proof system on the BN254 curve. Used throughout the ZK crate:
 
-- `ark-groth16` 0.4: `Groth16::setup()`, `Groth16::prove()`, `Groth16::verify()` in `zk/src/prover.rs`
+- `ark-groth16` 0.4: `Groth16::setup()`, `Groth16::prove()`, `Groth16::verify()` in `omnia-adapters/src/prover.rs`
 - `ark-bn254` 0.4: Bn254 pairing-friendly curve, `Fr` field element type used in circuits
-- `ark-r1cs-std` 0.4: R1CS gadget library (`FpVar`, `Boolean`, `CondSelectGadget`, `EqGadget`) used in `zk/src/circuit.rs` and `zk/src/poseidon.rs`
+- `ark-r1cs-std` 0.4: R1CS gadget library (`FpVar`, `Boolean`, `CondSelectGadget`, `EqGadget`) used in `omnia-adapters/src/circuit.rs` and `omnia-adapters/src/poseidon.rs`
 - `ark-relations` 0.4: `ConstraintSynthesizer` trait, `ConstraintSystemRef`, `SynthesisError`
 - `ark-serialize` 0.4: Canonical serialization for proofs and keys
 - `ark-ec` 0.4: Elliptic curve operations for Powers of Tau
@@ -94,8 +94,8 @@ The 0.4 line is the latest stable release. No known vulnerabilities.
 
 | Field | Value |
 |-------|-------|
-| **zk/Cargo.toml (rand)** | `"0.8"` |
-| **zk/Cargo.toml (rand_chacha)** | `"0.3"` |
+| **omnia-adapters/Cargo.toml (rand)** | `"0.8"` |
+| **omnia-adapters/Cargo.toml (rand_chacha)** | `"0.3"` |
 | **binding/Cargo.toml (rand)** | `"0.8"` |
 | **Assessment** | ⚠️ **Acceptable, with note** |
 
@@ -112,7 +112,7 @@ No known security vulnerabilities in rand 0.8.x.
 | **Cargo.toml** | `"0.4"` |
 | **Assessment** | ✅ **Safe** |
 
-Used for canonical serialization of Groth16 proofs and verifying keys in `zk/src/prover.rs`:
+Used for canonical serialization of Groth16 proofs and verifying keys in `omnia-adapters/src/prover.rs`:
 - `serialize_proof()` uses `serialize_uncompressed()`
 - `deserialize_proof()` uses `deserialize_uncompressed()`
 - `serialize_verifying_key()` / `deserialize_verifying_key()` for VK persistence

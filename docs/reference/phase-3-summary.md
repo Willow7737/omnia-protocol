@@ -68,7 +68,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 - All constraint branches are now active under generated keys
 - Invalid operation type proofs are rejected
 
-**Files changed:** `zk/src/circuit.rs`, `zk/src/prover.rs`, `zk/src/setup/circuit_setup.rs`
+**Files changed:** `omnia-adapters/src/circuit.rs`, `omnia-adapters/src/prover.rs`, `omnia-adapters/src/setup/circuit_setup.rs`
 **Tests:** 10+ tests including for_setup non-zero verification
 
 ### H-2: Trusted Setup Transcript Hash Initialization [FIND-P2-011] ✅
@@ -81,7 +81,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 - Real EC operations with BN254 G1 scalar multiplication
 - Fiat-Shamir Proof of Knowledge on BN254 G1
 
-**Files changed:** `zk/src/setup/contribution.rs`
+**Files changed:** `omnia-adapters/src/setup/contribution.rs`
 **Tests:** 12 tests including non-zero transcript hash, real EC operations, ceremony transcript
 
 ---
@@ -152,11 +152,11 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 - `EthereumConfig` with RPC URL, contract address, operator key, gas limits, confirmation blocks
 - Config validation: URL scheme, contract address format, required fields
 - Feature flag `ethereum-live` for real RPC integration
-- ABI JSON stored at `zk/contracts/ethereum/OmniaRollup.json`
+- ABI JSON stored at `omnia-adapters/contracts/ethereum/OmniaRollup.json`
 - Live mode stubs return `SettlementError::NotImplemented` pending ethers-rs dependency
 - ethers-rs intentionally excluded from default build (300+ dependencies, very heavy compile)
 
-**Files changed:** `zk/src/settlement/ethereum.rs`, `zk/Cargo.toml`
+**Files changed:** `omnia-adapters/src/settlement/ethereum.rs`, `omnia-adapters/Cargo.toml`
 **Tests:** 16 tests covering simulated mode, config validation, live mode stubs
 
 ### M-1: Kyber Key Encapsulation Mechanism ✅
@@ -233,7 +233,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 | omnia-substrate | 405 passed |
 | omnia-shards | 62 passed |
 | omnia-binding | 61 passed |
-| omnia-zk | 107 passed |
+| omnia-adapters | 107 passed |
 | omnia-economics | 58 passed |
 | **Total** | **693+** (lib tests only) |
 
@@ -256,7 +256,7 @@ All existing tests continue to pass. No regressions introduced.
 ## Global Constraints Compliance
 
 1. ✅ `#![deny(clippy::unwrap_used)]` — No `unwrap()` in production code
-2. ✅ `#![forbid(unsafe_code)]` — No unsafe blocks
+2. ✅ `#![deny(unsafe_code) (see SAFETY.md)]` — No unsafe blocks
 3. ✅ All new errors use typed enums — No `Result<_, String>`
 4. ✅ BLAKE3 domain separation — Every hash uses `OMNIA-*` prefix
 5. ✅ Constant-time comparisons — All secret comparisons use `subtle::ConstantTimeEq`

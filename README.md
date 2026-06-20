@@ -7,8 +7,8 @@
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status">
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
-  <img src="https://img.shields.io/badge/Tests-1,382_Passing-00ff88?style=for-the-badge&logo=rust" alt="Tests">
-  <img src="https://img.shields.io/badge/Lines-81,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
+  <img src="https://img.shields.io/badge/Tests-Run_cargo_test-00ff88?style=for-the-badge&logo=rust" alt="Tests">
+  <img src="https://img.shields.io/badge/Lines-83,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/Phases_0--4-Complete-brightgreen?style=for-the-badge" alt="Phases 0-4">
@@ -94,26 +94,24 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 ## 🧪 Workspace
 
-| Crate | Purpose | Tests | Status |
-|-------|---------|-------|--------|
-| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | 68 | ✅ |
-| `omnia-crypto/` | Ed25519, BLS, VRF, AES-GCM, keystore, PQC, DKG | 189 | ✅ |
-| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs, slashing | 294 | ✅ |
-| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | 126 | ✅ |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | 149 | ✅ |
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | 72 | ✅ |
-| `shards/` | 6 domain shards + cross-shard messaging | 120 | ✅ |
-| `binding/` | Provenance log, RF stub, hybrid PQC signatures | 86 | ✅ |
-| `economics/` | UBC token, quota, governance, useful work | 88 | ✅ |
-| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | 67 | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | 84 | ✅ |
-| `fuzz/` | 12 fuzz harnesses (libfuzzer) | 12 targets | ✅ |
-| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | 5 suites | ✅ |
-| `tests/` | Integration tests | 39 | ✅ |
+| Crate | Purpose | Status |
+|-------|---------|--------|
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | ✅ |
+| `omnia-crypto/` | Ed25519, BLS, deterministic hash selection, AES-GCM, keystore, PQC, DKG | ✅ |
+| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs, slashing | ✅ |
+| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | ✅ |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | ✅ |
+| `substrate/` | Integration crate: causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | ✅ |
+| `shards/` | 6 domain shards + cross-shard messaging | ✅ |
+| `binding/` | Provenance log, RF stub, hybrid PQC signatures | ✅ |
+| `economics/` | UBC token, quota, governance, useful work | ✅ |
+| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | ✅ |
+| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ✅ |
+| `fuzz/` | 12 fuzz harnesses (libfuzzer) | ✅ |
+| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | ✅ |
+| `tests/` | Integration tests | ✅ |
 
-**Total: 224 Rust source files, 81,000+ lines.** L-20 fix (audit v0.1.68):
-the previously hardcoded test count (`1,382 tests`) goes stale as tests are
-added or removed — run `cargo test --workspace` for the current count.
+**Total: 224+ Rust source files, 83,000+ lines.** Run `cargo test --workspace` for current test counts.
 
 ---
 
@@ -408,7 +406,7 @@ Omnia is a public-interest protocol. Join the conversation:
 - **[Project Dashboard](docs/reference/project-dashboard.md)** - Real-time project health and status updates.
 - **[Requirements & Status](docs/reference/status.md)** - Granular tracking of technical requirements.
 - **[Discord](https://discord.gg/qYkpAeSYR)** - Real-time chat and community.
-- **Email:** `conduct@omnia.protocol` (for conduct-related issues)
+- **Email:** `GitHub Security Advisory (https://github.com/Willow7737/omnia-protocol/security/advisories/new)` (for conduct-related issues)
 
 ---
 

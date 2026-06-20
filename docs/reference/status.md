@@ -157,7 +157,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 ---
 
-## 13. Post-Phase 5: Audit Findings (v0.1.56)
+## 13. Post-Phase 5: Audit Findings (v0.1.56 + v0.1.68)
 
 | ID | Finding | Severity | Status |
 | :--- | :--- | :--- | :--- |
@@ -203,7 +203,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 3** | 10 | 10 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Phase 4** | 9 | 9 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **Future** | 8 | 4 | 0 | 0 | 4 | 0 | █████░░░░░ 50% |
-| **v0.1.56 Audit** | 23 | 9 | 0 | 0 | 0 | 14 | ████░░░░░░ 39% |
+| **v0.1.56 + v0.1.68 Audit** | 23 | 9 | 0 | 0 | 0 | 14 | ████░░░░░░ 39% |
 | **Limit Verification** | 39 | 39 | 0 | 0 | 0 | 0 | ██████████ 100% |
 | **TOTAL** | **170** | **141** | **0** | **1** | **4** | **25** | █████████░ 93% |
 

@@ -3,8 +3,8 @@
 > 🔗 Context: Node CLI subcommands and REST API endpoint reference
 > 📅 Last Updated: 2026-05-20
 
-**Version:** v4.0.0
-**Last Updated:** 2026-03-05
+**Version:** v0.1.68
+**Last Updated:** 2026-06-20
 
 ---
 

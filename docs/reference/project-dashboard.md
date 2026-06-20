@@ -13,7 +13,7 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | **Phase** | Post-Phase 5: Audit & Hardening | 🔄 In Progress |
 | **Overall Completion** | **93%** (8/23 audit findings remediated; 15 medium-priority tracked) | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 1,382 tests (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![forbid(unsafe_code)]` enforced | Verified |
+| **Code Health** | 1,382 tests (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced | Verified |
 | **Network Status** | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack | Integration complete |
 | **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved |
 | **Mutation Testing** | 75% minimum score on primitives; consensus sharded across 4 parallel jobs | Nightly CI |
@@ -24,7 +24,7 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 [██████████████████████████░░] 93%
 ```
 
-> **Note**: The 93% figure reflects the full v0.1.56 codebase audit across all 14 crates.
+> **Note**: The 93% figure reflects the full v0.1.68 codebase audit across all 14 crates.
 > All Phase 0–5 milestones are complete. 8 of 23 audit findings have been remediated
 > (7 high-priority: BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS,
 > DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence; 1 medium: signature

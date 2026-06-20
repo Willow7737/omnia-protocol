@@ -19,13 +19,13 @@ The following components are within the scope of the bug bounty program:
 
 - **All Rust code in the `omnia-protocol` repository**, including:
   - `substrate/` — Causal graph consensus, vector clocks, CRDTs, gossip protocol, slashing
-  - `zk/` — Groth16 ZK circuits, Poseidon hash, proof generation and verification, trusted setup
+  - `omnia-adapters/` — Groth16 ZK circuits, Poseidon hash, proof generation and verification, trusted setup
   - `binding/` — Quantum commitments, PQC key rotation, RF fingerprinting, provenance chains
   - `shards/` — Domain shard state machines and operation handlers
   - `economics/` — UBC token logic, decay model, governance
   - `node/` — REST API, authentication, HTTP server
   - `chaos-tests/` — Load testing and chaos engineering framework
-- **Solidity contracts** in `zk/contracts/ethereum/`
+- **Solidity contracts** in `omnia-adapters/contracts/ethereum/`
 - **Cryptographic implementations** specifically:
   - VRF (Ed25519-based and ECVRF constructions)
   - Poseidon hash function (custom and reference parameters)

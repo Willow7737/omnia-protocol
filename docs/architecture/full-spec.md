@@ -46,7 +46,7 @@ Omnia is a five-layer distributed system designed to enable trustless coordinati
 └─────────────────────────────────────────┘
 ```
 
-**Implementation status:** All five core layers are implemented and tested (295+ tests). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash round constants).
+**Implementation status:** All five core layers are implemented and tested (run `cargo test --workspace` for current test counts). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash round constants).
 
 ---
 
@@ -398,7 +398,7 @@ The TLA+ model (`formal-verification/OmniaConsensus.tla`, 191 lines) verifies:
 - **Liveness** — Honest events are eventually committed (under fairness)
 - **TypeOK** — State well-typedness
 
-⚠️ **Time to finality:** Not yet benchmarked at scale.
+✅ **Time to finality:** ~93 µs p50 (single-node, synchronous, Criterion benchmark — NOT real-world distributed latency)
 
 ---
 
@@ -406,11 +406,11 @@ The TLA+ model (`formal-verification/OmniaConsensus.tla`, 191 lines) verifies:
 
 ### Throughput
 
-⚠️ **Not yet benchmarked.** The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
+✅ **Benchmarked (Phase 5).** ~7,190 evt/s single-node synchronous. The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
 
 ### Latency
 
-⚠️ **Not yet benchmarked.** No real-world network testing has been performed.
+⚠️ **Single-node only.** No real-world multi-node network testing has been performed.
 
 ### Storage
 

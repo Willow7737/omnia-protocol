@@ -40,7 +40,7 @@ pub enum CommitmentPhase {
 ```
 
 - Both `verify_ed25519()` and `verify_dilithium()` perform real cryptographic verification
-- ML-KEM-768 (FIPS-203 standardized Kyber768) key encapsulation for post-quantum key exchange
+- ML-KEM-768 (FIPS-203 algorithm; Rust implementation not NIST-certified) key encapsulation for post-quantum key exchange
 - Constant-time comparisons via `subtle::ConstantTimeEq`
 - X25519 ECDH + ML-KEM-768 hybrid mode for defense-in-depth
 

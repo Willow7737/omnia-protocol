@@ -217,12 +217,13 @@ graph sizes.
   replaced with instruction to run `cargo test --workspace`.
 
 #### L-23 — Workspace version mismatch
-- `Cargo.toml:21` bumped from `0.1.56` to `0.1.67` to match the latest
-  CHANGELOG entry (released 2026-06-02).
+- `Cargo.toml:21` bumped from `0.1.56` to `0.1.68` to match the latest
+  CHANGELOG entry. (Main branch was already at 0.1.68 via commit 0518b37;
+  the initial L-23 fix bumped to 0.1.67, resolved to 0.1.68 on merge.)
 
 #### L-28 — Helm image tag pinning
 - `helm/omnia-node/values.yaml` default `image.tag` changed from `""`
-  to `"0.1.67"` so Helm deployments are reproducible.
+  to `"0.1.68"` so Helm deployments are reproducible.
 
 #### L-30 — genesis-example.toml node_id format
 - Added a comment explaining that `node_id` should be a hex-encoded

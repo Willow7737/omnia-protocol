@@ -21,7 +21,7 @@ Implement a dual-hash transition from custom BLAKE3-derived Poseidon parameters 
 
 ## Context
 
-The Omnia protocol uses Poseidon as the SNARK-friendly hash function for Merkle path verification and state transition constraints in the ZK rollup circuit. The current implementation in `zk/src/poseidon.rs` uses:
+The Omnia protocol uses Poseidon as the SNARK-friendly hash function for Merkle path verification and state transition constraints in the ZK rollup circuit. The current implementation in `omnia-adapters/src/poseidon.rs` uses:
 
 - MDS matrix: Cauchy construction (not Filecoin/Neptune reference)
 - Round constants: BLAKE3-derived (not Grain LFSR as in the reference specification)
