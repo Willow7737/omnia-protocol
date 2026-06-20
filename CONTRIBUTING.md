@@ -17,7 +17,7 @@ We are committed to providing a welcoming and inspiring community for all. Pleas
 - **Integrity:** Act with honesty and transparency
 - **Safety:** Maintain a harassment-free environment
 
-Violations can be reported to conduct@omnia.protocol.
+Violations can be reported to GitHub Security Advisory (https://github.com/Willow7737/omnia-protocol/security/advisories/new).
 
 ---
 
@@ -297,7 +297,7 @@ Omnia is a public-interest protocol. Join the conversation:
 - **[GitHub Issues](issues)** - Bug reports, feature requests, and technical research proposals.
 - **[Project Dashboard](./PROJECT_DASHBOARD.md)** - Real-time project health and status updates.
 - **[Discord](https://discord.gg/qYkpAeSYR)** - Real-time chat and community.
-- **Email:** `conduct@omnia.protocol` (for conduct issues)
+- **Email:** `GitHub Security Advisory (https://github.com/Willow7737/omnia-protocol/security/advisories/new)` (for conduct issues)
 
 ### Response Times
 

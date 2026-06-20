@@ -104,7 +104,7 @@ The original discrepancy report (`docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.
 | `omnia-substrate` | ~120 | 5 test files | 1 file | 3 | — |
 | `omnia-shards` | ~60 | 6 test files | — | 1 | — |
 | `omnia-economics` | ~40 | 2 test files | 1 file | — | — |
-| `omnia-zk` | ~20 | 3 test files | — | 1 | — |
+| `omnia-adapters` | ~20 | 3 test files | — | 1 | — |
 | `omnia-binding` | ~25 | 2 test files | — | — | — |
 | `omnia-node` | ~30 | 1 test file | — | — | — |
 | `omnia-chaos-tests` | — | 4 test files | — | — | ~15 scenarios |

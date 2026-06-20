@@ -29,7 +29,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `shards/src/identity/state.rs`, `shards/src/identity/mod.rs`, `shards/src/lib.rs`
 
 ### C-2: Fix Trusted Setup Ceremony — Replace Hash Stub with Real EC Operations
-- **Problem:** `contribute()` in `zk/src/setup/contribution.rs` used BLAKE3 hashing instead of actual BN254 scalar multiplication. `derive_keys()` completely ignored the SRS.
+- **Problem:** `contribute()` in `omnia-adapters/src/setup/contribution.rs` used BLAKE3 hashing instead of actual BN254 scalar multiplication. `derive_keys()` completely ignored the SRS.
 - **Resolution:**
   - Replaced hash-based transcript generation with actual BN254 G1 scalar multiplication
   - Added `apply_contribution_ec()` using real G1/G2 scalar multiplication on `PowersOfTau`
@@ -39,7 +39,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
   - Added consistency checks verifying consecutive G1 points
   - Marked `derive_keys()` and `derive_keys_expanded()` as deprecated (they ignore SRS)
 - **Tests:** `test_ceremony_produces_non_identity_points`, `test_ceremony_produces_valid_srs`, `test_apply_contribution_ec`, `test_verify_ceremony_transcript`, `test_verify_srs`, `test_derive_keys_from_srs_with_ceremony`, and 6 more
-- **Files changed:** `zk/src/setup/contribution.rs`, `zk/src/setup/powers_of_tau.rs`, `zk/src/setup/circuit_setup.rs`
+- **Files changed:** `omnia-adapters/src/setup/contribution.rs`, `omnia-adapters/src/setup/powers_of_tau.rs`, `omnia-adapters/src/setup/circuit_setup.rs`
 
 ---
 
@@ -53,23 +53,23 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
   - Added payload_hash constraint: `payload_hash == Poseidon(event_hash, operation_type)`
   - Updated `from_batch()` to accept `operation_types` and `payload_hashes`
 - **Tests:** `test_out_of_range_operation_type_proof_fails`, `test_mismatched_payload_hash_proof_fails`
-- **Files changed:** `zk/src/circuit.rs`, `zk/src/lib.rs`, `zk/tests/circuit_expanded.rs`
+- **Files changed:** `omnia-adapters/src/circuit.rs`, `omnia-adapters/src/lib.rs`, `omnia-adapters/tests/circuit_expanded.rs`
 
 ### H-2: ZK-SNARK Benchmark Suite
 - **Resolution:**
   - Created `zk/benches/zk_benchmarks.rs` with 5 benchmark groups (Poseidon hash, Groth16 proof generation/verification, Merkle tree, key generation)
-  - Added `[[bench]]` entry in `zk/Cargo.toml`
+  - Added `[[bench]]` entry in `omnia-adapters/Cargo.toml`
   - Updated `substrate/benches/throughput.rs` with slashing and VRF benchmarks
   - Created `.github/workflows/benchmarks.yml` CI workflow
-- **Files changed:** `zk/benches/zk_benchmarks.rs`, `zk/Cargo.toml`, `substrate/benches/throughput.rs`, `.github/workflows/benchmarks.yml`
+- **Files changed:** `zk/benches/zk_benchmarks.rs`, `omnia-adapters/Cargo.toml`, `substrate/benches/throughput.rs`, `.github/workflows/benchmarks.yml`
 
 ### H-3: Groth16 Batch Verification
 - **Resolution:**
-  - Added `verify_proofs_batch()` to `zk/src/prover.rs`
+  - Added `verify_proofs_batch()` to `omnia-adapters/src/prover.rs`
   - Uses BLAKE3 domain separation (`OMNIA-BATCH-VRFY-V1`) for random scalar derivation
   - Handles empty batches, single proofs (delegates to `verify_proof`), and multi-proof batches
 - **Tests:** `test_batch_verify_valid_proofs` (8 proofs), `test_batch_verify_one_invalid` (7 valid + 1 invalid), `test_batch_verify_empty`
-- **Files changed:** `zk/src/prover.rs`, `zk/src/lib.rs`
+- **Files changed:** `omnia-adapters/src/prover.rs`, `omnia-adapters/src/lib.rs`
 
 ### H-4: Integrate PQC Key Rotation with Encrypted Keystore
 - **Resolution:**
@@ -143,7 +143,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 | Crate | Tests | Status |
 |-------|-------|--------|
 | omnia-substrate | 351 | ✅ All passing |
-| omnia-zk | 81 | ✅ All passing |
+| omnia-adapters | 81 | ✅ All passing |
 | omnia-shards | 56 | ✅ All passing |
 | omnia-binding | 49 | ✅ All passing |
 | **Total** | **537+** | **✅ All passing** |

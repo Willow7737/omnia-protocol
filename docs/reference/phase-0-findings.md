@@ -669,7 +669,7 @@ All 7 crates enforce `#![forbid(unsafe_code)]` in their `lib.rs`:
 | `omnia-substrate` | `#![forbid(unsafe_code)]` |
 | `omnia-shards` | `#![forbid(unsafe_code)]` |
 | `omnia-economics` | `#![forbid(unsafe_code)]` |
-| `omnia-zk` | `#![forbid(unsafe_code)]` |
+| `omnia-adapters` | `#![forbid(unsafe_code)]` |
 | `omnia-binding` | `#![forbid(unsafe_code)]` |
 | `omnia-node` | `#![forbid(unsafe_code)]` |
 | `omnia-chaos-tests` | `#![forbid(unsafe_code)]` |
@@ -684,7 +684,7 @@ No impact — this is a positive finding. `forbid` is the strongest lint level (
 $ rg "forbid\(unsafe_code\)" --glob '**/lib.rs'
 binding/src/lib.rs:51:#![forbid(unsafe_code)]
 economics/src/lib.rs:22:#![forbid(unsafe_code)]
-zk/src/lib.rs:48:#![forbid(unsafe_code)]
+omnia-adapters/src/lib.rs:48:#![forbid(unsafe_code)]
 chaos-tests/src/lib.rs:36:#![forbid(unsafe_code)]
 node/src/lib.rs:15:#![forbid(unsafe_code)]
 shards/src/lib.rs:43:#![forbid(unsafe_code)]

@@ -223,7 +223,7 @@ Cryptographic verification points are where asserted data becomes trusted data. 
 
 ### 4.3 Groth16 Proof Verification
 
-**Description:** ZK rollup proofs are verified using arkworks' Groth16 implementation on the BN254 curve. The verification occurs in `zk/src/proof.rs` and `zk/src/prover.rs`.
+**Description:** ZK rollup proofs are verified using arkworks' Groth16 implementation on the BN254 curve. The verification occurs in `omnia-adapters/src/proof.rs` and `omnia-adapters/src/prover.rs`.
 
 **Severity:** High
 

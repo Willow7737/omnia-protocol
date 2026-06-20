@@ -96,7 +96,7 @@ cargo test -p omnia-shards
 cargo test -p omnia-economics
 
 # ZK (circuit, prover, proof bundle, settlement)
-cargo test -p omnia-zk
+cargo test -p omnia-adapters
 
 # Binding (quantum commitments, provenance, physical shard)
 cargo test -p omnia-binding
@@ -453,7 +453,7 @@ omnia-substrate  ←  omnia-shards  ←  omnia-economics
        |                 +──────────────────┘
        |
        +── omnia-binding  (depends on substrate for crypto + VectorClock)
-       +── omnia-zk       (depends on substrate for Event types)
+       +── omnia-adapters       (depends on substrate for Event types)
        |
 omnia-node  ←  (depends on substrate, shards, economics, binding, zk)
        ↑
@@ -462,7 +462,7 @@ omnia-chaos-tests  ←  (depends on substrate, shards, economics)
 
 Key dependency relationships:
 - `omnia-shards` depends on `omnia-substrate` (Event, VectorClock, EventProcessor trait) and `omnia-economics` (QuotaSystem)
-- `omnia-zk` depends on `omnia-substrate` (Event type for circuit)
+- `omnia-adapters` depends on `omnia-substrate` (Event type for circuit)
 - `omnia-binding` depends on `omnia-substrate` (NodeKeypair, VectorClock, crypto)
 - `omnia-economics` is standalone (no dependency on other Omnia crates)
 - `omnia-node` depends on all 5 core crates (substrate, shards, economics, binding, zk) + jsonwebtoken, aes-gcm, hkdf, tower-http for API security

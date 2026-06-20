@@ -30,10 +30,10 @@ These components handle ZK proofs, cryptographic commitments, and key management
 
 | Component | Files | Rationale |
 |-----------|-------|-----------|
-| **ZK Circuit** | `zk/src/circuit.rs` | Groth16 rollup circuit — proof soundness = chain security |
-| **Poseidon Hash** | `zk/src/poseidon.rs` | SNARK-friendly hash — non-standard parameters (see ADR-009, ADR-014) |
-| **ZK Prover** | `zk/src/prover.rs`, `zk/src/proof.rs` | Proof generation and verification — forgery = invalid state transitions accepted |
-| **Trusted Setup** | `zk/src/setup/` | Powers of Tau ceremony — setup compromise = all proofs invalid |
+| **ZK Circuit** | `omnia-adapters/src/circuit.rs` | Groth16 rollup circuit — proof soundness = chain security |
+| **Poseidon Hash** | `omnia-adapters/src/poseidon.rs` | SNARK-friendly hash — non-standard parameters (see ADR-009, ADR-014) |
+| **ZK Prover** | `omnia-adapters/src/prover.rs`, `omnia-adapters/src/proof.rs` | Proof generation and verification — forgery = invalid state transitions accepted |
+| **Trusted Setup** | `omnia-adapters/src/setup/` | Powers of Tau ceremony — setup compromise = all proofs invalid |
 | **Quantum Commitments** | `binding/src/quantum_commit.rs` | Hybrid Ed25519+Dilithium commitments — forgery = provenance chain break |
 | **PQC Key Rotation** | `binding/src/key_rotation.rs` | Post-quantum key lifecycle — rotation failure = quantum-vulnerable state |
 
@@ -48,7 +48,7 @@ These components handle networking, storage, and API surfaces:
 | **Keystore** | `substrate/src/keystore.rs` | AES-256-GCM encrypted key storage — key extraction = fund theft |
 | **REST API** | `node/src/api/` | HTTP endpoints — auth bypass = unauthorized operations |
 | **Fast Sync** | `substrate/src/fast_sync.rs` | State synchronization — malicious snapshots = state corruption |
-| **Ethereum Settlement** | `zk/src/settlement/ethereum.rs` | On-chain proof submission — contract exploit = settlement bypass |
+| **Ethereum Settlement** | `omnia-adapters/src/settlement/ethereum.rs` | On-chain proof submission — contract exploit = settlement bypass |
 
 ### Out of Scope
 
@@ -87,7 +87,7 @@ The following issues are already known and documented. Auditors should focus on 
 
 4. **No multi-node BFT testing until Phase 5** — Phase 5 adds `multi_node_test.rs` and `network_integration.rs`, but these were not available during earlier phases.
 
-5. **ZK/binding side-channel audit incomplete** — The substrate crate was audited for constant-time operations, but `zk/src/poseidon.rs` and `binding/src/quantum_commit.rs` were not. Phase 5 adds the side-channel audit.
+5. **ZK/binding side-channel audit incomplete** — The substrate crate was audited for constant-time operations, but `omnia-adapters/src/poseidon.rs` and `binding/src/quantum_commit.rs` were not. Phase 5 adds the side-channel audit.
 
 6. **Ethereum settlement not tested against live network** — The Alloy integration compiles but has never been tested against a real Ethereum network (even testnet). Phase 5 adds the E2E test.
 
@@ -101,7 +101,7 @@ As of Phase 5, the codebase has:
 | Fuzz targets | 11 |
 | Chaos test suites | 4 |
 | Lines of Rust code | 46,000+ |
-| Lint enforcement | `#![forbid(unsafe_code)]`, `#![deny(clippy::unwrap_used)]` |
+| Lint enforcement | `#![deny(unsafe_code) (see SAFETY.md)]`, `#![deny(clippy::unwrap_used)]` |
 | Error handling | All typed error enums, no `Result<_, String>` |
 | Cryptographic domain separation | BLAKE3 `OMNIA-*` prefix on all hashes |
 | Constant-time comparisons | `subtle::ConstantTimeEq` for all secret comparisons in substrate |
@@ -147,7 +147,7 @@ cargo test --test network_integration -- --ignored --nocapture
 
 # Specific crate tests
 cargo test -p omnia-substrate
-cargo test -p omnia-zk
+cargo test -p omnia-adapters
 cargo test -p omnia-binding
 ```
 

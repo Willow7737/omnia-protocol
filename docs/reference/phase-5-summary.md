@@ -84,7 +84,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: Alloy integration compiles but has never been tested against a real Ethereum network.
 
 **Changes**:
-- **`zk/tests/ethereum_live_test.rs`** (new): Feature-gated (`ethereum-live`) test file with:
+- **`omnia-adapters/tests/ethereum_live_test.rs`** (new): Feature-gated (`ethereum-live`) test file with:
   - `test_e2e_ethereum_settlement` — deploy → submit → verify placeholder
   - `test_invalid_proof_rejected` — invalid proof rejection placeholder
   - Both marked `#[ignore]` requiring running Anvil instance
@@ -95,7 +95,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: Custom Poseidon parameters are incompatible with Filecoin/Neptune. No migration path started. The original `const` arrays using `Fr::zero()` could not compile on stable Rust because `Fr::zero()` is not const-evaluable.
 
 **Changes**:
-- **`zk/src/poseidon.rs`**: Added dual-hash infrastructure:
+- **`omnia-adapters/src/poseidon.rs`**: Added dual-hash infrastructure:
   - `PoseidonVersion` enum: `Custom` (default, deprecated) and `Reference` (target)
   - `reference` module with `LazyLock<[[Fr; 3]; 3]>` MDS matrix and `LazyLock<Vec<Fr>>` round constants — **populated with deterministic parameters** using distinct Cauchy MDS construction (x=[2,3,4], y=[6,7,8]) and BLAKE3 domain `"Poseidon-Ref-BN254-t3-RF8-RP57"`
   - `custom` module with `LazyLock` equivalents — **populated from actual `generate_mds_matrix()` and `generate_round_constants()` calls** (previously all zeros)
@@ -150,7 +150,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 
 Test results verified per crate:
 - `omnia-substrate` — 454 lib tests + 3 multi-node tests passing
-- `omnia-zk` — 129 lib tests passing (15 Poseidon tests)
+- `omnia-adapters` — 129 lib tests passing (15 Poseidon tests)
 - `omnia-binding` — 61 lib tests passing
 - `omnia-economics` — 58 lib tests passing
 - `omnia-shards` — 62 lib tests passing

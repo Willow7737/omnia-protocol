@@ -16,7 +16,7 @@ The following versions of Omnia Protocol are currently being supported with secu
 | < 0.1   | :x:                |
 
 **Note**: The current crate versions in `Cargo.toml` are `0.1.0` for both
-`omnia-zk` and `omnia-binding`. Security patches are applied to the `0.1.x`
+`omnia-adapters` and `omnia-binding`. Security patches are applied to the `0.1.x`
 line until a stable `1.0.0` release.
 
 ## Reporting a Vulnerability
@@ -47,10 +47,10 @@ We are committed to keeping reporters informed throughout the process. If you do
 
 The following are considered in scope for vulnerability reports:
 
-- Cryptographic implementation flaws in `zk/` or `binding/`
-  - Groth16 proof soundness in `zk/src/prover.rs`
-  - Poseidon hash correctness in `zk/src/poseidon.rs`
-  - Trusted setup ceremony integrity in `zk/src/setup/`
+- Cryptographic implementation flaws in `omnia-adapters/` or `binding/`
+  - Groth16 proof soundness in `omnia-adapters/src/prover.rs`
+  - Poseidon hash correctness in `omnia-adapters/src/poseidon.rs`
+  - Trusted setup ceremony integrity in `omnia-adapters/src/setup/`
   - Quantum commitment verification in `binding/src/quantum_commit.rs`
   - PQC key rotation in `binding/src/key_rotation.rs`
 - Consensus or state corruption vulnerabilities in `shards/` or `substrate/`
@@ -76,17 +76,17 @@ Every pull request that touches the following directories **requires** security 
 - `substrate/` — Core causal graph and CRDT primitives
 - `shards/` — Shard state machines and operation handlers
 - `economics/` — UBC token logic and governance
-- `zk/` — Zero-knowledge proof circuits, Poseidon hash, trusted setup ceremony, and verification
+- `omnia-adapters/` — Zero-knowledge proof circuits, Poseidon hash, trusted setup ceremony, and verification
 - `binding/` — Quantum commitments, RF fingerprinting, provenance logs, PQC key rotation
 
 ### Review Roles
 
 | Role | Responsibility | Scope |
 |------|---------------|-------|
-| **Cipher** | Cryptographic correctness, key management, proof soundness, Poseidon parameters, trusted setup integrity | `zk/`, `binding/`, any PR with cryptographic changes |
+| **Cipher** | Cryptographic correctness, key management, proof soundness, Poseidon parameters, trusted setup integrity | `omnia-adapters/`, `binding/`, any PR with cryptographic changes |
 | **Sentry** | Protocol integrity, state consistency, denial-of-service resistance | `substrate/`, `shards/`, `economics/` |
 
-Cryptographic PRs (any change to `zk/`, `binding/quantum_commit.rs`, `binding/rf_fingerprint.rs`, `binding/key_rotation.rs`, or cryptographic key handling) require **both Cipher and Sentry review** — no exceptions.
+Cryptographic PRs (any change to `omnia-adapters/`, `binding/quantum_commit.rs`, `binding/rf_fingerprint.rs`, `binding/key_rotation.rs`, or cryptographic key handling) require **both Cipher and Sentry review** — no exceptions.
 
 ### Review Rules
 
@@ -147,10 +147,10 @@ for the full audit report covering the substrate crate.
 The ZK and binding crates have been audited for side-channel resistance in Phase 5.
 See [`docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md`](docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md)
 for the full audit report covering:
-- Poseidon hash field-element operations in `zk/src/poseidon.rs`
+- Poseidon hash field-element operations in `omnia-adapters/src/poseidon.rs`
 - Ed25519 and Dilithium signature verification paths in `binding/src/quantum_commit.rs`
 - ML-KEM key encapsulation operations in `binding/src/quantum_commit.rs`
-- Trusted setup contribution operations in `zk/src/setup/contribution.rs`
+- Trusted setup contribution operations in `omnia-adapters/src/setup/contribution.rs`
 
 **Remaining concern**: The `pqc-dilithium` crate has not been formally audited for timing
 side-channels. Monitor upstream updates and consider switching to a formally verified

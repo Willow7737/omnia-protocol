@@ -112,7 +112,7 @@ The original `RollupCircuit` enforced only `new_state_root == expected_new_state
 
 **Previously remaining gap:** The `ExpandedRollupCircuit` used a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function. This meant the hash constraint was not cryptographically binding.
 
-**Current status:** The `ExpandedRollupCircuit` now uses **Poseidon hash** (implemented in `zk/src/poseidon.rs`) with:
+**Current status:** The `ExpandedRollupCircuit` now uses **Poseidon hash** (implemented in `omnia-adapters/src/poseidon.rs`) with:
 - Cauchy MDS matrix construction (`generate_mds_matrix()`) for the linear layer
 - BLAKE3-derived round constants (deterministically generated from a seed, not the Filecoin/Neptune reference constants)
 - Full R1CS gadget (`poseidon_permutation_gadget()`) for on-circuit verification

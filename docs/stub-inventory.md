@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: Sprint 0 (Phase 0 Throughput Optimization)
+> Last updated: 2026-06-20 (v0.1.68 audit cycle)
 
 ---
 

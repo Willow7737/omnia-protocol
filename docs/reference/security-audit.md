@@ -39,7 +39,7 @@
 
 | ID | Finding | Status |
 |----|---------|--------|
-| FIND-030 | No unsafe code | ✅ Clean — `#![forbid(unsafe_code)]` on all 7 crates |
+| FIND-030 | No unsafe code | ✅ Clean — `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates |
 | FIND-031 | No interior mutability in shard state | ✅ Clean — correct pattern |
 | FIND-032 | Grafana default password | ✅ Fixed — Required env var |
 | FIND-033 | 9 ignored RUSTSEC advisories | 🔄 Open — Quarterly review |

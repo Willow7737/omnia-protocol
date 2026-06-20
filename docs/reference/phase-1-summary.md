@@ -124,7 +124,7 @@ CI workflow updated (`.github/workflows/ci.yml`):
 
 ### Solidity Groth16 Verifier
 
-The verifier at `zk/contracts/ethereum/OmniaRollup.sol` was already production-quality:
+The verifier at `omnia-adapters/contracts/ethereum/OmniaRollup.sol` was already production-quality:
 - Groth16 verification using EIP-196/197 BN254 precompiles
 - Verifying key set at construction (immutable after deploy)
 - State root binding in public inputs
@@ -141,8 +141,8 @@ The verifier at `zk/contracts/ethereum/OmniaRollup.sol` was already production-q
 | `substrate/src/consensus.rs` | 12 (Arguments, Returns, Errors, Security) |
 | `substrate/src/causal_graph.rs` | 6 (Errors, Arguments, Returns, Security) |
 | `shards/src/router.rs` | 7 (Arguments, Errors, Returns, Security) |
-| `zk/src/circuit.rs` | 2 (Security) |
-| `zk/src/proof.rs` | 1 (Arguments, Returns, Security) |
+| `omnia-adapters/src/circuit.rs` | 2 (Security) |
+| `omnia-adapters/src/proof.rs` | 1 (Arguments, Returns, Security) |
 | `node/src/api/auth.rs` | 1 (Arguments) |
 | `substrate/src/keystore.rs` | 1 (Security) |
 
@@ -162,7 +162,7 @@ The verifier at `zk/contracts/ethereum/OmniaRollup.sol` was already production-q
 | `cargo test --workspace --exclude omnia-fuzz --lib` | ✅ All Pass |
 | `cargo fmt --all -- --check` | ✅ Pass |
 | `#![deny(clippy::unwrap_used)]` on all 7 crates | ✅ Confirmed |
-| `#![forbid(unsafe_code)]` on all 7 crates | ✅ Confirmed |
+| `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates | ✅ Confirmed |
 | `#![warn(missing_docs)]` on all 7 crates | ✅ Confirmed |
 
 ### Bug Fix: Route Path Parameter Syntax

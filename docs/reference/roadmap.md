@@ -13,11 +13,11 @@
 - ✅ 6 domain shards with cross-shard messaging
 - ✅ Settlement-agnostic ZK-rollup architecture
 - ✅ Full ZK circuit (arkworks R1CS + Groth16 + Poseidon)
-- ✅ Real PQC signatures (ML-KEM-768 / FIPS-203)
+- ✅ Real PQC signatures (ML-KEM-768 / FIPS-203 algorithm; implementation not NIST-certified)
 - ✅ REST API with JWT auth, rate limiting, CORS
 - ✅ Encrypted keystore (AES-256-GCM)
 - ✅ Gradual slashing (3-tier: Warning → Jail → Ejection)
-- ✅ BFT consensus with VRF leader selection
+- ✅ BFT consensus with deterministic hash-based leader selection (ECVRF migration planned)
 - ✅ Docker 5-node testnet + monitoring stack
 
 ## Phase 1: Hardening ✅ Complete

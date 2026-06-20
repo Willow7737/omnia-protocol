@@ -23,7 +23,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** The Ethereum settlement adapter had full architecture but `Live` mode returned `SettlementError::NotImplemented` for every operation. No actual on-chain interaction.
 
 **Resolution:**
-- Added `alloy` dependency (v1) behind `ethereum-live` feature flag in `zk/Cargo.toml`
+- Added `alloy` dependency (v1) behind `ethereum-live` feature flag in `omnia-adapters/Cargo.toml`
 - Implemented `EthereumLiveClient` with lazy provider construction per-call
 - Generated contract bindings via `alloy::sol!` macro for `OmniaRollup` contract
 - Implemented real RPC calls: `post_batch`, `verify_proof`, `latest_state_root`, `deposit`, `request_withdrawal`
@@ -34,7 +34,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 - Feature-gated tests: simulated mode always works, live mode requires `ethereum-live` feature
 - New CI workflow: `.github/workflows/ethereum-settlement.yml` with Anvil/Hardhat
 
-**Files changed:** `zk/Cargo.toml`, `zk/src/settlement/ethereum.rs`, `zk/src/settlement/mod.rs`, `zk/tests/settlement_agnostic.rs`, `.github/workflows/ethereum-settlement.yml`
+**Files changed:** `omnia-adapters/Cargo.toml`, `omnia-adapters/src/settlement/ethereum.rs`, `omnia-adapters/src/settlement/mod.rs`, `omnia-adapters/tests/settlement_agnostic.rs`, `.github/workflows/ethereum-settlement.yml`
 
 ---
 
@@ -130,21 +130,21 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** Trusted setup ceremony worked correctly but only ran locally. Production requires multi-party network contributions.
 
 **Resolution:**
-- Created `zk/src/setup/ceremony_server.rs` — `CeremonyServer` coordinator
+- Created `omnia-adapters/src/setup/ceremony_server.rs` — `CeremonyServer` coordinator
   - `CeremonyConfig` with `min_participants`, `max_participants`, `ceremony_id`, `degree`
   - `CeremonyPhase` lifecycle: `NotStarted` → `AcceptingContributions` → `Finalized`
   - `accept_contribution()` — verifies PoK, applies EC scalar multiplication, stores contribution
   - `finalize()` — derives `CircuitKeyPair` from final SRS after min_participants reached
   - `export_transcript()` — full transcript for independent third-party verification
   - `ContributionReceipt` and `CeremonyTranscript` structs
-- Created `zk/src/setup/ceremony_client.rs` — `CeremonyClient`
+- Created `omnia-adapters/src/setup/ceremony_client.rs` — `CeremonyClient`
   - `generate_contribution()` — wraps `contribute()` for client-side use
   - `verify_transcript()` — independent replay verification of entire ceremony
 - Added ceremony CLI subcommands: `CeremonyServe`, `CeremonyContribute`, `CeremonyVerify`
 - Added stub ceremony HTTP API endpoints: `/ceremony/state`, `/ceremony/contribute`, `/ceremony/transcript`, `/ceremony/finalize`
 - 15 new tests across server and client
 
-**Files changed:** `zk/src/setup/ceremony_server.rs` (new), `zk/src/setup/ceremony_client.rs` (new), `zk/src/setup/mod.rs`, `node/src/api/ceremony.rs` (new), `node/src/api/mod.rs`, `node/src/config.rs`, `node/src/main.rs`
+**Files changed:** `omnia-adapters/src/setup/ceremony_server.rs` (new), `omnia-adapters/src/setup/ceremony_client.rs` (new), `omnia-adapters/src/setup/mod.rs`, `node/src/api/ceremony.rs` (new), `node/src/api/mod.rs`, `node/src/config.rs`, `node/src/main.rs`
 
 ---
 

@@ -26,14 +26,14 @@ The `pqc_kyber` crate version 0.7.x had a critical timing side-channel vulnerabi
 ML-KEM (Module-Lattice-Based Key-Encapsulation Mechanism) is the FIPS-203 standardized version of Kyber, published by NIST in 2024. The key properties are:
 
 1. **Wire-compatible**: ML-KEM-768 has the same public key size (1184 bytes), secret key size (2400 bytes), and ciphertext size (1088 bytes) as Kyber768.
-2. **FIPS-203 compliant**: Officially standardized by NIST, providing regulatory compliance for production deployments.
+2. **FIPS-203 algorithm (Rust implementation not NIST-certified)**: Officially standardized by NIST, providing regulatory compliance for production deployments.
 3. **No KyberSlash**: The `ml-kem` crate implementation uses constant-time operations throughout.
 4. **Actively maintained**: The `ml-kem` crate follows the RustCrypto project's maintenance standards.
 
 ## Alternatives Considered
 
 ### pqc_kyber 0.8+
-Upgrade to `pqc_kyber` 0.8+ which patches KyberSlash. This is the simplest migration path but has drawbacks: not FIPS-203 compliant (implements the pre-standard Kyber), long-term maintenance uncertain, and doesn't align with NIST standardization direction.
+Upgrade to `pqc_kyber` 0.8+ which patches KyberSlash. This is the simplest migration path but has drawbacks: not FIPS-203 algorithm (Rust implementation not NIST-certified) (implements the pre-standard Kyber), long-term maintenance uncertain, and doesn't align with NIST standardization direction.
 
 ### Custom Implementation
 Implement ML-KEM from scratch following FIPS-203. Maximum control and auditability but significant implementation effort, risk of subtle bugs in constant-time requirements, and no community review. Cryptographic implementations should be left to specialized, well-audited crates.
@@ -42,7 +42,7 @@ Implement ML-KEM from scratch following FIPS-203. Maximum control and auditabili
 
 ### Positive
 - Eliminates KyberSlash vulnerability (RUSTSEC-2023-0079)
-- FIPS-203 compliance for regulatory environments
+- FIPS-203 algorithm (Rust implementation not NIST-certified) for regulatory environments
 - Wire-compatible with Kyber768 — no migration needed for existing encrypted data
 - Same key sizes: public key 1184 bytes, ciphertext 1088 bytes
 - `ml-kem` crate is part of the RustCrypto ecosystem with strong maintenance guarantees
@@ -56,7 +56,7 @@ Implement ML-KEM from scratch following FIPS-203. Maximum control and auditabili
 - Migration removes ability to interop with pre-standard Kyber implementations
 
 ### Trade-offs
-- Chose `ml-kem` over `pqc_kyber` 0.8+ for FIPS-203 compliance and long-term standardization alignment
+- Chose `ml-kem` over `pqc_kyber` 0.8+ for FIPS-203 algorithm (Rust implementation not NIST-certified) and long-term standardization alignment
 - Wire compatibility means no data migration — existing encrypted shares remain valid
 - API naming (`kyber_*` functions) preserved for consistency, even though the underlying implementation is ML-KEM
 

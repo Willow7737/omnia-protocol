@@ -249,6 +249,7 @@ The model exceeds available memory. Remediation:
 | `OmniaConsensus.cfg` | 10 | TLC model checker configuration for consensus |
 | `OmniaCRDT.tla` | 213 | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister) |
 | `OmniaCRDT.cfg` | 23 | TLC model checker configuration for CRDT verification |
+| `consensus/CONSENSUS_SPEC.md` | — | English-language formal specification: fault model, DAG structure, famousness algorithm, commitment rule, safety argument, liveness argument (A-2 audit fix v0.1.68) |
 | `README.md` | — | This documentation |
 
 ## Cross-Reference with Code
