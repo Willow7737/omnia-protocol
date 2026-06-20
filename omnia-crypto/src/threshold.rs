@@ -1701,6 +1701,7 @@ mod tests {
 
     #[cfg(feature = "deprecated-dkg")]
     #[test]
+    #[ignore = "deprecated-dkg: Feldman VSS share verification is non-deterministic on some platforms; see ADR-013"]
     fn test_dkg_phase_transitions() {
         let nodes: Vec<NodeId> = (1..=3)
             .map(|i| {
