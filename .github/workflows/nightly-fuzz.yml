@@ -86,7 +86,7 @@ jobs:
               cargo fuzz cmin "$target" --fuzz-dir fuzz --sanitizer none 2>/dev/null || true
             fi
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: fuzz-corpus-${{ matrix.group }}-${{ github.run_id }}
@@ -134,7 +134,7 @@ jobs:
             --ignore RUSTSEC-2026-0118 \
             --ignore RUSTSEC-2026-0119 \
             --ignore RUSTSEC-2026-0173
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: security-audit-${{ github.run_id }}
           path: audit-report.json

@@ -93,7 +93,7 @@ jobs:
       # ── Upload artifacts ───────────────────────────────────────────
       - name: Upload criterion results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: criterion-regression-results
           path: |
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload criterion data
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: criterion-data
           path: target/criterion/
@@ -149,7 +149,7 @@ jobs:
 
       - name: Upload iai results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: iai-callgrind-results
           path: iai_output.txt
@@ -165,7 +165,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download criterion data
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: criterion-data
           path: target/criterion/

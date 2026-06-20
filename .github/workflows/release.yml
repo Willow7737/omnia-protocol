@@ -156,7 +156,7 @@ jobs:
           "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ascii "${{ matrix.artifact }}.sha256"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -238,7 +238,7 @@ jobs:
           cat contract-output/checksums.txt
 
       - name: Upload contract artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: omnia-rollup-contract
           path: contract-output/
@@ -269,7 +269,7 @@ jobs:
           find . -name '*.bom.xml' -exec mv {} sbom-output/ \; 2>/dev/null || true
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: omnia-release-sbom
           path: sbom-output/
@@ -302,7 +302,7 @@ jobs:
             --ignore RUSTSEC-2026-0173
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-audit
           path: audit-report.json
@@ -368,26 +368,26 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release-artifacts/
           pattern: omnia-node-*
           merge-multiple: false
 
       - name: Download contract artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: omnia-rollup-contract
           path: release-artifacts/omnia-rollup-contract/
 
       - name: Download security audit
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: security-audit
           path: release-artifacts/security-audit/
 
       - name: Download SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         continue-on-error: true
         with:
           name: omnia-release-sbom

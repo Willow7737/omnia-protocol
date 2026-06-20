@@ -61,7 +61,7 @@ jobs:
           fi
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mutants-primitives
           path: |
@@ -118,7 +118,7 @@ jobs:
           echo "consensus-core: mutation score = ${SCORE}%"
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mutants-consensus-core
           path: |
@@ -179,7 +179,7 @@ jobs:
           echo "consensus-batch: mutation score = ${SCORE}%"
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mutants-consensus-batch
           path: |
@@ -240,7 +240,7 @@ jobs:
           echo "consensus-other: mutation score = ${SCORE}%"
       - name: Upload mutants report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mutants-consensus-other
           path: |
