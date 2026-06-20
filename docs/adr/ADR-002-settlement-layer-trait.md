@@ -1,4 +1,5 @@
 # ADR-002: SettlementLayer Trait Requirements
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -135,5 +136,6 @@ The `EthereumAdapter` (`zk/src/settlement/ethereum.rs`) is the only non-stub ada
 - **Trade-off**: The trait uses `String` for error messages rather than structured error codes. This mirrors the `EventProcessor` design: the caller (the ZK operator) logs the error but rarely acts on its specific content.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

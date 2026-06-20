@@ -1,8 +1,8 @@
 # Architecture RFC: Consensus State Sharding
 
-| RFC ID    | Title                          | Status   | Sprint  |
-|-----------|-------------------------------|----------|---------|
-| ARCH-001  | Consensus State Sharding       | Approved | Sprint 1 |
+| RFC ID   | Title                    | Status   | Sprint   |
+| -------- | ------------------------ | -------- | -------- |
+| ARCH-001 | Consensus State Sharding | Approved | Sprint 1 |
 
 ## Summary
 
@@ -17,6 +17,7 @@ is serialized through a single mutable reference, creating a throughput bottlene
 even on multi-core systems.
 
 Key observations:
+
 - Event processing is **embarrassingly parallel** for events that don't share
   ancestry — they can be validated, assigned rounds, and tracked independently.
 - The consensus state is **read-heavy**: most operations look up existing state
@@ -32,12 +33,14 @@ The `EventId` is a 32-byte SHA-256 hash. We use the **first byte** as the
 shard key, giving us 256 shards.
 
 **Why the first byte?**
+
 - SHA-256 output is uniformly distributed, so events spread evenly across shards.
 - Simple to compute (no additional hashing needed).
 - 256 shards provides fine granularity for parallelism while keeping per-shard
   memory overhead low (one `RwLock` + three `HashMap`s per shard).
 
 **Why not more or fewer shards?**
+
 - Fewer shards (e.g., 16) would limit parallelism.
 - More shards (e.g., 65536) would increase memory overhead without proportional
   benefit (we're limited by CPU cores, not by lock contention on 256 shards).
@@ -46,21 +49,22 @@ shard key, giving us 256 shards.
 
 Each shard holds the per-event data that can be partitioned by EventId:
 
-| Field              | Shard Key  | Lock         |
-|--------------------|-----------|--------------|
-| `event_states`     | EventId   | Per-shard RwLock |
-| `event_rounds`     | EventId   | Per-shard RwLock |
-| `fame_status`      | EventId   | Per-shard RwLock |
-| `round_witnesses`  | Round     | Global RwLock   |
-| `node_info`        | NodeId    | Global RwLock   |
-| `first_event_for_sequence` | (NodeId, u64) | Global RwLock |
-| `committed_count`  | —         | Global RwLock   |
+| Field                      | Shard Key     | Lock             |
+| -------------------------- | ------------- | ---------------- |
+| `event_states`             | EventId       | Per-shard RwLock |
+| `event_rounds`             | EventId       | Per-shard RwLock |
+| `fame_status`              | EventId       | Per-shard RwLock |
+| `round_witnesses`          | Round         | Global RwLock    |
+| `node_info`                | NodeId        | Global RwLock    |
+| `first_event_for_sequence` | (NodeId, u64) | Global RwLock    |
+| `committed_count`          | —             | Global RwLock    |
 
 ## Locking Strategy
 
 ### Per-Shard RwLock
 
 Each shard is protected by a `std::sync::RwLock`. This allows:
+
 - **Concurrent reads**: Multiple threads can read from the same shard simultaneously.
 - **Exclusive writes**: Only one thread can write to a shard at a time.
 - **Cross-shard parallelism**: Threads accessing different shards never contend.
@@ -164,6 +168,7 @@ benchmarks compared to the single-threaded `ConsensusEngine`.
 ### Benchmark Methodology
 
 We measure **events/sec** for three scenarios:
+
 1. **Single-threaded HashMap**: Baseline using plain `HashMap` (simulates
    the existing `ConsensusEngine` internals).
 2. **Single-threaded ShardedConsensusState**: Measures RwLock overhead
@@ -181,6 +186,7 @@ The 2× target is: `multi_threaded_throughput / single_threaded_throughput >= 2`
 could become a bottleneck under high load.
 
 **Mitigation**:
+
 - The global lock is only taken for cross-shard operations (witness recording,
   node info updates), which are O(1) per event.
 - Read operations (checking witnesses for a round) use a read lock, allowing
@@ -194,6 +200,7 @@ could become a bottleneck under high load.
 subsequent accesses to fail.
 
 **Mitigation**:
+
 - All lock acquisitions use `unwrap_or_else(|e| e.into_inner())` to recover
   from poisoning. The data may be in an inconsistent state, but the system
   continues operating.
@@ -208,6 +215,7 @@ subsequent accesses to fail.
 may increase memory usage compared to the single-engine design.
 
 **Mitigation**:
+
 - Empty HashMaps use minimal memory (typically 0 bytes for the allocation
   plus a small fixed overhead for the struct).
 - In practice, most shards will be populated in a running system, so
@@ -218,9 +226,10 @@ may increase memory usage compared to the single-engine design.
 ### Risk 4: Cross-Shard Consistency
 
 **Risk**: Events in different shards may see inconsistent state if
-  one shard is being written to while another is being read.
+one shard is being written to while another is being read.
 
 **Mitigation**:
+
 - Within a shard, `RwLock` guarantees that readers see a consistent
   snapshot (either the old or new state, never a torn read).
 - Cross-shard operations (finality) are sequenced through the global

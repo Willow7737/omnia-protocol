@@ -1,4 +1,5 @@
 # Dependency Policy
+
 > 🎯 Audience: Developers
 > 🔗 Context: Policy for managing dependencies — pinning, audits, and exemptions
 > 📅 Last Updated: 2026-05-20
@@ -50,6 +51,7 @@ New dependencies MUST be reviewed for:
 **Purpose:** Embedded key-value database for persistent slashing state (`RedbSlashingStore`), nonce tracking (`RedbNonceStore`), and consensus state (`RedbConsensusStore`).
 
 **Properties:**
+
 - ACID transactions with crash-safe durability
 - Pure Rust implementation with no unsafe code in the storage layer
 - Single-file database with forward compatibility guarantees
@@ -88,5 +90,6 @@ Generate a Software Bill of Materials for supply chain transparency:
 Crates that cannot be fully audited should be listed in `supply-chain/config.toml` under `[[exemptions]]` with a comment explaining why. Exemptions MUST be reviewed at least quarterly and either audited or removed.
 
 ---
+
 🔙 **Back**: [reference/](./) | 🔄 **Related**: [security-audit.md](./security-audit.md)
 🚀 **Next**: [crypto-migration.md](./crypto-migration.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./blueprint-reference.md)

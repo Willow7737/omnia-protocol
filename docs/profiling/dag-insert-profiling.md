@@ -39,6 +39,7 @@ In the optimized path, the flamegraph should show:
 3. Minimal time in `alloc::alloc` — only during initial pool growth
 
 In the **unoptimized** path (HashMap), you'll see significant time in:
+
 1. `HashMap::insert` → hash computation → allocation → rehashing
 2. `HashMap::get` → hash computation → collision resolution
 
@@ -100,11 +101,11 @@ mod allocation_tests {
 
 ### Expected Results
 
-| Phase | Allocations per Insert |
-|-------|----------------------|
-| Initial fill (no free slots, pool grows) | 1-2 (Vec resize) |
-| Steady state (free slots available) | **0** |
-| After pruning (slots recycled) | **0** |
+| Phase                                    | Allocations per Insert |
+| ---------------------------------------- | ---------------------- |
+| Initial fill (no free slots, pool grows) | 1-2 (Vec resize)       |
+| Steady state (free slots available)      | **0**                  |
+| After pruning (slots recycled)           | **0**                  |
 
 ## 3. Heap Profiling with Massif (Valgrind)
 
@@ -128,11 +129,13 @@ ms_print massif.out.*
 ### Expected Patterns
 
 **CausalGraph (HashMap):**
+
 - Heap grows monotonically with each insert
 - Periodic jumps when HashMap rehashes
 - No significant decrease after pruning (HashMap doesn't shrink)
 
 **PruningAwarePool (Slab):**
+
 - Initial allocation for pre-allocated slots
 - Growth events are smooth (1.5x factor)
 - After pruning: heap doesn't grow (slots are reused)
@@ -166,12 +169,12 @@ static ALLOCATOR: AllocCounter = AllocCounter;
 
 ### Expected Allocation Count
 
-| Operation | CausalGraph | PruningAwarePool |
-|-----------|-------------|------------------|
-| Insert (cold) | 3-5 allocs | 1-2 allocs (pool growth) |
-| Insert (steady-state) | 3-5 allocs | **0 allocs** |
-| Lookup | 0 allocs | 0 allocs |
-| Remove/Prune | 0 allocs | 0 allocs (free list update) |
+| Operation             | CausalGraph | PruningAwarePool            |
+| --------------------- | ----------- | --------------------------- |
+| Insert (cold)         | 3-5 allocs  | 1-2 allocs (pool growth)    |
+| Insert (steady-state) | 3-5 allocs  | **0 allocs**                |
+| Lookup                | 0 allocs    | 0 allocs                    |
+| Remove/Prune          | 0 allocs    | 0 allocs (free list update) |
 
 ## 5. Cache Performance with `perf stat`
 
@@ -187,10 +190,10 @@ The slab allocator stores events in a contiguous `Vec<Slot>`, which
 should produce significantly fewer cache misses than the HashMap's
 scattered heap allocations.
 
-| Metric | CausalGraph | PruningAwarePool |
-|--------|-------------|------------------|
-| L1-dcache load misses | _TBD_ | _TBD_ |
-| Cache miss rate | _TBD_ | _TBD_ |
+| Metric                | CausalGraph | PruningAwarePool |
+| --------------------- | ----------- | ---------------- |
+| L1-dcache load misses | _TBD_       | _TBD_            |
+| Cache miss rate       | _TBD_       | _TBD_            |
 
 ## 6. Criterion Benchmarks
 
@@ -202,6 +205,7 @@ cargo bench --bench throughput -- graph-insert
 
 The benchmark reports p50, p95, p99, and mean latency with confidence
 intervals. Look for:
+
 - p99 latency reduction ≥ 60% (Sprint 3 target)
 - No regression in p50 latency
 - Stable results across multiple runs

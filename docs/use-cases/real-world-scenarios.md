@@ -1,4 +1,5 @@
 # Real-World Scenarios
+
 > 🎯 Audience: Laymen, All
 > 🔗 Context: 10 real-world use cases demonstrating how Omnia solves problems across financial inclusion, supply chain, healthcare, IP, AI, and governance
 > 📅 Last Updated: 2026-05-20
@@ -8,6 +9,7 @@
 ### The Problem
 
 1.7 billion people worldwide lack access to basic financial services. They cannot:
+
 - Save money safely
 - Borrow for education or business
 - Send money to family
@@ -24,6 +26,7 @@
 5. **Saving:** Her savings earn interest through RPGF rewards.
 
 **Impact:**
+
 - Amara has a financial identity without a bank
 - She can access credit based on reputation, not collateral
 - She eliminates middlemen and keeps more profit
@@ -55,6 +58,7 @@ Phase 3: Global marketplace
 ### The Problem
 
 Global supply chains are opaque. Consumers cannot verify:
+
 - Product authenticity
 - Ethical sourcing
 - Environmental impact
@@ -65,6 +69,7 @@ Global supply chains are opaque. Consumers cannot verify:
 **Scenario:** A coffee buyer in New York
 
 **The Journey:**
+
 1. **Farming (Ethiopia):** Farmer registers coffee batch with RF fingerprint and quantum seal. The `PhysicalOp::AnchorItem` operation (in `shards/src/physical/ops.rs`) creates an immutable provenance entry.
 2. **Cooperative:** Beans are washed, graded, and RF fingerprint is updated. `PhysicalOp::TransferOwnership` records the transfer in the append-only provenance log.
 3. **Export:** Container is sealed with quantum seal and GPS tracking. A `CrossShardMessage` (in `shards/src/cross_shard.rs`) may trigger a financial payment to the cooperative.
@@ -73,6 +78,7 @@ Global supply chains are opaque. Consumers cannot verify:
 6. **Consumer:** Buys coffee, scans with phone, sees complete provenance
 
 **What the Consumer Sees:**
+
 ```
 Your Coffee's Journey
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -89,6 +95,7 @@ Trust no one. Verify everything.
 ```
 
 **Impact:**
+
 - Farmers get fair prices (no middlemen taking cuts)
 - Consumers know exactly where their coffee comes from
 - Environmental impact is transparent
@@ -101,6 +108,7 @@ Trust no one. Verify everything.
 ### The Problem
 
 Healthcare records are fragmented across providers. Patients cannot:
+
 - Access their full medical history
 - Prove vaccination status without revealing full records
 - Share data for research without losing privacy
@@ -126,6 +134,7 @@ Healthcare records are fragmented across providers. Patients cannot:
    - She earns UBC rewards for contribution via `UsefulWorkProof`
 
 **Implementation:**
+
 ```
 Phase 1: Vaccination records
 - Verifiable credentials for vaccines
@@ -150,6 +159,7 @@ Phase 3: Research participation
 ### The Problem
 
 Artists, musicians, and creators lose control of their work:
+
 - Streaming platforms take 70% of revenue
 - Piracy is rampant
 - Attribution is lost
@@ -166,6 +176,7 @@ Artists, musicians, and creators lose control of their work:
 5. **Licensing:** Other artists can license her work with automatic payment
 
 **Impact:**
+
 - Maya keeps 99% of revenue (only 1% fee for Omnia)
 - Her work is protected from piracy (cryptographically verified)
 - She earns royalties on derivatives
@@ -178,6 +189,7 @@ Artists, musicians, and creators lose control of their work:
 ### The Problem
 
 AI models are trained on centralized data, controlled by a few companies:
+
 - Users' data is exploited without consent
 - Only large companies can afford to train models
 - Model ownership is centralized
@@ -209,6 +221,7 @@ AI models are trained on centralized data, controlled by a few companies:
    - Fees go to RPGF pool
 
 **Impact:**
+
 - Hospitals keep their data private
 - Medical AI is more accurate (trained on more diverse data)
 - Smaller organizations can participate in AI development
@@ -221,6 +234,7 @@ AI models are trained on centralized data, controlled by a few companies:
 ### The Problem
 
 As humanity expands to Mars and beyond, traditional finance breaks:
+
 - Earth-Mars communication takes 3-22 minutes
 - Traditional blockchains require global synchronization
 - Currency exchange is complex
@@ -245,6 +259,7 @@ As humanity expands to Mars and beyond, traditional finance breaks:
    - Automatic execution
 
 **Example Transaction:**
+
 ```
 Mars Colony sells 100 tons of water ice to Earth
 Earth sends 50,000 Omnia
@@ -266,6 +281,7 @@ Result: Trade complete, both parties satisfied, no intermediary needed
 ### The Problem
 
 Refugees lack official documentation:
+
 - Cannot prove identity
 - Cannot access banking
 - Cannot prove education/skills
@@ -296,6 +312,7 @@ Refugees lack official documentation:
    - Can borrow for housing
 
 **Impact:**
+
 - Ahmed has a digital identity that no government can revoke
 - He can prove his skills without official documents
 - He can access financial services
@@ -308,6 +325,7 @@ Refugees lack official documentation:
 ### The Problem
 
 Traditional organizations are hierarchical:
+
 - Decisions are made by a few people
 - Transparency is limited
 - Corruption is common
@@ -342,6 +360,7 @@ Traditional organizations are hierarchical:
 6. **AI agent participation:** AI agents with `AgentCapability::GovernanceVote { max_weight }` can participate with bounded influence
 
 **Impact:**
+
 - Climate action is coordinated globally
 - Funding is transparent and efficient
 - Corruption is eliminated
@@ -354,6 +373,7 @@ Traditional organizations are hierarchical:
 ### The Problem
 
 Centralized energy grids are inefficient:
+
 - Renewable energy is wasted
 - Demand peaks cause blackouts
 - Storage is expensive
@@ -384,6 +404,7 @@ Centralized energy grids are inefficient:
    - Rewards are distributed via `UsefulWorkType::DistributedStorage`
 
 **Impact:**
+
 - Renewable energy is maximized
 - Grid is more stable
 - Consumers save money
@@ -396,6 +417,7 @@ Centralized energy grids are inefficient:
 ### The Problem
 
 Scientific research is siloed:
+
 - Data is locked behind paywalls
 - Researchers cannot collaborate easily
 - Reproducibility is difficult
@@ -426,6 +448,7 @@ Scientific research is siloed:
    - Funding is distributed automatically
 
 **Impact:**
+
 - Climate research is accelerated
 - Findings are reproducible
 - Collaboration is seamless
@@ -435,19 +458,20 @@ Scientific research is siloed:
 
 ## Implementation Timeline
 
-| Use Case | Phase | Timeline |
-|----------|-------|----------|
-| Financial Inclusion | Phase 0 | Months 0-18 |
-| Supply Chain | Phase 1 | Years 1-2 |
-| Healthcare | Phase 1 | Years 1-2 |
-| IP and Digital Rights | Phase 1 | Years 1-2 |
-| Decentralized AI | Phase 2 | Years 3-5 |
-| Interplanetary Trade | Phase 3 | Years 5-10 |
-| Refugee Identity | Phase 1 | Years 1-2 |
+| Use Case                 | Phase   | Timeline    |
+| ------------------------ | ------- | ----------- |
+| Financial Inclusion      | Phase 0 | Months 0-18 |
+| Supply Chain             | Phase 1 | Years 1-2   |
+| Healthcare               | Phase 1 | Years 1-2   |
+| IP and Digital Rights    | Phase 1 | Years 1-2   |
+| Decentralized AI         | Phase 2 | Years 3-5   |
+| Interplanetary Trade     | Phase 3 | Years 5-10  |
+| Refugee Identity         | Phase 1 | Years 1-2   |
 | Decentralized Governance | Phase 0 | Months 0-18 |
-| Energy Grid | Phase 2 | Years 3-5 |
-| Scientific Research | Phase 1 | Years 1-2 |
+| Energy Grid              | Phase 2 | Years 3-5   |
+| Scientific Research      | Phase 1 | Years 1-2   |
 
 ---
+
 🔙 **Back**: [use-cases/](./) | 🔄 **Related**: [phase-alignment.md](./phase-alignment.md)  
 🚀 **Next**: [phase-alignment.md](./phase-alignment.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,5 @@
 # Feature Flag Reference
+
 > 🎯 Audience: Operators
 > 🔗 Context: Feature flags and their operational impact for running Omnia Protocol nodes
 > 📅 Last Updated: 2026-05-21
@@ -14,6 +15,7 @@
 **Without flag (default):** Ethereum adapter runs in **Simulated** mode — full architecture, in-memory state transitions, no real on-chain interaction.
 
 **With flag:** Adds `alloy` v1 dependency for real RPC calls to Ethereum nodes. Supports:
+
 - Real batch submission to OmniaRollup.sol
 - Groth16 proof verification on-chain
 - State root queries
@@ -23,11 +25,13 @@
 **Requirements:** Rust 1.91+ (alloy dependency requires newer compiler)
 
 **Build:**
+
 ```bash
 cargo build --features ethereum-live
 ```
 
 **Docker:**
+
 ```bash
 docker build --build-arg FEATURES=ethereum-live -f docker/Dockerfile .
 ```
@@ -49,6 +53,7 @@ docker build --build-arg FEATURES=ethereum-live -f docker/Dockerfile .
 **With flag:** Compiles the `FfiSettlementAdapter` which uses `unsafe` FFI calls to the C library. The FFI module has `#![allow(unsafe_code)]` because FFI intrinsically requires unsafe operations.
 
 **Build:**
+
 ```bash
 cargo build --features settlement-ffi
 ```
@@ -68,6 +73,7 @@ cargo build --features settlement-ffi
 **With flag:** Full ZK proof system with BN254 curve operations, Poseidon hash gadget, Groth16 proving/verification, and ceremony tooling.
 
 **Build:**
+
 ```bash
 cargo build --features zk          # via omnia-node
 cargo build --features arkworks    # directly on omnia-adapters
@@ -86,6 +92,7 @@ cargo build --features arkworks    # directly on omnia-adapters
 **With flag:** Full hybrid (Ed25519 + Dilithium) and post-quantum-only signing. ML-KEM-768 encapsulation/decapsulation for PQ-secure key exchange.
 
 **Build:**
+
 ```bash
 cargo build --features pqc
 ```
@@ -99,6 +106,7 @@ cargo build --features pqc
 **Purpose:** Enables BLS signature aggregation via the `blst` crate.
 
 **Build:**
+
 ```bash
 cargo build --features bls
 ```
@@ -114,6 +122,7 @@ cargo build --features bls
 **Without flag:** The `NodeMetrics` struct and `/metrics` endpoint are not available.
 
 **Build:**
+
 ```bash
 cargo build --features metrics
 ```
@@ -129,6 +138,7 @@ cargo build --features metrics
 **Without flag:** Consensus state is ephemeral (in-memory only). Node must re-sync on restart.
 
 **Build:**
+
 ```bash
 cargo build --features persistent-storage
 ```
@@ -139,11 +149,11 @@ cargo build --features persistent-storage
 
 The `omnia-node` crate provides pre-configured profiles:
 
-| Profile | Features | Build Command |
-|---------|----------|---------------|
-| `full` (default) | network, zk, bls, pqc, metrics | `cargo build -p omnia-node` |
-| `light` | minimal | `cargo build -p omnia-node --no-default-features --features light` |
-| Full + Ethereum | full + ethereum-live | `cargo build -p omnia-node --features ethereum-live` |
+| Profile          | Features                       | Build Command                                                      |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------ |
+| `full` (default) | network, zk, bls, pqc, metrics | `cargo build -p omnia-node`                                        |
+| `light`          | minimal                        | `cargo build -p omnia-node --no-default-features --features light` |
+| Full + Ethereum  | full + ethereum-live           | `cargo build -p omnia-node --features ethereum-live`               |
 
 ---
 
@@ -153,39 +163,40 @@ These are not compile-time feature flags but runtime configuration options that 
 
 ### Snapshot Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `snapshot_interval` | 10000 | Take a state snapshot every N events |
+| Parameter           | Default | Description                          |
+| ------------------- | ------- | ------------------------------------ |
+| `snapshot_interval` | 10000   | Take a state snapshot every N events |
 
 ### Pruning Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `pruning_depth` | 0 | Events older than (finalized_round - depth) are pruned; 0 = archive mode |
+| Parameter       | Default | Description                                                              |
+| --------------- | ------- | ------------------------------------------------------------------------ |
+| `pruning_depth` | 0       | Events older than (finalized_round - depth) are pruned; 0 = archive mode |
 
 ### Readiness Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `readiness_min_peers` | 1 | Minimum peers for readiness probe |
-| `readiness_max_finalization_age` | 600 | Max rounds since last finalization for readiness |
+| Parameter                        | Default | Description                                      |
+| -------------------------------- | ------- | ------------------------------------------------ |
+| `readiness_min_peers`            | 1       | Minimum peers for readiness probe                |
+| `readiness_max_finalization_age` | 600     | Max rounds since last finalization for readiness |
 
 ### Security Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `OMNIA_JWT_SECRET` | (none) | HMAC secret for JWT auth |
-| `OMNIA_AUTHORIZED_CALLERS` | (none) | Comma-separated authorized caller IDs |
-| `OMNIA_AUTHORIZED_ADMINS` | (none) | Comma-separated admin caller IDs |
-| `OMNIA_RATE_LIMIT_RPS` | (none) | Max requests per second per IP |
+| Parameter                  | Default | Description                           |
+| -------------------------- | ------- | ------------------------------------- |
+| `OMNIA_JWT_SECRET`         | (none)  | HMAC secret for JWT auth              |
+| `OMNIA_AUTHORIZED_CALLERS` | (none)  | Comma-separated authorized caller IDs |
+| `OMNIA_AUTHORIZED_ADMINS`  | (none)  | Comma-separated admin caller IDs      |
+| `OMNIA_RATE_LIMIT_RPS`     | (none)  | Max requests per second per IP        |
 
 ### Logging Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `RUST_LOG` | `info` | Log level (trace, debug, info, warn, error) |
-| `RUST_LOG_FORMAT` | (default) | Set to `json` for structured JSON logging |
+| Parameter         | Default   | Description                                 |
+| ----------------- | --------- | ------------------------------------------- |
+| `RUST_LOG`        | `info`    | Log level (trace, debug, info, warn, error) |
+| `RUST_LOG_FORMAT` | (default) | Set to `json` for structured JSON logging   |
 
 ---
+
 🔙 **Back**: [operations/](./) | 🔄 **Related**: [../building/feature-matrix.md](../building/feature-matrix.md)
 🚀 **Next**: [../reference/](../reference/) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

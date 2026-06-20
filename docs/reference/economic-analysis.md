@@ -1,4 +1,5 @@
 # Economic Parameter Analysis
+
 > 🎯 Audience: Architects
 > 🔗 Context: Comprehensive analysis of economic parameters for mainnet readiness
 > 📅 Last Updated: 2026-05-20
@@ -38,37 +39,41 @@ pub struct FeeSchedule {
 
 The `FeeSchedule::standard()` constructor provides the production defaults:
 
-| Domain | Fee Field | Fee (UBC) | Relative Cost |
-|--------|-----------|-----------|---------------|
-| Financial | `financial_op_fee` | 10 | 5× baseline |
-| Computational | `computational_op_fee` | 5 | 2.5× baseline |
-| Physical | `physical_op_fee` | 3 | 1.5× baseline |
-| Identity | `identity_op_fee` | 2 | 1× baseline |
-| Biological | `biological_op_fee` | 3 | 1.5× baseline |
-| Cross-Shard | `cross_shard_fee` | 15 | 7.5× baseline |
-| Economics | `default_fee` | 3 | 1.5× baseline |
-| Default (unrecognized) | `default_fee` | 3 | 1.5× baseline |
+| Domain                 | Fee Field              | Fee (UBC) | Relative Cost |
+| ---------------------- | ---------------------- | --------- | ------------- |
+| Financial              | `financial_op_fee`     | 10        | 5× baseline   |
+| Computational          | `computational_op_fee` | 5         | 2.5× baseline |
+| Physical               | `physical_op_fee`      | 3         | 1.5× baseline |
+| Identity               | `identity_op_fee`      | 2         | 1× baseline   |
+| Biological             | `biological_op_fee`    | 3         | 1.5× baseline |
+| Cross-Shard            | `cross_shard_fee`      | 15        | 7.5× baseline |
+| Economics              | `default_fee`          | 3         | 1.5× baseline |
+| Default (unrecognized) | `default_fee`          | 3         | 1.5× baseline |
 
 The `Economics` variant of `ShardOp` falls back to `default_fee` (see `FeeSchedule::fee_for_op()`). A `FeeSchedule::zero()` constructor is also available for testing.
 
 ### 2.2 Fee Rationale
 
 **Financial operations (10 UBC)** are priced highest because they:
+
 - Modify account balances (high-value state changes)
 - Are the primary target for spam and abuse
 - Require strict causal ordering (non-CRDT)
 
 **Cross-shard operations (15 UBC)** are priced above financial operations because they:
+
 - Require coordination across multiple shards
 - Consume more network bandwidth (causality proofs)
 - Are inherently more expensive to process
 
 **Identity operations (2 UBC)** are priced lowest because they:
+
 - Are infrequent (DID creation is a one-time operation)
 - Are critical for network participation (low barriers to entry)
 - Modify relatively simple state
 
 **Computational operations (5 UBC)** are priced mid-range because they:
+
 - May involve expensive proof verification
 - Are expected to be the highest-volume operation type
 - Balance between spam resistance and accessibility
@@ -97,33 +102,33 @@ There is no formula-based fee calculation (no base fee + per-byte fee). The fee 
 
 Assuming 1 UBC = $0.001 (tentative mainnet pricing), the cost of a sustained spam attack:
 
-| Attack Type | Ops/Second | UBC/Op | Cost/Second | Cost/Hour | Cost/Day |
-|-------------|-----------|--------|------------|-----------|----------|
-| Financial spam | 1,000 | 10 | $10.00 | $36,000 | $864,000 |
-| Computational spam | 1,000 | 5 | $5.00 | $18,000 | $432,000 |
-| Identity spam | 1,000 | 2 | $2.00 | $7,200 | $172,800 |
-| Cross-shard spam | 1,000 | 15 | $15.00 | $54,000 | $1,296,000 |
-| Mixed spam (average) | 1,000 | 6.7 | $6.70 | $24,120 | $578,880 |
+| Attack Type          | Ops/Second | UBC/Op | Cost/Second | Cost/Hour | Cost/Day   |
+| -------------------- | ---------- | ------ | ----------- | --------- | ---------- |
+| Financial spam       | 1,000      | 10     | $10.00      | $36,000   | $864,000   |
+| Computational spam   | 1,000      | 5      | $5.00       | $18,000   | $432,000   |
+| Identity spam        | 1,000      | 2      | $2.00       | $7,200    | $172,800   |
+| Cross-shard spam     | 1,000      | 15     | $15.00      | $54,000   | $1,296,000 |
+| Mixed spam (average) | 1,000      | 6.7    | $6.70       | $24,120   | $578,880   |
 
 ### 3.2 UBC Quota as Spam Defense
 
 The UBC system provides a monthly quota that limits the total compute any single identity can consume:
 
-| Parameter | Value | Code Reference |
-|-----------|-------|----------------|
-| Default UBC quota | 1,000 UBC/month | `DEFAULT_UBC_QUOTA` in `economics/src/quota.rs` |
-| Epoch duration | 2,592,000,000 ms (30 days) | `DEFAULT_EPOCH_DURATION_MS` in `economics/src/quota.rs` |
-| Monthly epochs | 1 | Single 30-day epoch per month |
+| Parameter         | Value                      | Code Reference                                          |
+| ----------------- | -------------------------- | ------------------------------------------------------- |
+| Default UBC quota | 1,000 UBC/month            | `DEFAULT_UBC_QUOTA` in `economics/src/quota.rs`         |
+| Epoch duration    | 2,592,000,000 ms (30 days) | `DEFAULT_EPOCH_DURATION_MS` in `economics/src/quota.rs` |
+| Monthly epochs    | 1                          | Single 30-day epoch per month                           |
 
 **Quota exhaustion analysis:**
 
-| Operation Mix | Ops Until Quota Exhausted | Time to Exhaust (at 1 op/s) |
-|---------------|--------------------------|-----------------------------|
-| Financial only (10 UBC) | 100 | ~2 minutes |
-| Computational only (5 UBC) | 200 | ~3 minutes |
-| Identity only (2 UBC) | 500 | ~8 minutes |
-| Cross-shard only (15 UBC) | 67 | ~1 minute |
-| Realistic mix (avg 6.7 UBC) | ~150 | ~2.5 minutes |
+| Operation Mix               | Ops Until Quota Exhausted | Time to Exhaust (at 1 op/s) |
+| --------------------------- | ------------------------- | --------------------------- |
+| Financial only (10 UBC)     | 100                       | ~2 minutes                  |
+| Computational only (5 UBC)  | 200                       | ~3 minutes                  |
+| Identity only (2 UBC)       | 500                       | ~8 minutes                  |
+| Cross-shard only (15 UBC)   | 67                        | ~1 minute                   |
+| Realistic mix (avg 6.7 UBC) | ~150                      | ~2.5 minutes                |
 
 **Conclusion**: A single identity with the default 1,000 UBC/month quota can only sustain ~150 operations before exhaustion. At realistic transaction rates, this provides approximately 2–8 minutes of sustained usage per month per identity. This is adequate for normal usage but insufficient for spam attacks.
 
@@ -131,13 +136,13 @@ The UBC system provides a monthly quota that limits the total compute any single
 
 An attacker creating N identities gains N × 1,000 = 1,000N UBC/month:
 
-| Identities | Total UBC | Financial Ops | Cost (DID creation) | Net Economic Feasibility |
-|-----------|-----------|---------------|---------------------|-------------------------|
-| 1 | 1,000 | 100 | $0.002 | Feasible |
-| 10 | 10,000 | 1,000 | $0.02 | Feasible |
-| 100 | 100,000 | 10,000 | $0.20 | Feasible |
-| 1,000 | 1,000,000 | 100,000 | $2.00 | Feasible |
-| 10,000 | 10,000,000 | 1,000,000 | $20.00 | Feasible (cheap) |
+| Identities | Total UBC  | Financial Ops | Cost (DID creation) | Net Economic Feasibility |
+| ---------- | ---------- | ------------- | ------------------- | ------------------------ |
+| 1          | 1,000      | 100           | $0.002              | Feasible                 |
+| 10         | 10,000     | 1,000         | $0.02               | Feasible                 |
+| 100        | 100,000    | 10,000        | $0.20               | Feasible                 |
+| 1,000      | 1,000,000  | 100,000       | $2.00               | Feasible                 |
+| 10,000     | 10,000,000 | 1,000,000     | $20.00              | Feasible (cheap)         |
 
 **Problem**: Without Sybil-resistant DID creation, the UBC quota system is vulnerable to identity farming. An attacker can create 10,000 identities for ~$20 and gain 10M UBC/month — enough for 1,000,000 financial operations.
 
@@ -151,41 +156,42 @@ An attacker creating N identities gains N × 1,000 = 1,000N UBC/month:
 
 For a typical user performing normal operations:
 
-| Operation | Monthly Frequency | UBC/Op | Total UBC |
-|-----------|-------------------|--------|-----------|
-| DID creation | 1 | 2 | 2 |
-| Financial transfers | 50 | 10 | 500 |
-| Computational tasks | 20 | 5 | 100 |
-| Identity updates | 5 | 2 | 10 |
-| Physical anchoring | 10 | 3 | 30 |
-| Cross-shard messages | 15 | 15 | 225 |
-| **Total** | | | **867** |
+| Operation            | Monthly Frequency | UBC/Op | Total UBC |
+| -------------------- | ----------------- | ------ | --------- |
+| DID creation         | 1                 | 2      | 2         |
+| Financial transfers  | 50                | 10     | 500       |
+| Computational tasks  | 20                | 5      | 100       |
+| Identity updates     | 5                 | 2      | 10        |
+| Physical anchoring   | 10                | 3      | 30        |
+| Cross-shard messages | 15                | 15     | 225       |
+| **Total**            |                   |        | **867**   |
 
 **Result**: A typical user consumes 867 UBC/month, leaving only 133 UBC (13.3%) as buffer. This is tight — any unexpected usage could exhaust the quota before month-end.
 
 ### 4.2 Power User Quota Consumption
 
-| Operation | Monthly Frequency | UBC/Op | Total UBC |
-|-----------|-------------------|--------|-----------|
-| DID creation | 3 | 2 | 6 |
-| Financial transfers | 200 | 10 | 2,000 |
-| Computational tasks | 100 | 5 | 500 |
-| Identity updates | 20 | 2 | 40 |
-| Physical anchoring | 50 | 3 | 150 |
-| Cross-shard messages | 50 | 15 | 750 |
-| **Total** | | | **3,446** |
+| Operation            | Monthly Frequency | UBC/Op | Total UBC |
+| -------------------- | ----------------- | ------ | --------- |
+| DID creation         | 3                 | 2      | 6         |
+| Financial transfers  | 200               | 10     | 2,000     |
+| Computational tasks  | 100               | 5      | 500       |
+| Identity updates     | 20                | 2      | 40        |
+| Physical anchoring   | 50                | 3      | 150       |
+| Cross-shard messages | 50                | 15     | 750       |
+| **Total**            |                   |        | **3,446** |
 
 **Result**: A power user needs 3,446 UBC/month — 3.4× the default quota. This is achievable through:
+
 - Proof-of-Useful-Work rewards (earning extra UBC via `UbcToken::reward()`)
 - Higher-tier identity verification (increased quota, future feature)
 
 ### 4.3 Recommendations for Quota Parameters
 
-| Parameter | Current Value | Code Location | Recommended Value | Rationale |
-|-----------|--------------|---------------|-------------------|-----------|
-| Default UBC quota | 1,000 | `economics/src/quota.rs` `DEFAULT_UBC_QUOTA` | 2,000 | Provides adequate buffer for normal users |
-| Epoch duration | 30 days (2,592,000,000 ms) | `economics/src/quota.rs` `DEFAULT_EPOCH_DURATION_MS` | 30 days | Keep — monthly cycle is user-friendly |
-| Power user quota | N/A | Not implemented | 10,000 | For verified high-volume identities |
+| Parameter         | Current Value              | Code Location                                        | Recommended Value | Rationale                                 |
+| ----------------- | -------------------------- | ---------------------------------------------------- | ----------------- | ----------------------------------------- |
+| Default UBC quota | 1,000                      | `economics/src/quota.rs` `DEFAULT_UBC_QUOTA`         | 2,000             | Provides adequate buffer for normal users |
+| Epoch duration    | 30 days (2,592,000,000 ms) | `economics/src/quota.rs` `DEFAULT_EPOCH_DURATION_MS` | 30 days           | Keep — monthly cycle is user-friendly     |
+| Power user quota  | N/A                        | Not implemented                                      | 10,000            | For verified high-volume identities       |
 
 ---
 
@@ -195,15 +201,15 @@ For a typical user performing normal operations:
 
 Based on the spam resistance analysis, we recommend the following mainnet fee schedule:
 
-| Domain | Testnet Fee | Mainnet Fee (Recommended) | Change | Rationale |
-|--------|------------|--------------------------|--------|-----------|
-| Financial | 10 UBC | 25 UBC | +150% | Higher value state changes warrant higher fees |
-| Computational | 5 UBC | 10 UBC | +100% | Proof verification is CPU-intensive |
-| Physical | 3 UBC | 8 UBC | +167% | Asset anchoring has real-world value |
-| Identity | 2 UBC | 3 UBC | +50% | Low barrier to entry maintained |
-| Biological | 3 UBC | 8 UBC | +167% | Consent operations have legal implications |
-| Cross-shard | 15 UBC | 35 UBC | +133% | Cross-shard coordination is expensive |
-| Default | 3 UBC | 8 UBC | +167% | Consistent with mid-tier operations |
+| Domain        | Testnet Fee | Mainnet Fee (Recommended) | Change | Rationale                                      |
+| ------------- | ----------- | ------------------------- | ------ | ---------------------------------------------- |
+| Financial     | 10 UBC      | 25 UBC                    | +150%  | Higher value state changes warrant higher fees |
+| Computational | 5 UBC       | 10 UBC                    | +100%  | Proof verification is CPU-intensive            |
+| Physical      | 3 UBC       | 8 UBC                     | +167%  | Asset anchoring has real-world value           |
+| Identity      | 2 UBC       | 3 UBC                     | +50%   | Low barrier to entry maintained                |
+| Biological    | 3 UBC       | 8 UBC                     | +167%  | Consent operations have legal implications     |
+| Cross-shard   | 15 UBC      | 35 UBC                    | +133%  | Cross-shard coordination is expensive          |
+| Default       | 3 UBC       | 8 UBC                     | +167%  | Consistent with mid-tier operations            |
 
 ### 5.2 Dynamic Fee Adjustment (Future)
 
@@ -218,10 +224,10 @@ This is planned for Phase 2 (see R7 in THREAT_MODEL.md).
 
 ### 5.3 Spam Cost at Recommended Mainnet Fees
 
-| Attack Type | Ops/Second | Fee/Op | Cost/Second | Cost/Hour | Cost/Day |
-|-------------|-----------|--------|------------|-----------|----------|
-| Financial spam | 1,000 | 25 | $25.00 | $90,000 | $2,160,000 |
-| Mixed spam (avg) | 1,000 | 15.3 | $15.30 | $55,080 | $1,321,920 |
+| Attack Type      | Ops/Second | Fee/Op | Cost/Second | Cost/Hour | Cost/Day   |
+| ---------------- | ---------- | ------ | ----------- | --------- | ---------- |
+| Financial spam   | 1,000      | 25     | $25.00      | $90,000   | $2,160,000 |
+| Mixed spam (avg) | 1,000      | 15.3   | $15.30      | $55,080   | $1,321,920 |
 
 At recommended mainnet fees, a 24-hour sustained spam attack costs $1.3M–$2.2M — a significant economic deterrent.
 
@@ -245,24 +251,24 @@ pub fn set_weight(&mut self, did: &str, stake: u64) {
 ```
 
 | Stake (tokens) | Voting Weight | Weight/Stake Ratio | Power Advantage vs. 1-token holder |
-|---------------|---------------|-------------------|-------------------------------------|
-| 1 | 1 | 1.000 | 1× |
-| 10 | 3 | 0.300 | 3× |
-| 100 | 10 | 0.100 | 10× |
-| 1,000 | 31 | 0.031 | 31× |
-| 10,000 | 100 | 0.010 | 100× |
-| 100,000 | 316 | 0.003 | 316× |
-| 1,000,000 | 1,000 | 0.001 | 1,000× |
+| -------------- | ------------- | ------------------ | ---------------------------------- |
+| 1              | 1             | 1.000              | 1×                                 |
+| 10             | 3             | 0.300              | 3×                                 |
+| 100            | 10            | 0.100              | 10×                                |
+| 1,000          | 31            | 0.031              | 31×                                |
+| 10,000         | 100           | 0.010              | 100×                               |
+| 100,000        | 316           | 0.003              | 316×                               |
+| 1,000,000      | 1,000         | 0.001              | 1,000×                             |
 
 **Key Property**: To double your voting power, you must quadruple your stake. This prevents plutocratic dominance:
 
-| Action | Additional Stake Needed | Marginal Cost per Vote |
-|--------|------------------------|----------------------|
-| 1st vote | 1 | 1 |
-| 2nd vote (2→4) | 3 | 3 |
-| 3rd vote (4→9) | 5 | 5 |
-| 10th vote (81→100) | 19 | 19 |
-| 100th vote (9,801→10,000) | 199 | 199 |
+| Action                    | Additional Stake Needed | Marginal Cost per Vote |
+| ------------------------- | ----------------------- | ---------------------- |
+| 1st vote                  | 1                       | 1                      |
+| 2nd vote (2→4)            | 3                       | 3                      |
+| 3rd vote (4→9)            | 5                       | 5                      |
+| 10th vote (81→100)        | 19                      | 19                     |
+| 100th vote (9,801→10,000) | 199                     | 199                    |
 
 ### 6.2 Reputation Decay
 
@@ -295,15 +301,15 @@ pub fn remaining_ppm_after(&self, epochs: u64) -> u64 {
 **Decay trajectory** (10% per epoch, base weight = 100):
 
 | Epochs Inactive | Remaining PPM | Effective Weight |
-|----------------|---------------|-----------------|
-| 0 | 1,000,000 | 100 |
-| 1 | 900,000 | 90 |
-| 2 | 810,000 | 81 |
-| 5 | 590,490 | 59 |
-| 10 | 348,678 | 34 |
-| 20 | 121,577 | 12 |
-| 30 | 42,391 | 4 |
-| 50 | 5,153 | 0 (rounds down) |
+| --------------- | ------------- | ---------------- |
+| 0               | 1,000,000     | 100              |
+| 1               | 900,000       | 90               |
+| 2               | 810,000       | 81               |
+| 5               | 590,490       | 59               |
+| 10              | 348,678       | 34               |
+| 20              | 121,577       | 12               |
+| 30              | 42,391        | 4                |
+| 50              | 5,153         | 0 (rounds down)  |
 
 **Result**: After 50 epochs of inactivity, a voter's weight drops to effectively zero. This ensures that only active participants have governance influence.
 
@@ -319,11 +325,11 @@ Time-locked voting is **implemented** in `economics/src/time_lock.rs`. It preven
 
 The `TimeLockConfig` struct defines the parameters:
 
-| Parameter | Default Value | Code Field |
-|-----------|--------------|------------|
-| Minimum lock duration | 100 blocks (~8 min at 5s finality) | `min_lock_duration` |
-| Maximum lock duration | 100,000 blocks (~6 days at 5s finality) | `max_lock_duration` |
-| Strict enforcement | true | `strict_enforcement` |
+| Parameter             | Default Value                           | Code Field           |
+| --------------------- | --------------------------------------- | -------------------- |
+| Minimum lock duration | 100 blocks (~8 min at 5s finality)      | `min_lock_duration`  |
+| Maximum lock duration | 100,000 blocks (~6 days at 5s finality) | `max_lock_duration`  |
+| Strict enforcement    | true                                    | `strict_enforcement` |
 
 The `LockedStake` struct tracks individual locks:
 
@@ -341,6 +347,7 @@ pub struct LockedStake {
 **Flash loan prevention**: A freshly-locked stake has zero voting power until `current_height >= lock_end`. This means borrowed funds cannot be used for voting, because the lock must mature before any power is granted.
 
 The `TimeLockVoting` struct provides:
+
 - `lock()` — Lock stake for a duration (enforces min/max bounds)
 - `voting_power()` — Sum of mature, non-released stakes
 - `release_expired()` — Release mature stakes
@@ -354,49 +361,49 @@ The `TimeLockVoting` struct provides:
 
 The `SlashingEngine` (defined in `substrate/src/slashing.rs`) uses the following parameters:
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Slash threshold | 500 points | Points at which a node is slashed (stake forfeited) |
-| Ejection threshold | 2,000 points | Points at which a node is ejected from validator set |
-| Equivocation points | 500 | Points for double-signing |
-| Liveness violation points | 100 | Points for being offline too long |
-| Invalid attestation points | 300 | Points for attesting to invalid data |
+| Parameter                  | Value        | Description                                          |
+| -------------------------- | ------------ | ---------------------------------------------------- |
+| Slash threshold            | 500 points   | Points at which a node is slashed (stake forfeited)  |
+| Ejection threshold         | 2,000 points | Points at which a node is ejected from validator set |
+| Equivocation points        | 500          | Points for double-signing                            |
+| Liveness violation points  | 100          | Points for being offline too long                    |
+| Invalid attestation points | 300          | Points for attesting to invalid data                 |
 
 ### 7.2 Offense Accumulation Analysis
 
-| Scenario | Offenses | Total Points | Outcome |
-|----------|----------|-------------|---------|
-| Single equivocation | 1 × 500 | 500 | Slashed (at threshold) |
-| Accumulated liveness violations | 5 × 100 | 500 | Slashed (at threshold) |
-| Mixed offenses (1 liveness + 1 invalid attestation) | 100 + 300 | 400 | Warned (below threshold) |
-| Persistent liveness violations | 20 × 100 | 2,000 | Ejected (at threshold) |
-| Multiple equivocations | 4 × 500 | 2,000 | Ejected (at threshold) |
+| Scenario                                            | Offenses  | Total Points | Outcome                  |
+| --------------------------------------------------- | --------- | ------------ | ------------------------ |
+| Single equivocation                                 | 1 × 500   | 500          | Slashed (at threshold)   |
+| Accumulated liveness violations                     | 5 × 100   | 500          | Slashed (at threshold)   |
+| Mixed offenses (1 liveness + 1 invalid attestation) | 100 + 300 | 400          | Warned (below threshold) |
+| Persistent liveness violations                      | 20 × 100  | 2,000        | Ejected (at threshold)   |
+| Multiple equivocations                              | 4 × 500   | 2,000        | Ejected (at threshold)   |
 
 ### 7.3 Slashing Economics
 
 Assuming a validator stakes 10,000 tokens ($10,000 at $1/token):
 
-| Offense | Slash Points | Stake Forfeited | Economic Penalty |
-|---------|-------------|----------------|-----------------|
-| Liveness violation | 100 | 0 (warned) | $0 (reputation damage only) |
-| Invalid attestation | 300 | 0 (warned) | $0 (reputation damage only) |
-| First equivocation | 500 | 10,000 (full stake) | $10,000 |
-| Second equivocation (after first slash) | 500 | 10,000 (full stake) | $10,000 |
-| Persistent liveness (20 violations) | 2,000 | 10,000 (ejected) | $10,000 + loss of future rewards |
+| Offense                                 | Slash Points | Stake Forfeited     | Economic Penalty                 |
+| --------------------------------------- | ------------ | ------------------- | -------------------------------- |
+| Liveness violation                      | 100          | 0 (warned)          | $0 (reputation damage only)      |
+| Invalid attestation                     | 300          | 0 (warned)          | $0 (reputation damage only)      |
+| First equivocation                      | 500          | 10,000 (full stake) | $10,000                          |
+| Second equivocation (after first slash) | 500          | 10,000 (full stake) | $10,000                          |
+| Persistent liveness (20 violations)     | 2,000        | 10,000 (ejected)    | $10,000 + loss of future rewards |
 
 **Issue**: The current implementation slashes the entire stake when the threshold is reached. This is a binary outcome — there is no partial slashing. A validator with 500 points (threshold = 500) loses 100% of their stake.
 
 ### 7.4 Recommended Slashing Parameters for Mainnet
 
-| Parameter | Current Value | Recommended Value | Rationale |
-|-----------|--------------|-------------------|-----------|
-| Slash threshold | 500 | 500 | Keep — single equivocation triggers slash |
-| Ejection threshold | 2,000 | 1,500 | Lower — eject persistent offenders sooner |
-| Equivocation points | 500 | 500 | Keep — equivocation is the most severe offense |
-| Liveness violation points | 100 | 50 | Lower — avoid penalizing brief network issues |
-| Invalid attestation points | 300 | 400 | Higher — invalid attestations undermine trust |
-| Slash percentage | 100% | Proportional (points/threshold × 100%) | Graduated — partial slashing for partial offenses |
-| Slashing reward | 0% | 10% of slashed stake | Incentivize whistle-blowing |
+| Parameter                  | Current Value | Recommended Value                      | Rationale                                         |
+| -------------------------- | ------------- | -------------------------------------- | ------------------------------------------------- |
+| Slash threshold            | 500           | 500                                    | Keep — single equivocation triggers slash         |
+| Ejection threshold         | 2,000         | 1,500                                  | Lower — eject persistent offenders sooner         |
+| Equivocation points        | 500           | 500                                    | Keep — equivocation is the most severe offense    |
+| Liveness violation points  | 100           | 50                                     | Lower — avoid penalizing brief network issues     |
+| Invalid attestation points | 300           | 400                                    | Higher — invalid attestations undermine trust     |
+| Slash percentage           | 100%          | Proportional (points/threshold × 100%) | Graduated — partial slashing for partial offenses |
+| Slashing reward            | 0%            | 10% of slashed stake                   | Incentivize whistle-blowing                       |
 
 ### 7.5 Proportional Slashing Formula
 
@@ -420,12 +427,13 @@ This is more proportional to the offense severity and avoids the "all-or-nothing
 
 To incentivize the detection and reporting of Byzantine behavior, we recommend awarding 10% of slashed stake to the reporter:
 
-| Offense | Slash Amount | Reporter Reward | Burned | Treasury |
-|---------|-------------|----------------|--------|----------|
-| Equivocation (proportional) | 3,333 | 333 | 1,667 | 1,333 |
-| Full ejection | 10,000 | 1,000 | 5,000 | 4,000 |
+| Offense                     | Slash Amount | Reporter Reward | Burned | Treasury |
+| --------------------------- | ------------ | --------------- | ------ | -------- |
+| Equivocation (proportional) | 3,333        | 333             | 1,667  | 1,333    |
+| Full ejection               | 10,000       | 1,000           | 5,000  | 4,000    |
 
 **Distribution**:
+
 - 10% to reporter (whistle-blower incentive)
 - 50% burned (deflationary pressure)
 - 40% to treasury (RPGF and community funding)
@@ -434,19 +442,19 @@ To incentivize the detection and reporting of Byzantine behavior, we recommend a
 
 ## 8. Summary of Recommendations
 
-| # | Parameter | Current | Recommended | Priority |
-|---|-----------|---------|-------------|----------|
-| 1 | Default UBC quota | 1,000 | 2,000 | Medium |
-| 2 | Financial op fee | 10 UBC | 25 UBC | High (mainnet) |
-| 3 | Cross-shard fee | 15 UBC | 35 UBC | High (mainnet) |
-| 4 | Identity op fee | 2 UBC | 3 UBC | Low |
-| 5 | Liveness violation points | 100 | 50 | Medium |
-| 6 | Invalid attestation points | 300 | 400 | Medium |
-| 7 | Ejection threshold | 2,000 | 1,500 | Medium |
-| 8 | Slash percentage | 100% (binary) | Proportional | High (mainnet) |
-| 9 | Slashing reporter reward | 0% | 10% | High (mainnet) |
-| 10 | Sybil-resistant DID creation | Not implemented | Implement (biometric or stake-based) | High |
-| 11 | Dynamic fee adjustment | Not implemented | Implement (EIP-1559-style) | Low (Phase 2) |
+| #   | Parameter                    | Current         | Recommended                          | Priority       |
+| --- | ---------------------------- | --------------- | ------------------------------------ | -------------- |
+| 1   | Default UBC quota            | 1,000           | 2,000                                | Medium         |
+| 2   | Financial op fee             | 10 UBC          | 25 UBC                               | High (mainnet) |
+| 3   | Cross-shard fee              | 15 UBC          | 35 UBC                               | High (mainnet) |
+| 4   | Identity op fee              | 2 UBC           | 3 UBC                                | Low            |
+| 5   | Liveness violation points    | 100             | 50                                   | Medium         |
+| 6   | Invalid attestation points   | 300             | 400                                  | Medium         |
+| 7   | Ejection threshold           | 2,000           | 1,500                                | Medium         |
+| 8   | Slash percentage             | 100% (binary)   | Proportional                         | High (mainnet) |
+| 9   | Slashing reporter reward     | 0%              | 10%                                  | High (mainnet) |
+| 10  | Sybil-resistant DID creation | Not implemented | Implement (biometric or stake-based) | High           |
+| 11  | Dynamic fee adjustment       | Not implemented | Implement (EIP-1559-style)           | Low (Phase 2)  |
 
 ### Implementation Priority
 
@@ -456,8 +464,9 @@ To incentivize the detection and reporting of Byzantine behavior, we recommend a
 
 ---
 
-*This analysis should be updated when economic parameters are modified or when market conditions change significantly.*
+_This analysis should be updated when economic parameters are modified or when market conditions change significantly._
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Benchmark Gates](./benchmark-gates.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

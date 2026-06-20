@@ -1,4 +1,5 @@
 # Phase 2 Summary
+
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 2 milestones and deliverables
 > 📅 Last Updated: 2026-05-20
@@ -18,6 +19,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 ## Critical (C) — Completed
 
 ### C-1: Fix Shamir's Secret Sharing Recovery Flow
+
 - **Problem:** Three TODOs in `shards/src/identity/state.rs` meant the entire social recovery flow was non-functional. Shares were dropped on creation, reconstructed secrets were discarded, and new keys were never added to authentication sets.
 - **Resolution:**
   - Added `EncryptedShare` struct with AES-256-GCM-style XOR encryption using BLAKE3 domain separation
@@ -29,6 +31,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `shards/src/identity/state.rs`, `shards/src/identity/mod.rs`, `shards/src/lib.rs`
 
 ### C-2: Fix Trusted Setup Ceremony — Replace Hash Stub with Real EC Operations
+
 - **Problem:** `contribute()` in `omnia-adapters/src/setup/contribution.rs` used BLAKE3 hashing instead of actual BN254 scalar multiplication. `derive_keys()` completely ignored the SRS.
 - **Resolution:**
   - Replaced hash-based transcript generation with actual BN254 G1 scalar multiplication
@@ -46,6 +49,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 ## High (H) — Completed
 
 ### H-1: Populate ZK Circuit Dummy Fields — Event Semantics Constraints
+
 - **Problem:** `EventWitness.operation_type` and `payload_hash` were always `Fr::zero()`, allowing malicious provers to submit arbitrary data.
 - **Resolution:**
   - Added `OperationType` enum (Transfer through IdentityUpdate, 8 values)
@@ -56,6 +60,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `omnia-adapters/src/circuit.rs`, `omnia-adapters/src/lib.rs`, `omnia-adapters/tests/circuit_expanded.rs`
 
 ### H-2: ZK-SNARK Benchmark Suite
+
 - **Resolution:**
   - Created `zk/benches/zk_benchmarks.rs` with 5 benchmark groups (Poseidon hash, Groth16 proof generation/verification, Merkle tree, key generation)
   - Added `[[bench]]` entry in `omnia-adapters/Cargo.toml`
@@ -64,6 +69,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `zk/benches/zk_benchmarks.rs`, `omnia-adapters/Cargo.toml`, `substrate/benches/throughput.rs`, `.github/workflows/benchmarks.yml`
 
 ### H-3: Groth16 Batch Verification
+
 - **Resolution:**
   - Added `verify_proofs_batch()` to `omnia-adapters/src/prover.rs`
   - Uses BLAKE3 domain separation (`OMNIA-BATCH-VRFY-V1`) for random scalar derivation
@@ -72,6 +78,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `omnia-adapters/src/prover.rs`, `omnia-adapters/src/lib.rs`
 
 ### H-4: Integrate PQC Key Rotation with Encrypted Keystore
+
 - **Resolution:**
   - Created `binding/src/keystore_bridge.rs` with `KeyStoreBridge` struct
   - Bridges `PqcKeyRotationManager` (in-memory) with `EncryptedKeyStore` (persistent)
@@ -82,6 +89,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `binding/src/keystore_bridge.rs`, `binding/src/lib.rs`, `binding/Cargo.toml`
 
 ### H-5: Gradual Stake Slashing with Jail/Suspension
+
 - **Problem:** Binary slashing created perverse incentives and no proportional response.
 - **Resolution:**
   - Added `SlashPenalty` enum (Warning / Jailed / Ejected) with burn percentages
@@ -97,6 +105,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 ## Medium (M) — Completed
 
 ### M-1: BIP-39 Mnemonic Support to Keystore
+
 - **Resolution:**
   - Added `bip39` dependency with `zeroize` and `rand` features
   - Added `from_mnemonic()`, `generate_with_mnemonic()`, `derive_child_key()` to `EncryptedKeyStore`
@@ -106,6 +115,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `substrate/src/keystore.rs`, `substrate/src/lib.rs`, `substrate/Cargo.toml`
 
 ### M-2: Implement DKG for Threshold Signatures
+
 - **Resolution:**
   - Added `DkgSession` state machine with 3-step protocol (generate_shares → receive_shares → finalize)
   - Added `DkgPhase`, `DkgError`, `DkgResult`, `DkgSharePackage`, `DkgVerificationResult`
@@ -115,6 +125,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `substrate/src/threshold.rs`, `substrate/src/bls.rs`, `substrate/src/lib.rs`
 
 ### M-3: Complete Sled Removal
+
 - **Resolution:**
   - Removed `sled` optional dependency and `migration` feature flag from `substrate/Cargo.toml`
   - Replaced `migration.rs` with simplified deprecation module preserving `migration_v1_to_v2_status()`
@@ -123,6 +134,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files changed:** `substrate/Cargo.toml`, `substrate/src/migration.rs`, `node/src/main.rs`, `deny.toml`, `Cargo.lock`
 
 ### M-4: Add Missing Architecture Decision Records
+
 - **Created 5 new ADRs:**
   - ADR-010: Encrypted Keystore Design (AES-256-GCM + HKDF-SHA256 + BLAKE3)
   - ADR-011: Gradual Slashing Model (3-tier Warning → Jail → Ejection)
@@ -132,6 +144,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 - **Files created:** `docs/adr/ADR-010-encrypted-keystore-design.md`, `docs/adr/ADR-011-gradual-slashing-model.md`, `docs/adr/ADR-012-vrf-construction-choice.md`, `docs/adr/ADR-013-dkg-protocol-selection.md`, `docs/adr/ADR-014-poseidon-parameter-migration.md`
 
 ### M-5: Update Project Dashboard and Status Documentation
+
 - **Updated `PROJECT_DASHBOARD.md`:** Phase 0 ✅, Phase 1 ✅, Phase 2 🔄 In Progress, added Phase 2 work items table
 - **Created `PHASE_2_FINDINGS.md`:** 5 findings documented with severity ratings
 - **Updated `STATUS.md`:** Added Phase 1/2 requirement sections with honest risk assessments
@@ -140,13 +153,13 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 
 ## Test Summary
 
-| Crate | Tests | Status |
-|-------|-------|--------|
-| omnia-substrate | 351 | ✅ All passing |
-| omnia-adapters | 81 | ✅ All passing |
-| omnia-shards | 56 | ✅ All passing |
-| omnia-binding | 49 | ✅ All passing |
-| **Total** | **537+** | **✅ All passing** |
+| Crate           | Tests    | Status             |
+| --------------- | -------- | ------------------ |
+| omnia-substrate | 351      | ✅ All passing     |
+| omnia-adapters  | 81       | ✅ All passing     |
+| omnia-shards    | 56       | ✅ All passing     |
+| omnia-binding   | 49       | ✅ All passing     |
+| **Total**       | **537+** | **✅ All passing** |
 
 ---
 
@@ -168,30 +181,31 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 
 ## Phase 2 Success Criteria Verification
 
-| # | Criterion | Verification | Status |
-|---|-----------|-------------|--------|
-| 1 | SSS recovery produces actual keypairs end-to-end | `test_sss_recovery_end_to_end` passes | ✅ |
-| 2 | Trusted setup uses real EC operations | `test_ceremony_produces_valid_srs` passes | ✅ |
-| 3 | ZK circuit constrains event semantics | Negative tests: invalid op type → proof fails | ✅ |
-| 4 | ZK benchmarks produce actionable data | `cargo bench --bench zk_benchmarks` compiles | ✅ |
-| 5 | Batch verification works for n ≥ 1 | `test_batch_verify_valid_proofs` passes | ✅ |
-| 6 | PQC rotation persists across restart | `test_rotation_survives_restart` passes | ✅ |
-| 7 | Gradual slashing with jail/suspension | `test_graded_slashing_equivocation_escalation` passes | ✅ |
-| 8 | Slashing audit log survives restart | `test_jail_period_auto_release` passes | ✅ |
-| 9 | BIP-39 mnemonic key derivation works | `test_mnemonic_round_trip` passes | ✅ |
-| 10 | DKG produces valid threshold key shares | `test_dkg_3_of_5` passes | ✅ |
-| 11 | sled fully removed from dependency tree | `cargo tree` shows no sled | ✅ |
-| 12 | 5 new ADRs committed | Files exist in `docs/adr/` | ✅ |
-| 13 | Dashboard reflects actual state | No "IMPLEMENTED" on stubs | ✅ |
-| 14 | All 537+ existing tests still pass | Individual crate tests green | ✅ |
-| 15 | No new clippy warnings | Clippy passes with `-D clippy::unwrap_used` | ✅ |
-| 16 | `PHASE_2_SUMMARY.md` written | This document | ✅ |
+| #   | Criterion                                        | Verification                                          | Status |
+| --- | ------------------------------------------------ | ----------------------------------------------------- | ------ |
+| 1   | SSS recovery produces actual keypairs end-to-end | `test_sss_recovery_end_to_end` passes                 | ✅     |
+| 2   | Trusted setup uses real EC operations            | `test_ceremony_produces_valid_srs` passes             | ✅     |
+| 3   | ZK circuit constrains event semantics            | Negative tests: invalid op type → proof fails         | ✅     |
+| 4   | ZK benchmarks produce actionable data            | `cargo bench --bench zk_benchmarks` compiles          | ✅     |
+| 5   | Batch verification works for n ≥ 1               | `test_batch_verify_valid_proofs` passes               | ✅     |
+| 6   | PQC rotation persists across restart             | `test_rotation_survives_restart` passes               | ✅     |
+| 7   | Gradual slashing with jail/suspension            | `test_graded_slashing_equivocation_escalation` passes | ✅     |
+| 8   | Slashing audit log survives restart              | `test_jail_period_auto_release` passes                | ✅     |
+| 9   | BIP-39 mnemonic key derivation works             | `test_mnemonic_round_trip` passes                     | ✅     |
+| 10  | DKG produces valid threshold key shares          | `test_dkg_3_of_5` passes                              | ✅     |
+| 11  | sled fully removed from dependency tree          | `cargo tree` shows no sled                            | ✅     |
+| 12  | 5 new ADRs committed                             | Files exist in `docs/adr/`                            | ✅     |
+| 13  | Dashboard reflects actual state                  | No "IMPLEMENTED" on stubs                             | ✅     |
+| 14  | All 537+ existing tests still pass               | Individual crate tests green                          | ✅     |
+| 15  | No new clippy warnings                           | Clippy passes with `-D clippy::unwrap_used`           | ✅     |
+| 16  | `PHASE_2_SUMMARY.md` written                     | This document                                         | ✅     |
 
 ---
 
 ## Post-Phase 2 Horizon
 
 Phase 3 should address:
+
 - VRF spec compliance (ECVRF per RFC 9381) or formal justification for current construction
 - Kyber KEM implementation in `binding/src/quantum_commit.rs`
 - State sync protocol for late-joining nodes
@@ -201,5 +215,6 @@ Phase 3 should address:
 - Bug bounty program and external security review
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,5 @@
 # Frequently Asked Questions
+
 > 🎯 Audience: All
 > 🔗 Context: Common questions about the Omnia Protocol, its economics, security model, and practical usage
 > 📅 Last Updated: 2026-05-20
@@ -59,6 +60,7 @@ You should see 938+ tests passing.
 - The graph naturally captures causality without artificial ordering
 
 **Example:**
+
 ```
 If Alice pays Bob, and Carol pays Dave:
 - These are independent events
@@ -77,6 +79,7 @@ This is much faster than traditional blockchains where every transaction waits i
 You take a massive piece of paper with a small hole in it. You place it over the picture so only Wally is visible through the hole. Your friend sees Wally and knows you found him — but learns nothing about where he is in the full picture.
 
 **In Omnia:**
+
 - Prove you're over 18 without revealing your birth date
 - Prove you have enough money without revealing your balance
 - Prove a medicine is authentic without revealing supply chain details
@@ -100,17 +103,20 @@ Physical time anchors (previously described as "Gravitational Timestamps") are n
 **Example:** `did:omnia:ab01cdef0123456789abcdef0123456789abcdef0123456789abcdef01234567`
 
 The validation rules (implemented in `shards/src/identity/did.rs`) are:
+
 - Must start with `did:omnia:` (the `DID_PREFIX` constant)
 - The method-specific identifier must be exactly 64 hex characters (32 bytes)
 - The hex must be valid (no non-hex characters)
 
 **Properties:**
+
 - You create it yourself (no authority issues it)
 - It's cryptographically verifiable
 - It cannot be revoked or censored
 - It's portable across platforms
 
 The `format_did()` function constructs DIDs from 32-byte public keys:
+
 ```rust
 // shards/src/identity/did.rs
 pub fn format_did(public_key: &[u8; 32]) -> String {
@@ -135,6 +141,7 @@ The GF(256) arithmetic uses the AES irreducible polynomial (0x11B) for reduction
 **A:** Every identity on Omnia receives a free monthly quota via the UBC token (implemented in `economics/src/ubc.rs`). The UBC token is soulbound (non-transferable) and provides a baseline of compute and transaction capacity. This ensures participation doesn't require money.
 
 Key parameters (from `economics/src/quota.rs`):
+
 - **Default quota**: 1,000 UBC/month (`DEFAULT_UBC_QUOTA`)
 - **Epoch duration**: 30 days (2,592,000,000 ms, `DEFAULT_EPOCH_DURATION_MS`)
 - **Monthly reset**: Balances are reset to the monthly quota at each epoch boundary; unspent balance is forfeited (anti-hoarding)
@@ -151,11 +158,13 @@ Key parameters (from `economics/src/quota.rs`):
 - After voting, the voter's `last_active` is updated, resetting the decay clock
 
 **Time-locked voting** is also implemented (in `economics/src/time_lock.rs`), preventing flash loan attacks:
+
 - Stake must be locked for a minimum duration (default: 100 blocks) before it grants voting power
 - Freshly-locked stake has zero voting power until the lock matures
 - Supports multiple concurrent locks per node
 
 **Planned for Phase 1 (not yet implemented):**
+
 - Conviction voting (graduated multipliers based on lock duration)
 - Delegation (delegating your vote to a trusted representative)
 
@@ -170,6 +179,7 @@ Key parameters (from `economics/src/quota.rs`):
 **A:** Omnia uses the UBC (Universal Basic Compute) token model. UBC tokens are soulbound — they are issued monthly to each identity and cannot be transferred. The `UbcToken::mint_monthly()` method resets the balance to the monthly quota at epoch boundaries. The `UbcToken::spend()` method consumes UBC for transactions (destroyed, not transferred). The `UbcToken::reward()` method adds UBC for useful-work contributions (additive, not reset at epoch boundaries).
 
 Proof-of-useful-work is implemented with 3 work types defined in `economics/src/useful_work.rs`:
+
 - `AiTraining { model_hash, training_data_hash }` — AI model training
 - `ScientificSimulation { simulation_id, params_hash }` — Distributed computation
 - `DistributedStorage { data_hash, storage_duration }` — Data hosting
@@ -182,17 +192,18 @@ There is no validator reward mechanism or staking system yet. Gradual slashing i
 
 **A:** Fee enforcement is **implemented** via the `FeeSchedule` struct (in `shards/src/fee_schedule.rs`) and the `ShardRouter` (in `shards/src/router.rs`). The standard fee schedule has flat per-operation-type fees:
 
-| Domain | Fee (UBC) |
-|--------|-----------|
-| Financial | 10 |
-| Computational | 5 |
-| Physical | 3 |
-| Identity | 2 |
-| Biological | 3 |
-| Cross-Shard | 15 |
-| Economics/Default | 3 |
+| Domain            | Fee (UBC) |
+| ----------------- | --------- |
+| Financial         | 10        |
+| Computational     | 5         |
+| Physical          | 3         |
+| Identity          | 2         |
+| Biological        | 3         |
+| Cross-Shard       | 15        |
+| Economics/Default | 3         |
 
 When `ShardRouter::route_event()` processes an event, it:
+
 1. Deserializes the payload into a `ShardPayload`
 2. Checks the nonce for replay protection
 3. Looks up the fee via `FeeSchedule::fee_for_op()`
@@ -215,22 +226,22 @@ A `ShardRouter::new_without_fees()` constructor is available for testing.
 
 **A:** Omnia uses multiple layers of security that are implemented and tested:
 
-| Security Layer | Status |
-|---------------|--------|
-| Ed25519 signatures | Implemented |
-| BLAKE3 hashing | Implemented |
-| BFT consensus (<1/3 faulty nodes) | Implemented |
-| Replay protection (nonce tracking with redb persistence) | Implemented |
-| State commitments (Merkle root) | Implemented |
-| Event pruning (sustainability) | Implemented |
-| Fee enforcement (FeeSchedule + QuotaSystem) | Implemented |
-| Time-locked voting (flash loan prevention) | Implemented |
-| Shamir's Secret Sharing social recovery (GF(256)) | Implemented |
-| Biometric anchors (BLAKE3 salted commitments) | Implemented |
-| Post-quantum cryptography (ML-KEM-768 / FIPS-203) | Implemented |
-| Gradual slashing (3-tier: Warning → Jail → Ejection) | Implemented |
-| Economic security (staking rewards) | Not started |
-| Real ZK proofs | Implemented (arkworks R1CS + Groth16 + Poseidon) |
+| Security Layer                                           | Status                                           |
+| -------------------------------------------------------- | ------------------------------------------------ |
+| Ed25519 signatures                                       | Implemented                                      |
+| BLAKE3 hashing                                           | Implemented                                      |
+| BFT consensus (<1/3 faulty nodes)                        | Implemented                                      |
+| Replay protection (nonce tracking with redb persistence) | Implemented                                      |
+| State commitments (Merkle root)                          | Implemented                                      |
+| Event pruning (sustainability)                           | Implemented                                      |
+| Fee enforcement (FeeSchedule + QuotaSystem)              | Implemented                                      |
+| Time-locked voting (flash loan prevention)               | Implemented                                      |
+| Shamir's Secret Sharing social recovery (GF(256))        | Implemented                                      |
+| Biometric anchors (BLAKE3 salted commitments)            | Implemented                                      |
+| Post-quantum cryptography (ML-KEM-768 / FIPS-203)        | Implemented                                      |
+| Gradual slashing (3-tier: Warning → Jail → Ejection)     | Implemented                                      |
+| Economic security (staking rewards)                      | Not started                                      |
+| Real ZK proofs                                           | Implemented (arkworks R1CS + Groth16 + Poseidon) |
 
 ### Q: What if my private key is compromised?
 
@@ -303,7 +314,7 @@ This approach avoids the "nothing to lose" perverse incentive of binary slashing
 
 ## Long-Term Vision
 
-*The following describes the long-term vision for Omnia. These are aspirational goals, not current capabilities.*
+_The following describes the long-term vision for Omnia. These are aspirational goals, not current capabilities._
 
 ### Q: Will Omnia work on Mars?
 
@@ -312,6 +323,7 @@ This approach avoids the "nothing to lose" perverse incentive of binary slashing
 ### Q: Will AI agents run Omnia?
 
 **A:** AI agent identity is implemented with 5 capability types (in `shards/src/identity/agent.rs`):
+
 - `FinancialTransfer { max_amount, currency }` — Bounded financial operations
 - `DataProcessing { domains, max_records }` — Scoped data access
 - `ContractExecution { contract_types }` — Limited contract interaction
@@ -327,11 +339,13 @@ AI agents can currently have identities on the network with these capabilities. 
 ### Q: I have a question not answered here
 
 **A:**
+
 - Check the documentation: [ARCHITECTURE.md](../architecture/full-spec.md)
 - Ask on Discord: [Join our Discord](https://discord.gg/qYkpAeSYR)
 - Open an issue: [GitHub Issues](issues)
 - Start a discussion: [GitHub Discussions](discussions)
 
 ---
+
 🔙 **Back**: [use-cases/](./) | 🔄 **Related**: [governance.md](./governance.md)  
 🚀 **Next**: [governance.md](./governance.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,5 @@
 # Governance System
+
 > 🎯 Audience: All
 > 🔗 Context: Omnia's governance system — quadratic voting, reputation decay, time-locked voting, AI agent participation, and future plans
 > 📅 Last Updated: 2026-05-20
@@ -38,6 +39,7 @@ The protocol evolves to meet changing needs without requiring hard forks.
 **Who decides:** Core developers and researchers
 
 **Process:**
+
 1. Proposal submitted (RFC format)
 2. Community discussion (2 weeks)
 3. Technical review (1 week)
@@ -69,6 +71,7 @@ pub struct GovernanceState {
 **Who decides:** Community members
 
 **Process:**
+
 1. Issue raised (GitHub, [Discord](https://discord.gg/qYkpAeSYR))
 2. Community discussion
 3. Consensus-building
@@ -85,6 +88,7 @@ pub struct GovernanceState {
 Voting power = isqrt(stake), where `isqrt` is the integer square root via Newton's method defined in `economics/src/fixed_point.rs`.
 
 **Example:**
+
 - Alice stakes 100 tokens → voting power = 10
 - Bob stakes 10,000 tokens → voting power = 100
 - Carol stakes 1,000,000 tokens → voting power = 1,000
@@ -120,11 +124,11 @@ Time-locked voting is **implemented** in `economics/src/time_lock.rs`. Stake mus
 
 **Configuration** (`TimeLockConfig`):
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `min_lock_duration` | 100 blocks | Minimum lock (~8 min at 5s finality) |
-| `max_lock_duration` | 100,000 blocks | Maximum lock (~6 days at 5s finality) |
-| `strict_enforcement` | true | No early withdrawals |
+| Parameter            | Default        | Description                           |
+| -------------------- | -------------- | ------------------------------------- |
+| `min_lock_duration`  | 100 blocks     | Minimum lock (~8 min at 5s finality)  |
+| `max_lock_duration`  | 100,000 blocks | Maximum lock (~6 days at 5s finality) |
+| `strict_enforcement` | true           | No early withdrawals                  |
 
 **How it works:**
 
@@ -155,6 +159,7 @@ This is planned for Phase 1 but not yet implemented.
 Voters can delegate their voting power to trusted representatives.
 
 **Process:**
+
 1. Voter selects delegate
 2. Delegate votes on behalf of voter
 3. Voter can revoke delegation anytime
@@ -169,11 +174,13 @@ This is planned for Phase 1 but not yet implemented.
 ### Monthly Governance
 
 **First Monday of each month:**
+
 - Governance call (1 hour)
 - Community presents proposals
 - Voting begins
 
 **Second Monday:**
+
 - Voting ends
 - Results announced
 - Implementation planning
@@ -181,6 +188,7 @@ This is planned for Phase 1 but not yet implemented.
 ### Quarterly Reviews
 
 **Every 3 months:**
+
 - Review protocol performance
 - Assess community health
 - Plan next quarter's initiatives
@@ -191,30 +199,30 @@ This is planned for Phase 1 but not yet implemented.
 
 ### Tier 1: Minor Updates (Fast Track)
 
-| Property | Value |
-|----------|-------|
-| **Examples** | Bug fixes, documentation, small parameter adjustments |
-| **Timeline** | 1 week |
-| **Voting** | Simple majority |
-| **Implementation** | Immediate |
+| Property           | Value                                                 |
+| ------------------ | ----------------------------------------------------- |
+| **Examples**       | Bug fixes, documentation, small parameter adjustments |
+| **Timeline**       | 1 week                                                |
+| **Voting**         | Simple majority                                       |
+| **Implementation** | Immediate                                             |
 
 ### Tier 2: Standard Proposals (Normal Track)
 
-| Property | Value |
-|----------|-------|
-| **Examples** | New features, protocol improvements, economic policy changes |
-| **Timeline** | 4 weeks |
-| **Voting** | Quadratic voting (>66% approval) |
-| **Implementation** | Staged rollout |
+| Property           | Value                                                        |
+| ------------------ | ------------------------------------------------------------ |
+| **Examples**       | New features, protocol improvements, economic policy changes |
+| **Timeline**       | 4 weeks                                                      |
+| **Voting**         | Quadratic voting (>66% approval)                             |
+| **Implementation** | Staged rollout                                               |
 
 ### Tier 3: Major Changes (Extended Track)
 
-| Property | Value |
-|----------|-------|
-| **Examples** | Consensus mechanism changes, new domain shards |
-| **Timeline** | 12 weeks |
-| **Voting** | Quadratic voting (>75% approval) |
-| **Implementation** | Shadow fork → testnet → mainnet (3+ months) |
+| Property           | Value                                          |
+| ------------------ | ---------------------------------------------- |
+| **Examples**       | Consensus mechanism changes, new domain shards |
+| **Timeline**       | 12 weeks                                       |
+| **Voting**         | Quadratic voting (>75% approval)               |
+| **Implementation** | Shadow fork → testnet → mainnet (3+ months)    |
 
 The `Proposal` struct in the codebase supports the basic fields needed for proposals:
 
@@ -237,22 +245,22 @@ pub struct Proposal {
 
 ### Conflict Resolution Process
 
-| Step | Duration | Description |
-|------|----------|-------------|
-| 1 | 1 week | Negotiation — Parties discuss directly; mediator facilitates |
-| 2 | 2 weeks | Arbitration — Neutral arbitrator reviews evidence, proposes solution |
-| 3 | 2 weeks | Community Vote — If parties disagree with arbitration; decision is binding |
+| Step | Duration | Description                                                                |
+| ---- | -------- | -------------------------------------------------------------------------- |
+| 1    | 1 week   | Negotiation — Parties discuss directly; mediator facilitates               |
+| 2    | 2 weeks  | Arbitration — Neutral arbitrator reviews evidence, proposes solution       |
+| 3    | 2 weeks  | Community Vote — If parties disagree with arbitration; decision is binding |
 
 ### Slashing — Aspirational
 
 Validators can be slashed (lose stake) for:
 
-| Offense | Slash Amount | Reason |
-|---------|--------------|--------|
-| Double-signing | 100% | Attempting to finalize conflicting blocks |
-| Offline >24h | 1% per day | Failing to participate in consensus |
-| Malicious behavior | 50-100% | Attacking the network |
-| Censoring transactions | 25% | Refusing to include valid transactions |
+| Offense                | Slash Amount | Reason                                    |
+| ---------------------- | ------------ | ----------------------------------------- |
+| Double-signing         | 100%         | Attempting to finalize conflicting blocks |
+| Offline >24h           | 1% per day   | Failing to participate in consensus       |
+| Malicious behavior     | 50-100%      | Attacking the network                     |
+| Censoring transactions | 25%          | Refusing to include valid transactions    |
 
 Slashing is aspirational — there is no validator network or staking system yet.
 
@@ -298,13 +306,13 @@ The `GovernanceVote` capability includes a `max_weight` parameter that limits th
 
 ### Reputation Thresholds — Planned
 
-| Threshold | Privileges |
-|-----------|-----------|
-| **0-10** | Read-only access |
-| **10-25** | Can vote on Tier 1 proposals |
-| **25-50** | Can vote on Tier 2 proposals |
-| **50-75** | Can vote on Tier 3 proposals |
-| **75-100** | Can propose Tier 3 changes |
+| Threshold  | Privileges                   |
+| ---------- | ---------------------------- |
+| **0-10**   | Read-only access             |
+| **10-25**  | Can vote on Tier 1 proposals |
+| **25-50**  | Can vote on Tier 2 proposals |
+| **50-75**  | Can vote on Tier 3 proposals |
+| **75-100** | Can propose Tier 3 changes   |
 
 ---
 
@@ -312,22 +320,22 @@ The `GovernanceVote` capability includes a `max_weight` parameter that limits th
 
 ### Revenue Sources
 
-| Source | Amount | Use | Status |
-|--------|--------|-----|--------|
-| Transaction fees | Implemented (FeeSchedule) | RPGF pool | Not yet distributed |
-| High-frequency fees | Not implemented | UBC subsidies | Not started |
-| Validator rewards | Not implemented | Incentivize validation | Not started |
-| Slashing proceeds | Not implemented | RPGF pool | Not started |
+| Source              | Amount                    | Use                    | Status              |
+| ------------------- | ------------------------- | ---------------------- | ------------------- |
+| Transaction fees    | Implemented (FeeSchedule) | RPGF pool              | Not yet distributed |
+| High-frequency fees | Not implemented           | UBC subsidies          | Not started         |
+| Validator rewards   | Not implemented           | Incentivize validation | Not started         |
+| Slashing proceeds   | Not implemented           | RPGF pool              | Not started         |
 
 ### Spending Categories
 
-| Category | Allocation | Purpose | Status |
-|----------|-----------|---------|--------|
-| RPGF | 40% | Reward public goods | Aspirational |
-| UBC subsidies | 30% | Free access for all | Aspirational |
-| Research | 15% | Academic partnerships | Aspirational |
-| Infrastructure | 10% | Nodes, storage, bandwidth | Aspirational |
-| Emergency reserve | 5% | Crisis response | Aspirational |
+| Category          | Allocation | Purpose                   | Status       |
+| ----------------- | ---------- | ------------------------- | ------------ |
+| RPGF              | 40%        | Reward public goods       | Aspirational |
+| UBC subsidies     | 30%        | Free access for all       | Aspirational |
+| Research          | 15%        | Academic partnerships     | Aspirational |
+| Infrastructure    | 10%        | Nodes, storage, bandwidth | Aspirational |
+| Emergency reserve | 5%         | Crisis response           | Aspirational |
 
 All treasury distribution is aspirational — there are no transaction fee distribution mechanisms, no validator rewards, and no treasury mechanism implemented yet. The `FeeSchedule` collects fees via the `ShardRouter`, but the collected UBC is simply consumed (burned), not redirected to a treasury.
 
@@ -373,6 +381,7 @@ Governance cannot:
 #### 1. Contribute Code
 
 **Process:**
+
 1. Fork repository
 2. Create feature branch
 3. Implement with tests
@@ -383,6 +392,7 @@ Governance cannot:
 #### 2. Participate in Governance
 
 **Process:**
+
 1. Run the protocol locally
 2. Test governance features (quadratic voting, reputation decay, time-locked voting)
 3. Propose changes via GitHub Issues or Discussions
@@ -390,6 +400,7 @@ Governance cannot:
 #### 3. Build Applications
 
 **Process:**
+
 1. Build tool/service using the Omnia Rust library
 2. Attract users
 3. Apply for RPGF funding (when implemented)
@@ -443,7 +454,7 @@ Governance cannot:
 
 ### Year 4+: Post-Human Governance — Aspirational
 
-*This section describes a long-term vision. It is not currently being developed.*
+_This section describes a long-term vision. It is not currently being developed._
 
 - AI agents have full voting rights
 - Collective intelligence guides decisions
@@ -451,5 +462,6 @@ Governance cannot:
 - Governance becomes mathematical
 
 ---
+
 🔙 **Back**: [use-cases/](./) | 🔄 **Related**: [../architecture/layer-5-economics.md](../architecture/layer-5-economics.md)  
 🚀 **Next**: [real-world-scenarios.md](./real-world-scenarios.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

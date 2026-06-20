@@ -1,4 +1,5 @@
 # Consensus Pipeline Design
+
 > 🎯 Audience: Developers
 > 🔗 Context: Consensus pipeline, mempool, leader selection, and queue invariants
 > 📅 Last Updated: 2026-05-20
@@ -37,7 +38,7 @@ This makes each consensus iteration O(k), where k is the number of new events si
 
 ### Invariant 1: Every Event in `unprocessed_events` Is Already in the Graph
 
-For every `EventId` in `unprocessed_events`, there exists a corresponding `Event` in `CausalGraph`. Events are inserted into the graph *before* their IDs are added to the queue.
+For every `EventId` in `unprocessed_events`, there exists a corresponding `Event` in `CausalGraph`. Events are inserted into the graph _before_ their IDs are added to the queue.
 
 ### Invariant 2: `process_consensus()` Drains the Queue Completely Each Call
 
@@ -88,15 +89,16 @@ See [ADR-018](../reference/adr-index.md#adr-018-consensus-state-persistence) for
 
 ## Performance Characteristics
 
-| Operation | Complexity | Notes |
-|-----------|-----------|-------|
-| Append to queue | O(1) | `Vec::push()` amortized |
-| Drain queue | O(k) | k = number of unprocessed events |
-| Consensus per event | O(k × ancestry) | Ancestry checks are O(k) in worst case |
-| Total per iteration | O(k) | Dominated by consensus, not queue management |
+| Operation           | Complexity      | Notes                                        |
+| ------------------- | --------------- | -------------------------------------------- |
+| Append to queue     | O(1)            | `Vec::push()` amortized                      |
+| Drain queue         | O(k)            | k = number of unprocessed events             |
+| Consensus per event | O(k × ancestry) | Ancestry checks are O(k) in worst case       |
+| Total per iteration | O(k)            | Dominated by consensus, not queue management |
 
 The queue ensures that consensus processing scales with the rate of new events, not with the total history size.
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [trait-boundaries.md](./trait-boundaries.md)
 🚀 **Next**: [crdt-convergence.md](./crdt-convergence.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

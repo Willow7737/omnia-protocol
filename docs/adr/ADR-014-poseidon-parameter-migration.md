@@ -1,4 +1,5 @@
 # ADR-014: Poseidon Parameter Migration Strategy
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -32,12 +33,14 @@ Phase 5 adds the `PoseidonVersion` enum with `Custom` (current, default) and `Re
 ## Migration Timeline
 
 ### Phase A: Both Versions Available, Custom is Default (Phase 5 — Current)
+
 - `PoseidonVersion::Custom` is the default for all hash operations
 - `PoseidonVersion::Reference` available via `poseidon_hash_with_version(_, Reference)`
 - Reference parameters are placeholder (zero-filled) until populated from Filecoin/Neptune
 - All existing proofs use Custom parameters and continue to work
 
 ### Phase B: Both Versions Available, Reference is Default for New Proofs (Phase 6 — Testnet)
+
 - Reference constants populated from Filecoin/Neptune repository
 - New proofs default to `PoseidonVersion::Reference`
 - Custom parameters still accepted for verification of existing proofs
@@ -45,6 +48,7 @@ Phase 5 adds the `PoseidonVersion` enum with `Custom` (current, default) and `Re
 - Trusted setup keys regenerated for Reference parameters
 
 ### Phase C: Custom Deprecated, Only Reference Accepted (Phase 7 — Mainnet)
+
 - Only `PoseidonVersion::Reference` accepted for new proofs
 - Custom parameters kept for historical verification only
 - All existing Custom proofs must be regenerated with Reference parameters
@@ -53,33 +57,40 @@ Phase 5 adds the `PoseidonVersion` enum with `Custom` (current, default) and `Re
 ## Alternatives Considered
 
 ### Immediate Migration
+
 Breaks all existing proofs immediately. Rejected due to deployment disruption.
 
 ### Dual-Hash Transition (Chosen)
+
 Safest approach: both versions coexist during transition. Allows gradual migration with no network downtime.
 
 ### Keep Current Parameters (Previous Decision)
+
 Retained as Phase A of the dual-hash transition. Now has a concrete migration timeline.
 
 ## Consequences
 
 ### Positive
+
 - Concrete migration plan with defined phases
 - No immediate disruption to existing proofs
 - Reference parameters will provide interoperability with Filecoin/Neptune
 - Phase 5 infrastructure (`PoseidonVersion`, `poseidon_hash_with_version`) ready for Phase B
 
 ### Negative
+
 - Three-phase migration requires coordination across multiple releases
 - Trusted setup keys must be regenerated for Reference parameters
 - All existing ZK proofs must eventually be regenerated
 - Dual-hash period increases code complexity
 
 ### Trade-offs
+
 - Migration complexity traded for long-term interoperability and auditability
 - Phased approach reduces risk compared to immediate migration
 - Phase 5 lays the foundation; Phases 6-7 complete the transition
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

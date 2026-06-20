@@ -1,4 +1,5 @@
 # Building Omnia Protocol
+
 > 🎯 Audience: Developers
 > 🔗 Context: Index for build guides, feature profiles, and binary optimization
 > 📅 Last Updated: 2026-05-20
@@ -11,11 +12,11 @@
 
 ## Build Documents
 
-| Document | Description |
-|----------|-------------|
-| [feature-matrix.md](feature-matrix.md) | Feature flags and build profiles — `ethereum-live`, default features |
-| [cross-compilation.md](cross-compilation.md) | Cross-compilation guide — Docker builds, target triples |
-| [binary-optimization.md](binary-optimization.md) | Binary size and release optimization — LTO, codegen-units, strip |
+| Document                                         | Description                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| [feature-matrix.md](feature-matrix.md)           | Feature flags and build profiles — `ethereum-live`, default features |
+| [cross-compilation.md](cross-compilation.md)     | Cross-compilation guide — Docker builds, target triples              |
+| [binary-optimization.md](binary-optimization.md) | Binary size and release optimization — LTO, codegen-units, strip     |
 
 ## Quick Build
 
@@ -31,5 +32,6 @@ cargo build --release --workspace
 ```
 
 ---
+
 🔙 **Back**: [docs/](../) | 🔄 **Related**: [operations/](../operations/)
 🚀 **Next**: [feature-matrix.md](./feature-matrix.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

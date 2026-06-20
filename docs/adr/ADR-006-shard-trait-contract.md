@@ -1,4 +1,5 @@
 # ADR-006: Shard Trait Contract
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -42,14 +43,14 @@ The `ShardId` is a 32-byte identifier with well-known constructors for each shar
 
 Six concrete types implement the `Shard` trait, each defined in `shards/src/lib.rs`:
 
-| Implementation | `shard_id()` | State Type | Source File |
-|---------------|--------------|------------|-------------|
-| `FinancialShard` | `ShardId::financial()` (`"FINANCE0"`) | `FinancialState` | `shards/src/lib.rs` |
-| `ComputationalShard` | `ShardId::computational()` (`"COMP___0"`) | `ComputationalState` | `shards/src/lib.rs` |
-| `PhysicalShard` | `ShardId::physical()` (`"PHYS___0"`) | `PhysicalState` | `shards/src/lib.rs` |
-| `BiologicalShard` | `ShardId::biological()` (`"BIO____0"`) | `BiologicalState` | `shards/src/lib.rs` |
-| `IdentityShard` | `ShardId::identity()` (`"IDENT__0"`) | `IdentityState` | `shards/src/lib.rs` |
-| `EconomicsShard` | `ShardId::economics()` (`"ECONOM00"`) | `EconomicsShardState` | `shards/src/lib.rs` |
+| Implementation       | `shard_id()`                              | State Type            | Source File         |
+| -------------------- | ----------------------------------------- | --------------------- | ------------------- |
+| `FinancialShard`     | `ShardId::financial()` (`"FINANCE0"`)     | `FinancialState`      | `shards/src/lib.rs` |
+| `ComputationalShard` | `ShardId::computational()` (`"COMP___0"`) | `ComputationalState`  | `shards/src/lib.rs` |
+| `PhysicalShard`      | `ShardId::physical()` (`"PHYS___0"`)      | `PhysicalState`       | `shards/src/lib.rs` |
+| `BiologicalShard`    | `ShardId::biological()` (`"BIO____0"`)    | `BiologicalState`     | `shards/src/lib.rs` |
+| `IdentityShard`      | `ShardId::identity()` (`"IDENT__0"`)      | `IdentityState`       | `shards/src/lib.rs` |
+| `EconomicsShard`     | `ShardId::economics()` (`"ECONOM00"`)     | `EconomicsShardState` | `shards/src/lib.rs` |
 
 Each shard's `process_event()` implementation validates the operation before applying it, delegates to the domain-specific validator and state, and returns `ShardError` on failure. The `state_snapshot()` method serializes state via `postcard::to_allocvec()` (some shards prefix a version byte).
 
@@ -62,6 +63,7 @@ Each shard's `process_event()` implementation validates the operation before app
 **Rationale**: The Omnia consensus engine requires that all honest nodes reach the same shard state after processing the same sequence of committed events. If `process_event()` were non-deterministic (e.g., using random numbers, thread-local state, or wall-clock time), different nodes would diverge, breaking consensus.
 
 **Implications for implementations**:
+
 - No use of `rand::random()` or `SystemTime::now()` inside `process_event()`.
 - No use of `HashMap` iteration order (which is non-deterministic in Rust). Use `BTreeMap` for any data structure that affects state serialization.
 - All randomness must come from the event's vector clock or payload (which are deterministic given the same event).
@@ -74,6 +76,7 @@ Each shard's `process_event()` implementation validates the operation before app
 **Rationale**: `validate()` is used for pre-flight checks — determining whether an operation would succeed before committing it. If `validate()` had side effects, calling it would alter state, making it impossible to "test before commit." This is especially important for the Financial shard, where `validate()` checks balance sufficiency without modifying balances.
 
 **Implications for implementations**:
+
 - `validate()` takes `&self` (immutable reference), enforced by the Rust type system.
 - No interior mutability (no `Cell`, `RefCell`, or `AtomicU64` inside `validate()`).
 - No I/O (no network calls, no file reads, no logging of mutable state).
@@ -84,6 +87,7 @@ Each shard's `process_event()` implementation validates the operation before app
 **Contract**: For the same shard state, `state_snapshot()` must always return the exact same byte sequence. Two nodes with the same state must produce identical snapshots.
 
 **Rationale**: State snapshots are used for:
+
 - State root computation (the Merkle root of shard state).
 - Cross-shard state verification.
 - L1 settlement (the state root is posted to L1 via `SettlementLayer::post_batch()`).
@@ -91,6 +95,7 @@ Each shard's `process_event()` implementation validates the operation before app
 If snapshots were non-reproducible, the same shard state would produce different state roots on different nodes, breaking consensus.
 
 **Implications for implementations**:
+
 - All serialization must use deterministic formats. `postcard` (used by all shard `to_bytes()` methods) is deterministic by default and `no_std`-compatible, ensuring byte-for-byte reproducible output. This is critical for consensus, where all nodes must produce identical state snapshots from the same state.
 - Map types must use `BTreeMap` (deterministic iteration order), not `HashMap` (non-deterministic iteration order). The `FinancialState` and other shards use `HashMap`, which is a known issue — they must be migrated to `BTreeMap` before mainnet.
 - Floating-point numbers must not appear in serialized state (NaN != NaN, -0.0 != +0.0). The economics crate enforces this: all calculations use fixed-point PPM arithmetic.
@@ -104,6 +109,7 @@ If snapshots were non-reproducible, the same shard state would produce different
 **Rationale**: The substrate runs in a multi-threaded Tokio runtime. The `ShardRouter` holds shards in a collection that may be accessed from multiple tasks. While individual `process_event()` calls are sequential (due to `&mut self`), the router itself must be `Send + Sync` to be stored in the substrate's `shard_processor` field, which is accessed across await points in the `run()` loop.
 
 **Implications for implementations**:
+
 - No `Rc` or `RefCell` in shard state (they are not `Send + Sync`).
 - `Arc` is acceptable for shared read-only data.
 - `Mutex` and `RwLock` are acceptable for interior mutability, but care must be taken to avoid deadlocks.
@@ -112,15 +118,15 @@ If snapshots were non-reproducible, the same shard state would produce different
 
 The `ShardError` enum (in `shards/src/shard.rs`) provides seven variants:
 
-| Variant | When to Use | Example |
-|---------|-------------|---------|
-| `InvalidOperation` | The operation is not valid for this shard type | Calling a financial op on the identity shard |
-| `ValidationFailed` | The operation would violate a business rule | Insufficient balance for transfer |
-| `StateConflict` | A state-level conflict is detected | Double-spend attempt, task already exists |
-| `CrossShardError` | A cross-shard communication failure | Timeout waiting for another shard |
-| `DeserializationError` | Failed to decode the shard payload | Malformed `ShardOp` bytes |
-| `UnknownShard` | The target shard was not found in the router | Routing to a non-existent shard |
-| `InsufficientFee` | The caller lacks UBC quota to pay the fee | Quota exceeded for the operation |
+| Variant                | When to Use                                    | Example                                      |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------- |
+| `InvalidOperation`     | The operation is not valid for this shard type | Calling a financial op on the identity shard |
+| `ValidationFailed`     | The operation would violate a business rule    | Insufficient balance for transfer            |
+| `StateConflict`        | A state-level conflict is detected             | Double-spend attempt, task already exists    |
+| `CrossShardError`      | A cross-shard communication failure            | Timeout waiting for another shard            |
+| `DeserializationError` | Failed to decode the shard payload             | Malformed `ShardOp` bytes                    |
+| `UnknownShard`         | The target shard was not found in the router   | Routing to a non-existent shard              |
+| `InsufficientFee`      | The caller lacks UBC quota to pay the fee      | Quota exceeded for the operation             |
 
 `ValidationFailed` vs `StateConflict`: Use `ValidationFailed` for rule violations that are caught by the `validate()` method (e.g., insufficient balance). Use `StateConflict` for violations detected during `process_event()` that represent actual state corruption (e.g., a double-spend where the same UTXO is spent twice). The distinction is important because `StateConflict` may trigger slashing, while `ValidationFailed` simply rejects the operation.
 
@@ -160,5 +166,6 @@ The Financial shard (`shards/src/financial/`) uses strict causal ordering for ba
 - **Trade-off**: The `ShardError` enum is shared across all shard types, which means some error variants may not apply to all shards. This is simpler than per-shard error types but reduces type safety at the router level.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

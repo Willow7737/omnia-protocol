@@ -1,4 +1,5 @@
 # Layer 3: The Binding Layer
+
 > 🎯 Audience: Developers
 > 🔗 Context: Layer 3 anchors the digital system to physical reality without requiring trusted intermediaries
 > 📅 Last Updated: 2026-05-20
@@ -65,16 +66,17 @@ Located in: `shards/src/identity/biometric.rs`
 
 ## What's a Stub ⚠️
 
-| Feature | Status | What's Needed |
-|---------|--------|---------------|
-| RF fingerprinting | ⚠️ Stub | SDR hardware (HackRF/USRP) for real RF-DNA feature extraction |
+| Feature               | Status             | What's Needed                                                                                          |
+| --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------ |
+| RF fingerprinting     | ⚠️ Stub            | SDR hardware (HackRF/USRP) for real RF-DNA feature extraction                                          |
 | Physical time anchors | 🌑 Not Implemented | Previously described as "Gravitational Timestamps" — protocol relies on logical time via vector clocks |
-| Satellite mesh | 🌑 Not Implemented | GPS + Galileo + Starlink cross-validation for location verification |
+| Satellite mesh        | 🌑 Not Implemented | GPS + Galileo + Starlink cross-validation for location verification                                    |
 
 ## Cryptographic Migration
 
 For the migration playbook if any cryptographic primitive is compromised, see [crypto-migration.md](../reference/crypto-migration.md).
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [layer-4-identity.md](./layer-4-identity.md)
 🚀 **Next**: [layer-4-identity.md](./layer-4-identity.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

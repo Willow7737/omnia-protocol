@@ -29,13 +29,13 @@
 
 ## 🚪 Choose Your Path
 
-| If you are... | Start Here | Next Step |
-|---------------|------------|-----------|
-| 🌱 New to Omnia | [docs/use-cases/](docs/use-cases/) | [Quick Start](#-quick-start) |
-| 💻 Contributor | [CONTRIBUTING.md](CONTRIBUTING.md) | [docs/architecture/](docs/architecture/) |
-| 🏗️ Systems Architect | [docs/reference/blueprint-reference.md](docs/reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](docs/architecture/trait-boundaries.md) |
-| 📦 Validator Operator | [docs/building/feature-matrix.md](docs/building/feature-matrix.md) | [docs/operations/validator-setup.md](docs/operations/validator-setup.md) |
-| 📊 Performance Engineer | [docs/reference/benchmark-gates.md](docs/reference/benchmark-gates.md) | [docs/architecture/pipeline-design.md](docs/architecture/pipeline-design.md) |
+| If you are...           | Start Here                                                                     | Next Step                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 🌱 New to Omnia         | [docs/use-cases/](docs/use-cases/)                                             | [Quick Start](#-quick-start)                                                   |
+| 💻 Contributor          | [CONTRIBUTING.md](CONTRIBUTING.md)                                             | [docs/architecture/](docs/architecture/)                                       |
+| 🏗️ Systems Architect    | [docs/reference/blueprint-reference.md](docs/reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](docs/architecture/trait-boundaries.md) |
+| 📦 Validator Operator   | [docs/building/feature-matrix.md](docs/building/feature-matrix.md)             | [docs/operations/validator-setup.md](docs/operations/validator-setup.md)       |
+| 📊 Performance Engineer | [docs/reference/benchmark-gates.md](docs/reference/benchmark-gates.md)         | [docs/architecture/pipeline-design.md](docs/architecture/pipeline-design.md)   |
 
 ---
 
@@ -81,35 +81,35 @@ Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamenta
 
 ### The Problem We Solve
 
-| Challenge | Impact | Omnia's Solution |
-| :--- | :--- | :--- |
-| **Inefficient Blockchains** | High fees and energy waste | Parallel causal graph consensus |
-| **Broken Governance** | Opaque decisions and ignored votes | Quadratic voting + reputation decay |
-| **Data Exploitation** | Corporate profit from personal info | User-controlled data via Zero-Knowledge Proofs |
-| **Opaque Supply Chains** | Hidden child labor and fake medicine | Cryptographic birth certificates for physical items |
-| **Centralized AI** | Corporate control of models and data | Distributed training with shared rewards |
-| **Speculative Crypto** | Wealth concentration and volatility | Universal Basic Compute for all participants |
+| Challenge                   | Impact                               | Omnia's Solution                                    |
+| :-------------------------- | :----------------------------------- | :-------------------------------------------------- |
+| **Inefficient Blockchains** | High fees and energy waste           | Parallel causal graph consensus                     |
+| **Broken Governance**       | Opaque decisions and ignored votes   | Quadratic voting + reputation decay                 |
+| **Data Exploitation**       | Corporate profit from personal info  | User-controlled data via Zero-Knowledge Proofs      |
+| **Opaque Supply Chains**    | Hidden child labor and fake medicine | Cryptographic birth certificates for physical items |
+| **Centralized AI**          | Corporate control of models and data | Distributed training with shared rewards            |
+| **Speculative Crypto**      | Wealth concentration and volatility  | Universal Basic Compute for all participants        |
 
 ---
 
 ## 🧪 Workspace
 
-| Crate | Purpose | Status |
-|-------|---------|--------|
-| `omnia-primitives/` | Shared types: Event, VectorClock, wire format | ✅ |
-| `omnia-crypto/` | Ed25519, BLS, deterministic hash selection, AES-GCM, keystore, PQC, DKG | ✅ |
-| `omnia-consensus/` | Causal graph, consensus engine, mempool, CRDTs, slashing | ✅ |
-| `omnia-network/` | P2P networking: gossipsub, fast-sync, snapshots | ✅ |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | ✅ |
-| `substrate/` | Integration crate: causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | ✅ |
-| `shards/` | 6 domain shards + cross-shard messaging | ✅ |
-| `binding/` | Provenance log, RF stub, hybrid PQC signatures | ✅ |
-| `economics/` | UBC token, quota, governance, useful work | ✅ |
-| `node/` | Binary entrypoint, REST API, health/metrics, consensus loop | ✅ |
-| `chaos-tests/` | Network partitions, crash recovery, byzantine, message loss | ✅ |
-| `fuzz/` | 12 fuzz harnesses (libfuzzer) | ✅ |
-| `benches/` | Throughput, ZK, IAI/Callgrind hot-path benchmarks | ✅ |
-| `tests/` | Integration tests | ✅ |
+| Crate               | Purpose                                                                            | Status |
+| ------------------- | ---------------------------------------------------------------------------------- | ------ |
+| `omnia-primitives/` | Shared types: Event, VectorClock, wire format                                      | ✅     |
+| `omnia-crypto/`     | Ed25519, BLS, deterministic hash selection, AES-GCM, keystore, PQC, DKG            | ✅     |
+| `omnia-consensus/`  | Causal graph, consensus engine, mempool, CRDTs, slashing                           | ✅     |
+| `omnia-network/`    | P2P networking: gossipsub, fast-sync, snapshots                                    | ✅     |
+| `omnia-adapters/`   | ZK-rollup (arkworks R1CS + Groth16), settlement adapters                           | ✅     |
+| `substrate/`        | Integration crate: causal graph, consensus, gossip, crypto, CRDTs, slashing (redb) | ✅     |
+| `shards/`           | 6 domain shards + cross-shard messaging                                            | ✅     |
+| `binding/`          | Provenance log, RF stub, hybrid PQC signatures                                     | ✅     |
+| `economics/`        | UBC token, quota, governance, useful work                                          | ✅     |
+| `node/`             | Binary entrypoint, REST API, health/metrics, consensus loop                        | ✅     |
+| `chaos-tests/`      | Network partitions, crash recovery, byzantine, message loss                        | ✅     |
+| `fuzz/`             | 12 fuzz harnesses (libfuzzer)                                                      | ✅     |
+| `benches/`          | Throughput, ZK, IAI/Callgrind hot-path benchmarks                                  | ✅     |
+| `tests/`            | Integration tests                                                                  | ✅     |
 
 **Total: 224+ Rust source files, 83,000+ lines.** Run `cargo test --workspace` for current test counts.
 
@@ -129,6 +129,7 @@ cargo bench --no-run
 ## ✅ What's Implemented
 
 ### Layer 1: Substrate ✅
+
 - Causal graph (DAG) with vector clock ordering
 - Hashgraph-like two-parent events
 - AlephBFT-inspired BFT finality
@@ -141,6 +142,7 @@ cargo bench --no-run
 - Security: `state_root()`, `merkle_proof()`, `prune_old_events()`
 
 ### Layer 2: Domain Shards ✅
+
 - 6 shards: Financial, Identity, Physical, Computational, Biological, Economics
 - Shard router with automatic dispatch (`EventProcessor` trait)
 - Cross-shard messaging with causality proofs
@@ -149,6 +151,7 @@ cargo bench --no-run
 - FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
 
 ### Layer 3: Binding Layer ✅
+
 - Append-only provenance log (CRDT) with BLAKE3 hash-chain integrity
 - Physical anchor (RF + quantum + provenance)
 - ProvenanceTracker with create/transfer/verify/destroy lifecycle
@@ -157,6 +160,7 @@ cargo bench --no-run
 - ⚠️ **STUB**: RF fingerprinting (needs SDR hardware; see [stub inventory](docs/stub-inventory.md))
 
 ### Layer 4: Identity Hardening ✅
+
 - `did:omnia:` method with validation
 - Shamir's Secret Sharing over GF(256)
 - Privacy-preserving biometric anchors (BLAKE3(salt || template))
@@ -164,6 +168,7 @@ cargo bench --no-run
 - Social recovery with guardian threshold
 
 ### Layer 5: Economics ✅
+
 - Universal Basic Compute (UBC) — soulbound monthly quota
 - Quota system with epoch advancement
 - Quadratic voting with exponential reputation decay
@@ -171,6 +176,7 @@ cargo bench --no-run
 - ⚠️ **STUB**: Proof-of-useful-work (3 work types defined, not production; see [stub inventory](docs/stub-inventory.md))
 
 ### Phase 0: ZK-Rollup ✅
+
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
@@ -185,6 +191,7 @@ cargo bench --no-run
 - ⚠️ Placeholder: ExpandedRollupCircuit uses Poseidon hash (production-ready, but parameters use Cauchy MDS + BLAKE3 round constants, not Grain LFSR from paper)
 
 ### Phase 0 Remediation ✅
+
 - **Coin round** integrated into fame determination (breaks split-vote deadlocks)
 - **Feldman VSS DKG** replaces deprecated key aggregation (`FeldmanVssSession`)
 - **SRS binding** in key derivation (`derive_keys_deterministic_from_srs`)
@@ -202,18 +209,18 @@ cargo bench --no-run
 
 ## 🌑 What's Not Yet Implemented
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Real RF fingerprinting | ⚠️ **STUB** | Needs HackRF/USRP hardware |
-| Bitcoin settlement adapter | ⚠️ **STUB** | Implements trait, returns hardcoded values |
-| Solana settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
-| Cosmos settlement adapter | ⚠️ **STUB** | Implements trait, no-op methods |
-| Proof-of-useful-work | ⚠️ **STUB** | 3 types defined, no real verification |
-| Mobile wallet | 🌑 Not started | Planned for post-testnet |
-| Validator network | 🌑 Not started | Single-node operator currently |
-| Conviction voting | 🌑 Not started | Planned for post-testnet |
-| Delegation | 🌑 Not started | Planned for post-testnet |
-| Production ZK hash gadget | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
+| Feature                    | Status                  | Notes                                                |
+| -------------------------- | ----------------------- | ---------------------------------------------------- |
+| Real RF fingerprinting     | ⚠️ **STUB**             | Needs HackRF/USRP hardware                           |
+| Bitcoin settlement adapter | ⚠️ **STUB**             | Implements trait, returns hardcoded values           |
+| Solana settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
+| Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
+| Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
+| Mobile wallet              | 🌑 Not started          | Planned for post-testnet                             |
+| Validator network          | 🌑 Not started          | Single-node operator currently                       |
+| Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
+| Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
+| Production ZK hash gadget  | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
 
 > **Full stub inventory**: See [docs/stub-inventory.md](docs/stub-inventory.md) for detailed documentation of all stubs and partial implementations.
 
@@ -231,7 +238,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 ## 🗺️ Implementation Roadmap
 
 ### Phase 0: The Seed ✅ Complete
-*Goal: Proof of Concept*
+
+_Goal: Proof of Concept_
+
 - ✅ Causal graph consensus (Rust, 68 primitives tests + 294 consensus tests)
 - ✅ Self-sovereign identity system (DIDs, Shamir, biometrics)
 - ✅ Universal Basic Compute (UBC)
@@ -246,7 +255,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Docker 5-node testnet + monitoring stack
 
 ### Phase 1: Hardening ✅ Complete
-*Goal: Code Quality*
+
+_Goal: Code Quality_
+
 - ✅ Typed error migration — 34 `thiserror` enums
 - ✅ `unwrap()` replacement — `#![deny(clippy::unwrap_used)]` on all crates
 - ✅ E2E REST API Integration Tests — 19 test functions
@@ -257,7 +268,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Rustdoc coverage — 35 documentation items
 
 ### Phase 2: Cryptographic Key Management & ZK Hardening ✅ Complete
-*Goal: Security Closure*
+
+_Goal: Security Closure_
+
 - ✅ SSS recovery flow with encrypted shares and key derivation
 - ✅ Trusted setup ceremony with real EC scalar multiplication
 - ✅ ZK circuit dummy fields populated with event semantics constraints
@@ -271,7 +284,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ ADRs 010–014
 
 ### Phase 3: Network Optimization & Security Closure ✅ Complete
-*Goal: Production Network Readiness*
+
+_Goal: Production Network Readiness_
+
 - ✅ SSS/DKG share encryption — XOR to AES-256-GCM
 - ✅ ZK circuit trusted setup dummy values + transcript hash initialization
 - ✅ Leader selection wired into consensus block production
@@ -286,7 +301,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ RUSTSEC advisory cleanup
 
 ### Phase 4: Mainnet Readiness ✅ Complete
-*Goal: Production Hardening*
+
+_Goal: Production Hardening_
+
 - ✅ Real Ethereum settlement with Alloy
 - ✅ Gradual slashing implementation — ADR-011
 - ✅ Migrate pqc_kyber → ml-kem (fix KyberSlash, FIPS-203)
@@ -298,7 +315,9 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Supply chain hardening (cargo-vet, cargo-deny, SBOM)
 
 ### Phase 5: Testnet Launch & Validation ✅ Validated
-*Goal: Performance Validation*
+
+_Goal: Performance Validation_
+
 - ✅ Real performance benchmarking (~7,190 events/sec synchronous single-node; ~13.6× improvement over initial tokio-based measurements)
 - ✅ Multi-node BFT testnet validation (3-node E2E via real libp2p)
 - ✅ VRF migration to ECVRF per RFC 9381
@@ -310,6 +329,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 - ✅ Side-channel audit for ZK and binding crates
 
 ### Phase 0 Throughput Optimization (Sprints 0–5) ✅ Complete
+
 - ✅ Sprint 0: Baseline benchmarks, 3-node testnet Docker Compose, monitoring stack
 - ✅ Sprint 1: `ShardedConsensusState` — 256-shard RwLock for parallel event processing
 - ✅ Sprint 2: `BatchIngestor` + `ConsensusEventBatch` — amortized validation & proof generation
@@ -321,6 +341,7 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 **Optimization Results**: ~40% wire size reduction, O(1) duplicate detection, priority-based finality propagation, pre-allocated graph insertion with slot reuse.
 
 ### Post-Phase 5: Audit & Hardening 🔄 In Progress
+
 - ✅ 7 high-priority audit findings remediated (BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS, DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence)
 - ✅ 1 medium-priority finding remediated (signature dedup)
 - ✅ Event submission now uses node's persistent keypair (not ephemeral)
@@ -330,12 +351,12 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 
 ### Future Phases
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| Phase 6: Public Testnet | Multi-node testnet, external audit | 📋 Planned |
-| Phase 7: Mainnet | Sybil resistance, GC, formal verification | 📋 Planned |
-| Phase 8: Decentralization | Hardware mesh, production PoUW | 📋 Long-term |
-| Phase 9: Universality | Relativistic consensus, physical-digital fusion | 📋 Long-term |
+| Phase                     | Goal                                            | Status       |
+| ------------------------- | ----------------------------------------------- | ------------ |
+| Phase 6: Public Testnet   | Multi-node testnet, external audit              | 📋 Planned   |
+| Phase 7: Mainnet          | Sybil resistance, GC, formal verification       | 📋 Planned   |
+| Phase 8: Decentralization | Hardware mesh, production PoUW                  | 📋 Long-term |
+| Phase 9: Universality     | Relativistic consensus, physical-digital fusion | 📋 Long-term |
 
 ---
 
@@ -348,17 +369,17 @@ To uphold our commitment to radical transparency, we maintain a live dashboard o
 > 6.8, `rustc 1.91.0`). Re-run `cargo bench --bench baseline_bench` on
 > your own hardware for comparable figures.
 
-| Metric | Measured | Conditions | Hardware |
-|--------|----------|------------|----------|
-| **Synchronous pipeline** | ~7,190 evt/s (v0.1.48 micro-benchmark) | Release build, single-node, no async | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Async (tokio)** | Obsoleted by sync benchmark | Previous tokio-based measurement was an artifact of async runtime overhead, not a consensus limit | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Finality latency p50** | 93 µs (Criterion benchmark) | Synchronous, single-node | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Graph insert p50** | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Ed25519 verify** | ~27,000 sig/s (est., test timing) | Standalone | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark) | BN254, R1CS | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Groth16 verify** | ~2.7 ms (Criterion benchmark) | Single proof | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **VRF compute** | ~19 µs (Criterion benchmark) | Ed25519 + BLAKE3 | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **CRDT batch merge** | ~100K ops/s (est., no dedicated benchmark) | 1K ops/batch |
+| Metric                       | Measured                                    | Conditions                                                                                        | Hardware                                      |
+| ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Synchronous pipeline**     | ~7,190 evt/s (v0.1.48 micro-benchmark)      | Release build, single-node, no async                                                              | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Async (tokio)**            | Obsoleted by sync benchmark                 | Previous tokio-based measurement was an artifact of async runtime overhead, not a consensus limit | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Finality latency p50**     | 93 µs (Criterion benchmark)                 | Synchronous, single-node                                                                          | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Graph insert p50**         | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events                                                                     | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Ed25519 verify**           | ~27,000 sig/s (est., test timing)           | Standalone                                                                                        | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark)          | BN254, R1CS                                                                                       | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Groth16 verify**           | ~2.7 ms (Criterion benchmark)               | Single proof                                                                                      | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **VRF compute**              | ~19 µs (Criterion benchmark)                | Ed25519 + BLAKE3                                                                                  | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **CRDT batch merge**         | ~100K ops/s (est., no dedicated benchmark)  | 1K ops/batch                                                                                      |
 
 > Numbers marked (est.) are approximate and environment-dependent, not from rigorous Criterion benchmarks. Numbers marked (Criterion benchmark) or (v0.1.48 micro-benchmark) come from reproducible benchmark suites. Real-world throughput will be lower due to network latency, BFT supermajority requirements, and ZK proof generation overhead. For reproduction, run: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`, `cargo bench --bench zk_benchmarks --features full`
 
@@ -379,6 +400,7 @@ Full documentation is organized in [docs/](docs/):
 - [**docs/use-cases/**](docs/use-cases/) — Real-world scenarios, FAQ, governance
 
 Quick links:
+
 - [**Architecture**](docs/architecture/) — Links to canonical architecture docs
 - [**Implementation Spec**](docs/reference/implementation-spec.md) — Protocol specifications
 - [**Research**](./substrate/RESEARCH.md) — Consensus research and implementation results

@@ -1,4 +1,5 @@
 # Phase 2 Findings
+
 > 🎯 Audience: Developers
 > 🔗 Context: Audit findings from Phase 2 implementation
 > 📅 Last Updated: 2026-05-20
@@ -301,13 +302,13 @@ transcript_hash: [0u8; 32],  // Should be BLAKE3 of initial generator state
 
 ## Finding Summary Table
 
-| ID | Title | Severity | Status |
-|---|---|---|---|
-| FIND-P2-001 | SSS recovery does not update DID authentication | Critical | Open |
-| FIND-P2-002 | SSS share encryption uses XOR instead of AES-256-GCM | Critical | Open |
-| FIND-P2-003 | DKG share packages use XOR encryption | Critical | Open |
-| FIND-P2-010 | ZK circuit uses dummy field values for trusted setup | High | Open |
-| FIND-P2-011 | Trusted setup transcript hash initialized to zero | Medium | Open |
+| ID          | Title                                                | Severity | Status |
+| ----------- | ---------------------------------------------------- | -------- | ------ |
+| FIND-P2-001 | SSS recovery does not update DID authentication      | Critical | Open   |
+| FIND-P2-002 | SSS share encryption uses XOR instead of AES-256-GCM | Critical | Open   |
+| FIND-P2-003 | DKG share packages use XOR encryption                | Critical | Open   |
+| FIND-P2-010 | ZK circuit uses dummy field values for trusted setup | High     | Open   |
+| FIND-P2-011 | Trusted setup transcript hash initialized to zero    | Medium   | Open   |
 
 **Totals**: 0 Fixed, 3 Critical Open, 1 High Open, 1 Medium Open
 
@@ -315,14 +316,15 @@ transcript_hash: [0u8; 32],  // Should be BLAKE3 of initial generator state
 
 ## Related Architecture Decision Records
 
-| ADR | Finding | Relationship |
-|-----|---------|-------------|
+| ADR     | Finding                  | Relationship                                                                                                                                                              |
+| ------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ADR-010 | FIND-P2-002, FIND-P2-003 | ADR-010 documents AES-256-GCM as the accepted keystore encryption; FIND-P2-002/003 identify that this standard is not consistently applied to SSS shares and DKG packages |
-| ADR-011 | — | ADR-011 designs the gradual slashing model; implementation will create new FIND entries when the current binary model is replaced |
-| ADR-012 | — | ADR-012 accepts the non-standard VRF construction; no finding needed since the deviation is documented |
-| ADR-013 | FIND-P2-003 | ADR-013 documents the Feldman VSS-based DKG; FIND-P2-003 identifies that the share encryption in DKG uses XOR instead of the AES-256-GCM standard |
-| ADR-014 | FIND-P2-010 | ADR-014 documents the non-standard Poseidon parameters; FIND-P2-010 identifies that the circuit setup uses dummy values that may not exercise all constraint branches |
+| ADR-011 | —                        | ADR-011 designs the gradual slashing model; implementation will create new FIND entries when the current binary model is replaced                                         |
+| ADR-012 | —                        | ADR-012 accepts the non-standard VRF construction; no finding needed since the deviation is documented                                                                    |
+| ADR-013 | FIND-P2-003              | ADR-013 documents the Feldman VSS-based DKG; FIND-P2-003 identifies that the share encryption in DKG uses XOR instead of the AES-256-GCM standard                         |
+| ADR-014 | FIND-P2-010              | ADR-014 documents the non-standard Poseidon parameters; FIND-P2-010 identifies that the circuit setup uses dummy values that may not exercise all constraint branches     |
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

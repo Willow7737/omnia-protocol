@@ -1,4 +1,5 @@
 # ZK-Rollup Settlement Layer (Phase 0)
+
 > 🎯 Audience: Developers
 > 🔗 Context: Phase 0 implements settlement-agnostic ZK-rollup architecture for bridging to L1 chains
 > 📅 Last Updated: 2026-05-20
@@ -26,6 +27,7 @@ pub trait SettlementAdapter: Send + Sync {
 ```
 
 Implementations:
+
 - **MockSettlementAdapter** — always available, deterministic BLAKE3-based responses
 - **EthereumSettlementAdapter** — feature-gated behind `ethereum-live`, real RPC via Alloy
 - **FfiSettlementAdapter** — feature-gated behind `settlement-ffi`, C library integration
@@ -156,5 +158,6 @@ Located in: `omnia-adapters/src/operator.rs`
 ```
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [pipeline-design.md](./pipeline-design.md)
 🚀 **Next**: [trait-boundaries.md](./trait-boundaries.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

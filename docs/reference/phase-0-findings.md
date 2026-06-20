@@ -1,4 +1,5 @@
 # Phase 0 Findings
+
 > 🎯 Audience: Developers
 > 🔗 Context: Audit findings from Phase 0 implementation
 > 📅 Last Updated: 2026-05-20
@@ -34,6 +35,7 @@ The `omnia-node` HTTP API exposed 9+ endpoints under `/api/v1/` with zero securi
 ### Impact
 
 An attacker with network access to the HTTP port could:
+
 - Mint unlimited UBC via `POST /api/v1/shards/economics/operations` with `{"operation": "mint"}`
 - Drain any registered DID's balance via `POST /api/v1/economics/transfer`
 - Flood the network with events via `POST /api/v1/events`
@@ -129,6 +131,7 @@ The `Event::validate()` method verified that the Ed25519 signature was valid for
 ### Impact
 
 An attacker could impersonate any node by:
+
 1. Setting `creator` to the victim's node ID (`blake3(victim_pubkey)`)
 2. Setting `creator_pubkey` to their own public key
 3. Signing the event with their own private key
@@ -291,8 +294,8 @@ The Docker Compose configuration used invalid `OMNIA_NODE_ID` values (`bootstrap
 ```yaml
 # BEFORE: Invalid u64 values
 environment:
-  - OMNIA_NODE_ID=bootstrap    # Not a u64!
-  - OMNIA_NODE_ID=node1        # Not a u64!
+  - OMNIA_NODE_ID=bootstrap # Not a u64!
+  - OMNIA_NODE_ID=node1 # Not a u64!
 ```
 
 ### Remediation
@@ -493,6 +496,7 @@ BLAKE3 was used as the sole hash function throughout the protocol for different 
 ### Impact
 
 While BLAKE3 collisions are computationally infeasible, the lack of domain separation violates the cryptographic principle of context isolation. In theory:
+
 - A creator ID could collide with a state root, allowing confusion between identity and consensus components.
 - Nonce keys could collide with commitment hashes, enabling cross-domain attacks.
 
@@ -563,6 +567,7 @@ node/src/main.rs:11
 ### Remediation
 
 **Status: Open** — Requires systematic replacement. Recommended approach:
+
 1. Add `#![deny(clippy::unwrap_used)]` to each crate's `lib.rs` (currently only `#![warn]`)
 2. Replace `unwrap()` with proper `?` propagation or `map_err()` with context
 3. For cases where `unwrap()` is provably safe (e.g., `HashMap::get()` after `HashMap::contains_key()`), add a comment with the invariant proof and use `expect("invariant: ...")` instead
@@ -570,7 +575,7 @@ node/src/main.rs:11
 
 ---
 
-## FIND-024: Result<_, String> Errors in Critical Paths
+## FIND-024: Result<\_, String> Errors in Critical Paths
 
 **Severity:** Medium
 **Category:** Code Quality
@@ -601,6 +606,7 @@ fn handle_cross_shard_message(&self, ...) -> Result<(), String> { ... }
 ### Remediation
 
 **Status: Open** — Needs systematic migration. Recommended approach:
+
 1. Define error enums with `thiserror` derive for each module that currently uses `String`
 2. Migrate one module at a time (each migration is backward-compatible if the error enum implements `From<String>`)
 3. Priority modules: `slashing_undo`, `cross_shard`, `shard_router`, `gossip`
@@ -664,14 +670,14 @@ pub struct GossipStats {
 
 All 7 crates enforce `#![forbid(unsafe_code)]` in their `lib.rs`:
 
-| Crate | Directive |
-|---|---|
-| `omnia-substrate` | `#![forbid(unsafe_code)]` |
-| `omnia-shards` | `#![forbid(unsafe_code)]` |
-| `omnia-economics` | `#![forbid(unsafe_code)]` |
-| `omnia-adapters` | `#![forbid(unsafe_code)]` |
-| `omnia-binding` | `#![forbid(unsafe_code)]` |
-| `omnia-node` | `#![forbid(unsafe_code)]` |
+| Crate               | Directive                 |
+| ------------------- | ------------------------- |
+| `omnia-substrate`   | `#![forbid(unsafe_code)]` |
+| `omnia-shards`      | `#![forbid(unsafe_code)]` |
+| `omnia-economics`   | `#![forbid(unsafe_code)]` |
+| `omnia-adapters`    | `#![forbid(unsafe_code)]` |
+| `omnia-binding`     | `#![forbid(unsafe_code)]` |
+| `omnia-node`        | `#![forbid(unsafe_code)]` |
 | `omnia-chaos-tests` | `#![forbid(unsafe_code)]` |
 
 ### Impact
@@ -807,6 +813,7 @@ ignore = [
 ### Remediation
 
 **Status: Open** — Requires periodic review. Recommended actions:
+
 1. **Remove `RUSTSEC-2025-0055`**: Already patched at current version — the ignore is stale.
 2. **Monitor libp2p upgrades**: When libp2p updates to hickory-proto 0.26+, remove `RUSTSEC-2026-0118` and `RUSTSEC-2026-0119`.
 3. **Evaluate `ring` alternatives**: Track whether `ring` receives a new audit or whether `aws-lc-rs` becomes a viable replacement.
@@ -825,6 +832,7 @@ ignore = [
 ### Description
 
 The discrepancy report (TASK-3d) identified 70+ discrepancies across 13 documentation files. Major issues include:
+
 - Stale version references (`SPRINT_3_COMMIT` instead of `v4.0.0`)
 - Wrong test counts ("278+" vs. actual)
 - Missing coverage of node crate, chaos tests, REST API, Swagger UI
@@ -844,6 +852,7 @@ See `docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md` for the full 70+ discrepa
 ### Remediation
 
 **Status: Partial** — Phase 0 findings update addresses the most critical discrepancies (this document, the roadmap, and the validated audit). Full documentation update requires:
+
 1. Update all version references to `v4.0.0`
 2. Fix test counts, crate lists, and feature status tables
 3. Update RUNBOOK.md with correct API paths, CLI subcommands, and Docker config
@@ -854,29 +863,30 @@ See `docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md` for the full 70+ discrepa
 
 ## Finding Summary Table
 
-| ID | Title | Severity | Status |
-|---|---|---|---|
-| FIND-001 | REST API has no authentication | Critical | Fixed |
-| FIND-002 | Permissionless MintUbc / AdvanceEpoch | Critical | Fixed |
-| FIND-003 | Creator ↔ Pubkey binding gap | Critical | Fixed |
-| FIND-010 | Unencrypted private key storage | High | Fixed |
-| FIND-011 | Slashing persistence failure not rolled back | High | Fixed |
-| FIND-012 | Docker Compose invalid OMNIA_NODE_ID values | High | Fixed |
-| FIND-013 | node_id type mismatch (u16 vs u64) | High | Fixed |
-| FIND-020 | No governance quorum | Medium | Fixed |
-| FIND-021 | No MAX_PAYLOAD_SIZE at gossip level | Medium | Fixed |
-| FIND-022 | Missing BLAKE3 domain separation | Medium | Fixed |
-| FIND-023 | Extensive unwrap() in production code | Medium | Open |
-| FIND-024 | Result<_, String> errors in critical paths | Medium | Open |
-| FIND-025 | f64 in gossip stats | Medium | Fixed |
-| FIND-030 | No unsafe code | Informational | Clean |
-| FIND-031 | No interior mutability in shard state | Informational | Clean |
-| FIND-032 | Grafana default password | Low | Fixed |
-| FIND-033 | 9 ignored RUSTSEC advisories | Low | Open |
-| FIND-034 | Documentation severely out of date | Low | Partial |
+| ID       | Title                                        | Severity      | Status  |
+| -------- | -------------------------------------------- | ------------- | ------- |
+| FIND-001 | REST API has no authentication               | Critical      | Fixed   |
+| FIND-002 | Permissionless MintUbc / AdvanceEpoch        | Critical      | Fixed   |
+| FIND-003 | Creator ↔ Pubkey binding gap                 | Critical      | Fixed   |
+| FIND-010 | Unencrypted private key storage              | High          | Fixed   |
+| FIND-011 | Slashing persistence failure not rolled back | High          | Fixed   |
+| FIND-012 | Docker Compose invalid OMNIA_NODE_ID values  | High          | Fixed   |
+| FIND-013 | node_id type mismatch (u16 vs u64)           | High          | Fixed   |
+| FIND-020 | No governance quorum                         | Medium        | Fixed   |
+| FIND-021 | No MAX_PAYLOAD_SIZE at gossip level          | Medium        | Fixed   |
+| FIND-022 | Missing BLAKE3 domain separation             | Medium        | Fixed   |
+| FIND-023 | Extensive unwrap() in production code        | Medium        | Open    |
+| FIND-024 | Result<\_, String> errors in critical paths  | Medium        | Open    |
+| FIND-025 | f64 in gossip stats                          | Medium        | Fixed   |
+| FIND-030 | No unsafe code                               | Informational | Clean   |
+| FIND-031 | No interior mutability in shard state        | Informational | Clean   |
+| FIND-032 | Grafana default password                     | Low           | Fixed   |
+| FIND-033 | 9 ignored RUSTSEC advisories                 | Low           | Open    |
+| FIND-034 | Documentation severely out of date           | Low           | Partial |
 
 **Totals**: 13 Fixed, 3 Open, 2 Clean, 1 Partial
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

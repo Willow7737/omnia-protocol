@@ -1,4 +1,5 @@
 # 🤝 Contributing to Omnia Protocol
+
 > 🎯 Audience: Developers
 > 🔗 Context: Contribution guidelines, CI gates, and code review process for the Rust-only codebase
 > 📅 Last Updated: 2026-05-20
@@ -86,6 +87,7 @@ mod tests {
 ```
 
 **Requirements:**
+
 - ✅ Tests pass: `cargo test --workspace`
 - ✅ Clippy passes: `cargo clippy -- -D warnings`
 - ✅ Format is correct: `cargo fmt --check`
@@ -137,11 +139,11 @@ Reviewers will:
 
 ### Approval Process
 
-| Approval Level | Meaning |
-|---------------|---------|
-| **1 approval** | Code review complete (current policy — small team) |
-| **2+ approvals** | Ready to merge (policy when team grows) |
-| **Changes requested** | Address feedback and resubmit |
+| Approval Level        | Meaning                                            |
+| --------------------- | -------------------------------------------------- |
+| **1 approval**        | Code review complete (current policy — small team) |
+| **2+ approvals**      | Ready to merge (policy when team grows)            |
+| **Changes requested** | Address feedback and resubmit                      |
 
 ---
 
@@ -160,6 +162,7 @@ chore: update dependencies
 ```
 
 **Format:**
+
 ```
 <type>(<scope>): <subject>
 
@@ -169,6 +172,7 @@ chore: update dependencies
 ```
 
 **Example:**
+
 ```
 feat(consensus): implement causal graph consensus
 
@@ -217,7 +221,7 @@ fn test_end_to_end_flow() {
 
 ### Code Documentation
 
-```rust
+````rust
 /// Brief description of the function.
 ///
 /// Longer description explaining what the function does,
@@ -241,7 +245,7 @@ fn test_end_to_end_flow() {
 pub fn my_function(arg1: Type1, arg2: Type2) -> ReturnType {
     // Implementation
 }
-```
+````
 
 ---
 
@@ -250,6 +254,7 @@ pub fn my_function(arg1: Type1, arg2: Type2) -> ReturnType {
 ### Bug Reports
 
 Include:
+
 - Clear description of the bug
 - Steps to reproduce
 - Expected behavior
@@ -258,22 +263,28 @@ Include:
 - Logs if relevant
 
 **Template:**
+
 ```markdown
 ## 🐛 Description
+
 Brief description of the bug
 
 ## Steps to Reproduce
+
 1. Step 1
 2. Step 2
 3. Step 3
 
 ## Expected Behavior
+
 What should happen
 
 ## Actual Behavior
+
 What actually happens
 
 ## Environment
+
 - OS: macOS 12.0
 - Rust: 1.75.0
 - Version: 4.0.0
@@ -282,6 +293,7 @@ What actually happens
 ### Feature Requests
 
 Include:
+
 - Clear description of the feature
 - Use case and motivation
 - Proposed implementation (if any)
@@ -301,12 +313,12 @@ Omnia is a public-interest protocol. Join the conversation:
 
 ### Response Times
 
-| Type | Expected Response |
-|------|-------------------|
-| 🐛 Bug reports | 24-48 hours |
-| 💡 Feature requests | 1 week |
-| 🔀 Pull requests | 2-5 days |
-| ❓ Questions | 24 hours |
+| Type                | Expected Response |
+| ------------------- | ----------------- |
+| 🐛 Bug reports      | 24-48 hours       |
+| 💡 Feature requests | 1 week            |
+| 🔀 Pull requests    | 2-5 days          |
+| ❓ Questions        | 24 hours          |
 
 ---
 
@@ -319,5 +331,6 @@ By contributing to Omnia Protocol, you agree that your contributions will be lic
 **Last Updated:** May 2026
 
 ---
+
 🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/architecture/](./docs/architecture/)  
 🚀 **Next**: [docs/building/](./docs/building/) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)

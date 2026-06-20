@@ -1,4 +1,5 @@
 # Architecture Full Specification
+
 > 🎯 Audience: Architects
 > 🔗 Context: Comprehensive architecture specification covering all layers, node binary, and cross-layer interactions
 > 📅 Last Updated: 2026-05-20
@@ -68,6 +69,7 @@ Instead of organizing events into sequential blocks, Omnia maintains a **directe
 - The graph naturally captures causality without artificial ordering
 
 **Advantages:**
+
 - Transactions that don't depend on each other can be finalized independently
 - Network latency does not block unrelated transactions
 - O(new_events) consensus processing via `unprocessed_events` queue
@@ -84,6 +86,7 @@ Node A's vector clock: [3, 2, 5, 1]
 ```
 
 **Properties:**
+
 - If `VC_A < VC_B` (component-wise), then event A causally precedes event B
 - If neither `VC_A < VC_B` nor `VC_B < VC_A`, the events are concurrent
 - Nodes can determine ordering without global synchronization
@@ -137,14 +140,14 @@ Each domain shard is a **projection of the unified state** that:
 
 ### Implemented Shards (6 total)
 
-| Shard | Purpose | Status | API Endpoint |
-|-------|---------|--------|-------------|
-| 💰 Financial | Balances, transfers, replay protection | ✅ Implemented | `POST /api/v1/shards/financial/operations` |
-| 🆔 Identity | DID management, credentials | ✅ Implemented | `POST /api/v1/shards/identity/operations` |
-| 📦 Physical | Object registration, provenance | ✅ Implemented | `POST /api/v1/shards/physical/operations` |
-| 🧮 Computational | AI training, proofs | ✅ Implemented | `POST /api/v1/shards/computational/operations` |
-| 🧬 Biological | Health records, bio-signals | ✅ Implemented | `POST /api/v1/shards/biological/operations` |
-| 📊 Economics | UBC, governance, useful work | ✅ Implemented | `POST /api/v1/shards/economics/operations` |
+| Shard            | Purpose                                | Status         | API Endpoint                                   |
+| ---------------- | -------------------------------------- | -------------- | ---------------------------------------------- |
+| 💰 Financial     | Balances, transfers, replay protection | ✅ Implemented | `POST /api/v1/shards/financial/operations`     |
+| 🆔 Identity      | DID management, credentials            | ✅ Implemented | `POST /api/v1/shards/identity/operations`      |
+| 📦 Physical      | Object registration, provenance        | ✅ Implemented | `POST /api/v1/shards/physical/operations`      |
+| 🧮 Computational | AI training, proofs                    | ✅ Implemented | `POST /api/v1/shards/computational/operations` |
+| 🧬 Biological    | Health records, bio-signals            | ✅ Implemented | `POST /api/v1/shards/biological/operations`    |
+| 📊 Economics     | UBC, governance, useful work           | ✅ Implemented | `POST /api/v1/shards/economics/operations`     |
 
 ⚠️ **Note:** Only the Economics shard has full API-level operation support (mint, spend, register, advance_epoch). Other shards return `{"status": "accepted", "note": "..."}` via the API.
 
@@ -233,11 +236,11 @@ AI agent identities with 5 capability types are implemented.
 
 #### Reputation System — 🏗️ Partially Implemented
 
-| Component | Status |
-|-----------|--------|
-| ✅ Exponential reputation decay | Implemented |
-| 🌑 Full reputation scoring | Not yet implemented |
-| 📋 Reputation thresholds | Planned |
+| Component                       | Status              |
+| ------------------------------- | ------------------- |
+| ✅ Exponential reputation decay | Implemented         |
+| 🌑 Full reputation scoring      | Not yet implemented |
+| 📋 Reputation thresholds        | Planned             |
 
 ---
 
@@ -259,11 +262,11 @@ Quadratic voting with exponential reputation decay is implemented. Voting power 
 
 The `FeeSchedule` maps operations to fixed UBC fees:
 
-| Category | Fee Range |
-|----------|-----------|
-| Identity operations | 2 UBC |
-| Financial operations | 5 UBC |
-| Cross-shard operations | 15 UBC |
+| Category               | Fee Range |
+| ---------------------- | --------- |
+| Identity operations    | 2 UBC     |
+| Financial operations   | 5 UBC     |
+| Cross-shard operations | 15 UBC    |
 
 Fees are deducted atomically before shard dispatch. No fee refund on operation failure.
 
@@ -271,11 +274,11 @@ Fees are deducted atomically before shard dispatch. No fee refund on operation f
 
 The `SlashingEngine` tracks three offense types with configurable thresholds:
 
-| Offense | Points | Slash Threshold | Ejection Threshold |
-|---------|--------|----------------|-------------------|
-| Equivocation | 500 | 500 | 2000 |
-| LivenessViolation | 100 | 500 | 2000 |
-| InvalidAttestation | 300 | 500 | 2000 |
+| Offense            | Points | Slash Threshold | Ejection Threshold |
+| ------------------ | ------ | --------------- | ------------------ |
+| Equivocation       | 500    | 500             | 2000               |
+| LivenessViolation  | 100    | 500             | 2000               |
+| InvalidAttestation | 300    | 500             | 2000               |
 
 Persistent storage via `RedbSlashingStore`. The `omnia-node` binary configures redb persistence automatically.
 
@@ -331,19 +334,19 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 9 endpoints under `/api/v1/` with Swagger UI at `/swagger-ui`:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Liveness probe |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/api/v1/node/info` | Node identity and status |
-| GET | `/api/v1/node/peers` | Connected peer list |
-| POST | `/api/v1/events` | Submit a new event |
-| GET | `/api/v1/events/{id}` | Retrieve event by ID |
-| POST | `/api/v1/shards/{shard_id}/operations` | Submit shard operation |
-| POST | `/api/v1/governance/proposals` | Create governance proposal |
-| POST | `/api/v1/governance/vote` | Cast quadratic-weighted vote |
-| GET | `/api/v1/economics/balance/{did}` | Check UBC balance |
-| POST | `/api/v1/economics/transfer` | Spend UBC tokens |
+| Method | Path                                   | Description                  |
+| ------ | -------------------------------------- | ---------------------------- |
+| GET    | `/health`                              | Liveness probe               |
+| GET    | `/metrics`                             | Prometheus metrics           |
+| GET    | `/api/v1/node/info`                    | Node identity and status     |
+| GET    | `/api/v1/node/peers`                   | Connected peer list          |
+| POST   | `/api/v1/events`                       | Submit a new event           |
+| GET    | `/api/v1/events/{id}`                  | Retrieve event by ID         |
+| POST   | `/api/v1/shards/{shard_id}/operations` | Submit shard operation       |
+| POST   | `/api/v1/governance/proposals`         | Create governance proposal   |
+| POST   | `/api/v1/governance/vote`              | Cast quadratic-weighted vote |
+| GET    | `/api/v1/economics/balance/{did}`      | Check UBC balance            |
+| POST   | `/api/v1/economics/transfer`           | Spend UBC tokens             |
 
 **Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Endpoints require valid JWT tokens. Privileged operations (mint UBC, advance epoch) require admin JWT. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
@@ -351,14 +354,14 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 6 node-level metrics registered in `NodeMetrics` (`node/src/state.rs`):
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `omnia_node_events_submitted_total` | Counter | Events submitted via API |
+| Metric                              | Type    | Description                   |
+| ----------------------------------- | ------- | ----------------------------- |
+| `omnia_node_events_submitted_total` | Counter | Events submitted via API      |
 | `omnia_node_events_finalized_total` | Counter | Events finalized by consensus |
-| `omnia_node_peers_connected` | Gauge | Connected peers |
-| `omnia_node_consensus_round` | Gauge | Current consensus round |
-| `omnia_node_shard_operations_total` | Counter | Shard operations processed |
-| `omnia_node_http_requests_total` | Counter | HTTP requests served |
+| `omnia_node_peers_connected`        | Gauge   | Connected peers               |
+| `omnia_node_consensus_round`        | Gauge   | Current consensus round       |
+| `omnia_node_shard_operations_total` | Counter | Shard operations processed    |
+| `omnia_node_http_requests_total`    | Counter | HTTP requests served          |
 
 ---
 
@@ -366,14 +369,14 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 ### Example: Supply Chain
 
-| Layer | Feature | Status |
-|-------|---------|--------|
-| Layer 1 (Substrate) | Causal graph tracks event sequence | ✅ Implemented |
-| Layer 2 (Shards) | Financial, Physical, Identity shards | ✅ Implemented |
-| Layer 3 (Binding) | RF fingerprint, quantum seal, satellite mesh | ⚠️ Stubs / 🌑 Not Implemented |
-| Layer 4 (Identity) | DID verification | ✅ Implemented |
-| Layer 5 (Economic) | Fee structure, slashing | ✅ Implemented |
-| Node Binary | REST API for all operations | ✅ Implemented |
+| Layer               | Feature                                      | Status                        |
+| ------------------- | -------------------------------------------- | ----------------------------- |
+| Layer 1 (Substrate) | Causal graph tracks event sequence           | ✅ Implemented                |
+| Layer 2 (Shards)    | Financial, Physical, Identity shards         | ✅ Implemented                |
+| Layer 3 (Binding)   | RF fingerprint, quantum seal, satellite mesh | ⚠️ Stubs / 🌑 Not Implemented |
+| Layer 4 (Identity)  | DID verification                             | ✅ Implemented                |
+| Layer 5 (Economic)  | Fee structure, slashing                      | ✅ Implemented                |
+| Node Binary         | REST API for all operations                  | ✅ Implemented                |
 
 ---
 
@@ -392,6 +395,7 @@ Omnia implements causal consistency, which guarantees:
 BFT finality via the ConsensusEngine with supermajority witness model (inspired by Hashgraph + AlephBFT).
 
 The TLA+ model (`formal-verification/OmniaConsensus.tla`, 191 lines) verifies:
+
 - **Agreement** — All honest nodes that commit an event at the same `(creator, sequence)` agree on its hash
 - **NoEquivocation** — Equivocation is confined to Byzantine creators
 - **Validity** — Committed events were proposed by some node
@@ -423,32 +427,33 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 ### Threat Model
 
 **Adversaries:**
+
 - Up to 1/3 of validator nodes are Byzantine (faulty or malicious) — designed, not tested in production
 - Network may partition temporarily — designed via CRDT merge, tested via chaos tests
 - Cryptographic primitives: Ed25519 signatures, BLAKE3 hashing, CRYSTALS-Dilithium PQC signatures
 
 ### Security Guarantees
 
-| Guarantee | Status |
-|-----------|--------|
-| ✅ Consistency (2/3 honest → system consistent) | Designed |
-| ✅ Liveness (connected + 2/3 honest → progress) | Designed |
-| ✅ Replay protection (nonce tracking with redb persistence) | Implemented |
-| ✅ State commitments (Merkle root + proofs) | Implemented |
-| ✅ Event pruning (sustainability) | Implemented |
-| ✅ Economic security (slashing with persistence) | Implemented |
-| ✅ Fee enforcement (FeeSchedule + QuotaSystem) | Implemented |
-| ✅ API security (JWT auth + ACL + rate limiting + CORS) | Implemented (FIND-001) |
+| Guarantee                                                   | Status                 |
+| ----------------------------------------------------------- | ---------------------- |
+| ✅ Consistency (2/3 honest → system consistent)             | Designed               |
+| ✅ Liveness (connected + 2/3 honest → progress)             | Designed               |
+| ✅ Replay protection (nonce tracking with redb persistence) | Implemented            |
+| ✅ State commitments (Merkle root + proofs)                 | Implemented            |
+| ✅ Event pruning (sustainability)                           | Implemented            |
+| ✅ Economic security (slashing with persistence)            | Implemented            |
+| ✅ Fee enforcement (FeeSchedule + QuotaSystem)              | Implemented            |
+| ✅ API security (JWT auth + ACL + rate limiting + CORS)     | Implemented (FIND-001) |
 
 ### Cryptographic Primitives
 
-| Primitive | Status |
-|-----------|--------|
-| ✅ Ed25519 signatures | Implemented |
-| ✅ BLAKE3 hashing | Implemented |
+| Primitive                                         | Status                                       |
+| ------------------------------------------------- | -------------------------------------------- |
+| ✅ Ed25519 signatures                             | Implemented                                  |
+| ✅ BLAKE3 hashing                                 | Implemented                                  |
 | ✅ zk-SNARKs (arkworks R1CS + Groth16 + Poseidon) | Implemented (BLAKE3-derived round constants) |
-| ✅ CRYSTALS-Dilithium (PQC signatures) | Implemented (real verification) |
-| ✅ Shamir's Secret Sharing (GF(256)) | Implemented |
+| ✅ CRYSTALS-Dilithium (PQC signatures)            | Implemented (real verification)              |
+| ✅ Shamir's Secret Sharing (GF(256))              | Implemented                                  |
 
 ### Known Security Gaps
 
@@ -463,6 +468,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 ## Future Enhancements — 🔮 Aspirational
 
 ### Quantum Resistance
+
 - ✅ CRYSTALS-Dilithium (signatures) — implemented
 - ✅ Creator-pubkey binding — constant-time validation (FIND-003)
 - ✅ Encrypted key storage — AES-256-GCM + HKDF-SHA256 (FIND-010)
@@ -471,13 +477,16 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 - 📋 Gradual migration, no hard fork — planned
 
 ### Homomorphic Encryption
+
 - 🔮 Computing on encrypted data without decryption — aspirational
 
 ### Proof-of-Useful-Work
+
 - ⚠️ Scientific computation, AI training, rendering — stubs exist (3 work types)
 - 🌑 Real verification of useful work — not implemented
 
 ### Interplanetary Operation
+
 - 🔮 Relativistic consensus — aspirational
 - 🔮 Local autonomy with eventual consistency — aspirational
 
@@ -493,5 +502,6 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 **Version:** 4.0.0
 
 ---
+
 🔙 **Back**: [Architecture Index](./) | 🔄 **Related**: [Trait Boundaries](./trait-boundaries.md)
 🚀 **Next**: [Pipeline Design](./pipeline-design.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

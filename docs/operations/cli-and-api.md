@@ -1,4 +1,5 @@
 # CLI and REST API Reference
+
 > 🎯 Audience: Operators
 > 🔗 Context: Node CLI subcommands and REST API endpoint reference
 > 📅 Last Updated: 2026-05-20
@@ -18,14 +19,14 @@ This document covers the operational aspects of running Omnia Protocol nodes, in
 
 The `omnia-node` binary supports the following subcommands:
 
-| Subcommand | Description | Key Flags |
-|---|---|---|
-| `run` | Run the node (default) | All `--node-id`, `--http-port`, etc. flags |
-| `keygen` | Generate validator keypair | `--output-dir`, `--passphrase` |
+| Subcommand         | Description                          | Key Flags                                  |
+| ------------------ | ------------------------------------ | ------------------------------------------ |
+| `run`              | Run the node (default)               | All `--node-id`, `--http-port`, etc. flags |
+| `keygen`           | Generate validator keypair           | `--output-dir`, `--passphrase`             |
 | `setup-contribute` | Contribute to Powers of Tau ceremony | `--degree`, `--min-participants`, `--seed` |
-| `setup-verify` | Verify Powers of Tau ceremony | `--degree`, `--num-contributions` |
-| `snapshot` | Take a state snapshot | `--output` |
-| `restore` | Restore from a snapshot | `--input` |
+| `setup-verify`     | Verify Powers of Tau ceremony        | `--degree`, `--num-contributions`          |
+| `snapshot`         | Take a state snapshot                | `--output`                                 |
+| `restore`          | Restore from a snapshot              | `--input`                                  |
 
 All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMNIA_NODE_ID=1`).
 
@@ -35,19 +36,19 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 The node exposes 9 REST API endpoints under `/api/v1/`:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Node liveness probe |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/api/v1/node/info` | Node identity and status |
-| GET | `/api/v1/node/peers` | Connected peer list |
-| POST | `/api/v1/events` | Submit a new event |
-| GET | `/api/v1/events/{id}` | Retrieve event by ID |
-| POST | `/api/v1/shards/{shard_id}/operations` | Submit shard operation |
-| POST | `/api/v1/governance/proposals` | Create governance proposal |
-| POST | `/api/v1/governance/vote` | Cast quadratic-weighted vote |
-| GET | `/api/v1/economics/balance/{did}` | Check UBC balance |
-| POST | `/api/v1/economics/transfer` | Spend UBC tokens |
+| Method | Path                                   | Description                  |
+| ------ | -------------------------------------- | ---------------------------- |
+| GET    | `/health`                              | Node liveness probe          |
+| GET    | `/metrics`                             | Prometheus metrics           |
+| GET    | `/api/v1/node/info`                    | Node identity and status     |
+| GET    | `/api/v1/node/peers`                   | Connected peer list          |
+| POST   | `/api/v1/events`                       | Submit a new event           |
+| GET    | `/api/v1/events/{id}`                  | Retrieve event by ID         |
+| POST   | `/api/v1/shards/{shard_id}/operations` | Submit shard operation       |
+| POST   | `/api/v1/governance/proposals`         | Create governance proposal   |
+| POST   | `/api/v1/governance/vote`              | Cast quadratic-weighted vote |
+| GET    | `/api/v1/economics/balance/{did}`      | Check UBC balance            |
+| POST   | `/api/v1/economics/transfer`           | Spend UBC tokens             |
 
 **Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
@@ -133,5 +134,6 @@ systemctl start omnia-node
 **Warning:** Without backup or snapshot restoration, all slashing state and nonce tracking will be lost. Validators with accumulated slash points would effectively be "reset" to zero offenses. Nonce replay protection would also be lost, potentially allowing replay of previously processed operations.
 
 ---
+
 🔙 **Back**: [Operations Index](./) | 🔄 **Related**: [Validator Setup](./validator-setup.md)
 🚀 **Next**: [Runbook](./runbook.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

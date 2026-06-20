@@ -1,4 +1,5 @@
 # Omnia Protocol — Security Self-Assessment
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
 > 📅 Last Updated: 2026-05-20
@@ -32,6 +33,7 @@ The following issues were identified during earlier sprints and have been resolv
 **Original issue:** The `QuantumCommitment::verify()` method in `binding/src/quantum_commit.rs` contained a stub implementation that returned `true` regardless of the input. This meant that any commitment — even one with a forged or empty Dilithium signature — would pass verification in the `Hybrid` and `PostQuantum` phases. This completely negated the post-quantum security guarantees.
 
 **Mitigation:** The `verify_dilithium()` method was replaced with a real verification call to `pqc_dilithium::verify()`. The method now:
+
 1. Checks that the Dilithium public key is non-empty (returns `false` if empty)
 2. Checks that the Dilithium signature is non-empty (returns `false` if empty)
 3. Calls `pqc_dilithium::verify(&self.dilithium_sig, hash.as_bytes(), &public_key.dilithium)` and returns the result
@@ -43,6 +45,7 @@ The following issues were identified during earlier sprints and have been resolv
 **Original issue:** The `ShardRouter` did not enforce fees before processing shard operations. Any event with a valid signature and nonce could trigger arbitrary shard operations without paying UBC tokens. This allowed spam attacks at zero cost.
 
 **Mitigation:** A two-layer fee enforcement system was added:
+
 1. **FeeSchedule** (`shards/src/fee_schedule.rs`, 187 lines): Maps each `ShardOp` variant to a fixed `u64` fee in UBC units. Standard fees range from 2 UBC (identity operations) to 15 UBC (cross-shard operations).
 2. **QuotaSystem** (`economics/src/quota.rs`, 141 lines): Manages per-DID UBC balances with atomic `spend()` and `reward()` operations. Insufficient balance returns `EconomicsError`.
 
@@ -55,6 +58,7 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 **Original issue:** The protocol had no mechanism to penalize Byzantine validators. A validator could equivocate, go offline, or attest to invalid data with no economic consequences.
 
 **Mitigation:** A `SlashingEngine` (`substrate/src/slashing.rs`, 1,079 lines) was implemented with:
+
 - Three offense types: Equivocation (500 points), LivenessViolation (100 points), InvalidAttestation (300 points)
 - Two thresholds: Slash (500 points — stake forfeited), Ejection (2000 points — removed from validator set)
 - Equivocation detection via `check_equivocation()` — compares `creator + sequence + event_id`
@@ -77,6 +81,7 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 **Original issue:** There was no way to run the protocol as a standalone node.
 
 **Mitigation:** The `omnia-node` binary provides:
+
 - CLI with clap (configurable via args + env vars with `OMNIA_` prefix)
 - HTTP health endpoint (`/health`) and Prometheus metrics (`/metrics`)
 - REST API with 9 endpoints under `/api/v1/` + Swagger UI at `/swagger-ui`
@@ -113,6 +118,7 @@ The original `RollupCircuit` enforced only `new_state_root == expected_new_state
 **Previously remaining gap:** The `ExpandedRollupCircuit` used a **simplified field-addition hash** as a placeholder for a proper SNARK-friendly hash function. This meant the hash constraint was not cryptographically binding.
 
 **Current status:** The `ExpandedRollupCircuit` now uses **Poseidon hash** (implemented in `omnia-adapters/src/poseidon.rs`) with:
+
 - Cauchy MDS matrix construction (`generate_mds_matrix()`) for the linear layer
 - BLAKE3-derived round constants (deterministically generated from a seed, not the Filecoin/Neptune reference constants)
 - Full R1CS gadget (`poseidon_permutation_gadget()`) for on-circuit verification
@@ -124,6 +130,7 @@ The original `RollupCircuit` enforced only `new_state_root == expected_new_state
 ### 3.3 Unencrypted Private Key Storage (High) → ✅ Resolved (FIND-010)
 
 The `keygen` CLI subcommand now supports encrypted key output:
+
 - With `--passphrase` (or `OMNIA_KEYGEN_PASSPHRASE` env var), the private key is encrypted with AES-256-GCM using a key derived from the passphrase via BLAKE3 domain-separated key derivation, and saved as `validator_key.enc`.
 - Without `--passphrase`, keys are written unencrypted as `validator_key.bin` with a prominent warning.
 - The `EncryptedKeyStore` module (`substrate/src/keystore.rs`, 856 lines) provides encrypted key storage with AES-256-GCM + HKDF-SHA256.
@@ -169,19 +176,20 @@ Both `RedbSlashingStore` and `RedbNonceStore` use redb, which is a production-qu
 
 The protocol has 295+ tests across 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
 
-| Crate | Test categories |
-|---|---|
-| `substrate` | Event creation/signing/verification, causal graph insertion/traversal, consensus finality, gossip simulation, slashing offense detection, vector clock merge, CRDT convergence, property-based tests, snapshot serialization |
-| `shards` | Fee enforcement, replay protection, cross-shard routing, financial adversarial tests, identity hardening, layer 2 integration |
-| `economics` | UBC lifecycle (mint/spend/reward), governance determinism, fixed-point arithmetic, quota management |
-| `zk` | Circuit construction, Groth16 proof generation and verification, settlement layer abstraction |
-| `binding` | Quantum commitment (Ed25519 + Dilithium hybrid), provenance chain construction, physical shard binding |
-| `node` | CLI config validation (zero node_id, zero http_port, invalid log_level), TOML config parsing, slashing/nonce dir defaults |
-| `chaos-tests` | Network partition safety/liveness, node crash recovery, message drop rates, equivocation detection |
+| Crate         | Test categories                                                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `substrate`   | Event creation/signing/verification, causal graph insertion/traversal, consensus finality, gossip simulation, slashing offense detection, vector clock merge, CRDT convergence, property-based tests, snapshot serialization |
+| `shards`      | Fee enforcement, replay protection, cross-shard routing, financial adversarial tests, identity hardening, layer 2 integration                                                                                                |
+| `economics`   | UBC lifecycle (mint/spend/reward), governance determinism, fixed-point arithmetic, quota management                                                                                                                          |
+| `zk`          | Circuit construction, Groth16 proof generation and verification, settlement layer abstraction                                                                                                                                |
+| `binding`     | Quantum commitment (Ed25519 + Dilithium hybrid), provenance chain construction, physical shard binding                                                                                                                       |
+| `node`        | CLI config validation (zero node_id, zero http_port, invalid log_level), TOML config parsing, slashing/nonce dir defaults                                                                                                    |
+| `chaos-tests` | Network partition safety/liveness, node crash recovery, message drop rates, equivocation detection                                                                                                                           |
 
 ### 4.2 Property-Based Tests
 
 The `substrate/tests/property_tests.rs` file contains property-based tests that test:
+
 - Causal graph invariants under random insertion sequences
 - Consensus behavior under Byzantine conditions
 - Vector clock merge associativity and commutativity
@@ -219,15 +227,15 @@ The `omnia-chaos-tests` crate provides a comprehensive simulation framework (`Ch
 
 The protocol has 7 fuzz targets, managed via `scripts/fuzz.sh`:
 
-| Fuzz Target | What it fuzzes |
-|---|---|
-| `fuzz_event_deserialization` | Random bytes fed to `Event::from_bytes()` — tests for deserialization panics |
-| `fuzz_gossip_message` | Random gossip message structures — tests for malformed gossip data |
-| `fuzz_zk_proof_deserialization` | Random ZK proof data — tests for proof deserialization robustness |
-| `fuzz_consensus_state_transition` | Random consensus state transitions — tests for state machine panics |
-| `fuzz_vector_clock_merge` | Random vector clock merge operations — tests for partial order violations |
-| `fuzz_rate_limiter` | Random rate limiter inputs — tests for rate limiter edge cases |
-| `fuzz_snapshot_deserialization` | Random snapshot data — tests for snapshot deserialization robustness |
+| Fuzz Target                       | What it fuzzes                                                               |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `fuzz_event_deserialization`      | Random bytes fed to `Event::from_bytes()` — tests for deserialization panics |
+| `fuzz_gossip_message`             | Random gossip message structures — tests for malformed gossip data           |
+| `fuzz_zk_proof_deserialization`   | Random ZK proof data — tests for proof deserialization robustness            |
+| `fuzz_consensus_state_transition` | Random consensus state transitions — tests for state machine panics          |
+| `fuzz_vector_clock_merge`         | Random vector clock merge operations — tests for partial order violations    |
+| `fuzz_rate_limiter`               | Random rate limiter inputs — tests for rate limiter edge cases               |
+| `fuzz_snapshot_deserialization`   | Random snapshot data — tests for snapshot deserialization robustness         |
 
 Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 
@@ -244,25 +252,25 @@ Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 
 ### 6.1 Key Dependencies
 
-| Dependency | Version | Purpose | Notes |
-|---|---|---|---|
-| `ed25519-dalek` | Latest | Ed25519 signature verification | Well-audited; constant-time operations |
-| `pqc-dilithium` | Latest | CRYSTALS-Dilithium PQC signatures | NIST PQC standard; no formal audit of Rust crate |
-| `ark-bn254` | Latest | BN254 elliptic curve for ZK | Used by major protocols (Celo, Polygon zkEVM) |
-| `ark-groth16` | Latest | Groth16 ZK proof system | Well-audited; reference implementation |
-| `ark-r1cs-std` | Latest | R1CS constraint standard library | Part of arkworks ecosystem |
-| `blake3` | Latest | Hashing (state roots, commitments, node IDs) | Very fast; no known vulnerabilities |
-| `postcard` | Latest | Serialization (events, payloads) | Not cryptographic; deterministic `no_std`-compatible format |
-| `libp2p` | Latest | P2P networking | Large dependency surface; many sub-crates |
-| `serde` | Latest | Serialization framework | No known issues |
-| `thiserror` | Latest | Error derivation | No security implications |
-| `axum` | "0.7" | HTTP framework | Well-maintained; no known security issues |
-| `clap` | "4" | CLI argument parsing | Well-maintained; no known security issues |
-| `redb` | "2" | Embedded database | Production-quality; ACID transactions, crash-safe, pure Rust |
-| `utoipa` | "5" | OpenAPI spec generation | No security implications |
-| `utoipa-swagger-ui` | "8" | Swagger UI | No security implications; serves static assets |
-| `prometheus` | "0.13" | Metrics exposition | Standard monitoring library |
-| `tokio` | "1" | Async runtime | Well-maintained; industry standard |
+| Dependency          | Version | Purpose                                      | Notes                                                        |
+| ------------------- | ------- | -------------------------------------------- | ------------------------------------------------------------ |
+| `ed25519-dalek`     | Latest  | Ed25519 signature verification               | Well-audited; constant-time operations                       |
+| `pqc-dilithium`     | Latest  | CRYSTALS-Dilithium PQC signatures            | NIST PQC standard; no formal audit of Rust crate             |
+| `ark-bn254`         | Latest  | BN254 elliptic curve for ZK                  | Used by major protocols (Celo, Polygon zkEVM)                |
+| `ark-groth16`       | Latest  | Groth16 ZK proof system                      | Well-audited; reference implementation                       |
+| `ark-r1cs-std`      | Latest  | R1CS constraint standard library             | Part of arkworks ecosystem                                   |
+| `blake3`            | Latest  | Hashing (state roots, commitments, node IDs) | Very fast; no known vulnerabilities                          |
+| `postcard`          | Latest  | Serialization (events, payloads)             | Not cryptographic; deterministic `no_std`-compatible format  |
+| `libp2p`            | Latest  | P2P networking                               | Large dependency surface; many sub-crates                    |
+| `serde`             | Latest  | Serialization framework                      | No known issues                                              |
+| `thiserror`         | Latest  | Error derivation                             | No security implications                                     |
+| `axum`              | "0.7"   | HTTP framework                               | Well-maintained; no known security issues                    |
+| `clap`              | "4"     | CLI argument parsing                         | Well-maintained; no known security issues                    |
+| `redb`              | "2"     | Embedded database                            | Production-quality; ACID transactions, crash-safe, pure Rust |
+| `utoipa`            | "5"     | OpenAPI spec generation                      | No security implications                                     |
+| `utoipa-swagger-ui` | "8"     | Swagger UI                                   | No security implications; serves static assets               |
+| `prometheus`        | "0.13"  | Metrics exposition                           | Standard monitoring library                                  |
+| `tokio`             | "1"     | Async runtime                                | Well-maintained; industry standard                           |
 
 ### 6.2 Dependency Risks
 
@@ -276,19 +284,19 @@ Corpus seeds can be generated via `scripts/generate-fuzz-seeds.sh`.
 
 ## 7. Security Posture Summary
 
-| Category | Status | Trend |
-|---|---|---|
-| Consensus safety | Partially verified (TLA+ bounded, property tests, chaos tests) | Improving |
-| Cryptographic correctness | Real implementations (not stubs), Poseidon hash in ZK circuit | Improving |
-| Economic security | Fee enforcement + slashing + persistence available | Improving |
-| Network security | Gossip bounds exist, rate limiting on API (FIND-001) | Improving |
-| **API security** | **JWT auth + ACL + rate limiting + CORS (FIND-001)** | **Resolved** |
-| Input validation | Hash + signature checks, nonce replay protection | Good |
-| Authorization | ACL for privileged operations via AuthorizedCallers + admin JWT | Resolved (FIND-001) |
-| Persistence | RedbSlashingStore + RedbNonceStore; redb is production-quality | ✅ Resolved |
-| Key management | EncryptedKeyStore (AES-256-GCM); keygen supports --passphrase | ✅ Resolved (FIND-010) |
-| Test coverage | 295+ tests, 7 fuzz targets, chaos test framework | Adequate |
-| Dependency health | cargo-audit configured, redb is production-quality | Monitoring |
+| Category                  | Status                                                          | Trend                  |
+| ------------------------- | --------------------------------------------------------------- | ---------------------- |
+| Consensus safety          | Partially verified (TLA+ bounded, property tests, chaos tests)  | Improving              |
+| Cryptographic correctness | Real implementations (not stubs), Poseidon hash in ZK circuit   | Improving              |
+| Economic security         | Fee enforcement + slashing + persistence available              | Improving              |
+| Network security          | Gossip bounds exist, rate limiting on API (FIND-001)            | Improving              |
+| **API security**          | **JWT auth + ACL + rate limiting + CORS (FIND-001)**            | **Resolved**           |
+| Input validation          | Hash + signature checks, nonce replay protection                | Good                   |
+| Authorization             | ACL for privileged operations via AuthorizedCallers + admin JWT | Resolved (FIND-001)    |
+| Persistence               | RedbSlashingStore + RedbNonceStore; redb is production-quality  | ✅ Resolved            |
+| Key management            | EncryptedKeyStore (AES-256-GCM); keygen supports --passphrase   | ✅ Resolved (FIND-010) |
+| Test coverage             | 295+ tests, 7 fuzz targets, chaos test framework                | Adequate               |
+| Dependency health         | cargo-audit configured, redb is production-quality              | Monitoring             |
 
 ---
 
@@ -308,5 +316,6 @@ Based on our self-assessment, we believe the following areas would benefit most 
 10. **Node ID derivation** — The chaos tests use `blake3(pubkey)` for node IDs, matching `Event::sign_with_keypair()`. But `NodeConfig::node_id_bytes()` uses `node_id.to_le_bytes()`. Are these consistent?
 
 ---
+
 🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
 🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

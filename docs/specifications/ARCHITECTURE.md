@@ -1,4 +1,5 @@
 # Architecture Specification
+
 > 🎯 Audience: Developers
 > 🔗 Context: Part of the specifications documentation section
 > 📅 Last Updated: 2026-05-20
@@ -8,5 +9,6 @@
 The comprehensive architecture specification is now at [docs/architecture/full-spec.md](../architecture/full-spec.md).
 
 ---
+
 🔙 **Back**: [Index](../) | 🔄 **Related**: [Related](./)
 🚀 **Next**: [Next](./) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

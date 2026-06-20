@@ -1,4 +1,5 @@
 # Operations Runbook
+
 > 🎯 Audience: Operators
 > 🔗 Context: Step-by-step procedures for common operational tasks when running Omnia Protocol nodes
 > 📅 Last Updated: 2026-05-20
@@ -104,11 +105,11 @@ The `KeyRotationProof` must be shared with all other validators. They verify the
 
 The `SlashingEngine` tracks three offense types with gradual escalation:
 
-| Offense | 1st | 2nd | 3rd+ |
-|---------|-----|-----|-------|
-| Equivocation | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%) |
-| LivenessViolation | Warning (1%) | Warning (1%) | Jailed (5%, 500r) |
-| InvalidAttestation | Warning (2%) | Jailed (10%, 2000r) | Ejected (100%) |
+| Offense            | 1st                | 2nd                 | 3rd+              |
+| ------------------ | ------------------ | ------------------- | ----------------- |
+| Equivocation       | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%)    |
+| LivenessViolation  | Warning (1%)       | Warning (1%)        | Jailed (5%, 500r) |
+| InvalidAttestation | Warning (2%)       | Jailed (10%, 2000r) | Ejected (100%)    |
 
 ### Detecting Slashing Events
 
@@ -274,20 +275,20 @@ omnia-node setup-verify --degree 65536 --num-contributions 3
 
 ## REST API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/healthz` | Liveness probe |
-| GET | `/readyz` | Readiness probe |
-| GET | `/metrics` | Prometheus metrics |
-| GET | `/api/v1/node/info` | Node identity and status |
-| GET | `/api/v1/node/peers` | Connected peer list |
-| POST | `/api/v1/events` | Submit a new event |
-| GET | `/api/v1/events/:id` | Retrieve event by ID |
-| POST | `/api/v1/shards/:shard_id/operations` | Submit shard operation |
-| POST | `/api/v1/governance/proposals` | Create governance proposal |
-| POST | `/api/v1/governance/vote` | Cast quadratic-weighted vote |
-| GET | `/api/v1/economics/balance/:did` | Check UBC balance |
-| POST | `/api/v1/economics/transfer` | Spend UBC tokens |
+| Method | Path                                  | Description                  |
+| ------ | ------------------------------------- | ---------------------------- |
+| GET    | `/healthz`                            | Liveness probe               |
+| GET    | `/readyz`                             | Readiness probe              |
+| GET    | `/metrics`                            | Prometheus metrics           |
+| GET    | `/api/v1/node/info`                   | Node identity and status     |
+| GET    | `/api/v1/node/peers`                  | Connected peer list          |
+| POST   | `/api/v1/events`                      | Submit a new event           |
+| GET    | `/api/v1/events/:id`                  | Retrieve event by ID         |
+| POST   | `/api/v1/shards/:shard_id/operations` | Submit shard operation       |
+| POST   | `/api/v1/governance/proposals`        | Create governance proposal   |
+| POST   | `/api/v1/governance/vote`             | Cast quadratic-weighted vote |
+| GET    | `/api/v1/economics/balance/:did`      | Check UBC balance            |
+| POST   | `/api/v1/economics/transfer`          | Spend UBC tokens             |
 
 **Security:** All endpoints require JWT authentication. Privileged operations require admin JWT. See [validator-setup.md](./validator-setup.md) for configuration.
 
@@ -295,5 +296,6 @@ Swagger UI: `http://localhost:8080/swagger-ui`
 OpenAPI spec: `http://localhost:8080/api-docs/openapi.json`
 
 ---
+
 🔙 **Back**: [operations/](./) | 🔄 **Related**: [validator-setup.md](./validator-setup.md)
 🚀 **Next**: [feature-flags.md](./feature-flags.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

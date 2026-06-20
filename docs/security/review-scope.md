@@ -15,18 +15,18 @@ The external security review will assess the correctness and safety of the Omnia
 
 ### Primary (Full Review)
 
-| Crate | Lines of Code | Description | Risk Level |
-|-------|--------------|-------------|------------|
-| `omnia-crypto` | ~3,200 | Ed25519, BLS12-381, VRF, AES-GCM keystore, PQC (Dilithium/ML-KEM) | Critical |
-| `omnia-consensus` | ~5,800 | Causal graph, BFT finality gadget, CRDTs, slashing, sharded state, batch processing | Critical |
-| `omnia-network` | ~3,400 | libp2p GossipSub, compact encoding, bloom filters, priority queue | High |
+| Crate             | Lines of Code | Description                                                                         | Risk Level |
+| ----------------- | ------------- | ----------------------------------------------------------------------------------- | ---------- |
+| `omnia-crypto`    | ~3,200        | Ed25519, BLS12-381, VRF, AES-GCM keystore, PQC (Dilithium/ML-KEM)                   | Critical   |
+| `omnia-consensus` | ~5,800        | Causal graph, BFT finality gadget, CRDTs, slashing, sharded state, batch processing | Critical   |
+| `omnia-network`   | ~3,400        | libp2p GossipSub, compact encoding, bloom filters, priority queue                   | High       |
 
 ### Secondary (Differential Review)
 
-| Crate | Description | Risk Level |
-|-------|-------------|------------|
-| `omnia-primitives` | Core types (Event, VectorClock, NodeId) | Medium |
-| `omnia-adapters` | ZK circuits, batch proof circuit, settlement | High |
+| Crate              | Description                                  | Risk Level |
+| ------------------ | -------------------------------------------- | ---------- |
+| `omnia-primitives` | Core types (Event, VectorClock, NodeId)      | Medium     |
+| `omnia-adapters`   | ZK circuits, batch proof circuit, settlement | High       |
 
 ### Out of Scope
 
@@ -98,23 +98,24 @@ The `CompactEncoder` uses delta-compressed vector clocks. Review should verify:
 ### 4.3 Formal Verification
 
 The existing TLA+ specifications should be updated to cover:
+
 - Sharded consensus state concurrent operations
 - Batch proof verification state machine
 - Bloom filter rotation protocol
 
 ## 5. Timeline
 
-| Phase | Duration | Deliverables |
-|-------|----------|-------------|
-| Kickoff & scope review | Week 1 | Signed SOW, access to repository |
-| Automated analysis | Week 2 | Tool reports, dependency audit |
-| Manual review (crypto) | Weeks 2-4 | Crypto crate findings |
-| Manual review (consensus) | Weeks 3-5 | Consensus crate findings |
-| Manual review (network) | Weeks 4-5 | Network crate findings |
-| TLA+ spec update | Week 5 | Updated formal specs |
-| Interim report | Week 3 | Early findings for Critical/High issues |
-| Final report | Week 6 | Complete findings + recommendations |
-| Remediation support | Weeks 7-8 | Resolution verification |
+| Phase                     | Duration  | Deliverables                            |
+| ------------------------- | --------- | --------------------------------------- |
+| Kickoff & scope review    | Week 1    | Signed SOW, access to repository        |
+| Automated analysis        | Week 2    | Tool reports, dependency audit          |
+| Manual review (crypto)    | Weeks 2-4 | Crypto crate findings                   |
+| Manual review (consensus) | Weeks 3-5 | Consensus crate findings                |
+| Manual review (network)   | Weeks 4-5 | Network crate findings                  |
+| TLA+ spec update          | Week 5    | Updated formal specs                    |
+| Interim report            | Week 3    | Early findings for Critical/High issues |
+| Final report              | Week 6    | Complete findings + recommendations     |
+| Remediation support       | Weeks 7-8 | Resolution verification                 |
 
 ## 6. Deliverables
 
@@ -125,13 +126,13 @@ The existing TLA+ specifications should be updated to cover:
 
 ## 7. Severity Classification
 
-| Severity | Criteria | SLA |
-|----------|----------|-----|
-| Critical | Remote exploit, consensus safety violation, key compromise | Fix within 48h |
-| High | Local exploit, data corruption, liveness degradation | Fix within 1 week |
-| Medium | DoS vector, information leak, misconfiguration | Fix within 2 weeks |
-| Low | Code quality, documentation, best practice | Fix within 4 weeks |
-| Informational | Suggestion, improvement | Discretionary |
+| Severity      | Criteria                                                   | SLA                |
+| ------------- | ---------------------------------------------------------- | ------------------ |
+| Critical      | Remote exploit, consensus safety violation, key compromise | Fix within 48h     |
+| High          | Local exploit, data corruption, liveness degradation       | Fix within 1 week  |
+| Medium        | DoS vector, information leak, misconfiguration             | Fix within 2 weeks |
+| Low           | Code quality, documentation, best practice                 | Fix within 4 weeks |
+| Informational | Suggestion, improvement                                    | Discretionary      |
 
 ## 8. Access and Environment
 

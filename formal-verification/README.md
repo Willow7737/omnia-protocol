@@ -37,6 +37,7 @@ The key invariant is that at most one event per `(creator, sequence)` can become
 ### Liveness
 
 The `FairSpec` adds weak fairness assumptions on honest actions:
+
 - `WF_vars(CreateEvent(n))` for honest nodes — events are eventually created
 - `WF_vars(Gossip(n1, n2))` for all node pairs — events are eventually propagated
 - `WF_vars(DecideFamous(eid))` for all events — fame is eventually decided
@@ -82,11 +83,11 @@ java -XX:+UseParallelGC -jar tla2tools.jar \
 
 The model is configured in `OmniaConsensus.cfg`:
 
-| Parameter | Value | Meaning |
-|---|---|---|
-| `Nodes` | `{n1, n2, n3, n4}` | 4-node network |
-| `ByzantineNodes` | `{n1}` | 1 Byzantine node (as a set, not a count — BFT threshold: f=1 requires 4 nodes) |
-| `MaxSeq` | `1` | Each node creates at most 1 event (sequence 0). This is the maximum sequence number, not a round count. |
+| Parameter        | Value              | Meaning                                                                                                 |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `Nodes`          | `{n1, n2, n3, n4}` | 4-node network                                                                                          |
+| `ByzantineNodes` | `{n1}`             | 1 Byzantine node (as a set, not a count — BFT threshold: f=1 requires 4 nodes)                          |
+| `MaxSeq`         | `1`                | Each node creates at most 1 event (sequence 0). This is the maximum sequence number, not a round count. |
 
 **Important:** The configuration uses `ByzantineNodes` (a subset of `Nodes`) and `MaxSeq` (maximum sequence number), not `MaxByzantine` and `MaxRounds` as earlier docs stated. The TLA+ `CONSTANTS` are exactly as defined in the spec header.
 
@@ -162,13 +163,13 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 
 **Configuration tested:** `Nodes = {n1, n2, n3, n4}`, `ByzantineNodes = {n1}`, `MaxSeq = 1`
 
-| Property | Status | Notes |
-|---|---|---|
-| TypeOK | ✅ Holds | Well-typedness invariant verified |
-| Agreement | ✅ Holds | Restored by quorum + fame requirement |
-| NoEquivocation | ✅ Holds | Equivocation is confined to Byzantine creators |
-| Validity | ✅ Holds | Committed events were proposed by some node |
-| Liveness | ✅ Holds | Honest events eventually committed (under fairness) |
+| Property       | Status   | Notes                                               |
+| -------------- | -------- | --------------------------------------------------- |
+| TypeOK         | ✅ Holds | Well-typedness invariant verified                   |
+| Agreement      | ✅ Holds | Restored by quorum + fame requirement               |
+| NoEquivocation | ✅ Holds | Equivocation is confined to Byzantine creators      |
+| Validity       | ✅ Holds | Committed events were proposed by some node         |
+| Liveness       | ✅ Holds | Honest events eventually committed (under fairness) |
 
 ## CRDT Convergence Verification (B5)
 
@@ -206,17 +207,17 @@ The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence propertie
 
 ## Known Limitations
 
-| Limitation | Details |
-|---|---|
-| **Bounded state space** | Model checking is over a finite set of 4 nodes with MaxSeq=1. Scaling beyond this is limited by state explosion. |
-| **Simplified gossip** | Gossip is modeled as atomic one-step transfer, not the multi-round epidemic protocol used in production. |
-| **No network partitions** | The model assumes reliable delivery. Partition tolerance is not modeled (but is tested via `omnia-chaos-tests`). |
-| **Abstract hashes** | Honest nodes use hash=1 deterministically; Byzantine nodes use hash=1 and hash=2. Collision resistance is assumed, not proved. |
-| **No timing** | The model is untimed; partial synchrony assumptions are not captured. |
-| **Byzantine set is static** | The set of Byzantine nodes is fixed. Adaptive corruptions are not modeled. |
-| **Equivocation only** | Byzantine behavior is limited to equivocation. More complex attacks (selective forwarding, Sybil) are not captured. |
-| **No parent references** | The two-parent DAG structure is abstracted away; only the creator+sequence+hash identification is modeled. |
-| **Abstract fame decision** | The `DecideFamous` action abstracts the multi-round witness voting process into a single step. |
+| Limitation                  | Details                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Bounded state space**     | Model checking is over a finite set of 4 nodes with MaxSeq=1. Scaling beyond this is limited by state explosion.               |
+| **Simplified gossip**       | Gossip is modeled as atomic one-step transfer, not the multi-round epidemic protocol used in production.                       |
+| **No network partitions**   | The model assumes reliable delivery. Partition tolerance is not modeled (but is tested via `omnia-chaos-tests`).               |
+| **Abstract hashes**         | Honest nodes use hash=1 deterministically; Byzantine nodes use hash=1 and hash=2. Collision resistance is assumed, not proved. |
+| **No timing**               | The model is untimed; partial synchrony assumptions are not captured.                                                          |
+| **Byzantine set is static** | The set of Byzantine nodes is fixed. Adaptive corruptions are not modeled.                                                     |
+| **Equivocation only**       | Byzantine behavior is limited to equivocation. More complex attacks (selective forwarding, Sybil) are not captured.            |
+| **No parent references**    | The two-parent DAG structure is abstracted away; only the creator+sequence+hash identification is modeled.                     |
+| **Abstract fame decision**  | The `DecideFamous` action abstracts the multi-round witness voting process into a single step.                                 |
 
 ## How to Interpret Results
 
@@ -236,6 +237,7 @@ All specified invariants hold for every reachable state within the configured bo
 ### TLC reports "State space too large"
 
 The model exceeds available memory. Remediation:
+
 - Reduce `MaxSeq`
 - Reduce the number of nodes
 - Add state constraints to prune the exploration
@@ -243,14 +245,14 @@ The model exceeds available memory. Remediation:
 
 ## File Index
 
-| File | Lines | Description |
-|---|---|---|
-| `OmniaConsensus.tla` | 191 | TLA+ specification of the consensus protocol (with B1 fix), including CreateEvent, Equivocate, Gossip, DecideFamous, and CommitEvent actions |
-| `OmniaConsensus.cfg` | 10 | TLC model checker configuration for consensus |
-| `OmniaCRDT.tla` | 213 | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister) |
-| `OmniaCRDT.cfg` | 23 | TLC model checker configuration for CRDT verification |
-| `consensus/CONSENSUS_SPEC.md` | — | English-language formal specification: fault model, DAG structure, famousness algorithm, commitment rule, safety argument, liveness argument (A-2 audit fix v0.1.68) |
-| `README.md` | — | This documentation |
+| File                          | Lines | Description                                                                                                                                                          |
+| ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OmniaConsensus.tla`          | 191   | TLA+ specification of the consensus protocol (with B1 fix), including CreateEvent, Equivocate, Gossip, DecideFamous, and CommitEvent actions                         |
+| `OmniaConsensus.cfg`          | 10    | TLC model checker configuration for consensus                                                                                                                        |
+| `OmniaCRDT.tla`               | 213   | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister)                                                                                     |
+| `OmniaCRDT.cfg`               | 23    | TLC model checker configuration for CRDT verification                                                                                                                |
+| `consensus/CONSENSUS_SPEC.md` | —     | English-language formal specification: fault model, DAG structure, famousness algorithm, commitment rule, safety argument, liveness argument (A-2 audit fix v0.1.68) |
+| `README.md`                   | —     | This documentation                                                                                                                                                   |
 
 ## Cross-Reference with Code
 

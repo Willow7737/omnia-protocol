@@ -1,4 +1,5 @@
 # ADR-019: Fast-Sync Protocol
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -39,14 +40,17 @@ The trust model for fast-sync is anchored in supermajority agreement — a snaps
 ## Alternatives Considered
 
 ### Full Replay Only
+
 Require every node to replay from genesis. Maximum trust minimization — no external trust required beyond the genesis state. However, this does not scale and becomes impractical as the chain grows.
 
 ### State Sync via External Service
+
 Use a trusted external service (e.g., cloud storage) to provide snapshots. Simple to implement but introduces a trusted third party, creating a centralization vector and single point of failure.
 
 ## Consequences
 
 ### Positive
+
 - Fast node bootstrapping — new nodes can sync in minutes instead of hours
 - Trust anchored in supermajority agreement (2/3+ stake), same security as BFT consensus
 - BLAKE3 domain separation (`OMNIA-FAST-SYNC-V1`) prevents cross-protocol hash collisions
@@ -57,6 +61,7 @@ Use a trusted external service (e.g., cloud storage) to provide snapshots. Simpl
 - `SyncSnapshot` compact wire format minimizes bandwidth
 
 ### Negative
+
 - New nodes must trust that supermajority of validators agreed on the snapshot
 - Snapshot download is a large data transfer (proportional to state size)
 - Delta replay may still be significant if the snapshot is old
@@ -64,11 +69,13 @@ Use a trusted external service (e.g., cloud storage) to provide snapshots. Simpl
 - Protocol requires at least one responsive peer with a checkpoint
 
 ### Trade-offs
+
 - Chose supermajority trust over zero-trust (full replay) for practicality
 - Chose P2P download over external service for decentralization
 - `SyncNetwork` trait allows testing without real P2P infrastructure
 - `try_sync_or_fallback()` trades a small amount of complexity for robust startup behavior
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

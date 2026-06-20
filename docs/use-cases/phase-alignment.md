@@ -1,4 +1,5 @@
 # Phase Alignment & User Impact
+
 > 🎯 Audience: All
 > 🔗 Context: Maps each development phase to concrete user-facing capabilities and feature availability
 > 📅 Last Updated: 2026-05-20
@@ -20,15 +21,15 @@ Phase 0 delivered the core protocol: a causal graph consensus engine, six domain
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| Causal graph consensus | ✅ | 454+ substrate tests, ~7,190 events/sec single-node (synchronous) |
-| 6 domain shards | ✅ | Financial, Computational, Physical, Biological, Identity, Economics |
-| DID identity system | ✅ | `did:omnia:` method, Shamir recovery, biometric anchors |
-| UBC economics | ✅ | 1,000 UBC/month soulbound quota, quadratic voting |
-| ZK-rollup (arkworks) | ✅ | Groth16 + Poseidon on BN254 |
-| PQC signatures | ✅ | ML-KEM-768 (FIPS-203) + Ed25519 hybrid |
-| REST API | ✅ | JWT auth, rate limiting, 9 endpoints |
+| Capability             | Implementation | Notes                                                               |
+| ---------------------- | -------------- | ------------------------------------------------------------------- |
+| Causal graph consensus | ✅             | 454+ substrate tests, ~7,190 events/sec single-node (synchronous)   |
+| 6 domain shards        | ✅             | Financial, Computational, Physical, Biological, Identity, Economics |
+| DID identity system    | ✅             | `did:omnia:` method, Shamir recovery, biometric anchors             |
+| UBC economics          | ✅             | 1,000 UBC/month soulbound quota, quadratic voting                   |
+| ZK-rollup (arkworks)   | ✅             | Groth16 + Poseidon on BN254                                         |
+| PQC signatures         | ✅             | ML-KEM-768 (FIPS-203) + Ed25519 hybrid                              |
+| REST API               | ✅             | JWT auth, rate limiting, 9 endpoints                                |
 
 ---
 
@@ -46,13 +47,13 @@ Phase 1 eliminated the most dangerous code quality issues: production `unwrap()`
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| Typed errors | ✅ | 34 `thiserror` enums, zero `Result<_, String>` |
-| `unwrap()` removal | ✅ | `#![deny(clippy::unwrap_used)]` on all crates |
-| E2E API tests | ✅ | 19 test functions, 4 auth states |
-| Code coverage CI | ✅ | `cargo llvm-cov`, 70% target |
-| Solidity Groth16 verifier | ✅ | Pre-existing, production-quality |
+| Capability                | Implementation | Notes                                          |
+| ------------------------- | -------------- | ---------------------------------------------- |
+| Typed errors              | ✅             | 34 `thiserror` enums, zero `Result<_, String>` |
+| `unwrap()` removal        | ✅             | `#![deny(clippy::unwrap_used)]` on all crates  |
+| E2E API tests             | ✅             | 19 test functions, 4 auth states               |
+| Code coverage CI          | ✅             | `cargo llvm-cov`, 70% target                   |
+| Solidity Groth16 verifier | ✅             | Pre-existing, production-quality               |
 
 ---
 
@@ -70,16 +71,16 @@ Phase 2 closed critical security findings in SSS recovery, DKG share encryption,
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| SSS recovery flow | ✅ | End-to-end: encrypt → persist → reconstruct → rotate |
-| Trusted setup ceremony | ✅ | Real EC operations on BN254 G1 |
-| ZK circuit constraints | ✅ | Operation type + payload hash constraints |
-| Gradual slashing | ✅ | ADR-011: Warning → Jail → Ejection |
-| DKG | ✅ | Feldman VSS-based, AES-256-GCM share encryption |
-| BIP-39 mnemonics | ✅ | SLIP-0010 HD derivation |
-| PQC key rotation bridge | ✅ | KeyStoreBridge: persistent rotation across restarts |
-| sled removal | ✅ | Fully migrated to redb |
+| Capability              | Implementation | Notes                                                |
+| ----------------------- | -------------- | ---------------------------------------------------- |
+| SSS recovery flow       | ✅             | End-to-end: encrypt → persist → reconstruct → rotate |
+| Trusted setup ceremony  | ✅             | Real EC operations on BN254 G1                       |
+| ZK circuit constraints  | ✅             | Operation type + payload hash constraints            |
+| Gradual slashing        | ✅             | ADR-011: Warning → Jail → Ejection                   |
+| DKG                     | ✅             | Feldman VSS-based, AES-256-GCM share encryption      |
+| BIP-39 mnemonics        | ✅             | SLIP-0010 HD derivation                              |
+| PQC key rotation bridge | ✅             | KeyStoreBridge: persistent rotation across restarts  |
+| sled removal            | ✅             | Fully migrated to redb                               |
 
 ---
 
@@ -97,16 +98,16 @@ Phase 3 closed all 5 open Phase 2 findings (3 critical, 1 high, 1 medium) and de
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| SSS/DKG share encryption | ✅ | XOR → AES-256-GCM with HKDF-SHA256 |
-| Leader selection in consensus | ✅ | VRF-based, stake-weighted, mempool |
-| Kademlia DHT + NAT traversal | ✅ | AutoNAT, Relay, DCutr, TCP fallback |
-| GossipSub peer scoring | ✅ | Graylisting at -100, penalty weights |
-| Consensus state persistence | ✅ | RedbConsensusStore, load_or_new |
-| ML-KEM-768 | ✅ | FIPS-203, replaces pqc_kyber |
-| Fast-sync | ✅ | BLAKE3 checkpoints, supermajority, P2P download |
-| Message compression | ✅ | Snappy for >256 bytes |
+| Capability                    | Implementation | Notes                                           |
+| ----------------------------- | -------------- | ----------------------------------------------- |
+| SSS/DKG share encryption      | ✅             | XOR → AES-256-GCM with HKDF-SHA256              |
+| Leader selection in consensus | ✅             | VRF-based, stake-weighted, mempool              |
+| Kademlia DHT + NAT traversal  | ✅             | AutoNAT, Relay, DCutr, TCP fallback             |
+| GossipSub peer scoring        | ✅             | Graylisting at -100, penalty weights            |
+| Consensus state persistence   | ✅             | RedbConsensusStore, load_or_new                 |
+| ML-KEM-768                    | ✅             | FIPS-203, replaces pqc_kyber                    |
+| Fast-sync                     | ✅             | BLAKE3 checkpoints, supermajority, P2P download |
+| Message compression           | ✅             | Snappy for >256 bytes                           |
 
 ---
 
@@ -124,15 +125,15 @@ Phase 4 delivered real Ethereum settlement via Alloy, wired gradual slashing per
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| Real Ethereum settlement | ✅ | Alloy v1, feature-gated |
-| Gradual slashing (wired) | ✅ | ADR-011 tiers: Warning → Jail → Ejection |
-| KyberSlash fix | ✅ | pqc_kyber → ml-kem migration |
-| Fast-sync P2P automation | ✅ | Full download loop with MockSyncNetwork |
-| Liveness/readiness probes | ✅ | `/healthz`, `/readyz`, `/health` |
-| Ceremony server/client | ✅ | Multi-party coordinator + CLI subcommands |
-| Supply chain hardening | ✅ | First-party audits for ml-kem, snap, libp2p crates |
+| Capability                | Implementation | Notes                                              |
+| ------------------------- | -------------- | -------------------------------------------------- |
+| Real Ethereum settlement  | ✅             | Alloy v1, feature-gated                            |
+| Gradual slashing (wired)  | ✅             | ADR-011 tiers: Warning → Jail → Ejection           |
+| KyberSlash fix            | ✅             | pqc_kyber → ml-kem migration                       |
+| Fast-sync P2P automation  | ✅             | Full download loop with MockSyncNetwork            |
+| Liveness/readiness probes | ✅             | `/healthz`, `/readyz`, `/health`                   |
+| Ceremony server/client    | ✅             | Multi-party coordinator + CLI subcommands          |
+| Supply chain hardening    | ✅             | First-party audits for ml-kem, snap, libp2p crates |
 
 ---
 
@@ -151,27 +152,29 @@ Phase 5 captured real benchmark data (~7,190 events/sec synchronous single-node;
 
 ### Key Deliverables
 
-| Capability | Implementation | Notes |
-|-----------|---------------|-------|
-| Real benchmarks | ✅ | ~7,190 evt/s sync single-node (13.6× improvement over initial measurements) |
-| Multi-node BFT | ✅ | 4-node test validated |
-| ECVRF (RFC 9381) | ✅ | V2 with Fiat-Shamir + Ed25519 |
-| Genesis tooling | ✅ | GenesisConfig, ValidatorInfo, TOML templates |
-| Poseidon dual-hash | ✅ | Custom + Reference, LazyLock-based |
-| Bug bounty program | ✅ | $100–$50,000, 90-day embargo |
-| External audit package | ✅ | AUDIT_PACKAGE.md + findings template |
-| Side-channel audit | ✅ | ZK + binding crates, 5 findings |
+| Capability             | Implementation | Notes                                                                       |
+| ---------------------- | -------------- | --------------------------------------------------------------------------- |
+| Real benchmarks        | ✅             | ~7,190 evt/s sync single-node (13.6× improvement over initial measurements) |
+| Multi-node BFT         | ✅             | 4-node test validated                                                       |
+| ECVRF (RFC 9381)       | ✅             | V2 with Fiat-Shamir + Ed25519                                               |
+| Genesis tooling        | ✅             | GenesisConfig, ValidatorInfo, TOML templates                                |
+| Poseidon dual-hash     | ✅             | Custom + Reference, LazyLock-based                                          |
+| Bug bounty program     | ✅             | $100–$50,000, 90-day embargo                                                |
+| External audit package | ✅             | AUDIT_PACKAGE.md + findings template                                        |
+| Side-channel audit     | ✅             | ZK + binding crates, 5 findings                                             |
 
 ---
 
 ## Post-Phase 5: What's Coming Next
 
 ### Before Public Testnet
+
 1. Docker Compose multi-node verification (5-node network validation)
 2. External security audit (commission professional audit firm)
 3. Anvil E2E test (deploy → submit → verify on local Ethereum)
 
 ### Before Mainnet
+
 4. Sybil resistance / stake-weighted validator registry
 5. Causal graph garbage collection with pruning
 6. Comprehensive rustdoc coverage (100% of public API)
@@ -179,6 +182,7 @@ Phase 5 captured real benchmark data (~7,190 events/sec synchronous single-node;
 8. Poseidon standard parameter migration (Phase B)
 
 ### Long-Term Vision
+
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
@@ -188,12 +192,13 @@ Phase 5 captured real benchmark data (~7,190 events/sec synchronous single-node;
 
 ### Timeline
 
-| Milestone | Target | Blockers |
-|-----------|--------|-----------|
-| Public Testnet | Q2 2026 | External audit completion |
-| Mainnet | Q4 2026 | Audit findings, Sybil resistance, GC |
+| Milestone        | Target  | Blockers                                  |
+| ---------------- | ------- | ----------------------------------------- |
+| Public Testnet   | Q2 2026 | External audit completion                 |
+| Mainnet          | Q4 2026 | Audit findings, Sybil resistance, GC      |
 | Hardened Mainnet | Q1 2027 | Multi-party ceremony, formal verification |
 
 ---
+
 🔙 **Back**: [use-cases/](./) | 🔄 **Related**: [../reference/roadmap.md](../reference/roadmap.md)  
 🚀 **Next**: [faq.md](./faq.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

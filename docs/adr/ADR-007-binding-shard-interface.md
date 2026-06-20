@@ -1,4 +1,5 @@
 # ADR-007: Binding Shard Interface — PhysicalShard and ProvenanceTracker
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -94,6 +95,7 @@ The Binding Layer interacts with physical hardware (RF sensors, quantum key gene
 The key principle is: **hardware unavailability is a soft failure (log warning, continue), but logical errors (double-anchor, transfer of destroyed item) are hard failures (return error)**.
 
 Note that the Physical shard itself enforces some of these constraints directly:
+
 - `AnchorItem` on an already-anchored item returns `ShardError::StateConflict`.
 - `TransferOwnership` on a non-existent item returns `ShardError::ValidationFailed`.
 - `VerifyChain` on a non-existent item returns `ShardError::ValidationFailed`.
@@ -136,7 +138,7 @@ This CRDT property is essential for the `Shard` trait contract (ADR-006), which 
 
 However, the `ProvenanceLog` is not itself a `Shard` implementation. It is a data structure used by the `ProvenanceTracker`, which sits alongside the Physical Shard. The `ProvenanceTracker` does not implement the `Shard` trait directly — instead, it is called by the `ShardRouter` as a sidecar to the Physical Shard.
 
-This design avoids a conflict between the CRDT's commutativity and the `Shard` trait's determinism requirement. The `ProvenanceLog` is commutative across *different* items (two different items' logs can be updated in any order), but for a *single* item, the log is strictly ordered (creation → transfers → destruction). This single-item ordering is enforced by the `ProvenanceTracker`'s `transfer_item()` and `destroy_item()` methods, which append events in the order they are received from the causal graph.
+This design avoids a conflict between the CRDT's commutativity and the `Shard` trait's determinism requirement. The `ProvenanceLog` is commutative across _different_ items (two different items' logs can be updated in any order), but for a _single_ item, the log is strictly ordered (creation → transfers → destruction). This single-item ordering is enforced by the `ProvenanceTracker`'s `transfer_item()` and `destroy_item()` methods, which append events in the order they are received from the causal graph.
 
 ### The PhysicalAnchor as the Unified Verification Type
 
@@ -186,5 +188,6 @@ The `ShardRouter::route_cross_shard()` method deserializes the inner `ShardOp` f
 - **Trade-off**: Using stub RF fingerprints and quantum commitments for Phase 0 means that the Binding Layer provides no real physical security until real hardware integration is complete. The stubs are deterministic placeholders that will be replaced with real measurements in later phases.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

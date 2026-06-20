@@ -1,11 +1,12 @@
 # CRDT Convergence Proofs
+
 > 🎯 Audience: Developers
 > 🔗 Context: Mathematical foundation for why CRDTs guarantee convergence under arbitrary message delivery order
 > 📅 Last Updated: 2026-05-20
 
 ## Formal Convergence Theorem
 
-> **Theorem.** *For any state-based CRDT C, if replicas start at the same state and apply the same set of merge operations in any order, they converge to the same state.*
+> **Theorem.** _For any state-based CRDT C, if replicas start at the same state and apply the same set of merge operations in any order, they converge to the same state._
 
 **Proof sketch.** A state-based CRDT's merge function must satisfy three algebraic properties for its join semilattice:
 
@@ -43,12 +44,12 @@ The merge is **pointwise maximum** over all node entries.
 
 ### Property-Based Tests
 
-| Test | Property |
-|------|----------|
-| `proptest_merge_commutative` | `merge(a, b) == merge(b, a)` |
-| `proptest_merge_idempotent` | `merge(a, a) == a` |
+| Test                         | Property                                         |
+| ---------------------------- | ------------------------------------------------ |
+| `proptest_merge_commutative` | `merge(a, b) == merge(b, a)`                     |
+| `proptest_merge_idempotent`  | `merge(a, a) == a`                               |
 | `proptest_merge_associative` | `merge(merge(a, b), c) == merge(a, merge(b, c))` |
-| `proptest_monotonic` | `value` never decreases after increment or merge |
+| `proptest_monotonic`         | `value` never decreases after increment or merge |
 
 ---
 
@@ -88,17 +89,17 @@ The key invariant of an observed-remove set is:
 
 > If an element is concurrently added and removed, the **add wins**.
 
-**Proof.** A remove operation can only observe tokens that existed at the time of the remove. A concurrent add creates a *new* token that the remove cannot have observed. Therefore the new token is in `adds[T]` but not in `removes[T]`, so `adds[T] \ removes[T] ≠ ∅`, and the element remains present after merge.
+**Proof.** A remove operation can only observe tokens that existed at the time of the remove. A concurrent add creates a _new_ token that the remove cannot have observed. Therefore the new token is in `adds[T]` but not in `removes[T]`, so `adds[T] \ removes[T] ≠ ∅`, and the element remains present after merge.
 
 This property ensures that no addition is silently lost due to a concurrent remove — a critical guarantee for use cases like shopping carts and access control lists.
 
 ### Property-Based Tests
 
-| Test | Property |
-|------|----------|
-| `proptest_merge_commutative` | Observable elements of `merge(a, b)` == `merge(b, a)` |
-| `proptest_merge_idempotent` | `merge(a, a) == a` |
-| `proptest_add_wins` | Concurrently added element survives remove after merge |
+| Test                         | Property                                               |
+| ---------------------------- | ------------------------------------------------------ |
+| `proptest_merge_commutative` | Observable elements of `merge(a, b)` == `merge(b, a)`  |
+| `proptest_merge_idempotent`  | `merge(a, a) == a`                                     |
+| `proptest_add_wins`          | Concurrently added element survives remove after merge |
 
 ---
 
@@ -148,11 +149,11 @@ The tiebreaker order `version > timestamp > node_id` is carefully chosen:
 
 ### Property-Based Tests
 
-| Test | Property |
-|------|----------|
-| `proptest_merge_deterministic` | `merge(a, b)` always returns the same result |
-| `proptest_merge_idempotent` | `merge(a, a) == a` |
-| `proptest_newer_wins` | Register with higher version/timestamp/node_id wins |
+| Test                           | Property                                            |
+| ------------------------------ | --------------------------------------------------- |
+| `proptest_merge_deterministic` | `merge(a, b)` always returns the same result        |
+| `proptest_merge_idempotent`    | `merge(a, a) == a`                                  |
+| `proptest_newer_wins`          | Register with higher version/timestamp/node_id wins |
 
 ---
 
@@ -166,11 +167,11 @@ In a distributed system, messages between replicas can be:
 
 State-based CRDTs handle all three cases through their algebraic properties:
 
-| Scenario | Property that handles it |
-|----------|--------------------------|
-| Reordered messages | Commutativity: merge order doesn't matter |
+| Scenario            | Property that handles it                              |
+| ------------------- | ----------------------------------------------------- |
+| Reordered messages  | Commutativity: merge order doesn't matter             |
 | Duplicated messages | Idempotency: merging the same state twice is harmless |
-| Arbitrary fan-in | Associativity: grouping of merges doesn't matter |
+| Arbitrary fan-in    | Associativity: grouping of merges doesn't matter      |
 
 Together, these properties mean that a replica can apply incoming state updates in any order, at any time, and the result will be the same as if they were applied in any other order. This is precisely the guarantee needed for eventual consistency in the Omnia Protocol's gossip-based synchronization.
 
@@ -189,9 +190,10 @@ This holds regardless of the order in which each replica processes the updates i
 
 ## References
 
-- Shapiro, M., Preguiça, N., Baquero, C., & Zawirski, M. (2011). *Conflict-free Replicated Data Types*. SSS 2011.
-- Almeida, P. S., Baquero, C., & Preguiça, N. (2018). *Delta State Replicated Data Types*. Journal of Parallel and Distributed Computing.
+- Shapiro, M., Preguiça, N., Baquero, C., & Zawirski, M. (2011). _Conflict-free Replicated Data Types_. SSS 2011.
+- Almeida, P. S., Baquero, C., & Preguiça, N. (2018). _Delta State Replicated Data Types_. Journal of Parallel and Distributed Computing.
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [vector-clock-reconciliation.md](./vector-clock-reconciliation.md)
 🚀 **Next**: [vector-clock-reconciliation.md](./vector-clock-reconciliation.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

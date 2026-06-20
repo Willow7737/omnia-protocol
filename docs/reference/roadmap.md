@@ -1,11 +1,12 @@
 # Implementation Roadmap
+
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
 > 📅 Last Updated: 2026-05-26
 
 ## Phase 0: The Seed ✅ Complete
 
-*Goal: Proof of Concept*
+_Goal: Proof of Concept_
 
 - ✅ Causal graph consensus (Rust, 454+ tests)
 - ✅ Self-sovereign identity system (DIDs, Shamir, biometrics)
@@ -91,6 +92,7 @@
 ## Remaining Work (Post-Phase 5)
 
 ### v0.1.56 Audit Findings — High Priority ✅ All Remediated
+
 1. ✅ `BatchCrdtMerger::apply_batch` rollback — snapshot-and-restore pattern added
 2. ✅ `GCounter::value()` overflow — `checked_add` with saturation; `value_checked()` added
 3. ✅ Non-constant-time comparisons — `vrf.rs:190` and `bls12_381_scalar.rs:507` now use `subtle::ConstantTimeEq`
@@ -99,6 +101,7 @@
 6. ✅ `KeyStoreBridge::rotate()` — now persists rotated keypair to keystore on disk
 
 ### v0.1.56 Audit Findings — Medium Priority (14 Remaining)
+
 7. `CmRDT` trait is dead code (never implemented)
 8. `AccountBalance::merge` doesn't merge `vector_clock`
 9. Mixed SHA-256/BLAKE3 in CRDT `state_hash()`
@@ -117,11 +120,13 @@
 22. Quorum check uses base weights instead of effective (decayed) weights
 
 ### Before Public Testnet
+
 1. Docker Compose multi-node verification
 2. External security audit
 3. Anvil E2E test execution
 
 ### Before Mainnet
+
 4. Sybil resistance / stake-weighted validator registry
 5. Causal graph GC with pruning
 6. Comprehensive rustdoc coverage (100% public API)
@@ -129,6 +134,7 @@
 8. Poseidon standard parameter migration (Phase B of dual-hash transition)
 
 ### Long-Term
+
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
@@ -138,10 +144,10 @@
 
 ### Timeline
 
-| Milestone | Target | Blockers |
-|-----------|--------|-----------|
-| Public Testnet | Q2 2026 | External audit |
-| Mainnet | Q4 2026 | Audit findings, Sybil resistance, GC |
+| Milestone        | Target  | Blockers                                  |
+| ---------------- | ------- | ----------------------------------------- |
+| Public Testnet   | Q2 2026 | External audit                            |
+| Mainnet          | Q4 2026 | Audit findings, Sybil resistance, GC      |
 | Hardened Mainnet | Q1 2027 | Multi-party ceremony, formal verification |
 
 ---
@@ -151,5 +157,6 @@
 See [status.md Section 14](./status.md#14-verified-protocol-limits-tested-2026-05-26) for the complete table of 40+ verified constants and throughput estimates, confirmed by running the full workspace test suite (910 default + 189 BLS feature tests).
 
 ---
+
 🔙 **Back**: [reference/](./) | 🔄 **Related**: [benchmark-gates.md](./benchmark-gates.md)
 🚀 **Next**: [benchmark-gates.md](./benchmark-gates.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./blueprint-reference.md)

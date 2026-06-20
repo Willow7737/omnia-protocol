@@ -13,15 +13,15 @@ deferred for a follow-up PR with rationale.
 
 ## Summary
 
-| Category              | Total | Applied | Verified FP | Deferred |
-|-----------------------|-------|---------|-------------|----------|
-| Critical (C)          | 8     | 5       | 1 (H-2*)    | 3 (C-5, C-7 partial, C-8) |
-| High (H)              | 14    | 8       | 2 (H-2, H-13) | 4 (H-3, H-11, H-14, plus C-4 below) |
-| Medium (M)            | 23    | 5       | 0           | 18 (lower priority, deferred) |
-| Low (L)               | 31    | 8       | 1 (L-14)    | 22 (doc cleanup, deferred) |
-| Architectural (A)     | 5     | 1       | 0           | 4 (large efforts, deferred) |
+| Category          | Total | Applied | Verified FP   | Deferred                            |
+| ----------------- | ----- | ------- | ------------- | ----------------------------------- |
+| Critical (C)      | 8     | 5       | 1 (H-2\*)     | 3 (C-5, C-7 partial, C-8)           |
+| High (H)          | 14    | 8       | 2 (H-2, H-13) | 4 (H-3, H-11, H-14, plus C-4 below) |
+| Medium (M)        | 23    | 5       | 0             | 18 (lower priority, deferred)       |
+| Low (L)           | 31    | 8       | 1 (L-14)      | 22 (doc cleanup, deferred)          |
+| Architectural (A) | 5     | 1       | 0             | 4 (large efforts, deferred)         |
 
-*H-2 was the same kind of issue as several C/M items and is grouped under "Critical" in the audit; we treated it as High per the strategy.
+\*H-2 was the same kind of issue as several C/M items and is grouped under "Critical" in the audit; we treated it as High per the strategy.
 
 ---
 
@@ -55,7 +55,7 @@ see "Applied" below.
 ### H-2 — Deserialization size check ordering → **FALSE POSITIVE**
 
 `shards/src/router.rs:225-234` already checks
-`event.payload.len() > MAX_PAYLOAD_SIZE` *before* calling
+`event.payload.len() > MAX_PAYLOAD_SIZE` _before_ calling
 `ShardPayload::from_bytes()`. The order is correct. No change needed.
 
 ### M-3 — Commitment graph traversal complexity → **DEFERRED**
@@ -72,9 +72,10 @@ graph sizes.
 ### Phase 1 — Safety
 
 #### C-3 — Equivocation content_hash (real bug)
+
 - Added `Event::content_hash()` to `omnia-primitives/src/event.rs`
   (deterministic BLAKE3 hash of `creator_pubkey || sequence || timestamp ||
-  payload || self_parent || other_parent`).
+payload || self_parent || other_parent`).
 - Added `content_hash: [u8; 32]` field to `PrunedEventMetadata` in
   `omnia-consensus/src/causal_graph.rs`.
 - Updated the equivocation check at `omnia-consensus/src/consensus.rs:440-496`
@@ -85,6 +86,7 @@ graph sizes.
   content_hash determinism and the new struct field.
 
 #### C-6 — Remove fee refund
+
 - Removed the `quota.reward()` call in `shards/src/router.rs:268-281`
   that refunded fees on `route()` failure.
 - Replaced with a debug-level log entry; fees are now burned on attempt
@@ -99,6 +101,7 @@ graph sizes.
 ### Phase 2 — Correctness
 
 #### C-1 — unsafe_code + SAFETY.md
+
 - Changed `#![forbid(unsafe_code)]` → `#![deny(unsafe_code)]` in
   `substrate/src/lib.rs` (blst transitively requires `unsafe` FFI; `forbid`
   is viral and would prevent the `bls` feature from compiling).
@@ -106,6 +109,7 @@ graph sizes.
   and the policy.
 
 #### C-2 — Remove substrate deprecation
+
 - Removed the `#![deprecated(since = "0.2.0", ...)]` annotation from
   `substrate/src/lib.rs`.
 - Updated the crate-level doc comment to reflect `omnia-substrate`'s actual
@@ -117,6 +121,7 @@ graph sizes.
   `substrate/tests/gossip_libp2p.rs`, `shards/tests/layer2_integration.rs`.
 
 #### H-12 — Fail hard on invalid OMNIA_CONSENSUS_SEED
+
 - Added `try_parse_consensus_seed() -> Result<[u8; 32], ConsensusSeedError>`
   in `substrate/src/lib.rs` with explicit error variants for invalid hex,
   invalid length, and RNG unavailability.
@@ -128,8 +133,9 @@ graph sizes.
   and exit instead of silent forking.
 
 #### H-8 — Remove false PQC claims
+
 - README.md "Real PQC signatures (ML-KEM-768 / FIPS-203)" → clarified that
-  the *algorithm* is FIPS-203 but the *Rust implementation* is not
+  the _algorithm_ is FIPS-203 but the _Rust implementation_ is not
   NIST-certified; PQC features require `--features pqc` and are not
   production-ready.
 - README.md "ML-KEM-768 key encapsulation (FIPS-203, KyberSlash eliminated)"
@@ -143,12 +149,14 @@ graph sizes.
 ### Phase 3 — Production Readiness (partial)
 
 #### H-10 — Startup warnings for stub settlement adapters
+
 - Added a startup warning in `node/src/main.rs` that fires whenever
   `settlement.is_live()` returns `false` (true for MockSettlementAdapter
   and the stub Bitcoin/Solana/Cosmos/Celestia adapters that all return
   `NotImplemented`).
 
 #### M-10 — redb corruption recovery
+
 - `RedbSlashingStore::open()` in `omnia-consensus/src/slashing.rs` now
   recovers from a corrupt database: renames the corrupt file to `.corrupt`,
   logs an ERROR, and creates a fresh database. Previously a corrupt DB
@@ -157,6 +165,7 @@ graph sizes.
 ### Phase 4 — Hardening
 
 #### H-5 — IndexMap for deterministic event store eviction
+
 - Added `indexmap = "2"` dependency to `node/Cargo.toml`.
 - Added `EventStore = IndexMap<String, StoredEvent>` type alias in
   `node/src/state.rs`.
@@ -166,6 +175,7 @@ graph sizes.
 - Updated all call sites (`main.rs`, `http.rs`) to use `IndexMap::new()`.
 
 #### H-6 — Zeroize KeyShare (best-effort)
+
 - Added `zeroize = { version = "1.8", features = ["derive"] }` to
   `omnia-crypto/Cargo.toml`.
 - Derived `Zeroize` and `ZeroizeOnDrop` on `KeyShare` in
@@ -179,6 +189,7 @@ graph sizes.
   already implements `ZeroizeOnDrop` upstream.
 
 #### H-7 — Quadratic voting fixed-point → **ALREADY DONE**
+
 - Verified that `economics/src/governance.rs` already uses
   `isqrt(stake).max(1)` for quadratic voting weight (line 203).
 - Verified that `economics/src/fixed_point.rs` provides `isqrt` and
@@ -188,6 +199,7 @@ graph sizes.
 - No code change required.
 
 #### H-9 — Peer score cleanup on disconnect
+
 - Added `PeerScoreTracker::remove_peer()` in
   `omnia-network/src/network.rs` that removes a peer's score entry.
 - Added `PeerScoreTracker::cleanup_stale()` for periodic cleanup of
@@ -196,6 +208,7 @@ graph sizes.
   in `OmniaNetwork::handle_swarm_event()`.
 
 #### A-2 — Formal consensus specification
+
 - Created `formal-verification/consensus/CONSENSUS_SPEC.md` documenting
   the fault model, event DAG structure, famousness algorithm, commitment
   rule, safety argument, liveness argument, anti-spam mechanisms, and
@@ -204,41 +217,50 @@ graph sizes.
 ### Phase 5 — Documentation
 
 #### L-17 — STATUS.md hardcoded test count
+
 - `docs/reference/status.md:223` no longer hardcodes "1,382 tests pass";
   replaced with instruction to run `cargo test --workspace`.
 
 #### L-19 — README benchmark hardware spec
+
 - Added "Hardware" column to the performance numbers table in `README.md`.
 - All benchmark rows now reference the same reference machine
   (AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8, rustc 1.91.0).
 
 #### L-20 — README hardcoded test count
+
 - `README.md:113` no longer hardcodes "1,382 tests — all passing";
   replaced with instruction to run `cargo test --workspace`.
 
 #### L-23 — Workspace version mismatch
+
 - `Cargo.toml:21` bumped from `0.1.56` to `0.1.68` to match the latest
   CHANGELOG entry. (Main branch was already at 0.1.68 via commit 0518b37;
   the initial L-23 fix bumped to 0.1.67, resolved to 0.1.68 on merge.)
 
 #### L-28 — Helm image tag pinning
+
 - `helm/omnia-node/values.yaml` default `image.tag` changed from `""`
   to `"0.1.68"` so Helm deployments are reproducible.
 
 #### L-30 — genesis-example.toml node_id format
+
 - Added a comment explaining that `node_id` should be a hex-encoded
   32-byte NodeId (BLAKE3 hash of the validator's Ed25519 public key),
   with an example value.
 
 #### L-31 — omnia-node.toml.example listen_addr format
+
 - Changed `listen_addr = "0.0.0.0:4001"` to
   `listen_addr = "/ip4/0.0.0.0/tcp/4001"` (libp2p multiaddr format).
 
 #### L-15 — CODE_OF_CONDUCT.md non-functional email
+
 - Replaced `conduct@omnia.protocol` (no mail server) with a pointer to
   GitHub's private security advisory flow.
 
 #### M-23 — Pin Prometheus and Grafana image versions
+
 - `docker/docker-compose.yml` and `docker/docker-compose.testnet.yml`:
   `prom/prometheus:latest` → `prom/prometheus:v2.52.0`.
   `grafana/grafana:latest` → `grafana/grafana:10.4.0`.
@@ -257,6 +279,7 @@ the team.
 **Reason:** The slashing module uses `f64` for `burn_percentage` in 30+
 locations across `omnia-consensus/src/slashing.rs` (3000+ line file).
 Migrating to `u32` basis points requires:
+
 - Redefining the `SlashPenalty` enum (3 variants × 1 field each).
 - Updating `compute_burn_amount`, `burn_amount_for`, `compute_burn_amount_for`.
 - Updating all penalty constants in `compute_penalty` (~10 sites).
@@ -274,6 +297,7 @@ risk profile has worsened since the original assessment. The coverage
 report shows `slashing.rs` at 81.14% region coverage but only 57.74%
 function coverage — 71 of 168 functions have never been exercised by
 tests. This means:
+
 1. The `f64` arithmetic is running in untested code paths, so any
    cross-platform non-determinism would go undetected until production.
 2. The deferred C-4 fix would need to modify 30+ sites in a file where
@@ -287,13 +311,14 @@ branch merges, but it must be preceded by targeted test coverage for the
 71 untested slashing functions — particularly the penalty computation,
 burn amount calculation, and state persistence paths. The migration
 sequence should be:
-  1. Add tests for the 71 untested slashing functions (target: 80%+ function coverage).
-  2. Migrate `f64` → `u32` basis points with `checked_mul`/`checked_div`.
-  3. Add a serde migration layer for existing persisted `f64` state.
-  4. Verify all slashing tests pass on both x86 and ARM.
+
+1. Add tests for the 71 untested slashing functions (target: 80%+ function coverage).
+2. Migrate `f64` → `u32` basis points with `checked_mul`/`checked_div`.
+3. Add a serde migration layer for existing persisted `f64` state.
+4. Verify all slashing tests pass on both x86 and ARM.
 
 **Mitigation (unchanged):** The non-determinism risk is real but bounded
-— `f64` arithmetic on identical inputs is *usually* deterministic across
+— `f64` arithmetic on identical inputs is _usually_ deterministic across
 x86/ARM for the specific operations used (`*` and `/`), and slashing
 decisions are human-reviewable after the fact. But "usually" is not
 "always," and "human-reviewable" is not "correct."
@@ -302,6 +327,7 @@ decisions are human-reviewable after the fact. But "usually" is not
 
 **Reason:** Migrating from HS256 (HMAC-SHA256) to EdDSA (Ed25519) JWT in
 `node/src/api/auth.rs` is a major refactor:
+
 - Add `jsonwebtoken` `ed25519` feature + `ed25519-dalek` direct dependency.
 - Replace `JwtConfig` to hold `EncodingKey`/`DecodingKey` derived from
   the node keypair (requires H-14 to be landed first for persistent
@@ -326,6 +352,7 @@ is a defense-in-depth improvement, not a fix for an open security hole.
 as "NOT a VRF per RFC 9381" (see lines 1-42). The strategy's recommended
 rename is mostly cosmetic at this point — the documentation is honest.
 A full rename would require:
+
 - `mv omnia-crypto/src/vrf.rs omnia-crypto/src/deterministic_selection.rs`
 - Update `mod vrf` → `mod deterministic_selection` in `omnia-crypto/src/lib.rs`.
 - Update all `use omnia_crypto::vrf::*` imports across the codebase.
@@ -347,6 +374,7 @@ endpoint. The existing scaffolding in `node/src/main.rs:357-432` and
 done yet.
 
 **Recommendation:** Land C-8 as a dedicated multi-PR effort:
+
 1. PR 1: Define work-item types and worker tasks (no handler changes).
 2. PR 2: Migrate `submit_event` handler to enqueue pattern.
 3. PR 3: Add finality polling endpoint.
@@ -372,6 +400,7 @@ the existing test harness's commit-tracking APIs.
 **Reason:** `node/src/main.rs:291-296` currently calls
 `omnia_substrate::crypto::generate_keypair()` on every startup, so the
 node's identity changes across restarts. Persisting it requires:
+
 - Implement `load_or_generate_node_keypair()` per the strategy.
 - Wire up `EncryptedKeyStore::load`/`save` (already exists).
 - Handle the `OMNIA_KEYSTORE_PASSPHRASE` env var.
@@ -387,6 +416,7 @@ node keypair).
 in `omnia-consensus/src/causal_graph.rs`. However, the actual struct
 `SequenceBuffer` uses `HashMap<NodeId, BTreeMap<u64, Event>>` (line 73)
 without an LRU bound. The fix requires:
+
 - Adding `lru = "0.12"` dependency to `omnia-consensus/Cargo.toml`.
 - Refactoring `SequenceBuffer` to use `LruCache`.
 - Adding a `MAX_BUFFERED_CREATORS` constant.
@@ -401,6 +431,7 @@ LRU update on access) without compile feedback is risky.
 
 The strategy lists 5 architectural items (A-1 through A-5). Only A-2
 (formal spec) was applied. The others are large efforts:
+
 - A-1: ?
 - A-3: ?
 - A-4: ?
@@ -437,6 +468,7 @@ cargo llvm-cov --workspace --exclude omnia-fuzz --ignore-tests --summary-only
 ```
 
 Approximate production-only coverage for the three targeted files:
+
 - `substrate/src/lib.rs`: ~64% (reported 77%, test code inflates by ~13%)
 - `crdt/mod.rs`: ~95% (reported 97%, test code is small relative to production)
 - `domain_state.rs`: ~90% (reported 95%, test code is ~54% of the file)
@@ -535,7 +567,7 @@ throughput benchmark does NOT exercise:
 3. **`ConsensusEngine::process_event()` pruned-metadata branch**
    (omnia-consensus/src/consensus.rs) — the only code change (not just
    comments) is inside the `Err(crate::causal_graph::CausalGraphError::
-   EventPruned(_))` arm. The `Ok(first_event)` arm (which the bench
+EventPruned(_))` arm. The `Ok(first_event)` arm (which the bench
    hits) and the `if self.event_states.contains_key(&event_id)` early
    return are unchanged.
 

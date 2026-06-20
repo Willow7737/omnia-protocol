@@ -1,4 +1,5 @@
 # Project Dashboard
+
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
 > 📅 Last Updated: 2026-05-26
@@ -7,16 +8,16 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 
 ## Current Project Status: Phases 0–5 Complete | Post-Phase 5: Audit & Hardening
 
-| Metric | Value | Status |
-| :--- | :--- | :--- |
-| **Version** | v0.1.56 | Latest release |
-| **Phase** | Post-Phase 5: Audit & Hardening | 🔄 In Progress |
-| **Overall Completion** | **93%** (8/23 audit findings remediated; 15 medium-priority tracked) | All core layers implemented; 7 high + 1 medium bug fixed |
-| **Active Contributors** | 1 (Lead) + AI Agent assistance | Needs Growth |
-| **Code Health** | 1,382 tests (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced | Verified |
-| **Network Status** | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack | Integration complete |
-| **Security Posture** | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved |
-| **Mutation Testing** | 75% minimum score on primitives; consensus sharded across 4 parallel jobs | Nightly CI |
+| Metric                  | Value                                                                                                                                                                                                                       | Status                                                   |
+| :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- |
+| **Version**             | v0.1.56                                                                                                                                                                                                                     | Latest release                                           |
+| **Phase**               | Post-Phase 5: Audit & Hardening                                                                                                                                                                                             | 🔄 In Progress                                           |
+| **Overall Completion**  | **93%** (8/23 audit findings remediated; 15 medium-priority tracked)                                                                                                                                                        | All core layers implemented; 7 high + 1 medium bug fixed |
+| **Active Contributors** | 1 (Lead) + AI Agent assistance                                                                                                                                                                                              | Needs Growth                                             |
+| **Code Health**         | 1,382 tests (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                                                       | Verified                                                 |
+| **Network Status**      | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack                                                                                                                                              | Integration complete                                     |
+| **Security Posture**    | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved                                         |
+| **Mutation Testing**    | 75% minimum score on primitives; consensus sharded across 4 parallel jobs                                                                                                                                                   | Nightly CI                                               |
 
 ### Completion Bar
 
@@ -38,35 +39,35 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 
 Omnia is a community-driven protocol. We track our human capital as transparently as our code.
 
-| Role | Individual / Entity | Status |
-| :--- | :--- | :--- |
-| **Project Lead** | [@Willow7737](https://github.com/Willow7737) | Active |
-| **Distributed Systems** | *Vacant* | Recruiting |
+| Role                     | Individual / Entity                                | Status                |
+| :----------------------- | :------------------------------------------------- | :-------------------- |
+| **Project Lead**         | [@Willow7737](https://github.com/Willow7737)       | Active                |
+| **Distributed Systems**  | _Vacant_                                           | Recruiting            |
 | **Applied Cryptography** | [@10299614-lgtm](https://github.com/10299614-lgtm) | Active but Recruiting |
-| **Community & Gov** | [@Spidroidtech](https://github.com/Spidroidtech) | Active but Recruiting |
-| **Protocol Engineering** | *Vacant* | Recruiting |
+| **Community & Gov**      | [@Spidroidtech](https://github.com/Spidroidtech)   | Active but Recruiting |
+| **Protocol Engineering** | _Vacant_                                           | Recruiting            |
 
 ---
 
 ## Technical Readiness
 
-| Component | Status | Risk Level | Notes |
-| :--- | :--- | :--- | :--- |
-| **Causal Consensus** | Implemented | Low | Rust, 267 consensus tests + 33 substrate tests, O(new_events) processing |
-| **Identity Shard** | Implemented | Low | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery |
-| **Financial Shard** | Implemented | Low | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence) |
-| **Computational Shard** | Implemented | Low | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub |
-| **Physical Shard** | Implemented | Low | Append-only provenance log (CRDT-friendly), ownership tracking, chain verification |
-| **Biological Shard** | Implemented | Low | Consent registry (grant/revoke), ZK query stub, expiration tracking |
-| **Economics Shard** | Implemented | Medium | UBC quota (1,000/month, 30-day epochs), quadratic voting with PPM decay, time-locked voting (flash loan prevention), useful-work proof (3 types: AI training, scientific simulation, distributed storage) |
-| **Physical Binding** | Implemented | Medium | Provenance log full; RF/QC are stubs (need hardware) |
-| **Fee Enforcement** | Implemented | Medium | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch |
-| **UBC Economic Model** | Implemented | Medium | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay |
-| **ZK-Rollup Settlement** | Implemented | **Medium** | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3) |
-| **Encrypted Keystore** | Implemented | Low | AES-256-GCM + HKDF-SHA256 + BLAKE3 domain separation; legacy XOR migration supported (see ADR-010) |
-| **VRF Leader Election** | Implemented | **Medium** | Non-standard VRF construction (Ed25519 + BLAKE3, not ECVRF — see ADR-012); functional for internal use but not spec-compliant |
-| **DKG / Threshold Signatures** | Implemented | Low | Feldman VSS-based DKG with proper BLS12-381 scalar field arithmetic (see ADR-013); polynomial evaluation via Horner's method; Lagrange interpolation for secret reconstruction; AES-256-GCM share encryption (see ADR-016, Phase 3) |
-| **Slashing** | Implemented | Low | Gradual slashing implemented (ADR-011): 3-tier Warning → Jail → Ejection |
+| Component                      | Status      | Risk Level | Notes                                                                                                                                                                                                                               |
+| :----------------------------- | :---------- | :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Causal Consensus**           | Implemented | Low        | Rust, 267 consensus tests + 33 substrate tests, O(new_events) processing                                                                                                                                                            |
+| **Identity Shard**             | Implemented | Low        | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery                                                                                            |
+| **Financial Shard**            | Implemented | Low        | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence)                                                                                                                        |
+| **Computational Shard**        | Implemented | Low        | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub                                                                                                                                                      |
+| **Physical Shard**             | Implemented | Low        | Append-only provenance log (CRDT-friendly), ownership tracking, chain verification                                                                                                                                                  |
+| **Biological Shard**           | Implemented | Low        | Consent registry (grant/revoke), ZK query stub, expiration tracking                                                                                                                                                                 |
+| **Economics Shard**            | Implemented | Medium     | UBC quota (1,000/month, 30-day epochs), quadratic voting with PPM decay, time-locked voting (flash loan prevention), useful-work proof (3 types: AI training, scientific simulation, distributed storage)                           |
+| **Physical Binding**           | Implemented | Medium     | Provenance log full; RF/QC are stubs (need hardware)                                                                                                                                                                                |
+| **Fee Enforcement**            | Implemented | Medium     | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch                                                                                                                                                  |
+| **UBC Economic Model**         | Implemented | Medium     | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay                                                                                                               |
+| **ZK-Rollup Settlement**       | Implemented | **Medium** | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3)  |
+| **Encrypted Keystore**         | Implemented | Low        | AES-256-GCM + HKDF-SHA256 + BLAKE3 domain separation; legacy XOR migration supported (see ADR-010)                                                                                                                                  |
+| **VRF Leader Election**        | Implemented | **Medium** | Non-standard VRF construction (Ed25519 + BLAKE3, not ECVRF — see ADR-012); functional for internal use but not spec-compliant                                                                                                       |
+| **DKG / Threshold Signatures** | Implemented | Low        | Feldman VSS-based DKG with proper BLS12-381 scalar field arithmetic (see ADR-013); polynomial evaluation via Horner's method; Lagrange interpolation for secret reconstruction; AES-256-GCM share encryption (see ADR-016, Phase 3) |
+| **Slashing**                   | Implemented | Low        | Gradual slashing implemented (ADR-011): 3-tier Warning → Jail → Ejection                                                                                                                                                            |
 
 ### Shard Architecture Summary
 
@@ -81,70 +82,71 @@ pub trait Shard: Send + Sync {
 }
 ```
 
-| Shard | ShardId Prefix | Operations | State Type |
-|-------|---------------|------------|------------|
-| Financial | `"FINANCE0"` | Transfer, Mint, Burn, BalanceQuery | `FinancialState` |
-| Computational | `"COMP___0"` | SubmitTask, SubmitProof, VerifyProof | `ComputationalState` |
-| Physical | `"PHYS___0"` | AnchorItem, TransferOwnership, VerifyChain | `PhysicalState` |
-| Biological | `"BIO____0"` | GrantAccess, RevokeAccess, QueryWithZkProof | `BiologicalState` |
-| Identity | `"IDENT__0"` | CreateDid, UpdateDid, RecoverDid, VerifyDid, AddAgent, EnrollBiometric, VerifyBiometric, RevokeAgent, ConfigureRecovery | `IdentityState` |
-| Economics | `"ECONOM00"` | MintUbc, SpendUbc, SubmitWork, CreateProposal, Vote, RegisterDid, AdvanceEpoch | `EconomicsShardState` |
+| Shard         | ShardId Prefix | Operations                                                                                                              | State Type            |
+| ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Financial     | `"FINANCE0"`   | Transfer, Mint, Burn, BalanceQuery                                                                                      | `FinancialState`      |
+| Computational | `"COMP___0"`   | SubmitTask, SubmitProof, VerifyProof                                                                                    | `ComputationalState`  |
+| Physical      | `"PHYS___0"`   | AnchorItem, TransferOwnership, VerifyChain                                                                              | `PhysicalState`       |
+| Biological    | `"BIO____0"`   | GrantAccess, RevokeAccess, QueryWithZkProof                                                                             | `BiologicalState`     |
+| Identity      | `"IDENT__0"`   | CreateDid, UpdateDid, RecoverDid, VerifyDid, AddAgent, EnrollBiometric, VerifyBiometric, RevokeAgent, ConfigureRecovery | `IdentityState`       |
+| Economics     | `"ECONOM00"`   | MintUbc, SpendUbc, SubmitWork, CreateProposal, Vote, RegisterDid, AdvanceEpoch                                          | `EconomicsShardState` |
 
 ### Economics Layer Summary
 
 The economics crate (`omnia-economics`) implements Layer 5 with these core modules:
 
-| Module | Key Types | File |
-|--------|-----------|------|
-| UBC Token | `UbcToken` (soulbound, monthly reset) | `economics/src/ubc.rs` |
-| Quota System | `QuotaSystem` (1,000 UBC/month, 30-day epochs) | `economics/src/quota.rs` |
-| Governance | `GovernanceState`, `Proposal`, `VoteChoice` (For/Against/Abstain) | `economics/src/governance.rs` |
-| Fixed-Point | `DecayRate`, `BasisPpmExt`, `isqrt()` (no f64) | `economics/src/fixed_point.rs` |
-| Useful Work | `UsefulWorkProof`, `UsefulWorkType` (3 variants) | `economics/src/useful_work.rs` |
-| Time Lock | `TimeLockVoting`, `LockedStake`, `TimeLockConfig` | `economics/src/time_lock.rs` |
-| Economics Shard | `EconomicsState`, `EconomicsOp` | `economics/src/economics_shard.rs` |
+| Module          | Key Types                                                         | File                               |
+| --------------- | ----------------------------------------------------------------- | ---------------------------------- |
+| UBC Token       | `UbcToken` (soulbound, monthly reset)                             | `economics/src/ubc.rs`             |
+| Quota System    | `QuotaSystem` (1,000 UBC/month, 30-day epochs)                    | `economics/src/quota.rs`           |
+| Governance      | `GovernanceState`, `Proposal`, `VoteChoice` (For/Against/Abstain) | `economics/src/governance.rs`      |
+| Fixed-Point     | `DecayRate`, `BasisPpmExt`, `isqrt()` (no f64)                    | `economics/src/fixed_point.rs`     |
+| Useful Work     | `UsefulWorkProof`, `UsefulWorkType` (3 variants)                  | `economics/src/useful_work.rs`     |
+| Time Lock       | `TimeLockVoting`, `LockedStake`, `TimeLockConfig`                 | `economics/src/time_lock.rs`       |
+| Economics Shard | `EconomicsState`, `EconomicsOp`                                   | `economics/src/economics_shard.rs` |
 
 ---
 
 ## Phase 3 Work Items (Completed)
 
-| # | Item | Status | ADR | Notes |
-|---|------|--------|-----|-------|
-| C-1 | SSS Share Encryption: XOR → AES-256-GCM | ✅ Complete | — | FIND-P2-002 closed; 9 new tests |
-| C-2 | DKG Share Encryption: XOR → AES-256-GCM | ✅ Complete | — | FIND-P2-003 closed; ~15 tests |
-| C-3 | SSS Recovery DID Authentication Update | ✅ Complete | — | FIND-P2-001 closed; TODO resolved |
-| H-1 | ZK Circuit Trusted Setup Dummy Values | ✅ Complete | — | FIND-P2-010 closed; for_setup() constructor |
-| H-2 | Trusted Setup Transcript Hash Initialization | ✅ Complete | — | FIND-P2-011 closed; BLAKE3 domain separation |
-| H-3 | Leader Selection in Consensus Loop | ✅ Complete | ADR-015 | VRF-based, mempool, process_consensus_round() |
-| H-4 | Kademlia DHT + NAT Traversal | ✅ Complete | ADR-016 | Peer discovery, AutoNAT, Relay, DCutr |
-| H-5 | GossipSub Peer Scoring | ✅ Complete | ADR-017 | Penalty weights, graylist at -100 |
-| H-6 | Consensus State Persistence | ✅ Complete | ADR-018 | RedbConsensusStore, load_or_new pattern |
-| H-7 | Real Ethereum Settlement Adapter | ✅ Complete | — | Alloy-based, `ethereum-live` feature flag |
-| M-1 | Kyber KEM / ML-KEM Integration | ✅ Complete | ADR-020 | ML-KEM-768 (FIPS-203), KyberSlash eliminated |
-| M-2 | Fast-Sync Protocol | ✅ Complete | ADR-019 | Checkpoints, supermajority, P2P download |
-| M-3 | Message Compression | ✅ Complete | ADR-021 | Snappy for >256 bytes, flag byte prefix |
-| M-4 | Load Testing Infrastructure | ✅ Complete | — | LoadTestConfig, CI workflow, baseline document |
-| M-5 | RUSTSEC Advisory Cleanup | ✅ Complete | — | 2 advisories removed, 7 justified ignores |
+| #   | Item                                         | Status      | ADR     | Notes                                          |
+| --- | -------------------------------------------- | ----------- | ------- | ---------------------------------------------- |
+| C-1 | SSS Share Encryption: XOR → AES-256-GCM      | ✅ Complete | —       | FIND-P2-002 closed; 9 new tests                |
+| C-2 | DKG Share Encryption: XOR → AES-256-GCM      | ✅ Complete | —       | FIND-P2-003 closed; ~15 tests                  |
+| C-3 | SSS Recovery DID Authentication Update       | ✅ Complete | —       | FIND-P2-001 closed; TODO resolved              |
+| H-1 | ZK Circuit Trusted Setup Dummy Values        | ✅ Complete | —       | FIND-P2-010 closed; for_setup() constructor    |
+| H-2 | Trusted Setup Transcript Hash Initialization | ✅ Complete | —       | FIND-P2-011 closed; BLAKE3 domain separation   |
+| H-3 | Leader Selection in Consensus Loop           | ✅ Complete | ADR-015 | VRF-based, mempool, process_consensus_round()  |
+| H-4 | Kademlia DHT + NAT Traversal                 | ✅ Complete | ADR-016 | Peer discovery, AutoNAT, Relay, DCutr          |
+| H-5 | GossipSub Peer Scoring                       | ✅ Complete | ADR-017 | Penalty weights, graylist at -100              |
+| H-6 | Consensus State Persistence                  | ✅ Complete | ADR-018 | RedbConsensusStore, load_or_new pattern        |
+| H-7 | Real Ethereum Settlement Adapter             | ✅ Complete | —       | Alloy-based, `ethereum-live` feature flag      |
+| M-1 | Kyber KEM / ML-KEM Integration               | ✅ Complete | ADR-020 | ML-KEM-768 (FIPS-203), KyberSlash eliminated   |
+| M-2 | Fast-Sync Protocol                           | ✅ Complete | ADR-019 | Checkpoints, supermajority, P2P download       |
+| M-3 | Message Compression                          | ✅ Complete | ADR-021 | Snappy for >256 bytes, flag byte prefix        |
+| M-4 | Load Testing Infrastructure                  | ✅ Complete | —       | LoadTestConfig, CI workflow, baseline document |
+| M-5 | RUSTSEC Advisory Cleanup                     | ✅ Complete | —       | 2 advisories removed, 7 justified ignores      |
 
 ## Phase 4 Work Items
 
-| # | Item | Status | ADR | Notes |
-|---|------|--------|-----|-------|
-| C-1 | Real Ethereum Settlement with Alloy | ✅ Complete | — | `ethereum-live` feature flag, live RPC integration |
-| H-1 | Gradual Slashing Implementation | ✅ Complete | ADR-011 | 3-tier Warning → Jail → Ejection |
-| H-2 | Migrate pqc_kyber → ml-kem | ✅ Complete | ADR-020 | KyberSlash eliminated, FIPS-203 compliant |
-| H-3 | Fast-Sync P2P Automation | ✅ Complete | ADR-019 | Checkpoints, supermajority, P2P download |
-| H-4 | Separate Liveness and Readiness Probes | ✅ Complete | — | Distinct `/health` and `/ready` endpoints |
-| M-1 | Multi-party Trusted Setup Ceremony Automation | ✅ Complete | — | CeremonyServer + CeremonyClient lifecycle |
-| M-2 | Documentation Sprint (Dashboard, ADRs, FAQ) | ✅ Complete | ADR-015–021 | Phase 3 documentation catch-up |
-| M-3 | Load Testing Baseline Capture | ✅ Complete | — | LoadTestConfig, CI workflow, baseline document |
-| M-4 | Supply Chain Hardening | ✅ Complete | — | cargo-vet, cargo-deny, SBOM generation |
+| #   | Item                                          | Status      | ADR         | Notes                                              |
+| --- | --------------------------------------------- | ----------- | ----------- | -------------------------------------------------- |
+| C-1 | Real Ethereum Settlement with Alloy           | ✅ Complete | —           | `ethereum-live` feature flag, live RPC integration |
+| H-1 | Gradual Slashing Implementation               | ✅ Complete | ADR-011     | 3-tier Warning → Jail → Ejection                   |
+| H-2 | Migrate pqc_kyber → ml-kem                    | ✅ Complete | ADR-020     | KyberSlash eliminated, FIPS-203 compliant          |
+| H-3 | Fast-Sync P2P Automation                      | ✅ Complete | ADR-019     | Checkpoints, supermajority, P2P download           |
+| H-4 | Separate Liveness and Readiness Probes        | ✅ Complete | —           | Distinct `/health` and `/ready` endpoints          |
+| M-1 | Multi-party Trusted Setup Ceremony Automation | ✅ Complete | —           | CeremonyServer + CeremonyClient lifecycle          |
+| M-2 | Documentation Sprint (Dashboard, ADRs, FAQ)   | ✅ Complete | ADR-015–021 | Phase 3 documentation catch-up                     |
+| M-3 | Load Testing Baseline Capture                 | ✅ Complete | —           | LoadTestConfig, CI workflow, baseline document     |
+| M-4 | Supply Chain Hardening                        | ✅ Complete | —           | cargo-vet, cargo-deny, SBOM generation             |
 
 ---
 
 ## Roadmap and Milestones
 
 ### Phase 0: The Seed (Months 0-6) — ✅ Complete
+
 - [x] Architecture Whitepaper (v1.0)
 - [x] Causal Graph Consensus Prototype (Rust, 120+ tests)
 - [x] DID Registry Implementation (`did:omnia:` method with hex-encoded 32-byte public keys)
@@ -168,6 +170,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] Creator-pubkey binding (constant-time validation via subtle crate)
 
 ### Phase 1: The Sprout (Months 6-12) — ✅ Complete
+
 - [x] Typed error migration (34 `thiserror` enums, zero `Result<_, String>`)
 - [x] `unwrap()` replacement (`#![deny(clippy::unwrap_used)]` on all 7 crates)
 - [x] E2E REST API Integration Tests (19 test functions, 4 auth states)
@@ -178,6 +181,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] Rustdoc Coverage (35 items added to 7 security-critical modules)
 
 ### Phase 2: Hardening & Security Audit (Months 12-18) — ✅ Complete
+
 - [x] Gradual slashing implementation (ADR-011)
 - [x] DKG share encryption upgrade (XOR → AES-256-GCM)
 - [x] ZK circuit dummy field remediation
@@ -187,6 +191,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] Project dashboard & findings documentation (M-5)
 
 ### Phase 3: Network Optimization & Production Deployment — ✅ Complete
+
 - [x] SSS Share Encryption: XOR → AES-256-GCM (C-1)
 - [x] DKG Share Encryption: XOR → AES-256-GCM (C-2)
 - [x] SSS Recovery DID Authentication Update (C-3)
@@ -204,6 +209,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - [x] RUSTSEC Advisory Cleanup (M-5)
 
 ### Phase 4: Mainnet Readiness — ✅ Complete
+
 - [x] Real Ethereum settlement with Alloy (`ethereum-live` feature)
 - [x] Gradual slashing implementation (ADR-011)
 - [x] Migrate pqc_kyber → ml-kem (fix KyberSlash, FIPS-203)
@@ -218,33 +224,34 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 
 ## Architecture Decision Records
 
-| ADR | Title | Date | Status |
-|-----|-------|------|--------|
-| ADR-001 | Event Processor Trait | 2026-05-10 | Implemented |
-| ADR-002 | Settlement Layer Trait | 2026-05-10 | Implemented |
-| ADR-003 | Gossip Substrate Interface | 2026-05-10 | Implemented |
-| ADR-005 | ProofBundle Universal Proof Format | 2026-05-14 | Implemented |
-| ADR-006 | Shard Trait Contract | 2026-05-10 | Implemented |
-| ADR-007 | Binding Shard Interface | 2026-05-10 | Implemented |
-| ADR-008 | Crypto Dependency Audit | 2026-05-10 | Accepted |
-| ADR-009 | Poseidon Parameter Justification | 2026-05-14 | Accepted |
-| ADR-010 | Encrypted Keystore Design | 2026-05-18 | Accepted |
-| ADR-011 | Gradual Slashing Model | 2026-05-18 | Accepted |
-| ADR-012 | VRF Construction Choice | 2026-05-18 | Accepted |
-| ADR-013 | DKG Protocol Selection | 2026-05-18 | Accepted |
-| ADR-014 | Poseidon Parameter Migration Strategy | 2026-05-18 | Accepted |
-| ADR-015 | Leader Selection in Consensus Loop | 2026-05-19 | Accepted |
-| ADR-016 | Kademlia DHT Configuration | 2026-05-19 | Accepted |
-| ADR-017 | GossipSub Peer Scoring Thresholds | 2026-05-19 | Accepted |
-| ADR-018 | Consensus State Persistence | 2026-05-19 | Accepted |
-| ADR-019 | Fast-Sync Protocol | 2026-05-19 | Accepted |
-| ADR-020 | Kyber KEM / ML-KEM Integration | 2026-05-19 | Accepted |
-| ADR-021 | Gossip Message Compression | 2026-05-19 | Accepted |
+| ADR     | Title                                 | Date       | Status      |
+| ------- | ------------------------------------- | ---------- | ----------- |
+| ADR-001 | Event Processor Trait                 | 2026-05-10 | Implemented |
+| ADR-002 | Settlement Layer Trait                | 2026-05-10 | Implemented |
+| ADR-003 | Gossip Substrate Interface            | 2026-05-10 | Implemented |
+| ADR-005 | ProofBundle Universal Proof Format    | 2026-05-14 | Implemented |
+| ADR-006 | Shard Trait Contract                  | 2026-05-10 | Implemented |
+| ADR-007 | Binding Shard Interface               | 2026-05-10 | Implemented |
+| ADR-008 | Crypto Dependency Audit               | 2026-05-10 | Accepted    |
+| ADR-009 | Poseidon Parameter Justification      | 2026-05-14 | Accepted    |
+| ADR-010 | Encrypted Keystore Design             | 2026-05-18 | Accepted    |
+| ADR-011 | Gradual Slashing Model                | 2026-05-18 | Accepted    |
+| ADR-012 | VRF Construction Choice               | 2026-05-18 | Accepted    |
+| ADR-013 | DKG Protocol Selection                | 2026-05-18 | Accepted    |
+| ADR-014 | Poseidon Parameter Migration Strategy | 2026-05-18 | Accepted    |
+| ADR-015 | Leader Selection in Consensus Loop    | 2026-05-19 | Accepted    |
+| ADR-016 | Kademlia DHT Configuration            | 2026-05-19 | Accepted    |
+| ADR-017 | GossipSub Peer Scoring Thresholds     | 2026-05-19 | Accepted    |
+| ADR-018 | Consensus State Persistence           | 2026-05-19 | Accepted    |
+| ADR-019 | Fast-Sync Protocol                    | 2026-05-19 | Accepted    |
+| ADR-020 | Kyber KEM / ML-KEM Integration        | 2026-05-19 | Accepted    |
+| ADR-021 | Gossip Message Compression            | 2026-05-19 | Accepted    |
 
 ---
 
 ## Transparency Log
-*Every major decision and status change is logged here.*
+
+_Every major decision and status change is logged here._
 
 - **2026-06-01:** Benchmark accuracy audit: Fixed non-existent benchmark commands in v0.1.48 docs (`omnia-bench-standalone`, `omnia-zk-bench`, `omnia-vrf-bench` don't exist; replaced with actual Criterion commands). Added accuracy qualifiers to all performance claims — numbers from simple test timings now marked (est.), Criterion benchmark numbers marked accordingly. Flagged CRDT batch merge (~100K ops/s) as having no dedicated benchmark. Fixed CausalGraph insertion discrepancy (1,417 evt/s is full create+sign+insert cycle; insertion-only is ~55,000 evt/s). Corrected `total_nodes` documentation (benchmark code uses 3, not 1). Updated line/file counts (224 files, 81,000+ lines). Added profile discrepancy note (LIMITS.md says lto=fat; v0.1.48 used no LTO).
 - **2026-06-01:** Documentation overhaul: Updated all stats to reflect true current state (224 source files, 81,000+ lines, 1,382 tests). Fixed Phase vs Sprint confusion across all markdowns — "Sprint" now only refers to Phase 0 throughput sub-iterations (Sprints 0–5), while "Phase" refers to project-level milestones (Phases 0–5). Removed agent-ctx folder. Updated AUDIT-16 to remediated (event signing now uses persistent keypair). Added honest performance numbers table to README (~7,190 evt/s sync; initial tokio measurement obsoleted by 13.6× sync improvement). Fixed Celestia adapter status across docs (implemented, not stub). Corrected architecture box from SPRINT 0-4 to SPRINTS 0-5.
@@ -264,9 +271,11 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 - **2026-05-10:** Project ownership confirmed under CC0 License.
 
 ---
-*Last Updated: 2026-06-01*
-*Version: 10.0.0*
+
+_Last Updated: 2026-06-01_
+_Version: 10.0.0_
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -14,10 +14,10 @@ The current `CausalGraph` uses HashMap-based storage. Measured performance:
 
 ### Measured Insertion Latency (v0.1.48)
 
-| Pre-fill | p50 | p95 | p99 | mean |
-|----------|-----|-----|-----|------|
-| **0 events** | 18.09 µs | 22.64 µs | 26.26 µs | 18.49 µs |
-| **100 events** | 18.21 µs | 23.36 µs | 30.85 µs | 18.81 µs |
+| Pre-fill        | p50      | p95      | p99       | mean     |
+| --------------- | -------- | -------- | --------- | -------- |
+| **0 events**    | 18.09 µs | 22.64 µs | 26.26 µs  | 18.49 µs |
+| **100 events**  | 18.21 µs | 23.36 µs | 30.85 µs  | 18.81 µs |
 | **1000 events** | 18.28 µs | 25.03 µs | 145.46 µs | 21.36 µs |
 
 ### Key Observations
@@ -40,6 +40,7 @@ The current `CausalGraph` uses HashMap-based storage. Measured performance:
 ## Optimized: PruningAwarePool (Pre-allocated Slab + VectorClockIndex)
 
 The new `PruningAwarePool` uses:
+
 - `EventPool` (slab allocator) → pre-allocated slots, O(1) free list recycling
 - `VectorClockIndex` → O(1) parent resolution via (creator, sequence) indexing
 - Free slot reuse after pruning → no allocation for events inserted into freed slots
@@ -55,49 +56,49 @@ The new `PruningAwarePool` uses:
 ### Predicted Performance (Based on HashMap Baseline)
 
 | Metric | CausalGraph (HashMap) | PruningAwarePool (Slab) | Predicted Improvement |
-|--------|----------------------|------------------------|----------------------|
-| p50 | 18.09 µs | ~10-12 µs | ~35-45% |
-| p95 | 22.64 µs | ~12-14 µs | ~40-45% |
-| p99 | 145.46 µs (at 1K) | ~15-18 µs | ~88-90% |
-| Mean | 21.36 µs (at 1K) | ~11-13 µs | ~40-50% |
+| ------ | --------------------- | ----------------------- | --------------------- |
+| p50    | 18.09 µs              | ~10-12 µs               | ~35-45%               |
+| p95    | 22.64 µs              | ~12-14 µs               | ~40-45%               |
+| p99    | 145.46 µs (at 1K)     | ~15-18 µs               | ~88-90%               |
+| Mean   | 21.36 µs (at 1K)      | ~11-13 µs               | ~40-50%               |
 
 ## Benchmark Results
 
 ### Insertion Latency
 
-| Metric | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement |
-|--------|----------------------|------------------------|-------------|
-| p50 | 18.09 µs | _TBD_ | _TBD_ |
-| p95 | 22.64 µs | _TBD_ | _TBD_ |
-| p99 | 26.26–145.46 µs | _TBD_ | Target: ≥60% |
-| Mean | 18.49–21.36 µs | _TBD_ | _TBD_ |
+| Metric | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement  |
+| ------ | --------------------- | ----------------------- | ------------ |
+| p50    | 18.09 µs              | _TBD_                   | _TBD_        |
+| p95    | 22.64 µs              | _TBD_                   | _TBD_        |
+| p99    | 26.26–145.46 µs       | _TBD_                   | Target: ≥60% |
+| Mean   | 18.49–21.36 µs        | _TBD_                   | _TBD_        |
 
 ### Throughput
 
-| Metric | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement |
-|--------|----------------------|------------------------|-------------|
-| Events/sec (1 node) | 7,190 | _TBD_ | _TBD_ |
-| Events/sec (10 nodes) | _TBD_ | _TBD_ | _TBD_ |
-| Events/sec (100 nodes) | _TBD_ | _TBD_ | _TBD_ |
+| Metric                 | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement |
+| ---------------------- | --------------------- | ----------------------- | ----------- |
+| Events/sec (1 node)    | 7,190                 | _TBD_                   | _TBD_       |
+| Events/sec (10 nodes)  | _TBD_                 | _TBD_                   | _TBD_       |
+| Events/sec (100 nodes) | _TBD_                 | _TBD_                   | _TBD_       |
 
 ### Memory Usage
 
-| Metric | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement |
-|--------|----------------------|------------------------|-------------|
-| Peak RSS (10K events) | ~22.5 MB | _TBD_ | _TBD_ |
-| Peak RSS (100K events) | _TBD_ | _TBD_ | _TBD_ |
-| Memory after pruning | _TBD_ | _TBD_ | _TBD_ |
-| Fragmentation | _TBD_ | _TBD_ | _TBD_ |
+| Metric                 | CausalGraph (HashMap) | PruningAwarePool (Slab) | Improvement |
+| ---------------------- | --------------------- | ----------------------- | ----------- |
+| Peak RSS (10K events)  | ~22.5 MB              | _TBD_                   | _TBD_       |
+| Peak RSS (100K events) | _TBD_                 | _TBD_                   | _TBD_       |
+| Memory after pruning   | _TBD_                 | _TBD_                   | _TBD_       |
+| Fragmentation          | _TBD_                 | _TBD_                   | _TBD_       |
 
 ### Pool Utilization Stats
 
-| Metric | Value |
-|--------|-------|
-| Initial capacity | Configurable (default 1024) |
-| Growth factor | 1.5x |
-| Max capacity | Configurable (default 1M) |
-| Steady-state utilization | _TBD_ |
-| Growth count (10K inserts) | _TBD_ |
+| Metric                     | Value                       |
+| -------------------------- | --------------------------- |
+| Initial capacity           | Configurable (default 1024) |
+| Growth factor              | 1.5x                        |
+| Max capacity               | Configurable (default 1M)   |
+| Steady-state utilization   | _TBD_                       |
+| Growth count (10K inserts) | _TBD_                       |
 
 ## Methodology
 

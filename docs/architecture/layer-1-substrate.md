@@ -1,4 +1,5 @@
 # Layer 1: The Substrate
+
 > 🎯 Audience: Developers
 > 🔗 Context: Foundation layer enabling the network to agree on what happened without global clock time or a single authority
 > 📅 Last Updated: 2026-05-20
@@ -6,12 +7,14 @@
 ## Core Components
 
 ### 1. VectorClock
+
 - Tracks logical time across all known nodes
 - Implements partial ordering: `happened_before`, `concurrent`, `merge`
 - Enables parallel execution of causally independent events
 - Located in: `substrate/src/vector_clock.rs`
 
 ### 2. Event
+
 - Fundamental unit of the protocol
 - Two-parent structure (self-parent + other-parent) forming a DAG
 - Contains: vector clock, payload, cryptographic signature
@@ -19,6 +22,7 @@
 - Located in: `substrate/src/event.rs`
 
 ### 3. CausalGraph
+
 - DAG storage for all events
 - O(1) amortized insertion (hash map lookup) and O(1) amortized lookup
 - Topological ordering for deterministic sequencing
@@ -30,6 +34,7 @@
 - Located in: `substrate/src/causal_graph.rs`
 
 ### 4. CRDTs (Conflict-free Replicated Data Types)
+
 - **GCounter**: Grow-only counter for monotonic values
 - **OrSet**: Observed-remove set with add-wins semantics
 - **LwwRegister**: Last-write-wins register for single values
@@ -38,6 +43,7 @@
 For mathematical convergence proofs, see [crdt-convergence.md](./crdt-convergence.md).
 
 ### 5. GossipProtocol
+
 - Epidemic event propagation across the network
 - Built on libp2p (QUIC transport + GossipSub + mDNS discovery)
 - Kademlia DHT for wide-area peer discovery
@@ -48,6 +54,7 @@ For mathematical convergence proofs, see [crdt-convergence.md](./crdt-convergenc
 - Located in: `substrate/src/gossip.rs`, `substrate/src/network.rs`
 
 ### 6. ConsensusEngine
+
 - BFT finality mechanism running on top of the causal graph
 - Witness/fame/commit model (inspired by Hashgraph + AlephBFT)
 - Optimistic confirmation for low-latency finality
@@ -59,6 +66,7 @@ For mathematical convergence proofs, see [crdt-convergence.md](./crdt-convergenc
 For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 
 ### 7. SlashingEngine
+
 - Three offense types: Equivocation (500pts), LivenessViolation (100pts), InvalidAttestation (300pts)
 - Gradual slashing with 3-tier model: Warning → Jail → Ejection (ADR-011)
 - Persistent state via `RedbSlashingStore` with snapshot-and-rollback pattern
@@ -66,6 +74,7 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - Located in: `substrate/src/slashing.rs`, `substrate/src/slashing_undo.rs`
 
 ### 8. State Management
+
 - `state_root()` — Merkle root of the entire graph state
 - `merkle_proof()` — Inclusion proof for any event
 - `prune_old_events()` — Event pruning for long-term sustainability
@@ -74,6 +83,7 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - Located in: `substrate/src/snapshot.rs`, `substrate/src/fast_sync.rs`
 
 ### 9. KeyStore and Crypto
+
 - `EncryptedKeyStore` with AES-256-GCM + HKDF-SHA256 encryption
 - BIP-39 mnemonic support with SLIP-0010 HD key derivation
 - Key rotation with cryptographic proof (`KeyRotationProof`)
@@ -82,6 +92,7 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - Located in: `substrate/src/keystore.rs`, `substrate/src/crypto.rs`, `substrate/src/blake3_domain.rs`
 
 ### 10. BLS Threshold Signatures and DKG
+
 - BLS12-381 signature aggregation for N-to-1 verification
 - `ThresholdKeyManager` for t-of-n key sharing
 - `DkgSession` state machine with Feldman VSS-based DKG
@@ -89,6 +100,7 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - Located in: `substrate/src/bls.rs`, `substrate/src/threshold.rs`
 
 ### 11. VRF and Leader Selection
+
 - V1: Ed25519 signature + BLAKE3 derivation (legacy)
 - V2: ECVRF with Fiat-Shamir + Ed25519 signatures (standard, target)
 - Stake-weighted leader selection via `compute_leader()`
@@ -100,23 +112,23 @@ See [ADR-012](../reference/adr-index.md#adr-012-vrf-construction-choice) for the
 
 ### Why Causal Consistency over Blockchain?
 
-| Property | Blockchain | Causal Graph (Omnia) |
-|----------|-----------|---------------------|
-| Ordering | Total (sequential) | Partial (parallel) |
-| Throughput | ~100-1000 TPS | ~7,190 events/sec (single-node measured, synchronous) |
-| Latency | ~12s block time | Not yet benchmarked at scale |
-| Concurrency | None (single chain) | Automatic (DAG) |
-| Finality | Probabilistic | Deterministic (BFT) |
+| Property    | Blockchain          | Causal Graph (Omnia)                                  |
+| ----------- | ------------------- | ----------------------------------------------------- |
+| Ordering    | Total (sequential)  | Partial (parallel)                                    |
+| Throughput  | ~100-1000 TPS       | ~7,190 events/sec (single-node measured, synchronous) |
+| Latency     | ~12s block time     | Not yet benchmarked at scale                          |
+| Concurrency | None (single chain) | Automatic (DAG)                                       |
+| Finality    | Probabilistic       | Deterministic (BFT)                                   |
 
 ### Consensus Model: Hybrid Approach
 
 After researching Hashgraph, IOTA Tangle, and AlephBFT, we chose a hybrid:
 
-| Approach | Pros for Omnia | Cons |
-|----------|---------------|------|
-| Pure Hashgraph | Virtual voting is elegant; proven throughput | Patented; requires complete history |
-| Pure IOTA | Simple tip selection; feeless | FPC finality not as strong as BFT |
-| Pure AlephBFT | Strong BFT guarantees; leaderless | Committee-based, not fully permissionless |
+| Approach         | Pros for Omnia                                  | Cons                                       |
+| ---------------- | ----------------------------------------------- | ------------------------------------------ |
+| Pure Hashgraph   | Virtual voting is elegant; proven throughput    | Patented; requires complete history        |
+| Pure IOTA        | Simple tip selection; feeless                   | FPC finality not as strong as BFT          |
+| Pure AlephBFT    | Strong BFT guarantees; leaderless               | Committee-based, not fully permissionless  |
 | **Omnia Hybrid** | Causal ordering + CRDT convergence + simple BFT | Novel combination — needs thorough testing |
 
 - **Structure**: Hashgraph-like DAG with two-parent events
@@ -133,6 +145,7 @@ See `substrate/RESEARCH.md` for detailed comparative analysis.
 ## Testing Strategy
 
 Every module has comprehensive unit tests. The critical integration test simulates:
+
 - 3+ nodes in a network
 - Each node creates events
 - Events propagate via gossip
@@ -141,5 +154,6 @@ Every module has comprehensive unit tests. The critical integration test simulat
 - All tests in: `substrate/tests/`
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [pipeline-design.md](./pipeline-design.md)
 🚀 **Next**: [layer-2-shards.md](./layer-2-shards.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -12,6 +12,7 @@
 This document analyzes the potential patent risk arising from the similarity between Omnia Protocol's two-parent event DAG design and the Hashgraph consensus algorithm, which is covered by US Patent 10,496,525 (and related international patents) assigned to Swirlds, Inc. (now Hedera Hashgraph).
 
 The purpose of this document is to:
+
 1. Identify the specific claims that may be relevant
 2. Document the technical differences between Omnia and Hashgraph
 3. Propose mitigation strategies
@@ -33,15 +34,15 @@ Key claims relevant to Omnia's design:
 
 ### Potentially Applicable Claims
 
-| Claim Element | Hashgraph | Omnia | Similarity |
-|---------------|-----------|-------|------------|
-| Two-parent events (self + other) | Yes | Yes | High |
-| Round assignment via witnessing | Yes | Yes | Medium |
-| Famous witness determination | Yes | Modified | Medium |
-| Supermajority threshold (2N/3+1) | Yes | Yes | High |
-| Event hash as identifier | SHA-384 | SHA-256/BLAKE3 | Low |
-| Gossip about gossip | Yes | No | None |
-| Virtual voting | Yes | No | None |
+| Claim Element                    | Hashgraph | Omnia          | Similarity |
+| -------------------------------- | --------- | -------------- | ---------- |
+| Two-parent events (self + other) | Yes       | Yes            | High       |
+| Round assignment via witnessing  | Yes       | Yes            | Medium     |
+| Famous witness determination     | Yes       | Modified       | Medium     |
+| Supermajority threshold (2N/3+1) | Yes       | Yes            | High       |
+| Event hash as identifier         | SHA-384   | SHA-256/BLAKE3 | Low        |
+| Gossip about gossip              | Yes       | No             | None       |
+| Virtual voting                   | Yes       | No             | None       |
 
 ---
 
@@ -49,29 +50,30 @@ Key claims relevant to Omnia's design:
 
 ### 3.1 Fundamental Architecture
 
-| Aspect | Hashgraph | Omnia |
-|--------|-----------|-------|
-| **Consensus mechanism** | Gossip-about-gossip + virtual voting | Causal graph + BFT finality gadget (AlephBFT-inspired) |
-| **Event propagation** | Gossip about gossip (events contain full history) | Direct gossip (events contain only parent references) |
-| **Voting** | Virtual voting (deterministic from graph structure) | Explicit acknowledgment + BFT commitment |
-| **State representation** | Events as sole state carrier | Separate CausalGraph + ConsensusEngine + CRDT state |
-| **Finality determination** | Famous witnesses → consensus timestamp | Witness → Fame → Commitment (BFT-style) |
+| Aspect                     | Hashgraph                                           | Omnia                                                  |
+| -------------------------- | --------------------------------------------------- | ------------------------------------------------------ |
+| **Consensus mechanism**    | Gossip-about-gossip + virtual voting                | Causal graph + BFT finality gadget (AlephBFT-inspired) |
+| **Event propagation**      | Gossip about gossip (events contain full history)   | Direct gossip (events contain only parent references)  |
+| **Voting**                 | Virtual voting (deterministic from graph structure) | Explicit acknowledgment + BFT commitment               |
+| **State representation**   | Events as sole state carrier                        | Separate CausalGraph + ConsensusEngine + CRDT state    |
+| **Finality determination** | Famous witnesses → consensus timestamp              | Witness → Fame → Commitment (BFT-style)                |
 
 ### 3.2 Event Structure
 
-| Field | Hashgraph | Omnia |
-|-------|-----------|-------|
-| Self-parent hash | Yes | Yes |
-| Other-parent hash | Yes | Yes |
-| Creator signature | Yes (Ed25519) | Yes (Ed25519 + optional BLS aggregation) |
-| Timestamp | Yes (consensus median) | Yes (creator's local time) |
-| Payload | Transactions | Arbitrary bytes (shard-specific) |
-| Vector clock | No | Yes (explicit VectorClock field) |
-| Event hash | SHA-384 | SHA-256 + BLAKE3 domain separation |
+| Field             | Hashgraph              | Omnia                                    |
+| ----------------- | ---------------------- | ---------------------------------------- |
+| Self-parent hash  | Yes                    | Yes                                      |
+| Other-parent hash | Yes                    | Yes                                      |
+| Creator signature | Yes (Ed25519)          | Yes (Ed25519 + optional BLS aggregation) |
+| Timestamp         | Yes (consensus median) | Yes (creator's local time)               |
+| Payload           | Transactions           | Arbitrary bytes (shard-specific)         |
+| Vector clock      | No                     | Yes (explicit VectorClock field)         |
+| Event hash        | SHA-384                | SHA-256 + BLAKE3 domain separation       |
 
 ### 3.3 Consensus Protocol
 
 **Hashgraph**:
+
 1. Events are gossiped with full ancestry ("gossip about gossip")
 2. Rounds are assigned when an event can "see" >2/3 of prior-round witnesses
 3. Witnesses vote on fame of prior-round witnesses via virtual voting
@@ -79,6 +81,7 @@ Key claims relevant to Omnia's design:
 5. No separate state machine — consensus emerges from graph structure
 
 **Omnia**:
+
 1. Events are gossiped with only parent references (compact encoding + delta compression)
 2. Rounds are assigned when an event can "strongly see" >2/3 of prior-round witnesses
 3. Witnesses are determined by `(creator, round)` uniqueness
@@ -122,6 +125,7 @@ Key claims relevant to Omnia's design:
 If legal counsel determines that the two-parent event structure infringes Hashgraph claims, the following fallback DAG design can be implemented:
 
 **Single-Parent Linear Chain with Cross-Links**:
+
 - Replace two-parent events with single-parent linear chains (one self-parent per event)
 - Add cross-links as separate metadata records (not part of the core event structure)
 - Round assignment based on chain height + cross-link density
@@ -132,6 +136,7 @@ This design avoids the two-parent event structure entirely while maintaining equ
 ### 4.3 Licensing Options
 
 If the fallback design is undesirable:
+
 - Evaluate Swirlds/Hedera licensing terms
 - Consider Apache 2.0 license compatibility
 - Assess whether Omnia's use falls within fair use or experimental use exceptions
@@ -160,13 +165,13 @@ We request formal legal opinion on the following questions:
 
 ## 6. Timeline
 
-| Milestone | Target |
-|-----------|--------|
-| Submit patent opinion request | Immediate |
-| Counsel review begins | Week 1 |
-| Interim opinion (preliminary risk assessment) | Week 4 |
-| Final legal opinion delivered | Week 8 |
-| Design modifications (if needed) | Weeks 9-12 |
+| Milestone                                     | Target     |
+| --------------------------------------------- | ---------- |
+| Submit patent opinion request                 | Immediate  |
+| Counsel review begins                         | Week 1     |
+| Interim opinion (preliminary risk assessment) | Week 4     |
+| Final legal opinion delivered                 | Week 8     |
+| Design modifications (if needed)              | Weeks 9-12 |
 
 ---
 

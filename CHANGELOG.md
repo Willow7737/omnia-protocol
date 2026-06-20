@@ -1,4 +1,5 @@
 # Changelog
+
 > 🎯 Audience: Developers, Operators
 > 🔗 Context: Version history and migration notes for all releases
 > 📅 Last Updated: 2026-05-20
@@ -10,865 +11,774 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.68](https://github.com/Willow7737/omnia-protocol/compare/v0.1.67...v0.1.68) (2026-06-02)
 
-
 ### Features
 
-* make node info/peers API public + add web dashboard to Docker Compose ([01c2ffe](https://github.com/Willow7737/omnia-protocol/commit/01c2ffe52fa6d0190398a65ffe5042bf69ad6671))
-
+- make node info/peers API public + add web dashboard to Docker Compose ([01c2ffe](https://github.com/Willow7737/omnia-protocol/commit/01c2ffe52fa6d0190398a65ffe5042bf69ad6671))
 
 ### Bug Fixes
 
-* **fmt:** collapse method chains to single lines in test ([383c0ac](https://github.com/Willow7737/omnia-protocol/commit/383c0ac71f5280fb78abdc1eef2287b187331fcd))
-* **fmt:** collapse Router::new() chain to single line ([1b67d23](https://github.com/Willow7737/omnia-protocol/commit/1b67d2351eac74ed6ef14b13cdc68b7ba2646b93))
-* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
-* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
-* **test:** use authenticated endpoint in 401 error format test ([4953cea](https://github.com/Willow7737/omnia-protocol/commit/4953cea39a93601bacdc8f649abebe1ed3bfed45))
-* update auth integration tests for public node info/peers endpoints ([a960240](https://github.com/Willow7737/omnia-protocol/commit/a960240e03b4bfa871b0ab19b29c8a64363f093b))
-* update auth integration tests for public node info/peers endpoints ([7d064e8](https://github.com/Willow7737/omnia-protocol/commit/7d064e87ca26175cbc574057da332a2a53819c21))
+- **fmt:** collapse method chains to single lines in test ([383c0ac](https://github.com/Willow7737/omnia-protocol/commit/383c0ac71f5280fb78abdc1eef2287b187331fcd))
+- **fmt:** collapse Router::new() chain to single line ([1b67d23](https://github.com/Willow7737/omnia-protocol/commit/1b67d2351eac74ed6ef14b13cdc68b7ba2646b93))
+- P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
+- P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
+- **test:** use authenticated endpoint in 401 error format test ([4953cea](https://github.com/Willow7737/omnia-protocol/commit/4953cea39a93601bacdc8f649abebe1ed3bfed45))
+- update auth integration tests for public node info/peers endpoints ([a960240](https://github.com/Willow7737/omnia-protocol/commit/a960240e03b4bfa871b0ab19b29c8a64363f093b))
+- update auth integration tests for public node info/peers endpoints ([7d064e8](https://github.com/Willow7737/omnia-protocol/commit/7d064e87ca26175cbc574057da332a2a53819c21))
 
 ## [0.1.67](https://github.com/Willow7737/omnia-protocol/compare/v0.1.66...v0.1.67) (2026-06-02)
 
-
 ### Bug Fixes
 
-* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
-* P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
+- P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([acf97b5](https://github.com/Willow7737/omnia-protocol/commit/acf97b5206d4b4dfc54da8e2843bfdfa617bed0d))
+- P2P network QUIC transport — Docker multiaddr mismatch + listen address defaults ([4ccc159](https://github.com/Willow7737/omnia-protocol/commit/4ccc1596449f83e59ae0a61c36b2ec97059e0561))
 
 ## [0.1.66](https://github.com/Willow7737/omnia-protocol/compare/v0.1.65...v0.1.66) (2026-06-02)
 
-
 ### Bug Fixes
 
-* chaos test message loss flaky assert + Docker missing ENTRYPOINT ([a60f9c0](https://github.com/Willow7737/omnia-protocol/commit/a60f9c048411d5286b8572a97b990773b34a79e2))
-
+- chaos test message loss flaky assert + Docker missing ENTRYPOINT ([a60f9c0](https://github.com/Willow7737/omnia-protocol/commit/a60f9c048411d5286b8572a97b990773b34a79e2))
 
 ### Documentation
 
-* benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([79186fa](https://github.com/Willow7737/omnia-protocol/commit/79186fa83738f4adf405c14bf0712ac08d03e04e))
-* benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([31d330b](https://github.com/Willow7737/omnia-protocol/commit/31d330b0aaed791c68ed3294d7c63c0c77586c55))
-* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([71f7ab7](https://github.com/Willow7737/omnia-protocol/commit/71f7ab7a2694e0f045cce0957874c00919d77955))
-* overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([dc6ee7b](https://github.com/Willow7737/omnia-protocol/commit/dc6ee7be100d7acf242e2a7d27cab5eb9b065f26))
+- benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([79186fa](https://github.com/Willow7737/omnia-protocol/commit/79186fa83738f4adf405c14bf0712ac08d03e04e))
+- benchmark accuracy audit — fix non-existent commands, add accuracy qualifiers ([31d330b](https://github.com/Willow7737/omnia-protocol/commit/31d330b0aaed791c68ed3294d7c63c0c77586c55))
+- overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([71f7ab7](https://github.com/Willow7737/omnia-protocol/commit/71f7ab7a2694e0f045cce0957874c00919d77955))
+- overhaul all markdowns — true stats, fix Phase/Sprint confusion, remove agent-ctx ([dc6ee7b](https://github.com/Willow7737/omnia-protocol/commit/dc6ee7be100d7acf242e2a7d27cab5eb9b065f26))
 
 ## [0.1.65](https://github.com/Willow7737/omnia-protocol/compare/v0.1.64...v0.1.65) (2026-06-01)
 
-
 ### Bug Fixes
 
-* apply cargo fmt to threshold.rs, provide keypair in test AppState constructors ([f0a5776](https://github.com/Willow7737/omnia-protocol/commit/f0a577624febec84b55a0634072a03174b578e32))
-* clippy ok_or_else → ok_or in economics/src/ubc.rs ([1995699](https://github.com/Willow7737/omnia-protocol/commit/19956999ff7132c3a1fffad4c0d9a9a9ea95f944))
-* clippy redundant_pattern_matching in chaos-tests ([e9e6399](https://github.com/Willow7737/omnia-protocol/commit/e9e63997aa679d67411eef00bedf523580d8c516))
-* comprehensive security and performance audit — 110 issues resolved ([eb6b87d](https://github.com/Willow7737/omnia-protocol/commit/eb6b87dc2a53accb80c1f28843f3becab92e5c9b))
-* comprehensive security and performance audit — 110 issues resolved ([5b2ca8e](https://github.com/Willow7737/omnia-protocol/commit/5b2ca8ee463167212f36cd6db5bef0071a26a752))
-* resolve all remaining CI failures across workspace ([c8e6067](https://github.com/Willow7737/omnia-protocol/commit/c8e6067fba4625176a648aac2c79f0cd9768ef33))
-* resolve CI failures — add ReadableTable imports, fix unicode escapes, apply cargo fmt ([4173d04](https://github.com/Willow7737/omnia-protocol/commit/4173d04b5441f0be9edc50b26f9c196278bcb09c))
-* resolve E0277 From&lt;ProvenanceError&gt; impl, clippy ok_or/unwrap errors, remove duplicate stub() ([bb19ab6](https://github.com/Willow7737/omnia-protocol/commit/bb19ab6b4856cc014c59a7c528f8384a80c286c2))
-* resolve E0597 lifetime issue, remove unused import, fix remaining fmt issues ([1b52498](https://github.com/Willow7737/omnia-protocol/commit/1b524983a1496c98342e2247d48a9810c16ca00c))
+- apply cargo fmt to threshold.rs, provide keypair in test AppState constructors ([f0a5776](https://github.com/Willow7737/omnia-protocol/commit/f0a577624febec84b55a0634072a03174b578e32))
+- clippy ok_or_else → ok_or in economics/src/ubc.rs ([1995699](https://github.com/Willow7737/omnia-protocol/commit/19956999ff7132c3a1fffad4c0d9a9a9ea95f944))
+- clippy redundant_pattern_matching in chaos-tests ([e9e6399](https://github.com/Willow7737/omnia-protocol/commit/e9e63997aa679d67411eef00bedf523580d8c516))
+- comprehensive security and performance audit — 110 issues resolved ([eb6b87d](https://github.com/Willow7737/omnia-protocol/commit/eb6b87dc2a53accb80c1f28843f3becab92e5c9b))
+- comprehensive security and performance audit — 110 issues resolved ([5b2ca8e](https://github.com/Willow7737/omnia-protocol/commit/5b2ca8ee463167212f36cd6db5bef0071a26a752))
+- resolve all remaining CI failures across workspace ([c8e6067](https://github.com/Willow7737/omnia-protocol/commit/c8e6067fba4625176a648aac2c79f0cd9768ef33))
+- resolve CI failures — add ReadableTable imports, fix unicode escapes, apply cargo fmt ([4173d04](https://github.com/Willow7737/omnia-protocol/commit/4173d04b5441f0be9edc50b26f9c196278bcb09c))
+- resolve E0277 From&lt;ProvenanceError&gt; impl, clippy ok_or/unwrap errors, remove duplicate stub() ([bb19ab6](https://github.com/Willow7737/omnia-protocol/commit/bb19ab6b4856cc014c59a7c528f8384a80c286c2))
+- resolve E0597 lifetime issue, remove unused import, fix remaining fmt issues ([1b52498](https://github.com/Willow7737/omnia-protocol/commit/1b524983a1496c98342e2247d48a9810c16ca00c))
 
 ## [0.1.64](https://github.com/Willow7737/omnia-protocol/compare/v0.1.63...v0.1.64) (2026-05-31)
 
-
 ### Bug Fixes
 
-* comprehensive security and performance audit fixes across all crates ([66897c2](https://github.com/Willow7737/omnia-protocol/commit/66897c2dc145d3171a1100423d298b546ad2fb29))
-* comprehensive security and performance audit fixes across all crates ([9d4ac7b](https://github.com/Willow7737/omnia-protocol/commit/9d4ac7b3baafdcbbebdf03c674b11b065bfabd4d))
-* resolve 7 omnia-crypto test failures (keystore + threshold DKG) ([f1b4ce5](https://github.com/Willow7737/omnia-protocol/commit/f1b4ce5532d046435a24f917c647f7edea169a3b))
-* resolve all CI compilation, clippy, and formatting errors ([59cd4bd](https://github.com/Willow7737/omnia-protocol/commit/59cd4bdf2c6130c208dd52cda62921000024b7b6))
-* resolve all remaining CI compilation, clippy, and warning errors (round 2) ([da9d912](https://github.com/Willow7737/omnia-protocol/commit/da9d912e248e6a3309ec4a48d2a1a5eae8454401))
-* resolve CI test failures and rustdoc errors (round 3) ([6cc6a08](https://github.com/Willow7737/omnia-protocol/commit/6cc6a08a5cb0f86bb85bb00cbead02c6f3f4e045))
-* update version assertion in consensus state persistence test ([f94e6cd](https://github.com/Willow7737/omnia-protocol/commit/f94e6cdb81e9e12a3d2a3d88f40407bb407f8c1d))
+- comprehensive security and performance audit fixes across all crates ([66897c2](https://github.com/Willow7737/omnia-protocol/commit/66897c2dc145d3171a1100423d298b546ad2fb29))
+- comprehensive security and performance audit fixes across all crates ([9d4ac7b](https://github.com/Willow7737/omnia-protocol/commit/9d4ac7b3baafdcbbebdf03c674b11b065bfabd4d))
+- resolve 7 omnia-crypto test failures (keystore + threshold DKG) ([f1b4ce5](https://github.com/Willow7737/omnia-protocol/commit/f1b4ce5532d046435a24f917c647f7edea169a3b))
+- resolve all CI compilation, clippy, and formatting errors ([59cd4bd](https://github.com/Willow7737/omnia-protocol/commit/59cd4bdf2c6130c208dd52cda62921000024b7b6))
+- resolve all remaining CI compilation, clippy, and warning errors (round 2) ([da9d912](https://github.com/Willow7737/omnia-protocol/commit/da9d912e248e6a3309ec4a48d2a1a5eae8454401))
+- resolve CI test failures and rustdoc errors (round 3) ([6cc6a08](https://github.com/Willow7737/omnia-protocol/commit/6cc6a08a5cb0f86bb85bb00cbead02c6f3f4e045))
+- update version assertion in consensus state persistence test ([f94e6cd](https://github.com/Willow7737/omnia-protocol/commit/f94e6cdb81e9e12a3d2a3d88f40407bb407f8c1d))
 
 ## [0.1.63](https://github.com/Willow7737/omnia-protocol/compare/v0.1.62...v0.1.63) (2026-05-31)
 
-
 ### Bug Fixes
 
-* E0509 cannot move out of EthereumConfig with Drop trait ([88c4e4a](https://github.com/Willow7737/omnia-protocol/commit/88c4e4a9e2382f994ac1c5154f51bbd8642cef87))
-* E0509 cannot move out of EthereumConfig with Drop trait ([5eb702d](https://github.com/Willow7737/omnia-protocol/commit/5eb702db16e1e8b1dfc63d14a003a0e78f90474c))
+- E0509 cannot move out of EthereumConfig with Drop trait ([88c4e4a](https://github.com/Willow7737/omnia-protocol/commit/88c4e4a9e2382f994ac1c5154f51bbd8642cef87))
+- E0509 cannot move out of EthereumConfig with Drop trait ([5eb702d](https://github.com/Willow7737/omnia-protocol/commit/5eb702db16e1e8b1dfc63d14a003a0e78f90474c))
 
 ## [0.1.62](https://github.com/Willow7737/omnia-protocol/compare/v0.1.61...v0.1.62) (2026-05-31)
 
-
 ### Features
 
-* comprehensive security & performance audit fixes - production hardening ([e88aadd](https://github.com/Willow7737/omnia-protocol/commit/e88aadd46544c26f08f6ddfae65ee26ab141e4e7))
-
+- comprehensive security & performance audit fixes - production hardening ([e88aadd](https://github.com/Willow7737/omnia-protocol/commit/e88aadd46544c26f08f6ddfae65ee26ab141e4e7))
 
 ### Bug Fixes
 
-* identity_hardening tests and rustdoc broken link ([0c69bec](https://github.com/Willow7737/omnia-protocol/commit/0c69beca28c3b9c468405ac68a76c80e1e0312e5))
-* resolve all CI failures — compilation errors, test failures, fmt and warnings ([f3def05](https://github.com/Willow7737/omnia-protocol/commit/f3def057e4337279a3700eb037073ecb0af7fa60))
-* resolve remaining CI failures - zk_benchmarks, clippy, crypto tests ([74c1aa0](https://github.com/Willow7737/omnia-protocol/commit/74c1aa037312db96712b23eb8b5ac42f5e7d0218))
-* **security:** comprehensive security, performance, and correctness audit fixes ([b05c520](https://github.com/Willow7737/omnia-protocol/commit/b05c52023f168952aa063697d028170d5cf773a6))
-* update slashing tests to expect EquivocationDetected error ([0fd09c0](https://github.com/Willow7737/omnia-protocol/commit/0fd09c03d02c97705477034abf1e2a89feb8fed8))
+- identity_hardening tests and rustdoc broken link ([0c69bec](https://github.com/Willow7737/omnia-protocol/commit/0c69beca28c3b9c468405ac68a76c80e1e0312e5))
+- resolve all CI failures — compilation errors, test failures, fmt and warnings ([f3def05](https://github.com/Willow7737/omnia-protocol/commit/f3def057e4337279a3700eb037073ecb0af7fa60))
+- resolve remaining CI failures - zk_benchmarks, clippy, crypto tests ([74c1aa0](https://github.com/Willow7737/omnia-protocol/commit/74c1aa037312db96712b23eb8b5ac42f5e7d0218))
+- **security:** comprehensive security, performance, and correctness audit fixes ([b05c520](https://github.com/Willow7737/omnia-protocol/commit/b05c52023f168952aa063697d028170d5cf773a6))
+- update slashing tests to expect EquivocationDetected error ([0fd09c0](https://github.com/Willow7737/omnia-protocol/commit/0fd09c03d02c97705477034abf1e2a89feb8fed8))
 
 ## [0.1.61](https://github.com/Willow7737/omnia-protocol/compare/v0.1.60...v0.1.61) (2026-05-30)
 
-
 ### Bug Fixes
 
-* **benches:** handle Result&lt;Event, EventValidationError&gt; from Event::new/genesis ([d0eaaa2](https://github.com/Willow7737/omnia-protocol/commit/d0eaaa2fa7300be1b489a402ca3ec8ad21fdface))
-* cargo fmt in layer2_integration, cross-shard source verification in fee test ([0cef080](https://github.com/Willow7737/omnia-protocol/commit/0cef0806e092efdebd2c09f571991e4ad4c79959))
-* clippy bind_instead_of_map in substrate, fix financial shard test assertions ([694f37e](https://github.com/Willow7737/omnia-protocol/commit/694f37e57a2b68f08e8c936fdd6e3045bb3b8ad1))
-* clippy needless_range_loop in merkle.rs, integration test JWT auth ([d821c9d](https://github.com/Willow7737/omnia-protocol/commit/d821c9d6929c1a8be5d2a549a7695aaa179c7b71))
-* cross-shard test failures due to mint authority and identity auth ([9e1e925](https://github.com/Willow7737/omnia-protocol/commit/9e1e9254358cf28f02fdcfebdc88c1af132d3fdf))
-* remaining Event::new()/genesis() Result unwrapping + clippy threshold.rs ([b306738](https://github.com/Willow7737/omnia-protocol/commit/b30673811c9423053ecb52fb736bad3092b5f53d))
-* remove needless return in biological/computational ZK proof error paths ([a652ab1](https://github.com/Willow7737/omnia-protocol/commit/a652ab117fd6ac89b081f37e614bc95cc2825544))
-* resolve all CI failures — Result unwrapping, fmt, clippy, auth tests ([fb25658](https://github.com/Willow7737/omnia-protocol/commit/fb256580286d2ec542a19482d1f818c832bf7620))
-* resolve all remaining CI failures — keystore Result assertions, clippy redundant closures, chaos-tests warnings, deprecated annotations ([1fcd23f](https://github.com/Willow7737/omnia-protocol/commit/1fcd23ff2507788f20b751fb80a017c4c250d12c))
-* resolve rustdoc broken intra-doc link for MAX_REWARD_PER_PROOF ([37ecaf2](https://github.com/Willow7737/omnia-protocol/commit/37ecaf279a635daf1f2c28953bc0fd22b34ab49d))
-* **security:** comprehensive security, performance, and correctness audit fixes ([98cf43a](https://github.com/Willow7737/omnia-protocol/commit/98cf43a42ee4d8d118a615bb518f53308c327f86))
-* **security:** comprehensive security, performance, and correctness audit fixes ([a6d8720](https://github.com/Willow7737/omnia-protocol/commit/a6d8720c1e23e91b0432d44365d69579af6613b4))
+- **benches:** handle Result&lt;Event, EventValidationError&gt; from Event::new/genesis ([d0eaaa2](https://github.com/Willow7737/omnia-protocol/commit/d0eaaa2fa7300be1b489a402ca3ec8ad21fdface))
+- cargo fmt in layer2_integration, cross-shard source verification in fee test ([0cef080](https://github.com/Willow7737/omnia-protocol/commit/0cef0806e092efdebd2c09f571991e4ad4c79959))
+- clippy bind_instead_of_map in substrate, fix financial shard test assertions ([694f37e](https://github.com/Willow7737/omnia-protocol/commit/694f37e57a2b68f08e8c936fdd6e3045bb3b8ad1))
+- clippy needless_range_loop in merkle.rs, integration test JWT auth ([d821c9d](https://github.com/Willow7737/omnia-protocol/commit/d821c9d6929c1a8be5d2a549a7695aaa179c7b71))
+- cross-shard test failures due to mint authority and identity auth ([9e1e925](https://github.com/Willow7737/omnia-protocol/commit/9e1e9254358cf28f02fdcfebdc88c1af132d3fdf))
+- remaining Event::new()/genesis() Result unwrapping + clippy threshold.rs ([b306738](https://github.com/Willow7737/omnia-protocol/commit/b30673811c9423053ecb52fb736bad3092b5f53d))
+- remove needless return in biological/computational ZK proof error paths ([a652ab1](https://github.com/Willow7737/omnia-protocol/commit/a652ab117fd6ac89b081f37e614bc95cc2825544))
+- resolve all CI failures — Result unwrapping, fmt, clippy, auth tests ([fb25658](https://github.com/Willow7737/omnia-protocol/commit/fb256580286d2ec542a19482d1f818c832bf7620))
+- resolve all remaining CI failures — keystore Result assertions, clippy redundant closures, chaos-tests warnings, deprecated annotations ([1fcd23f](https://github.com/Willow7737/omnia-protocol/commit/1fcd23ff2507788f20b751fb80a017c4c250d12c))
+- resolve rustdoc broken intra-doc link for MAX_REWARD_PER_PROOF ([37ecaf2](https://github.com/Willow7737/omnia-protocol/commit/37ecaf279a635daf1f2c28953bc0fd22b34ab49d))
+- **security:** comprehensive security, performance, and correctness audit fixes ([98cf43a](https://github.com/Willow7737/omnia-protocol/commit/98cf43a42ee4d8d118a615bb518f53308c327f86))
+- **security:** comprehensive security, performance, and correctness audit fixes ([a6d8720](https://github.com/Willow7737/omnia-protocol/commit/a6d8720c1e23e91b0432d44365d69579af6613b4))
 
 ## [0.1.60](https://github.com/Willow7737/omnia-protocol/compare/v0.1.59...v0.1.60) (2026-05-27)
 
-
 ### Bug Fixes
 
-* **docker:** create stub source files before cargo generate-lockfile ([cb65ff0](https://github.com/Willow7737/omnia-protocol/commit/cb65ff0f67eaddd0bf09f9b9e751386010024f52))
-* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([aefb24b](https://github.com/Willow7737/omnia-protocol/commit/aefb24bb80a95c0cec3d88161c786d18d3f4801f))
-* **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([5342f87](https://github.com/Willow7737/omnia-protocol/commit/5342f87605810dbabe79ed0c0ad024cd2bbfde48))
+- **docker:** create stub source files before cargo generate-lockfile ([cb65ff0](https://github.com/Willow7737/omnia-protocol/commit/cb65ff0f67eaddd0bf09f9b9e751386010024f52))
+- **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([aefb24b](https://github.com/Willow7737/omnia-protocol/commit/aefb24bb80a95c0cec3d88161c786d18d3f4801f))
+- **docker:** simplify Dockerfile — delete lockfile instead of generate-lockfile ([5342f87](https://github.com/Willow7737/omnia-protocol/commit/5342f87605810dbabe79ed0c0ad024cd2bbfde48))
 
 ## [0.1.59](https://github.com/Willow7737/omnia-protocol/compare/v0.1.58...v0.1.59) (2026-05-27)
 
-
 ### Bug Fixes
 
-* **docker:** resolve build failure from CI-only crates excluded by .dockerignore ([b25226c](https://github.com/Willow7737/omnia-protocol/commit/b25226c925eb00e633452f7097cae708cfbb3339))
+- **docker:** resolve build failure from CI-only crates excluded by .dockerignore ([b25226c](https://github.com/Willow7737/omnia-protocol/commit/b25226c925eb00e633452f7097cae708cfbb3339))
 
 ## [0.1.58](https://github.com/Willow7737/omnia-protocol/compare/v0.1.57...v0.1.58) (2026-05-27)
 
-
 ### Features
 
-* add GitHub Codespace config for 5-node testnet ([7a601ab](https://github.com/Willow7737/omnia-protocol/commit/7a601ab2382df14af4cb311b331f59936058d146))
+- add GitHub Codespace config for 5-node testnet ([7a601ab](https://github.com/Willow7737/omnia-protocol/commit/7a601ab2382df14af4cb311b331f59936058d146))
 
 ## [0.1.57](https://github.com/Willow7737/omnia-protocol/compare/v0.1.56...v0.1.57) (2026-05-27)
 
-
 ### Features
 
-* add limit verification test suite (39 tests), LIMITS.md reference ([7e1cdab](https://github.com/Willow7737/omnia-protocol/commit/7e1cdab5cc541ad13b53288aec53537710a9dd0a))
-* add limit verification test suite (39 tests), LIMITS.md reference ([01ba013](https://github.com/Willow7737/omnia-protocol/commit/01ba013213e8d67cf14e88964378b282538eea81))
-* add testnet launch script with monitoring support ([84b2a45](https://github.com/Willow7737/omnia-protocol/commit/84b2a45ac572c2c3e826e7073315db6463060bdb))
-* add testnet launch script with monitoring support ([10daa78](https://github.com/Willow7737/omnia-protocol/commit/10daa7865e217060fa973c5fc63af7e4b186b33a))
-
+- add limit verification test suite (39 tests), LIMITS.md reference ([7e1cdab](https://github.com/Willow7737/omnia-protocol/commit/7e1cdab5cc541ad13b53288aec53537710a9dd0a))
+- add limit verification test suite (39 tests), LIMITS.md reference ([01ba013](https://github.com/Willow7737/omnia-protocol/commit/01ba013213e8d67cf14e88964378b282538eea81))
+- add testnet launch script with monitoring support ([84b2a45](https://github.com/Willow7737/omnia-protocol/commit/84b2a45ac572c2c3e826e7073315db6463060bdb))
+- add testnet launch script with monitoring support ([10daa78](https://github.com/Willow7737/omnia-protocol/commit/10daa7865e217060fa973c5fc63af7e4b186b33a))
 
 ### Bug Fixes
 
-* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([fb40575](https://github.com/Willow7737/omnia-protocol/commit/fb405753f943945ec940ced0045172f1674de641))
-* **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([1eafa5a](https://github.com/Willow7737/omnia-protocol/commit/1eafa5aad493a1fb7634fe3044401f89a1d23dce))
-* **ci:** resolve 25 CI workflow issues — action versions, Dockerfile, timeouts, shell safety ([87a6529](https://github.com/Willow7737/omnia-protocol/commit/87a65296d53589e90962c24f82c98ca85ed948d5))
-* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([5c6d8b8](https://github.com/Willow7737/omnia-protocol/commit/5c6d8b81b33cef61f10a1dac93a0b0bde0b32047))
-* **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([a002c20](https://github.com/Willow7737/omnia-protocol/commit/a002c2083403add99dd29eadd115b4d7c05e47a1))
-* **clippy:** replace unwrap() with expect() in keystore_bridge.rs rotate() ([4551edb](https://github.com/Willow7737/omnia-protocol/commit/4551edbdd1366c060bbcb088f9aebaec906b0544))
-* **consensus:** allow equivocation at current sequence in monotonicity check ([0679e8f](https://github.com/Willow7737/omnia-protocol/commit/0679e8f484d03fa5d6cc0c641e096df630106252))
-* **consensus:** resolve rustdoc private-intra-doc-links errors ([131eb3d](https://github.com/Willow7737/omnia-protocol/commit/131eb3d233a626acdaedf0a422e6ef35ecfd554d))
-* **fmt:** apply cargo fmt to keystore_bridge.rs and g_counter.rs ([55fd867](https://github.com/Willow7737/omnia-protocol/commit/55fd867efd67c7784882e1b7aef0ce36aa1db4d3))
-* regenerate Cargo.lock and apply cargo fmt to tests/src/lib.rs ([e97c4df](https://github.com/Willow7737/omnia-protocol/commit/e97c4df979ae08b7e06388a0680a70bce54bce24))
-* resolve 7 high-priority audit bugs + CI/Docker infrastructure fixes ([b5d0e55](https://github.com/Willow7737/omnia-protocol/commit/b5d0e55caf3d1f602e06d26f32fc56b1080b7055))
-* resolve 9 medium-priority audit findings + verify 4 as by-design ([c8a41ad](https://github.com/Willow7737/omnia-protocol/commit/c8a41adb5504f971658820f059c658fdf2ff1f1d))
-* resolve 9 medium-priority audit findings + verify 4 as by-design ([bd1105e](https://github.com/Willow7737/omnia-protocol/commit/bd1105e6bc120ad39e26f9f7dbd3d656685c000d))
-* resolve all CI failures for testnet readiness ([24c4c3b](https://github.com/Willow7737/omnia-protocol/commit/24c4c3b93c251c41b9f65306b80d194521ac9728))
-* **rustdoc:** remove private intra-doc link in current_signing_key() ([f0868d6](https://github.com/Willow7737/omnia-protocol/commit/f0868d609e4e6540b0e879e8ddb851eebadecb0a))
-* **security:** enforce sequence monotonicity at CausalGraph::insert() boundary ([25198a0](https://github.com/Willow7737/omnia-protocol/commit/25198a07f349f44fa269f1028eff8919929536d7))
-* update test_duplicate_signers_detected for dedup (AUDIT-12), fix governance.rs doc link ([4da24da](https://github.com/Willow7737/omnia-protocol/commit/4da24da0a8c80aa563ff51ab2065ca8804e6a13c))
-
+- **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([fb40575](https://github.com/Willow7737/omnia-protocol/commit/fb405753f943945ec940ced0045172f1674de641))
+- **ci:** handle forge create non-zero exit in ethereum-settlement.yml ([1eafa5a](https://github.com/Willow7737/omnia-protocol/commit/1eafa5aad493a1fb7634fe3044401f89a1d23dce))
+- **ci:** resolve 25 CI workflow issues — action versions, Dockerfile, timeouts, shell safety ([87a6529](https://github.com/Willow7737/omnia-protocol/commit/87a65296d53589e90962c24f82c98ca85ed948d5))
+- **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([5c6d8b8](https://github.com/Willow7737/omnia-protocol/commit/5c6d8b81b33cef61f10a1dac93a0b0bde0b32047))
+- **ci:** resolve Docker lowercase repo name + shard mutation testing to prevent timeout ([a002c20](https://github.com/Willow7737/omnia-protocol/commit/a002c2083403add99dd29eadd115b4d7c05e47a1))
+- **clippy:** replace unwrap() with expect() in keystore_bridge.rs rotate() ([4551edb](https://github.com/Willow7737/omnia-protocol/commit/4551edbdd1366c060bbcb088f9aebaec906b0544))
+- **consensus:** allow equivocation at current sequence in monotonicity check ([0679e8f](https://github.com/Willow7737/omnia-protocol/commit/0679e8f484d03fa5d6cc0c641e096df630106252))
+- **consensus:** resolve rustdoc private-intra-doc-links errors ([131eb3d](https://github.com/Willow7737/omnia-protocol/commit/131eb3d233a626acdaedf0a422e6ef35ecfd554d))
+- **fmt:** apply cargo fmt to keystore_bridge.rs and g_counter.rs ([55fd867](https://github.com/Willow7737/omnia-protocol/commit/55fd867efd67c7784882e1b7aef0ce36aa1db4d3))
+- regenerate Cargo.lock and apply cargo fmt to tests/src/lib.rs ([e97c4df](https://github.com/Willow7737/omnia-protocol/commit/e97c4df979ae08b7e06388a0680a70bce54bce24))
+- resolve 7 high-priority audit bugs + CI/Docker infrastructure fixes ([b5d0e55](https://github.com/Willow7737/omnia-protocol/commit/b5d0e55caf3d1f602e06d26f32fc56b1080b7055))
+- resolve 9 medium-priority audit findings + verify 4 as by-design ([c8a41ad](https://github.com/Willow7737/omnia-protocol/commit/c8a41adb5504f971658820f059c658fdf2ff1f1d))
+- resolve 9 medium-priority audit findings + verify 4 as by-design ([bd1105e](https://github.com/Willow7737/omnia-protocol/commit/bd1105e6bc120ad39e26f9f7dbd3d656685c000d))
+- resolve all CI failures for testnet readiness ([24c4c3b](https://github.com/Willow7737/omnia-protocol/commit/24c4c3b93c251c41b9f65306b80d194521ac9728))
+- **rustdoc:** remove private intra-doc link in current_signing_key() ([f0868d6](https://github.com/Willow7737/omnia-protocol/commit/f0868d609e4e6540b0e879e8ddb851eebadecb0a))
+- **security:** enforce sequence monotonicity at CausalGraph::insert() boundary ([25198a0](https://github.com/Willow7737/omnia-protocol/commit/25198a07f349f44fa269f1028eff8919929536d7))
+- update test_duplicate_signers_detected for dedup (AUDIT-12), fix governance.rs doc link ([4da24da](https://github.com/Willow7737/omnia-protocol/commit/4da24da0a8c80aa563ff51ab2065ca8804e6a13c))
 
 ### Performance
 
-* eliminate O(n) bottlenecks in CausalGraph::insert — 37× throughput gain ([7bb452a](https://github.com/Willow7737/omnia-protocol/commit/7bb452a768668569166b4c6548cd94cdaa2a989c))
-
+- eliminate O(n) bottlenecks in CausalGraph::insert — 37× throughput gain ([7bb452a](https://github.com/Willow7737/omnia-protocol/commit/7bb452a768668569166b4c6548cd94cdaa2a989c))
 
 ### Documentation
 
-* add verified protocol limits, update audit status to 8/23 remediated ([9429e9a](https://github.com/Willow7737/omnia-protocol/commit/9429e9a436f79202e946be7430a13b3e810b383b))
-* add verified protocol limits, update audit status to 8/23 remediated ([3330f25](https://github.com/Willow7737/omnia-protocol/commit/3330f2579b62a10d8fd626fbb53b3cb6f2eda568))
-* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([1e69ee7](https://github.com/Willow7737/omnia-protocol/commit/1e69ee7bb2d39850165b13f4429360d3d54a9fde))
-* update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([dc01129](https://github.com/Willow7737/omnia-protocol/commit/dc01129778177e75d7691a64691fcf8a884f84a7))
-* update project status to 93% — 7 high-priority audit findings remediated ([dbf46e8](https://github.com/Willow7737/omnia-protocol/commit/dbf46e837f95831f48d57f76ddb7d5867db301fe))
+- add verified protocol limits, update audit status to 8/23 remediated ([9429e9a](https://github.com/Willow7737/omnia-protocol/commit/9429e9a436f79202e946be7430a13b3e810b383b))
+- add verified protocol limits, update audit status to 8/23 remediated ([3330f25](https://github.com/Willow7737/omnia-protocol/commit/3330f2579b62a10d8fd626fbb53b3cb6f2eda568))
+- update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([1e69ee7](https://github.com/Willow7737/omnia-protocol/commit/1e69ee7bb2d39850165b13f4429360d3d54a9fde))
+- update markdowns for v0.1.56 — full codebase audit, test counts, roadmap findings ([dc01129](https://github.com/Willow7737/omnia-protocol/commit/dc01129778177e75d7691a64691fcf8a884f84a7))
+- update project status to 93% — 7 high-priority audit findings remediated ([dbf46e8](https://github.com/Willow7737/omnia-protocol/commit/dbf46e837f95831f48d57f76ddb7d5867db301fe))
 
 ## [0.1.56](https://github.com/Willow7737/omnia-protocol/compare/v0.1.55...v0.1.56) (2026-05-25)
 
-
 ### Bug Fixes
 
-* **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([597824d](https://github.com/Willow7737/omnia-protocol/commit/597824d87ead2bcce08d3b04029690a91f012998))
-* **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([a38b637](https://github.com/Willow7737/omnia-protocol/commit/a38b637f208c39da98f5663982fc1606ccc78b58))
+- **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([597824d](https://github.com/Willow7737/omnia-protocol/commit/597824d87ead2bcce08d3b04029690a91f012998))
+- **ci:** resolve 3 CI failures — benchmark baselines, iai-callgrind runner, OpenSSL cross-compile ([a38b637](https://github.com/Willow7737/omnia-protocol/commit/a38b637f208c39da98f5663982fc1606ccc78b58))
 
 ## [0.1.55](https://github.com/Willow7737/omnia-protocol/compare/v0.1.54...v0.1.55) (2026-05-24)
 
-
 ### Bug Fixes
 
-* **ci:** resolve 4 CI failures — benchmarks, OpenSSL, Solidity, binary size ([4c241a2](https://github.com/Willow7737/omnia-protocol/commit/4c241a273c0f24b07b644ad0b9983b07e4ee9c9d))
-* **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([153703d](https://github.com/Willow7737/omnia-protocol/commit/153703d765b27d6dad46e13e60ebb7a1310a1bfc))
-* **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([b90cf48](https://github.com/Willow7737/omnia-protocol/commit/b90cf488e71560ed85e6d513307909058b832383))
+- **ci:** resolve 4 CI failures — benchmarks, OpenSSL, Solidity, binary size ([4c241a2](https://github.com/Willow7737/omnia-protocol/commit/4c241a273c0f24b07b644ad0b9983b07e4ee9c9d))
+- **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([153703d](https://github.com/Willow7737/omnia-protocol/commit/153703d765b27d6dad46e13e60ebb7a1310a1bfc))
+- **ci:** revert reqwest rustls migration + add OpenSSL ARM64 cross-compile from source ([b90cf48](https://github.com/Willow7737/omnia-protocol/commit/b90cf488e71560ed85e6d513307909058b832383))
 
 ## [0.1.54](https://github.com/Willow7737/omnia-protocol/compare/v0.1.53...v0.1.54) (2026-05-24)
 
-
 ### Bug Fixes
 
-* **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([0901de9](https://github.com/Willow7737/omnia-protocol/commit/0901de905b89d8b3d4020f54f5b47586285509a2))
-* **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([717961e](https://github.com/Willow7737/omnia-protocol/commit/717961e7c5802d662597367a56764bc660f1447a))
-* **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([44f5287](https://github.com/Willow7737/omnia-protocol/commit/44f5287ef539adab68d11009f5b40f83747a1668))
-* **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([1b15de6](https://github.com/Willow7737/omnia-protocol/commit/1b15de63290b2f450e275e3ce95189ad001ec57c))
-* **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([c4a7566](https://github.com/Willow7737/omnia-protocol/commit/c4a75663f55e2ab040f073c5b9070df9ffc0a928))
-* **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([9c4d15a](https://github.com/Willow7737/omnia-protocol/commit/9c4d15a556eb688c618eddfef574ddb822ec3784))
+- **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([0901de9](https://github.com/Willow7737/omnia-protocol/commit/0901de905b89d8b3d4020f54f5b47586285509a2))
+- **ci:** resolve nightly mutation testing timeout and fuzz linker errors ([717961e](https://github.com/Willow7737/omnia-protocol/commit/717961e7c5802d662597367a56764bc660f1447a))
+- **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([44f5287](https://github.com/Willow7737/omnia-protocol/commit/44f5287ef539adab68d11009f5b40f83747a1668))
+- **e2e:** late-join test cross-ref events + update docs for v0.1.53 review ([1b15de6](https://github.com/Willow7737/omnia-protocol/commit/1b15de63290b2f450e275e3ce95189ad001ec57c))
+- **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([c4a7566](https://github.com/Willow7737/omnia-protocol/commit/c4a75663f55e2ab040f073c5b9070df9ffc0a928))
+- **fmt:** collapse eprintln! to single line in e2e_multi_node_consensus.rs ([9c4d15a](https://github.com/Willow7737/omnia-protocol/commit/9c4d15a556eb688c618eddfef574ddb822ec3784))
 
 ## [0.1.53](https://github.com/Willow7737/omnia-protocol/compare/v0.1.52...v0.1.53) (2026-05-24)
 
-
 ### Bug Fixes
 
-* **ci:** sync release-please manifest + auto-fix version in Release workflow ([ce55c13](https://github.com/Willow7737/omnia-protocol/commit/ce55c13addf240d8410d84e417b0505269019afd))
-* **ci:** sync release-please manifest + auto-fix version in Release workflow ([11fdfd4](https://github.com/Willow7737/omnia-protocol/commit/11fdfd40632a903bb5335c5d404f36cbca82400f))
+- **ci:** sync release-please manifest + auto-fix version in Release workflow ([ce55c13](https://github.com/Willow7737/omnia-protocol/commit/ce55c13addf240d8410d84e417b0505269019afd))
+- **ci:** sync release-please manifest + auto-fix version in Release workflow ([11fdfd4](https://github.com/Willow7737/omnia-protocol/commit/11fdfd40632a903bb5335c5d404f36cbca82400f))
 
 ## [0.1.52](https://github.com/Willow7737/omnia-protocol/compare/v0.1.51...v0.1.52) (2026-05-24)
 
-
 ### Features
 
-* **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([9067163](https://github.com/Willow7737/omnia-protocol/commit/90671637864dcbd0a7cdcdacb7db8428d7f0264a))
-* **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([423a7bf](https://github.com/Willow7737/omnia-protocol/commit/423a7bf1a32f5723f188f21e8c214005b5511cd7))
-* Docker Compose E2E test + benchmark regression gates (Group C) ([c1653f3](https://github.com/Willow7737/omnia-protocol/commit/c1653f3f7b0828536026c03311b252e0e21ca428))
-* wire ShardRouter + E2E multi-node consensus test (Group B) ([b0e709e](https://github.com/Willow7737/omnia-protocol/commit/b0e709e85a4e58076ce0abeba4357bbf752a7321))
-
+- **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([9067163](https://github.com/Willow7737/omnia-protocol/commit/90671637864dcbd0a7cdcdacb7db8428d7f0264a))
+- **dkg:** fix three critical DKG bugs + wire bootstrap peers (Group A) ([423a7bf](https://github.com/Willow7737/omnia-protocol/commit/423a7bf1a32f5723f188f21e8c214005b5511cd7))
+- Docker Compose E2E test + benchmark regression gates (Group C) ([c1653f3](https://github.com/Willow7737/omnia-protocol/commit/c1653f3f7b0828536026c03311b252e0e21ca428))
+- wire ShardRouter + E2E multi-node consensus test (Group B) ([b0e709e](https://github.com/Willow7737/omnia-protocol/commit/b0e709e85a4e58076ce0abeba4357bbf752a7321))
 
 ### Bug Fixes
 
-* borrow nodes in e2e test loops to avoid move-after-use ([131a47f](https://github.com/Willow7737/omnia-protocol/commit/131a47ff402c58065d64e8a98b8ba7c8d6416256))
-* **crypto:** correct blst API type mismatches + LE/BE scalar encoding ([1656553](https://github.com/Willow7737/omnia-protocol/commit/16565536bf86993ac38f432c0085a0d3279787ff))
-* HashSet::contains borrow check + clippy unwrap_used denial ([14b5477](https://github.com/Willow7737/omnia-protocol/commit/14b54771dd216ffe98e4b5b230b1f5f8adf0ad69))
-* **shards:** resolve broken rustdoc intra-doc links ([2354958](https://github.com/Willow7737/omnia-protocol/commit/23549581d7aff424246872cf1bf679ab9aff3fb2))
+- borrow nodes in e2e test loops to avoid move-after-use ([131a47f](https://github.com/Willow7737/omnia-protocol/commit/131a47ff402c58065d64e8a98b8ba7c8d6416256))
+- **crypto:** correct blst API type mismatches + LE/BE scalar encoding ([1656553](https://github.com/Willow7737/omnia-protocol/commit/16565536bf86993ac38f432c0085a0d3279787ff))
+- HashSet::contains borrow check + clippy unwrap_used denial ([14b5477](https://github.com/Willow7737/omnia-protocol/commit/14b54771dd216ffe98e4b5b230b1f5f8adf0ad69))
+- **shards:** resolve broken rustdoc intra-doc links ([2354958](https://github.com/Willow7737/omnia-protocol/commit/23549581d7aff424246872cf1bf679ab9aff3fb2))
 
 ## [0.1.51](https://github.com/Willow7737/omnia-protocol/compare/v0.1.50...v0.1.51) (2026-05-23)
 
-
 ### Bug Fixes
 
-* **ci:** bump workspace version to 0.1.50 and inherit in all crates ([e6849ba](https://github.com/Willow7737/omnia-protocol/commit/e6849bab824a40b74d89dc7da59afca6396abd30))
-* **ci:** bump workspace version to 0.1.50 and inherit in all crates ([f0f491d](https://github.com/Willow7737/omnia-protocol/commit/f0f491dcc507687d766cc134931ba00f6491a26e))
-* **ci:** update Cargo.lock to reflect workspace version 0.1.50 ([129174d](https://github.com/Willow7737/omnia-protocol/commit/129174d6d8b02d699deab98c94ade359e7a9b85f))
+- **ci:** bump workspace version to 0.1.50 and inherit in all crates ([e6849ba](https://github.com/Willow7737/omnia-protocol/commit/e6849bab824a40b74d89dc7da59afca6396abd30))
+- **ci:** bump workspace version to 0.1.50 and inherit in all crates ([f0f491d](https://github.com/Willow7737/omnia-protocol/commit/f0f491dcc507687d766cc134931ba00f6491a26e))
+- **ci:** update Cargo.lock to reflect workspace version 0.1.50 ([129174d](https://github.com/Willow7737/omnia-protocol/commit/129174d6d8b02d699deab98c94ade359e7a9b85f))
 
 ## [0.1.50](https://github.com/Willow7737/omnia-protocol/compare/v0.1.49...v0.1.50) (2026-05-23)
 
-
 ### Bug Fixes
 
-* allow release-please to use PAT for credentials ([c1acefc](https://github.com/Willow7737/omnia-protocol/commit/c1acefc4bdd51f3119a328d2f6eec81ef29a8f4f))
+- allow release-please to use PAT for credentials ([c1acefc](https://github.com/Willow7737/omnia-protocol/commit/c1acefc4bdd51f3119a328d2f6eec81ef29a8f4f))
 
 ## [0.1.49](https://github.com/Willow7737/omnia-protocol/compare/v0.1.48...v0.1.49) (2026-05-23)
 
-
 ### Bug Fixes
 
-* apply rustfmt formatting and increase binary size gate to 16 MB ([552d450](https://github.com/Willow7737/omnia-protocol/commit/552d450a33e6fee5584b162fae88947080cad702))
-* **P0-1:** Wire GossipProtocol into node binary ([a4df6c1](https://github.com/Willow7737/omnia-protocol/commit/a4df6c1aee2c61b31dd2390334e46aa13aec6109))
-* **P0-1:** Wire GossipProtocol into node binary ([807f093](https://github.com/Willow7737/omnia-protocol/commit/807f093ed4256e9f74d3210cb8b21629fc6f8ee8))
-* **P0-2:** Integrate bls12_381_scalar module into FeldmanVssSession ([e3f50f8](https://github.com/Willow7737/omnia-protocol/commit/e3f50f8f173bb93e6e6025755de25cfc5a0cfd3e))
-* **P1-1,P2-1,P3-1,P3-2:** BatchProofCircuit type safety, malformed proof rejection, auth tests, ceremony client ([f727241](https://github.com/Willow7737/omnia-protocol/commit/f72724163a6b06200a05d71108fde8f487e654b8))
-* pin Foundry toolchain to stable instead of nightly ([f934196](https://github.com/Willow7737/omnia-protocol/commit/f934196221e698c5a707e516eab9e2c7b170ec02))
-* resolve broken intra-doc links in substrate/src/lib.rs ([4ea63ff](https://github.com/Willow7737/omnia-protocol/commit/4ea63ff5f3397e7ef4944bf88979ce56790493a5))
-* resolve clippy doc comment warnings in shard modules ([428f89c](https://github.com/Willow7737/omnia-protocol/commit/428f89c1cd23a725dd5c83143e9efea9ab94a510))
+- apply rustfmt formatting and increase binary size gate to 16 MB ([552d450](https://github.com/Willow7737/omnia-protocol/commit/552d450a33e6fee5584b162fae88947080cad702))
+- **P0-1:** Wire GossipProtocol into node binary ([a4df6c1](https://github.com/Willow7737/omnia-protocol/commit/a4df6c1aee2c61b31dd2390334e46aa13aec6109))
+- **P0-1:** Wire GossipProtocol into node binary ([807f093](https://github.com/Willow7737/omnia-protocol/commit/807f093ed4256e9f74d3210cb8b21629fc6f8ee8))
+- **P0-2:** Integrate bls12_381_scalar module into FeldmanVssSession ([e3f50f8](https://github.com/Willow7737/omnia-protocol/commit/e3f50f8f173bb93e6e6025755de25cfc5a0cfd3e))
+- **P1-1,P2-1,P3-1,P3-2:** BatchProofCircuit type safety, malformed proof rejection, auth tests, ceremony client ([f727241](https://github.com/Willow7737/omnia-protocol/commit/f72724163a6b06200a05d71108fde8f487e654b8))
+- pin Foundry toolchain to stable instead of nightly ([f934196](https://github.com/Willow7737/omnia-protocol/commit/f934196221e698c5a707e516eab9e2c7b170ec02))
+- resolve broken intra-doc links in substrate/src/lib.rs ([4ea63ff](https://github.com/Willow7737/omnia-protocol/commit/4ea63ff5f3397e7ef4944bf88979ce56790493a5))
+- resolve clippy doc comment warnings in shard modules ([428f89c](https://github.com/Willow7737/omnia-protocol/commit/428f89c1cd23a725dd5c83143e9efea9ab94a510))
 
 ## [0.1.48](https://github.com/Willow7737/omnia-protocol/compare/v0.1.47...v0.1.48) (2026-05-22)
 
-
 ### Bug Fixes
 
-* Add BLS12-381 scalar field arithmetic for DKG (P1) ([c0b758f](https://github.com/Willow7737/omnia-protocol/commit/c0b758fc907ad600d75dd482c35acb46596aa0c6))
-* Address P0-P3 issues from code review v0.1.47 ([3243ed8](https://github.com/Willow7737/omnia-protocol/commit/3243ed87cc459629cd70726e756fd089380ce18e))
-* correct bls12_381_scalar arithmetic and merkle doctest ([78f30c8](https://github.com/Willow7737/omnia-protocol/commit/78f30c8c819fb7159de18d4f9fdd04cfdc7478e4))
-* resolve compilation errors and CI failures on dev branch ([28d44ab](https://github.com/Willow7737/omnia-protocol/commit/28d44abedf5f5ab1361b9ca6606f2502192fc169))
-* resolve remaining compilation errors and CI failures ([345f082](https://github.com/Willow7737/omnia-protocol/commit/345f08284680f22e0491ba15b2b08935845a7825))
-
+- Add BLS12-381 scalar field arithmetic for DKG (P1) ([c0b758f](https://github.com/Willow7737/omnia-protocol/commit/c0b758fc907ad600d75dd482c35acb46596aa0c6))
+- Address P0-P3 issues from code review v0.1.47 ([3243ed8](https://github.com/Willow7737/omnia-protocol/commit/3243ed87cc459629cd70726e756fd089380ce18e))
+- correct bls12_381_scalar arithmetic and merkle doctest ([78f30c8](https://github.com/Willow7737/omnia-protocol/commit/78f30c8c819fb7159de18d4f9fdd04cfdc7478e4))
+- resolve compilation errors and CI failures on dev branch ([28d44ab](https://github.com/Willow7737/omnia-protocol/commit/28d44abedf5f5ab1361b9ca6606f2502192fc169))
+- resolve remaining compilation errors and CI failures ([345f082](https://github.com/Willow7737/omnia-protocol/commit/345f08284680f22e0491ba15b2b08935845a7825))
 
 ### Documentation
 
-* Update README and PROJECT_DASHBOARD for v0.1.47 ([e47b7fa](https://github.com/Willow7737/omnia-protocol/commit/e47b7fa5edbe8e46c55920a39a73bb0dcc63d754))
-
+- Update README and PROJECT_DASHBOARD for v0.1.47 ([e47b7fa](https://github.com/Willow7737/omnia-protocol/commit/e47b7fa5edbe8e46c55920a39a73bb0dcc63d754))
 
 ### CI
 
-* Add dev branch triggers to CI workflows ([fec7b68](https://github.com/Willow7737/omnia-protocol/commit/fec7b68f75bf2b97ff2a4bad64afa453694c7aa3))
-* Add dev branch triggers to CI workflows ([3ab72be](https://github.com/Willow7737/omnia-protocol/commit/3ab72be6919c5226e720f2eac9856ea958c7bcfe))
+- Add dev branch triggers to CI workflows ([fec7b68](https://github.com/Willow7737/omnia-protocol/commit/fec7b68f75bf2b97ff2a4bad64afa453694c7aa3))
+- Add dev branch triggers to CI workflows ([3ab72be](https://github.com/Willow7737/omnia-protocol/commit/3ab72be6919c5226e720f2eac9856ea958c7bcfe))
 
 ## [0.1.47](https://github.com/Willow7737/omnia-protocol/compare/v0.1.46...v0.1.47) (2026-05-22)
 
-
 ### Features
 
-* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([f6e41bb](https://github.com/Willow7737/omnia-protocol/commit/f6e41bbaaa8a7457f4c17ded6480137efd2969eb))
-* sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([26d9999](https://github.com/Willow7737/omnia-protocol/commit/26d9999fe357515989b5121170c6e42f8b5a8ac9))
-
+- sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([f6e41bb](https://github.com/Willow7737/omnia-protocol/commit/f6e41bbaaa8a7457f4c17ded6480137efd2969eb))
+- sprint fixes — deterministic key derivation, poseidon merkle, real_verification, owner pre-flight ([26d9999](https://github.com/Willow7737/omnia-protocol/commit/26d9999fe357515989b5121170c6e42f8b5a8ac9))
 
 ### Bug Fixes
 
-* resolve rustdoc intra-doc link for validate_with_caller ([be770b8](https://github.com/Willow7737/omnia-protocol/commit/be770b8d9df093a987a775d8aef02985b1417880))
+- resolve rustdoc intra-doc link for validate_with_caller ([be770b8](https://github.com/Willow7737/omnia-protocol/commit/be770b8d9df093a987a775d8aef02985b1417880))
 
 ## [0.1.46](https://github.com/Willow7737/omnia-protocol/compare/v0.1.45...v0.1.46) (2026-05-22)
 
-
 ### Features
 
-* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([57ba4dd](https://github.com/Willow7737/omnia-protocol/commit/57ba4dd6665526789b25498ac3ac2d2fdb39fc03))
-* Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([5645c55](https://github.com/Willow7737/omnia-protocol/commit/5645c5565441f8b828665c04eeb058d906c908f6))
-
+- Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([57ba4dd](https://github.com/Willow7737/omnia-protocol/commit/57ba4dd6665526789b25498ac3ac2d2fdb39fc03))
+- Phase 0 Critical Remediation — 11 code review fixes across 3 phases ([5645c55](https://github.com/Willow7737/omnia-protocol/commit/5645c5565441f8b828665c04eeb058d906c908f6))
 
 ### Bug Fixes
 
-* **ci:** add CircuitSpecificSetupSNARK trait import + cargo fmt ([ab9d4f8](https://github.com/Willow7737/omnia-protocol/commit/ab9d4f8499447d7c62630d81d513775c89f7535b))
-* **ci:** add Clone derive to RollupCircuit, deref-then-clone for Groth16::setup ([f8b2a12](https://github.com/Willow7737/omnia-protocol/commit/f8b2a12f85cc46a8bb309b20dc0b56a702ff6654))
-* **ci:** clippy overly_complex_bool_expr, SRS test, network integration tests ([c62b17a](https://github.com/Willow7737/omnia-protocol/commit/c62b17af20394acbfcf9905847a1150c4fbf7869))
-* **ci:** declare rng as mutable for Groth16::setup ([fc73e15](https://github.com/Willow7737/omnia-protocol/commit/fc73e15afb2ff5acb3c97a1733bb772f34ecffe8))
-* **ci:** Groth16::setup signature + missing max_sequence_entries ([6924083](https://github.com/Willow7737/omnia-protocol/commit/6924083e9729dec7307be47b647995f5ee430ea1))
-* **ci:** network test missing field, clippy bool_comparison, SRS test determinism ([029eeb7](https://github.com/Willow7737/omnia-protocol/commit/029eeb7067c60e1b75dccc1b4a4a198151be45c0))
-* **ci:** use turbofish Groth16::&lt;Bn254&gt;::setup to resolve type inference ([b4dd099](https://github.com/Willow7737/omnia-protocol/commit/b4dd09900c3427a96f9fcae312a9da9e4ba1851d))
-* sign burn event with account owner keypair in double-spend test ([2d561a7](https://github.com/Willow7737/omnia-protocol/commit/2d561a7a1496d6b4d09b8acf32b428812b8f7a4f))
-* use real keypair for account owner in cross_shard burn test ([c5a327f](https://github.com/Willow7737/omnia-protocol/commit/c5a327f21ada5de0bd2674dae8689711792ab54e))
+- **ci:** add CircuitSpecificSetupSNARK trait import + cargo fmt ([ab9d4f8](https://github.com/Willow7737/omnia-protocol/commit/ab9d4f8499447d7c62630d81d513775c89f7535b))
+- **ci:** add Clone derive to RollupCircuit, deref-then-clone for Groth16::setup ([f8b2a12](https://github.com/Willow7737/omnia-protocol/commit/f8b2a12f85cc46a8bb309b20dc0b56a702ff6654))
+- **ci:** clippy overly_complex_bool_expr, SRS test, network integration tests ([c62b17a](https://github.com/Willow7737/omnia-protocol/commit/c62b17af20394acbfcf9905847a1150c4fbf7869))
+- **ci:** declare rng as mutable for Groth16::setup ([fc73e15](https://github.com/Willow7737/omnia-protocol/commit/fc73e15afb2ff5acb3c97a1733bb772f34ecffe8))
+- **ci:** Groth16::setup signature + missing max_sequence_entries ([6924083](https://github.com/Willow7737/omnia-protocol/commit/6924083e9729dec7307be47b647995f5ee430ea1))
+- **ci:** network test missing field, clippy bool_comparison, SRS test determinism ([029eeb7](https://github.com/Willow7737/omnia-protocol/commit/029eeb7067c60e1b75dccc1b4a4a198151be45c0))
+- **ci:** use turbofish Groth16::&lt;Bn254&gt;::setup to resolve type inference ([b4dd099](https://github.com/Willow7737/omnia-protocol/commit/b4dd09900c3427a96f9fcae312a9da9e4ba1851d))
+- sign burn event with account owner keypair in double-spend test ([2d561a7](https://github.com/Willow7737/omnia-protocol/commit/2d561a7a1496d6b4d09b8acf32b428812b8f7a4f))
+- use real keypair for account owner in cross_shard burn test ([c5a327f](https://github.com/Willow7737/omnia-protocol/commit/c5a327f21ada5de0bd2674dae8689711792ab54e))
 
 ## [0.1.45](https://github.com/Willow7737/omnia-protocol/compare/v0.1.44...v0.1.45) (2026-05-22)
 
-
 ### Bug Fixes
 
-* **ci:** allow deprecated DkgSession in re-exports ([18a8518](https://github.com/Willow7737/omnia-protocol/commit/18a8518d9b32c6984575cb686071440fc7f91f3f))
-* **ci:** replace redundant closure with function reference in merkle.rs ([aacf953](https://github.com/Willow7737/omnia-protocol/commit/aacf953bf70c0bd85da2782dd06f7ad49206d899))
-* resolve all 14 code review issues + multi-node consensus test ([631dd31](https://github.com/Willow7737/omnia-protocol/commit/631dd311cb10e2b0e7077136aea35931ffb2ff02))
-* resolve all 14 code review issues + multi-node consensus test ([f467ebe](https://github.com/Willow7737/omnia-protocol/commit/f467ebe14680ab6bbf43d2d6a9ee3ddd4597b870))
-* **test:** bloom filter race in test_three_node_with_optimized_gossip_components ([e0ad142](https://github.com/Willow7737/omnia-protocol/commit/e0ad14216c53787d5a224f5b9b5f94cd8124d19f))
+- **ci:** allow deprecated DkgSession in re-exports ([18a8518](https://github.com/Willow7737/omnia-protocol/commit/18a8518d9b32c6984575cb686071440fc7f91f3f))
+- **ci:** replace redundant closure with function reference in merkle.rs ([aacf953](https://github.com/Willow7737/omnia-protocol/commit/aacf953bf70c0bd85da2782dd06f7ad49206d899))
+- resolve all 14 code review issues + multi-node consensus test ([631dd31](https://github.com/Willow7737/omnia-protocol/commit/631dd311cb10e2b0e7077136aea35931ffb2ff02))
+- resolve all 14 code review issues + multi-node consensus test ([f467ebe](https://github.com/Willow7737/omnia-protocol/commit/f467ebe14680ab6bbf43d2d6a9ee3ddd4597b870))
+- **test:** bloom filter race in test_three_node_with_optimized_gossip_components ([e0ad142](https://github.com/Willow7737/omnia-protocol/commit/e0ad14216c53787d5a224f5b9b5f94cd8124d19f))
 
 ## [0.1.44](https://github.com/Willow7737/omnia-protocol/compare/v0.1.43...v0.1.44) (2026-05-21)
 
-
 ### Features
 
-* **sprint-0:** foundation & baselines ([bf99745](https://github.com/Willow7737/omnia-protocol/commit/bf997451097ba5cd7a0fe1a586844238534b0503))
-* **sprint-1:** sharded consensus state with parallel event validation ([c09173e](https://github.com/Willow7737/omnia-protocol/commit/c09173eec2870999a7470aea5f222a074f0a0fc7))
-* **sprint-1:** sharded consensus state with parallel event validation ([ae41956](https://github.com/Willow7737/omnia-protocol/commit/ae419569eced76937009c9927ccd91e5f35fca77))
-* **sprint-2:** batch event submission & processing ([4814ea5](https://github.com/Willow7737/omnia-protocol/commit/4814ea5692d180f2d0387026390b3ed30c410dad))
-* **sprint-3:** optimized graph insertion with pre-allocated data structures ([32852fd](https://github.com/Willow7737/omnia-protocol/commit/32852fddc0e652b08b37cc8c3b755736eb2fe60a))
-* **sprint-4:** network-optimized gossip protocol ([80a790d](https://github.com/Willow7737/omnia-protocol/commit/80a790d160d7048f38e225449b74a15cc9582a63))
-* **sprint-5:** Phase 0 integration, stability & sign-off documentation ([c4f8b12](https://github.com/Willow7737/omnia-protocol/commit/c4f8b129f22c4fd0a9490c74edfefaa7c3f6a919))
-* **sprint-5:** stability test framework and full chaos test suite ([1d952dc](https://github.com/Willow7737/omnia-protocol/commit/1d952dce2ed57fddaff9e3164c6db644196d382e))
-
+- **sprint-0:** foundation & baselines ([bf99745](https://github.com/Willow7737/omnia-protocol/commit/bf997451097ba5cd7a0fe1a586844238534b0503))
+- **sprint-1:** sharded consensus state with parallel event validation ([c09173e](https://github.com/Willow7737/omnia-protocol/commit/c09173eec2870999a7470aea5f222a074f0a0fc7))
+- **sprint-1:** sharded consensus state with parallel event validation ([ae41956](https://github.com/Willow7737/omnia-protocol/commit/ae419569eced76937009c9927ccd91e5f35fca77))
+- **sprint-2:** batch event submission & processing ([4814ea5](https://github.com/Willow7737/omnia-protocol/commit/4814ea5692d180f2d0387026390b3ed30c410dad))
+- **sprint-3:** optimized graph insertion with pre-allocated data structures ([32852fd](https://github.com/Willow7737/omnia-protocol/commit/32852fddc0e652b08b37cc8c3b755736eb2fe60a))
+- **sprint-4:** network-optimized gossip protocol ([80a790d](https://github.com/Willow7737/omnia-protocol/commit/80a790d160d7048f38e225449b74a15cc9582a63))
+- **sprint-5:** Phase 0 integration, stability & sign-off documentation ([c4f8b12](https://github.com/Willow7737/omnia-protocol/commit/c4f8b129f22c4fd0a9490c74edfefaa7c3f6a919))
+- **sprint-5:** stability test framework and full chaos test suite ([1d952dc](https://github.com/Willow7737/omnia-protocol/commit/1d952dce2ed57fddaff9e3164c6db644196d382e))
 
 ### Bug Fixes
 
-* **ci:** resolve clippy errors, formatting issues, and test failure ([ac782b9](https://github.com/Willow7737/omnia-protocol/commit/ac782b902c450e0186c85a41e0f3f57cc8ce8538))
-* **ci:** resolve clippy unwrap_used errors and warnings ([f1176e6](https://github.com/Willow7737/omnia-protocol/commit/f1176e6fc62d45bad22ec6ba1266e8c895556cc2))
-* **ci:** resolve rustdoc broken links and invalid HTML tags ([fccdf59](https://github.com/Willow7737/omnia-protocol/commit/fccdf59d624512acafc76961324a037e1a6451d9))
+- **ci:** resolve clippy errors, formatting issues, and test failure ([ac782b9](https://github.com/Willow7737/omnia-protocol/commit/ac782b902c450e0186c85a41e0f3f57cc8ce8538))
+- **ci:** resolve clippy unwrap_used errors and warnings ([f1176e6](https://github.com/Willow7737/omnia-protocol/commit/f1176e6fc62d45bad22ec6ba1266e8c895556cc2))
+- **ci:** resolve rustdoc broken links and invalid HTML tags ([fccdf59](https://github.com/Willow7737/omnia-protocol/commit/fccdf59d624512acafc76961324a037e1a6451d9))
 
 ## [0.1.43](https://github.com/Willow7737/omnia-protocol/compare/v0.1.42...v0.1.43) (2026-05-21)
 
-
 ### Bug Fixes
 
-* **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([f4c5dd6](https://github.com/Willow7737/omnia-protocol/commit/f4c5dd6374061e91b2e6e4fbc2e32bdda9901104))
-* **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([ca9aaad](https://github.com/Willow7737/omnia-protocol/commit/ca9aaad659467d41285c5364040fbf495f622c8c))
-* **ci:** resolve all 7 CI failures ([47ff783](https://github.com/Willow7737/omnia-protocol/commit/47ff7837f2d1610195dc889382e1eeaff1a6ed89))
-* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([c80b325](https://github.com/Willow7737/omnia-protocol/commit/c80b3251e30f1e548507ad686f32a3cd2c1f3e21))
-* **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([a9db9f9](https://github.com/Willow7737/omnia-protocol/commit/a9db9f96da785d5fa1c2647e8e9e51aa3cc989cd))
-* **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([0f47fed](https://github.com/Willow7737/omnia-protocol/commit/0f47fedbb8983ff326d04a0db4b89ae58fd00739))
-* **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([cd07277](https://github.com/Willow7737/omnia-protocol/commit/cd072778aa8ca2a703421a2046042b7fd1854147))
-* **ci:** resolve unsafe_code forbid conflict and gate pqc test ([e993d07](https://github.com/Willow7737/omnia-protocol/commit/e993d07f2d5c3554bfb69c84306143148da415b4))
-* **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([a4936df](https://github.com/Willow7737/omnia-protocol/commit/a4936df66465a65aa34e8653be200bc7e3350b3a))
-* **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([73ba66a](https://github.com/Willow7737/omnia-protocol/commit/73ba66a38cdd082fc5ff2e4df79b72a491fed7c7))
-* **doc:** replace broken intra-doc links for feature-gated types ([307452c](https://github.com/Willow7737/omnia-protocol/commit/307452ca47b70a671550f8e80eba71b7c1d6ae6c))
-* **doc:** resolve remaining broken intra-doc links across workspace ([669be6b](https://github.com/Willow7737/omnia-protocol/commit/669be6b1940b755184a4e5eda23910fef50a2cb5))
-* resolve 6 CI-breaking bugs + 5 minor issues ([2ed119e](https://github.com/Willow7737/omnia-protocol/commit/2ed119e4d38880f5fdec1d1bba76faff97537a2e))
-
+- **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([f4c5dd6](https://github.com/Willow7737/omnia-protocol/commit/f4c5dd6374061e91b2e6e4fbc2e32bdda9901104))
+- **ci:** comprehensive Clippy fixes, udeps nightly, and deprecated warnings ([ca9aaad](https://github.com/Willow7737/omnia-protocol/commit/ca9aaad659467d41285c5364040fbf495f622c8c))
+- **ci:** resolve all 7 CI failures ([47ff783](https://github.com/Willow7737/omnia-protocol/commit/47ff7837f2d1610195dc889382e1eeaff1a6ed89))
+- **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([c80b325](https://github.com/Willow7737/omnia-protocol/commit/c80b3251e30f1e548507ad686f32a3cd2c1f3e21))
+- **ci:** resolve fuzz ASAN linker errors, benchmark deps, fmt, udeps toolchain, badge ([a9db9f9](https://github.com/Willow7737/omnia-protocol/commit/a9db9f96da785d5fa1c2647e8e9e51aa3cc989cd))
+- **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([0f47fed](https://github.com/Willow7737/omnia-protocol/commit/0f47fedbb8983ff326d04a0db4b89ae58fd00739))
+- **ci:** resolve remaining Clippy, fmt, and feature-gate CI failures ([cd07277](https://github.com/Willow7737/omnia-protocol/commit/cd072778aa8ca2a703421a2046042b7fd1854147))
+- **ci:** resolve unsafe_code forbid conflict and gate pqc test ([e993d07](https://github.com/Willow7737/omnia-protocol/commit/e993d07f2d5c3554bfb69c84306143148da415b4))
+- **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([a4936df](https://github.com/Willow7737/omnia-protocol/commit/a4936df66465a65aa34e8653be200bc7e3350b3a))
+- **ci:** resolve unused imports, missing ApiDoc import, and broken doc links ([73ba66a](https://github.com/Willow7737/omnia-protocol/commit/73ba66a38cdd082fc5ff2e4df79b72a491fed7c7))
+- **doc:** replace broken intra-doc links for feature-gated types ([307452c](https://github.com/Willow7737/omnia-protocol/commit/307452ca47b70a671550f8e80eba71b7c1d6ae6c))
+- **doc:** resolve remaining broken intra-doc links across workspace ([669be6b](https://github.com/Willow7737/omnia-protocol/commit/669be6b1940b755184a4e5eda23910fef50a2cb5))
+- resolve 6 CI-breaking bugs + 5 minor issues ([2ed119e](https://github.com/Willow7737/omnia-protocol/commit/2ed119e4d38880f5fdec1d1bba76faff97537a2e))
 
 ### Documentation
 
-* comprehensive documentation audit — align all docs with current project state ([5960027](https://github.com/Willow7737/omnia-protocol/commit/596002736e4913c9097be0254235d1ecce76d490))
+- comprehensive documentation audit — align all docs with current project state ([5960027](https://github.com/Willow7737/omnia-protocol/commit/596002736e4913c9097be0254235d1ecce76d490))
 
 ## [0.1.42](https://github.com/Willow7737/omnia-protocol/compare/v0.1.41...v0.1.42) (2026-05-20)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all CI workflow failures and broken README badge ([80ff258](https://github.com/Willow7737/omnia-protocol/commit/80ff2585fb59e4a0feed8792722e61fe636a2dfd))
-* **ci:** resolve all CI workflow failures and broken README badge ([a68d2c8](https://github.com/Willow7737/omnia-protocol/commit/a68d2c8549dfa4dbff819a68ac61636a2c070f56))
+- **ci:** resolve all CI workflow failures and broken README badge ([80ff258](https://github.com/Willow7737/omnia-protocol/commit/80ff2585fb59e4a0feed8792722e61fe636a2dfd))
+- **ci:** resolve all CI workflow failures and broken README badge ([a68d2c8](https://github.com/Willow7737/omnia-protocol/commit/a68d2c8549dfa4dbff819a68ac61636a2c070f56))
 
 ## [0.1.41](https://github.com/Willow7737/omnia-protocol/compare/v0.1.40...v0.1.41) (2026-05-20)
 
-
 ### CI
 
-* stabilize nightly fuzz & security audits ([9d53380](https://github.com/Willow7737/omnia-protocol/commit/9d5338051b87739ad4295d93b2134613f7c2943b))
-* stabilize nightly fuzz & security audits ([76783f3](https://github.com/Willow7737/omnia-protocol/commit/76783f38605a2068137a9e803fb1b8fafbb589c2))
+- stabilize nightly fuzz & security audits ([9d53380](https://github.com/Willow7737/omnia-protocol/commit/9d5338051b87739ad4295d93b2134613f7c2943b))
+- stabilize nightly fuzz & security audits ([76783f3](https://github.com/Willow7737/omnia-protocol/commit/76783f38605a2068137a9e803fb1b8fafbb589c2))
 
 ## [0.1.40](https://github.com/Willow7737/omnia-protocol/compare/v0.1.39...v0.1.40) (2026-05-20)
 
-
 ### Documentation
 
-* consolidate & eliminate duplication ([63beef3](https://github.com/Willow7737/omnia-protocol/commit/63beef33fa739ef4fec7d6dc28d1d2eefcae31fc))
-* consolidate & eliminate duplication ([8c6a2b5](https://github.com/Willow7737/omnia-protocol/commit/8c6a2b5e758d95ab9ee65832ab969ed3e7fd7af8))
+- consolidate & eliminate duplication ([63beef3](https://github.com/Willow7737/omnia-protocol/commit/63beef33fa739ef4fec7d6dc28d1d2eefcae31fc))
+- consolidate & eliminate duplication ([8c6a2b5](https://github.com/Willow7737/omnia-protocol/commit/8c6a2b5e758d95ab9ee65832ab969ed3e7fd7af8))
 
 ## [0.1.39](compare/v0.1.38...v0.1.39) (2026-05-20)
 
-
 ### Bug Fixes
 
-* decouple alloy from MSRV via Hybrid Settlement pattern ([aded2bb](commit/aded2bbd2632aeef471b23e870bd9e92aa53d907))
+- decouple alloy from MSRV via Hybrid Settlement pattern ([aded2bb](commit/aded2bbd2632aeef471b23e870bd9e92aa53d907))
 
 ## [0.1.38](compare/v0.1.37...v0.1.38) (2026-05-20)
 
-
 ### Documentation
 
-* restructure documentation into organized hierarchy ([7850778](commit/7850778f5e98f86d3d37c2be8135893a785d7618))
-* restructure documentation into organized hierarchy ([f6be244](commit/f6be2449e659b81c4dc799f6973b1d932613514a))
+- restructure documentation into organized hierarchy ([7850778](commit/7850778f5e98f86d3d37c2be8135893a785d7618))
+- restructure documentation into organized hierarchy ([f6be244](commit/f6be2449e659b81c4dc799f6973b1d932613514a))
 
 ## [0.1.37](compare/v0.1.36...v0.1.37) (2026-05-20)
 
-
 ### Features
 
-* implement Hybrid Settlement Architecture ([67ce911](commit/67ce911a9919fc39bef513bfc1c1ff1f1f6d78cb))
-* implement Hybrid Settlement Architecture ([c260daf](commit/c260dafaa1d72098961617d92cb2bfccdbb2a9e5))
+- implement Hybrid Settlement Architecture ([67ce911](commit/67ce911a9919fc39bef513bfc1c1ff1f1f6d78cb))
+- implement Hybrid Settlement Architecture ([c260daf](commit/c260dafaa1d72098961617d92cb2bfccdbb2a9e5))
 
 ## [0.1.36](compare/v0.1.35...v0.1.36) (2026-05-20)
 
-
 ### Bug Fixes
 
-* **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([93c0d29](commit/93c0d2963e966752e1c0a7f24adba5600c419048))
-* **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([0edae16](commit/0edae16326405b0296f219afcc8cf8effdb8175f))
+- **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([93c0d29](commit/93c0d2963e966752e1c0a7f24adba5600c419048))
+- **ci:** resolve CI failures — alloy MSRV exemption, ethereum-live toolchain, test skip, baseline fallback ([0edae16](commit/0edae16326405b0296f219afcc8cf8effdb8175f))
 
 ## [0.1.35](compare/v0.1.34...v0.1.35) (2026-05-19)
 
-
 ### CI
 
-* rectify workflows post-restructuring (Step 6) ([857ada3](commit/857ada355497d14f4d6ce3d8665778d58e3cd150))
-* rectify workflows post-restructuring (Step 6) ([f3273b7](commit/f3273b7f4d4112b650010c72e073b1f8a426ad62))
+- rectify workflows post-restructuring (Step 6) ([857ada3](commit/857ada355497d14f4d6ce3d8665778d58e3cd150))
+- rectify workflows post-restructuring (Step 6) ([f3273b7](commit/f3273b7f4d4112b650010c72e073b1f8a426ad62))
 
 ## [0.1.34](compare/v0.1.33...v0.1.34) (2026-05-19)
 
-
 ### CI
 
-* rectify workflows post-restructuring (Steps 1–5.5) ([07e668d](commit/07e668d903875f27fe048c61c56685ead2462ba8))
-* rectify workflows post-restructuring (Steps 1–5.5) ([b68e832](commit/b68e8326704a5f0a59e40f4f22d58fff85e6905c))
+- rectify workflows post-restructuring (Steps 1–5.5) ([07e668d](commit/07e668d903875f27fe048c61c56685ead2462ba8))
+- rectify workflows post-restructuring (Steps 1–5.5) ([b68e832](commit/b68e8326704a5f0a59e40f4f22d58fff85e6905c))
 
 ## [0.1.33](compare/v0.1.32...v0.1.33) (2026-05-19)
 
-
 ### Bug Fixes
 
-* escape square brackets in rustdoc comments to fix CI doc build ([0a3036e](commit/0a3036ecf007da9fdcc4a470cfb872a35fd35053))
+- escape square brackets in rustdoc comments to fix CI doc build ([0a3036e](commit/0a3036ecf007da9fdcc4a470cfb872a35fd35053))
 
 ## [0.1.32](compare/v0.1.31...v0.1.32) (2026-05-19)
 
-
 ### Bug Fixes
 
-* **phase-5:** populate Poseidon reference constants, implement dual-hash, fix formatting ([3bd9bd7](commit/3bd9bd7dcab4604de31a22f433134a1dec603d8b))
+- **phase-5:** populate Poseidon reference constants, implement dual-hash, fix formatting ([3bd9bd7](commit/3bd9bd7dcab4604de31a22f433134a1dec603d8b))
 
 ## [0.1.31](compare/v0.1.30...v0.1.31) (2026-05-19)
 
-
 ### Features
 
-* **phase-5:** real benchmarks, fix ECVRF, fix BFT tests, populate BASELINE.md ([d400042](commit/d400042350d5e3f7b02c692206055d4d33fadaab))
-
+- **phase-5:** real benchmarks, fix ECVRF, fix BFT tests, populate BASELINE.md ([d400042](commit/d400042350d5e3f7b02c692206055d4d33fadaab))
 
 ### Documentation
 
-* **phase-5:** update summary with real benchmark data and bug fixes ([00f1ea8](commit/00f1ea8c023775b211b5e659604e8d18b88d9030))
+- **phase-5:** update summary with real benchmark data and bug fixes ([00f1ea8](commit/00f1ea8c023775b211b5e659604e8d18b88d9030))
 
 ## [0.1.30](compare/v0.1.29...v0.1.30) (2026-05-19)
 
-
 ### Features
 
-* **phase-5:** testnet launch, performance validation & audit preparation ([c57f281](commit/c57f28160cbb1b73b91de41efbc409523996393e))
+- **phase-5:** testnet launch, performance validation & audit preparation ([c57f281](commit/c57f28160cbb1b73b91de41efbc409523996393e))
 
 ## [0.1.29](compare/v0.1.28...v0.1.29) (2026-05-19)
 
-
 ### Bug Fixes
 
-* **ci:** fix cargo fmt and cargo-vet remaining issues ([759a675](commit/759a675c1908a9a79cc8ecb2bf5897655356305f))
-* **ci:** resolve broken doc links and cargo-vet unvetted deps ([bf32351](commit/bf32351c595734b4b6abc175a10971564d814be5))
+- **ci:** fix cargo fmt and cargo-vet remaining issues ([759a675](commit/759a675c1908a9a79cc8ecb2bf5897655356305f))
+- **ci:** resolve broken doc links and cargo-vet unvetted deps ([bf32351](commit/bf32351c595734b4b6abc175a10971564d814be5))
 
 ## [0.1.28](compare/v0.1.27...v0.1.28) (2026-05-19)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing CI workflow jobs ([7092a68](commit/7092a68372875ae61b5e90dfafb841bc50c2351d))
+- **ci:** resolve all failing CI workflow jobs ([7092a68](commit/7092a68372875ae61b5e90dfafb841bc50c2351d))
 
 ## [0.1.27](compare/v0.1.26...v0.1.27) (2026-05-19)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing CI workflow jobs ([1e0eab7](commit/1e0eab7fdeb73fe0ac037c3155717b6ba2950f18))
+- **ci:** resolve all failing CI workflow jobs ([1e0eab7](commit/1e0eab7fdeb73fe0ac037c3155717b6ba2950f18))
 
 ## [0.1.26](compare/v0.1.25...v0.1.26) (2026-05-19)
 
-
 ### Features
 
-* Phase 4 — Mainnet readiness, settlement integration & architectural closure ([97c2e3c](commit/97c2e3cd7b70f53dcc873aab3834b2f1df3e260b))
+- Phase 4 — Mainnet readiness, settlement integration & architectural closure ([97c2e3c](commit/97c2e3cd7b70f53dcc873aab3834b2f1df3e260b))
 
 ## [0.1.25](compare/v0.1.24...v0.1.25) (2026-05-18)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing CI workflow jobs ([dc4b19f](commit/dc4b19f2ecdde425a7646adec2a7eea465af375c))
+- **ci:** resolve all failing CI workflow jobs ([dc4b19f](commit/dc4b19f2ecdde425a7646adec2a7eea465af375c))
 
 ## [0.1.24](compare/v0.1.23...v0.1.24) (2026-05-18)
 
-
 ### Features
 
-* Phase 3 — Critical security closure, network production readiness, and cryptographic completion ([f8285ab](commit/f8285ab6641fe385f17a81b3ffa205212b4fe2eb))
+- Phase 3 — Critical security closure, network production readiness, and cryptographic completion ([f8285ab](commit/f8285ab6641fe385f17a81b3ffa205212b4fe2eb))
 
 ## [0.1.23](compare/v0.1.22...v0.1.23) (2026-05-18)
 
-
 ### Bug Fixes
 
-* **zk:** resolve rustdoc broken link to apply_contribution_ec ([dcc9119](commit/dcc911991af0b88f4578f438402506951c5a34ac))
+- **zk:** resolve rustdoc broken link to apply_contribution_ec ([dcc9119](commit/dcc911991af0b88f4578f438402506951c5a34ac))
 
 ## [0.1.22](compare/v0.1.21...v0.1.22) (2026-05-18)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing GitHub Actions workflows ([74e8ba5](commit/74e8ba502e3b4bce91cf25c048b0739bfb006a19))
+- **ci:** resolve all failing GitHub Actions workflows ([74e8ba5](commit/74e8ba502e3b4bce91cf25c048b0739bfb006a19))
 
 ## [0.1.21](compare/v0.1.20...v0.1.21) (2026-05-18)
 
-
 ### Features
 
-* **binding:** integrate PQC key rotation with encrypted keystore (H-4) ([ba6f0f8](commit/ba6f0f8ba007d9a0c8cfea346a79c0f6056efe0f))
-* **shards:** fix SSS recovery flow with encrypted shares and key derivation (C-1) ([bead81a](commit/bead81af45cb72b6862281c2ddcf90a00edca0dd))
-* **substrate:** add BIP-39 mnemonic support to keystore (M-1) ([068f32b](commit/068f32bb3a4c954b328a10eb78ca7919a88e9ad5))
-* **substrate:** add gradual slashing with jail/suspension and events (H-5) ([17e08f2](commit/17e08f206d25a273432a68ec3b16da296d1fc10e))
-* **substrate:** implement DKG for threshold signatures (M-2) ([71ba10a](commit/71ba10a6cdc2177da079a84c25ccc4e956cc98b7))
-* **zk:** add Groth16 batch verification (H-3) ([8ae958f](commit/8ae958ff2d0aa8622ce7b02fcae619821b3f1307))
-* **zk:** add ZK-SNARK benchmark suite (H-2) ([ad795d5](commit/ad795d50c4bc6390d0a8ce88f447293d2e4f3dd8))
-* **zk:** fix trusted setup ceremony with real EC scalar multiplication (C-2) ([65e00be](commit/65e00beb9bdce7090ed3beb368cfcee03b18d2d4))
-* **zk:** populate circuit dummy fields with event semantics constraints (H-1) ([8738e05](commit/8738e059a8e8192e259d7738d4f1c91dec80c4d6))
-
+- **binding:** integrate PQC key rotation with encrypted keystore (H-4) ([ba6f0f8](commit/ba6f0f8ba007d9a0c8cfea346a79c0f6056efe0f))
+- **shards:** fix SSS recovery flow with encrypted shares and key derivation (C-1) ([bead81a](commit/bead81af45cb72b6862281c2ddcf90a00edca0dd))
+- **substrate:** add BIP-39 mnemonic support to keystore (M-1) ([068f32b](commit/068f32bb3a4c954b328a10eb78ca7919a88e9ad5))
+- **substrate:** add gradual slashing with jail/suspension and events (H-5) ([17e08f2](commit/17e08f206d25a273432a68ec3b16da296d1fc10e))
+- **substrate:** implement DKG for threshold signatures (M-2) ([71ba10a](commit/71ba10a6cdc2177da079a84c25ccc4e956cc98b7))
+- **zk:** add Groth16 batch verification (H-3) ([8ae958f](commit/8ae958ff2d0aa8622ce7b02fcae619821b3f1307))
+- **zk:** add ZK-SNARK benchmark suite (H-2) ([ad795d5](commit/ad795d50c4bc6390d0a8ce88f447293d2e4f3dd8))
+- **zk:** fix trusted setup ceremony with real EC scalar multiplication (C-2) ([65e00be](commit/65e00beb9bdce7090ed3beb368cfcee03b18d2d4))
+- **zk:** populate circuit dummy fields with event semantics constraints (H-1) ([8738e05](commit/8738e059a8e8192e259d7738d4f1c91dec80c4d6))
 
 ### Documentation
 
-* add ADRs 010-014 and update project dashboard (M-4, M-5) ([ef52634](commit/ef5263448820b272a12c3399104dd9d9e87f34db))
-* add PHASE_2_SUMMARY.md documenting all Phase 2 deliverables ([a269a49](commit/a269a4994bacfa9d6394ed51649da337588c87b9))
+- add ADRs 010-014 and update project dashboard (M-4, M-5) ([ef52634](commit/ef5263448820b272a12c3399104dd9d9e87f34db))
+- add PHASE_2_SUMMARY.md documenting all Phase 2 deliverables ([a269a49](commit/a269a4994bacfa9d6394ed51649da337588c87b9))
 
 ## [0.1.20](compare/v0.1.19...v0.1.20) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** resolve cargo fmt, doc link errors, and codecov token failure ([2fbfe5f](commit/2fbfe5f3f4c55f19ab0b7b47fd063d11a5209993))
+- **ci:** resolve cargo fmt, doc link errors, and codecov token failure ([2fbfe5f](commit/2fbfe5f3f4c55f19ab0b7b47fd063d11a5209993))
 
 ## [0.1.19](compare/v0.1.18...v0.1.19) (2026-05-17)
 
-
 ### Bug Fixes
 
-* resolve compilation errors, clippy warnings, and test failures ([87d52bd](commit/87d52bdee0721d9cd858f8e4a7e3ccfbbfa8ad0d))
+- resolve compilation errors, clippy warnings, and test failures ([87d52bd](commit/87d52bdee0721d9cd858f8e4a7e3ccfbbfa8ad0d))
 
 ## [0.1.18](compare/v0.1.17...v0.1.18) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** fix CI coverage enforcement and remove continue-on-error on security jobs ([1716c4c](commit/1716c4c8bfa475cbae719cc402829cd59466f8fe))
-* **ci:** fix release workflow and nightly fuzz error handling ([9ce12a5](commit/9ce12a5858d1d10502e3cf63874f67ea4ed9c45a))
-* **deps:** set unknown-git to deny in deny.toml ([dc7bd12](commit/dc7bd126a332c4fd2532a7b4e55df4551ec9c3cb))
-* **economics:** use saturating_add for vote accumulation in governance ([a579608](commit/a5796084907b1dc374271f8a14b6a4587175db94))
-* **fuzz:** update OSS-Fuzz Dockerfile to Rust 1.85 ([37cddcf](commit/37cddcfedf32067e1a1228b09f8167993d293c97))
-* **security:** add constant-time comparisons in ZK and binding crates ([be29809](commit/be298099f2d1c89b01538bd033fe07d642a05392))
-* **security:** Phase 1 - Critical smart contract fixes for OmniaRollup.sol ([7d52c57](commit/7d52c5753153b0eb35253587f54a419d7542dd9d))
-* **shards:** change Shard state_snapshot() trait to return Result ([b34cc66](commit/b34cc66d260221103b60f2910e6c89228566b276))
-* **shards:** return Result from ShamirRecovery::gf_inverse() instead of panicking ([46b2e73](commit/46b2e732c78159b8a164ae9cdb0f4002870fc3b7))
-* **shards:** use saturating_add for EconomicsShardState balance operations ([abb4183](commit/abb418369d294d6d1dfd7919bcaad8e32290a7c7))
-* **substrate:** add auto-upgrade path for legacy XOR keystores ([ceb5ca6](commit/ceb5ca61e32c9b7f4a0a16f6b2b7033042941265))
-* **substrate:** add bounded caches and pruning for unbounded collections ([743c9c4](commit/743c9c45c2688eab14d51f928912faec92ed9521))
-* **substrate:** deduplicate committed events in check_commitments with HashSet ([af33da1](commit/af33da1fa3d597d4c19b06d2c52053e465b32235))
-* **substrate:** fix can_strongly_see() EventPruned handling - propagate error instead of false default ([c562a94](commit/c562a945081bb6b843f15e913a5b15e24d9d1964))
-* **substrate:** fix finalized_order() O(n²) performance with HashSet ([470f82b](commit/470f82b8cb9ccf9cdb73ea8c7caaf432909bb473))
-* **substrate:** fix GCounter overflow and add crate lints to chaos-tests ([51e677b](commit/51e677bdf8616f04fe8c927a38f1bc9b10845f96))
-* **substrate:** fix SlashingEngine Clone divergent state with Arc&lt;RwLock&lt;SlashingState&gt;&gt; ([774a597](commit/774a5973bb8853dcfc0ef4964d3b1df089e42840))
-* **substrate:** fix verify_integrity() for pruned graphs by checking pruned_events ([890be85](commit/890be85474b26905133354ab334a02bf043ade36))
-* **substrate:** propagate Result in KeyStore AES-256-GCM functions ([fc58998](commit/fc589985fb3d2a61c6a80998ce80988015078b9e))
-* **substrate:** return Result from ConsensusConfig::with_random_seed() and BlsKeypair::generate_random() ([cae0963](commit/cae096342b43eec505f42c122320e425ec1e8caa))
-* **zk:** make Ethereum settlement stub return error instead of true ([9a97686](commit/9a9768623a9915029719a67db671d525e1e37c4f))
-* **zk:** return Result from PowersOfTau::new() instead of using expect() ([92fdcbb](commit/92fdcbb63e86683d7075431ca23904cef9b8bdb6))
-
+- **ci:** fix CI coverage enforcement and remove continue-on-error on security jobs ([1716c4c](commit/1716c4c8bfa475cbae719cc402829cd59466f8fe))
+- **ci:** fix release workflow and nightly fuzz error handling ([9ce12a5](commit/9ce12a5858d1d10502e3cf63874f67ea4ed9c45a))
+- **deps:** set unknown-git to deny in deny.toml ([dc7bd12](commit/dc7bd126a332c4fd2532a7b4e55df4551ec9c3cb))
+- **economics:** use saturating_add for vote accumulation in governance ([a579608](commit/a5796084907b1dc374271f8a14b6a4587175db94))
+- **fuzz:** update OSS-Fuzz Dockerfile to Rust 1.85 ([37cddcf](commit/37cddcfedf32067e1a1228b09f8167993d293c97))
+- **security:** add constant-time comparisons in ZK and binding crates ([be29809](commit/be298099f2d1c89b01538bd033fe07d642a05392))
+- **security:** Phase 1 - Critical smart contract fixes for OmniaRollup.sol ([7d52c57](commit/7d52c5753153b0eb35253587f54a419d7542dd9d))
+- **shards:** change Shard state_snapshot() trait to return Result ([b34cc66](commit/b34cc66d260221103b60f2910e6c89228566b276))
+- **shards:** return Result from ShamirRecovery::gf_inverse() instead of panicking ([46b2e73](commit/46b2e732c78159b8a164ae9cdb0f4002870fc3b7))
+- **shards:** use saturating_add for EconomicsShardState balance operations ([abb4183](commit/abb418369d294d6d1dfd7919bcaad8e32290a7c7))
+- **substrate:** add auto-upgrade path for legacy XOR keystores ([ceb5ca6](commit/ceb5ca61e32c9b7f4a0a16f6b2b7033042941265))
+- **substrate:** add bounded caches and pruning for unbounded collections ([743c9c4](commit/743c9c45c2688eab14d51f928912faec92ed9521))
+- **substrate:** deduplicate committed events in check_commitments with HashSet ([af33da1](commit/af33da1fa3d597d4c19b06d2c52053e465b32235))
+- **substrate:** fix can_strongly_see() EventPruned handling - propagate error instead of false default ([c562a94](commit/c562a945081bb6b843f15e913a5b15e24d9d1964))
+- **substrate:** fix finalized_order() O(n²) performance with HashSet ([470f82b](commit/470f82b8cb9ccf9cdb73ea8c7caaf432909bb473))
+- **substrate:** fix GCounter overflow and add crate lints to chaos-tests ([51e677b](commit/51e677bdf8616f04fe8c927a38f1bc9b10845f96))
+- **substrate:** fix SlashingEngine Clone divergent state with Arc&lt;RwLock&lt;SlashingState&gt;&gt; ([774a597](commit/774a5973bb8853dcfc0ef4964d3b1df089e42840))
+- **substrate:** fix verify_integrity() for pruned graphs by checking pruned_events ([890be85](commit/890be85474b26905133354ab334a02bf043ade36))
+- **substrate:** propagate Result in KeyStore AES-256-GCM functions ([fc58998](commit/fc589985fb3d2a61c6a80998ce80988015078b9e))
+- **substrate:** return Result from ConsensusConfig::with_random_seed() and BlsKeypair::generate_random() ([cae0963](commit/cae096342b43eec505f42c122320e425ec1e8caa))
+- **zk:** make Ethereum settlement stub return error instead of true ([9a97686](commit/9a9768623a9915029719a67db671d525e1e37c4f))
+- **zk:** return Result from PowersOfTau::new() instead of using expect() ([92fdcbb](commit/92fdcbb63e86683d7075431ca23904cef9b8bdb6))
 
 ### Documentation
 
-* replace all sled references with redb in documentation ([f52f769](commit/f52f769140882aeafaeb95cb8d4831a5635a6032))
-* replace bincode references with postcard in documentation ([93ad377](commit/93ad3774dc8fecb8f04b8c137c1077232f726544))
+- replace all sled references with redb in documentation ([f52f769](commit/f52f769140882aeafaeb95cb8d4831a5635a6032))
+- replace bincode references with postcard in documentation ([93ad377](commit/93ad3774dc8fecb8f04b8c137c1077232f726544))
 
 ## [0.1.17](compare/v0.1.16...v0.1.17) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** add RUSTSEC-2025-0141 (bincode v1 unmaintained) to ignore lists ([1f67a22](commit/1f67a22c3d6b925a01455cc32dae03451d6f3dc3))
+- **ci:** add RUSTSEC-2025-0141 (bincode v1 unmaintained) to ignore lists ([1f67a22](commit/1f67a22c3d6b925a01455cc32dae03451d6f3dc3))
 
 ## [0.1.16](compare/v0.1.15...v0.1.16) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing GitHub Actions workflows ([7203862](commit/72038620e2f3bf70daadf78be0b30e26ae9193db))
+- **ci:** resolve all failing GitHub Actions workflows ([7203862](commit/72038620e2f3bf70daadf78be0b30e26ae9193db))
 
 ## [0.1.15](compare/v0.1.14...v0.1.15) (2026-05-17)
 
-
 ### Features
 
-* **substrate:** add bincode v0 fallback deserialization in wire format ([b6b66da](commit/b6b66da6d6599efea5a36727d102dadc3d190f09))
-* **substrate:** add sled-to-redb migration utility ([7b28dc3](commit/7b28dc32be21e3540d97f4f13d06296854c8a8a2))
-* **tooling:** add cargo-mutants configuration ([d8fba17](commit/d8fba172c5730af6d912381ef2ede69c1abdbe49))
-
+- **substrate:** add bincode v0 fallback deserialization in wire format ([b6b66da](commit/b6b66da6d6599efea5a36727d102dadc3d190f09))
+- **substrate:** add sled-to-redb migration utility ([7b28dc3](commit/7b28dc32be21e3540d97f4f13d06296854c8a8a2))
+- **tooling:** add cargo-mutants configuration ([d8fba17](commit/d8fba172c5730af6d912381ef2ede69c1abdbe49))
 
 ### Bug Fixes
 
-* **api:** remove false rate-limiting claim and unused ErrorCode::RateLimited variant ([58f7639](commit/58f7639badceefd5e7515ed4f2794bfda18793d7))
-* **causal-graph:** return EventPruned instead of MissingParent for pruned parents in insert() ([377da82](commit/377da826469c580de9a65dceb2d83392f75abc48))
-* **causal-graph:** return Result from topological_order() to detect pruned ancestry ([82ab609](commit/82ab6099e34fd754e612acbaba122b4f5415222c))
-* **ci:** add clippy::unwrap_used checks to CI pipeline ([37b038b](commit/37b038bd2c2647f08cd7ef6a1017d1bdd70e5573))
-* **consensus:** detect equivocation even when first event is pruned ([b58d092](commit/b58d092badfbd4af7237ad667cb1032f216e8fb0))
-* **helm:** replace {{ .Service }} with {{ .Release.Service }} in all templates ([8c7995b](commit/8c7995bbd17578d7639e0369e4d9759d188cae62))
-* **lints:** add #[allow(clippy::unwrap_used)] to all test modules and integration tests ([11aafc7](commit/11aafc7dd452e4918926c7740bc9033b8b6c7cc1))
-* resolve compilation errors in migration.rs, poseidon.rs, and Cargo.toml ([5530fe2](commit/5530fe216b33d63d3ea740b5aef50d1d4f6d6e9e))
-* **rollup:** add withdrawal access control, escrow pattern, and reentrancy guard ([7c85e20](commit/7c85e20dfae3126f48bb1d725099091cfa3bd570))
-* **rollup:** bind state root to proof public inputs in submitBatch() ([02ba4a6](commit/02ba4a6ae9f50272947e203eb7fe59c2825ec89d))
-* **shards,economics:** convert to_bytes() from panicking expect() to Result return type ([206e8a2](commit/206e8a2ceb3a42992314304c6c7b7d0992c15650))
-* **substrate,chaos-tests:** replace graph.get() with graph.get_checked() for pruned event handling ([ae9927d](commit/ae9927dffd8215205ff841ce0ebd24cf8d649b10))
-* **zk:** replace expect() with Result return type in poseidon.rs and contribution.rs ([2c2896d](commit/2c2896dcb986e7d33920f2a1d90546c8a232d5f2))
-
+- **api:** remove false rate-limiting claim and unused ErrorCode::RateLimited variant ([58f7639](commit/58f7639badceefd5e7515ed4f2794bfda18793d7))
+- **causal-graph:** return EventPruned instead of MissingParent for pruned parents in insert() ([377da82](commit/377da826469c580de9a65dceb2d83392f75abc48))
+- **causal-graph:** return Result from topological_order() to detect pruned ancestry ([82ab609](commit/82ab6099e34fd754e612acbaba122b4f5415222c))
+- **ci:** add clippy::unwrap_used checks to CI pipeline ([37b038b](commit/37b038bd2c2647f08cd7ef6a1017d1bdd70e5573))
+- **consensus:** detect equivocation even when first event is pruned ([b58d092](commit/b58d092badfbd4af7237ad667cb1032f216e8fb0))
+- **helm:** replace {{ .Service }} with {{ .Release.Service }} in all templates ([8c7995b](commit/8c7995bbd17578d7639e0369e4d9759d188cae62))
+- **lints:** add #[allow(clippy::unwrap_used)] to all test modules and integration tests ([11aafc7](commit/11aafc7dd452e4918926c7740bc9033b8b6c7cc1))
+- resolve compilation errors in migration.rs, poseidon.rs, and Cargo.toml ([5530fe2](commit/5530fe216b33d63d3ea740b5aef50d1d4f6d6e9e))
+- **rollup:** add withdrawal access control, escrow pattern, and reentrancy guard ([7c85e20](commit/7c85e20dfae3126f48bb1d725099091cfa3bd570))
+- **rollup:** bind state root to proof public inputs in submitBatch() ([02ba4a6](commit/02ba4a6ae9f50272947e203eb7fe59c2825ec89d))
+- **shards,economics:** convert to_bytes() from panicking expect() to Result return type ([206e8a2](commit/206e8a2ceb3a42992314304c6c7b7d0992c15650))
+- **substrate,chaos-tests:** replace graph.get() with graph.get_checked() for pruned event handling ([ae9927d](commit/ae9927dffd8215205ff841ce0ebd24cf8d649b10))
+- **zk:** replace expect() with Result return type in poseidon.rs and contribution.rs ([2c2896d](commit/2c2896dcb986e7d33920f2a1d90546c8a232d5f2))
 
 ### Documentation
 
-* **self-assessment:** update section 3.2 to reflect Poseidon hash implementation ([5bdb993](commit/5bdb9930ff87bba5d9e522976d443977e2f19b85))
+- **self-assessment:** update section 3.2 to reflect Poseidon hash implementation ([5bdb993](commit/5bdb9930ff87bba5d9e522976d443977e2f19b85))
 
 ## [0.1.14](compare/v0.1.13...v0.1.14) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** ignore transitive vulnerability advisories in cargo-deny and cargo-audit ([56841f2](commit/56841f27d2bfe24a23bdadae445b03d7c6bac80b))
+- **ci:** ignore transitive vulnerability advisories in cargo-deny and cargo-audit ([56841f2](commit/56841f27d2bfe24a23bdadae445b03d7c6bac80b))
 
 ## [0.1.13](compare/v0.1.12...v0.1.13) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** fix cargo-deny license and wildcard errors ([4720794](commit/472079453dab9acd8555166cf512a57db691bf58))
+- **ci:** fix cargo-deny license and wildcard errors ([4720794](commit/472079453dab9acd8555166cf512a57db691bf58))
 
 ## [0.1.12](compare/v0.1.11...v0.1.12) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** remove deprecated deny.toml keys (unlicensed, copyleft, default) for cargo-deny 0.19.x ([fa044f2](commit/fa044f2e57ab86d7482c3b8fcd235c9215af5df5))
+- **ci:** remove deprecated deny.toml keys (unlicensed, copyleft, default) for cargo-deny 0.19.x ([fa044f2](commit/fa044f2e57ab86d7482c3b8fcd235c9215af5df5))
 
 ## [0.1.11](compare/v0.1.10...v0.1.11) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** fix deny.toml yanked field value — accepts allow/warn/deny not workspace ([52bb45e](commit/52bb45ef38cf852ba8cba8fe288f36dfdd0899b3))
+- **ci:** fix deny.toml yanked field value — accepts allow/warn/deny not workspace ([52bb45e](commit/52bb45ef38cf852ba8cba8fe288f36dfdd0899b3))
 
 ## [0.1.10](compare/v0.1.9...v0.1.10) (2026-05-17)
 
-
 ### Bug Fixes
 
-* **ci:** resolve all failing GitHub Actions workflows ([5c6d570](commit/5c6d570cccd00deb86eb2a158ef94539944234f1))
+- **ci:** resolve all failing GitHub Actions workflows ([5c6d570](commit/5c6d570cccd00deb86eb2a158ef94539944234f1))
 
 ## [0.1.9](compare/v0.1.8...v0.1.9) (2026-05-17)
 
-
 ### Bug Fixes
 
-* make Prettier check non-blocking, exclude generated files ([ebb3c0f](commit/ebb3c0f7458c857932d02211cfc992323c26dd2c))
+- make Prettier check non-blocking, exclude generated files ([ebb3c0f](commit/ebb3c0f7458c857932d02211cfc992323c26dd2c))
 
 ## [0.1.8](compare/v0.1.7...v0.1.8) (2026-05-17)
 
-
 ### Bug Fixes
 
-* remaining rustfmt formatting and deny.toml config ([b75c4fa](commit/b75c4fac0bf4caf946493333db9045b9cda710bd))
+- remaining rustfmt formatting and deny.toml config ([b75c4fa](commit/b75c4fac0bf4caf946493333db9045b9cda710bd))
 
 ## [0.1.7](compare/v0.1.6...v0.1.7) (2026-05-17)
 
-
 ### Bug Fixes
 
-* rustfmt formatting in errors.rs function signature ([41750fb](commit/41750fb56707ca61e43f03a4957cbf63a52ed768))
+- rustfmt formatting in errors.rs function signature ([41750fb](commit/41750fb56707ca61e43f03a4957cbf63a52ed768))
 
 ## [0.1.6](compare/v0.1.5...v0.1.6) (2026-05-17)
 
-
 ### Bug Fixes
 
-* unwrap→expect replacements and utoipa schema derivations ([cbacbfe](commit/cbacbfe9b8b3f531a8492199ee77cae46d7dc9a7))
+- unwrap→expect replacements and utoipa schema derivations ([cbacbfe](commit/cbacbfe9b8b3f531a8492199ee77cae46d7dc9a7))
 
 ## [0.1.5](compare/v0.1.4...v0.1.5) (2026-05-17)
 
-
 ### Bug Fixes
 
-* redb v2 API — use range() for iteration, remove drain() call ([3625438](commit/36254387f6a1f58a5d4d957868f0d9194eec53ce))
+- redb v2 API — use range() for iteration, remove drain() call ([3625438](commit/36254387f6a1f58a5d4d957868f0d9194eec53ce))
 
 ## [0.1.4](compare/v0.1.3...v0.1.4) (2026-05-17)
 
-
 ### Bug Fixes
 
-* resolve remaining CI failures — compilation and audit ([1eb2193](commit/1eb2193f11ef584e4a54a399a604c8da0f1e0a9a))
+- resolve remaining CI failures — compilation and audit ([1eb2193](commit/1eb2193f11ef584e4a54a399a604c8da0f1e0a9a))
 
 ## [0.1.3](compare/v0.1.2...v0.1.3) (2026-05-17)
 
-
 ### Bug Fixes
 
-* resolve all CI workflow failures ([d1b2d2b](commit/d1b2d2be751b4ce9ff4be0d4ec8d3e6b0ea79173))
+- resolve all CI workflow failures ([d1b2d2b](commit/d1b2d2be751b4ce9ff4be0d4ec8d3e6b0ea79173))
 
 ## [0.1.2](compare/v0.1.1...v0.1.2) (2026-05-16)
 
-
 ### Features
 
-* A-grade quality improvement plan — all 23 tasks across 4 sprints ([d231c10](commit/d231c1023be94e6b07e796cf4707c8ac9f3ced6d))
+- A-grade quality improvement plan — all 23 tasks across 4 sprints ([d231c10](commit/d231c1023be94e6b07e796cf4707c8ac9f3ced6d))
 
 ## [0.1.1](compare/v0.1.0...v0.1.1) (2026-05-16)
 
-
 ### Features
 
-* **ci:** add CD pipeline with release-please and automated binary/contract/Docker publishing ([8f9d108](commit/8f9d10872d0f408af99a509aebfd4ca07193731d))
-* Initial commit - Omnia Protocol universal coordination layer ([f5d035a](commit/f5d035a35d1579a970d0b0c5022076c02461c930))
-* integrate Layer 1 Substrate implementation and enhance documentation structure ([e1212c4](commit/e1212c43dff244565616db3882a85e60201bb357))
-* **integration:** wire Layer 2 shards into Layer 1 substrate — EventProcessor trait + committed event routing ([f49b72f](commit/f49b72f358a63696dbc069f83930625769d6577e))
-* **layer3:** binding layer — provenance log + RF stub + quantum commitment stub ([62ca8d8](commit/62ca8d8b95432ddbb9a3b7fd67398ac4466f212f))
-* **layer4:** identity hardening — Shamir recovery + biometric anchors + AI agent identity ([b0ea4df](commit/b0ea4dfecc928e26ce3a2c69ea69b59ffdf69879))
-* **layer5:** economics — UBC token + proof-of-useful-work + quadratic voting with decay ([d33de8f](commit/d33de8f3b3733d4f01924e4d2c135f55fa7a14b7))
-* **phase0:** settlement-agnostic ZK-rollup — Ethereum adapter + Bitcoin/Solana/Celestia stubs ([c703dd4](commit/c703dd43debb5598dfbe99ada48fdc3913011d12))
-* Sprint 3 — Testnet Readiness ([7800d26](commit/7800d26b090e5f064c14f46886548d28d56d9eba))
-* Sprint 4 — security hardening, formal verification, cryptographic maturity, and operational readiness ([aac338c](commit/aac338c67df2df7350da235e0b428e835681b601))
-* Sprint 4 final push — nonce wiring, VRF stake weighting, Grafana alerts, ceremony PoK ([4ff1deb](commit/4ff1deb416c63c96b27d671094fda201a5dfd68e))
-* Sprint 5 — fuzzing, proptests, supply chain hardening, reproducible builds ([0c1cb52](commit/0c1cb528bac5b536dcf6cd7aa84ac1a28fad8fc0))
-* Sprint 6 — Complete the Foundation ([0f6ceff](commit/0f6ceffc2ab08cf24eae28c9070ae2ae61dd68c4))
-* **sprint-1:** foundation hardening — consensus docs, event validati… ([df14119](commit/df141199c574aee35c989afa7120c18d4565855e))
-* **sprint-1:** foundation hardening — consensus docs, event validation, adversarial tests, ProofBundle, CI/CD, ADRs ([0d51070](commit/0d5107006628714faf329ef2131e6aefd8af0192))
-* **sprint-6:** Complete the Foundation — all 8 phases ([9a79f63](commit/9a79f6394a404b89af640b323b28cebf1211ba2f))
-* **sprint-7:** Remediate ARGUS-PANOPTES audit findings ([51241d7](commit/51241d7af57640ed80b31596cb5090a792018e83))
-* **sprint-7:** remediate ARGUS-PANOPTES audit findings — 2 critical, 3 high, 5 medium, 2 low/info ([56dbcfa](commit/56dbcfad09baefae1e2e8da851600de09a17d356))
-
+- **ci:** add CD pipeline with release-please and automated binary/contract/Docker publishing ([8f9d108](commit/8f9d10872d0f408af99a509aebfd4ca07193731d))
+- Initial commit - Omnia Protocol universal coordination layer ([f5d035a](commit/f5d035a35d1579a970d0b0c5022076c02461c930))
+- integrate Layer 1 Substrate implementation and enhance documentation structure ([e1212c4](commit/e1212c43dff244565616db3882a85e60201bb357))
+- **integration:** wire Layer 2 shards into Layer 1 substrate — EventProcessor trait + committed event routing ([f49b72f](commit/f49b72f358a63696dbc069f83930625769d6577e))
+- **layer3:** binding layer — provenance log + RF stub + quantum commitment stub ([62ca8d8](commit/62ca8d8b95432ddbb9a3b7fd67398ac4466f212f))
+- **layer4:** identity hardening — Shamir recovery + biometric anchors + AI agent identity ([b0ea4df](commit/b0ea4dfecc928e26ce3a2c69ea69b59ffdf69879))
+- **layer5:** economics — UBC token + proof-of-useful-work + quadratic voting with decay ([d33de8f](commit/d33de8f3b3733d4f01924e4d2c135f55fa7a14b7))
+- **phase0:** settlement-agnostic ZK-rollup — Ethereum adapter + Bitcoin/Solana/Celestia stubs ([c703dd4](commit/c703dd43debb5598dfbe99ada48fdc3913011d12))
+- Sprint 3 — Testnet Readiness ([7800d26](commit/7800d26b090e5f064c14f46886548d28d56d9eba))
+- Sprint 4 — security hardening, formal verification, cryptographic maturity, and operational readiness ([aac338c](commit/aac338c67df2df7350da235e0b428e835681b601))
+- Sprint 4 final push — nonce wiring, VRF stake weighting, Grafana alerts, ceremony PoK ([4ff1deb](commit/4ff1deb416c63c96b27d671094fda201a5dfd68e))
+- Sprint 5 — fuzzing, proptests, supply chain hardening, reproducible builds ([0c1cb52](commit/0c1cb528bac5b536dcf6cd7aa84ac1a28fad8fc0))
+- Sprint 6 — Complete the Foundation ([0f6ceff](commit/0f6ceffc2ab08cf24eae28c9070ae2ae61dd68c4))
+- **sprint-1:** foundation hardening — consensus docs, event validati… ([df14119](commit/df141199c574aee35c989afa7120c18d4565855e))
+- **sprint-1:** foundation hardening — consensus docs, event validation, adversarial tests, ProofBundle, CI/CD, ADRs ([0d51070](commit/0d5107006628714faf329ef2131e6aefd8af0192))
+- **sprint-6:** Complete the Foundation — all 8 phases ([9a79f63](commit/9a79f6394a404b89af640b323b28cebf1211ba2f))
+- **sprint-7:** Remediate ARGUS-PANOPTES audit findings ([51241d7](commit/51241d7af57640ed80b31596cb5090a792018e83))
+- **sprint-7:** remediate ARGUS-PANOPTES audit findings — 2 critical, 3 high, 5 medium, 2 low/info ([56dbcfa](commit/56dbcfad09baefae1e2e8da851600de09a17d356))
 
 ### Bug Fixes
 
-* add missing nonce_data_dir field in integration test NodeConfig ([0da370e](commit/0da370e8cae726be17ce600bfe8926665b6be946))
-* add required toolchain input to dtolnay/rust-toolchain@v1 ([2cf1285](commit/2cf128550996a470443b71edef933ddf57269248))
-* **ci:** cargo fmt + ignore RUSTSEC-2024-0384 (instant via sled) ([33e3542](commit/33e3542eb73ed0838ffc898f886bd19ee01d038b))
-* **ci:** exclude fuzz crate from workspace test/clippy/doc/coverage, fix cargo-vet command ([5ad0b3d](commit/5ad0b3d495ba1c723f54dcc84fa65602156025be))
-* **ci:** fix cargo-vet config format, make supply-chain job non-blocking ([cc571a9](commit/cc571a939df6f511f62d6d11d1ac9e0670fa8a03))
-* **ci:** fresh rustup install on macOS to bypass broken Homebrew rustup ([03ea642](commit/03ea642f6abdf5c67b20b8c2e26bf630f8c9f38d))
-* **ci:** ignore RUSTSEC-2025-0055 audit, fix macOS cargo PATH ([fc28e66](commit/fc28e66474dfaff73c46957606126ca72d86e6fb))
-* **ci:** move with_random_seed out of impl Default, fix remaining fmt issues ([e76a3d6](commit/e76a3d6c762485d11c663ef1f412ebbd8f8a5400))
-* **ci:** properly initialize cargo-vet supply-chain with exemptions and imports ([8766ebf](commit/8766ebf0c2fa93a83ca2440e052dcb91c083a465))
-* **ci:** provide non-zero round_seed in chaos-tests ([04da88c](commit/04da88c4405bdfcdefa3c0b81018d79f3ed959e9))
-* **ci:** provide non-zero round_seed in SubstrateConfig constructors ([b8fa3ef](commit/b8fa3ef504b0fb7158df6c0de01d513d29a45d54))
-* **ci:** re-add cargo to PATH after rust-cache on macOS ([2547b98](commit/2547b98a1d27788b23cf1644bbdabcdd4740e793))
-* **ci:** resolve all CD pipeline failures — release-please, cross-compile, Windows, publish ([73e4353](commit/73e43533c44261859e369608ec7fe4f2cc8c69e2))
-* **ci:** resolve clippy warnings and fuzz install resilience ([9e9b095](commit/9e9b095814fec7eae9cbeb1e82e53e29352d252e))
-* **ci:** resolve compilation, formatting, and CI workflow errors ([f82aa21](commit/f82aa2167f7b0810200ce75a65dfe7daa86f841e))
-* **ci:** resolve fmt, clippy, and ZK circuit test failures ([3a0d0b0](commit/3a0d0b09b68aa9c4a299c45ba095f048145cafc9))
-* **ci:** resolve fmt, compilation, and Cargo.lock issues ([43768a6](commit/43768a64c8cb17c3f32874184987508b99cfbfd2))
-* **ci:** resolve macOS cargo PATH loss after rust-cache restore ([e7994c1](commit/e7994c117a3fbebebe9ae5c57d9b2495c67efcec))
-* **ci:** resolve macOS cargo=rustup-init Homebrew conflict ([99b1daf](commit/99b1daf47a1a57a7378c75242964f4f0a41ea3d4))
-* **ci:** resolve Python toml import error and cargo-fuzz manifest issue ([ad328b5](commit/ad328b54ef5dda81e40769cefa38de288b401451))
-* **ci:** resolve remaining fmt, SBOM, and fuzz CI issues ([99d13ea](commit/99d13ea9ca06c557c15e156728cc0abf3b328b39))
-* **ci:** resolve rustdoc broken intra-doc links ([df6ad3f](commit/df6ad3fbc548640ab354c311f25f4fa9f4c1927f))
-* **ci:** resolve rustdoc redundant explicit link target in zk/src/lib.rs ([e480478](commit/e4804788fb5b33e2fed14f47fb12c4c6be4236be))
-* **ci:** resolve rustdoc warnings treated as errors ([3429b14](commit/3429b14802e62389e83e1f6bb75b592d738e17af))
-* **ci:** update remaining protocol identifier test assertion to 4.0.0 ([dd2c417](commit/dd2c4179d2bb72161867dcf4e65ec9917473740c))
-* **ci:** update test expectations for protocol version and undo rate limit ([1ac950f](commit/1ac950fc854599c9b577141338918da092b2b5f6))
-* **ci:** use dtolnay/rust-toolchain for all platforms including macOS ([98c1976](commit/98c19762070b43505d90733083aedd7cfc9ef5d4))
-* **ci:** wrap governance error return in Err(), remove dead seen_sequences field ([364d114](commit/364d114bb9074469fc1d9b1273f6c7add761d4cd))
-* clippy bench warnings, drop MSRV matrix (deps require 1.86+) ([fd8498c](commit/fd8498c53bd69595ac299234ffdad9562829714d))
-* commit Cargo.lock for security auditing and reproducible builds ([d68ef8d](commit/d68ef8da5338e711c089e0e150852ad972217b95))
-* commit Cargo.lock for security auditing and reproducible builds ([a600515](commit/a600515b21cf984e5f0ee44cffc9caae30b6893a))
-* configure cargo audit to ignore known transitive dep vulnerabilities ([e90549f](commit/e90549fb0fede5f37c88582614fe7b4abc9373e6))
-* configure cargo audit to ignore known transitive dep vulnerabilities ([53434d8](commit/53434d89118d3b62fd4c475184f5dbe611e3679f))
-* **docs:** resolve rustdoc warnings that break CI with -D warnings ([504aa08](commit/504aa081d7f3b9d41f451585d0f76892fc3b0642))
-* **layer3:** strengthen links_to, add destroy_item, explicit blake3 dep ([14d807e](commit/14d807e37040cb494752d8bc016839f88df2ed65))
-* make PROOF_BUNDLE_VERSION public to fix rustdoc private-intra-doc-links ([cc11864](commit/cc11864104dcc5243361b1c18454aa1e6d553360))
-* **pre-rollup:** 4 critical gaps — replay protection, state root, event pruning, economics wiring ([facd051](commit/facd0515af3821d984c567a89287efdfcf4297e9))
-* resolve all CI failures — fmt, clippy, and dependabot config ([a1cc009](commit/a1cc00900e2b84b609ffaab007dcecd9633e4bee))
-* resolve all CI failures — fmt, clippy, and dependabot config ([6a1f00d](commit/6a1f00d2b8e216b0093dc7e6e82ce4c01fcb38c3))
-* resolve all remaining CI failures ([1ef8eda](commit/1ef8edae4178c634444b4bfdf832427c18228511))
-* resolve all remaining CI failures (audit action + toolchain pinning) ([4937f16](commit/4937f16d3f0159dd1909bc5da3eacab147feab64))
-* single persistent SlashingEngine shared between consensus and API ([e4b0b40](commit/e4b0b40e360136f5077aca3b2f5ccfcb02c39412))
-* **sprint-1:** CI overhaul, multi-OS testing, Docker testnet, fuzz targets ([8467c93](commit/8467c9395a5ddd009a2bacf3b5e9dd743fecace2))
-* **sprint-1:** CI overhaul, multi-OS testing, Docker testnet, fuzz targets ([cfd9113](commit/cfd911341d4ba90578a415afdd041c4783b1e80c))
-* **sprint-2:** critical hardening — 6 security fixes ([b31d148](commit/b31d148899b4ff620ce0a78de819385db801cda3))
-* **sprint-2:** Critical Hardening — 6 Security Fixes ([4e398fc](commit/4e398fce0cf4dfc9f819efbf9edb0dce3cf05e91))
-* three hotfix sprint blocking issues ([4cfd97d](commit/4cfd97d0dcf628f1bd1542fec54e2f18ba795810))
-* upgrade CI toolchain to Rust 1.85 ([9e45fd1](commit/9e45fd10c427d23eea730dd7a72e27a6cf91adfa))
-* upgrade CI toolchain to Rust 1.85 ([5286bbe](commit/5286bbed2bc2b1bda65f7a54e5d0d340cf9b95f9))
-* use stable Rust toolchain in CI ([bcab7ef](commit/bcab7ef33ee38d56b9636f2d56f932b6a869ef9a))
-* use stable Rust toolchain in CI to resolve transitive dep MSRV issues ([0fa9700](commit/0fa9700e31898ed5894f145b22b82a6554267755))
-
+- add missing nonce_data_dir field in integration test NodeConfig ([0da370e](commit/0da370e8cae726be17ce600bfe8926665b6be946))
+- add required toolchain input to dtolnay/rust-toolchain@v1 ([2cf1285](commit/2cf128550996a470443b71edef933ddf57269248))
+- **ci:** cargo fmt + ignore RUSTSEC-2024-0384 (instant via sled) ([33e3542](commit/33e3542eb73ed0838ffc898f886bd19ee01d038b))
+- **ci:** exclude fuzz crate from workspace test/clippy/doc/coverage, fix cargo-vet command ([5ad0b3d](commit/5ad0b3d495ba1c723f54dcc84fa65602156025be))
+- **ci:** fix cargo-vet config format, make supply-chain job non-blocking ([cc571a9](commit/cc571a939df6f511f62d6d11d1ac9e0670fa8a03))
+- **ci:** fresh rustup install on macOS to bypass broken Homebrew rustup ([03ea642](commit/03ea642f6abdf5c67b20b8c2e26bf630f8c9f38d))
+- **ci:** ignore RUSTSEC-2025-0055 audit, fix macOS cargo PATH ([fc28e66](commit/fc28e66474dfaff73c46957606126ca72d86e6fb))
+- **ci:** move with_random_seed out of impl Default, fix remaining fmt issues ([e76a3d6](commit/e76a3d6c762485d11c663ef1f412ebbd8f8a5400))
+- **ci:** properly initialize cargo-vet supply-chain with exemptions and imports ([8766ebf](commit/8766ebf0c2fa93a83ca2440e052dcb91c083a465))
+- **ci:** provide non-zero round_seed in chaos-tests ([04da88c](commit/04da88c4405bdfcdefa3c0b81018d79f3ed959e9))
+- **ci:** provide non-zero round_seed in SubstrateConfig constructors ([b8fa3ef](commit/b8fa3ef504b0fb7158df6c0de01d513d29a45d54))
+- **ci:** re-add cargo to PATH after rust-cache on macOS ([2547b98](commit/2547b98a1d27788b23cf1644bbdabcdd4740e793))
+- **ci:** resolve all CD pipeline failures — release-please, cross-compile, Windows, publish ([73e4353](commit/73e43533c44261859e369608ec7fe4f2cc8c69e2))
+- **ci:** resolve clippy warnings and fuzz install resilience ([9e9b095](commit/9e9b095814fec7eae9cbeb1e82e53e29352d252e))
+- **ci:** resolve compilation, formatting, and CI workflow errors ([f82aa21](commit/f82aa2167f7b0810200ce75a65dfe7daa86f841e))
+- **ci:** resolve fmt, clippy, and ZK circuit test failures ([3a0d0b0](commit/3a0d0b09b68aa9c4a299c45ba095f048145cafc9))
+- **ci:** resolve fmt, compilation, and Cargo.lock issues ([43768a6](commit/43768a64c8cb17c3f32874184987508b99cfbfd2))
+- **ci:** resolve macOS cargo PATH loss after rust-cache restore ([e7994c1](commit/e7994c117a3fbebebe9ae5c57d9b2495c67efcec))
+- **ci:** resolve macOS cargo=rustup-init Homebrew conflict ([99b1daf](commit/99b1daf47a1a57a7378c75242964f4f0a41ea3d4))
+- **ci:** resolve Python toml import error and cargo-fuzz manifest issue ([ad328b5](commit/ad328b54ef5dda81e40769cefa38de288b401451))
+- **ci:** resolve remaining fmt, SBOM, and fuzz CI issues ([99d13ea](commit/99d13ea9ca06c557c15e156728cc0abf3b328b39))
+- **ci:** resolve rustdoc broken intra-doc links ([df6ad3f](commit/df6ad3fbc548640ab354c311f25f4fa9f4c1927f))
+- **ci:** resolve rustdoc redundant explicit link target in zk/src/lib.rs ([e480478](commit/e4804788fb5b33e2fed14f47fb12c4c6be4236be))
+- **ci:** resolve rustdoc warnings treated as errors ([3429b14](commit/3429b14802e62389e83e1f6bb75b592d738e17af))
+- **ci:** update remaining protocol identifier test assertion to 4.0.0 ([dd2c417](commit/dd2c4179d2bb72161867dcf4e65ec9917473740c))
+- **ci:** update test expectations for protocol version and undo rate limit ([1ac950f](commit/1ac950fc854599c9b577141338918da092b2b5f6))
+- **ci:** use dtolnay/rust-toolchain for all platforms including macOS ([98c1976](commit/98c19762070b43505d90733083aedd7cfc9ef5d4))
+- **ci:** wrap governance error return in Err(), remove dead seen_sequences field ([364d114](commit/364d114bb9074469fc1d9b1273f6c7add761d4cd))
+- clippy bench warnings, drop MSRV matrix (deps require 1.86+) ([fd8498c](commit/fd8498c53bd69595ac299234ffdad9562829714d))
+- commit Cargo.lock for security auditing and reproducible builds ([d68ef8d](commit/d68ef8da5338e711c089e0e150852ad972217b95))
+- commit Cargo.lock for security auditing and reproducible builds ([a600515](commit/a600515b21cf984e5f0ee44cffc9caae30b6893a))
+- configure cargo audit to ignore known transitive dep vulnerabilities ([e90549f](commit/e90549fb0fede5f37c88582614fe7b4abc9373e6))
+- configure cargo audit to ignore known transitive dep vulnerabilities ([53434d8](commit/53434d89118d3b62fd4c475184f5dbe611e3679f))
+- **docs:** resolve rustdoc warnings that break CI with -D warnings ([504aa08](commit/504aa081d7f3b9d41f451585d0f76892fc3b0642))
+- **layer3:** strengthen links_to, add destroy_item, explicit blake3 dep ([14d807e](commit/14d807e37040cb494752d8bc016839f88df2ed65))
+- make PROOF_BUNDLE_VERSION public to fix rustdoc private-intra-doc-links ([cc11864](commit/cc11864104dcc5243361b1c18454aa1e6d553360))
+- **pre-rollup:** 4 critical gaps — replay protection, state root, event pruning, economics wiring ([facd051](commit/facd0515af3821d984c567a89287efdfcf4297e9))
+- resolve all CI failures — fmt, clippy, and dependabot config ([a1cc009](commit/a1cc00900e2b84b609ffaab007dcecd9633e4bee))
+- resolve all CI failures — fmt, clippy, and dependabot config ([6a1f00d](commit/6a1f00d2b8e216b0093dc7e6e82ce4c01fcb38c3))
+- resolve all remaining CI failures ([1ef8eda](commit/1ef8edae4178c634444b4bfdf832427c18228511))
+- resolve all remaining CI failures (audit action + toolchain pinning) ([4937f16](commit/4937f16d3f0159dd1909bc5da3eacab147feab64))
+- single persistent SlashingEngine shared between consensus and API ([e4b0b40](commit/e4b0b40e360136f5077aca3b2f5ccfcb02c39412))
+- **sprint-1:** CI overhaul, multi-OS testing, Docker testnet, fuzz targets ([8467c93](commit/8467c9395a5ddd009a2bacf3b5e9dd743fecace2))
+- **sprint-1:** CI overhaul, multi-OS testing, Docker testnet, fuzz targets ([cfd9113](commit/cfd911341d4ba90578a415afdd041c4783b1e80c))
+- **sprint-2:** critical hardening — 6 security fixes ([b31d148](commit/b31d148899b4ff620ce0a78de819385db801cda3))
+- **sprint-2:** Critical Hardening — 6 Security Fixes ([4e398fc](commit/4e398fce0cf4dfc9f819efbf9edb0dce3cf05e91))
+- three hotfix sprint blocking issues ([4cfd97d](commit/4cfd97d0dcf628f1bd1542fec54e2f18ba795810))
+- upgrade CI toolchain to Rust 1.85 ([9e45fd1](commit/9e45fd10c427d23eea730dd7a72e27a6cf91adfa))
+- upgrade CI toolchain to Rust 1.85 ([5286bbe](commit/5286bbed2bc2b1bda65f7a54e5d0d340cf9b95f9))
+- use stable Rust toolchain in CI ([bcab7ef](commit/bcab7ef33ee38d56b9636f2d56f932b6a869ef9a))
+- use stable Rust toolchain in CI to resolve transitive dep MSRV issues ([0fa9700](commit/0fa9700e31898ed5894f145b22b82a6554267755))
 
 ### Performance
 
-* **substrate:** O(n) → O(new_events) — replace graph walk with unprocessed event queue ([2f45765](commit/2f457655324259aa183c94668dd6bd4fe83bb750))
-
+- **substrate:** O(n) → O(new_events) — replace graph walk with unprocessed event queue ([2f45765](commit/2f457655324259aa183c94668dd6bd4fe83bb750))
 
 ### Documentation
 
-* comprehensive documentation audit — align all markdown with v4.0.0 codebase ([e37d6ef](commit/e37d6ef91c9c2b271ba99d6f970617dad7e8d591))
-* comprehensive repository beautification (excluding workflows due to permissions) ([5d8088d](commit/5d8088de797abff9f926086e8fa4695b809d4b21))
-* comprehensive repository beautification and enhancement ([52bca8e](commit/52bca8e7f3d6871509dded8034c093a9a719cf1d))
-* configure community channels and issue templates ([9b038df](commit/9b038dfc503b3c9f7b8068ec2066f7630b89371f))
-* implement radical transparency dashboard and status tracking ([d1bf6d7](commit/d1bf6d7690a6878fcceaca02134d458ef1aa3bac))
-* overhaul all markdown — match docs to actual codebase ([2381c77](commit/2381c77c6b22684d2592394417b9b2e7706bb0c3))
-* update all markdown — honest content + preserved visual design ([c2f8034](commit/c2f803415fcdaeddc9e2ede2caed2e6761544643))
-* update Discord server link to https://discord.gg/qYkpAeSYR ([d4face4](commit/d4face4940ea600dab6c74c0af9f6589aedc48a6))
-* update README with direct community and tracking links ([144b670](commit/144b67089ea069fc78be5b4bd33d16e36a11ddf3))
-
+- comprehensive documentation audit — align all markdown with v4.0.0 codebase ([e37d6ef](commit/e37d6ef91c9c2b271ba99d6f970617dad7e8d591))
+- comprehensive repository beautification (excluding workflows due to permissions) ([5d8088d](commit/5d8088de797abff9f926086e8fa4695b809d4b21))
+- comprehensive repository beautification and enhancement ([52bca8e](commit/52bca8e7f3d6871509dded8034c093a9a719cf1d))
+- configure community channels and issue templates ([9b038df](commit/9b038dfc503b3c9f7b8068ec2066f7630b89371f))
+- implement radical transparency dashboard and status tracking ([d1bf6d7](commit/d1bf6d7690a6878fcceaca02134d458ef1aa3bac))
+- overhaul all markdown — match docs to actual codebase ([2381c77](commit/2381c77c6b22684d2592394417b9b2e7706bb0c3))
+- update all markdown — honest content + preserved visual design ([c2f8034](commit/c2f803415fcdaeddc9e2ede2caed2e6761544643))
+- update Discord server link to https://discord.gg/qYkpAeSYR ([d4face4](commit/d4face4940ea600dab6c74c0af9f6589aedc48a6))
+- update README with direct community and tracking links ([144b670](commit/144b67089ea069fc78be5b4bd33d16e36a11ddf3))
 
 ### Build
 
-* **deps:** bump actions/checkout from 4 to 6 ([94120e8](commit/94120e8a63d9cd9c6125cc0a3fb8ae30f7b7e2c8))
-* **deps:** bump actions/checkout from 4 to 6 ([fd771f8](commit/fd771f816fd62a3817bc85ca1cb5d5db6770ab68))
-* **deps:** update bincode requirement from 1.3 to 3.0 ([ebc42a5](commit/ebc42a56c6abbaaefd29c7853d1c4e30f3af5899))
-* **deps:** update bincode requirement from 1.3 to 3.0 ([ee4118d](commit/ee4118d371e456bfb9ce327b1867dc72df2bc6a4))
-* **deps:** update criterion requirement from 0.5 to 0.8 ([bff04f3](commit/bff04f32609872c2746eae84f14936eee2e8410b))
-* **deps:** update criterion requirement from 0.5 to 0.8 ([4652f14](commit/4652f148ecc266ed2d6ad62e245d4b8f644fdae8))
-* **deps:** update libp2p requirement from 0.53 to 0.56 ([734156b](commit/734156b780c85244f97ee01814b9cf5c39aa4224))
-* **deps:** update libp2p requirement from 0.53 to 0.56 ([bc7165a](commit/bc7165a6f6f7e8eb210a25470b5dfb43430b58fb))
-* **deps:** update rand requirement from 0.8 to 0.10 ([259659f](commit/259659fabace680f308f875023c80902eb1cbe11))
-* **deps:** update rand requirement from 0.8 to 0.10 ([709914a](commit/709914a79ec2cc0185c5038aa6af54f01b99f53e))
-* **deps:** update sha2 requirement from 0.10 to 0.11 ([0646dcd](commit/0646dcd70951ad63f4603e6f8a5fe00efeafbc48))
-* **deps:** update sha2 requirement from 0.10 to 0.11 ([a53aa93](commit/a53aa935e01aa4455414017bfc2287fdd178a4ef))
-* **deps:** update thiserror requirement from 1.0 to 2.0 ([2073b7b](commit/2073b7b9be610b7e7efef38b8da1c16829d835fd))
-* **deps:** update thiserror requirement from 1.0 to 2.0 ([12a762e](commit/12a762eafa50ef94221d3334b258e96d6c559497))
-
+- **deps:** bump actions/checkout from 4 to 6 ([94120e8](commit/94120e8a63d9cd9c6125cc0a3fb8ae30f7b7e2c8))
+- **deps:** bump actions/checkout from 4 to 6 ([fd771f8](commit/fd771f816fd62a3817bc85ca1cb5d5db6770ab68))
+- **deps:** update bincode requirement from 1.3 to 3.0 ([ebc42a5](commit/ebc42a56c6abbaaefd29c7853d1c4e30f3af5899))
+- **deps:** update bincode requirement from 1.3 to 3.0 ([ee4118d](commit/ee4118d371e456bfb9ce327b1867dc72df2bc6a4))
+- **deps:** update criterion requirement from 0.5 to 0.8 ([bff04f3](commit/bff04f32609872c2746eae84f14936eee2e8410b))
+- **deps:** update criterion requirement from 0.5 to 0.8 ([4652f14](commit/4652f148ecc266ed2d6ad62e245d4b8f644fdae8))
+- **deps:** update libp2p requirement from 0.53 to 0.56 ([734156b](commit/734156b780c85244f97ee01814b9cf5c39aa4224))
+- **deps:** update libp2p requirement from 0.53 to 0.56 ([bc7165a](commit/bc7165a6f6f7e8eb210a25470b5dfb43430b58fb))
+- **deps:** update rand requirement from 0.8 to 0.10 ([259659f](commit/259659fabace680f308f875023c80902eb1cbe11))
+- **deps:** update rand requirement from 0.8 to 0.10 ([709914a](commit/709914a79ec2cc0185c5038aa6af54f01b99f53e))
+- **deps:** update sha2 requirement from 0.10 to 0.11 ([0646dcd](commit/0646dcd70951ad63f4603e6f8a5fe00efeafbc48))
+- **deps:** update sha2 requirement from 0.10 to 0.11 ([a53aa93](commit/a53aa935e01aa4455414017bfc2287fdd178a4ef))
+- **deps:** update thiserror requirement from 1.0 to 2.0 ([2073b7b](commit/2073b7b9be610b7e7efef38b8da1c16829d835fd))
+- **deps:** update thiserror requirement from 1.0 to 2.0 ([12a762e](commit/12a762eafa50ef94221d3334b258e96d6c559497))
 
 ### CI
 
-* **release-please:** add workflow_dispatch trigger for manual re-runs ([fa80aef](commit/fa80aef19c14bcb82bcd43fe43f08c2606af8498))
+- **release-please:** add workflow_dispatch trigger for manual re-runs ([fa80aef](commit/fa80aef19c14bcb82bcd43fe43f08c2606af8498))
 
 ## [0.1.0] - 2026-05-15
 
@@ -967,5 +877,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial diagrams for architecture, governance, supply chain, consensus comparison, and identity system.
 
 ---
+
 🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/reference/roadmap.md](./docs/reference/roadmap.md)  
 🚀 **Next**: [docs/reference/roadmap.md](./docs/reference/roadmap.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)
