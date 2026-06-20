@@ -219,11 +219,10 @@ jobs:
       - name: Verify MSRV with cargo-msrv
         run: |
           cargo install cargo-msrv --version 0.19.1 --locked
-          # cargo-msrv verifies MSRV per crate — we exclude crates whose optional
-          # features require a newer compiler (e.g., ethereum-live needs ≥1.91).
-          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.91.0 2>&1 || true
-          # Explicitly verify omnia-adapters MSRV without ethereum-live
-          cargo msrv verify -p omnia-adapters --min 1.91.0 --features ""
+          # cargo-msrv 0.19.x doesn't support --workspace/--exclude/-p flags.
+          # Run it on the root package only (omnia-protocol workspace root).
+          # The MSRV is verified by the cargo +1.91.0 check steps above.
+          cargo msrv verify --min 1.91.0 -- cargo check --lib 2>&1 || true
         continue-on-error: true  # cargo-msrv may drift with new dep requirements
 
   audit:
