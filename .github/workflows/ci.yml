@@ -218,7 +218,7 @@ jobs:
         run: cargo +1.91.0 check -p omnia-node --no-default-features --features full
       - name: Verify MSRV with cargo-msrv
         run: |
-          cargo install cargo-msrv --locked
+          cargo install cargo-msrv --version 0.19.1 --locked
           # cargo-msrv verifies MSRV per crate — we exclude crates whose optional
           # features require a newer compiler (e.g., ethereum-live needs ≥1.91).
           cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.91.0 2>&1 || true
