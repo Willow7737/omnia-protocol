@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.71](https://github.com/Willow7737/omnia-protocol/compare/v0.1.70...v0.1.71) (2026-06-20)
+
+
+### Documentation
+
+* comprehensive markdown audit — 36 files updated, 2 removed ([60c0a1a](https://github.com/Willow7737/omnia-protocol/commit/60c0a1ae41632dea72d06f53085b63bac4af1583))
+* comprehensive markdown audit — 36 files updated, 2 removed ([e28696c](https://github.com/Willow7737/omnia-protocol/commit/e28696c1ccc267a9bb75fd664683f0ae13388eda))
+
 ## [0.1.70](https://github.com/Willow7737/omnia-protocol/compare/v0.1.69...v0.1.70) (2026-06-19)
 
 
