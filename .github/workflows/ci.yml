@@ -328,11 +328,13 @@ jobs:
         run: |
           # If no baseline exists, save one; otherwise compare against it.
           # The baseline file is criterion's <bench-name>/main/estimates.json.
+          # Use --bench flags to target only criterion benchmarks (not lib tests,
+          # which don't understand --save-baseline).
           if [ ! -f target/criterion/.omnia-baseline-saved ]; then
-            cargo bench -p omnia-benches --features full -- --save-baseline main
+            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --save-baseline main
             touch target/criterion/.omnia-baseline-saved
           else
-            cargo bench -p omnia-benches --features full -- --baseline main
+            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --baseline main
           fi
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
