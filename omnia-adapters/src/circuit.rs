@@ -540,6 +540,152 @@ impl ExpandedRollupCircuit {
         }
     }
 
+    /// Build a circuit bound to actual state roots (C-1 audit fix, v0.1.68).
+    ///
+    /// Unlike [`empty()`](Self::empty), which constructs a circuit with
+    /// all-zero public inputs and witnesses, this constructor binds the
+    /// circuit's public inputs to the **real** `old_root` and `new_root`
+    /// of the state transition being proved. Any successfully generated
+    /// proof therefore attests to a transition between these specific
+    /// roots, not between two zero roots.
+    ///
+    /// # Arguments
+    ///
+    /// * `old_root` — Byte-encoded old state root (32 bytes; BLAKE3 or
+    ///   similar). Converted to a field element via
+    ///   [`hash_to_fr`](crate::merkle::hash_to_fr).
+    /// * `new_root` — Byte-encoded new state root (32 bytes).
+    /// * `event_count` — Number of events in the batch. When zero, the
+    ///   circuit enforces the empty-batch constraint `old_root == new_root`.
+    /// * `expected_old` — Verifier-side expected old root. Must equal
+    ///   `old_root`; asserted as a sanity check.
+    /// * `expected_new` — Verifier-side expected new root. Must equal
+    ///   `new_root`; asserted as a sanity check.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `expected_old != old_root` or `expected_new != new_root`.
+    /// These sanity checks ensure the prover is constructing a circuit for
+    /// the exact transition the caller intends — a mismatch indicates a
+    /// logic error in the caller.
+    ///
+    /// # Security
+    ///
+    /// The circuit's public inputs (`old_state_root`, `new_state_root`)
+    /// are bound to the real roots. The Groth16 verifying equation
+    /// cryptographically binds the proof to these public inputs: a
+    /// verifier supplying different `expected_*` values will reject the
+    /// proof.
+    ///
+    /// # Limitations
+    ///
+    /// When `event_count > 0`, this constructor does not yet wire up
+    /// real per-event witnesses (event hashes, Merkle proofs,
+    /// intermediate roots). The caller should use
+    /// [`from_batch()`](Self::from_batch) for full event-witness
+    /// binding. This constructor is intended for the case where only
+    /// the state-root binding is required (e.g., setup-bound proofs
+    /// or empty-batch attestations).
+    pub fn from_state_roots(
+        old_root: [u8; 32],
+        new_root: [u8; 32],
+        event_count: u64,
+        expected_old: [u8; 32],
+        expected_new: [u8; 32],
+    ) -> Self {
+        // Sanity checks: the caller must pass matching expected_* values.
+        // In the verifier, the independently-computed expected_* are used
+        // to construct the public input vec; a mismatch here would mean
+        // the prover is building a circuit for a transition that doesn't
+        // match what the caller intends.
+        assert_eq!(
+            old_root, expected_old,
+            "from_state_roots: old_root must match expected_old (caller logic error)"
+        );
+        assert_eq!(
+            new_root, expected_new,
+            "from_state_roots: new_root must match expected_new (caller logic error)"
+        );
+
+        let old_root_fr = crate::merkle::hash_to_fr(&old_root);
+        let new_root_fr = crate::merkle::hash_to_fr(&new_root);
+
+        if event_count == 0 {
+            // Empty batch: the only constraint is old_root == new_root.
+            // Use real roots as public inputs; event_commitment is unused
+            // (no events to commit) but must be Some for public_input().
+            Self {
+                old_state_root: Some(old_root_fr),
+                new_state_root: Some(new_root_fr),
+                event_commitment: Some(Fr::zero()),
+                events: Vec::new(),
+                merkle_proofs: Vec::new(),
+                intermediate_roots: Vec::new(),
+            }
+        } else {
+            // Non-empty batch with no per-event witnesses available at this
+            // call site. The witness fields are populated with placeholder
+            // values that match the shape of a real circuit (so the circuit
+            // structure is identical to a real batch and can use the same
+            // trusted setup), but the per-event constraints (Merkle path
+            // verification, Poseidon state transition) will fail during
+            // proof creation.
+            //
+            // The public inputs (`old_state_root`, `new_state_root`) ARE
+            // bound to the real roots, which is the security improvement
+            // over `empty()`. For full event-witness binding, the caller
+            // must use `from_batch()`.
+            let num_events = event_count as usize;
+            let merkle_depth = 8; // Default Merkle tree depth (matches operator.rs)
+
+            let events: Vec<Option<EventWitness>> = (0..num_events)
+                .map(|_| {
+                    Some(EventWitness {
+                        event_hash: Some(Fr::zero()),
+                        operation_type: Some(Fr::zero()),
+                        payload_hash: Some(Fr::zero()),
+                    })
+                })
+                .collect();
+
+            let merkle_proofs: Vec<Option<MerklePathWitness>> = (0..num_events)
+                .map(|_| {
+                    Some(MerklePathWitness {
+                        siblings: (0..merkle_depth).map(|_| Some(Fr::zero())).collect(),
+                        directions: (0..merkle_depth).map(|_| Some(false)).collect(),
+                    })
+                })
+                .collect();
+
+            // Intermediate roots: [old_root, 0, ..., 0, new_root].
+            // The boundary constraints (intermediate_roots[0] == old_root,
+            // intermediate_roots[num_events] == new_root) are enforced by
+            // the circuit; the per-event Poseidon chain between them is
+            // NOT satisfiable with these placeholder values, so proof
+            // creation will fail until real witnesses are wired up.
+            let intermediate_roots: Vec<Option<Fr>> = (0..=num_events)
+                .map(|i| {
+                    if i == 0 {
+                        Some(old_root_fr)
+                    } else if i == num_events {
+                        Some(new_root_fr)
+                    } else {
+                        Some(Fr::zero())
+                    }
+                })
+                .collect();
+
+            Self {
+                old_state_root: Some(old_root_fr),
+                new_state_root: Some(new_root_fr),
+                event_commitment: Some(Fr::zero()),
+                events,
+                merkle_proofs,
+                intermediate_roots,
+            }
+        }
+    }
+
     /// Create a circuit instance for trusted setup key generation.
     ///
     /// Uses `MAX_OPERATION_TYPE` as the operation_type and non-zero values

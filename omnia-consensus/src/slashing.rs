@@ -1675,8 +1675,18 @@ impl SlashingEngine {
     ///
     /// The absolute burn amount, rounded down. Returns `0` if the validator
     /// has no stake or the percentage is zero.
+    ///
+    /// # H-6 fix (audit v0.1.68)
+    ///
+    /// Uses u128 integer arithmetic instead of f64 to ensure deterministic
+    /// cross-platform results. The formula is: `(stake * burn_percentage_bps) / 10_000`
+    /// where `burn_percentage_bps = (burn_percentage * 100) as u128`.
     pub fn compute_burn_amount(stake: u64, burn_percentage: f64) -> u64 {
-        ((stake as f64) * burn_percentage / 100.0) as u64
+        // H-6 fix: Use u128 intermediate to avoid f64 non-determinism.
+        // Convert percentage to basis points (1% = 100 bps, 5.0% = 500 bps).
+        // Then: burn = stake * bps / 10_000
+        let bps = (burn_percentage * 100.0) as u128;
+        ((stake as u128) * bps / 10_000) as u64
     }
 
     /// Compute the burn amount for a specific validator given a burn percentage.

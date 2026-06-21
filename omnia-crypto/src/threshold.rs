@@ -306,6 +306,18 @@ impl ThresholdKeyManager {
     ///
     /// A [`ThresholdSignature`] on success, or an error string if quorum
     /// is not met or aggregation fails.
+    ///
+    /// # H-8 fix (audit v0.1.68): Honest documentation
+    ///
+    /// This method implements **multi-signature aggregation**, NOT true
+    /// threshold signing. The combined signature verifies against the
+    /// aggregate of the *signing participants'* public keys, not the
+    /// fixed DKG group key. The signer set is revealed via
+    /// `ThresholdSignature.signers`. True threshold signing would use
+    /// Lagrange interpolation to produce a signature that verifies under
+    /// the fixed group public key without revealing which t signers
+    /// participated. Implementing proper Lagrange-weighted combination
+    /// is deferred — see ADR-013.
     pub fn combine_signatures(
         &self,
         partials: &[PartialSignature],

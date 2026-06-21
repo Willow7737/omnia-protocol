@@ -338,7 +338,15 @@ impl Event {
 
     /// Compute the legacy SHA-256 hash (for backward compatibility).
     /// Only available with the `legacy-hash` feature flag.
+    ///
+    /// This function is preserved as a reference implementation of the
+    /// legacy SHA-256 event-hash algorithm. It is not called by the
+    /// current codebase (which uses BLAKE3 via [`compute_hash`](Self::compute_hash)),
+    /// but is retained so that migration tooling or audit verification
+    /// can recompute legacy hashes when validating events created by
+    /// older node versions.
     #[cfg(feature = "legacy-hash")]
+    #[allow(dead_code)] // Reference impl for legacy hash verification; see doc comment above.
     fn compute_hash_legacy(&self) -> Result<EventId, EventValidationError> {
         let mut hasher = Sha256::new();
         hasher.update(self.creator);
@@ -364,7 +372,7 @@ impl Event {
             }
         }
         hasher.update(&self.payload);
-        hasher.update(&self.creator_pubkey);
+        hasher.update(self.creator_pubkey);
         Ok(hasher.finalize().into())
     }
 

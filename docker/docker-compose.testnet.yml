@@ -32,6 +32,8 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=3
+      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9090:8080/tcp"
     networks:
@@ -59,6 +61,8 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=3
+      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9091:8080/tcp"
     networks:
@@ -83,6 +87,8 @@ services:
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=3
+      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9092:8080/tcp"
     networks:

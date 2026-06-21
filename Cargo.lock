@@ -4813,6 +4813,8 @@ dependencies = [
 name = "omnia-economics"
 version = "0.1.68"
 dependencies = [
+ "ed25519-dalek",
+ "hex",
  "omnia-primitives",
  "omnia-substrate",
  "postcard",

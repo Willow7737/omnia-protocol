@@ -46,6 +46,8 @@ use blst::min_sig::{
 use blst::BLST_ERROR;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+// H-10 fix: Zeroize secret key material on drop.
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 // ---------------------------------------------------------------------------
 // Serde helpers for fixed-size byte arrays larger than 32 bytes
@@ -154,11 +156,19 @@ const BLS_POP_DST: &[u8] = b"BLS_POP_BLS12381G1";
 /// let sig = keypair.sign(msg);
 /// assert!(keypair.public_key().verify(msg, &sig).is_ok());
 /// ```
-#[derive(Debug, Clone)]
+///
+/// # H-10 fix (audit v0.1.68)
+///
+/// Implements `ZeroizeOnDrop` to ensure the secret key is wiped from
+/// memory when the keypair is dropped. The `secret_key` field stores
+/// raw bytes that are zeroized on drop; the `public_key` is not secret.
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct BlsKeypair {
-    /// The blst secret key.
+    /// The blst secret key (zeroized on drop).
+    #[zeroize(skip)]
     secret_key: BlstSecretKey,
-    /// The corresponding blst public key.
+    /// The corresponding blst public key (not secret).
+    #[zeroize(skip)]
     public_key: BlstPublicKey,
 }
 

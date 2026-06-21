@@ -170,10 +170,19 @@ impl RollupOperator {
             });
         }
 
-        // Build ExpandedRollupCircuit from state roots.
-        // Use the old_root as the expected_old_state_root (the verifier independently
-        // knows the old state root from the on-chain state).
-        let circuit = ExpandedRollupCircuit::empty(event_count.max(1), merkle_depth);
+        // Build ExpandedRollupCircuit from actual state roots.
+        // C-1 fix (audit v0.1.68): Previously used ExpandedRollupCircuit::empty()
+        // which proves over an all-zero witness — the proof does not bind to
+        // any real state transition. Now uses from_state_roots() with the
+        // actual old and new state roots, binding the proof to the real
+        // state transition.
+        let circuit = ExpandedRollupCircuit::from_state_roots(
+            *_old_root,
+            *_new_root,
+            event_count as u64,
+            *_old_root, // expected_old = old (verifier independently knows this)
+            *_new_root, // expected_new = new (verifier checks this matches on-chain)
+        );
         let pub_input = circuit
             .public_input()
             .map_err(|e| RollupError::Prover(ProverError::CircuitError(e.to_string())))?;

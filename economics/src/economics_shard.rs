@@ -148,10 +148,14 @@ impl EconomicsState {
     ) -> Result<(), EconomicsError> {
         match op {
             EconomicsOp::MintUbc { did, amount } => {
-                // SECURITY: Admin authorization required for minting when
-                // admin_keys is configured. This prevents unauthorized minting
-                // of UBC tokens. When admin_keys is empty (testing mode),
-                // minting is allowed for backward compatibility.
+                // SECURITY (C-6 fix): Admin authorization is ALWAYS required
+                // for minting when admin_keys is configured. When admin_keys
+                // is empty (the default), a loud warning is logged and minting
+                // is allowed for backward compatibility with test environments.
+                //
+                // Production deployments MUST call add_admin_key() before
+                // accepting events. The node startup code should configure
+                // admin keys from OMNIA_AUTHORIZED_CALLERS.
                 if !self.admin_keys.is_empty() {
                     let submitter = event_creator.ok_or_else(|| {
                         EconomicsError::ValidationFailed("MintUbc requires authenticated event creator".into())
@@ -161,14 +165,33 @@ impl EconomicsState {
                             "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into(),
                         ));
                     }
+                } else {
+                    tracing::warn!(
+                        "MintUbc accepted without admin verification — admin_keys is empty. \
+                         Configure admin_keys for production to prevent unauthorized minting."
+                    );
                 }
-                // Only allow unrestricted minting when no admin keys are configured (testing mode)
                 if !self.quota.is_registered(did) {
                     self.quota.register_did(did);
                 }
                 self.quota.reward(did, *amount)
             }
-            EconomicsOp::SpendUbc { did, amount } => self.quota.spend(did, *amount),
+            EconomicsOp::SpendUbc { did, amount } => {
+                // SECURITY (C-7 fix): Bind the caller to the DID being spent.
+                // When event_creator is provided, verify it matches the op's DID.
+                // When event_creator is None (testing only), log a warning.
+                if let Some(creator_pubkey) = event_creator {
+                    let caller_did = format!("did:omnia:{}", hex::encode(creator_pubkey));
+                    if caller_did != *did {
+                        return Err(EconomicsError::Unauthorized(
+                            "SpendUbc: caller's DID does not match the DID being spent".into(),
+                        ));
+                    }
+                } else {
+                    tracing::warn!("SpendUbc accepted without event_creator — testing mode only");
+                }
+                self.quota.spend(did, *amount)
+            }
             EconomicsOp::SubmitWork { did, proof } => {
                 // Gate work submission: only authorized submitters can mint UBC
                 // Until real ZK verification is implemented, require admin authorization
@@ -228,7 +251,22 @@ impl EconomicsState {
                 did,
                 proposal_id,
                 choice,
-            } => self.governance.vote(did, proposal_id, choice.clone(), current_epoch),
+            } => {
+                // SECURITY (C-8 fix): Bind the caller to the voting DID.
+                // When event_creator is provided, verify it matches the op's DID.
+                // When event_creator is None (testing only), log a warning.
+                if let Some(creator_pubkey) = event_creator {
+                    let caller_did = format!("did:omnia:{}", hex::encode(creator_pubkey));
+                    if caller_did != *did {
+                        return Err(EconomicsError::Unauthorized(
+                            "Vote: caller's DID does not match the voting DID".into(),
+                        ));
+                    }
+                } else {
+                    tracing::warn!("Vote accepted without event_creator — testing mode only");
+                }
+                self.governance.vote(did, proposal_id, choice.clone(), current_epoch)
+            }
             EconomicsOp::RegisterDid { did } => {
                 self.quota.register_did(did);
                 Ok(())
