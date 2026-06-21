@@ -25,10 +25,24 @@ use serde_json::json;
 use crate::state::AppState;
 
 /// Request body for submitting a contribution.
+///
+/// C-15 fix: Contribution is now a direct JSON field (not a JSON-in-JSON
+/// string) to prevent deeply-nested JSON deserialization bombs. The
+/// previous `contribution_json: String` design allowed a 10 MB attacker-
+/// controlled inner JSON string with no depth limit.
+#[cfg(feature = "zk")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContributeRequest {
-    /// The serialized `Contribution` as JSON (includes PoK).
-    pub contribution_json: String,
+    /// The contribution (directly deserialized by axum's Json extractor).
+    pub contribution: omnia_adapters::setup::Contribution,
+}
+
+/// Fallback request body when ZK feature is not enabled.
+#[cfg(not(feature = "zk"))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContributeRequest {
+    /// Placeholder — ceremony contributions require --features zk.
+    pub contribution: serde_json::Value,
 }
 
 /// Response body for the ceremony state endpoint.
@@ -147,18 +161,9 @@ pub async fn ceremony_contribute(
             }
         };
 
-        // Deserialize the contribution from JSON
-        let contribution: omnia_adapters::setup::Contribution = match serde_json::from_str(&body.contribution_json) {
-            Ok(c) => c,
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({
-                        "error": format!("Invalid contribution JSON: {e}")
-                    })),
-                );
-            }
-        };
+        // C-15 fix: Contribution is already deserialized by axum's Json extractor.
+        // No double-JSON deserialization needed.
+        let contribution = body.contribution;
 
         let result = {
             // SECURITY: Use write lock because accept_contribution mutates the

@@ -151,7 +151,11 @@ impl ShardRouter {
             ShardOp::Biological(_) => ShardId::biological(),
             ShardOp::Identity(_) => ShardId::identity(),
             ShardOp::Economics(_) => ShardId::economics(),
-            ShardOp::CrossShard(_) => unreachable!(),
+            ShardOp::CrossShard(_) => {
+                return Err(ShardError::InvalidOperation(
+                    "CrossShard operations must be routed via route_cross_shard(), not route()".into(),
+                ));
+            }
         };
 
         if let Some(shard) = self.shards.get_mut(&shard_id) {

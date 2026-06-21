@@ -118,24 +118,15 @@ pub struct ConsensusConfig {
 impl Default for ConsensusConfig {
     fn default() -> Self {
         // Use with_random_seed to generate a cryptographically random seed.
-        // Falls back to all-zero seed only if the system entropy source is
-        // unavailable (should never happen on a properly configured host).
-        Self::with_random_seed(4).unwrap_or_else(|_| {
-            tracing::error!(
-                "⚠️  getrandom failed — falling back to insecure all-zero round_seed. \
-                 This MUST NOT happen in production."
-            );
-            Self {
-                total_nodes: 4,
-                commit_delay_rounds: 1,
-                optimistic_confirmation: true,
-                optimistic_threshold: 3,
-                max_look_ahead: 10,
-                round_seed: [0u8; 32], // Insecure fallback — should never be reached
-                round_timeout_ms: 30_000,
-                max_consecutive_timeouts: 3,
-                max_sequence_entries: 10_000,
-            }
+        // H-4 fix: panic if getrandom fails instead of falling back to an
+        // insecure all-zero seed. An all-zero seed makes leader selection
+        // fully predictable — a consensus soundness break. It is better to
+        // crash at startup than to run with a predictable seed.
+        Self::with_random_seed(4).unwrap_or_else(|e| {
+            panic!(
+                "getrandom failed when generating consensus round_seed: {e}. \
+                 Cannot start with a predictable seed — fix the system RNG."
+            )
         })
     }
 }
