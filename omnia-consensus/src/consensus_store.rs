@@ -426,4 +426,367 @@ mod tests {
         assert_eq!(loaded.active_validators.len(), 100);
         assert_eq!(loaded.equivocation_tracking.len(), 100);
     }
+
+    /// RAII guard that ensures a temp file is removed when dropped, even if a
+    /// test assertion panics. Used by disk-based store tests.
+    struct TempFileGuard(std::path::PathBuf);
+
+    impl TempFileGuard {
+        fn new(path: std::path::PathBuf) -> Self {
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFileGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    /// Build a unique temp file path for disk-based store tests.
+    fn unique_temp_path(counter: u32) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("omnia-consensus-test-{}-{}.redb", std::process::id(), counter))
+    }
+
+    #[test]
+    fn test_open_disk_based_store() {
+        let path = unique_temp_path(1);
+        // Ensure a clean slate in case a prior run left a file behind.
+        let _ = std::fs::remove_file(&path);
+        let guard = TempFileGuard::new(path.clone());
+
+        let store = RedbConsensusStore::open(&path).unwrap();
+        store.save_round(7).unwrap();
+        assert_eq!(store.load_round().unwrap(), 7);
+
+        // Full state round-trip on disk.
+        let state = ConsensusState {
+            current_round: 42,
+            round_seed: [9u8; 32],
+            committed_events: 1234,
+            last_finalized_round: 40,
+            active_validators: vec![[1u8; 32], [2u8; 32]],
+            equivocation_tracking: HashMap::from([([1u8; 32], 3u64)]),
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
+        };
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+        assert_eq!(loaded.current_round, 42);
+        assert_eq!(loaded.round_seed, [9u8; 32]);
+        assert_eq!(loaded.active_validators, vec![[1u8; 32], [2u8; 32]]);
+
+        // Drop guard (and store) — file will be removed.
+        drop(store);
+        drop(guard);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_state_persistence_across_restart() {
+        // 1. In-memory store: state is lost when the store is dropped.
+        let mem_state = ConsensusState {
+            current_round: 5,
+            round_seed: [1u8; 32],
+            committed_events: 50,
+            last_finalized_round: 4,
+            active_validators: vec![[7u8; 32]],
+            equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
+        };
+        {
+            let mem_store = RedbConsensusStore::in_memory().unwrap();
+            mem_store.save_state(&mem_state).unwrap();
+            // Visible within the same instance.
+            assert_eq!(mem_store.load_state().unwrap().unwrap().current_round, 5);
+        }
+        // New in-memory store: nothing persisted.
+        let fresh_mem = RedbConsensusStore::in_memory().unwrap();
+        assert!(fresh_mem.load_state().unwrap().is_none());
+
+        // 2. Disk-based store: state survives a "process restart" (drop + reopen).
+        let path = unique_temp_path(2);
+        let _ = std::fs::remove_file(&path);
+        let guard = TempFileGuard::new(path.clone());
+
+        let disk_state = ConsensusState {
+            current_round: 99,
+            round_seed: [42u8; 32],
+            committed_events: 999,
+            last_finalized_round: 95,
+            active_validators: vec![[11u8; 32], [22u8; 32], [33u8; 32]],
+            equivocation_tracking: HashMap::from([([11u8; 32], 1u64), ([22u8; 32], 2u64)]),
+            first_event_for_sequence: HashMap::from([(([11u8; 32], 1u64), [0xAB; 32])]),
+            version: 2,
+        };
+
+        {
+            let disk_store = RedbConsensusStore::open(&path).unwrap();
+            disk_store.save_state(&disk_state).unwrap();
+            disk_store.save_round(99).unwrap();
+        }
+
+        // Simulate crash recovery: open a brand-new store at the same path.
+        let recovered = RedbConsensusStore::open(&path).unwrap();
+        let loaded = recovered
+            .load_state()
+            .unwrap()
+            .expect("state should persist across restart");
+        assert_eq!(loaded.current_round, 99);
+        assert_eq!(loaded.round_seed, [42u8; 32]);
+        assert_eq!(loaded.committed_events, 999);
+        assert_eq!(loaded.last_finalized_round, 95);
+        assert_eq!(loaded.active_validators, vec![[11u8; 32], [22u8; 32], [33u8; 32]]);
+        assert_eq!(loaded.equivocation_tracking.len(), 2);
+        assert_eq!(loaded.equivocation_tracking.get(&[11u8; 32]), Some(&1u64));
+        assert_eq!(
+            loaded.first_event_for_sequence.get(&([11u8; 32], 1u64)),
+            Some(&[0xAB; 32])
+        );
+        assert_eq!(recovered.load_round().unwrap(), 99);
+
+        drop(recovered);
+        drop(guard);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_round_persistence_default_zero() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+        // Fresh store: no round saved yet → default is 0.
+        assert_eq!(store.load_round().unwrap(), 0);
+
+        // Also verify on a fresh disk-based store.
+        let path = unique_temp_path(3);
+        let _ = std::fs::remove_file(&path);
+        let guard = TempFileGuard::new(path.clone());
+        {
+            let disk_store = RedbConsensusStore::open(&path).unwrap();
+            assert_eq!(disk_store.load_round().unwrap(), 0);
+        }
+        drop(guard);
+    }
+
+    #[test]
+    fn test_state_with_first_event_for_sequence() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        let first_event_map: HashMap<(NodeId, u64), [u8; 32]> =
+            HashMap::from([(([1u8; 32], 1u64), [0xAA; 32]), (([2u8; 32], 5u64), [0xBB; 32])]);
+
+        let state = ConsensusState {
+            current_round: 3,
+            round_seed: [0u8; 32],
+            committed_events: 0,
+            last_finalized_round: 0,
+            active_validators: vec![[1u8; 32], [2u8; 32]],
+            equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: first_event_map.clone(),
+            version: 2,
+        };
+
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+
+        assert_eq!(loaded.first_event_for_sequence.len(), 2);
+        assert_eq!(loaded.first_event_for_sequence, first_event_map);
+        // Spot-check individual entries.
+        assert_eq!(
+            loaded.first_event_for_sequence.get(&([1u8; 32], 1u64)),
+            Some(&[0xAA; 32])
+        );
+        assert_eq!(
+            loaded.first_event_for_sequence.get(&([2u8; 32], 5u64)),
+            Some(&[0xBB; 32])
+        );
+    }
+
+    #[test]
+    fn test_state_with_empty_validators() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        let state = ConsensusState {
+            current_round: 0,
+            round_seed: [0u8; 32],
+            committed_events: 0,
+            last_finalized_round: 0,
+            active_validators: Vec::new(),
+            equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
+        };
+
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+
+        assert!(loaded.active_validators.is_empty());
+        assert!(loaded.equivocation_tracking.is_empty());
+        assert!(loaded.first_event_for_sequence.is_empty());
+        assert_eq!(loaded.current_round, 0);
+    }
+
+    #[test]
+    fn test_state_with_max_round() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        let state = ConsensusState {
+            current_round: u64::MAX,
+            round_seed: [0xFF; 32],
+            committed_events: u64::MAX,
+            last_finalized_round: u64::MAX - 1,
+            active_validators: vec![[0xFF; 32]],
+            equivocation_tracking: HashMap::from([([0xFF; 32], u64::MAX)]),
+            first_event_for_sequence: HashMap::from([(([0xFF; 32], u64::MAX), [0xFF; 32])]),
+            version: 2,
+        };
+
+        store.save_state(&state).unwrap();
+        let loaded = store.load_state().unwrap().unwrap();
+
+        assert_eq!(loaded.current_round, u64::MAX);
+        assert_eq!(loaded.last_finalized_round, u64::MAX - 1);
+        assert_eq!(loaded.committed_events, u64::MAX);
+        assert_eq!(loaded.round_seed, [0xFF; 32]);
+        assert_eq!(loaded.equivocation_tracking.get(&[0xFF; 32]), Some(&u64::MAX));
+        assert_eq!(
+            loaded.first_event_for_sequence.get(&([0xFF; 32], u64::MAX)),
+            Some(&[0xFF; 32])
+        );
+    }
+
+    #[test]
+    fn test_round_save_load_cycle() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        // Start at default 0.
+        assert_eq!(store.load_round().unwrap(), 0);
+
+        // Save 0 explicitly — should still read back as 0.
+        store.save_round(0).unwrap();
+        assert_eq!(store.load_round().unwrap(), 0);
+
+        // Save 1 — reads back as 1.
+        store.save_round(1).unwrap();
+        assert_eq!(store.load_round().unwrap(), 1);
+
+        // Overwrite back to a smaller value — must not be sticky.
+        store.save_round(0).unwrap();
+        assert_eq!(store.load_round().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_state_overwrite_smaller() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        // Large initial state: 100 validators, 50 equivocation entries, 1000 committed events.
+        let large_validators: Vec<NodeId> = (0..100)
+            .map(|i| {
+                let mut id = [0u8; 32];
+                id[0] = i as u8;
+                id[1] = (i >> 8) as u8;
+                id
+            })
+            .collect();
+
+        let mut large_equivocation = HashMap::new();
+        for (i, v) in large_validators.iter().take(50).enumerate() {
+            large_equivocation.insert(*v, i as u64);
+        }
+
+        let mut large_first_event = HashMap::new();
+        for (i, v) in large_validators.iter().take(50).enumerate() {
+            let mut event_id = [0u8; 32];
+            event_id[0] = i as u8;
+            large_first_event.insert((*v, i as u64), event_id);
+        }
+
+        let large_state = ConsensusState {
+            current_round: 1_000,
+            round_seed: [0x11; 32],
+            committed_events: 1_000,
+            last_finalized_round: 990,
+            active_validators: large_validators.clone(),
+            equivocation_tracking: large_equivocation,
+            first_event_for_sequence: large_first_event,
+            version: 2,
+        };
+        store.save_state(&large_state).unwrap();
+
+        // Sanity-check the large state was written.
+        let large_loaded = store.load_state().unwrap().unwrap();
+        assert_eq!(large_loaded.active_validators.len(), 100);
+        assert_eq!(large_loaded.equivocation_tracking.len(), 50);
+        assert_eq!(large_loaded.first_event_for_sequence.len(), 50);
+
+        // Now overwrite with a small state — must replace, not merge.
+        let small_state = ConsensusState {
+            current_round: 1,
+            round_seed: [0x22; 32],
+            committed_events: 0,
+            last_finalized_round: 0,
+            active_validators: Vec::new(),
+            equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
+        };
+        store.save_state(&small_state).unwrap();
+
+        let small_loaded = store.load_state().unwrap().unwrap();
+        assert_eq!(small_loaded.current_round, 1);
+        assert_eq!(small_loaded.round_seed, [0x22; 32]);
+        assert_eq!(small_loaded.committed_events, 0);
+        assert_eq!(small_loaded.last_finalized_round, 0);
+        assert!(small_loaded.active_validators.is_empty());
+        assert!(small_loaded.equivocation_tracking.is_empty());
+        assert!(small_loaded.first_event_for_sequence.is_empty());
+    }
+
+    #[test]
+    fn test_concurrent_save_load() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let store = Arc::new(RedbConsensusStore::in_memory().unwrap());
+
+        let state = ConsensusState {
+            current_round: 42,
+            round_seed: [1u8; 32],
+            committed_events: 100,
+            last_finalized_round: 40,
+            active_validators: vec![[2u8; 32]],
+            equivocation_tracking: HashMap::new(),
+            first_event_for_sequence: HashMap::new(),
+            version: 2,
+        };
+
+        // Spawn N writer threads and N reader threads sharing the same store.
+        const N: usize = 4;
+        thread::scope(|s| {
+            for _ in 0..N {
+                let store = Arc::clone(&store);
+                let state = state.clone();
+                s.spawn(move || {
+                    for r in 0..50 {
+                        let mut st = state.clone();
+                        st.current_round = r;
+                        store.save_state(&st).unwrap();
+                    }
+                });
+            }
+            for _ in 0..N {
+                let store = Arc::clone(&store);
+                s.spawn(move || {
+                    for _ in 0..50 {
+                        // Should never panic — load_state must always succeed.
+                        let _ = store.load_state().unwrap();
+                    }
+                });
+            }
+        });
+
+        // Final sanity check.
+        let loaded = store.load_state().unwrap().unwrap();
+        assert!(loaded.current_round < 50);
+    }
 }

@@ -312,4 +312,351 @@ mod tests {
         let loaded = store.load().expect("load should succeed");
         assert!(loaded.is_empty());
     }
+
+    // -------------------------------------------------------------------------
+    // Coverage-focused tests (Task ID: 6)
+    //
+    // These tests target the previously-uncovered code paths:
+    //   - `RedbNonceStore::open` with a real disk path (not a tempdir)
+    //   - `RedbNonceStore::from_db` constructor
+    //   - `RedbNonceStore::save_incremental`
+    //   - `InMemoryNonceStore::save_incremental` overwrite + multi-creator
+    //   - `save()` full-replaces-incremental semantics
+    //   - crash-recovery (drop + reopen) for replay protection
+    //   - empty-save roundtrip
+    //   - large-set serialization scalability
+    //   - `Default` equivalence with `new()`
+    // -------------------------------------------------------------------------
+
+    /// RAII guard for a unique on-disk redb test path. Removes the file on
+    /// Drop so that panics / early returns still clean up. Each guard
+    /// produces a globally unique path via a process-local atomic counter,
+    /// matching the requested naming scheme
+    /// `omnia-nonce-test-{pid}-{counter}.redb` under `std::env::temp_dir()`.
+    struct TempDbPath {
+        path: std::path::PathBuf,
+    }
+
+    impl TempDbPath {
+        fn new() -> Self {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static COUNTER: AtomicU64 = AtomicU64::new(0);
+            let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path = std::env::temp_dir().join(format!("omnia-nonce-test-{}-{}.redb", std::process::id(), id));
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDbPath {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    /// Test: `RedbNonceStore::open` with a real disk path under
+    /// `std::env::temp_dir()` (not a `tempfile::tempdir()`). Verify save/load
+    /// works on the disk-backed store, then clean up.
+    #[test]
+    fn test_redb_open_disk_based() {
+        let tmp = TempDbPath::new();
+        let path = tmp.path();
+        // Clean up any stale file from a prior crashed run.
+        let _ = std::fs::remove_file(path);
+
+        let store = RedbNonceStore::open(path).expect("open should succeed");
+
+        let mut nonces = HashMap::new();
+        nonces.insert([7u8; 32], 111);
+        nonces.insert([8u8; 32], 222);
+        store.save(&nonces).expect("save should succeed");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded.get(&[7u8; 32]), Some(&111));
+        assert_eq!(loaded.get(&[8u8; 32]), Some(&222));
+
+        // Drop the store before removing the file (Windows can't delete open
+        // files, and on Linux this ensures the WAL is flushed).
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Test: `RedbNonceStore::from_db` constructor with an externally-created
+    /// `redb::Database` wrapped in `Arc`. This exercises the `from_db`
+    /// constructor which is otherwise untested.
+    #[test]
+    fn test_redb_from_db_constructor() {
+        let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+        let db_path = tmp_dir.path().join("nonce_from_db_test.redb");
+
+        let db = redb::Database::create(&db_path).expect("database create should succeed");
+        let store = RedbNonceStore::from_db(std::sync::Arc::new(db)).expect("from_db should succeed");
+
+        let mut nonces = HashMap::new();
+        nonces.insert([9u8; 32], 333);
+        store.save(&nonces).expect("save should succeed");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded.get(&[9u8; 32]), Some(&333));
+    }
+
+    /// Test: `InMemoryNonceStore::save_incremental` inserts entries one at a
+    /// time, and later incremental saves for the same creator overwrite (not
+    /// reject) the previous value.
+    #[test]
+    fn test_save_incremental_in_memory() {
+        let store = InMemoryNonceStore::new();
+        let creator_a = [0xAAu8; 32];
+        let creator_b = [0xBBu8; 32];
+        let creator_c = [0xCCu8; 32];
+
+        store.save_incremental(&creator_a, 1).expect("incremental save a");
+        store.save_incremental(&creator_b, 2).expect("incremental save b");
+        store.save_incremental(&creator_c, 3).expect("incremental save c");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded.get(&creator_a), Some(&1));
+        assert_eq!(loaded.get(&creator_b), Some(&2));
+        assert_eq!(loaded.get(&creator_c), Some(&3));
+
+        // Updating creator_a with a new nonce should overwrite, not reject.
+        store.save_incremental(&creator_a, 10).expect("incremental update a");
+        let loaded = store.load().expect("load after update should succeed");
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded.get(&creator_a), Some(&10));
+        assert_eq!(loaded.get(&creator_b), Some(&2));
+        assert_eq!(loaded.get(&creator_c), Some(&3));
+    }
+
+    /// Test: `RedbNonceStore::save_incremental` — the critical previously-
+    /// untested per-event persistence path. Insert a few incremental nonces
+    /// and verify they are persisted; verify overwrite semantics.
+    #[test]
+    fn test_save_incremental_redb() {
+        let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+        let db_path = tmp_dir.path().join("nonce_incremental_test.redb");
+
+        let store = RedbNonceStore::open(&db_path).expect("open should succeed");
+
+        let creator_a = [0xAAu8; 32];
+        let creator_b = [0xBBu8; 32];
+
+        store.save_incremental(&creator_a, 1).expect("incremental save a");
+        store.save_incremental(&creator_b, 2).expect("incremental save b");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded.get(&creator_a), Some(&1));
+        assert_eq!(loaded.get(&creator_b), Some(&2));
+
+        // Updating creator_a with a new nonce should overwrite.
+        store.save_incremental(&creator_a, 10).expect("incremental update a");
+        let loaded = store.load().expect("load after update should succeed");
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded.get(&creator_a), Some(&10));
+        assert_eq!(loaded.get(&creator_b), Some(&2));
+    }
+
+    /// Test: `save_incremental` overwrites existing entries for the same
+    /// creator — it does not reject the second write.
+    #[test]
+    fn test_save_incremental_overwrite() {
+        let store = InMemoryNonceStore::new();
+        let creator_a = [0x11u8; 32];
+
+        store.save_incremental(&creator_a, 5).expect("incremental save 5");
+        store.save_incremental(&creator_a, 10).expect("incremental save 10");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 1);
+        // Should be 10 (overwritten), not 5 (rejected).
+        assert_eq!(loaded.get(&creator_a), Some(&10));
+    }
+
+    /// Test: `save_incremental` supports multiple distinct creators
+    /// independently.
+    #[test]
+    fn test_save_incremental_multiple_creators() {
+        let store = InMemoryNonceStore::new();
+        let creator_a = [0x01u8; 32];
+        let creator_b = [0x02u8; 32];
+        let creator_c = [0x03u8; 32];
+
+        store.save_incremental(&creator_a, 1).expect("incremental save a");
+        store.save_incremental(&creator_b, 2).expect("incremental save b");
+        store.save_incremental(&creator_c, 3).expect("incremental save c");
+
+        let loaded = store.load().expect("load should succeed");
+        assert_eq!(loaded.len(), 3);
+        assert_eq!(loaded.get(&creator_a), Some(&1));
+        assert_eq!(loaded.get(&creator_b), Some(&2));
+        assert_eq!(loaded.get(&creator_c), Some(&3));
+    }
+
+    /// Test: A full `save()` replaces the incremental state entirely (does
+    /// not merge). Note: this holds for `InMemoryNonceStore`, whose `save()`
+    /// does `*stored = nonces.clone()`. (`RedbNonceStore::save()` only
+    /// inserts/overwrites and does not remove keys not in the new map, so
+    /// this test deliberately uses the in-memory store to verify the
+    /// full-replacement contract.)
+    #[test]
+    fn test_save_full_replaces_incremental() {
+        let store = InMemoryNonceStore::new();
+        let creator_a = [0xA1u8; 32];
+        let creator_b = [0xB2u8; 32];
+        let creator_c = [0xC3u8; 32];
+
+        // Insert a few incremental nonces first.
+        store.save_incremental(&creator_a, 1).expect("incremental a");
+        store.save_incremental(&creator_b, 2).expect("incremental b");
+        store.save_incremental(&creator_c, 3).expect("incremental c");
+
+        // Full save with a different set (only creator_b, value 99).
+        let mut full_map = HashMap::new();
+        full_map.insert(creator_b, 99);
+        store.save(&full_map).expect("full save");
+
+        let loaded = store.load().expect("load should succeed");
+        // Only the full-save set should be present.
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded.get(&creator_b), Some(&99));
+        assert_eq!(loaded.get(&creator_a), None);
+        assert_eq!(loaded.get(&creator_c), None);
+    }
+
+    /// Test: Crash-recovery for replay protection. Save nonces to a
+    /// disk-backed `RedbNonceStore` via `save_incremental`, drop it, create
+    /// a new store at the same path, and verify `load()` returns the saved
+    /// nonces. This simulates a node restart with no in-memory state.
+    #[test]
+    fn test_redb_persistence_across_restart() {
+        let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+        let db_path = tmp_dir.path().join("nonce_restart_test.redb");
+
+        let creator_x = [0xDEu8; 32];
+        let creator_y = [0xADu8; 32];
+
+        // Phase 1: Save nonces via save_incremental (the per-event path).
+        {
+            let store = RedbNonceStore::open(&db_path).expect("open should succeed");
+            store.save_incremental(&creator_x, 42).expect("incremental x");
+            store.save_incremental(&creator_y, 7).expect("incremental y");
+        }
+
+        // Phase 2: Simulate restart — open a new store at the same path.
+        {
+            let store = RedbNonceStore::open(&db_path).expect("reopen should succeed");
+            let loaded = store.load().expect("load should succeed");
+            assert_eq!(loaded.len(), 2);
+            assert_eq!(loaded.get(&creator_x), Some(&42));
+            assert_eq!(loaded.get(&creator_y), Some(&7));
+        }
+    }
+
+    /// Test: Saving an empty `HashMap` and then loading returns an empty map
+    /// (not `None` — the store has been written to, just with no entries).
+    /// Verified on both `InMemoryNonceStore` and `RedbNonceStore`.
+    #[test]
+    fn test_empty_save_then_load() {
+        let empty: HashMap<[u8; 32], u64> = HashMap::new();
+
+        // In-memory.
+        let store = InMemoryNonceStore::new();
+        store.save(&empty).expect("in-memory save should succeed");
+        let loaded = store.load().expect("in-memory load should succeed");
+        assert!(loaded.is_empty());
+
+        // Redb.
+        let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+        let db_path = tmp_dir.path().join("nonce_empty_save_test.redb");
+        let redb_store = RedbNonceStore::open(&db_path).expect("open should succeed");
+        redb_store.save(&empty).expect("redb save should succeed");
+        let loaded = redb_store.load().expect("redb load should succeed");
+        assert!(loaded.is_empty());
+    }
+
+    /// Test: Serialization scalability — save 1000 nonces and verify all are
+    /// present after a roundtrip. Each creator key is a unique 32-byte array
+    /// (i encoded in the first 4 bytes, rest zero). Verified on both
+    /// `InMemoryNonceStore` and `RedbNonceStore` (the latter exercises
+    /// postcard serialization + redb range scan over a large set).
+    #[test]
+    fn test_large_nonce_set() {
+        fn make_key(i: u32) -> [u8; 32] {
+            let mut key = [0u8; 32];
+            key[..4].copy_from_slice(&i.to_le_bytes());
+            key
+        }
+
+        let mut nonces = HashMap::new();
+        for i in 0..1000u32 {
+            nonces.insert(make_key(i), i as u64);
+        }
+        assert_eq!(nonces.len(), 1000, "test setup: keys must be unique");
+
+        // In-memory roundtrip.
+        let store = InMemoryNonceStore::new();
+        store.save(&nonces).expect("in-memory save should succeed");
+        let loaded = store.load().expect("in-memory load should succeed");
+        assert_eq!(loaded.len(), 1000);
+        for i in 0..1000u32 {
+            assert_eq!(
+                loaded.get(&make_key(i)),
+                Some(&(i as u64)),
+                "in-memory nonce for i={} should match",
+                i
+            );
+        }
+
+        // Redb roundtrip.
+        let tmp_dir = tempfile::tempdir().expect("tempdir should succeed");
+        let db_path = tmp_dir.path().join("nonce_large_set_test.redb");
+        let redb_store = RedbNonceStore::open(&db_path).expect("open should succeed");
+        redb_store.save(&nonces).expect("redb save should succeed");
+        let loaded = redb_store.load().expect("redb load should succeed");
+        assert_eq!(loaded.len(), 1000);
+        for i in 0..1000u32 {
+            assert_eq!(
+                loaded.get(&make_key(i)),
+                Some(&(i as u64)),
+                "redb nonce for i={} should match",
+                i
+            );
+        }
+    }
+
+    /// Test: `InMemoryNonceStore::default()` behaves identically to
+    /// `InMemoryNonceStore::new()` — both start empty and both support the
+    /// same save/load round-trip.
+    #[test]
+    fn test_default_in_memory_store_equivalence() {
+        let via_new = InMemoryNonceStore::new();
+        let via_default = InMemoryNonceStore::default();
+
+        // Both should start empty.
+        assert!(via_new.load().expect("load new").is_empty());
+        assert!(via_default.load().expect("load default").is_empty());
+
+        // Round-trip on both with the same data.
+        let mut nonces = HashMap::new();
+        nonces.insert([0xFEu8; 32], 1234);
+        nonces.insert([0xEDu8; 32], 5678);
+
+        via_new.save(&nonces).expect("save new");
+        via_default.save(&nonces).expect("save default");
+
+        let loaded_new = via_new.load().expect("load new after save");
+        let loaded_default = via_default.load().expect("load default after save");
+
+        assert_eq!(loaded_new, loaded_default);
+        assert_eq!(loaded_new.len(), 2);
+        assert_eq!(loaded_new.get(&[0xFEu8; 32]), Some(&1234));
+        assert_eq!(loaded_new.get(&[0xEDu8; 32]), Some(&5678));
+    }
 }

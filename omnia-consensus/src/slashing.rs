@@ -3120,4 +3120,618 @@ mod tests {
         // Fractional result rounds down
         assert_eq!(SlashingEngine::compute_burn_amount(999, 1.0), 9); // 999 * 0.01 = 9.99 → 9
     }
+
+    // ── Task 7: Edge-case coverage tests ────────────────────────────
+    //
+    // The following tests target functions and edge cases identified as
+    // uncovered ("dark") by the coverage report — multi-offense accumulation
+    // across thresholds, liveness boundary behavior, undo-after-ejection,
+    // internal accessors, graded escalation cycles, disk-backed persistence,
+    // and the `decrement_slash_count_by` store trait method.
+
+    /// Process-local counter used to derive unique temp-dir paths for each
+    /// disk-backed test, preventing cross-test file collisions even when
+    /// tests run in parallel.
+    static TEMP_DB_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    /// Returns a unique `.redb` path under `std::env::temp_dir()`.
+    fn unique_temp_db_path() -> PathBuf {
+        let pid = std::process::id();
+        let n = TEMP_DB_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        std::env::temp_dir().join(format!("omnia-slashing-test-{pid}-{n}.redb"))
+    }
+
+    /// Best-effort cleanup of a temp db file *and* any corrupt backup that
+    /// `RedbSlashingStore::open` may have created alongside it.
+    fn cleanup_temp_db(path: &Path) {
+        let _ = std::fs::remove_file(path);
+        let corrupt = path.with_extension("db.corrupt");
+        let _ = std::fs::remove_file(&corrupt);
+    }
+
+    /// RAII guard that removes the temp db file (and any corrupt backup)
+    /// when dropped, so panic / early-return cleanup is automatic.
+    struct TempDbGuard(PathBuf);
+    impl Drop for TempDbGuard {
+        fn drop(&mut self) {
+            cleanup_temp_db(&self.0);
+        }
+    }
+
+    #[test]
+    fn test_new_disk_backed_engine() {
+        // `SlashingEngine::new(Some(path), ...)` opens a redb-backed engine.
+        // Verify the engine functions end-to-end (register, record, query).
+        let path = unique_temp_db_path();
+        let _guard = TempDbGuard(path.clone());
+
+        let mut engine = SlashingEngine::new(Some(path.clone()), 500, 2000).expect("open disk engine");
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+        assert_eq!(engine.stake_of(&n), 10_000);
+
+        // Liveness violation → 100 pts, below slash_threshold → Warned
+        let outcome = engine.record_offense(n, SlashOffense::LivenessViolation);
+        assert!(matches!(outcome, SlashOutcome::Warned { .. }));
+        assert_eq!(engine.slash_points_of(&n), 100);
+        assert!(!engine.is_slashed(&n));
+
+        // Equivocation → 600 pts, ≥ slash_threshold → Slashed
+        let outcome = engine.record_offense(n, SlashOffense::Equivocation);
+        assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
+        assert!(engine.is_slashed(&n));
+
+        // engine state is persisted to disk — verified by the disk-persistence test below.
+    }
+
+    #[test]
+    fn test_with_store_constructor_redb() {
+        // `SlashingEngine::with_store(Arc<dyn SlashingStore>)` with a
+        // `RedbSlashingStore` (the existing `with_store` tests only cover
+        // `InMemorySlashingStore`).
+        let path = unique_temp_db_path();
+        let _guard = TempDbGuard(path.clone());
+
+        let store: Arc<dyn SlashingStore> = Arc::new(RedbSlashingStore::open(&path).expect("open redb"));
+        let mut engine = SlashingEngine::with_store(store).expect("with_store");
+
+        // Empty store → default thresholds (500 / 2000)
+        assert_eq!(engine.internal_slash_threshold(), 500);
+        assert_eq!(engine.internal_ejection_threshold(), 2000);
+
+        let n = node(7);
+        engine.register_validator(n, 5_000);
+        assert_eq!(engine.stake_of(&n), 5_000);
+        let outcome = engine.record_offense(n, SlashOffense::Equivocation);
+        assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
+        assert!(engine.is_slashed(&n));
+    }
+
+    #[test]
+    fn test_register_validator_overwrite() {
+        // Documented behavior: re-registering an existing validator
+        // OVERWRITES the stake (insert semantics) and leaves slash_points
+        // untouched (or_insert(0) only inserts if absent).
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+
+        engine.register_validator(n, 1_000);
+        assert_eq!(engine.stake_of(&n), 1_000);
+
+        // Accumulate some slash points before re-registering.
+        engine.record_offense(n, SlashOffense::LivenessViolation); // +100 pts
+        assert_eq!(engine.slash_points_of(&n), 100);
+
+        // Re-register with a different stake.
+        engine.register_validator(n, 2_000);
+        assert_eq!(engine.stake_of(&n), 2_000, "stake should be overwritten to 2_000");
+        assert_eq!(
+            engine.slash_points_of(&n),
+            100,
+            "slash_points should be preserved across re-registration"
+        );
+    }
+
+    #[test]
+    fn test_multi_offense_accumulation_across_thresholds() {
+        // Accumulate points one offense at a time, crossing first the
+        // slash_threshold and then the ejection_threshold. Verify the
+        // outcome transitions Warned → Slashed → Ejected and that the
+        // is_slashed / is_ejected accessors track the transitions.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+
+        // 4 × LivenessViolation = 400 pts (below slash_threshold)
+        for _ in 0..4 {
+            let o = engine.record_offense(n, SlashOffense::LivenessViolation);
+            assert!(
+                matches!(o, SlashOutcome::Warned { .. }),
+                "should be warned below slash threshold"
+            );
+        }
+        assert_eq!(engine.slash_points_of(&n), 400);
+        assert!(!engine.is_slashed(&n));
+        assert!(!engine.is_ejected(&n));
+
+        // +1 LivenessViolation = 500 pts (≥ slash_threshold) → Slashed
+        let o = engine.record_offense(n, SlashOffense::LivenessViolation);
+        assert!(matches!(o, SlashOutcome::Slashed { .. }));
+        assert!(engine.is_slashed(&n));
+        assert!(!engine.is_ejected(&n), "not yet ejected at 500 pts");
+
+        // +2 × Equivocation = 1500 pts (still slashed, not ejected)
+        engine.record_offense(n, SlashOffense::Equivocation);
+        let o = engine.record_offense(n, SlashOffense::Equivocation);
+        assert!(matches!(o, SlashOutcome::Slashed { .. }));
+        assert_eq!(engine.slash_points_of(&n), 1500);
+        assert!(engine.is_slashed(&n));
+        assert!(!engine.is_ejected(&n));
+
+        // +1 × Equivocation = 2000 pts (≥ ejection_threshold) → Ejected
+        let o = engine.record_offense(n, SlashOffense::Equivocation);
+        assert!(matches!(o, SlashOutcome::Ejected { node } if node == n));
+        assert_eq!(engine.slash_points_of(&n), 2000);
+        assert!(engine.is_ejected(&n));
+    }
+
+    #[test]
+    fn test_check_liveness_boundary() {
+        // Documented boundary behavior of `check_liveness`:
+        //   inactive_rounds = current_round - last_active_round
+        //   violation triggered iff inactive_rounds > threshold  (strict >)
+        // Therefore:
+        //   - exactly at threshold (inactive == threshold) → NO violation
+        //   - one above threshold (inactive == threshold + 1) → violation
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+
+        // inactive = 15 - 5 = 10, threshold = 10 → 10 > 10 is false → None
+        let result = engine.check_liveness(n, 5, 15, 10);
+        assert!(result.is_none(), "at-threshold (10 == 10) should NOT trigger");
+        assert_eq!(engine.slash_points_of(&n), 0, "no offense should have been recorded");
+
+        // inactive = 16 - 5 = 11, threshold = 10 → 11 > 10 is true → Some
+        let result = engine.check_liveness(n, 5, 16, 10);
+        assert!(result.is_some(), "one-above-threshold (11 > 10) should trigger");
+        assert_eq!(engine.slash_points_of(&n), 100);
+    }
+
+    #[test]
+    fn test_undo_slash_after_ejection() {
+        // Documented behavior: `undo_slash` pops the most recent offense
+        // from the history stack and decrements slash_points accordingly,
+        // even when the validator has already crossed the ejection
+        // threshold. After enough undos, is_ejected flips back to false.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+
+        // 4 × Equivocation = 2000 pts → Ejected
+        for _ in 0..4 {
+            engine.record_offense(n, SlashOffense::Equivocation);
+        }
+        assert_eq!(engine.slash_points_of(&n), 2000);
+        assert!(engine.is_ejected(&n));
+
+        // Undo one equivocation (500 pts) → 1500 pts, no longer ejected.
+        engine.undo_slash(&n).expect("undo after ejection");
+        assert_eq!(engine.slash_points_of(&n), 1500);
+        assert!(!engine.is_ejected(&n), "should no longer be ejected after one undo");
+        assert!(engine.is_slashed(&n), "should still be slashed");
+
+        // Undo all remaining offenses → 0 pts.
+        for _ in 0..3 {
+            engine.undo_slash(&n).expect("undo");
+        }
+        assert_eq!(engine.slash_points_of(&n), 0);
+        assert!(!engine.is_slashed(&n));
+
+        // Further undo fails: no offense history left.
+        let err = engine.undo_slash(&n).unwrap_err();
+        assert!(matches!(err, SlashingStoreError::UndoNoOffenseHistory(_)));
+    }
+
+    #[test]
+    fn test_to_state_round_trip() {
+        // `to_state()` snapshots the full SlashingState. Save it into a
+        // fresh store, build a new engine via `with_store`, and verify
+        // the new engine observes identical data.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n1 = node(1);
+        let n2 = node(2);
+        engine.register_validator(n1, 10_000);
+        engine.register_validator(n2, 5_000);
+        engine.record_offense(n1, SlashOffense::Equivocation); // 500 pts → Slashed
+        engine.record_offense(n2, SlashOffense::LivenessViolation); // 100 pts → Warned
+
+        let snapshot = engine.to_state();
+        assert_eq!(snapshot.slash_points.get(&n1), Some(&500));
+        assert_eq!(snapshot.slash_points.get(&n2), Some(&100));
+        assert_eq!(snapshot.stakes.get(&n1), Some(&10_000));
+        assert_eq!(snapshot.stakes.get(&n2), Some(&5_000));
+        assert_eq!(snapshot.slash_threshold, 500);
+        assert_eq!(snapshot.ejection_threshold, 2000);
+        // typed_offense_history should also be present
+        assert_eq!(snapshot.typed_offense_history.get(&n1).map(Vec::len), Some(1));
+        assert_eq!(snapshot.typed_offense_history.get(&n2).map(Vec::len), Some(1));
+
+        // Round-trip via a fresh in-memory store.
+        let store: Arc<dyn SlashingStore> = Arc::new(InMemorySlashingStore::new());
+        store.save(&snapshot).expect("save snapshot");
+        let engine2 = SlashingEngine::with_store(store).expect("with_store");
+        assert_eq!(engine2.slash_points_of(&n1), 500);
+        assert_eq!(engine2.slash_points_of(&n2), 100);
+        assert_eq!(engine2.stake_of(&n1), 10_000);
+        assert_eq!(engine2.stake_of(&n2), 5_000);
+        assert!(engine2.is_slashed(&n1));
+        assert!(!engine2.is_slashed(&n2));
+    }
+
+    #[test]
+    fn test_internal_accessors() {
+        // Cover the four `internal_*` accessors used by genesis-replay.
+        let mut engine = SlashingEngine::new_in_memory(700, 3_000);
+        let n1 = node(1);
+        let n2 = node(2);
+        engine.register_validator(n1, 10_000);
+        engine.register_validator(n2, 5_000);
+        engine.record_offense(n1, SlashOffense::LivenessViolation); // 100 pts
+        engine.record_offense(n2, SlashOffense::Equivocation); // 500 pts
+
+        let slash_points = engine.internal_slash_points();
+        assert_eq!(slash_points.get(&n1), Some(&100));
+        assert_eq!(slash_points.get(&n2), Some(&500));
+
+        let stakes = engine.internal_stakes();
+        assert_eq!(stakes.get(&n1), Some(&10_000));
+        assert_eq!(stakes.get(&n2), Some(&5_000));
+
+        assert_eq!(engine.internal_slash_threshold(), 700);
+        assert_eq!(engine.internal_ejection_threshold(), 3_000);
+    }
+
+    #[test]
+    fn test_compute_burn_amount_for_unregistered() {
+        // `compute_burn_amount_for` returns `None` for an unregistered
+        // validator (stake == 0).
+        let engine = SlashingEngine::new_in_memory(500, 2000);
+        let unregistered = node(99);
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 50.0), None);
+    }
+
+    #[test]
+    fn test_compute_burn_amount_for_registered() {
+        // 10% of a 1_000 stake = 100. Verifies the instance method path.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 1_000);
+        assert_eq!(engine.compute_burn_amount_for(n, 10.0), Some(100));
+        // Also verify a 0% burn on a registered validator returns Some(0).
+        assert_eq!(engine.compute_burn_amount_for(n, 0.0), Some(0));
+    }
+
+    #[test]
+    fn test_record_offense_graded_escalation_invalid_attestation() {
+        // Focused escalation test for InvalidAttestation across all three
+        // tiers: Warning(2%) → Jailed(10%, 2000r) → Ejected(100%).
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = node(1);
+        engine.register_validator(v, 10_000);
+
+        // 1st → Warning(2% of 10_000 = 200)
+        let o1 = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 100);
+        assert!(matches!(o1, SlashOutcome::Warned { node, points: 200 } if node == v));
+        assert!(engine.jailed_validators().is_empty());
+
+        // 2nd → Jailed(10% of 10_000 = 1000, 2000 rounds, auto_release)
+        let o2 = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 200);
+        assert!(matches!(o2, SlashOutcome::Slashed { node, amount: 1000 } if node == v));
+        assert!(engine.is_jailed_at(v, 200));
+        assert!(!engine.is_jailed_at(v, 2200)); // 200 + 2000 = 2200
+
+        // Release so the 3rd offense can be recorded cleanly.
+        let released = engine.release_expired_jails(2200);
+        assert_eq!(released, vec![v]);
+
+        // 3rd → Ejected(100%)
+        let o3 = engine.record_offense_graded(v, SlashOffense::InvalidAttestation, 3000);
+        assert!(matches!(o3, SlashOutcome::Ejected { node } if node == v));
+    }
+
+    #[test]
+    fn test_record_offense_graded_jail_auto_release_explicit() {
+        // Explicit end-to-end test of the auto-release path:
+        // graded offense jails with auto_release=true → advance round past
+        // release_round → try_release_from_jail returns Ok(true) and
+        // is_jailed returns false afterwards.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = node(1);
+        engine.register_validator(v, 10_000);
+
+        // First equivocation → Jailed(5%, 1000 rounds, auto_release=true)
+        let outcome = engine.record_offense_graded(v, SlashOffense::Equivocation, 100);
+        assert!(matches!(outcome, SlashOutcome::Slashed { .. }));
+        assert_eq!(engine.jailed_validators().len(), 1);
+        assert!(engine.is_jailed(v, 100));
+        assert!(engine.is_jailed(v, 1099));
+
+        // Before release_round: try_release_from_jail returns Ok(false).
+        let released = engine.try_release_from_jail(v, 500).expect("try_release");
+        assert!(!released, "should not release before release_round");
+        assert!(engine.is_jailed(v, 500));
+
+        // At release_round: try_release_from_jail returns Ok(true).
+        let released = engine.try_release_from_jail(v, 1100).expect("try_release");
+        assert!(released, "should release at/past release_round");
+        assert!(!engine.is_jailed(v, 1100), "is_jailed should be false after release");
+        assert!(engine.jailed_validators().is_empty());
+    }
+
+    #[test]
+    fn test_release_expired_jails_batch_mixed_periods() {
+        // Jail three validators with different release_rounds (all
+        // auto_release=true). At a round between the earliest and latest
+        // release_rounds, only the expired subset should be returned.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v1 = node(1);
+        let v2 = node(2);
+        let v3 = node(3);
+        engine.register_validator(v1, 10_000);
+        engine.register_validator(v2, 10_000);
+        engine.register_validator(v3, 10_000);
+
+        // v1 jailed at round 0 → release_round = 1000
+        engine.record_offense_graded(v1, SlashOffense::Equivocation, 0);
+        // v2 jailed at round 500 → release_round = 1500
+        engine.record_offense_graded(v2, SlashOffense::Equivocation, 500);
+        // v3 jailed at round 1000 → release_round = 2000
+        engine.record_offense_graded(v3, SlashOffense::Equivocation, 1000);
+
+        assert_eq!(engine.jailed_validators().len(), 3);
+
+        // At round 1200: only v1 (release_round 1000) is expired.
+        let released = engine.release_expired_jails(1200);
+        assert_eq!(released.len(), 1);
+        assert!(released.contains(&v1));
+
+        // At round 1800: v2 (release_round 1500) is now expired.
+        let released = engine.release_expired_jails(1800);
+        assert_eq!(released.len(), 1);
+        assert!(released.contains(&v2));
+
+        // At round 9999: v3 (release_round 2000) is expired.
+        let released = engine.release_expired_jails(9999);
+        assert_eq!(released.len(), 1);
+        assert!(released.contains(&v3));
+
+        // Registry should now be empty.
+        assert!(engine.jailed_validators().is_empty());
+
+        // Subsequent call returns empty Vec.
+        let released = engine.release_expired_jails(99999);
+        assert!(released.is_empty());
+    }
+
+    #[test]
+    fn test_get_offense_history_empty() {
+        // A validator with no recorded offenses returns an empty Vec.
+        let engine = SlashingEngine::new_in_memory(500, 2000);
+        let unregistered = node(99);
+        assert!(engine.get_offense_history(unregistered).is_empty());
+
+        // A registered-but-clean validator also returns empty.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+        assert!(engine.get_offense_history(n).is_empty());
+    }
+
+    #[test]
+    fn test_get_offense_history_multiple_types() {
+        // Record multiple offense types for a single validator and verify
+        // `get_offense_history` returns them in insertion order with the
+        // correct types.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let n = node(1);
+        engine.register_validator(n, 10_000);
+
+        engine.record_offense(n, SlashOffense::LivenessViolation);
+        engine.record_offense(n, SlashOffense::Equivocation);
+        engine.record_offense(n, SlashOffense::InvalidAttestation);
+
+        let history = engine.get_offense_history(n);
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0], SlashOffense::LivenessViolation);
+        assert_eq!(history[1], SlashOffense::Equivocation);
+        assert_eq!(history[2], SlashOffense::InvalidAttestation);
+
+        // Different validator should still have empty history.
+        let other = node(2);
+        assert!(engine.get_offense_history(other).is_empty());
+    }
+
+    #[test]
+    fn test_emit_event_all_event_types() {
+        // `emit_event` only logs (no storage), so this test verifies it
+        // does not panic for any of the SlashingEventType variants.
+        let engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = node(1);
+        let round = 42u64;
+        let ts = current_timestamp();
+
+        let event_types = [
+            SlashingEventType::OffenseRecorded,
+            SlashingEventType::PenaltyApplied,
+            SlashingEventType::JailEntered,
+            SlashingEventType::JailReleased,
+            SlashingEventType::ValidatorEjected,
+            SlashingEventType::UndoApplied,
+        ];
+
+        for et in event_types {
+            engine.emit_event(SlashingEvent {
+                event_type: et,
+                validator_id: v,
+                round,
+                offense: Some(SlashOffense::Equivocation),
+                penalty: Some(SlashPenalty::Warning { burn_percentage: 1.0 }),
+                timestamp: ts,
+            });
+        }
+        // No panic = pass.
+    }
+
+    #[test]
+    fn test_jailed_validators_list_three() {
+        // Jail exactly 3 validators and verify `jailed_validators()` returns
+        // a Vec of length 3. (Existing test only jails 2.)
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v1 = node(1);
+        let v2 = node(2);
+        let v3 = node(3);
+        engine.register_validator(v1, 10_000);
+        engine.register_validator(v2, 10_000);
+        engine.register_validator(v3, 10_000);
+
+        // First equivocation → Jailed(5%, 1000 rounds, auto_release=true)
+        engine.record_offense_graded(v1, SlashOffense::Equivocation, 100);
+        engine.record_offense_graded(v2, SlashOffense::Equivocation, 200);
+        engine.record_offense_graded(v3, SlashOffense::Equivocation, 300);
+
+        let jailed = engine.jailed_validators();
+        assert_eq!(jailed.len(), 3);
+
+        // Each jailed entry should carry the right validator_id.
+        let jailed_ids: Vec<NodeId> = jailed.iter().map(|j| j.validator_id).collect();
+        assert!(jailed_ids.contains(&v1));
+        assert!(jailed_ids.contains(&v2));
+        assert!(jailed_ids.contains(&v3));
+    }
+
+    #[test]
+    fn test_is_jailed_at_specific_round_boundaries() {
+        // Jail a validator at round 10 for 5 rounds → release_round = 15.
+        // is_jailed_at returns true iff current_round < release_round.
+        let mut engine = SlashingEngine::new_in_memory(500, 2000);
+        let v = node(1);
+        engine.register_validator(v, 10_000);
+
+        // Manually insert a jail entry with release_round = 15 so we can
+        // control the exact release boundary (graded offenses use 1000+ rounds).
+        {
+            let mut state = engine.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "lock poisoned");
+                std::process::abort()
+            });
+            state.jail_registry.insert(
+                v,
+                JailState {
+                    validator_id: v,
+                    jailed_at_round: 10,
+                    release_round: 15,
+                    offense_history: vec![SlashOffense::LivenessViolation],
+                    stake_locked: 0,
+                    auto_release: true,
+                },
+            );
+        }
+
+        // Boundary behavior: current_round < release_round (15).
+        assert!(engine.is_jailed_at(v, 10), "10 < 15 → jailed");
+        assert!(engine.is_jailed_at(v, 14), "14 < 15 → jailed");
+        assert!(!engine.is_jailed_at(v, 15), "15 is NOT < 15 → not jailed (boundary)");
+        assert!(!engine.is_jailed_at(v, 16), "16 is NOT < 15 → not jailed");
+    }
+
+    #[test]
+    fn test_redb_slashing_store_disk_persistence() {
+        // Round-trip persistence: save state to a redb file, drop the
+        // store, open a fresh store at the same path, load state, and
+        // verify equivalence.
+        let path = unique_temp_db_path();
+        let _guard = TempDbGuard(path.clone());
+
+        let n1 = node(1);
+        let n2 = node(2);
+
+        // Phase 1: write state.
+        {
+            let store = RedbSlashingStore::open(&path).expect("open for write");
+            let mut state = SlashingState::default();
+            state.slash_points.insert(n1, 500);
+            state.slash_points.insert(n2, 100);
+            state.stakes.insert(n1, 10_000);
+            state.stakes.insert(n2, 5_000);
+            state.offense_history.insert(n1, vec![500]);
+            state.typed_offense_history.insert(n1, vec![SlashOffense::Equivocation]);
+            state.slash_threshold = 500;
+            state.ejection_threshold = 2_000;
+            store.save(&state).expect("save");
+            // store dropped at end of block → file handle released
+        }
+
+        // Phase 2: reload state from disk into a fresh store.
+        let store2 = RedbSlashingStore::open(&path).expect("open for read");
+        let loaded = store2.load().expect("load");
+        assert_eq!(loaded.slash_points.get(&n1), Some(&500));
+        assert_eq!(loaded.slash_points.get(&n2), Some(&100));
+        assert_eq!(loaded.stakes.get(&n1), Some(&10_000));
+        assert_eq!(loaded.stakes.get(&n2), Some(&5_000));
+        assert_eq!(loaded.slash_threshold, 500);
+        assert_eq!(loaded.ejection_threshold, 2_000);
+        assert_eq!(loaded.offense_history.get(&n1), Some(&vec![500]));
+        assert_eq!(
+            loaded.typed_offense_history.get(&n1),
+            Some(&vec![SlashOffense::Equivocation])
+        );
+    }
+
+    #[test]
+    fn test_decrement_slash_count_by() {
+        // Cover the `decrement_slash_count_by` trait method on both
+        // InMemorySlashingStore and RedbSlashingStore.
+        let n = node(1);
+
+        // ── InMemorySlashingStore ──
+        {
+            let store = InMemorySlashingStore::new();
+            let mut state = SlashingState::default();
+            state.slash_points.insert(n, 500);
+            state.stakes.insert(n, 10_000);
+            store.save(&state).expect("save");
+
+            assert_eq!(store.get_slash_count(&n), 500);
+            store.decrement_slash_count_by(&n, 200).expect("decrement 200");
+            assert_eq!(store.get_slash_count(&n), 300);
+            // Decrementing past zero clamps to zero (decrement = amount.min(current)).
+            store.decrement_slash_count_by(&n, 1_000).expect("decrement past zero");
+            assert_eq!(store.get_slash_count(&n), 0);
+        }
+
+        // ── RedbSlashingStore ──
+        let path = unique_temp_db_path();
+        let _guard = TempDbGuard(path.clone());
+        {
+            let store = RedbSlashingStore::open(&path).expect("open");
+            let mut state = SlashingState::default();
+            state.slash_points.insert(n, 500);
+            state.stakes.insert(n, 10_000);
+            store.save(&state).expect("save");
+
+            assert_eq!(store.get_slash_count(&n), 500);
+            store.decrement_slash_count_by(&n, 200).expect("decrement 200");
+            assert_eq!(store.get_slash_count(&n), 300);
+        }
+
+        // Decrementing a validator with zero slash_count returns an error.
+        let path2 = unique_temp_db_path();
+        let _guard2 = TempDbGuard(path2.clone());
+        {
+            let store = RedbSlashingStore::open(&path2).expect("open");
+            let err = store.decrement_slash_count_by(&n, 100).unwrap_err();
+            assert!(matches!(err, SlashingStoreError::Persistence(_)));
+        }
+    }
 }
