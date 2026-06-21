@@ -131,7 +131,7 @@ impl ShardState for EconomicsState {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use omnia_substrate::{crypto::generate_keypair, Event, NodeId, VectorClock};
+    use omnia_substrate::{crypto::generate_keypair, Event, NodeId};
 
     fn test_node(id: u8) -> NodeId {
         let mut n = [0u8; 32];

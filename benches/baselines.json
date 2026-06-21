@@ -20,14 +20,16 @@
       "source_bench": "tx_throughput/sustained_tps_single_node",
       "gated": false,
       "gated_short": "runner variance (±30%) exceeds gate threshold (25%) — gate is noise",
-      "gated_reason": "EXCLUDED from regression gate because GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range), but the gate threshold is 25%. When variance exceeds threshold, the gate cannot reliably detect real regressions and produces false alarms on legitimate runner dips. The benchmark is reported informatively (displayed in CI output) but does NOT fail CI. To re-enable gating, either (1) move to a self-hosted runner with stable CPU affinity, or (2) run 5+ CI runs, take the median as the new baseline, and set threshold to 10-15%. See AUDIT_FIX_NOTES.md 'Benchmark Throughput Investigation' section for the full analysis. The latency metrics (finality_latency_p99, dag_insert_p50, gossip_propagation_p50) with <4% variance remain gated and reliable."
+      "gated_reason": "EXCLUDED from regression gate because GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range), but the gate threshold is 25%. When variance exceeds threshold, the gate cannot reliably detect real regressions and produces false alarms on legitimate runner dips. The benchmark is reported informatively (displayed in CI output) but does NOT fail CI. To re-enable gating, either (1) move to a self-hosted runner with stable CPU affinity, or (2) run 5+ CI runs, take the median as the new baseline, and set threshold to 10-15%. See AUDIT_FIX_NOTES.md 'Benchmark Throughput Investigation' section for the full analysis. The latency metrics (finality_latency_mean, dag_insert_p50, gossip_propagation_p50) with <4% variance remain gated and reliable."
     },
-    "finality_latency_p99": {
-      "description": "Finality latency p99 (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency)",
+    "finality_latency_mean": {
+      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99. For true tail percentiles, post-process the JSON 'samples' array or implement a custom Measurement harness. Renamed 2026-06-21 from 'finality_latency_p99' which was misleading (the number was always a mean, never a percentile).",
       "unit": "ns",
       "baseline": 24520,
       "direction": "lower_is_better",
-      "source_bench": "finality_latency/creation_to_finality_p50_p95_p99"
+      "source_bench": "finality_latency/creation_to_finality_mean",
+      "former_name": "finality_latency_p99",
+      "former_source_bench": "finality_latency/creation_to_finality_p50_p95_p99"
     },
     "dag_insert_p50": {
       "description": "DAG insert latency p50 (0 pre-existing events, in-memory only)",
