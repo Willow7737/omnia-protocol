@@ -36,8 +36,10 @@ use serde_json::{json, Value};
 // Configuration
 // ---------------------------------------------------------------------------
 
-/// Project root directory (where the top-level Cargo.toml lives).
-const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+/// Project root directory (workspace root, where the top-level Cargo.toml lives).
+/// CARGO_MANIFEST_DIR points to the `node/` crate directory; we need to go
+/// up one level to reach the workspace root where `docker/` lives.
+const PROJECT_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 
 /// Relative path to the 5-node Docker Compose file from the project root.
 const COMPOSE_FILE: &str = "docker/docker-compose.yml";

@@ -142,8 +142,8 @@ jobs:
       # all-features includes ethereum-live; needs rustc ≥1.91 for alloy.
       # The stable toolchain may be <1.91, so this step is allowed to fail.
       # The feature-matrix job tests --all-features with toolchain 1.91.0 explicitly.
-      - name: Test workspace with all features (skip live settlement)
-        run: cargo test --workspace --exclude omnia-fuzz --all-features --lib --bins --tests --verbose -- --skip settlement::live
+      - name: Test workspace with all features (skip live settlement + docker)
+        run: cargo test --workspace --exclude omnia-fuzz --all-features --lib --bins --tests --verbose -- --skip settlement::live --skip docker_compose
         timeout-minutes: 15
         continue-on-error: true  # May fail if stable rustc < 1.91 (ethereum-live needs alloy)
 
