@@ -314,7 +314,7 @@ fn test_economics_state_full_lifecycle() {
             training_data_hash: nonzero_hash(),
         },
         nonzero_hash(),
-        500, // 500 compute units → 500 UBC reward
+        500,        // 500 compute units → 500 UBC reward
         Vec::new(), // empty signature: testing-mode accepted path
     )
     .expect("valid proof should construct");
