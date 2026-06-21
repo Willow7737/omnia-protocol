@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.72](https://github.com/Willow7737/omnia-protocol/compare/v0.1.71...v0.1.72) (2026-06-21)
+
+
+### Bug Fixes
+
+* **bench:** address 6 mentor review issues — hang, ungating, ZK drift ([7815de8](https://github.com/Willow7737/omnia-protocol/commit/7815de8116072824ff943eef07d9d1cf739eaba1))
+* **bench:** address 6 mentor review issues — hang, ungating, ZK drift ([5e79051](https://github.com/Willow7737/omnia-protocol/commit/5e79051f55239a0647e315a99393cd1194b2e134))
+* **bench:** address 6 mentor review issues — script bug, CI split, baselines ([b19b8ac](https://github.com/Willow7737/omnia-protocol/commit/b19b8ac1b6eda09e26d91c62a2ba0a648b8046d0))
+* **bench:** address 6 mentor review issues — script bug, CI split, baselines ([76c83ef](https://github.com/Willow7737/omnia-protocol/commit/76c83efdc76dd94ab32ac75d60c746b6ab8aa297))
+
 ## [0.1.71](https://github.com/Willow7737/omnia-protocol/compare/v0.1.70...v0.1.71) (2026-06-21)
 
 
