@@ -116,24 +116,65 @@ impl UsefulWorkProof {
     /// The method is named `verify` (not `verify_stub`) because the
     /// public API should be stable — the implementation will be upgraded
     /// to real cryptographic verification without changing the call site.
-    pub fn verify(&self, _verifier_pubkey: &[u8; 32]) -> bool {
-        #[cfg(feature = "production")]
-        {
-            // In production mode, stub verification is disabled
-            // TODO: Implement real ZK proof or VDF verification
-            tracing::error!("Production mode requires real work verification - stub not allowed");
-            return false;
-        }
-        #[cfg(not(feature = "production"))]
-        {
-            // Development/testing mode: allow stub verification with warning
-            let is_valid = self.result_hash.iter().any(|&b| b != 0)
-                && self.compute_units_consumed > 0
-                && !self.verifier_signature.is_empty();
-            if is_valid {
-                tracing::warn!("Work proof accepted with stub verification - NOT production safe");
+    ///
+    /// C-9 fix (audit v0.1.68): Implements Ed25519 signature verification
+    /// against the verifier's public key. The verifier signs the
+    /// `result_hash || compute_units_consumed` tuple, attesting that the
+    /// work was verified. This replaces the previous stub that only checked
+    /// `result_hash != [0;32]` (non-cryptographic).
+    ///
+    /// In production mode, real Ed25519 verification is always performed.
+    /// In non-production mode, if the verifier_signature is empty, a
+    /// warning is logged and the proof is accepted (testing mode). If
+    /// the signature is non-empty, it is verified cryptographically.
+    pub fn verify(&self, verifier_pubkey: &[u8; 32]) -> bool {
+        // Construct the message that the verifier should have signed:
+        // result_hash (32 bytes) || compute_units_consumed (8 bytes LE)
+        let mut message = Vec::with_capacity(40);
+        message.extend_from_slice(&self.result_hash);
+        message.extend_from_slice(&self.compute_units_consumed.to_le_bytes());
+
+        if self.verifier_signature.is_empty() {
+            // No signature provided
+            #[cfg(feature = "production")]
+            {
+                tracing::error!(
+                    "Production mode: work proof rejected — no verifier signature"
+                );
+                return false;
             }
-            is_valid
+            #[cfg(not(feature = "production"))]
+            {
+                tracing::warn!(
+                    "Work proof accepted without verifier signature — testing mode only"
+                );
+                return self.result_hash.iter().any(|&b| b != 0)
+                    && self.compute_units_consumed > 0;
+            }
+        }
+
+        // Verify the Ed25519 signature against the verifier's public key
+        use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
+        let Ok(pubkey) = VerifyingKey::from_bytes(verifier_pubkey) else {
+            tracing::error!("Invalid verifier public key format");
+            return false;
+        };
+
+        let Ok(sig) = Signature::from_slice(&self.verifier_signature) else {
+            tracing::error!("Invalid verifier signature format (len={})", self.verifier_signature.len());
+            return false;
+        };
+
+        match pubkey.verify(&message, &sig) {
+            Ok(()) => {
+                tracing::debug!("Work proof verifier signature valid");
+                true
+            }
+            Err(e) => {
+                tracing::warn!("Work proof verifier signature invalid: {e}");
+                false
+            }
         }
     }
 

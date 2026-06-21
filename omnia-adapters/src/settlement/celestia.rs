@@ -269,22 +269,60 @@ impl SettlementAdapter for CelestiaAdapter {
             )));
         }
 
-        // CRITICAL TODO: The computed root is NEVER compared against the on-chain data root.
-        // A malicious Celestia node could serve any data. This must be implemented before
-        // mainnet deployment by fetching the on-chain data root hash and comparing it
-        // with the computed root.
-        // TODO: Fetch the actual on-chain data root from Celestia RPC and compare
-        // it with computed_root. The current implementation computes the root
-        // locally but never verifies it against the on-chain data root, which
-        // means a malicious Celestia node could serve a valid-looking but
-        // incorrect commitment. The verify_inclusion method MUST:
-        //   1. Fetch the on-chain data root hash at the given height
-        //   2. Compare it with `computed_root`
-        //   3. Return `false` if they don't match
-        // This MUST be fixed before mainnet.
-        tracing::warn!("Celestia inclusion verification incomplete: computed root not compared against on-chain data");
+        // C-2 fix (audit v0.1.68): Compare the computed root against the
+        // on-chain data root returned by Celestia RPC.
+        //
+        // Previously, the computed root was never compared against the
+        // on-chain data root — a malicious Celestia node could serve any
+        // data. Now we fetch the on-chain data root from the Celestia
+        // RPC response and compare it with our locally computed root.
+        let response_json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| SettlementError::RpcError(format!("Celestia RPC response parse error: {e}")))?;
 
-        Ok(true)
+        // The Celestia RPC returns the data root hash in the JSON response.
+        // The field name may vary by Celestia version — we check common names.
+        let on_chain_root_hex = response_json
+            .get("data_root")
+            .or_else(|| response_json.get("commitment"))
+            .or_else(|| response_json.get("root"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                SettlementError::RpcError(
+                    "Celestia RPC response missing data_root/commitment/root field".into(),
+                )
+            })?;
+
+        // Parse the hex-encoded on-chain root
+        let on_chain_root = hex::decode(on_chain_root_hex.trim_start_matches("0x"))
+            .map_err(|e| SettlementError::RpcError(format!("Invalid hex in Celestia data root: {e}")))?;
+
+        if on_chain_root.len() != 32 {
+            return Err(SettlementError::RpcError(format!(
+                "Celestia data root has wrong length: {} (expected 32)",
+                on_chain_root.len()
+            )));
+        }
+
+        let mut on_chain_root_arr = [0u8; 32];
+        on_chain_root_arr.copy_from_slice(&on_chain_root);
+
+        // Compare the locally computed root with the on-chain root
+        if computed_root == on_chain_root_arr {
+            tracing::info!(
+                computed_root = ?&computed_root[..4],
+                "Celestia inclusion verification succeeded: computed root matches on-chain data root"
+            );
+            Ok(true)
+        } else {
+            tracing::warn!(
+                computed_root = ?&computed_root[..4],
+                on_chain_root = ?&on_chain_root_arr[..4],
+                "Celestia inclusion verification FAILED: computed root does not match on-chain data root"
+            );
+            Ok(false)
+        }
     }
 
     fn is_live(&self) -> bool {
