@@ -15,12 +15,12 @@
     "consensus_throughput": {
       "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O — NOT representative of real-world multi-node throughput)",
       "unit": "events_per_sec",
-      "baseline": 7000,
+      "baseline": 10000,
       "direction": "higher_is_better",
       "source_bench": "tx_throughput/sustained_tps_single_node",
       "gated": true,
       "threshold_pct": 40,
-      "gated_reason": "Re-gated 2026-06-21 with a per-benchmark threshold of 40% (vs the default 25%). GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range). The previous approach of ungating entirely (gated: false) provided ZERO regression protection on the primary throughput metric — a catastrophic 80% regression would have passed silently. The 40% threshold is a compromise: it accommodates runner variance while still catching catastrophic regressions (>40% throughput drop). For production-grade gating, move to a self-hosted runner with stable CPU affinity and reduce the threshold to 15-20%."
+      "gated_reason": "Updated 2026-06-21: baseline raised from 7000 to 10000 ops/s. The stale 7000 baseline (set 2026-06-07) was making the gate decorative — current measurements consistently range 11,900-15,400 ops/s, so a regression from 15,000 to 5,000 would have passed with a green checkmark (+43% above baseline). The new 10,000 baseline with the 40% threshold means the gate fails at <6,000 ops/s, catching catastrophic regressions while accommodating the ±30% CI runner variance. Re-gated with per-benchmark threshold of 40% (vs the default 25%). GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range). For production-grade gating, move to a self-hosted runner with stable CPU affinity and reduce the threshold to 15-20%."
     },
     "finality_latency_mean": {
       "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99. For true tail percentiles, post-process the JSON 'samples' array or implement a custom Measurement harness. Renamed 2026-06-21 from 'finality_latency_p99' which was misleading (the number was always a mean, never a percentile).",

@@ -52,8 +52,16 @@ def parse_criterion_output(text: str) -> dict[str, float]:
             continue
 
         # ── Parse time line FIRST (before benchmark name detection) ───
-        # Criterion output: "time:   [17.454 µs 17.610 µs 17.796 µs]"
-        # Each value has its own unit suffix: "lower UNIT median UNIT upper UNIT"
+        # Criterion outputs two formats depending on terminal width:
+        #   Format A (wide terminal): bench name and time on separate lines
+        #     finality_latency/creation_to_finality_mean
+        #                         time:   [24.736 µs 24.788 µs 24.841 µs]
+        #   Format B (narrow terminal): bench name and time on same line
+        #     zk_proof_gen/1_tx_batch time:   [3.0882 ms 3.0902 ms 3.0924 ms]
+        #
+        # The regexes below handle both formats. Format A matches
+        # "^time:..." and uses current_bench. Format B matches
+        # "<bench_name> time:..." and extracts the bench name from the line.
         time_match = re.match(r"^time:\s+\[([^\]]+)\]", line_stripped)
         if time_match and current_bench:
             values_str = time_match.group(1).strip()
@@ -77,6 +85,31 @@ def parse_criterion_output(text: str) -> dict[str, float]:
                         results[current_bench] = median_ns
             except (ValueError, IndexError):
                 pass
+            continue
+
+        # Format B: "<bench_name> time:   [...]" (bench name and time on same line)
+        # This happens when Criterion detects a narrow terminal width.
+        inline_time_match = re.match(r"^([\w/]+)\s+time:\s+\[([^\]]+)\]", line_stripped)
+        if inline_time_match:
+            inline_bench = inline_time_match.group(1)
+            values_str = inline_time_match.group(2).strip()
+            try:
+                pairs = re.findall(r"([\d.]+)\s*(µs|μs|us|ns|ms|s)", values_str)
+                if len(pairs) >= 2:
+                    median_ns = parse_time_value(f"{pairs[1][0]} {pairs[1][1]}")
+                    results[inline_bench] = median_ns
+                elif len(pairs) == 1:
+                    median_ns = parse_time_value(f"{pairs[0][0]} {pairs[0][1]}")
+                    results[inline_bench] = median_ns
+                else:
+                    parts = values_str.split()
+                    if len(parts) >= 3:
+                        median_ns = parse_time_value(f"{parts[1]} {parts[2]}")
+                        results[inline_bench] = median_ns
+            except (ValueError, IndexError):
+                pass
+            # Update current_bench too, in case the next line is a thrpt: line
+            current_bench = inline_bench
             continue
 
         # ── Parse throughput line ──────────────────────────────────────
@@ -120,6 +153,23 @@ def parse_criterion_output(text: str) -> dict[str, float]:
         # Skip lines that are clearly not benchmark names
         if line_stripped.startswith(("time:", "thrpt:", "[", "change:", "Found", "Smallest")):
             continue
+
+        # Check if the line looks like a benchmark ID FIRST (before the
+        # keyword filter). This prevents false negatives when a benchmark
+        # name contains a word that is also a Criterion statistics keyword.
+        # For example, "finality_latency/creation_to_finality_mean" contains
+        # "mean" as a substring, which would cause the keyword filter to
+        # skip it — leaving current_bench=None when the time: line arrives.
+        # The bench-name pattern is strict (word chars + slashes only, no
+        # spaces), so it won't match Criterion statistics lines like
+        # "mean: 24.788 µs" or "Performing bootstrap analysis".
+        if re.match(r"^[\w/]+$", line_stripped):
+            current_bench = line_stripped
+            continue
+
+        # If the line doesn't look like a bench name, check if it contains
+        # Criterion statistics keywords. If so, reset current_bench (the
+        # next time: line will be ignored until a new bench name appears).
         if any(kw in line_stripped.lower() for kw in [
             "warming up", "collecting", "performing", "found", "outliers",
             "mean", "median", "madvise", "meas", "sample", "bootstrapped",
@@ -127,9 +177,6 @@ def parse_criterion_output(text: str) -> dict[str, float]:
         ]):
             current_bench = None
             continue
-        # Only update current_bench if it looks like a benchmark ID
-        if re.match(r"^[\w/]+$", line_stripped):
-            current_bench = line_stripped
 
     return results
 

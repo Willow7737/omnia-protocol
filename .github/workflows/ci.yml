@@ -313,6 +313,7 @@ jobs:
   benchmark-comparison:
     name: Benchmark Comparison
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
@@ -321,22 +322,95 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "omnia-bench-${{ hashFiles('**/Cargo.lock') }}"
+
+      # ── CPU frequency governor ──────────────────────────────────────
+      # Pin the CPU to performance governor to reduce inter-run variance.
+      # GitHub Actions ubuntu-latest runners default to "powersave" or
+      # "schedutil" governor, which causes ~23% swing between benchmark
+      # suites as the CPU frequency boosts and throttles. Setting
+      # "performance" governor locks the CPU at its base frequency,
+      # producing stable, comparable measurements.
+      #
+      # This requires sudo and may fail on some runner configurations
+      # (e.g., if cpupower is not installed or the runner doesn't allow
+      # governor changes). The step is continue-on-error so the job
+      # proceeds even if governor setup fails.
+      - name: Set CPU performance governor
+        run: |
+          if command -v cpupower &>/dev/null; then
+            sudo cpupower frequency-set -g performance || echo "WARN: cpupower governor set failed (non-fatal)"
+          elif [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+            for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+              echo performance | sudo tee "$cpu" 2>/dev/null || true
+            done
+            echo "CPU governor set to performance"
+          else
+            echo "WARN: CPU governor not adjustable on this runner (non-fatal)"
+          fi
+        continue-on-error: true
+
       - name: Build benchmarks
         run: cargo bench --no-run -p omnia-benches --features full
-      - name: Run quick benchmark (baseline-aware)
+
+      # ── Run fast benchmarks only (fits in CI budget) ────────────────
+      # The benchmark-comparison job has a 20-minute timeout. The ZK
+      # benchmarks (baseline_bench --features full, which includes
+      # zk_proof_gen) can take 85+ seconds PER SAMPLE and 10 samples per
+      # bench, exceeding the budget. ZK benchmarks are moved to the
+      # scheduled benchmarks.yml workflow instead.
+      #
+      # This job runs:
+      #   - throughput.rs (fast: ~30s total)
+      #   - sharding_bench.rs (fast: ~2min total)
+      #   - baseline_bench.rs WITHOUT --features full (skips ZK group)
+      #
+      # The regression gate (check_benchmark_regression.py) is tolerant
+      # of missing benchmarks — it reports them as MISSING but does NOT
+      # fail CI. ZK regression gating is handled by the scheduled
+      # benchmarks.yml workflow.
+      - name: Run fast benchmarks (throughput + sharding, no ZK)
         run: |
           # If no baseline exists, save one; otherwise compare against it.
           # The baseline file is criterion's <bench-name>/main/estimates.json.
           # Use --bench flags to target only criterion benchmarks (not lib tests,
           # which don't understand --save-baseline).
           if [ ! -f target/criterion/.omnia-baseline-saved ]; then
-            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --save-baseline main
+            cargo bench -p omnia-benches --bench throughput --bench sharding_bench -- --save-baseline main 2>&1 | tee criterion_output.txt
             touch target/criterion/.omnia-baseline-saved
           else
-            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --baseline main
+            cargo bench -p omnia-benches --bench throughput --bench sharding_bench -- --baseline main 2>&1 | tee criterion_output.txt
           fi
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
+
+      - name: Run baseline benchmarks (consensus + DAG + gossip, no ZK)
+        run: |
+          # baseline_bench.rs includes a zk_proof_gen group that is
+          # feature-gated under "full". By running WITHOUT --features full,
+          # the ZK group emits a no-op "skipped_no_full_feature" bench and
+          # the fast consensus/DAG/gossip benches run normally.
+          if [ -f target/criterion/.omnia-baseline-saved ]; then
+            cargo bench -p omnia-benches --bench baseline_bench -- --baseline main 2>&1 | tee -a criterion_output.txt
+          else
+            cargo bench -p omnia-benches --bench baseline_bench -- --save-baseline main 2>&1 | tee -a criterion_output.txt
+          fi
+        timeout-minutes: 8
+        continue-on-error: true  # Benchmarks are informational
+
+      # ── Regression gate ────────────────────────────────────────────
+      - name: Check benchmark regressions
+        run: |
+          python3 scripts/check_benchmark_regression.py \
+            --baselines benches/baselines.json \
+            criterion_output.txt || true  # Informational only
+
+      - name: Upload criterion results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: criterion-comparison-results
+          path: criterion_output.txt
+          retention-days: 30
 
   supply-chain:
     name: Supply Chain Audit
