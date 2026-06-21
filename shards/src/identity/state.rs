@@ -675,13 +675,28 @@ fn aes256gcm_decrypt(ciphertext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &
 /// key). This ensures the recovered key can actually verify Ed25519
 /// signatures. The `SigningKey` is dropped after extracting the public
 /// key — the secret key material is not retained.
+///
+/// The reconstructed secret is first passed through BLAKE3 with the
+/// [`IDENTITY_KEY_DERIVATION_DOMAIN`] domain separator before being
+/// used as the Ed25519 seed. This is defense-in-depth against
+/// cross-protocol seed reuse: if the same reconstructed secret is
+/// ever reused in another context, the derived Ed25519 key will
+/// differ from any key derived with a different domain separator.
 fn derive_identity_key(secret: &[u8]) -> [u8; 32] {
     use ed25519_dalek::SigningKey;
-    // The secret must be at least 32 bytes for Ed25519 key derivation.
-    // If shorter, pad with zeros (deterministic).
+
+    // Mix the reconstructed secret with the identity-key derivation
+    // domain separator. This binds the derived seed to the
+    // "OMNIA identity recovery" context, preventing cross-protocol
+    // seed reuse even if the same Shamir-reconstructed secret
+    // appears elsewhere.
     let mut seed = [0u8; 32];
-    let len = secret.len().min(32);
-    seed[..len].copy_from_slice(&secret[..len]);
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(IDENTITY_KEY_DERIVATION_DOMAIN.as_bytes());
+    hasher.update(secret);
+    let digest = hasher.finalize();
+    seed.copy_from_slice(digest.as_bytes());
+
     // Create an Ed25519 signing key from the seed, then extract the
     // verifying (public) key. The signing key is dropped immediately.
     let signing_key = SigningKey::from_bytes(&seed);
