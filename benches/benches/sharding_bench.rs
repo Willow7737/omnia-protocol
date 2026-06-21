@@ -374,6 +374,12 @@ fn bench_realistic_sequential_finalization_hashmap(c: &mut Criterion) {
             BenchmarkId::new("sequential_finalization_hashmap", pre_fill),
             &pre_fill,
             |b, &pre_fill| {
+                // PerIteration (not SmallInput) to avoid accumulating thousands of
+                // HashMap instances in memory. With SmallInput, Criterion creates
+                // batch_size = iters/10 setup outputs simultaneously; for fast
+                // routines, iters can be 100k+, creating 10k+ HashMaps at once.
+                // PerIteration calls setup once per routine call and drops the
+                // output immediately, keeping memory bounded.
                 b.iter_batched(
                     || {
                         let (event_states, event_rounds) = prepopulate_hashmap(pre_fill.max(1));
@@ -399,7 +405,7 @@ fn bench_realistic_sequential_finalization_hashmap(c: &mut Criterion) {
                             seq += 1;
                         }
                     },
-                    criterion::BatchSize::SmallInput,
+                    criterion::BatchSize::PerIteration,
                 )
             },
         );
@@ -430,6 +436,16 @@ fn bench_realistic_sequential_finalization_sharded(c: &mut Criterion) {
             BenchmarkId::new("sequential_finalization_sharded", pre_fill),
             &pre_fill,
             |b, &pre_fill| {
+                // PerIteration is CRITICAL here. With SmallInput, Criterion
+                // creates batch_size = iters/10 ShardedConsensusState instances
+                // simultaneously (each containing 256 RwLocks). For the pre_fill=0
+                // case, the fast setup causes Criterion to estimate iters~100k+,
+                // so batch_size~10k+ — that's 2.56 MILLION RwLocks in memory at
+                // once, causing OOM/swapping and a 10-minute CI hang.
+                //
+                // PerIteration sets batch_size=1: setup is called, the routine
+                // runs, the ShardedConsensusState is dropped, then repeat.
+                // Memory stays bounded to one instance at a time.
                 b.iter_batched(
                     || {
                         let state = prepopulate_sharded(pre_fill.max(1));
@@ -454,7 +470,7 @@ fn bench_realistic_sequential_finalization_sharded(c: &mut Criterion) {
                             seq += 1;
                         }
                     },
-                    criterion::BatchSize::SmallInput,
+                    criterion::BatchSize::PerIteration,
                 )
             },
         );

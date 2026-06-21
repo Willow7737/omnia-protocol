@@ -168,6 +168,12 @@ def check_regressions(
         # "gated" defaults to true for backward compatibility. When false,
         # the benchmark is reported (SKIP status) but does not fail CI.
         gated = definition.get("gated", True)
+        # Per-benchmark threshold override: if "threshold_pct" is set on the
+        # benchmark definition, it takes precedence over the global threshold.
+        # This allows noise-tolerant gating for benchmarks with high runner
+        # variance (e.g., consensus_throughput on shared CI runners) while
+        # keeping tight thresholds for stable benchmarks.
+        bench_threshold = definition.get("threshold_pct", threshold_pct)
 
         # Find the measured value — two-pass approach:
         # 1. First try the most specific key (__thrpt for throughput)
@@ -224,10 +230,10 @@ def check_regressions(
 
         if direction == "higher_is_better":
             # Throughput: regression means measured is LOWER than baseline.
-            is_regression = pct_change < -threshold_pct
+            is_regression = pct_change < -bench_threshold
         else:
             # Latency: regression means measured is HIGHER than baseline.
-            is_regression = pct_change > threshold_pct
+            is_regression = pct_change > bench_threshold
 
         # If the benchmark is excluded from gating ("gated": false), report
         # it as SKIP regardless of whether it would have been a regression.
@@ -260,7 +266,7 @@ def check_regressions(
                 "description": definition.get("description", ""),
                 "message": (
                     f"REGRESSION: {key} ({definition.get('description', '')}) "
-                    f"changed by {pct_change:.1f}% (threshold: {threshold_pct}%). "
+                    f"changed by {pct_change:.1f}% (threshold: {bench_threshold}%). "
                     f"Baseline: {baseline_val} {unit}, Measured: {measured_val:.0f} {unit}"
                 ),
             })

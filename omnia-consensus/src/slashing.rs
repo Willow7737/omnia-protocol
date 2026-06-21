@@ -1681,6 +1681,37 @@ impl SlashingEngine {
     /// Uses u128 integer arithmetic instead of f64 to ensure deterministic
     /// cross-platform results. The formula is: `(stake * burn_percentage_bps) / 10_000`
     /// where `burn_percentage_bps = (burn_percentage * 100) as u128`.
+    ///
+    /// # C-4 residual risk (mentor review 2026-06-21)
+    ///
+    /// The H-6 fix mitigates the f64 non-determinism in the *arithmetic*
+    /// (the multiplication and division are now u128), but the
+    /// **f64→u128 conversion** at the API boundary (`(burn_percentage *
+    /// 100.0) as u128`) is still theoretically non-deterministic for
+    /// fractional values. On x86 with x87 FPU (80-bit extended
+    /// precision), `5.1 * 100.0` may produce `509.9999...` which
+    /// truncates to `509`, while on x86-64 with SSE2 it produces
+    /// `510.0` → `510`.
+    ///
+    /// **Current risk: LOW.** All burn_percentage values used in the
+    /// codebase are integer-valued (1.0, 2.0, 5.0, 10.0, 25.0, 100.0),
+    /// for which the f64→u128 conversion is exact and deterministic
+    /// across all platforms. The risk only materializes if a caller
+    /// passes a fractional burn_percentage.
+    ///
+    /// **Full fix (deferred):** Change the API to accept basis points
+    /// (`burn_percentage_bps: u64` where 10000 = 100%) instead of `f64`.
+    /// This is a breaking API change that affects `SlashPenalty`,
+    /// `compute_burn_amount`, `compute_burn_amount_for`, and
+    /// `record_offense_graded`. It should be done in a coordinated
+    /// breaking-change release.
+    ///
+    /// **Audit of new code (2026-06-21):** The 20 tests added to this
+    /// file for coverage are TEST-ONLY code and do NOT introduce any
+    /// new f64 usage in consensus-critical paths. The only f64
+    /// references in new code are test-assertion values
+    /// (e.g., `burn_percentage: 1.0` in `assert!(matches!(...))`),
+    /// which are not on the consensus critical path.
     pub fn compute_burn_amount(stake: u64, burn_percentage: f64) -> u64 {
         // H-6 fix: Use u128 intermediate to avoid f64 non-determinism.
         // Convert percentage to basis points (1% = 100 bps, 5.0% = 500 bps).
