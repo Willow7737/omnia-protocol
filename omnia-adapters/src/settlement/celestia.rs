@@ -289,9 +289,7 @@ impl SettlementAdapter for CelestiaAdapter {
             .or_else(|| response_json.get("root"))
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                SettlementError::RpcError(
-                    "Celestia RPC response missing data_root/commitment/root field".into(),
-                )
+                SettlementError::RpcError("Celestia RPC response missing data_root/commitment/root field".into())
             })?;
 
         // Parse the hex-encoded on-chain root

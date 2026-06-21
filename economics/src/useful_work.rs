@@ -138,18 +138,13 @@ impl UsefulWorkProof {
             // No signature provided
             #[cfg(feature = "production")]
             {
-                tracing::error!(
-                    "Production mode: work proof rejected — no verifier signature"
-                );
+                tracing::error!("Production mode: work proof rejected — no verifier signature");
                 return false;
             }
             #[cfg(not(feature = "production"))]
             {
-                tracing::warn!(
-                    "Work proof accepted without verifier signature — testing mode only"
-                );
-                return self.result_hash.iter().any(|&b| b != 0)
-                    && self.compute_units_consumed > 0;
+                tracing::warn!("Work proof accepted without verifier signature — testing mode only");
+                return self.result_hash.iter().any(|&b| b != 0) && self.compute_units_consumed > 0;
             }
         }
 
@@ -162,7 +157,10 @@ impl UsefulWorkProof {
         };
 
         let Ok(sig) = Signature::from_slice(&self.verifier_signature) else {
-            tracing::error!("Invalid verifier signature format (len={})", self.verifier_signature.len());
+            tracing::error!(
+                "Invalid verifier signature format (len={})",
+                self.verifier_signature.len()
+            );
             return false;
         };
 
