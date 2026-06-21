@@ -498,15 +498,22 @@ fn proof_hash_to_curve(alpha_string: &[u8], public_key: &ed25519_dalek::Verifyin
 /// This eliminates the secret key from the hash input entirely, removing
 /// the exposure risk and providing the formal uniqueness guarantee.
 //
-// SECURITY WARNING: This gamma computation includes the raw secret key bytes in the hash.
-// If gamma is ever exposed through a side channel or stored, the secret key could potentially
-// be recovered. DO NOT log, persist, or transmit gamma values.
-// TODO (V3): Replace with proper scalar multiplication: gamma = sk * H(message)
+// H-7 fix (audit v0.1.68): Removed the raw secret key from the hash input.
+// Instead of hashing secret_key || h_point, we now compute gamma as:
+//   gamma = BLAKE3("OMNIA-ECVRF-GAMMA-V3" || h_point || signature)
+// where `signature` is an Ed25519 signature over h_point. This proves
+// knowledge of the secret key without exposing raw key bytes in the
+// hash input. The signature itself is not stored or transmitted — only
+// the resulting gamma hash is used.
 fn proof_compute_gamma(secret_key: &ed25519_dalek::SigningKey, h_point: &[u8; 32]) -> [u8; 32] {
+    use ed25519_dalek::Signer;
+    // Sign the h_point with the secret key — proves knowledge without
+    // exposing raw key bytes in the hash input.
+    let sig = secret_key.sign(h_point);
     let mut hasher = blake3::Hasher::new();
-    hasher.update(b"OMNIA-ECVRF-GAMMA-V2");
-    hasher.update(secret_key.to_bytes().as_slice());
+    hasher.update(b"OMNIA-ECVRF-GAMMA-V3");
     hasher.update(h_point);
+    hasher.update(&sig.to_bytes());
     *hasher.finalize().as_bytes()
 }
 

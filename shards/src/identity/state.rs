@@ -663,15 +663,30 @@ fn aes256gcm_decrypt(ciphertext: &[u8], key: &[u8; 32], nonce: &[u8; 12], aad: &
         .map_err(|_| ShardError::ValidationFailed("Share decryption failed: authentication error".to_string()))
 }
 
-/// Derive a 32-byte Ed25519 public key from a reconstructed secret
-/// using BLAKE3 domain separation.
+/// Derive an Ed25519 public key from a reconstructed secret.
 ///
-/// The derivation uses `blake3::derive_key` with the domain
-/// `"OMNIA-IDENTITY-ED25519-V1"` to ensure the derived key is
-/// context-separated from all other BLAKE3 uses in the protocol.
-/// The same secret always produces the same public key (deterministic).
+/// C-10 fix (audit v0.1.68): The previous implementation used
+/// `blake3::derive_key()` which produces 32 pseudorandom bytes that
+/// are NOT a valid Ed25519 public key (Ed25519 public keys require
+/// scalar multiplication on the curve, not hashing).
+///
+/// The fix uses the reconstructed secret as the seed for an Ed25519
+/// `SigningKey`, then derives the corresponding `VerifyingKey` (public
+/// key). This ensures the recovered key can actually verify Ed25519
+/// signatures. The `SigningKey` is dropped after extracting the public
+/// key — the secret key material is not retained.
 fn derive_identity_key(secret: &[u8]) -> [u8; 32] {
-    blake3::derive_key(IDENTITY_KEY_DERIVATION_DOMAIN, secret)
+    use ed25519_dalek::SigningKey;
+    // The secret must be at least 32 bytes for Ed25519 key derivation.
+    // If shorter, pad with zeros (deterministic).
+    let mut seed = [0u8; 32];
+    let len = secret.len().min(32);
+    seed[..len].copy_from_slice(&secret[..len]);
+    // Create an Ed25519 signing key from the seed, then extract the
+    // verifying (public) key. The signing key is dropped immediately.
+    let signing_key = SigningKey::from_bytes(&seed);
+    let verifying_key = signing_key.verifying_key();
+    verifying_key.to_bytes()
 }
 
 #[cfg(test)]

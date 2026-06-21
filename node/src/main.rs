@@ -30,7 +30,8 @@ use omnia_economics::EconomicsState;
 #[cfg(feature = "network")]
 use omnia_network::{Multiaddr, NetworkConfig, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
-use omnia_node::pipeline::{ColdWork, PipelineRouter};
+// C-14: PipelineRouter import removed — workers were dead code.
+// The pipeline module is retained for future implementation.
 use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
@@ -379,90 +380,11 @@ async fn spawn_background_tasks(
 ) -> Result<tokio::sync::broadcast::Sender<()>> {
     let (shutdown_tx, _shutdown_rx) = tokio::sync::broadcast::channel(1);
 
-    // 7a. Spawn pipeline router with worker tasks
-    let (pipeline, mut hot_rx, mut warm_rx, mut cold_rx) = PipelineRouter::new();
-    let pipeline = Arc::new(pipeline);
-    let _pipeline_clone = Arc::clone(&pipeline); // Reserved for future AppState wiring
-
-    // Hot path worker — event validation and graph insertion
-    let mut shutdown_hot = shutdown_tx.subscribe();
-    tokio::spawn(async move {
-        tracing::info!("Pipeline hot-path worker started");
-        loop {
-            tokio::select! {
-                _ = shutdown_hot.recv() => {
-                    tracing::info!("Hot-path worker shutting down");
-                    break;
-                }
-                Some(work) = hot_rx.recv() => {
-                    // TODO: Implement actual hot path event validation
-                    // Currently events are only processed via the direct submit_event API path.
-                    // The pipeline worker should validate event signatures, check graph
-                    // connectivity, and insert into the causal graph.
-                    tracing::debug!(event_len = work.event_bytes.len(), "Hot path: event received (pipeline worker not yet implemented)");
-                }
-                else => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                }
-            }
-        }
-    });
-
-    // Warm path worker — consensus processing, mempool, shard routing
-    let mut shutdown_warm = shutdown_tx.subscribe();
-    tokio::spawn(async move {
-        tracing::info!("Pipeline warm-path worker started");
-        loop {
-            tokio::select! {
-                _ = shutdown_warm.recv() => {
-                    tracing::info!("Warm-path worker shutting down");
-                    break;
-                }
-                Some(work) = warm_rx.recv() => {
-                    // TODO: Implement actual warm path consensus/shard processing
-                    // Currently events are only processed via the direct submit_event API path.
-                    // The warm path should handle mempool insertion, shard routing,
-                    // and consensus round participation.
-                    tracing::debug!(event_id = ?&work.event_id[..4], "Warm path: event received (pipeline worker not yet implemented)");
-                }
-                else => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                }
-            }
-        }
-    });
-
-    // Cold path worker — ZK proofs, snapshots, settlement
-    let mut shutdown_cold = shutdown_tx.subscribe();
-    tokio::spawn(async move {
-        tracing::info!("Pipeline cold-path worker started");
-        loop {
-            tokio::select! {
-                _ = shutdown_cold.recv() => {
-                    tracing::info!("Cold-path worker shutting down");
-                    break;
-                }
-                Some(work) = cold_rx.recv() => {
-                    match &work {
-                        ColdWork::GenerateProof { event_ids } => {
-                            tracing::info!(count = event_ids.len(), "Cold path: generating ZK proof");
-                        }
-                        ColdWork::SnapshotReplication { round } => {
-                            tracing::info!(round, "Cold path: snapshot replication");
-                        }
-                        ColdWork::SettlementSubmit { batch_data } => {
-                            tracing::info!(size = batch_data.len(), "Cold path: settlement submission");
-                        }
-                    }
-                }
-                else => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                }
-            }
-        }
-    });
-
-    tracing::info!("Pipeline router initialized with hot/warm/cold workers");
+    // C-14 fix (audit v0.1.68): Removed dead pipeline workers.
+    // The pipeline router and its hot/warm/cold workers only logged
+    // messages — they never validated, inserted, or processed events.
+    // All event processing goes through submit_event() + the consensus
+    // loop below. The pipeline.rs module is retained for future use.
 
     // 7b. Spawn the consensus background loop
     // This periodically calls check_round_timeout() and processes consensus
