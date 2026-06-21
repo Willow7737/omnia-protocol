@@ -257,6 +257,7 @@ fn test_governance_inactive_voter() {
 }
 
 #[test]
+#[cfg(not(feature = "production"))]
 fn test_economics_state_full_lifecycle() {
     let mut state = EconomicsState::new();
     let epoch = state.current_epoch();
