@@ -494,10 +494,10 @@ jobs:
           FAILED=0
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
-            # Use 120s timeout to allow for compilation + fuzzing.
-            # The first target compiles all deps; subsequent targets
-            # reuse the cache and run faster.
-            if timeout 120 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -runs=1000 2>&1; then
+            # Use 180s timeout to allow for compilation + fuzzing.
+            # fuzz_gossip_message depends on omnia-network (libp2p) which
+            # is a heavy compilation; other targets are lighter.
+            if timeout 180 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -runs=1000 2>&1; then
               echo "$target smoke test passed"
             else
               echo "::warning::$target smoke test failed (may indicate a real bug)"
