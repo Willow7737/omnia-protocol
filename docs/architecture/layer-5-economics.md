@@ -1,4 +1,5 @@
 # Layer 5: Economics
+
 > 🎯 Audience: Developers
 > 🔗 Context: Layer 5 creates a monetary system that serves people, not extracts from them
 > 📅 Last Updated: 2026-05-20
@@ -12,6 +13,7 @@ The Economics layer implements a monetary system designed to serve participants 
 Every identity receives a soulbound (non-transferable) monthly quota via the UBC token (implemented in `economics/src/ubc.rs`).
 
 Key parameters (from `economics/src/quota.rs`):
+
 - **Default quota**: 1,000 UBC/month (`DEFAULT_UBC_QUOTA`)
 - **Epoch duration**: 30 days (2,592,000,000 ms, `DEFAULT_EPOCH_DURATION_MS`)
 - **Monthly reset**: Balances are reset to the monthly quota at each epoch boundary; unspent balance is forfeited (anti-hoarding)
@@ -28,6 +30,7 @@ UBC tokens are **soulbound** — they cannot be transferred between identities.
 ### Proof-of-Useful-Work — ⚠️ Stub
 
 3 work types defined in `economics/src/useful_work.rs`:
+
 - `AiTraining { model_hash, training_data_hash }` — AI model training
 - `ScientificSimulation { simulation_id, params_hash }` — Distributed computation
 - `DistributedStorage { data_hash, storage_duration }` — Data hosting
@@ -61,11 +64,11 @@ Default decay rate: `DecayRate::ten_percent()` = 100,000 PPM per epoch.
 
 Stake must be locked for a minimum duration before it grants voting power, preventing flash loan attacks:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `min_lock_duration` | 100 blocks | Minimum lock (~8 min at 5s finality) |
-| `max_lock_duration` | 100,000 blocks | Maximum lock (~6 days at 5s finality) |
-| `strict_enforcement` | true | No early withdrawals |
+| Parameter            | Default        | Description                           |
+| -------------------- | -------------- | ------------------------------------- |
+| `min_lock_duration`  | 100 blocks     | Minimum lock (~8 min at 5s finality)  |
+| `max_lock_duration`  | 100,000 blocks | Maximum lock (~6 days at 5s finality) |
+| `strict_enforcement` | true           | No early withdrawals                  |
 
 Freshly-locked stake has zero voting power until the lock matures.
 
@@ -77,22 +80,22 @@ Time-lock: `GovernanceState::time_lock_ms` (default 86,400,000 ms = 24 hours) �
 
 ### What's Not Yet Implemented
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Conviction voting | 📋 Planned | Graduated multipliers based on lock duration |
-| Delegation | 📋 Planned | Delegating voting power to trusted representatives |
-| Treasury | 🌑 Aspirational | No transaction fee distribution mechanism |
-| RPGF | 🌑 Aspirational | Retroactive Public Goods Funding — no implementation |
+| Feature           | Status          | Notes                                                |
+| ----------------- | --------------- | ---------------------------------------------------- |
+| Conviction voting | 📋 Planned      | Graduated multipliers based on lock duration         |
+| Delegation        | 📋 Planned      | Delegating voting power to trusted representatives   |
+| Treasury          | 🌑 Aspirational | No transaction fee distribution mechanism            |
+| RPGF              | 🌑 Aspirational | Retroactive Public Goods Funding — no implementation |
 
 ## Slashing — ✅ Implemented
 
 The `SlashingEngine` tracks three offense types with configurable thresholds. ADR-011 defines a gradual slashing model with 3-tier escalation:
 
-| Offense | 1st | 2nd | 3rd+ |
-|---------|-----|-----|-------|
-| Equivocation | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%) |
-| LivenessViolation | Warning (1%) | Warning (1%) | Jailed (5%, 500r) |
-| InvalidAttestation | Warning (2%) | Jailed (10%, 2000r) | Ejected (100%) |
+| Offense            | 1st                | 2nd                 | 3rd+              |
+| ------------------ | ------------------ | ------------------- | ----------------- |
+| Equivocation       | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%)    |
+| LivenessViolation  | Warning (1%)       | Warning (1%)        | Jailed (5%, 500r) |
+| InvalidAttestation | Warning (2%)       | Jailed (10%, 2000r) | Ejected (100%)    |
 
 Persistent storage via `RedbSlashingStore`. The `omnia-node` binary configures redb persistence automatically.
 
@@ -100,16 +103,17 @@ Persistent storage via `RedbSlashingStore`. The `omnia-node` binary configures r
 
 The `FeeSchedule` maps operations to fixed UBC fees:
 
-| Category | Fee (UBC) |
-|----------|-----------|
-| Identity operations | 2 |
-| Physical operations | 3 |
-| Biological operations | 3 |
-| Economics/Default | 3 |
-| Computational operations | 5 |
-| Financial operations | 10 |
-| Cross-shard operations | 15 |
+| Category                 | Fee (UBC) |
+| ------------------------ | --------- |
+| Identity operations      | 2         |
+| Physical operations      | 3         |
+| Biological operations    | 3         |
+| Economics/Default        | 3         |
+| Computational operations | 5         |
+| Financial operations     | 10        |
+| Cross-shard operations   | 15        |
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [layer-4-identity.md](./layer-4-identity.md)
 🚀 **Next**: [zk-rollup-settlement.md](./zk-rollup-settlement.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

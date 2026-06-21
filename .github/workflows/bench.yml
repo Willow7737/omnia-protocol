@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
@@ -93,7 +93,7 @@ jobs:
       # ── Upload artifacts ───────────────────────────────────────────
       - name: Upload criterion results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: criterion-regression-results
           path: |
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload criterion data
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: criterion-data
           path: target/criterion/
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@v1
@@ -149,7 +149,7 @@ jobs:
 
       - name: Upload iai results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: iai-callgrind-results
           path: iai_output.txt
@@ -162,10 +162,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download criterion data
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: criterion-data
           path: target/criterion/

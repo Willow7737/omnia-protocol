@@ -93,6 +93,7 @@ Batch messages are propagated over the GossipSub topic `omnia_batch_events`.
 ### Proof-Only Validation
 
 Lightweight validation that only checks:
+
 1. Merkle root matches recomputed root
 2. Batch ID matches recomputed ID
 3. Event count matches
@@ -105,14 +106,14 @@ Verifies that the batch's Merkle root matches an expected state root value.
 
 Batches are rejected if:
 
-| Condition | Error | Action |
-|-----------|-------|--------|
-| Empty batch | `BatchError::EmptyBatch` | Drop silently |
-| Size exceeds max | `BatchError::BatchTooLarge` | Drop, log warning |
-| Merkle root mismatch | `BatchError::InvalidProof` | Drop, log warning, increment rejection counter |
-| Batch ID mismatch | `BatchError::InvalidProof` | Drop, log warning |
-| Event hash invalid | `BatchError::EventValidationFailed` | Drop, log warning |
-| State root mismatch | `BatchError::InvalidStateRoot` | Drop, log warning |
+| Condition            | Error                               | Action                                         |
+| -------------------- | ----------------------------------- | ---------------------------------------------- |
+| Empty batch          | `BatchError::EmptyBatch`            | Drop silently                                  |
+| Size exceeds max     | `BatchError::BatchTooLarge`         | Drop, log warning                              |
+| Merkle root mismatch | `BatchError::InvalidProof`          | Drop, log warning, increment rejection counter |
+| Batch ID mismatch    | `BatchError::InvalidProof`          | Drop, log warning                              |
+| Event hash invalid   | `BatchError::EventValidationFailed` | Drop, log warning                              |
+| State root mismatch  | `BatchError::InvalidStateRoot`      | Drop, log warning                              |
 
 ## Integration with Consensus Flow
 
@@ -154,12 +155,12 @@ The `BatchProofCircuit` verifies batch proofs within the ZK circuit:
 
 ## Constants
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `MAX_BATCH_SIZE` | 100 | Maximum events per batch |
-| `DEFAULT_BATCH_SIZE` | 50 | Default flush threshold |
-| `DEFAULT_BATCH_TIMEOUT_MS` | 100 | Default flush timeout |
-| `MAX_CRDT_BATCH_SIZE` | 1000 | Maximum CRDT operations per batch |
-| `MAX_BATCH_GOSSIP_SIZE` | 1 MiB | Maximum serialized batch for gossip |
-| `BATCH_PROOF_TARGET_SIZE` | 100 | Target batch size for ZK proof |
-| `GOSSIP_BATCH_TOPIC` | `omnia_batch_events` | GossipSub topic for batch messages |
+| Constant                   | Value                | Description                         |
+| -------------------------- | -------------------- | ----------------------------------- |
+| `MAX_BATCH_SIZE`           | 100                  | Maximum events per batch            |
+| `DEFAULT_BATCH_SIZE`       | 50                   | Default flush threshold             |
+| `DEFAULT_BATCH_TIMEOUT_MS` | 100                  | Default flush timeout               |
+| `MAX_CRDT_BATCH_SIZE`      | 1000                 | Maximum CRDT operations per batch   |
+| `MAX_BATCH_GOSSIP_SIZE`    | 1 MiB                | Maximum serialized batch for gossip |
+| `BATCH_PROOF_TARGET_SIZE`  | 100                  | Target batch size for ZK proof      |
+| `GOSSIP_BATCH_TOPIC`       | `omnia_batch_events` | GossipSub topic for batch messages  |

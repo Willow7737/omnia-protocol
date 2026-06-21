@@ -1,4 +1,5 @@
 # ADR-005: ProofBundle Universal Proof Format
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -74,6 +75,7 @@ pub struct L1Anchor {
 ```
 
 The `L1Anchor` type provides convenience methods:
+
 - `is_ethereum()` — returns `true` if `chain_id == 1` (Ethereum mainnet)
 - `is_bitcoin()` — returns `true` if `chain_id` matches known Bitcoin chain IDs
   (`0x80000000`, `0x02000000`, `0x01000000`)
@@ -96,6 +98,7 @@ let proof_bytes = prover::serialize_proof(&proof_obj)?;
 The `ExpandedRollupCircuit` (`zk/src/circuit.rs`) also supports Groth16 proofs with Merkle path verification and Poseidon hash constraints, using `prover::create_expanded_proof()`.
 
 Legacy stub functions for Phase 0 testing are retained:
+
 - `proof::generate_dummy_proof()` returns `vec![0xBB; 192]` (test-only)
 - `proof::verify_stub_proof()` checks non-empty and >= 32 bytes (test-only)
 - `proof::compute_batch_commitment()` produces a BLAKE3 hash for batch commitment
@@ -178,5 +181,6 @@ Any L1 verifier that can check these five things can settle Omnia state transiti
 - **Trade-off**: The `L1Anchor` is a structured type rather than a fixed 32 bytes, which is more flexible but requires each adapter to understand the structure.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

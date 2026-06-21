@@ -4,12 +4,12 @@
       "type": "function",
       "name": "submitBatch",
       "inputs": [
-        {"name": "newStateRoot", "type": "bytes32"},
-        {"name": "proofA", "type": "uint256[2]"},
-        {"name": "proofB", "type": "uint256[2][2]"},
-        {"name": "proofC", "type": "uint256[2]"},
-        {"name": "publicInputs", "type": "uint256[]"},
-        {"name": "batchData", "type": "bytes"}
+        { "name": "newStateRoot", "type": "bytes32" },
+        { "name": "proofA", "type": "uint256[2]" },
+        { "name": "proofB", "type": "uint256[2][2]" },
+        { "name": "proofC", "type": "uint256[2]" },
+        { "name": "publicInputs", "type": "uint256[]" },
+        { "name": "batchData", "type": "bytes" }
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
@@ -18,34 +18,34 @@
       "type": "function",
       "name": "stateRoot",
       "inputs": [],
-      "outputs": [{"name": "", "type": "bytes32"}],
+      "outputs": [{ "name": "", "type": "bytes32" }],
       "stateMutability": "view"
     },
     {
       "type": "function",
       "name": "batchIndex",
       "inputs": [],
-      "outputs": [{"name": "", "type": "uint256"}],
+      "outputs": [{ "name": "", "type": "uint256" }],
       "stateMutability": "view"
     },
     {
       "type": "function",
       "name": "operator",
       "inputs": [],
-      "outputs": [{"name": "", "type": "address"}],
+      "outputs": [{ "name": "", "type": "address" }],
       "stateMutability": "view"
     },
     {
       "type": "function",
       "name": "paused",
       "inputs": [],
-      "outputs": [{"name": "", "type": "bool"}],
+      "outputs": [{ "name": "", "type": "bool" }],
       "stateMutability": "view"
     },
     {
       "type": "function",
       "name": "deposit",
-      "inputs": [{"name": "l2Did", "type": "bytes32"}],
+      "inputs": [{ "name": "l2Did", "type": "bytes32" }],
       "outputs": [],
       "stateMutability": "payable"
     },
@@ -53,8 +53,8 @@
       "type": "function",
       "name": "requestWithdrawal",
       "inputs": [
-        {"name": "l2Did", "type": "bytes32"},
-        {"name": "amount", "type": "uint256"}
+        { "name": "l2Did", "type": "bytes32" },
+        { "name": "amount", "type": "uint256" }
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
@@ -62,14 +62,14 @@
     {
       "type": "function",
       "name": "finalizeWithdrawal",
-      "inputs": [{"name": "withdrawalIndex", "type": "uint256"}],
+      "inputs": [{ "name": "withdrawalIndex", "type": "uint256" }],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
       "type": "function",
       "name": "initiateOperatorTransfer",
-      "inputs": [{"name": "newOperator", "type": "address"}],
+      "inputs": [{ "name": "newOperator", "type": "address" }],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
@@ -98,69 +98,69 @@
       "type": "function",
       "name": "vkICLength",
       "inputs": [],
-      "outputs": [{"name": "", "type": "uint256"}],
+      "outputs": [{ "name": "", "type": "uint256" }],
       "stateMutability": "view"
     },
     {
       "type": "event",
       "name": "StateUpdated",
       "inputs": [
-        {"name": "oldRoot", "type": "bytes32", "indexed": true},
-        {"name": "newRoot", "type": "bytes32", "indexed": true},
-        {"name": "batchIndex", "type": "uint256", "indexed": false}
+        { "name": "oldRoot", "type": "bytes32", "indexed": true },
+        { "name": "newRoot", "type": "bytes32", "indexed": true },
+        { "name": "batchIndex", "type": "uint256", "indexed": false }
       ]
     },
     {
       "type": "event",
       "name": "Deposited",
       "inputs": [
-        {"name": "sender", "type": "address", "indexed": true},
-        {"name": "l2Did", "type": "bytes32", "indexed": true},
-        {"name": "amount", "type": "uint256", "indexed": false}
+        { "name": "sender", "type": "address", "indexed": true },
+        { "name": "l2Did", "type": "bytes32", "indexed": true },
+        { "name": "amount", "type": "uint256", "indexed": false }
       ]
     },
     {
       "type": "event",
       "name": "WithdrawalRequested",
       "inputs": [
-        {"name": "recipient", "type": "address", "indexed": true},
-        {"name": "l2Did", "type": "bytes32", "indexed": true},
-        {"name": "amount", "type": "uint256", "indexed": false}
+        { "name": "recipient", "type": "address", "indexed": true },
+        { "name": "l2Did", "type": "bytes32", "indexed": true },
+        { "name": "amount", "type": "uint256", "indexed": false }
       ]
     },
     {
       "type": "event",
       "name": "WithdrawalFinalized",
       "inputs": [
-        {"name": "recipient", "type": "address", "indexed": true},
-        {"name": "amount", "type": "uint256", "indexed": false}
+        { "name": "recipient", "type": "address", "indexed": true },
+        { "name": "amount", "type": "uint256", "indexed": false }
       ]
     },
     {
       "type": "event",
       "name": "OperatorTransferInitiated",
       "inputs": [
-        {"name": "previousOperator", "type": "address", "indexed": true},
-        {"name": "newOperator", "type": "address", "indexed": true}
+        { "name": "previousOperator", "type": "address", "indexed": true },
+        { "name": "newOperator", "type": "address", "indexed": true }
       ]
     },
     {
       "type": "event",
       "name": "OperatorTransferCompleted",
       "inputs": [
-        {"name": "previousOperator", "type": "address", "indexed": true},
-        {"name": "newOperator", "type": "address", "indexed": true}
+        { "name": "previousOperator", "type": "address", "indexed": true },
+        { "name": "newOperator", "type": "address", "indexed": true }
       ]
     },
     {
       "type": "event",
       "name": "Paused",
-      "inputs": [{"name": "account", "type": "address", "indexed": false}]
+      "inputs": [{ "name": "account", "type": "address", "indexed": false }]
     },
     {
       "type": "event",
       "name": "Unpaused",
-      "inputs": [{"name": "account", "type": "address", "indexed": false}]
+      "inputs": [{ "name": "account", "type": "address", "indexed": false }]
     }
   ]
 }

@@ -52,18 +52,21 @@
 ### 4. CRDT Implementations
 
 **Automerge 2.0 (Rust)**
+
 - Rewritten from JS to Rust for performance
 - Document-based JSON-like CRDT
 - Hundreds of times faster than JS version
 - Used in collaborative editing applications
 
 **`crdts` crate (Rust)**
+
 - Pure Rust, serializable CRDTs
 - Provides: VClock, GCounter, Orswot (OR-Set), LWWReg, MVReg, Map, List
 - Well-tested with quickcheck property testing
 - Actor-based identification for vector clocks
 
 **Diamond Types**
+
 - Experimental, cutting-edge performance
 - Novel algorithms for smaller memory footprint
 - Pre-1.0, rapidly evolving
@@ -71,6 +74,7 @@
 ### 5. Causal Graph Libraries
 
 **`causal-graph` (JavaScript)**
+
 - Run-length encoded DAG for operation-based CRDTs
 - Each entry: `(agent, seq)` ID + list of parent entries
 - Supports: `versionContainsLV`, `diff`, `compareVersions`, `findDominators`
@@ -89,12 +93,12 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 ### Why This Hybrid?
 
-| Approach | Pros for Omnia | Cons |
-|----------|---------------|------|
-| Pure Hashgraph | Virtual voting is elegant; proven throughput | Patented; requires complete history; virtual voting complex to implement correctly |
-| Pure IOTA | Simple tip selection; feeless; IoT-friendly | FPC finality not as strong as BFT; tip selection parameter tuning difficult |
-| Pure AlephBFT | Strong BFT guarantees; leaderless; async | Committee-based (not fully permissionless); higher complexity |
-| **Omnia Hybrid** | Causal ordering + CRDT convergence + simple BFT finality | Novel combination — requires thorough testing |
+| Approach         | Pros for Omnia                                           | Cons                                                                               |
+| ---------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Pure Hashgraph   | Virtual voting is elegant; proven throughput             | Patented; requires complete history; virtual voting complex to implement correctly |
+| Pure IOTA        | Simple tip selection; feeless; IoT-friendly              | FPC finality not as strong as BFT; tip selection parameter tuning difficult        |
+| Pure AlephBFT    | Strong BFT guarantees; leaderless; async                 | Committee-based (not fully permissionless); higher complexity                      |
+| **Omnia Hybrid** | Causal ordering + CRDT convergence + simple BFT finality | Novel combination — requires thorough testing                                      |
 
 ### Key Differentiators
 
@@ -113,15 +117,15 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 ## 🧪 Implementation Results
 
-| Research Claim | Implementation Status |
-|----------------|----------------------|
-| Hashgraph-like DAG with two-parent events | ✅ Implemented |
-| Vector clock-based partial ordering | ✅ Implemented |
-| AlephBFT-inspired BFT finality | ✅ Implemented (simplified for permissionless model) |
-| CRDT semantics for state convergence | ✅ Implemented (GCounter, OrSet, LWWRegister) |
-| 10,000+ TPS target | ✅ ~7,190 evt/s (single-node, synchronous, Phase 5 benchmark) |
-| 1-5 second finality | ✅ ~93 µs p50 finality (single-node, Criterion benchmark) |
-| O(new_events) consensus processing | ✅ Achieved via unprocessed queue |
+| Research Claim                            | Implementation Status                                         |
+| ----------------------------------------- | ------------------------------------------------------------- |
+| Hashgraph-like DAG with two-parent events | ✅ Implemented                                                |
+| Vector clock-based partial ordering       | ✅ Implemented                                                |
+| AlephBFT-inspired BFT finality            | ✅ Implemented (simplified for permissionless model)          |
+| CRDT semantics for state convergence      | ✅ Implemented (GCounter, OrSet, LWWRegister)                 |
+| 10,000+ TPS target                        | ✅ ~7,190 evt/s (single-node, synchronous, Phase 5 benchmark) |
+| 1-5 second finality                       | ✅ ~93 µs p50 finality (single-node, Criterion benchmark)     |
+| O(new_events) consensus processing        | ✅ Achieved via unprocessed queue                             |
 
 ### What Worked ✅
 

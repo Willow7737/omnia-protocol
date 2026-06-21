@@ -116,15 +116,15 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 ## Summary Table
 
-| Feature | Layer | Status | File | Phase Planned |
-|---------|-------|--------|------|---------------|
-| RF Fingerprinting | 3 | ⚠️ STUB | `binding/src/rf_fingerprint.rs` | Phase 1 |
-| Proof-of-Useful-Work | 5 | ⚠️ PARTIAL | `economics/src/useful_work.rs` | Phase 2 |
-| Bitcoin Settlement | 0 | ⚠️ STUB | `omnia-adapters/src/settlement/bitcoin.rs` | Phase 1 |
-| Solana Settlement | 0 | ⚠️ STUB | `omnia-adapters/src/settlement/solana.rs` | Phase 1 |
-| Celestia Settlement | 0 | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
-| Cosmos Settlement | 0 | ⚠️ STUB | `omnia-adapters/src/settlement/cosmos.rs` | Phase 1 |
-| Mobile Wallet | — | 🌑 NOT STARTED | — | Phase 1 |
-| Validator Network | — | 🌑 NOT STARTED | — | Phase 1 |
-| Conviction Voting | 5 | 🌑 NOT STARTED | — | Phase 1 |
-| Delegation | 5 | 🌑 NOT STARTED | — | Phase 1 |
+| Feature              | Layer | Status                             | File                                        | Phase Planned         |
+| -------------------- | ----- | ---------------------------------- | ------------------------------------------- | --------------------- |
+| RF Fingerprinting    | 3     | ⚠️ STUB                            | `binding/src/rf_fingerprint.rs`             | Phase 1               |
+| Proof-of-Useful-Work | 5     | ⚠️ PARTIAL                         | `economics/src/useful_work.rs`              | Phase 2               |
+| Bitcoin Settlement   | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/bitcoin.rs`  | Phase 1               |
+| Solana Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
+| Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
+| Cosmos Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
+| Mobile Wallet        | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+| Validator Network    | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+| Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+| Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |

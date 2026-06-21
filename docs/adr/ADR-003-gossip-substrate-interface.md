@@ -1,4 +1,5 @@
 # ADR-003: Gossip → Substrate Event Flow
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -150,5 +151,6 @@ This design ensures that network events land in the graph where `Substrate::proc
 - **Trade-off**: The `Arc<RwLock<CausalGraph>>` pattern means that graph insertion requires an async write lock. Under high contention (many concurrent insertions), this could become a bottleneck. However, the lock is held only for the duration of `insert()`, which is O(1) for the HashMap lookup plus O(k) for ancestry checks.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

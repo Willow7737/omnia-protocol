@@ -1,4 +1,5 @@
 # Security Policy
+
 > 🎯 Audience: Operators, Architects
 > 🔗 Context: Vulnerability disclosure policy, security review process, and threat model references
 > 📅 Last Updated: 2026-05-20
@@ -34,12 +35,12 @@ We take the security of Omnia Protocol seriously. If you believe you have found 
 
 ### Response Timeline
 
-| Milestone | Target |
-|-----------|--------|
-| Acknowledgment of report | Within 48 hours |
-| Initial assessment and severity classification | Within 5 business days |
-| Fix development and patch release | Depends on severity (critical: 7 days, high: 14 days, medium: 30 days, low: next release) |
-| Public disclosure | Coordinated with reporter after patch is available |
+| Milestone                                      | Target                                                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Acknowledgment of report                       | Within 48 hours                                                                           |
+| Initial assessment and severity classification | Within 5 business days                                                                    |
+| Fix development and patch release              | Depends on severity (critical: 7 days, high: 14 days, medium: 30 days, low: next release) |
+| Public disclosure                              | Coordinated with reporter after patch is available                                        |
 
 We are committed to keeping reporters informed throughout the process. If you do not receive an acknowledgment within 48 hours, please follow up via the same email channel.
 
@@ -81,10 +82,10 @@ Every pull request that touches the following directories **requires** security 
 
 ### Review Roles
 
-| Role | Responsibility | Scope |
-|------|---------------|-------|
+| Role       | Responsibility                                                                                           | Scope                                                            |
+| ---------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | **Cipher** | Cryptographic correctness, key management, proof soundness, Poseidon parameters, trusted setup integrity | `omnia-adapters/`, `binding/`, any PR with cryptographic changes |
-| **Sentry** | Protocol integrity, state consistency, denial-of-service resistance | `substrate/`, `shards/`, `economics/` |
+| **Sentry** | Protocol integrity, state consistency, denial-of-service resistance                                      | `substrate/`, `shards/`, `economics/`                            |
 
 Cryptographic PRs (any change to `omnia-adapters/`, `binding/quantum_commit.rs`, `binding/rf_fingerprint.rs`, `binding/key_rotation.rs`, or cryptographic key handling) require **both Cipher and Sentry review** — no exceptions.
 
@@ -147,6 +148,7 @@ for the full audit report covering the substrate crate.
 The ZK and binding crates have been audited for side-channel resistance in Phase 5.
 See [`docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md`](docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md)
 for the full audit report covering:
+
 - Poseidon hash field-element operations in `omnia-adapters/src/poseidon.rs`
 - Ed25519 and Dilithium signature verification paths in `binding/src/quantum_commit.rs`
 - ML-KEM key encapsulation operations in `binding/src/quantum_commit.rs`
@@ -175,5 +177,6 @@ We follow a coordinated disclosure process:
 5. **No legal action**: We will not pursue legal action against security researchers who act in good faith, follow our reporting process, and avoid unnecessary harm to users or systems.
 
 ---
+
 🔙 **Back**: [README.md](./README.md) | 🔄 **Related**: [docs/reference/security-audit.md](./docs/reference/security-audit.md)  
 🚀 **Next**: [SECURITY_BOUNTY.md](./SECURITY_BOUNTY.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./docs/reference/blueprint-reference.md)

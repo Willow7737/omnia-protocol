@@ -29,7 +29,7 @@ high-performance C library for BLS12-381 pairing-based cryptography.
   `omnia-substrate` uses `#![deny(unsafe_code)]` rather than
   `#![forbid(unsafe_code)]` — `forbid` is viral and would prevent the `bls`
   feature from being enabled at all. `deny` still catches any `unsafe`
-  block written *inside* `omnia-substrate` itself, which is the policy we
+  block written _inside_ `omnia-substrate` itself, which is the policy we
   want.
 
 ## Other unsafe usage

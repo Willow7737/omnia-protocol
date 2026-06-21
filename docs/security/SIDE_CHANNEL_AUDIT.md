@@ -1,4 +1,5 @@
 # Side-Channel Resistance Audit
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the security documentation section
 > 📅 Last Updated: 2026-05-20
@@ -40,6 +41,7 @@ attention in future sprints.
 **File:** `substrate/src/event.rs` — `Event::validate_creator_binding()`
 
 **Before:**
+
 ```rust
 if self.creator != *expected_creator.as_bytes() {
     return Err(EventValidationError::CreatorPubkeyMismatch { ... });
@@ -47,6 +49,7 @@ if self.creator != *expected_creator.as_bytes() {
 ```
 
 **After:**
+
 ```rust
 if self.creator.ct_ne(expected_creator.as_bytes()).into() {
     return Err(EventValidationError::CreatorPubkeyMismatch { ... });
@@ -60,6 +63,7 @@ if self.creator.ct_ne(expected_creator.as_bytes()).into() {
 **File:** `substrate/src/event.rs` — `Event::verify_hash()`
 
 **Before:**
+
 ```rust
 pub fn verify_hash(&self) -> bool {
     self.id == self.compute_hash()
@@ -67,6 +71,7 @@ pub fn verify_hash(&self) -> bool {
 ```
 
 **After:**
+
 ```rust
 pub fn verify_hash(&self) -> bool {
     let computed = self.compute_hash();
@@ -81,6 +86,7 @@ pub fn verify_hash(&self) -> bool {
 **File:** `substrate/src/slashing.rs` — `SlashingEngine::check_equivocation()`
 
 **After:**
+
 ```rust
 pub fn check_equivocation(event_a: &Event, event_b: &Event) -> bool {
     use subtle::ConstantTimeEq;
@@ -435,7 +441,7 @@ extraction:
    peak detection) may have data-dependent timing based on signal quality and
    noise levels.
 2. **Comparison timing**: The final threshold comparison `similarity >
-   self.confidence` is on computed values, not directly on secret data.
+self.confidence` is on computed values, not directly on secret data.
 
 **Severity:** LOW (current stub) / MEDIUM (future real implementation)
 
@@ -460,12 +466,14 @@ constant-time.
 ## Non-Findings (Acceptable)
 
 ### Unsigned Event Check (Substrate)
+
 **File:** `substrate/src/event.rs` — `Event::validate()`
 
 Comparison against a public constant (all-zeros). No timing information
 about secrets is leaked. No change needed.
 
 ### CausalGraph Comparisons (Substrate)
+
 **File:** `substrate/src/causal_graph.rs`
 
 Various `==` comparisons on event IDs in the causal graph are used for
@@ -473,6 +481,7 @@ graph traversal and lookup operations. These operate on public graph state
 and do not involve secret-derived data. No change needed.
 
 ### ProvenanceLog Chain Verification (Binding)
+
 **File:** `binding/src/provenance.rs` — `ProvenanceLog::verify_chain()`
 
 The `links_to()` method compares `data_hash` values of consecutive
@@ -513,5 +522,6 @@ future secret-handling code in the binding crate.
    automatically uses constant-time comparison.
 
 ---
+
 🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
 🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

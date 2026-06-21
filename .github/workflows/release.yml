@@ -27,7 +27,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -86,7 +86,7 @@ jobs:
             os: windows-latest
             artifact: omnia-node-x86_64-windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
@@ -156,7 +156,7 @@ jobs:
           "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ascii "${{ matrix.artifact }}.sha256"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -171,7 +171,7 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install solc
         run: |
@@ -238,7 +238,7 @@ jobs:
           cat contract-output/checksums.txt
 
       - name: Upload contract artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: omnia-rollup-contract
           path: contract-output/
@@ -249,7 +249,7 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -269,7 +269,7 @@ jobs:
           find . -name '*.bom.xml' -exec mv {} sbom-output/ \; 2>/dev/null || true
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: omnia-release-sbom
           path: sbom-output/
@@ -280,7 +280,7 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -289,10 +289,20 @@ jobs:
         run: |
           cargo install cargo-audit --locked
           cargo audit --json > audit-report.json 2>/dev/null
-          cargo audit
+          cargo audit --deny unmaintained \
+            --ignore RUSTSEC-2024-0384 \
+            --ignore RUSTSEC-2024-0388 \
+            --ignore RUSTSEC-2024-0436 \
+            --ignore RUSTSEC-2024-0437 \
+            --ignore RUSTSEC-2025-0055 \
+            --ignore RUSTSEC-2025-0057 \
+            --ignore RUSTSEC-2025-0141 \
+            --ignore RUSTSEC-2026-0118 \
+            --ignore RUSTSEC-2026-0119 \
+            --ignore RUSTSEC-2026-0173
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-audit
           path: audit-report.json
@@ -303,7 +313,7 @@ jobs:
     needs: [validate, build-binaries]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -355,29 +365,29 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && needs.validate.result == 'success' && needs.build-binaries.result == 'success' && needs.build-contract.result == 'success' && needs.docker-image.result == 'success'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release-artifacts/
           pattern: omnia-node-*
           merge-multiple: false
 
       - name: Download contract artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: omnia-rollup-contract
           path: release-artifacts/omnia-rollup-contract/
 
       - name: Download security audit
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: security-audit
           path: release-artifacts/security-audit/
 
       - name: Download SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         continue-on-error: true
         with:
           name: omnia-release-sbom

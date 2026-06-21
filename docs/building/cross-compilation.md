@@ -1,4 +1,5 @@
 # Cross-Compilation Guide
+
 > 🎯 Audience: Developers
 > 🔗 Context: Building Omnia Protocol for different target platforms
 > 📅 Last Updated: 2026-05-20
@@ -89,5 +90,6 @@ helm install omnia-node ./helm/omnia-node -f my-values.yaml
 ```
 
 ---
+
 🔙 **Back**: [building/](./) | 🔄 **Related**: [binary-optimization.md](./binary-optimization.md)
 🚀 **Next**: [binary-optimization.md](./binary-optimization.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

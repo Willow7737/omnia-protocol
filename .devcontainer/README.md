@@ -20,15 +20,15 @@ GRAFANA_ADMIN_PASSWORD=yourpassword ./scripts/start-testnet.sh --monitoring
 
 Codespaces auto-forwards ports. Once the testnet is running:
 
-| Service | Port | URL |
-|---------|------|-----|
+| Service        | Port | URL                                            |
+| -------------- | ---- | ---------------------------------------------- |
 | Bootstrap Node | 9090 | `https://<codespace-name>-9090.app.github.dev` |
-| Node 1 | 9091 | `https://<codespace-name>-9091.app.github.dev` |
-| Node 2 | 9092 | `https://<codespace-name>-9092.app.github.dev` |
-| Node 3 | 9093 | `https://<codespace-name>-9093.app.github.dev` |
-| Node 4 | 9094 | `https://<codespace-name>-9094.app.github.dev` |
-| Prometheus | 9095 | `https://<codespace-name>-9095.app.github.dev` |
-| Grafana | 3000 | `https://<codespace-name>-3000.app.github.dev` |
+| Node 1         | 9091 | `https://<codespace-name>-9091.app.github.dev` |
+| Node 2         | 9092 | `https://<codespace-name>-9092.app.github.dev` |
+| Node 3         | 9093 | `https://<codespace-name>-9093.app.github.dev` |
+| Node 4         | 9094 | `https://<codespace-name>-9094.app.github.dev` |
+| Prometheus     | 9095 | `https://<codespace-name>-9095.app.github.dev` |
+| Grafana        | 3000 | `https://<codespace-name>-3000.app.github.dev` |
 
 ## Health Check
 
@@ -37,6 +37,7 @@ Codespaces auto-forwards ports. Once the testnet is running:
 ```
 
 Or manually:
+
 ```bash
 curl -s https://<codespace-name>-9090.app.github.dev/health | jq .
 ```

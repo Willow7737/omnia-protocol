@@ -52,6 +52,7 @@ directly. For causal graph traffic:
 
 **Latency Impact:** With mesh_n=4 and heartbeat_interval=500ms, the expected
 p99 propagation latency is:
+
 - 1 heartbeat to reach mesh peers: 500ms
 - Plus network RTT (~50ms on LAN): 550ms
 - Plus 1 heartbeat for fanout propagation: 550ms + 500ms = 1050ms worst case
@@ -81,6 +82,7 @@ older than 5 seconds are likely already received via sync mechanisms.
 **Default (libp2p):** varies
 
 **Rationale:** 64 KiB accommodates:
+
 - A single Event with up to ~60 KiB payload (after serialization overhead)
 - Batch gossip messages with multiple small events
 - Compact-encoded events with delta clocks
@@ -106,6 +108,7 @@ is ~90,000 events. Setting expected_items to 100,000 provides headroom
 for burst traffic.
 
 **Memory Calculation:**
+
 - m = -n × ln(p) / (ln(2))² = -100000 × ln(0.001) / 0.4805 ≈ 1,437,759 bits
 - Memory per filter: 1,437,759 / 8 ≈ 179,720 bytes ≈ 176 KiB
 - Total for filter pair: ~352 KiB
@@ -126,7 +129,7 @@ This is well within memory budgets for validator nodes.
 
 **Trade-off:** A lower FPR (e.g., 0.0001) would require 2x more memory.
 0.001 provides a good balance between memory usage and event delivery
-reliability, especially since the bloom filter is a *supplement* to
+reliability, especially since the bloom filter is a _supplement_ to
 the existing HashSet-based dedup, not a replacement.
 
 ### Rotation Interval: 300 seconds (5 minutes)
@@ -209,6 +212,7 @@ event, this saves 32 bytes per event, or ~5-10% for typical events.
 
 **Overflow Behavior:** When a queue is full, the oldest event at that
 level is dropped. This ensures that:
+
 1. Newer, more relevant events always have space.
 2. The queue never grows unboundedly.
 3. Dropped events can be recovered through sync mechanisms.
@@ -217,16 +221,16 @@ level is dropped. This ensures that:
 
 For the target ≤500ms p99 propagation in a 3-node testnet:
 
-| Component | Latency (ms) |
-|-----------|-------------|
-| Priority queue dequeue | <1 |
-| Compact encoding | <1 |
-| Bloom filter check | <1 |
-| GossipSub heartbeat | 0-500 |
-| Network RTT (LAN) | 1-5 |
-| Snappy compression | <1 |
-| **Total (p50)** | **~50-250** |
-| **Total (p99)** | **~500** |
+| Component              | Latency (ms) |
+| ---------------------- | ------------ |
+| Priority queue dequeue | <1           |
+| Compact encoding       | <1           |
+| Bloom filter check     | <1           |
+| GossipSub heartbeat    | 0-500        |
+| Network RTT (LAN)      | 1-5          |
+| Snappy compression     | <1           |
+| **Total (p50)**        | **~50-250**  |
+| **Total (p99)**        | **~500**     |
 
 The dominant factor is the GossipSub heartbeat interval. With a 500ms
 heartbeat, most events propagate within one heartbeat. The p99 is

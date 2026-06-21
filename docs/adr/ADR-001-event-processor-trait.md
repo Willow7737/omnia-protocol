@@ -1,4 +1,5 @@
 # ADR-001: EventProcessor Trait Contract
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -72,5 +73,6 @@ The `omnia-node` binary does not use the `EventProcessor` trait directly for its
 - **Trade-off**: The `&mut self` receiver means the processor cannot be called concurrently from multiple threads without external synchronization. This is intentional — the substrate processes events in causal order, and concurrent processing would violate ordering guarantees.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

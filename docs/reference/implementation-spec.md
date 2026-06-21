@@ -1,4 +1,5 @@
 # Implementation Specification
+
 > 🎯 Audience: Developers
 > 🔗 Context: Protocol implementation specifications and protocol-level details
 > 📅 Last Updated: 2026-05-20
@@ -16,16 +17,16 @@
 [█████████████████████████░░░] 90% Complete
 ```
 
-| Layer | Status | Tests |
-|-------|--------|-------|
-| Layer 1: Substrate | ✅ Implemented | 120+ |
-| Layer 2: Domain Shards | ✅ Implemented | 60+ |
-| Layer 3: Binding | ✅ Implemented | 41+ |
-| Layer 4: Identity | ✅ Implemented (in shards) | — |
-| Layer 5: Economics | ✅ Implemented | 40+ |
-| Phase 0: ZK-Rollup | ✅ Architecture | 20+ |
-| Node Binary | ✅ Implemented | 30+ |
-| Chaos Tests | ✅ Implemented | ~15 scenarios |
+| Layer                  | Status                     | Tests         |
+| ---------------------- | -------------------------- | ------------- |
+| Layer 1: Substrate     | ✅ Implemented             | 120+          |
+| Layer 2: Domain Shards | ✅ Implemented             | 60+           |
+| Layer 3: Binding       | ✅ Implemented             | 41+           |
+| Layer 4: Identity      | ✅ Implemented (in shards) | —             |
+| Layer 5: Economics     | ✅ Implemented             | 40+           |
+| Phase 0: ZK-Rollup     | ✅ Architecture            | 20+           |
+| Node Binary            | ✅ Implemented             | 30+           |
+| Chaos Tests            | ✅ Implemented             | ~15 scenarios |
 
 **Total: 295+ tests, all passing.**
 
@@ -105,11 +106,11 @@ Monitoring:
 
 ### What's a Stub ⚠️
 
-| Feature | Status | What's Needed |
-|---------|--------|---------------|
-| ZK circuit hash | ⚠️ Poseidon implemented | Round constants use BLAKE3 derivation (not Filecoin/Neptune reference); needs review |
-| RF fingerprinting | ⚠️ Stub | SDR hardware (HackRF/USRP) |
-| Proof-of-useful-work | ⚠️ Stub | Production verification |
+| Feature              | Status                  | What's Needed                                                                        |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| ZK circuit hash      | ⚠️ Poseidon implemented | Round constants use BLAKE3 derivation (not Filecoin/Neptune reference); needs review |
+| RF fingerprinting    | ⚠️ Stub                 | SDR hardware (HackRF/USRP)                                                           |
+| Proof-of-useful-work | ⚠️ Stub                 | Production verification                                                              |
 
 ### What Doesn't Exist 🌑
 
@@ -128,6 +129,7 @@ Monitoring:
 ### Objective
 
 Prove the concept works with a functional prototype that demonstrates:
+
 - Causal graph consensus
 - Self-sovereign identity
 - Universal Basic Compute
@@ -137,6 +139,7 @@ Prove the concept works with a functional prototype that demonstrates:
 ### Development Milestones
 
 #### Milestone 1: Foundation ✅ Completed
+
 - ✅ Causal graph with vector clock ordering
 - ✅ CRDT state convergence (GCounter, OrSet, LWWRegister)
 - ✅ BFT finality mechanism
@@ -144,6 +147,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ Ed25519 signatures with replay protection
 
 #### Milestone 2: Domain Shards ✅ Completed
+
 - ✅ 6 domain shards: Financial, Identity, Physical, Computational, Biological, Economics
 - ✅ Shard router with automatic dispatch (`EventProcessor` trait)
 - ✅ Cross-shard messaging with causality proofs
@@ -151,6 +155,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ Fee enforcement (FeeSchedule + QuotaSystem)
 
 #### Milestone 3: Binding & Identity ✅ Completed
+
 - ✅ Provenance log (append-only CRDT)
 - ✅ ProvenanceTracker lifecycle (create/transfer/verify/destroy)
 - ✅ `did:omnia:` method with validation
@@ -159,6 +164,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ AI agent identity with capability types
 
 #### Milestone 4: Economics ✅ Completed
+
 - ✅ UBC token (soulbound, monthly quota)
 - ✅ Quota system with epoch advancement
 - ✅ Quadratic voting with exponential decay
@@ -167,6 +173,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ⚠️ Proof-of-useful-work stubs
 
 #### Milestone 5: ZK-Rollup ✅ Architecture Complete
+
 - ✅ Settlement-agnostic architecture (`SettlementLayer` trait)
 - ✅ Ethereum adapter with Solidity contract
 - ✅ Solana, Celestia, Bitcoin adapters
@@ -179,6 +186,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ SNARK-friendly Poseidon hash (BLAKE3-derived round constants, needs audit against Filecoin/Neptune reference)
 
 #### Milestone 6: Node Binary ✅ Completed
+
 - ✅ CLI with clap (args + env vars + TOML config)
 - ✅ HTTP server (axum) with health/metrics/API
 - ✅ REST API with 9 endpoints + Swagger UI
@@ -190,6 +198,7 @@ Prove the concept works with a functional prototype that demonstrates:
 - ✅ Structured logging with JSON support
 
 #### Milestone 7: Testing & Verification ✅ Completed
+
 - ✅ 295+ tests across 7 crates
 - ✅ 7 fuzz targets
 - ✅ TLA+ model checker (191-line spec, 5 invariants verified)
@@ -203,7 +212,7 @@ Prove the concept works with a functional prototype that demonstrates:
 
 ## Phase 1: The Root (Years 1-2) — Planned
 
-*The following describes planned work. It has not been started.*
+_The following describes planned work. It has not been started._
 
 ### Objective
 
@@ -211,24 +220,24 @@ Build standalone capabilities and expand the protocol's reach.
 
 ### Planned Work
 
-| Feature | Priority | Status |
-|---------|----------|--------|
-| API authentication + rate limiting | P0 | ✅ Done (JWT + AuthorizedCallers + rate limiting + CORS — FIND-001) |
-| Encrypted key storage | P0 | ✅ Done (AES-256-GCM + HKDF-SHA256 — FIND-010) |
-| SNARK-friendly hash (Pedersen/Poseidon) | P0 | ✅ Done (Poseidon with BLAKE3-derived round constants — needs audit) |
-| Sybil resistance / staking | P0 | 📋 Planned |
-| redb persistence optimization | P1 | 📋 Planned |
-| Mobile wallet | P1 | 📋 Planned |
-| Validator network | P1 | 📋 Planned |
-| Conviction voting | P2 | 📋 Planned |
-| Delegation | P2 | 📋 Planned |
-| JS/Python client libraries | P2 | 📋 Planned |
+| Feature                                 | Priority | Status                                                               |
+| --------------------------------------- | -------- | -------------------------------------------------------------------- |
+| API authentication + rate limiting      | P0       | ✅ Done (JWT + AuthorizedCallers + rate limiting + CORS — FIND-001)  |
+| Encrypted key storage                   | P0       | ✅ Done (AES-256-GCM + HKDF-SHA256 — FIND-010)                       |
+| SNARK-friendly hash (Pedersen/Poseidon) | P0       | ✅ Done (Poseidon with BLAKE3-derived round constants — needs audit) |
+| Sybil resistance / staking              | P0       | 📋 Planned                                                           |
+| redb persistence optimization           | P1       | 📋 Planned                                                           |
+| Mobile wallet                           | P1       | 📋 Planned                                                           |
+| Validator network                       | P1       | 📋 Planned                                                           |
+| Conviction voting                       | P2       | 📋 Planned                                                           |
+| Delegation                              | P2       | 📋 Planned                                                           |
+| JS/Python client libraries              | P2       | 📋 Planned                                                           |
 
 ---
 
 ## Phase 2: The Trunk (Years 3-5) — Long-term Vision
 
-*The following describes a long-term vision. It is not currently being developed.*
+_The following describes a long-term vision. It is not currently being developed._
 
 ### Objective
 
@@ -294,7 +303,7 @@ Verification:
 
 ## Phase 3: The Canopy (Years 5-10) — Long-term Vision
 
-*The following describes a long-term vision. It is not currently being developed.*
+_The following describes a long-term vision. It is not currently being developed._
 
 ### Objective
 
@@ -396,40 +405,41 @@ The following modules and features were added during Phase 0 to address critical
 
 ### New Source Files
 
-| File | Lines | Purpose |
-|------|-------|--------|
-| `node/src/api/auth.rs` | 645 | JWT authentication, AuthorizedCallers ACL, RateLimiter, CORS middleware |
-| `substrate/src/keystore.rs` | 856 | EncryptedKeyStore with AES-256-GCM encryption, HKDF-SHA256 key derivation |
-| `substrate/src/blake3_domain.rs` | 82 | BLAKE3 domain-separated hashing for cryptographic separation |
+| File                             | Lines | Purpose                                                                   |
+| -------------------------------- | ----- | ------------------------------------------------------------------------- |
+| `node/src/api/auth.rs`           | 645   | JWT authentication, AuthorizedCallers ACL, RateLimiter, CORS middleware   |
+| `substrate/src/keystore.rs`      | 856   | EncryptedKeyStore with AES-256-GCM encryption, HKDF-SHA256 key derivation |
+| `substrate/src/blake3_domain.rs` | 82    | BLAKE3 domain-separated hashing for cryptographic separation              |
 
 ### New Security Features
 
-| Feature | Finding | Description |
-|---------|---------|------------|
-| JWT Authentication | FIND-001 | REST API requires valid JWT tokens; configured via `OMNIA_JWT_SECRET` |
-| AuthorizedCallers ACL | FIND-001 | Only registered caller IDs can access the API; configured via `OMNIA_AUTHORIZED_CALLERS` |
-| Rate Limiting | FIND-001 | Per-IP request throttling; configured via `OMNIA_RATE_LIMIT_RPS` |
-| CORS Middleware | FIND-001 | Cross-origin resource sharing via `tower-http` |
-| Encrypted Key Storage | FIND-010 | `EncryptedKeyStore` encrypts private keys with AES-256-GCM + HKDF-SHA256 |
-| Encrypted keygen | FIND-010 | `keygen --passphrase` encrypts output with AES-256-GCM |
-| Creator-pubkey binding | FIND-003 | Constant-time validation using `subtle` crate |
-| Slashing rollback | FIND-011 | Snapshot-and-rollback pattern for slashing persistence failures |
-| Governance quorum | FIND-020 | `quorum_percentage` field (default 67%) for proposal passage |
-| Governance time-lock | FIND-020 | `time_lock_ms` field (default 24h) prevents flash-loan governance attacks |
-| Gossip payload limits | FIND-021 | Early rejection of oversized gossip events via `MAX_PAYLOAD_SIZE` |
-| BLAKE3 domain separation | FIND-022 | `blake3_hash_domain()` for context-specific hashing |
+| Feature                  | Finding  | Description                                                                              |
+| ------------------------ | -------- | ---------------------------------------------------------------------------------------- |
+| JWT Authentication       | FIND-001 | REST API requires valid JWT tokens; configured via `OMNIA_JWT_SECRET`                    |
+| AuthorizedCallers ACL    | FIND-001 | Only registered caller IDs can access the API; configured via `OMNIA_AUTHORIZED_CALLERS` |
+| Rate Limiting            | FIND-001 | Per-IP request throttling; configured via `OMNIA_RATE_LIMIT_RPS`                         |
+| CORS Middleware          | FIND-001 | Cross-origin resource sharing via `tower-http`                                           |
+| Encrypted Key Storage    | FIND-010 | `EncryptedKeyStore` encrypts private keys with AES-256-GCM + HKDF-SHA256                 |
+| Encrypted keygen         | FIND-010 | `keygen --passphrase` encrypts output with AES-256-GCM                                   |
+| Creator-pubkey binding   | FIND-003 | Constant-time validation using `subtle` crate                                            |
+| Slashing rollback        | FIND-011 | Snapshot-and-rollback pattern for slashing persistence failures                          |
+| Governance quorum        | FIND-020 | `quorum_percentage` field (default 67%) for proposal passage                             |
+| Governance time-lock     | FIND-020 | `time_lock_ms` field (default 24h) prevents flash-loan governance attacks                |
+| Gossip payload limits    | FIND-021 | Early rejection of oversized gossip events via `MAX_PAYLOAD_SIZE`                        |
+| BLAKE3 domain separation | FIND-022 | `blake3_hash_domain()` for context-specific hashing                                      |
 
 ### New Dependencies
 
-| Dependency | Version | Purpose |
-|-----------|---------|--------|
-| `jsonwebtoken` | 9.x | JWT token creation and validation |
-| `aes-gcm` | 0.10.x | AES-256-GCM encryption for private key storage |
-| `hkdf` | 0.12.x | HKDF-SHA256 key derivation for key encryption |
-| `sha2` | 0.10.x | SHA-256 for HKDF key derivation |
-| `tower-http` | 0.6.x | CORS middleware for REST API |
-| `subtle` | 2.x | Constant-time comparisons for creator binding |
+| Dependency     | Version | Purpose                                        |
+| -------------- | ------- | ---------------------------------------------- |
+| `jsonwebtoken` | 9.x     | JWT token creation and validation              |
+| `aes-gcm`      | 0.10.x  | AES-256-GCM encryption for private key storage |
+| `hkdf`         | 0.12.x  | HKDF-SHA256 key derivation for key encryption  |
+| `sha2`         | 0.10.x  | SHA-256 for HKDF key derivation                |
+| `tower-http`   | 0.6.x   | CORS middleware for REST API                   |
+| `subtle`       | 2.x     | Constant-time comparisons for creator binding  |
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Blueprint Reference](./blueprint-reference.md)
 🚀 **Next**: [Roadmap](./roadmap.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

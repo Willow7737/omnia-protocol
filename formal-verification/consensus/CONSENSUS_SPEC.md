@@ -22,18 +22,18 @@ The consensus state is a directed acyclic graph (DAG) of **events**.
 
 ### 2.1 Event fields
 
-| Field           | Type                | Notes                                                      |
-|-----------------|---------------------|------------------------------------------------------------|
-| `id`            | `[u8; 32]`          | BLAKE3 hash of all fields except `signature`               |
-| `creator`       | `NodeId`            | BLAKE3 hash of `creator_pubkey` (domain-separated)         |
-| `sequence`      | `u64`               | Monotonic per-creator (0-indexed, genesis = 0)             |
-| `timestamp`     | `u64`               | Wall-clock ms — for replay protection, not ordering        |
-| `vector_clock`  | `VectorClock`       | Logical clock for happened-before relations                |
-| `self_parent`   | `Option<EventId>`   | Creator's previous event (`None` for genesis)              |
-| `other_parent`  | `Option<EventId>`   | Event received from another creator (`None` for genesis)   |
-| `payload`       | `Vec<u8>`           | Opaque to consensus; ≤ `MAX_PAYLOAD_SIZE` (1 MiB)          |
-| `creator_pubkey`| `[u8; 32]`          | Ed25519 public key — verified to bind to `creator`         |
-| `signature`     | `[u8; 64]`          | Ed25519 signature over `id`                                |
+| Field            | Type              | Notes                                                    |
+| ---------------- | ----------------- | -------------------------------------------------------- |
+| `id`             | `[u8; 32]`        | BLAKE3 hash of all fields except `signature`             |
+| `creator`        | `NodeId`          | BLAKE3 hash of `creator_pubkey` (domain-separated)       |
+| `sequence`       | `u64`             | Monotonic per-creator (0-indexed, genesis = 0)           |
+| `timestamp`      | `u64`             | Wall-clock ms — for replay protection, not ordering      |
+| `vector_clock`   | `VectorClock`     | Logical clock for happened-before relations              |
+| `self_parent`    | `Option<EventId>` | Creator's previous event (`None` for genesis)            |
+| `other_parent`   | `Option<EventId>` | Event received from another creator (`None` for genesis) |
+| `payload`        | `Vec<u8>`         | Opaque to consensus; ≤ `MAX_PAYLOAD_SIZE` (1 MiB)        |
+| `creator_pubkey` | `[u8; 32]`        | Ed25519 public key — verified to bind to `creator`       |
+| `signature`      | `[u8; 64]`        | Ed25519 signature over `id`                              |
 
 ### 2.2 Edges
 
@@ -56,6 +56,7 @@ Omnia uses a Hashgraph-style "famous witness" algorithm to determine consensus o
 ### 3.1 Rounds
 
 Events are partitioned into **rounds**:
+
 - An event `e` is in round `0` if it is a genesis event or its parents are in round `0`.
 - An event `e` (with parents in rounds `r_self`, `r_other`) is in round `r` where:
   ```
@@ -83,6 +84,7 @@ A witness `w` in round `r` is **famous** if a majority of witnesses in round `r 
 A round `r` is **decided** when all witnesses in round `r` have their fame decided.
 
 Once round `r` is decided:
+
 1. Every event `e` in round `r` whose `self_parent` and `other_parent` are both famous witnesses is **committed**.
 2. The committed events are placed in canonical order (deterministic topological sort by `(round, creator, sequence)`).
 3. Each committed event triggers:
@@ -93,6 +95,7 @@ Once round `r` is decided:
 ### 4.1 Finality
 
 An event is **final** when:
+
 - It is committed in a decided round, AND
 - `commit_delay_rounds` additional rounds have been decided (default: 1).
 
@@ -105,6 +108,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 **Theorem (Safety)**: Two honest validators cannot commit conflicting events (events with the same `(creator, sequence)` but different content) in the same decided round.
 
 **Sketch**:
+
 1. **Equivocation detection**: When validator `c` creates two events `e1, e2` with the same `sequence` but different content (different `id`), the consensus engine detects this via the `first_event_for_sequence` map (keyed on `(creator, sequence)`). The second event triggers a slashing offense and is rejected from the consensus state.
 2. **Pruned-metadata check (C-3 fix)**: If `e1` has been pruned by the time `e2` arrives, the engine compares `e2.content_hash()` against `e1`'s stored `PrunedEventMetadata.content_hash`:
    - Equal hashes → `e2` is a duplicate re-submission, silently dropped.
@@ -119,12 +123,14 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 **Theorem (Liveness)**: After GST, all events created by honest validators are eventually committed.
 
 **Sketch**:
+
 1. **Gossip propagation**: After GST, every event reaches every honest validator within bounded time (gossipsub `broadcast` guarantee).
 2. **Sequence buffer**: Out-of-order events are buffered in `SequenceBuffer` (per-creator, bounded by `MAX_SEQUENCE_BUFFER_PER_CREATOR = 256` and gap-limited by `MAX_SEQUENCE_GAP = 100`). When the missing predecessor arrives, the buffer drains consecutively.
 3. **Round advancement**: After GST, honest validators regularly create new events (heartbeat interval), which advance rounds. Once `2f + 1` validators are creating events in round `r`, round `r + 1` witnesses strongly see them and fame is decided.
 4. **Finality**: After `commit_delay_rounds + 1` rounds are decided (default: 2 rounds after the event's round), the event is final.
 
 **Failure modes that break liveness**:
+
 - More than `f` Byzantine validators (BFT assumption violated).
 - Network partition lasting longer than `MAX_EVENT_AGE_MS` (events age out before GST).
 - Per-creator buffer overflow (creator spams > 256 out-of-order events — addressed by H-4 fix).
@@ -146,6 +152,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 ## 8. State Persistence
 
 Consensus state is persisted to `redb` via `ConsensusStore`:
+
 - Current round number
 - `first_event_for_sequence` map (for equivocation detection)
 - Event states (Pending, Committed, Rejected)

@@ -15,7 +15,7 @@ jobs:
     name: Check & Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -89,7 +89,7 @@ jobs:
           - features: "--all-features"
             toolchain: "1.91.0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -115,7 +115,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Remove conflicting Homebrew rustup (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -142,8 +142,8 @@ jobs:
       # all-features includes ethereum-live; needs rustc ≥1.91 for alloy.
       # The stable toolchain may be <1.91, so this step is allowed to fail.
       # The feature-matrix job tests --all-features with toolchain 1.91.0 explicitly.
-      - name: Test workspace with all features (skip live settlement)
-        run: cargo test --workspace --exclude omnia-fuzz --all-features --lib --bins --tests --verbose -- --skip settlement::live
+      - name: Test workspace with all features (skip live settlement + docker)
+        run: cargo test --workspace --exclude omnia-fuzz --all-features --lib --bins --tests --verbose -- --skip settlement::live --skip docker_compose
         timeout-minutes: 15
         continue-on-error: true  # May fail if stable rustc < 1.91 (ethereum-live needs alloy)
 
@@ -151,7 +151,7 @@ jobs:
     name: Critical Chaos Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -169,7 +169,7 @@ jobs:
     name: Release Binary Size Gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -194,7 +194,7 @@ jobs:
     name: MSRV Check (1.91)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust 1.91.0
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -218,19 +218,18 @@ jobs:
         run: cargo +1.91.0 check -p omnia-node --no-default-features --features full
       - name: Verify MSRV with cargo-msrv
         run: |
-          cargo install cargo-msrv --locked
-          # cargo-msrv verifies MSRV per crate — we exclude crates whose optional
-          # features require a newer compiler (e.g., ethereum-live needs ≥1.91).
-          cargo msrv verify --workspace --exclude omnia-fuzz --exclude omnia-chaos-tests --exclude omnia-benches --min 1.91.0 2>&1 || true
-          # Explicitly verify omnia-adapters MSRV without ethereum-live
-          cargo msrv verify -p omnia-adapters --min 1.91.0 --features ""
+          cargo install cargo-msrv --version 0.19.1 --locked
+          # cargo-msrv 0.19.x doesn't support --workspace/--exclude/-p flags.
+          # Run it on the root package only (omnia-protocol workspace root).
+          # The MSRV is verified by the cargo +1.91.0 check steps above.
+          cargo msrv verify --min 1.91.0 -- cargo check --lib 2>&1 || true
         continue-on-error: true  # cargo-msrv may drift with new dep requirements
 
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -259,7 +258,7 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -272,7 +271,7 @@ jobs:
     name: Unused Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # cargo-udeps requires -Z binary-dep-depinfo which is nightly-only.
       # Use a pinned nightly to avoid regressions with the latest nightly.
       - uses: dtolnay/rust-toolchain@v1
@@ -297,7 +296,7 @@ jobs:
     name: Mutation Testing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -315,7 +314,7 @@ jobs:
     name: Benchmark Comparison
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -328,11 +327,13 @@ jobs:
         run: |
           # If no baseline exists, save one; otherwise compare against it.
           # The baseline file is criterion's <bench-name>/main/estimates.json.
+          # Use --bench flags to target only criterion benchmarks (not lib tests,
+          # which don't understand --save-baseline).
           if [ ! -f target/criterion/.omnia-baseline-saved ]; then
-            cargo bench -p omnia-benches --features full -- --save-baseline main
+            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --save-baseline main
             touch target/criterion/.omnia-baseline-saved
           else
-            cargo bench -p omnia-benches --features full -- --baseline main
+            cargo bench -p omnia-benches --features full --bench throughput --bench baseline_bench --bench sharding_bench -- --baseline main
           fi
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
@@ -341,7 +342,7 @@ jobs:
     name: Supply Chain Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -387,7 +388,7 @@ jobs:
     name: Build Reproducibility
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -418,7 +419,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Use stable toolchain for coverage — some workspace crates have optional
       # features (ethereum-live) requiring rustc >=1.91, and coverage may enable
       # additional features during instrumentation.
@@ -440,7 +441,7 @@ jobs:
           files: ./lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: |
@@ -452,7 +453,7 @@ jobs:
     name: Fuzz Smoke Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Pin to a known-good nightly. Latest nightly often has regressions with
       # ASAN + SanitizerCoverage (e.g. __sancov_gen_ linker errors).  The
       # nightly-2025-12-01 toolchain is known to work with cargo-fuzz + ASAN.
@@ -469,7 +470,7 @@ jobs:
         # some nightly toolchains.  Coverage instrumentation still works for
         # smoke testing; full ASAN fuzzing runs in the nightly-fuzz workflow.
         run: cargo fuzz build --fuzz-dir fuzz --sanitizer none
-      - name: Smoke test each target (10s each)
+      - name: Smoke test each target (30s each)
         # Smoke tests exercise fuzz targets with a small number of inputs.
         # A crash here may indicate a real bug, but it can also be a false
         # positive from the nightly toolchain.  Failures are reported as
@@ -493,7 +494,11 @@ jobs:
           FAILED=0
           for target in "${TARGETS[@]}"; do
             echo "--- Smoke testing $target ---"
-            if timeout 10 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -runs=1000 2>&1; then
+            # Use 300s timeout to allow for compilation + fuzzing.
+            # fuzz_gossip_message depends on omnia-network (libp2p) which
+            # takes ~2min to compile on first run, then recompiles again
+            # for cargo fuzz run. Total can exceed 180s.
+            if timeout 300 cargo fuzz run "$target" --fuzz-dir fuzz --sanitizer none -- -runs=1000 2>&1; then
               echo "$target smoke test passed"
             else
               echo "::warning::$target smoke test failed (may indicate a real bug)"
@@ -508,7 +513,7 @@ jobs:
     name: Generate SBOM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -522,7 +527,7 @@ jobs:
           find . -name '*.bom.json' -exec mv {} sbom/ \; || true
           find . -name '*.bom.xml' -exec mv {} sbom/ \; || true
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: omnia-sbom
           path: sbom/

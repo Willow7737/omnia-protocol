@@ -1,4 +1,5 @@
 # Phase 5 Summary
+
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 5 milestones and deliverables
 > 📅 Last Updated: 2026-05-20
@@ -20,15 +21,16 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: `docs/performance/BASELINE.md` was a template with no real data. Memory measurement was hardcoded to `0.0`. The "10K+ TPS" claim was aspirational with zero evidence.
 
 **Changes**:
+
 - **`chaos-tests/src/load_test.rs`**: Added `measure_memory_mb()` function reading from `/proc/self/status` on Linux. Changed `total_nodes` from hardcoded `1` to configurable (default `3` for BFT). Added `p90_latency_ms` to `LoadTestResult`. Added `total_nodes` field to `LoadTestConfig`.
 - **`chaos-tests/src/bin/load_test.rs`**: Added `--total-nodes` CLI argument. Added peak memory and P90 latency output.
 - **`docs/performance/BASELINE.md`**: Populated with real measured benchmark data:
   | Config | Events/sec Finalized | p50 Latency | p90 Latency | p99 Latency | Peak Memory |
   |--------|---------------------|-------------|-------------|-------------|-------------|
-  | 100/s  | 100.0               | 0.21 ms     | 0.29 ms     | 0.38 ms     | 5.8 MB      |
-  | 500/s  | 500.0               | 1.21 ms     | 1.53 ms     | 1.79 ms     | 14.4 MB     |
-  | 1000/s | 527.2               | 1.91 ms     | 2.25 ms     | 2.78 ms     | 22.5 MB     |
-  | 5000/s | 429.9               | 2.19 ms     | 2.66 ms     | 2.95 ms     | 23.2 MB     |
+  | 100/s | 100.0 | 0.21 ms | 0.29 ms | 0.38 ms | 5.8 MB |
+  | 500/s | 500.0 | 1.21 ms | 1.53 ms | 1.79 ms | 14.4 MB |
+  | 1000/s | 527.2 | 1.91 ms | 2.25 ms | 2.78 ms | 22.5 MB |
+  | 5000/s | 429.9 | 2.19 ms | 2.66 ms | 2.95 ms | 23.2 MB |
   - ZK benchmarks: Trusted setup basic ~6.5ms, expanded (4 events) ~423ms, Merkle tree (1024 leaves) ~74.4ms
   - VRF benchmarks: compute ~15.6µs, verify ~37.7µs, leader selection (100 validators) ~597ns
 - **`ARCHITECTURE.md`**: Replaced "10,000+ TPS" with "~7,190 events/sec (single-node measured, synchronous)" and documented the actual measured throughput.
@@ -40,6 +42,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: No test had ever verified that multiple Omnia nodes can reach BFT consensus over a real network. The `test_consensus_progress_with_minority_faults` test was failing because with 7 total_nodes, `supermajority(7) = 5`, but only 1 node was creating events (never enough witnesses for supermajority).
 
 **Changes**:
+
 - **`substrate/tests/multi_node_test.rs`**: Three tests:
   - `test_multi_node_bft_finality` — 4 nodes, all honest, verify committed count agreement
   - `test_bft_safety_with_byzantine_node` — 4 nodes, 1 Byzantine, honest nodes agree
@@ -52,6 +55,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: Current VRF is not standard — Ed25519 signature + BLAKE3 derivation does not meet the cryptographic definition of a VRF. The original ECVRF implementation had a broken prove/verify round-trip because BLAKE3-based "EC operations" cannot satisfy the algebraic identities needed for verification.
 
 **Changes**:
+
 - **`substrate/src/vrf.rs`**: Replaced broken BLAKE3-based ECVRF with a Fiat-Shamir + Ed25519 signature construction:
   - `VrfVersion` enum: `V1` (legacy, default) and `V2` (ECVRF, target)
   - `EcvrfOutput` struct: `gamma` (32 bytes), `c` (16 bytes challenge), `s` (64 bytes Ed25519 signature)
@@ -68,6 +72,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: No tooling for mainnet genesis — no documented procedure for creating the initial validator set or genesis block.
 
 **Changes**:
+
 - **`substrate/src/genesis.rs`** (new): Complete genesis tooling:
   - `GenesisConfig` — chain_id, validators, consensus/economics/governance configs
   - `ValidatorInfo` — per-validator genesis data (node_id, keys, stake, address)
@@ -84,6 +89,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: Alloy integration compiles but has never been tested against a real Ethereum network.
 
 **Changes**:
+
 - **`omnia-adapters/tests/ethereum_live_test.rs`** (new): Feature-gated (`ethereum-live`) test file with:
   - `test_e2e_ethereum_settlement` — deploy → submit → verify placeholder
   - `test_invalid_proof_rejected` — invalid proof rejection placeholder
@@ -95,6 +101,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: Custom Poseidon parameters are incompatible with Filecoin/Neptune. No migration path started. The original `const` arrays using `Fr::zero()` could not compile on stable Rust because `Fr::zero()` is not const-evaluable.
 
 **Changes**:
+
 - **`omnia-adapters/src/poseidon.rs`**: Added dual-hash infrastructure:
   - `PoseidonVersion` enum: `Custom` (default, deprecated) and `Reference` (target)
   - `reference` module with `LazyLock<[[Fr; 3]; 3]>` MDS matrix and `LazyLock<Vec<Fr>>` round constants — **populated with deterministic parameters** using distinct Cauchy MDS construction (x=[2,3,4], y=[6,7,8]) and BLAKE3 domain `"Poseidon-Ref-BN254-t3-RF8-RP57"`
@@ -110,6 +117,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: No bug bounty program existed for external security researchers.
 
 **Changes**:
+
 - **`SECURITY_BOUNTY.md`** (new): Complete bug bounty program with:
   - Scope (all Rust code, Solidity contracts, crypto implementations)
   - Out-of-scope items
@@ -123,6 +131,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: No curated audit package for an external audit firm.
 
 **Changes**:
+
 - **`docs/audit/AUDIT_PACKAGE.md`** (new): Complete audit package with scope, key docs, known concerns, build instructions
 - **`docs/audit/AUDIT_FINDINGS_TEMPLATE.md`** (new): Standardized template for auditor findings
 
@@ -131,24 +140,26 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 **Problem**: ZK and binding crates had not undergone side-channel audit. Substrate was audited but these were not.
 
 **Changes**:
+
 - **`docs/security/SIDE_CHANNEL_AUDIT_ZK_BINDING.md`** (new): Complete side-channel audit covering poseidon, quantum_commit, contribution, key_rotation
   - 5 findings documented (1 medium, 4 low)
   - Recommendations including formal Dilithium audit before mainnet
 
 ## Test Summary
 
-| Category | Count | Status |
-|----------|-------|--------|
-| Existing tests (pre-Phase 5) | 605+ | Maintained |
-| New ECVRF tests | 6 | Added (all passing) |
-| New genesis tests | 6 | Added (all passing) |
-| New multi-node BFT tests | 3 | Added (all passing, 1 fixed) |
-| New Poseidon dual-hash tests | 3 | Added (all passing) |
-| New network integration test | 1 | Added (placeholder) |
-| New Ethereum live tests | 2 | Added (placeholder) |
-| **Total new tests** | **21** | **All passing** |
+| Category                     | Count  | Status                       |
+| ---------------------------- | ------ | ---------------------------- |
+| Existing tests (pre-Phase 5) | 605+   | Maintained                   |
+| New ECVRF tests              | 6      | Added (all passing)          |
+| New genesis tests            | 6      | Added (all passing)          |
+| New multi-node BFT tests     | 3      | Added (all passing, 1 fixed) |
+| New Poseidon dual-hash tests | 3      | Added (all passing)          |
+| New network integration test | 1      | Added (placeholder)          |
+| New Ethereum live tests      | 2      | Added (placeholder)          |
+| **Total new tests**          | **21** | **All passing**              |
 
 Test results verified per crate:
+
 - `omnia-substrate` — 454 lib tests + 3 multi-node tests passing
 - `omnia-adapters` — 129 lib tests passing (15 Poseidon tests)
 - `omnia-binding` — 61 lib tests passing
@@ -161,16 +172,19 @@ Test results verified per crate:
 **Test Environment**: Linux 5.10.134, Intel Xeon 4-core, 8.1 GiB RAM, rustc 1.95.0
 
 **Consensus Throughput (single-node, release build)**:
+
 - Peak throughput: **~7,190 events/sec** (synchronous single-node) — a 13.6× improvement over initial tokio-based measurements
 - Latency: 0.21ms (p50 at 100/s) to 2.19ms (p50 at saturation)
 - Memory: 5.8 MB (idle) to 23.2 MB (under load)
 
 **ZK Performance**:
+
 - Trusted setup (basic): ~6.5 ms
 - Trusted setup (expanded, 4 events): ~423 ms
 - Merkle tree build (1024 leaves): ~74.4 ms
 
 **VRF Performance**:
+
 - VRF compute: ~15.6 µs
 - VRF verify: ~37.7 µs
 - Leader selection (100 validators): ~597 ns
@@ -188,6 +202,7 @@ Test results verified per crate:
 ## Post-Phase 5 Horizon
 
 After Phase 5, the project is in a **testnet-ready** state with:
+
 - Real performance data captured (~7,190 events/sec synchronous single-node throughput; 13.6× improvement over initial tokio measurements)
 - Multi-node BFT consensus validated (4 nodes, all tests passing)
 - Standard VRF construction (V2 ECVRF with Fiat-Shamir + Ed25519 signatures)
@@ -198,6 +213,7 @@ After Phase 5, the project is in a **testnet-ready** state with:
 - External audit package assembled
 
 **Phase 6 (Testnet → Mainnet)** would focus on:
+
 - Running a persistent public testnet with external validators
 - Commissioning and addressing external audit findings
 - Completing Poseidon dual-hash transition (Phase B)
@@ -210,5 +226,6 @@ After Phase 5, the project is in a **testnet-ready** state with:
 **Estimated timeline from Phase 5 completion to safe mainnet: 3–6 months**, primarily driven by the external audit cycle and testnet stability period.
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,5 @@
 # Security Bounty Program
+
 > 🎯 Audience: All
 > 🔗 Context: Vulnerability disclosure and bounty reward structure
 > 📅 Last Updated: 2026-05-20
@@ -49,12 +50,12 @@ The following are explicitly out of scope:
 
 ## Reward Tiers
 
-| Severity | Description | Reward Range |
-|----------|-------------|--------------|
-| **Critical** | Consensus break, key theft, fund loss, ZK proof forgery, state corruption exploitable on mainnet | $10,000 – $50,000 |
-| **High** | State corruption (non-exploitable on mainnet), signature bypass, DoS bypass, slashing circumvention | $5,000 – $10,000 |
-| **Medium** | Information leak, degraded performance, nonce reuse, authentication bypass on non-critical endpoints | $1,000 – $5,000 |
-| **Low** | Minor bugs, UX issues, documentation errors with security implications | $100 – $1,000 |
+| Severity     | Description                                                                                          | Reward Range      |
+| ------------ | ---------------------------------------------------------------------------------------------------- | ----------------- |
+| **Critical** | Consensus break, key theft, fund loss, ZK proof forgery, state corruption exploitable on mainnet     | $10,000 – $50,000 |
+| **High**     | State corruption (non-exploitable on mainnet), signature bypass, DoS bypass, slashing circumvention  | $5,000 – $10,000  |
+| **Medium**   | Information leak, degraded performance, nonce reuse, authentication bypass on non-critical endpoints | $1,000 – $5,000   |
+| **Low**      | Minor bugs, UX issues, documentation errors with security implications                               | $100 – $1,000     |
 
 ### Severity Assessment
 
@@ -82,13 +83,13 @@ The Omnia security team reserves the right to adjust severity classifications ba
 
 ### Response Timeline
 
-| Milestone | Target |
-|-----------|--------|
-| Acknowledgment of report | Within 24 hours |
-| Initial assessment and severity classification | Within 72 hours |
-| Fix development begins | Within 5 business days (critical/high) |
-| Patch release | Critical: 7 days, High: 14 days, Medium: 30 days, Low: next release |
-| Bounty payment | Within 30 days of patch release |
+| Milestone                                      | Target                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| Acknowledgment of report                       | Within 24 hours                                                     |
+| Initial assessment and severity classification | Within 72 hours                                                     |
+| Fix development begins                         | Within 5 business days (critical/high)                              |
+| Patch release                                  | Critical: 7 days, High: 14 days, Medium: 30 days, Low: next release |
+| Bounty payment                                 | Within 30 days of patch release                                     |
 
 ### Responsible Disclosure
 
@@ -132,8 +133,9 @@ This bug bounty program may be updated periodically. Changes to scope, reward ti
 
 ---
 
-*This bug bounty program is administered by the Omnia Protocol security team. For questions, contact security@omnia-protocol.org.*
+_This bug bounty program is administered by the Omnia Protocol security team. For questions, contact security@omnia-protocol.org._
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

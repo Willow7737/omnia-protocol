@@ -1,4 +1,5 @@
 # ADR-017: GossipSub Peer Scoring Thresholds
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -39,14 +40,17 @@ The default GossipSub parameters in libp2p are generic and not tuned for Omnia's
 ## Alternatives Considered
 
 ### No Peer Scoring
+
 Rely on the default GossipSub behavior without custom scoring. Simple but provides no protection against malicious peers beyond basic protocol compliance. Bad actors can degrade network quality without consequence.
 
 ### Binary Allow/Deny Lists
+
 Manually maintain lists of allowed and denied peers. Provides absolute control but doesn't scale (requires manual curation) and cannot handle temporary misbehavior or gradual degradation. A peer is either fully trusted or fully blocked, with no middle ground.
 
 ## Consequences
 
 ### Positive
+
 - Graduated response to bad peers — scores decay, allowing recovery from temporary issues
 - Invalid message deliveries penalized at -150 per delivery (strong deterrent)
 - Mesh delivery failure penalized at -50 (moderate deterrent for lazy peers)
@@ -57,16 +61,19 @@ Manually maintain lists of allowed and denied peers. Provides absolute control b
 - Application-level `PeerScoreTracker` integrates with message validation pipeline
 
 ### Negative
+
 - More complex configuration — scoring parameters need ongoing tuning based on network conditions
 - Score computation adds per-message overhead
 - Graylisted peers may experience temporary exclusion even if behavior improves (until score decays)
 - Threshold values (-100, penalty weights) are empirically chosen and may need adjustment
 
 ### Trade-offs
+
 - Chose graduated scoring over binary lists for self-healing capability
 - Penalty weights are asymmetric (heavier for invalid messages than for delivery failures) to prioritize network integrity
 - Decay interval of 1 minute provides fast recovery without erasing recent behavior too quickly
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

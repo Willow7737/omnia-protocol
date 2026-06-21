@@ -1,4 +1,5 @@
 # Consensus Queue Invariants
+
 > 🎯 Audience: Developers
 > 🔗 Context: Documents the consensus queue invariants and O(new_events) processing guarantee
 > 📅 Last Updated: 2026-05-20
@@ -91,6 +92,7 @@ These three levels of idempotency ensure that duplicate events are always handle
 The causal graph and the consensus queue are populated in tandem:
 
 **For locally created events** (via `Substrate::submit_event()`):
+
 1. The event is validated (`event.validate()`).
 2. The event is inserted into the graph (`graph.insert(event.clone())`).
 3. The event ID is appended to `unprocessed_events`.
@@ -98,6 +100,7 @@ The causal graph and the consensus queue are populated in tandem:
 5. The event is gossiped to the network.
 
 **For network-received events** (via `GossipProtocol::process_pending_events()`):
+
 1. The event is deserialized from gossip bytes (`Event::from_bytes()`).
 2. The event is inserted into the graph (`graph.insert(event.clone())`).
 3. The event ID is returned from `process_pending_events()`.
@@ -111,7 +114,7 @@ In both cases, the event is in the graph before its ID is added to the queue. Th
 
 **Statement**: For every `EventId` in `unprocessed_events`, there exists a corresponding `Event` in `CausalGraph`.
 
-**Why it holds**: Events are inserted into the graph *before* their IDs are added to the queue. If graph insertion fails (invalid hash, missing parent, duplicate), the event ID is never added to the queue.
+**Why it holds**: Events are inserted into the graph _before_ their IDs are added to the queue. If graph insertion fails (invalid hash, missing parent, duplicate), the event ID is never added to the queue.
 
 **Why it matters**: `process_consensus()` looks up events in the graph by ID. If an ID in the queue had no corresponding graph entry, `graph.get(id)` would return `None`, and the event would be silently skipped — but this would mean that consensus missed an event, potentially violating finality guarantees.
 
@@ -141,15 +144,16 @@ In both cases, the event is in the graph before its ID is added to the queue. Th
 
 ## Performance Characteristics
 
-| Operation | Complexity | Notes |
-|-----------|-----------|-------|
-| Append to queue | O(1) | `Vec::push()` amortized |
-| Drain queue | O(k) | k = number of unprocessed events |
-| Consensus per event | O(k × ancestry) | Ancestry checks are O(k) in worst case |
-| Total per iteration | O(k) | Dominated by consensus, not queue management |
+| Operation           | Complexity      | Notes                                        |
+| ------------------- | --------------- | -------------------------------------------- |
+| Append to queue     | O(1)            | `Vec::push()` amortized                      |
+| Drain queue         | O(k)            | k = number of unprocessed events             |
+| Consensus per event | O(k × ancestry) | Ancestry checks are O(k) in worst case       |
+| Total per iteration | O(k)            | Dominated by consensus, not queue management |
 
 The queue ensures that consensus processing scales with the rate of new events, not with the total history size. For a protocol targeting 10,000 TPS with a 100ms consensus interval, k ≈ 1,000 events per iteration — a manageable workload.
 
 ---
+
 🔙 **Back**: [Architecture Index](./) | 🔄 **Related**: [Pipeline Design](./pipeline-design.md)
 🚀 **Next**: [CRDT Convergence](./crdt-convergence.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

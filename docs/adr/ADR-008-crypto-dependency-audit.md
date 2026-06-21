@@ -1,4 +1,5 @@
 # ADR-008: Cryptographic Dependency Audit
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -14,22 +15,24 @@
 The Omnia Protocol relies on several cryptographic crates for core security guarantees: event signing, Merkle tree computation, state root hashing, ZK proof generation, and post-quantum commitments. As part of Sprint 1 hardening, we need to audit all cryptographic dependencies for version appropriateness and known vulnerabilities.
 
 The spec mandates:
+
 - ed25519-dalek should be 2.1+
 - blake3 should be 1.5+
 
 This audit covers two crates with cryptographic dependencies:
-- **`omnia-adapters`** (`omnia-adapters/Cargo.toml`): ZK proof system (ark-* crates, Poseidon hash, Powers of Tau)
+
+- **`omnia-adapters`** (`omnia-adapters/Cargo.toml`): ZK proof system (ark-\* crates, Poseidon hash, Powers of Tau)
 - **`omnia-binding`** (`binding/Cargo.toml`): Post-quantum commitments and RF fingerprinting
 
 ## Audit Results
 
 ### 1. ed25519-dalek (binding crate)
 
-| Field | Value |
-|-------|-------|
-| **Specified** | ≥ 2.1 |
+| Field          | Value                              |
+| -------------- | ---------------------------------- |
+| **Specified**  | ≥ 2.1                              |
 | **Cargo.toml** | `"2.1"` (with `rand_core` feature) |
-| **Assessment** | ✅ **Safe** |
+| **Assessment** | ✅ **Safe**                        |
 
 ed25519-dalek 2.x supersedes the 1.x line which had side-channel vulnerabilities (CVE-2020-12973 class). Version 2.x uses `curve25519-dalek` 4.x with constant-time operations by default. Used in `binding/src/quantum_commit.rs` for classical signature creation (`QuantumCommitment::sign_classical()`) and verification (`verify_ed25519()`). The `NodeKeypair` type from `omnia-substrate` wraps the `ed25519_dalek::SigningKey`.
 
@@ -37,12 +40,12 @@ ed25519-dalek 2.x supersedes the 1.x line which had side-channel vulnerabilities
 
 ### 2. blake3 (both crates)
 
-| Field | Value |
-|-------|-------|
-| **Specified** | ≥ 1.5 |
-| **omnia-adapters/Cargo.toml** | `"1.5"` |
-| **binding/Cargo.toml** | `"1.5"` |
-| **Assessment** | ✅ **Safe** |
+| Field                         | Value       |
+| ----------------------------- | ----------- |
+| **Specified**                 | ≥ 1.5       |
+| **omnia-adapters/Cargo.toml** | `"1.5"`     |
+| **binding/Cargo.toml**        | `"1.5"`     |
+| **Assessment**                | ✅ **Safe** |
 
 BLAKE3 is a relatively new hash function with no known cryptographic vulnerabilities. Used extensively across the ZK and binding crates:
 
@@ -53,11 +56,11 @@ BLAKE3 is a relatively new hash function with no known cryptographic vulnerabili
 
 ### 3. pqc_dilithium (binding crate)
 
-| Field | Value |
-|-------|-------|
-| **Specified** | N/A (added for PQC support) |
-| **Cargo.toml** | `"0.2"` |
-| **Assessment** | ✅ **Safe** |
+| Field          | Value                       |
+| -------------- | --------------------------- |
+| **Specified**  | N/A (added for PQC support) |
+| **Cargo.toml** | `"0.2"`                     |
+| **Assessment** | ✅ **Safe**                 |
 
 CRYSTALS-Dilithium is a NIST PQC standard for digital signatures. The `pqc_dilithium` crate provides the `Keypair::generate()`, `Keypair::sign()`, and `verify()` functions used in `binding/src/quantum_commit.rs` for hybrid and post-quantum signature modes:
 
@@ -70,10 +73,10 @@ pub fn sign_post_quantum(data: &[u8], dilithium_keypair: &pqc_dilithium::Keypair
 
 ### 4. ark-groth16 / ark-bn254 / ark-r1cs-std / ark-relations (ZK crate)
 
-| Field | Value |
-|-------|-------|
-| **Cargo.toml** | `"0.4"` (all ark-* crates) |
-| **Assessment** | ✅ **Safe** |
+| Field          | Value                       |
+| -------------- | --------------------------- |
+| **Cargo.toml** | `"0.4"` (all ark-\* crates) |
+| **Assessment** | ✅ **Safe**                 |
 
 The `ark-*` ecosystem provides the Groth16 proof system on the BN254 curve. Used throughout the ZK crate:
 
@@ -92,12 +95,12 @@ The 0.4 line is the latest stable release. No known vulnerabilities.
 
 ### 5. rand / rand_chacha (ZK crate)
 
-| Field | Value |
-|-------|-------|
-| **omnia-adapters/Cargo.toml (rand)** | `"0.8"` |
-| **omnia-adapters/Cargo.toml (rand_chacha)** | `"0.3"` |
-| **binding/Cargo.toml (rand)** | `"0.8"` |
-| **Assessment** | ⚠️ **Acceptable, with note** |
+| Field                                       | Value                        |
+| ------------------------------------------- | ---------------------------- |
+| **omnia-adapters/Cargo.toml (rand)**        | `"0.8"`                      |
+| **omnia-adapters/Cargo.toml (rand_chacha)** | `"0.3"`                      |
+| **binding/Cargo.toml (rand)**               | `"0.8"`                      |
+| **Assessment**                              | ⚠️ **Acceptable, with note** |
 
 rand 0.8.x is used in the ZK crate for `ChaCha8Rng::from_entropy()` in trusted setup and proof generation (`prover.rs`). `ChaCha8Rng::from_seed()` is used for deterministic contributions in the trusted setup ceremony (`setup/contribution.rs`). The binding crate uses rand for `Fr::rand()` operations.
 
@@ -107,12 +110,13 @@ No known security vulnerabilities in rand 0.8.x.
 
 ### 6. ark-serialize (ZK crate)
 
-| Field | Value |
-|-------|-------|
-| **Cargo.toml** | `"0.4"` |
+| Field          | Value       |
+| -------------- | ----------- |
+| **Cargo.toml** | `"0.4"`     |
 | **Assessment** | ✅ **Safe** |
 
 Used for canonical serialization of Groth16 proofs and verifying keys in `omnia-adapters/src/prover.rs`:
+
 - `serialize_proof()` uses `serialize_uncompressed()`
 - `deserialize_proof()` uses `deserialize_uncompressed()`
 - `serialize_verifying_key()` / `deserialize_verifying_key()` for VK persistence
@@ -123,15 +127,16 @@ Uncompressed serialization is used for simplicity and compatibility. Production 
 
 ### 7. serde / postcard (both crates)
 
-| Field | Value |
-|-------|-------|
-| **Cargo.toml (serde)** | `"1.0"` with `derive` feature |
-| **Cargo.toml (postcard)** | `"1"` |
-| **Assessment** | ✅ **Safe** |
+| Field                     | Value                         |
+| ------------------------- | ----------------------------- |
+| **Cargo.toml (serde)**    | `"1.0"` with `derive` feature |
+| **Cargo.toml (postcard)** | `"1"`                         |
+| **Assessment**            | ✅ **Safe**                   |
 
 Used for `ProofBundle` serialization (`proof_bundle.rs`), `MerkleProof` serialization (`merkle.rs`), `ProvenanceLog` serialization (`provenance.rs`), `PowersOfTau` serialization (`setup/powers_of_tau.rs`), `Contribution` and `ContributionProof` serialization (`setup/contribution.rs`), and `PqcKeyRotationRequest` serialization (`key_rotation.rs`). Also used for shard state serialization across all domain shards.
 
 postcard is a `no_std`-compatible, deterministic, compact binary serialization format. It was chosen over bincode for the following reasons:
+
 - **Deterministic encoding**: postcard always produces the same byte sequence for the same data, which is critical for consensus reproducibility.
 - **`no_std` compatibility**: postcard works in embedded and WASM environments without `std`.
 - **Active maintenance**: postcard is actively maintained and has no known vulnerabilities.
@@ -142,9 +147,9 @@ bincode 1.x is retained only for v0 backward compatibility (deserializing legacy
 
 ### 8. thiserror (both crates)
 
-| Field | Value |
-|-------|-------|
-| **Cargo.toml** | `"2.0"` |
+| Field          | Value       |
+| -------------- | ----------- |
+| **Cargo.toml** | `"2.0"`     |
 | **Assessment** | ✅ **Safe** |
 
 Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementError`, `RollupError`, `SetupError`, `BindingError`, `ProvenanceTrackerError`. thiserror 2.0 is the current release.
@@ -153,25 +158,25 @@ Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementEr
 
 ## Summary Table
 
-| Crate | Location | Cargo.toml | Spec Met | Status |
-|-------|----------|-----------|----------|--------|
-| ed25519-dalek | binding | 2.1 | ✅ ≥2.1 | ✅ Safe |
-| blake3 | both | 1.5 | ✅ ≥1.5 | ✅ Safe |
-| pqc_dilithium | binding | 0.2 | N/A | ✅ Safe |
-| ark-groth16 | zk | 0.4 | N/A | ✅ Safe |
-| ark-bn254 | zk | 0.4 | N/A | ✅ Safe |
-| ark-r1cs-std | zk | 0.4 | N/A | ✅ Safe |
-| ark-relations | zk | 0.4 | N/A | ✅ Safe |
-| ark-serialize | zk | 0.4 | N/A | ✅ Safe |
-| ark-ec | zk | 0.4 | N/A | ✅ Safe |
-| ark-ff | zk | 0.4 | N/A | ✅ Safe |
-| ark-crypto-primitives | zk | 0.4 | N/A | ✅ Safe |
-| rand | both | 0.8 | N/A | ⚠️ Acceptable |
-| rand_chacha | zk | 0.3 | N/A | ✅ Safe |
-| serde | both | 1.0 | N/A | ✅ Safe |
-| postcard | both | 1 | N/A | ✅ Safe |
-| bincode | both | 1 | N/A | ⚠️ Legacy only (v0 backward compat) |
-| thiserror | both | 2.0 | N/A | ✅ Safe |
+| Crate                 | Location | Cargo.toml | Spec Met | Status                              |
+| --------------------- | -------- | ---------- | -------- | ----------------------------------- |
+| ed25519-dalek         | binding  | 2.1        | ✅ ≥2.1  | ✅ Safe                             |
+| blake3                | both     | 1.5        | ✅ ≥1.5  | ✅ Safe                             |
+| pqc_dilithium         | binding  | 0.2        | N/A      | ✅ Safe                             |
+| ark-groth16           | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-bn254             | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-r1cs-std          | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-relations         | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-serialize         | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-ec                | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-ff                | zk       | 0.4        | N/A      | ✅ Safe                             |
+| ark-crypto-primitives | zk       | 0.4        | N/A      | ✅ Safe                             |
+| rand                  | both     | 0.8        | N/A      | ⚠️ Acceptable                       |
+| rand_chacha           | zk       | 0.3        | N/A      | ✅ Safe                             |
+| serde                 | both     | 1.0        | N/A      | ✅ Safe                             |
+| postcard              | both     | 1          | N/A      | ✅ Safe                             |
+| bincode               | both     | 1          | N/A      | ⚠️ Legacy only (v0 backward compat) |
+| thiserror             | both     | 2.0        | N/A      | ✅ Safe                             |
 
 ## Action Items
 
@@ -183,5 +188,6 @@ Used for error type derivation: `ProverError`, `ProofBundleError`, `SettlementEr
 6. **Ongoing**: Monitor NIST for updates to CRYSTALS-Dilithium standard (FIPS 204) and watch for `pqc_dilithium` crate updates.
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

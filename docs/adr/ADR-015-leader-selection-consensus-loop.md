@@ -1,4 +1,5 @@
 # ADR-015: Leader Selection in Consensus Loop
+
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
 > 📅 Last Updated: 2026-05-20
@@ -35,14 +36,17 @@ Additionally, a mempool was needed to buffer pending transactions before they ar
 ## Alternatives Considered
 
 ### Round-Robin Leader Selection
+
 Each validator takes turns in a fixed order. Simple to implement but has several drawbacks: predictable leader schedule enables targeted attacks, no stake-weighting means all validators have equal influence regardless of stake, and the order must be re-computed whenever the validator set changes.
 
 ### RANDAO-Based Leader Selection
+
 Use a commit-reveal scheme (like Ethereum's RANDAO) to generate randomness for leader selection. This provides better unpredictability than round-robin and is battle-tested in Ethereum. However, it requires multiple rounds of communication (commit and reveal phases), adding latency to each round. The last revealer also has some influence over the random value.
 
 ## Consequences
 
 ### Positive
+
 - Fair leader selection weighted by stake, proportional to economic commitment
 - Deterministic leader computation — no additional communication rounds needed
 - VRF output is publicly verifiable, preventing leader forgery
@@ -52,16 +56,19 @@ Use a commit-reveal scheme (like Ethereum's RANDAO) to generate randomness for l
 - `process_consensus_round()` provides clean separation of round logic
 
 ### Negative
+
 - VRF-based selection requires each validator to compute a VRF every round (small CPU cost)
 - Current VRF construction is non-standard (Ed25519 + BLAKE3, not ECVRF — see ADR-012)
 - Stake-weighted selection may concentrate influence among high-stake validators
 - Mempool requires memory proportional to pending transaction volume
 
 ### Trade-offs
+
 - Chose VRF over RANDAO for single-round determinism without commit-reveal latency
 - Chose stake-weighted over round-robin for economic fairness
 - Mempool with bounded size trades potential transaction drops for memory safety
 
 ---
+
 🔙 **Back**: [ADR Index](./) | 🔄 **Related**: [ADR Index](../reference/adr-index.md)
 🚀 **Next**: [ADR Index](../reference/adr-index.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

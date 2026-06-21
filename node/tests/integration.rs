@@ -27,6 +27,10 @@ use tokio::sync::{Mutex, RwLock};
 /// JWT secret used for integration tests.
 const TEST_JWT_SECRET: &str = "test-integration-secret";
 
+/// Serializes tests that modify OMNIA_JWT_SECRET to prevent env var races
+/// when tests run in parallel.
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// RAII guard that removes env vars when dropped.
 struct EnvGuard {
     keys: Vec<&'static str>,
@@ -45,7 +49,13 @@ impl Drop for EnvGuard {
 ///
 /// The server runs in a background tokio task and will be stopped
 /// when the shutdown handle is dropped.
-async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, EnvGuard) {
+async fn start_test_server() -> (
+    String,
+    tokio::task::JoinHandle<()>,
+    EnvGuard,
+    std::sync::MutexGuard<'static, ()>,
+) {
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // Set JWT secret before building the router so auth middleware can read it
     std::env::set_var("OMNIA_JWT_SECRET", TEST_JWT_SECRET);
     let env_guard = EnvGuard {
@@ -128,12 +138,12 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, EnvGuard) 
     // Give the server a moment to start
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    (format!("http://127.0.0.1:{port}"), handle, env_guard)
+    (format!("http://127.0.0.1:{port}"), handle, env_guard, lock)
 }
 
 #[tokio::test]
 async fn test_health_endpoint() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
 
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/health")).send().await?;
@@ -150,7 +160,7 @@ async fn test_health_endpoint() -> Result<()> {
 #[tokio::test]
 #[cfg(feature = "metrics")]
 async fn test_metrics_endpoint() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
 
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/metrics")).send().await?;
@@ -172,7 +182,7 @@ async fn test_metrics_endpoint() -> Result<()> {
 #[tokio::test]
 #[cfg(not(feature = "metrics"))]
 async fn test_metrics_endpoint_disabled() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
 
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/metrics")).send().await?;
@@ -188,7 +198,7 @@ async fn test_metrics_endpoint_disabled() -> Result<()> {
 
 #[tokio::test]
 async fn test_submit_event() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
 
     let token = create_token("test-caller", 3600).expect("create test token");
     let client = reqwest::Client::new();
@@ -213,7 +223,7 @@ async fn test_submit_event() -> Result<()> {
 
 #[tokio::test]
 async fn test_get_event_not_found() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
 
     let token = create_token("test-caller", 3600).expect("create test token");
     let client = reqwest::Client::new();
@@ -241,7 +251,7 @@ async fn test_get_event_not_found() -> Result<()> {
 #[tokio::test]
 #[cfg(feature = "swagger-ui")]
 async fn test_swagger_ui() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/swagger-ui/")).send().await?;
     assert_eq!(
@@ -256,7 +266,7 @@ async fn test_swagger_ui() -> Result<()> {
 #[tokio::test]
 #[cfg(not(feature = "swagger-ui"))]
 async fn test_swagger_ui_disabled() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/swagger-ui/")).send().await?;
     assert_eq!(resp.status(), 404, "Swagger UI should be 404 when feature disabled");
@@ -267,7 +277,7 @@ async fn test_swagger_ui_disabled() -> Result<()> {
 #[tokio::test]
 #[cfg(feature = "swagger-ui")]
 async fn test_openapi_json() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/api-docs/openapi.json")).send().await?;
     assert_eq!(
@@ -295,7 +305,7 @@ async fn test_openapi_json() -> Result<()> {
 #[tokio::test]
 #[cfg(not(feature = "swagger-ui"))]
 async fn test_openapi_json_disabled() -> Result<()> {
-    let (base_url, _handle, _env_guard) = start_test_server().await;
+    let (base_url, _handle, _env_guard, _lock) = start_test_server().await;
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/api-docs/openapi.json")).send().await?;
     assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");

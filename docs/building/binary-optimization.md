@@ -1,4 +1,5 @@
 # Binary Optimization
+
 > 🎯 Audience: Developers
 > 🔗 Context: Binary size and release optimization for the omnia-node binary
 > 📅 Last Updated: 2026-05-20
@@ -57,5 +58,6 @@ A reproducible build script is available:
 This ensures deterministic binary output across build environments. The script pins the Rust toolchain, sets deterministic environment variables, and verifies the build hash.
 
 ---
+
 🔙 **Back**: [building/](./) | 🔄 **Related**: [feature-matrix.md](./feature-matrix.md)
 🚀 **Next**: [../operations/](../operations/) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

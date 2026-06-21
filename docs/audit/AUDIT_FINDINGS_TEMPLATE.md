@@ -1,4 +1,5 @@
 # Audit Findings Template
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
 > 📅 Last Updated: 2026-05-20
@@ -47,7 +48,7 @@ Use this template for reporting all audit findings. Each finding should be a sep
 - [ ] `binding/src/quantum_commit.rs` — Quantum commitments
 - [ ] `binding/src/key_rotation.rs` — PQC key rotation
 - [ ] `node/src/api/` — REST API
-- [ ] Other: _______________
+- [ ] Other: **\*\***\_\_\_**\*\***
 
 ### Description
 
@@ -81,24 +82,25 @@ Use this template for reporting all audit findings. Each finding should be a sep
 
 ## Findings Summary Table
 
-| ID | Title | Severity | Component | Status |
-|----|-------|----------|-----------|--------|
-| F-001 | | | | |
-| F-002 | | | | |
-| F-003 | | | | |
+| ID    | Title | Severity | Component | Status |
+| ----- | ----- | -------- | --------- | ------ |
+| F-001 |       |          |           |        |
+| F-002 |       |          |           |        |
+| F-003 |       |          |           |        |
 
 ---
 
 ## Severity Definitions
 
-| Severity | Criteria |
-|----------|----------|
-| **Critical** | Direct fund loss, consensus break, key theft, ZK proof forgery exploitable on mainnet. Immediate action required. |
-| **High** | State corruption, signature bypass, slashing circumvention, significant DoS vector. Fix before mainnet. |
-| **Medium** | Information leak, authentication bypass on non-critical endpoints, degraded performance. Fix before or shortly after mainnet. |
-| **Low** | Minor bugs, code quality issues, documentation errors with security implications. Fix in next release. |
-| **Informational** | Best practice suggestions, style issues, non-security observations. Consider for future improvements. |
+| Severity          | Criteria                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Critical**      | Direct fund loss, consensus break, key theft, ZK proof forgery exploitable on mainnet. Immediate action required.             |
+| **High**          | State corruption, signature bypass, slashing circumvention, significant DoS vector. Fix before mainnet.                       |
+| **Medium**        | Information leak, authentication bypass on non-critical endpoints, degraded performance. Fix before or shortly after mainnet. |
+| **Low**           | Minor bugs, code quality issues, documentation errors with security implications. Fix in next release.                        |
+| **Informational** | Best practice suggestions, style issues, non-security observations. Consider for future improvements.                         |
 
 ---
+
 🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
 🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

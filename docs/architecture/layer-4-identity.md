@@ -1,4 +1,5 @@
 # Layer 4: Identity Hardening
+
 > 🎯 Audience: Developers
 > 🔗 Context: Layer 4 enables self-sovereign identity where individuals, AI agents, and collectives own their identity forever
 > 📅 Last Updated: 2026-05-20
@@ -16,11 +17,13 @@ The `did:omnia:` method is fully implemented with validation.
 **Format:** `did:omnia:<hex_public_key>` where `<hex_public_key>` is a 64-character hex string representing a 32-byte Ed25519 public key.
 
 **Validation rules** (implemented in `shards/src/identity/did.rs`):
+
 - Must start with `did:omnia:` (the `DID_PREFIX` constant)
 - The method-specific identifier must be exactly 64 hex characters (32 bytes)
 - The hex must be valid (no non-hex characters)
 
 **Properties:**
+
 - You create it yourself (no authority issues it)
 - It's cryptographically verifiable
 - It cannot be revoked or censored
@@ -39,6 +42,7 @@ Social recovery uses **Shamir's Secret Sharing over GF(256)** (implemented in `s
 The GF(256) arithmetic uses the AES irreducible polynomial (0x11B) for reduction. The threshold must be at least 2.
 
 **Recovery flow:**
+
 - `IdentityOp::ConfigureRecovery` — splits secret, persists encrypted shares
 - `IdentityOp::RecoverDid` — reconstructs secret, derives new Ed25519 keypair, adds to `doc.authentication` (rotation, not replacement)
 - `recovery_count` incremented to prevent replay attacks
@@ -74,13 +78,14 @@ The reconstructed secret is used to rotate the DID's public key and authenticati
 
 ## Reputation System — Partially Implemented
 
-| Component | Status |
-|-----------|--------|
-| ✅ Exponential reputation decay | Implemented (fixed-point PPM arithmetic) |
-| ✅ Quadratic voting weight calculation | Implemented |
-| 🌑 Full reputation scoring | Not yet implemented |
-| 📋 Reputation thresholds | Planned |
+| Component                              | Status                                   |
+| -------------------------------------- | ---------------------------------------- |
+| ✅ Exponential reputation decay        | Implemented (fixed-point PPM arithmetic) |
+| ✅ Quadratic voting weight calculation | Implemented                              |
+| 🌑 Full reputation scoring             | Not yet implemented                      |
+| 📋 Reputation thresholds               | Planned                                  |
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [layer-3-binding.md](./layer-3-binding.md)
 🚀 **Next**: [layer-5-economics.md](./layer-5-economics.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

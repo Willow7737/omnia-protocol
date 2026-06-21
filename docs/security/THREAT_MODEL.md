@@ -1,4 +1,5 @@
 # Omnia Protocol — Threat Model
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the security documentation section
 > 📅 Last Updated: 2026-05-20
@@ -9,12 +10,13 @@
 **Review Cadence**: Quarterly
 
 ## Document Control
-| Field | Value |
-|-------|-------|
-| Version | 4.0.0 |
-| Date | 2026-05-16 |
-| Classification | Public |
-| Review Cadence | Quarterly |
+
+| Field          | Value      |
+| -------------- | ---------- |
+| Version        | 4.0.0      |
+| Date           | 2026-05-16 |
+| Classification | Public     |
+| Review Cadence | Quarterly  |
 
 ---
 
@@ -34,6 +36,7 @@ architectures. The system comprises:
 - **Node layer**: REST API (axum), networking (libp2p QUIC), storage (redb)
 
 ### Trust Assumptions
+
 - At most f Byzantine nodes out of N >= 3f + 1
 - Network is partially synchronous (messages eventually delivered)
 - Cryptographic assumptions: discrete log in BN254 groups, collision
@@ -46,99 +49,99 @@ architectures. The system comprises:
 
 ### 2.1 Network Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Gossip flood (DoS) | High | Token-bucket rate limiter (200 burst/100s) | Implemented |
-| Replay attack | High | Nonce-based replay protection + redb persistence | Implemented |
-| Eclipse attack | High | Bootstrap nodes + peer diversity requirements | Partial - no geographic diversity enforcement |
-| Sybil attack | Medium | Stake-weighted VRF leader selection | Implemented |
-| Network partition | High | BFT assumption (3f+1), partition recovery in runbook | Documented |
-| QUIC handshake DoS | Medium | libp2p connection limits | Default limits only |
-| Peer impersonation | High | Ed25519 authentication on gossip | Implemented |
-| Large payload attack | Medium | MAX_PAYLOAD_SIZE = 1 MiB | Implemented |
-| Metadata analysis | Low | Gossip broadcasts (no targeted messages) | By design |
+| Attack               | Severity | Mitigation                                           | Status                                        |
+| -------------------- | -------- | ---------------------------------------------------- | --------------------------------------------- |
+| Gossip flood (DoS)   | High     | Token-bucket rate limiter (200 burst/100s)           | Implemented                                   |
+| Replay attack        | High     | Nonce-based replay protection + redb persistence     | Implemented                                   |
+| Eclipse attack       | High     | Bootstrap nodes + peer diversity requirements        | Partial - no geographic diversity enforcement |
+| Sybil attack         | Medium   | Stake-weighted VRF leader selection                  | Implemented                                   |
+| Network partition    | High     | BFT assumption (3f+1), partition recovery in runbook | Documented                                    |
+| QUIC handshake DoS   | Medium   | libp2p connection limits                             | Default limits only                           |
+| Peer impersonation   | High     | Ed25519 authentication on gossip                     | Implemented                                   |
+| Large payload attack | Medium   | MAX_PAYLOAD_SIZE = 1 MiB                             | Implemented                                   |
+| Metadata analysis    | Low      | Gossip broadcasts (no targeted messages)             | By design                                     |
 
 ### 2.2 Consensus Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Equivocation | Critical | Slashing engine with auto-detection | Implemented |
-| Nothing-at-stake | High | BFT finality gadget (2/3 commit required) | Implemented |
-| Long-range attack | High | Finality gadget prevents history rewrite past finality | Partial - No checkpoint mechanism yet |
-| Leader DOS | High | VRF leader is deterministic - can be predicted | Partial - No leader privacy or fallback |
-| Round stall | High | Round timeout + view-change | Implemented (Sprint 6) |
-| Censorship by supermajority | Medium | - | No censorship resistance mechanism |
-| Witness grinding | Medium | VRF-based witness selection | Implemented |
-| Commit withholding | Medium | Optimistic confirmation + commit delay | Implemented |
+| Attack                      | Severity | Mitigation                                             | Status                                  |
+| --------------------------- | -------- | ------------------------------------------------------ | --------------------------------------- |
+| Equivocation                | Critical | Slashing engine with auto-detection                    | Implemented                             |
+| Nothing-at-stake            | High     | BFT finality gadget (2/3 commit required)              | Implemented                             |
+| Long-range attack           | High     | Finality gadget prevents history rewrite past finality | Partial - No checkpoint mechanism yet   |
+| Leader DOS                  | High     | VRF leader is deterministic - can be predicted         | Partial - No leader privacy or fallback |
+| Round stall                 | High     | Round timeout + view-change                            | Implemented (Sprint 6)                  |
+| Censorship by supermajority | Medium   | -                                                      | No censorship resistance mechanism      |
+| Witness grinding            | Medium   | VRF-based witness selection                            | Implemented                             |
+| Commit withholding          | Medium   | Optimistic confirmation + commit delay                 | Implemented                             |
 
 ### 2.3 Cryptographic Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Side-channel (timing) | High | subtle::ct_eq/ct_ne on all secret comparisons | Implemented |
-| Quantum computer (future) | Critical | Hybrid Ed25519+Dilithium commitments | Partial - Default is ClassicalOnly |
-| BN254 curve break | Critical | Migration playbook (CRYPTO_MIGRATION.md) with BLS12-381 fallback | Planned |
-| BLAKE3 collision | Critical | Migration playbook with SHA3-256 fallback | Planned |
-| Dilithium key compromise | High | PQC key rotation (binding/src/key_rotation.rs) | Implemented |
-| Groth16 trusted setup subversion | High | PoK-verified ceremony (zk/src/setup/contribution.rs) | Implemented |
-| Poseidon hash collision | High | Cauchy MDS + BLAKE3-derived RC (non-standard) | Risk - differs from reference constants |
-| VRF output manipulation | High | Stake-weighted modular selection | Implemented |
-| BLS rogue-key attack | Medium | Proof-of-possession required for aggregation | Implemented (Sprint 6) |
+| Attack                           | Severity | Mitigation                                                       | Status                                  |
+| -------------------------------- | -------- | ---------------------------------------------------------------- | --------------------------------------- |
+| Side-channel (timing)            | High     | subtle::ct_eq/ct_ne on all secret comparisons                    | Implemented                             |
+| Quantum computer (future)        | Critical | Hybrid Ed25519+Dilithium commitments                             | Partial - Default is ClassicalOnly      |
+| BN254 curve break                | Critical | Migration playbook (CRYPTO_MIGRATION.md) with BLS12-381 fallback | Planned                                 |
+| BLAKE3 collision                 | Critical | Migration playbook with SHA3-256 fallback                        | Planned                                 |
+| Dilithium key compromise         | High     | PQC key rotation (binding/src/key_rotation.rs)                   | Implemented                             |
+| Groth16 trusted setup subversion | High     | PoK-verified ceremony (zk/src/setup/contribution.rs)             | Implemented                             |
+| Poseidon hash collision          | High     | Cauchy MDS + BLAKE3-derived RC (non-standard)                    | Risk - differs from reference constants |
+| VRF output manipulation          | High     | Stake-weighted modular selection                                 | Implemented                             |
+| BLS rogue-key attack             | Medium   | Proof-of-possession required for aggregation                     | Implemented (Sprint 6)                  |
 
 ### 2.4 ZK Proof System Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Malicious trusted setup | Critical | Multi-party ceremony with PoK (zk/src/setup/) | Implemented |
-| Proof replay across chains | High | L1Anchor with chain_id + block_height + timestamp in ProofBundle | Implemented |
-| Invalid state root in bundle | High | verify_integrity() checks version, proof non-empty, root differ | Implemented |
-| Poseidon parameter manipulation | High | Cauchy MDS determinism + BLAKE3-derived RC | Implemented but non-standard |
-| ExpandedRollupCircuit witness manipulation | High | Merkle path + event commitment constraints | Implemented |
-| Empty batch proof acceptance | Medium | Empty batch constraint: old_root == new_root | Implemented |
-| Proof deserialization attack | High | Canonical deserialization with error handling | Implemented |
+| Attack                                     | Severity | Mitigation                                                       | Status                       |
+| ------------------------------------------ | -------- | ---------------------------------------------------------------- | ---------------------------- |
+| Malicious trusted setup                    | Critical | Multi-party ceremony with PoK (zk/src/setup/)                    | Implemented                  |
+| Proof replay across chains                 | High     | L1Anchor with chain_id + block_height + timestamp in ProofBundle | Implemented                  |
+| Invalid state root in bundle               | High     | verify_integrity() checks version, proof non-empty, root differ  | Implemented                  |
+| Poseidon parameter manipulation            | High     | Cauchy MDS determinism + BLAKE3-derived RC                       | Implemented but non-standard |
+| ExpandedRollupCircuit witness manipulation | High     | Merkle path + event commitment constraints                       | Implemented                  |
+| Empty batch proof acceptance               | Medium   | Empty batch constraint: old_root == new_root                     | Implemented                  |
+| Proof deserialization attack               | High     | Canonical deserialization with error handling                    | Implemented                  |
 
 ### 2.5 Binding Layer Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| RF fingerprint forgery | High | Hamming distance threshold + confidence scoring | Stub - needs real hardware |
-| Quantum commitment forgery (classical) | High | Ed25519 signature verification | Implemented |
-| Quantum commitment forgery (PQC) | High | Dilithium signature verification | Implemented |
-| PQC key rotation downgrade | Medium | Phase downgrade rejected by PqcKeyRotationManager | Implemented |
-| Provenance chain tampering | High | Append-only log with commitment links_to() verification | Implemented |
-| Provenance log version downgrade | Medium | Version byte check in from_bytes() | Implemented |
-| Authorization signature bypass | Medium | Empty authorization sig rejected in key rotation | Implemented |
+| Attack                                 | Severity | Mitigation                                              | Status                     |
+| -------------------------------------- | -------- | ------------------------------------------------------- | -------------------------- |
+| RF fingerprint forgery                 | High     | Hamming distance threshold + confidence scoring         | Stub - needs real hardware |
+| Quantum commitment forgery (classical) | High     | Ed25519 signature verification                          | Implemented                |
+| Quantum commitment forgery (PQC)       | High     | Dilithium signature verification                        | Implemented                |
+| PQC key rotation downgrade             | Medium   | Phase downgrade rejected by PqcKeyRotationManager       | Implemented                |
+| Provenance chain tampering             | High     | Append-only log with commitment links_to() verification | Implemented                |
+| Provenance log version downgrade       | Medium   | Version byte check in from_bytes()                      | Implemented                |
+| Authorization signature bypass         | Medium   | Empty authorization sig rejected in key rotation        | Implemented                |
 
 ### 2.6 Economic Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Spam (griefing) | Medium | Fee schedule + quota system | Implemented |
-| Fee manipulation | Medium | Fixed fee schedule (governance-updated) | Implemented |
-| Governance capture | High | Quadratic voting | Partial - still plutocratic at extreme wealth |
-| Flash loan governance attack | Medium | Time-locked voting | Implemented (Sprint 6) |
-| Stake grinding | Medium | VRF-based leader selection | Implemented |
-| Nothing-at-stake (economic) | Medium | Slashing + slashing threshold | Implemented |
+| Attack                       | Severity | Mitigation                              | Status                                        |
+| ---------------------------- | -------- | --------------------------------------- | --------------------------------------------- |
+| Spam (griefing)              | Medium   | Fee schedule + quota system             | Implemented                                   |
+| Fee manipulation             | Medium   | Fixed fee schedule (governance-updated) | Implemented                                   |
+| Governance capture           | High     | Quadratic voting                        | Partial - still plutocratic at extreme wealth |
+| Flash loan governance attack | Medium   | Time-locked voting                      | Implemented (Sprint 6)                        |
+| Stake grinding               | Medium   | VRF-based leader selection              | Implemented                                   |
+| Nothing-at-stake (economic)  | Medium   | Slashing + slashing threshold           | Implemented                                   |
 
 ### 2.7 Data Integrity Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Snapshot tampering | High | BLAKE3 integrity hash + verify() | Implemented |
-| Event graph corruption | Medium | Causal graph consistency checks | Implemented |
-| CRDT divergence | High | TLA+-proven convergence | Proven |
-| Nonce reset (disk corruption) | Medium | redb durability guarantees | Partial - No nonce backup |
-| Pruning data loss | Medium | Archive mode default + PrunedEventMetadata | Implemented |
-| ProofBundle tampering | High | postcard serialization + verify_integrity() | Implemented |
+| Attack                        | Severity | Mitigation                                  | Status                    |
+| ----------------------------- | -------- | ------------------------------------------- | ------------------------- |
+| Snapshot tampering            | High     | BLAKE3 integrity hash + verify()            | Implemented               |
+| Event graph corruption        | Medium   | Causal graph consistency checks             | Implemented               |
+| CRDT divergence               | High     | TLA+-proven convergence                     | Proven                    |
+| Nonce reset (disk corruption) | Medium   | redb durability guarantees                  | Partial - No nonce backup |
+| Pruning data loss             | Medium   | Archive mode default + PrunedEventMetadata  | Implemented               |
+| ProofBundle tampering         | High     | postcard serialization + verify_integrity() | Implemented               |
 
 ### 2.8 Supply Chain Attack Surface
 
-| Attack | Severity | Mitigation | Status |
-|--------|----------|------------|--------|
-| Compromised dependency | High | cargo-audit + cargo-vet + dependency policy | Implemented |
-| Typosquatting | Medium | Cargo.lock pinning + manual review | Implemented |
-| Build system compromise | Medium | Reproducible builds (partial) | Partial - Non-deterministic |
-| Insider threat (maintainer) | Medium | SBOM generation + audit trail | Partial - No multi-signature for releases |
+| Attack                      | Severity | Mitigation                                  | Status                                    |
+| --------------------------- | -------- | ------------------------------------------- | ----------------------------------------- |
+| Compromised dependency      | High     | cargo-audit + cargo-vet + dependency policy | Implemented                               |
+| Typosquatting               | Medium   | Cargo.lock pinning + manual review          | Implemented                               |
+| Build system compromise     | Medium   | Reproducible builds (partial)               | Partial - Non-deterministic               |
+| Insider threat (maintainer) | Medium   | SBOM generation + audit trail               | Partial - No multi-signature for releases |
 
 ---
 
@@ -146,30 +149,30 @@ architectures. The system comprises:
 
 The following risks have NO mitigation and should be prioritized:
 
-| # | Risk | Impact | Likelihood | Priority |
-|---|------|--------|------------|----------|
-| R1 | BN254 curve compromise (no alternative) | All ZK invalid | Low | P1 |
-| R2 | Poseidon non-standard parameters | Hash divergence from reference | Medium | P2 |
-| R3 | Long-range attack (no checkpoints) | History rewrite | Low | P2 |
-| R4 | Censorship by supermajority | Transaction exclusion | Low | P2 |
-| R5 | No release multi-signature | Supply chain compromise | Low | P3 |
-| R6 | RF fingerprint forgery (stub implementation) | Physical identity bypass | High | P1 |
+| #   | Risk                                         | Impact                         | Likelihood | Priority |
+| --- | -------------------------------------------- | ------------------------------ | ---------- | -------- |
+| R1  | BN254 curve compromise (no alternative)      | All ZK invalid                 | Low        | P1       |
+| R2  | Poseidon non-standard parameters             | Hash divergence from reference | Medium     | P2       |
+| R3  | Long-range attack (no checkpoints)           | History rewrite                | Low        | P2       |
+| R4  | Censorship by supermajority                  | Transaction exclusion          | Low        | P2       |
+| R5  | No release multi-signature                   | Supply chain compromise        | Low        | P3       |
+| R6  | RF fingerprint forgery (stub implementation) | Physical identity bypass       | High       | P1       |
 
 ---
 
 ## 4. Threat Actors
 
-| Actor | Capability | Target | Mitigation |
-|-------|-----------|--------|------------|
-| Solo validator | 1 vote, limited stake | Minor griefing | Fees + rate limiting |
-| Colluding minority (< 1/3) | Coordinated voting | Censorship, equivocation | Slashing + BFT |
-| Colluding supermajority (>= 2/3) | Full consensus control | Censorship, history rewrite | Social layer only |
-| Network adversary | Packet manipulation | DOS, eclipse, partition | QUIC + rate limiting |
-| Cryptanalytic researcher | Math breakthroughs | Curve/hash breaks | Crypto agility (CRYPTO_MIGRATION.md) |
-| Quantum computer | Break Ed25519/ECDSA | Key compromise | Hybrid PQC mode |
-| Nation-state | All of the above | Targeted takedown | Geographic distribution |
-| Malicious dependency maintainer | Supply chain | Backdoor in node binary | cargo-vet + reproducible builds |
-| ZK operator | Submit fraudulent proofs | State root manipulation | Groth16 proof verification on L1 |
+| Actor                            | Capability               | Target                      | Mitigation                           |
+| -------------------------------- | ------------------------ | --------------------------- | ------------------------------------ |
+| Solo validator                   | 1 vote, limited stake    | Minor griefing              | Fees + rate limiting                 |
+| Colluding minority (< 1/3)       | Coordinated voting       | Censorship, equivocation    | Slashing + BFT                       |
+| Colluding supermajority (>= 2/3) | Full consensus control   | Censorship, history rewrite | Social layer only                    |
+| Network adversary                | Packet manipulation      | DOS, eclipse, partition     | QUIC + rate limiting                 |
+| Cryptanalytic researcher         | Math breakthroughs       | Curve/hash breaks           | Crypto agility (CRYPTO_MIGRATION.md) |
+| Quantum computer                 | Break Ed25519/ECDSA      | Key compromise              | Hybrid PQC mode                      |
+| Nation-state                     | All of the above         | Targeted takedown           | Geographic distribution              |
+| Malicious dependency maintainer  | Supply chain             | Backdoor in node binary     | cargo-vet + reproducible builds      |
+| ZK operator                      | Submit fraudulent proofs | State root manipulation     | Groth16 proof verification on L1     |
 
 ---
 
@@ -249,19 +252,19 @@ Physical Identity Forged
 
 ## 6. Recommendations Summary
 
-| # | Recommendation | Sprint | Status |
-|---|---------------|--------|--------|
-| 1 | Implement consensus timeout/view-change | Sprint 6 (Phase C) | Implemented |
-| 2 | Add BLS proof-of-possession | Sprint 6 (Phase C) | Implemented |
-| 3 | Implement crypto scheme versioning | Sprint 6 (Phase D) | Implemented |
-| 4 | Add genesis replay tool | Sprint 6 (Phase E) | Implemented |
-| 5 | Add slashing appeals/undo process | Sprint 6 (Phase E) | Implemented |
-| 6 | Add time-locked voting | Sprint 6 (Phase F) | Implemented |
-| 7 | Migrate Poseidon to reference constants | Future | Planned |
-| 8 | Side-channel audit for ZK and binding crates | Future | Not started |
-| 9 | Schedule external security audit | Post-Sprint 6 | Pending |
-| 10 | Implement leader privacy (threshold encryption) | Future | Not planned |
-| 11 | Real RF fingerprint hardware integration | Future | Stub only |
+| #   | Recommendation                                  | Sprint             | Status      |
+| --- | ----------------------------------------------- | ------------------ | ----------- |
+| 1   | Implement consensus timeout/view-change         | Sprint 6 (Phase C) | Implemented |
+| 2   | Add BLS proof-of-possession                     | Sprint 6 (Phase C) | Implemented |
+| 3   | Implement crypto scheme versioning              | Sprint 6 (Phase D) | Implemented |
+| 4   | Add genesis replay tool                         | Sprint 6 (Phase E) | Implemented |
+| 5   | Add slashing appeals/undo process               | Sprint 6 (Phase E) | Implemented |
+| 6   | Add time-locked voting                          | Sprint 6 (Phase F) | Implemented |
+| 7   | Migrate Poseidon to reference constants         | Future             | Planned     |
+| 8   | Side-channel audit for ZK and binding crates    | Future             | Not started |
+| 9   | Schedule external security audit                | Post-Sprint 6      | Pending     |
+| 10  | Implement leader privacy (threshold encryption) | Future             | Not planned |
+| 11  | Real RF fingerprint hardware integration        | Future             | Stub only   |
 
 ---
 
@@ -538,29 +541,29 @@ Spoofing attacks involve an adversary pretending to be another entity — a node
 
 ### 7.7 STRIDE Threat Summary
 
-| Category | Threat | Impact | Priority | Current Status |
-|----------|--------|--------|----------|----------------|
-| Spoofing | Fake Events | HIGH | HIGH | Mitigated by Ed25519 + creator binding |
-| Spoofing | Fake Identities | MEDIUM | MEDIUM | Mitigated by key-bound DIDs; gap in DID verification |
-| Spoofing | Fake Validators | HIGH | MEDIUM | Mitigated by BFT threshold; gap in validator authentication |
-| Spoofing | RF Fingerprint Spoofing | HIGH | HIGH | Stub implementation provides no real physical security |
-| Tampering | Event Payload Mod. | HIGH | LOW | Strongly mitigated by hash-then-sign |
-| Tampering | State Root Manip. | CRITICAL | CRITICAL | Groth16 proofs implemented; Solidity verifier still stub |
-| Tampering | Provenance Chain Tampering | HIGH | MEDIUM | Append-only log with links_to(); gap in cryptographic embedding |
-| Tampering | Shard State Mutation | MEDIUM | MEDIUM | Mitigated by Rust type system; gap in runtime enforcement |
-| Repudiation | Denial of Event Creation | MEDIUM | LOW | Non-repudiable Ed25519 + Dilithium signatures |
-| Repudiation | Denial of Provenance Event | MEDIUM | LOW | Quantum commitments provide non-repudiation |
-| Info Disclosure | ZK Proof Data Visibility | MEDIUM | MEDIUM | ZK proofs are zero-knowledge; batch data may be posted to L1 |
-| Info Disclosure | Trusted Setup Compromise | CRITICAL | HIGH | Multi-party PoK ceremony; production ceremony needed |
-| Info Disclosure | Shard State Exposure | MEDIUM | MEDIUM | No external API; gap in encryption at rest |
-| Info Disclosure | Private Key Compromise | CRITICAL | HIGH | Keys in memory only; no HSM |
-| DoS | Gossip Flooding | HIGH | MEDIUM | Rate limiting implemented |
-| DoS | Consensus Stall | HIGH | LOW | View-change implemented |
-| DoS | ZK Proving DoS | MEDIUM | MEDIUM | No circuit size limit or proving timeout |
-| Elevation | Validator Takeover | CRITICAL | HIGH | BFT + slashing; no validator rotation |
-| Elevation | Governance Manip. | MEDIUM | MEDIUM | Quadratic voting + time-locks |
-| Elevation | PQC Key Rotation Downgrade | MEDIUM | MEDIUM | Downgrade rejected; authorization sig not verified |
-| Elevation | Shard Privilege Esc. | HIGH | HIGH | No ACL for shard operations |
+| Category        | Threat                     | Impact   | Priority | Current Status                                                  |
+| --------------- | -------------------------- | -------- | -------- | --------------------------------------------------------------- |
+| Spoofing        | Fake Events                | HIGH     | HIGH     | Mitigated by Ed25519 + creator binding                          |
+| Spoofing        | Fake Identities            | MEDIUM   | MEDIUM   | Mitigated by key-bound DIDs; gap in DID verification            |
+| Spoofing        | Fake Validators            | HIGH     | MEDIUM   | Mitigated by BFT threshold; gap in validator authentication     |
+| Spoofing        | RF Fingerprint Spoofing    | HIGH     | HIGH     | Stub implementation provides no real physical security          |
+| Tampering       | Event Payload Mod.         | HIGH     | LOW      | Strongly mitigated by hash-then-sign                            |
+| Tampering       | State Root Manip.          | CRITICAL | CRITICAL | Groth16 proofs implemented; Solidity verifier still stub        |
+| Tampering       | Provenance Chain Tampering | HIGH     | MEDIUM   | Append-only log with links_to(); gap in cryptographic embedding |
+| Tampering       | Shard State Mutation       | MEDIUM   | MEDIUM   | Mitigated by Rust type system; gap in runtime enforcement       |
+| Repudiation     | Denial of Event Creation   | MEDIUM   | LOW      | Non-repudiable Ed25519 + Dilithium signatures                   |
+| Repudiation     | Denial of Provenance Event | MEDIUM   | LOW      | Quantum commitments provide non-repudiation                     |
+| Info Disclosure | ZK Proof Data Visibility   | MEDIUM   | MEDIUM   | ZK proofs are zero-knowledge; batch data may be posted to L1    |
+| Info Disclosure | Trusted Setup Compromise   | CRITICAL | HIGH     | Multi-party PoK ceremony; production ceremony needed            |
+| Info Disclosure | Shard State Exposure       | MEDIUM   | MEDIUM   | No external API; gap in encryption at rest                      |
+| Info Disclosure | Private Key Compromise     | CRITICAL | HIGH     | Keys in memory only; no HSM                                     |
+| DoS             | Gossip Flooding            | HIGH     | MEDIUM   | Rate limiting implemented                                       |
+| DoS             | Consensus Stall            | HIGH     | LOW      | View-change implemented                                         |
+| DoS             | ZK Proving DoS             | MEDIUM   | MEDIUM   | No circuit size limit or proving timeout                        |
+| Elevation       | Validator Takeover         | CRITICAL | HIGH     | BFT + slashing; no validator rotation                           |
+| Elevation       | Governance Manip.          | MEDIUM   | MEDIUM   | Quadratic voting + time-locks                                   |
+| Elevation       | PQC Key Rotation Downgrade | MEDIUM   | MEDIUM   | Downgrade rejected; authorization sig not verified              |
+| Elevation       | Shard Privilege Esc.       | HIGH     | HIGH     | No ACL for shard operations                                     |
 
 ### 7.8 Priority Action Items
 
@@ -575,5 +578,6 @@ Spoofing attacks involve an adversary pretending to be another entity — a node
 9. **MEDIUM — ZK proving DoS protection**: Add circuit size limits and proving timeouts.
 
 ---
+
 🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
 🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

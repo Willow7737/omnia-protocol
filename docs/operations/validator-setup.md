@@ -1,4 +1,5 @@
 # Validator Setup Guide
+
 > 🎯 Audience: Operators
 > 🔗 Context: Step-by-step guide for setting up and running an Omnia Protocol validator node
 > 📅 Last Updated: 2026-05-20
@@ -153,5 +154,6 @@ omnia-node --node-id 1 --http-port 8080
 - Privileged operations (mint, advance_epoch) require admin JWT
 
 ---
+
 🔙 **Back**: [operations/](./) | 🔄 **Related**: [runbook.md](./runbook.md)
 🚀 **Next**: [monitoring.md](./monitoring.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

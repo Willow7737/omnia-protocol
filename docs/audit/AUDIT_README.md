@@ -1,4 +1,5 @@
 # Omnia Protocol — Auditor's Guide
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
 > 📅 Last Updated: 2026-05-20
@@ -155,15 +156,15 @@ FUZZ_TIME=300 ./scripts/fuzz.sh
 
 **Available fuzz targets** (7 total, defined in `scripts/fuzz.sh`):
 
-| Target | What it fuzzes |
-|---|---|
-| `fuzz_event_deserialization` | Random bytes fed to `Event::from_bytes()` |
-| `fuzz_gossip_message` | Random gossip message structures |
-| `fuzz_zk_proof_deserialization` | Random ZK proof data |
-| `fuzz_consensus_state_transition` | Random consensus state transitions |
-| `fuzz_vector_clock_merge` | Random vector clock merge operations |
-| `fuzz_rate_limiter` | Random rate limiter inputs |
-| `fuzz_snapshot_deserialization` | Random snapshot data |
+| Target                            | What it fuzzes                            |
+| --------------------------------- | ----------------------------------------- |
+| `fuzz_event_deserialization`      | Random bytes fed to `Event::from_bytes()` |
+| `fuzz_gossip_message`             | Random gossip message structures          |
+| `fuzz_zk_proof_deserialization`   | Random ZK proof data                      |
+| `fuzz_consensus_state_transition` | Random consensus state transitions        |
+| `fuzz_vector_clock_merge`         | Random vector clock merge operations      |
+| `fuzz_rate_limiter`               | Random rate limiter inputs                |
+| `fuzz_snapshot_deserialization`   | Random snapshot data                      |
 
 To generate fuzz corpus seeds:
 
@@ -227,6 +228,7 @@ CONSTANTS Nodes = {n1, n2, n3, n4}
 ### 4.5 Expected Results
 
 All five invariants should hold:
+
 - **TypeOK** — Well-typedness invariant
 - **Agreement** — All honest nodes that commit an event agree on its hash
 - **NoEquivocation** — Equivocation is confined to Byzantine creators
@@ -461,6 +463,7 @@ omnia-chaos-tests  ←  (depends on substrate, shards, economics)
 ```
 
 Key dependency relationships:
+
 - `omnia-shards` depends on `omnia-substrate` (Event, VectorClock, EventProcessor trait) and `omnia-economics` (QuotaSystem)
 - `omnia-adapters` depends on `omnia-substrate` (Event type for circuit)
 - `omnia-binding` depends on `omnia-substrate` (NodeKeypair, VectorClock, crypto)
@@ -479,11 +482,13 @@ This project follows strict rules that auditors should be aware of. Violations o
 ### 8.1 No `unwrap()` in Production
 
 `unwrap()` is forbidden in all non-test code. Use:
+
 - `?` operator for error propagation
 - `.ok_or(Error::...)` for converting `Option` to `Result`
 - `.expect("descriptive message")` ONLY when failure is truly impossible (e.g., serializing a `String` that cannot fail)
 
 Search for violations:
+
 ```bash
 rg "\.unwrap\(\)" --type rust | rg -v "#\[test\]" | rg -v "mod tests"
 ```
@@ -493,11 +498,13 @@ rg "\.unwrap\(\)" --type rust | rg -v "#\[test\]" | rg -v "mod tests"
 Floating-point types are forbidden in the substrate, shards, and economics crates (excluding test code). All arithmetic must use integer types (`u64`, `i64`, `usize`) or the `FixedPoint<U>` type.
 
 Search for violations:
+
 ```bash
 rg "f64|f32" --type rust substrate/ shards/ economics/
 ```
 
 The only acceptable exceptions are:
+
 - `binding/src/rf_fingerprint.rs` — explicit stub
 - `chaos-tests/src/lib.rs` `drop_rate` field — test-only parameter
 
@@ -506,6 +513,7 @@ The only acceptable exceptions are:
 Every `pub fn`, `pub struct`, `pub enum`, and `pub trait` must have `///` doc comments. Missing rustdoc is a code quality finding.
 
 Search for violations:
+
 ```bash
 cargo doc --workspace --no-deps 2>&1 | rg "missing documentation"
 ```
@@ -543,5 +551,6 @@ For auditors who want to get started quickly:
 For questions about the codebase, architecture, or audit scope, contact the Omnia Protocol development team at security@omnia-protocol.org or via the project's internal communication channels.
 
 ---
+
 🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
 🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

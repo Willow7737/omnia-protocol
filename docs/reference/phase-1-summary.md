@@ -1,4 +1,5 @@
 # Phase 1 Summary
+
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 1 milestones and deliverables
 > 📅 Last Updated: 2026-05-20
@@ -11,16 +12,16 @@
 
 ## Phase 1 Completion Status
 
-| # | Finding | Severity | Status | Notes |
-|---|---------|----------|--------|-------|
-| 1 | FIND-024: Typed Error Migration | Medium | ✅ Complete | 34 typed error enums with `thiserror`; zero `Result<_, String>` remaining |
-| 2 | FIND-023: `unwrap()` Replacement | Medium | ✅ Complete | `#![deny(clippy::unwrap_used)]` on all 7 crates; zero production `unwrap()` |
-| 3 | E2E REST API Integration Tests | High | ✅ Complete | 19 test functions covering 9 endpoints × 4 auth states, rate limiting, ACL, CORS, error formats |
-| 4 | Code Coverage Integration | Medium | ✅ Complete | `cargo llvm-cov` replaces tarpaulin in CI; 70% target with 5% threshold |
-| 5 | FIND-033: RUSTSEC Advisory Review | Low | ✅ Complete | Removed stale RUSTSEC-2025-0055; added review dates to all 8 remaining ignores |
-| 6 | FIND-034: Documentation Sprint | Low | ✅ Complete | 50+ discrepancy fixes across 12 documentation files |
-| 7 | Solidity Groth16 Verifier | High | ✅ Pre-existing | Production-quality verifier with BN254 precompiles, state root binding, operator management |
-| 8 | FIND-026: Rustdoc Coverage (partial) | Medium | ✅ Complete | 35 documentation items added to 7 security-critical modules |
+| #   | Finding                              | Severity | Status          | Notes                                                                                           |
+| --- | ------------------------------------ | -------- | --------------- | ----------------------------------------------------------------------------------------------- |
+| 1   | FIND-024: Typed Error Migration      | Medium   | ✅ Complete     | 34 typed error enums with `thiserror`; zero `Result<_, String>` remaining                       |
+| 2   | FIND-023: `unwrap()` Replacement     | Medium   | ✅ Complete     | `#![deny(clippy::unwrap_used)]` on all 7 crates; zero production `unwrap()`                     |
+| 3   | E2E REST API Integration Tests       | High     | ✅ Complete     | 19 test functions covering 9 endpoints × 4 auth states, rate limiting, ACL, CORS, error formats |
+| 4   | Code Coverage Integration            | Medium   | ✅ Complete     | `cargo llvm-cov` replaces tarpaulin in CI; 70% target with 5% threshold                         |
+| 5   | FIND-033: RUSTSEC Advisory Review    | Low      | ✅ Complete     | Removed stale RUSTSEC-2025-0055; added review dates to all 8 remaining ignores                  |
+| 6   | FIND-034: Documentation Sprint       | Low      | ✅ Complete     | 50+ discrepancy fixes across 12 documentation files                                             |
+| 7   | Solidity Groth16 Verifier            | High     | ✅ Pre-existing | Production-quality verifier with BN254 precompiles, state root binding, operator management     |
+| 8   | FIND-026: Rustdoc Coverage (partial) | Medium   | ✅ Complete     | 35 documentation items added to 7 security-critical modules                                     |
 
 ---
 
@@ -30,42 +31,42 @@
 
 All modules now use `thiserror`-derived error enums. The following error types exist:
 
-| Module | Error Enum | Crate |
-|--------|-----------|-------|
-| `slashing_undo` | `SlashingUndoError` | substrate |
-| `cross_shard` | `CrossShardError` | shards |
-| `shard` | `ShardError` | shards |
-| `gossip` | `GossipError` | substrate |
-| `consensus` | `ConsensusError` | substrate |
-| `network` | `NetworkError` | substrate |
-| `snapshot` | `SnapshotError` | substrate |
-| `rate_limiter` | `RateLimiterError` | substrate |
-| `vrf` | `VrfError` | substrate |
-| `genesis_replay` | `GenesisReplayError` | substrate |
-| `bls` | `BlsError` | substrate |
-| `keystore` | `KeyStoreError` | substrate |
-| `vector_clock` | `VectorClockError` | substrate |
-| `causal_graph` | `CausalGraphError` | substrate |
-| `event` | `EventValidationError` | substrate |
-| `crdt` | `CrdtError` | substrate |
-| `threshold` | `ThresholdError` | substrate |
-| `migration` | `MigrationError` | substrate |
-| `wire_format` | `WireFormatError` | substrate |
-| `nonce_store` | `NonceStoreError` | shards |
-| `identity/did` | `DidError` | shards |
-| `identity/recovery` | `RecoveryError` | shards |
-| `quantum_commit` | `BindingError` | binding |
-| `provenance` | `ProvenanceTrackerError` | binding |
-| `key_rotation` | `KeyRotationError` | binding |
-| `poseidon` | `ZkError` | zk |
-| `settlement` | `SettlementError` | zk |
-| `prover` | `ProverError` | zk |
-| `proof_bundle` | `ProofBundleError` | zk |
-| `setup` | `SetupError` | zk |
-| `operator` | `OperatorError` | zk |
-| `economics` | `EconomicsError` | economics |
-| `time_lock` | `TimeLockError` | economics |
-| `auth` | `AuthError` | node |
+| Module              | Error Enum               | Crate     |
+| ------------------- | ------------------------ | --------- |
+| `slashing_undo`     | `SlashingUndoError`      | substrate |
+| `cross_shard`       | `CrossShardError`        | shards    |
+| `shard`             | `ShardError`             | shards    |
+| `gossip`            | `GossipError`            | substrate |
+| `consensus`         | `ConsensusError`         | substrate |
+| `network`           | `NetworkError`           | substrate |
+| `snapshot`          | `SnapshotError`          | substrate |
+| `rate_limiter`      | `RateLimiterError`       | substrate |
+| `vrf`               | `VrfError`               | substrate |
+| `genesis_replay`    | `GenesisReplayError`     | substrate |
+| `bls`               | `BlsError`               | substrate |
+| `keystore`          | `KeyStoreError`          | substrate |
+| `vector_clock`      | `VectorClockError`       | substrate |
+| `causal_graph`      | `CausalGraphError`       | substrate |
+| `event`             | `EventValidationError`   | substrate |
+| `crdt`              | `CrdtError`              | substrate |
+| `threshold`         | `ThresholdError`         | substrate |
+| `migration`         | `MigrationError`         | substrate |
+| `wire_format`       | `WireFormatError`        | substrate |
+| `nonce_store`       | `NonceStoreError`        | shards    |
+| `identity/did`      | `DidError`               | shards    |
+| `identity/recovery` | `RecoveryError`          | shards    |
+| `quantum_commit`    | `BindingError`           | binding   |
+| `provenance`        | `ProvenanceTrackerError` | binding   |
+| `key_rotation`      | `KeyRotationError`       | binding   |
+| `poseidon`          | `ZkError`                | zk        |
+| `settlement`        | `SettlementError`        | zk        |
+| `prover`            | `ProverError`            | zk        |
+| `proof_bundle`      | `ProofBundleError`       | zk        |
+| `setup`             | `SetupError`             | zk        |
+| `operator`          | `OperatorError`          | zk        |
+| `economics`         | `EconomicsError`         | economics |
+| `time_lock`         | `TimeLockError`          | economics |
+| `auth`              | `AuthError`              | node      |
 
 **EventProcessor trait**: Signature changed to `Result<(), EventProcessorError>` (breaking API change, all implementors updated).
 
@@ -81,6 +82,7 @@ All modules now use `thiserror`-derived error enums. The following error types e
 New file: `node/tests/api_integration.rs` (1,275 lines, 19 test functions)
 
 Test coverage:
+
 - **Auth matrix**: 9 endpoints × 4 auth states (no auth → 401, valid JWT → 200/201/400/404, expired JWT → 401, wrong JWT → 401)
 - **Rate limiting**: Rapid requests trigger 429 after bucket exhaustion
 - **Privileged operations**: MintUbc/AdvanceEpoch with non-admin → 403, admin → 200
@@ -90,11 +92,13 @@ Test coverage:
 ### Code Coverage Integration
 
 CI workflow updated (`.github/workflows/ci.yml`):
+
 - Replaced `cargo tarpaulin` with `cargo llvm-cov`
 - Generates `lcov.info` for Codecov upload
 - Generates `coverage-summary.txt` for baseline tracking
 
 `codecov.yml` updated:
+
 - Project target: 70% (was 80%)
 - Threshold: 5% (was 1%)
 - Patch target: 80% (unchanged)
@@ -110,21 +114,22 @@ CI workflow updated (`.github/workflows/ci.yml`):
 
 12 documentation files updated with 50+ discrepancy fixes:
 
-| Category | Count | Examples |
-|----------|-------|---------|
-| Stale security claims | 12 | "No auth" → JWT + ACL + rate limit; "Unencrypted keys" → AES-256-GCM |
-| Wrong test counts | 5 | 278+ → 295+ across all docs |
-| Stale sled references | 5 | SledSlashingStore/SledNonceStore → RedbSlashingStore/RedbNonceStore |
-| Missing Phase 0 files | 8 | auth.rs, keystore.rs, blake3_domain.rs, nonce_store.rs, etc. |
-| Missing Phase 0 dependencies | 3 | jsonwebtoken, aes-gcm, tower-http, etc. |
-| Wrong type references | 2 | Option\<u16\> → Option\<u64\> |
-| Outdated ZK status | 4 | "hash placeholder" → Poseidon hash |
-| Missing operational details | 4 | CLI subcommands, REST API endpoints, Grafana password, Prometheus ports |
-| Stale feature status | 7 | API auth, encrypted keys, SNARK hash → marked Done |
+| Category                     | Count | Examples                                                                |
+| ---------------------------- | ----- | ----------------------------------------------------------------------- |
+| Stale security claims        | 12    | "No auth" → JWT + ACL + rate limit; "Unencrypted keys" → AES-256-GCM    |
+| Wrong test counts            | 5     | 278+ → 295+ across all docs                                             |
+| Stale sled references        | 5     | SledSlashingStore/SledNonceStore → RedbSlashingStore/RedbNonceStore     |
+| Missing Phase 0 files        | 8     | auth.rs, keystore.rs, blake3_domain.rs, nonce_store.rs, etc.            |
+| Missing Phase 0 dependencies | 3     | jsonwebtoken, aes-gcm, tower-http, etc.                                 |
+| Wrong type references        | 2     | Option\<u16\> → Option\<u64\>                                           |
+| Outdated ZK status           | 4     | "hash placeholder" → Poseidon hash                                      |
+| Missing operational details  | 4     | CLI subcommands, REST API endpoints, Grafana password, Prometheus ports |
+| Stale feature status         | 7     | API auth, encrypted keys, SNARK hash → marked Done                      |
 
 ### Solidity Groth16 Verifier
 
 The verifier at `omnia-adapters/contracts/ethereum/OmniaRollup.sol` was already production-quality:
+
 - Groth16 verification using EIP-196/197 BN254 precompiles
 - Verifying key set at construction (immutable after deploy)
 - State root binding in public inputs
@@ -135,16 +140,16 @@ The verifier at `omnia-adapters/contracts/ethereum/OmniaRollup.sol` was already 
 
 7 files updated with 35 documentation items:
 
-| File | Items Added |
-|------|-------------|
-| `substrate/src/event.rs` | 6 (Arguments, Errors, Security, Example) |
-| `substrate/src/consensus.rs` | 12 (Arguments, Returns, Errors, Security) |
-| `substrate/src/causal_graph.rs` | 6 (Errors, Arguments, Returns, Security) |
-| `shards/src/router.rs` | 7 (Arguments, Errors, Returns, Security) |
-| `omnia-adapters/src/circuit.rs` | 2 (Security) |
-| `omnia-adapters/src/proof.rs` | 1 (Arguments, Returns, Security) |
-| `node/src/api/auth.rs` | 1 (Arguments) |
-| `substrate/src/keystore.rs` | 1 (Security) |
+| File                            | Items Added                               |
+| ------------------------------- | ----------------------------------------- |
+| `substrate/src/event.rs`        | 6 (Arguments, Errors, Security, Example)  |
+| `substrate/src/consensus.rs`    | 12 (Arguments, Returns, Errors, Security) |
+| `substrate/src/causal_graph.rs` | 6 (Errors, Arguments, Returns, Security)  |
+| `shards/src/router.rs`          | 7 (Arguments, Errors, Returns, Security)  |
+| `omnia-adapters/src/circuit.rs` | 2 (Security)                              |
+| `omnia-adapters/src/proof.rs`   | 1 (Arguments, Returns, Security)          |
+| `node/src/api/auth.rs`          | 1 (Arguments)                             |
+| `substrate/src/keystore.rs`     | 1 (Security)                              |
 
 2 files already fully documented (no changes needed): `slashing.rs`, `blake3_domain.rs`.
 
@@ -152,18 +157,18 @@ The verifier at `omnia-adapters/contracts/ethereum/OmniaRollup.sol` was already 
 
 ## Verification Results
 
-| Check | Result |
-|-------|--------|
-| `cargo check --workspace --exclude omnia-fuzz` | ✅ Pass |
-| `cargo clippy --workspace --lib -- -D warnings -D clippy::unwrap_used` | ✅ Pass |
-| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --exclude omnia-fuzz` | ✅ Pass |
-| `cargo test -p omnia-node --test api_integration -- --test-threads=1` | ✅ 20/20 Pass |
-| `cargo test -p omnia-node --test integration -- --test-threads=1` | ✅ 6/6 Pass |
-| `cargo test --workspace --exclude omnia-fuzz --lib` | ✅ All Pass |
-| `cargo fmt --all -- --check` | ✅ Pass |
-| `#![deny(clippy::unwrap_used)]` on all 7 crates | ✅ Confirmed |
-| `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates | ✅ Confirmed |
-| `#![warn(missing_docs)]` on all 7 crates | ✅ Confirmed |
+| Check                                                                             | Result        |
+| --------------------------------------------------------------------------------- | ------------- |
+| `cargo check --workspace --exclude omnia-fuzz`                                    | ✅ Pass       |
+| `cargo clippy --workspace --lib -- -D warnings -D clippy::unwrap_used`            | ✅ Pass       |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --exclude omnia-fuzz` | ✅ Pass       |
+| `cargo test -p omnia-node --test api_integration -- --test-threads=1`             | ✅ 20/20 Pass |
+| `cargo test -p omnia-node --test integration -- --test-threads=1`                 | ✅ 6/6 Pass   |
+| `cargo test --workspace --exclude omnia-fuzz --lib`                               | ✅ All Pass   |
+| `cargo fmt --all -- --check`                                                      | ✅ Pass       |
+| `#![deny(clippy::unwrap_used)]` on all 7 crates                                   | ✅ Confirmed  |
+| `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates                           | ✅ Confirmed  |
+| `#![warn(missing_docs)]` on all 7 crates                                          | ✅ Confirmed  |
 
 ### Bug Fix: Route Path Parameter Syntax
 
@@ -192,5 +197,6 @@ No items deferred to Phase 2 from Phase 1 scope.
 - `#![deny(missing_docs)]` enforcement
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

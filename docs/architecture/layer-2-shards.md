@@ -1,4 +1,5 @@
 # Layer 2: Domain Shards
+
 > 🎯 Audience: Developers
 > 🔗 Context: Layer 2 organizes different types of activity into specialized lanes with optimized state management
 > 📅 Last Updated: 2026-05-20
@@ -9,14 +10,14 @@ Layer 2 organizes different types of activity into specialized lanes, each with 
 
 ## Implemented Shards (6 total)
 
-| Shard | Purpose | Location |
-|-------|---------|----------|
-| 💰 Financial | Balances, transfers, replay protection | `shards/src/financial/` |
-| 🆔 Identity | DID management, credentials, social recovery | `shards/src/identity/` |
-| 📦 Physical | Object registration, provenance tracking | `shards/src/physical/` |
-| 🧮 Computational | AI training, proofs | `shards/src/computational/` |
-| 🧬 Biological | Health records, bio-signals, consent registry | `shards/src/biological/` |
-| 📊 Economics | UBC, governance, useful work | `shards/src/economics_shard.rs` |
+| Shard            | Purpose                                       | Location                        |
+| ---------------- | --------------------------------------------- | ------------------------------- |
+| 💰 Financial     | Balances, transfers, replay protection        | `shards/src/financial/`         |
+| 🆔 Identity      | DID management, credentials, social recovery  | `shards/src/identity/`          |
+| 📦 Physical      | Object registration, provenance tracking      | `shards/src/physical/`          |
+| 🧮 Computational | AI training, proofs                           | `shards/src/computational/`     |
+| 🧬 Biological    | Health records, bio-signals, consent registry | `shards/src/biological/`        |
+| 📊 Economics     | UBC, governance, useful work                  | `shards/src/economics_shard.rs` |
 
 ## ShardRouter
 
@@ -42,15 +43,15 @@ Cross-shard messaging with causality proofs is implemented in `shards/src/cross_
 
 The `FeeSchedule` maps each `ShardOp` variant to a fixed `u64` fee:
 
-| Domain | Fee (UBC) |
-|--------|-----------|
-| Financial | 10 |
-| Computational | 5 |
-| Physical | 3 |
-| Identity | 2 |
-| Biological | 3 |
-| Cross-Shard | 15 |
-| Economics/Default | 3 |
+| Domain            | Fee (UBC) |
+| ----------------- | --------- |
+| Financial         | 10        |
+| Computational     | 5         |
+| Physical          | 3         |
+| Identity          | 2         |
+| Biological        | 3         |
+| Cross-Shard       | 15        |
+| Economics/Default | 3         |
 
 Fees are deducted atomically before shard dispatch. No fee refund on operation failure.
 
@@ -120,5 +121,6 @@ Per-creator nonce tracking with `RedbNonceStore` persistence across restarts. Pr
 ```
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [trait-boundaries.md](./trait-boundaries.md)
 🚀 **Next**: [layer-3-binding.md](./layer-3-binding.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

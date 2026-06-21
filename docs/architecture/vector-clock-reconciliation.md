@@ -1,4 +1,5 @@
 # Vector Clock Reconciliation Strategy
+
 > 🎯 Audience: Developers
 > 🔗 Context: Strategy for restoring deterministic ordering after network partition healing
 > 📅 Last Updated: 2026-05-20
@@ -31,6 +32,7 @@ Vector clocks enable three fundamental operations:
 Consider a network of 4 nodes (A, B, C, D) that splits into two partitions: {A, B} and {C, D}.
 
 **Before partition:**
+
 ```
 Node A: {A:5, B:4, C:3, D:3}
 Node B: {A:5, B:4, C:3, D:3}
@@ -39,6 +41,7 @@ Node D: {A:5, B:4, C:3, D:3}
 ```
 
 **During partition (events continue locally):**
+
 ```
 Node A: {A:8, B:7, C:3, D:3}   (3 new events from A, 3 from B)
 Node B: {A:8, B:7, C:3, D:3}
@@ -47,6 +50,7 @@ Node D: {A:5, B:4, C:6, D:5}
 ```
 
 **After partition heals (each node merges with the other partition):**
+
 ```
 Node A: {A:8, B:7, C:6, D:5}   (merged with C/D's clocks)
 Node B: {A:8, B:7, C:6, D:5}
@@ -88,6 +92,7 @@ After a partition heals and vector clocks are merged, the `CausalOrder` between 
 **Concurrent events remain concurrent after merge.** If two events were concurrent before the partition (neither's vector clock is ≤ the other's), they remain concurrent after merge. Merge only adds entries; it never makes a previously-concurrent pair non-concurrent.
 
 **Example:**
+
 ```
 Before partition:
   Event E1: {A:2, B:0}  (created by A)
@@ -102,7 +107,7 @@ After partition heals and clocks merge:
 Node's frontier clock: {A:2, B:2}  (merged knowledge)
 ```
 
-The events' vector clocks are immutable — they were set when the event was created and never change. The merge only affects the node's *view* of the network's causal knowledge, not the events themselves.
+The events' vector clocks are immutable — they were set when the event was created and never change. The merge only affects the node's _view_ of the network's causal knowledge, not the events themselves.
 
 ## How Concurrent Events After Merge Are Handled
 
@@ -167,5 +172,6 @@ This automatic reconciliation means that no special "partition healing" protocol
 4. **Missing parent handling**: If a partition heals and events arrive before their parents, the `CausalGraph::insert()` method will reject them with `CausalGraphError::MissingParent`. The gossip protocol must retry or request missing events.
 
 ---
+
 🔙 **Back**: [architecture/](./) | 🔄 **Related**: [crdt-convergence.md](./crdt-convergence.md)
 🚀 **Next**: [layer-1-substrate.md](./layer-1-substrate.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

@@ -1,4 +1,5 @@
 # Blueprint Reference
+
 > 🎯 Audience: Architects
 > 🔗 Context: Implementation specification reference — status of all protocol components and milestones
 > 📅 Last Updated: 2026-05-20
@@ -9,16 +10,16 @@
 [█████████████████████████░░░] 90% Complete
 ```
 
-| Layer | Status | Tests |
-|-------|--------|-------|
-| Layer 1: Substrate | ✅ Implemented | 454+ |
-| Layer 2: Domain Shards | ✅ Implemented | 62+ |
-| Layer 3: Binding | ✅ Implemented | 61+ |
-| Layer 4: Identity (in shards) | ✅ Implemented | — |
-| Layer 5: Economics | ✅ Implemented | 58+ |
-| Phase 0: ZK-Rollup | ✅ Implemented | 129+ |
-| Node Binary | ✅ Implemented | 30+ |
-| Chaos Tests | ✅ Implemented | ~15 scenarios |
+| Layer                         | Status         | Tests         |
+| ----------------------------- | -------------- | ------------- |
+| Layer 1: Substrate            | ✅ Implemented | 454+          |
+| Layer 2: Domain Shards        | ✅ Implemented | 62+           |
+| Layer 3: Binding              | ✅ Implemented | 61+           |
+| Layer 4: Identity (in shards) | ✅ Implemented | —             |
+| Layer 5: Economics            | ✅ Implemented | 58+           |
+| Phase 0: ZK-Rollup            | ✅ Implemented | 129+          |
+| Node Binary                   | ✅ Implemented | 30+           |
+| Chaos Tests                   | ✅ Implemented | ~15 scenarios |
 
 **Total: 800+ lib tests + chaos/integration tests, all passing.**
 
@@ -26,39 +27,39 @@
 
 ### Core Crates (7 + support)
 
-| Crate | Purpose | Key Dependencies |
-|-------|---------|------------------|
-| `substrate/` | Causal graph, consensus, gossip, crypto, CRDTs, slashing, snapshots | ed25519-dalek, blake3, redb, libp2p, postcard |
-| `shards/` | 6 domain shards + cross-shard messaging + fee enforcement + nonce store | redb (nonce persistence) |
-| `binding/` | Provenance log, RF stub, quantum commitments, key rotation | ed25519-dalek, ml-kem, aes-gcm, hkdf |
-| `economics/` | UBC token, quota, governance, useful work, fixed-point | thiserror |
-| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters | ark-bn254, ark-groth16, alloy (feature-gated) |
-| `node/` | CLI binary, HTTP server, REST API, Swagger UI, Prometheus metrics | axum, utoipa, clap, jsonwebtoken |
-| `chaos-tests/` | Network partition, crash, drop-rate, equivocation simulation | tokio |
+| Crate             | Purpose                                                                 | Key Dependencies                              |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
+| `substrate/`      | Causal graph, consensus, gossip, crypto, CRDTs, slashing, snapshots     | ed25519-dalek, blake3, redb, libp2p, postcard |
+| `shards/`         | 6 domain shards + cross-shard messaging + fee enforcement + nonce store | redb (nonce persistence)                      |
+| `binding/`        | Provenance log, RF stub, quantum commitments, key rotation              | ed25519-dalek, ml-kem, aes-gcm, hkdf          |
+| `economics/`      | UBC token, quota, governance, useful work, fixed-point                  | thiserror                                     |
+| `omnia-adapters/` | ZK-rollup (arkworks R1CS + Groth16), settlement adapters                | ark-bn254, ark-groth16, alloy (feature-gated) |
+| `node/`           | CLI binary, HTTP server, REST API, Swagger UI, Prometheus metrics       | axum, utoipa, clap, jsonwebtoken              |
+| `chaos-tests/`    | Network partition, crash, drop-rate, equivocation simulation            | tokio                                         |
 
 ### Cryptographic Primitives
 
-| Primitive | Implementation | File Reference |
-|-----------|---------------|----------------|
-| Groth16 SNARK | `ark-groth16` on BN254 | `omnia-adapters/src/prover.rs` |
-| Poseidon hash | Custom (Cauchy MDS + BLAKE3 RC) + Reference | `omnia-adapters/src/poseidon.rs` |
-| BLAKE3 | `blake3` 1.5 (domain-separated) | Multiple files |
-| Ed25519 | `ed25519-dalek` 2.1 | `binding/src/quantum_commit.rs` |
-| CRYSTALS-Dilithium | `pqc_dilithium` 0.2 | `binding/src/quantum_commit.rs` |
-| ML-KEM-768 | `ml-kem` 0.2 (FIPS-203) | `binding/src/quantum_commit.rs` |
-| BLS12-381 | `blst` | `substrate/src/bls.rs` |
-| Shamir's SSS | GF(256) with AES irreducible polynomial | `shards/src/identity/recovery.rs` |
+| Primitive          | Implementation                              | File Reference                    |
+| ------------------ | ------------------------------------------- | --------------------------------- |
+| Groth16 SNARK      | `ark-groth16` on BN254                      | `omnia-adapters/src/prover.rs`    |
+| Poseidon hash      | Custom (Cauchy MDS + BLAKE3 RC) + Reference | `omnia-adapters/src/poseidon.rs`  |
+| BLAKE3             | `blake3` 1.5 (domain-separated)             | Multiple files                    |
+| Ed25519            | `ed25519-dalek` 2.1                         | `binding/src/quantum_commit.rs`   |
+| CRYSTALS-Dilithium | `pqc_dilithium` 0.2                         | `binding/src/quantum_commit.rs`   |
+| ML-KEM-768         | `ml-kem` 0.2 (FIPS-203)                     | `binding/src/quantum_commit.rs`   |
+| BLS12-381          | `blst`                                      | `substrate/src/bls.rs`            |
+| Shamir's SSS       | GF(256) with AES irreducible polynomial     | `shards/src/identity/recovery.rs` |
 
 ### State Management
 
-| Component | Implementation | Persistence |
-|-----------|---------------|-------------|
-| CRDTs | GCounter, OrSet, LWWRegister | In-memory |
-| Merkle state root | BLAKE3 off-circuit, Poseidon on-circuit | Snapshots |
-| Slashing state | `RedbSlashingStore` | redb (ACID) |
-| Nonce tracking | `RedbNonceStore` | redb (ACID) |
-| Consensus state | `RedbConsensusStore` | redb (ACID) |
-| Keystore | `EncryptedKeyStore` | AES-256-GCM encrypted files |
+| Component         | Implementation                          | Persistence                 |
+| ----------------- | --------------------------------------- | --------------------------- |
+| CRDTs             | GCounter, OrSet, LWWRegister            | In-memory                   |
+| Merkle state root | BLAKE3 off-circuit, Poseidon on-circuit | Snapshots                   |
+| Slashing state    | `RedbSlashingStore`                     | redb (ACID)                 |
+| Nonce tracking    | `RedbNonceStore`                        | redb (ACID)                 |
+| Consensus state   | `RedbConsensusStore`                    | redb (ACID)                 |
+| Keystore          | `EncryptedKeyStore`                     | AES-256-GCM encrypted files |
 
 ## What's Fully Implemented ✅
 
@@ -91,11 +92,11 @@
 
 ## What's a Stub ⚠️
 
-| Feature | Status | What's Needed |
-|---------|--------|---------------|
-| ZK circuit hash | ⚠️ Poseidon implemented | Round constants use BLAKE3 derivation; dual-hash transition started |
-| RF fingerprinting | ⚠️ Stub | SDR hardware (HackRF/USRP) |
-| Proof-of-useful-work | ⚠️ Stub | Production verification |
+| Feature              | Status                  | What's Needed                                                       |
+| -------------------- | ----------------------- | ------------------------------------------------------------------- |
+| ZK circuit hash      | ⚠️ Poseidon implemented | Round constants use BLAKE3 derivation; dual-hash transition started |
+| RF fingerprinting    | ⚠️ Stub                 | SDR hardware (HackRF/USRP)                                          |
+| Proof-of-useful-work | ⚠️ Stub                 | Production verification                                             |
 
 ## What Doesn't Exist Yet 🌑
 
@@ -107,5 +108,6 @@
 - Constant-time guarantee for Dilithium verify() (pending formal audit)
 
 ---
+
 🔙 **Back**: [reference/](./) | 🔄 **Related**: [roadmap.md](./roadmap.md)
 🚀 **Next**: [metrics-glossary.md](./metrics-glossary.md) | 📜 **Source of Truth**: [Restructuring Blueprint](./blueprint-reference.md)

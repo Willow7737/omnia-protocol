@@ -1,4 +1,5 @@
 # Phase 3 Summary
+
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 3 milestones and deliverables
 > 📅 Last Updated: 2026-05-20
@@ -22,6 +23,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 **Problem:** SSS shares were encrypted using XOR, providing no integrity protection, no authentication, and no nonce uniqueness guarantee.
 
 **Resolution:**
+
 - Replaced XOR-based share encryption with AES-256-GCM authenticated encryption
 - Key derivation: BLAKE3 + HKDF-SHA256 with domain separation (`OMNIA-SHARE-ENCRYPTION-V2`)
 - Random 96-bit nonce generation per share
@@ -36,6 +38,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 **Problem:** DKG shares used XOR encryption, same vulnerability as C-1.
 
 **Resolution:**
+
 - DkgSharePackage now uses `Vec<AeadCiphertext>` instead of `Vec<Vec<u8>>`
 - AeadCiphertext includes ciphertext, 96-bit nonce, and associated_data (sender_id || recipient_id)
 - Associated data prevents share relaying attacks
@@ -50,6 +53,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 **Problem:** SSS recovery reconstructed a keypair but never added it to the DID authentication set.
 
 **Resolution:**
+
 - `complete_recovery()` method adds the recovered key to DID authentication (rotation, not replacement)
 - `recovery_count` incremented to prevent replay attacks
 - TODO at line 66 resolved with production code calling `complete_recovery()`
@@ -63,6 +67,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 **Problem:** Trusted setup used `Fr::zero()` for some witness fields, meaning keys didn't constrain the full circuit.
 
 **Resolution:**
+
 - `ExpandedRollupCircuit::for_setup()` constructor uses non-zero witness fields
 - `generate_trusted_setup_expanded()` uses `for_setup()` instead of `empty()`
 - All constraint branches are now active under generated keys
@@ -76,6 +81,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 **Problem:** Transcript hash was initialized to all zeros, weakening Fiat-Shamir binding.
 
 **Resolution:**
+
 - `initialize_transcript()` uses BLAKE3 keyed hash with `OMNIA-SETUP-TRANSCRIPT-V1` domain separator
 - Transcript hash is never all-zeros during ceremony
 - Real EC operations with BN254 G1 scalar multiplication
@@ -91,6 +97,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### H-3: Wire Leader Selection into Consensus Block Production ✅
 
 **Resolution:**
+
 - `compute_leader()` called every round in the main consensus loop
 - Leader nodes produce proposal events via `propose_block()`
 - Non-leader nodes process proposals from leaders
@@ -104,6 +111,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### H-4: Kademlia DHT + NAT Traversal ✅
 
 **Resolution:**
+
 - Kademlia DHT for wide-area peer discovery with configurable bootstrap peers
 - AutoNAT for NAT type detection (30s probe timeout)
 - Relay client for NAT traversal (libp2p relay v2)
@@ -118,6 +126,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### H-5: GossipSub Peer Scoring Configuration ✅
 
 **Resolution:**
+
 - Custom PeerScoreParams tuned for Omnia's threat model
 - Invalid message deliveries: -150 penalty per delivery
 - Mesh delivery failure: -50 penalty
@@ -132,6 +141,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### H-6: Consensus State Persistence Across Restarts ✅
 
 **Resolution:**
+
 - `ConsensusStore` trait with `save_state()`, `load_state()`, `save_round()`, `load_round()`
 - `RedbConsensusStore` using redb embedded database with ACID guarantees
 - `ConsensusEngine::load_or_new()` restores from persisted state if available
@@ -148,6 +158,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### H-7: Real Ethereum Settlement Adapter ✅ (Architecture + Feature Flag)
 
 **Resolution:**
+
 - `EthereumAdapter` with dual mode: Simulated (default) and Live
 - `EthereumConfig` with RPC URL, contract address, operator key, gas limits, confirmation blocks
 - Config validation: URL scheme, contract address format, required fields
@@ -162,6 +173,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-1: Kyber Key Encapsulation Mechanism ✅
 
 **Resolution:**
+
 - ML-KEM-768 (Kyber768) key encapsulation via `ml-kem` crate (migrated from `pqc_kyber` to fix KyberSlash / RUSTSEC-2023-0079)
 - `generate_kyber_keypair()`, `kyber_encapsulate()`, `kyber_decapsulate()`
 - `kyber_key` populated in Hybrid and PostQuantum modes
@@ -178,6 +190,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-2: Fast-Sync Protocol ✅
 
 **Resolution:**
+
 - `FastSyncManager` with `create_checkpoint()` and `is_enabled()`
 - `SyncCheckpoint` with BLAKE3 integrity verification
 - `select_target_checkpoint()` with supermajority agreement
@@ -190,6 +203,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-3: Message Compression ✅
 
 **Resolution:**
+
 - Snappy compression for gossip messages exceeding 256 bytes
 - Compression flag byte: 0x00 (uncompressed), 0x01 (snappy)
 - `serialize_compressed()` and `deserialize_compressed()` with automatic compression threshold
@@ -201,6 +215,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-4: Load Testing Infrastructure ✅
 
 **Resolution:**
+
 - `LoadTestConfig` with configurable nodes, duration, rate, event size, warmup
 - `run_load_test()` produces `LoadTestResult` with throughput, latency percentiles, bandwidth
 - Binary: `chaos-tests/src/bin/load_test.rs` with environment variable configuration
@@ -213,6 +228,7 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 ### M-5: RUSTSEC Advisory Cleanup ✅
 
 **Resolution:**
+
 - Removed RUSTSEC-2024-0384 (instant via sled — sled removed in Phase 2)
 - Removed RUSTSEC-2025-0055 (tracing-subscriber patched to 0.3.23)
 - Remaining 7 ignores have detailed justification comments with:
@@ -228,14 +244,14 @@ Phase 3 addressed three strategic pillars: critical security closure, network an
 
 ## Test Summary
 
-| Crate | Tests |
-|-------|-------|
-| omnia-substrate | 405 passed |
-| omnia-shards | 62 passed |
-| omnia-binding | 61 passed |
-| omnia-adapters | 107 passed |
-| omnia-economics | 58 passed |
-| **Total** | **693+** (lib tests only) |
+| Crate           | Tests                     |
+| --------------- | ------------------------- |
+| omnia-substrate | 405 passed                |
+| omnia-shards    | 62 passed                 |
+| omnia-binding   | 61 passed                 |
+| omnia-adapters  | 107 passed                |
+| omnia-economics | 58 passed                 |
+| **Total**       | **693+** (lib tests only) |
 
 All existing tests continue to pass. No regressions introduced.
 
@@ -243,13 +259,13 @@ All existing tests continue to pass. No regressions introduced.
 
 ## Phase 3 Findings Status
 
-| ID | Severity | Description | Status |
-|----|----------|-------------|--------|
-| FIND-P2-001 | Critical | SSS recovery doesn't update DID auth | ✅ Closed |
-| FIND-P2-002 | Critical | SSS shares use XOR encryption | ✅ Closed |
-| FIND-P2-003 | Critical | DKG shares use XOR encryption | ✅ Closed |
-| FIND-P2-010 | High | ZK circuit uses Fr::zero() for witnesses | ✅ Closed |
-| FIND-P2-011 | Medium | Transcript hash zero-initialized | ✅ Closed |
+| ID          | Severity | Description                              | Status    |
+| ----------- | -------- | ---------------------------------------- | --------- |
+| FIND-P2-001 | Critical | SSS recovery doesn't update DID auth     | ✅ Closed |
+| FIND-P2-002 | Critical | SSS shares use XOR encryption            | ✅ Closed |
+| FIND-P2-003 | Critical | DKG shares use XOR encryption            | ✅ Closed |
+| FIND-P2-010 | High     | ZK circuit uses Fr::zero() for witnesses | ✅ Closed |
+| FIND-P2-011 | Medium   | Transcript hash zero-initialized         | ✅ Closed |
 
 ---
 
@@ -267,5 +283,6 @@ All existing tests continue to pass. No regressions introduced.
 10. ✅ No new RUSTSEC exceptions without documented risk assessment
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

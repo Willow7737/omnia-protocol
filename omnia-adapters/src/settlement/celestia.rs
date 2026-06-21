@@ -411,6 +411,7 @@ mod tests {
         assert_eq!(adapter.counter.load(Ordering::Relaxed), 0);
     }
 
+    #[cfg(not(feature = "celestia"))]
     #[tokio::test]
     async fn test_celestia_mock_submit_root() {
         let adapter = CelestiaAdapter::with_defaults();
@@ -418,6 +419,7 @@ mod tests {
         assert!(!tx_hash.0.iter().all(|&b| b == 0));
     }
 
+    #[cfg(not(feature = "celestia"))]
     #[tokio::test]
     async fn test_celestia_mock_submit_root_deterministic() {
         let adapter = CelestiaAdapter::with_defaults();
@@ -427,6 +429,7 @@ mod tests {
         assert_ne!(hash1, hash2);
     }
 
+    #[cfg(not(feature = "celestia"))]
     #[tokio::test]
     async fn test_celestia_mock_fetch_finality() {
         let adapter = CelestiaAdapter::with_defaults();
@@ -436,6 +439,7 @@ mod tests {
         assert_eq!(proof.confirmation_count, 3);
     }
 
+    #[cfg(not(feature = "celestia"))]
     #[tokio::test]
     async fn test_celestia_mock_verify_inclusion() {
         let adapter = CelestiaAdapter::with_defaults();

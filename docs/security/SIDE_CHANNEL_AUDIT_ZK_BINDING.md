@@ -1,4 +1,5 @@
 # Side-Channel Audit — ZK and Binding Crates
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the security documentation section
 > 📅 Last Updated: 2026-05-20
@@ -27,13 +28,13 @@ This document records the side-channel audit findings for the ZK (`omnia-zk`) an
 
 #### Status: LOW RISK
 
-| Function | Secret Data? | Constant-Time? | Risk | Notes |
-|----------|-------------|----------------|------|-------|
-| `sbox(x: &Fr)` | No (input is public in ZK circuit context) | N/A | Low | S-box operates on field elements that are public inputs in the verification context |
-| `mds_multiply()` | No | N/A | Low | Matrix multiplication on public parameters |
-| `poseidon_permutation()` | No | N/A | Low | All round constants and MDS matrix are public |
-| `poseidon_hash_offchain()` | No (input is typically a Merkle path) | N/A | Low | Off-circuit hash operates on public data |
-| `poseidon_hash()` (on-circuit) | No | N/A | Low | Circuit constraints enforce correct computation |
+| Function                       | Secret Data?                               | Constant-Time? | Risk | Notes                                                                               |
+| ------------------------------ | ------------------------------------------ | -------------- | ---- | ----------------------------------------------------------------------------------- |
+| `sbox(x: &Fr)`                 | No (input is public in ZK circuit context) | N/A            | Low  | S-box operates on field elements that are public inputs in the verification context |
+| `mds_multiply()`               | No                                         | N/A            | Low  | Matrix multiplication on public parameters                                          |
+| `poseidon_permutation()`       | No                                         | N/A            | Low  | All round constants and MDS matrix are public                                       |
+| `poseidon_hash_offchain()`     | No (input is typically a Merkle path)      | N/A            | Low  | Off-circuit hash operates on public data                                            |
+| `poseidon_hash()` (on-circuit) | No                                         | N/A            | Low  | Circuit constraints enforce correct computation                                     |
 
 **Analysis**: Poseidon hash operations operate on field elements that are either public inputs (Merkle paths, state roots) or public parameters (round constants, MDS matrix). There are no secret-dependent branches in the Poseidon implementation. The S-box computation (`x^5`) is a sequence of field multiplications with no branching on secret data.
 
@@ -45,15 +46,15 @@ This document records the side-channel audit findings for the ZK (`omnia-zk`) an
 
 #### Status: LOW RISK
 
-| Function | Secret Data? | Constant-Time? | Risk | Notes |
-|----------|-------------|----------------|------|-------|
-| `verify()` | No (public key, data, commitment) | Yes (`ct_ne`) | Low | Uses `subtle::ConstantTimeEq` for hash comparison |
-| `verify_ed25519()` | No (public verification) | Delegated to `ed25519-dalek` | Low | `ed25519-dalek` uses constant-time scalar multiplication |
-| `verify_dilithium()` | No (public verification) | Delegated to `pqc-dilithium` | Medium | See Dilithium analysis below |
-| `sign_hybrid()` | Yes (secret key) | Partial | Medium | Signing uses secret key; see analysis |
-| `generate_kyber_keypair()` | Yes (secret key) | Delegated to `ml-kem` | Low | ML-KEM uses constant-time operations |
-| `kyber_encapsulate()` | No (public key operation) | Delegated to `ml-kem` | Low | Encapsulation uses public key |
-| `kyber_decapsulate()` | Yes (secret key) | Delegated to `ml-kem` | Low | ML-KEM implicit rejection is constant-time |
+| Function                   | Secret Data?                      | Constant-Time?               | Risk   | Notes                                                    |
+| -------------------------- | --------------------------------- | ---------------------------- | ------ | -------------------------------------------------------- |
+| `verify()`                 | No (public key, data, commitment) | Yes (`ct_ne`)                | Low    | Uses `subtle::ConstantTimeEq` for hash comparison        |
+| `verify_ed25519()`         | No (public verification)          | Delegated to `ed25519-dalek` | Low    | `ed25519-dalek` uses constant-time scalar multiplication |
+| `verify_dilithium()`       | No (public verification)          | Delegated to `pqc-dilithium` | Medium | See Dilithium analysis below                             |
+| `sign_hybrid()`            | Yes (secret key)                  | Partial                      | Medium | Signing uses secret key; see analysis                    |
+| `generate_kyber_keypair()` | Yes (secret key)                  | Delegated to `ml-kem`        | Low    | ML-KEM uses constant-time operations                     |
+| `kyber_encapsulate()`      | No (public key operation)         | Delegated to `ml-kem`        | Low    | Encapsulation uses public key                            |
+| `kyber_decapsulate()`      | Yes (secret key)                  | Delegated to `ml-kem`        | Low    | ML-KEM implicit rejection is constant-time               |
 
 **Analysis**:
 
@@ -71,10 +72,10 @@ This document records the side-channel audit findings for the ZK (`omnia-zk`) an
 
 #### Status: LOW RISK
 
-| Function | Secret Data? | Constant-Time? | Risk | Notes |
-|----------|-------------|----------------|------|-------|
-| EC scalar multiplication | Yes (contribution secret) | Delegated to `ark-ec` | Low | `ark-ec` uses constant-time group operations |
-| Fiat-Shamir PoK | Yes (secret scalar) | Yes (hash-based) | Low | Challenge derived from BLAKE3, no branching on secret |
+| Function                 | Secret Data?              | Constant-Time?        | Risk | Notes                                                 |
+| ------------------------ | ------------------------- | --------------------- | ---- | ----------------------------------------------------- |
+| EC scalar multiplication | Yes (contribution secret) | Delegated to `ark-ec` | Low  | `ark-ec` uses constant-time group operations          |
+| Fiat-Shamir PoK          | Yes (secret scalar)       | Yes (hash-based)      | Low  | Challenge derived from BLAKE3, no branching on secret |
 
 **Analysis**: The trusted setup contribution uses `ark-ec` for elliptic curve operations, which implement constant-time scalar multiplication. The Fiat-Shamir Proof of Knowledge derives its challenge from a hash of public transcript data, so no timing leak on the secret scalar.
 
@@ -84,10 +85,10 @@ This document records the side-channel audit findings for the ZK (`omnia-zk`) an
 
 #### Status: LOW RISK
 
-| Function | Secret Data? | Constant-Time? | Risk | Notes |
-|----------|-------------|----------------|------|-------|
-| Key comparison | No (comparing public key hashes) | Uses `ct_eq` where needed | Low | Public key comparisons don't involve secrets |
-| Rotation trigger | No (based on public height/threshold) | N/A | Low | Rotation decision is public |
+| Function         | Secret Data?                          | Constant-Time?            | Risk | Notes                                        |
+| ---------------- | ------------------------------------- | ------------------------- | ---- | -------------------------------------------- |
+| Key comparison   | No (comparing public key hashes)      | Uses `ct_eq` where needed | Low  | Public key comparisons don't involve secrets |
+| Rotation trigger | No (based on public height/threshold) | N/A                       | Low  | Rotation decision is public                  |
 
 **Analysis**: Key rotation operates on public keys and public thresholds. The rotation decision is based on block height and governance parameters, not on any secret data. No timing leak.
 
@@ -95,13 +96,13 @@ This document records the side-channel audit findings for the ZK (`omnia-zk`) an
 
 ## Summary of Findings
 
-| ID | Severity | Component | Finding | Status |
-|----|----------|-----------|---------|--------|
-| SC-ZK-001 | Low | `zk/src/poseidon.rs` | Poseidon field operations use `ark-ff` which is constant-time by default | Accepted (no fix needed) |
-| SC-BD-001 | Medium | `binding/src/quantum_commit.rs` | Dilithium verification delegates to `pqc-dilithium` which has not been formally audited for timing side-channels | Accepted (monitor upstream) |
-| SC-BD-002 | Low | `binding/src/quantum_commit.rs` | All secret comparisons use `subtle::ConstantTimeEq` | Verified (no fix needed) |
-| SC-ZK-002 | Low | `zk/src/setup/contribution.rs` | EC operations delegate to `ark-ec` with constant-time scalar multiplication | Verified (no fix needed) |
-| SC-KR-001 | Low | `binding/src/key_rotation.rs` | Key rotation operates on public data only | Verified (no fix needed) |
+| ID        | Severity | Component                       | Finding                                                                                                          | Status                      |
+| --------- | -------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| SC-ZK-001 | Low      | `zk/src/poseidon.rs`            | Poseidon field operations use `ark-ff` which is constant-time by default                                         | Accepted (no fix needed)    |
+| SC-BD-001 | Medium   | `binding/src/quantum_commit.rs` | Dilithium verification delegates to `pqc-dilithium` which has not been formally audited for timing side-channels | Accepted (monitor upstream) |
+| SC-BD-002 | Low      | `binding/src/quantum_commit.rs` | All secret comparisons use `subtle::ConstantTimeEq`                                                              | Verified (no fix needed)    |
+| SC-ZK-002 | Low      | `zk/src/setup/contribution.rs`  | EC operations delegate to `ark-ec` with constant-time scalar multiplication                                      | Verified (no fix needed)    |
+| SC-KR-001 | Low      | `binding/src/key_rotation.rs`   | Key rotation operates on public data only                                                                        | Verified (no fix needed)    |
 
 ## Recommendations
 
@@ -160,5 +161,6 @@ fn test_poseidon_constant_time() {
 ```
 
 ---
+
 🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)
 🚀 **Next**: [Security Audit](../reference/security-audit.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

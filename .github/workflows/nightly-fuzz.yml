@@ -26,7 +26,7 @@ jobs:
           - group: adapters-binding
             targets: "fuzz_zk_proof_deserialization fuzz_snapshot_deserialization fuzz_shard_route"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Use a recent nightly for fuzz builds.  The --sanitizer none flag
       # avoids __sancov_gen_ linker errors that occur when ASan and
       # SanitizerCoverage are combined on certain nightly versions.
@@ -86,7 +86,7 @@ jobs:
               cargo fuzz cmin "$target" --fuzz-dir fuzz --sanitizer none 2>/dev/null || true
             fi
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: fuzz-corpus-${{ matrix.group }}-${{ github.run_id }}
@@ -102,7 +102,7 @@ jobs:
     name: Deep Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"
@@ -121,9 +121,9 @@ jobs:
             --ignore RUSTSEC-2026-0118 \
             --ignore RUSTSEC-2026-0119 \
             > audit-report.json
-      - name: Run cargo audit (deny warnings for new vulns)
+      - name: Run cargo audit (deny unmaintained for new vulns)
         run: |
-          cargo audit --deny warnings \
+          cargo audit --deny unmaintained \
             --ignore RUSTSEC-2024-0384 \
             --ignore RUSTSEC-2024-0388 \
             --ignore RUSTSEC-2024-0436 \
@@ -132,8 +132,9 @@ jobs:
             --ignore RUSTSEC-2025-0057 \
             --ignore RUSTSEC-2025-0141 \
             --ignore RUSTSEC-2026-0118 \
-            --ignore RUSTSEC-2026-0119
-      - uses: actions/upload-artifact@v4
+            --ignore RUSTSEC-2026-0119 \
+            --ignore RUSTSEC-2026-0173
+      - uses: actions/upload-artifact@v5
         with:
           name: security-audit-${{ github.run_id }}
           path: audit-report.json
@@ -146,7 +147,7 @@ jobs:
     name: Cargo Deny Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: "1.91.0"

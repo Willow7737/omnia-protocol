@@ -1,4 +1,5 @@
 # Phase 4 Summary
+
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 4 milestones and deliverables
 > 📅 Last Updated: 2026-05-20
@@ -23,6 +24,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** The Ethereum settlement adapter had full architecture but `Live` mode returned `SettlementError::NotImplemented` for every operation. No actual on-chain interaction.
 
 **Resolution:**
+
 - Added `alloy` dependency (v1) behind `ethereum-live` feature flag in `omnia-adapters/Cargo.toml`
 - Implemented `EthereumLiveClient` with lazy provider construction per-call
 - Generated contract bindings via `alloy::sol!` macro for `OmniaRollup` contract
@@ -43,6 +45,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** ADR-011 describes a 3-tier Warning → Jail → Ejection model, but `record_offense()` still used binary slashing. `compute_penalty()` existed but was never called.
 
 **Resolution:**
+
 - Wired `record_offense_graded()` to implement ADR-011's 3-tier penalty system
 - **Warning tier**: Small burn percentage, no jail — emits `OffenseRecorded` + `PenaltyApplied` events
 - **Jailed tier**: Partial burn + jail period — adds `JailState` to `jail_registry`, emits `JailEntered` event
@@ -55,11 +58,11 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 
 **Escalation tiers (per ADR-011):**
 
-| Offense              | 1st         | 2nd           | 3rd+      |
-|----------------------|-------------|---------------|-----------|
-| Equivocation         | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%) |
-| LivenessViolation    | Warning (1%) | Warning (1%)  | Jailed (5%, 500r) |
-| InvalidAttestation   | Warning (2%) | Jailed (10%, 2000r) | Ejected (100%) |
+| Offense            | 1st                | 2nd                 | 3rd+              |
+| ------------------ | ------------------ | ------------------- | ----------------- |
+| Equivocation       | Jailed (5%, 1000r) | Jailed (25%, 5000r) | Ejected (100%)    |
+| LivenessViolation  | Warning (1%)       | Warning (1%)        | Jailed (5%, 500r) |
+| InvalidAttestation | Warning (2%)       | Jailed (10%, 2000r) | Ejected (100%)    |
 
 **Files changed:** `substrate/src/slashing.rs`
 
@@ -70,6 +73,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** RUSTSEC-2023-0079 (KyberSlash) timing side-channel vulnerability in `pqc_kyber` 0.7.x with no patch available.
 
 **Resolution:**
+
 - Replaced `pqc_kyber` 0.7.1 with `ml-kem` 0.2 in `binding/Cargo.toml`
 - Rewrote KEM operations to use ML-KEM-768 API: `MlKem768::generate()`, `EncapsulationKey::from_bytes()` + `encapsulate()`, `DecapsulationKey::from_bytes()` + `decapsulate()`
 - Defined explicit size constants: `ML_KEM_768_ENCAPSULATION_KEY_SIZE` (1184), `ML_KEM_768_DECAPSULATION_KEY_SIZE` (2400), `ML_KEM_768_CIPHERTEXT_SIZE` (1088), `ML_KEM_768_SHARED_SECRET_SIZE` (32)
@@ -89,6 +93,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** Fast-sync had checkpoint types, verification, and supermajority selection, but no P2P snapshot download-and-apply loop. New nodes needed manual snapshot transfer.
 
 **Resolution:**
+
 - Added `SyncNetwork` trait abstracting P2P operations (`connected_peers()`, `send_request()`)
 - Added `SyncSnapshot` struct for compact P2P wire-format state transfer
 - Implemented full sync loop in `FastSyncManager::sync_to_latest()`:
@@ -112,6 +117,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** Single `/health` endpoint served both liveness and readiness. Kubernetes needs separate endpoints — a node can be alive but not ready.
 
 **Resolution:**
+
 - **`/healthz`**: Liveness probe — always returns 200 when process is alive. Reports `status: "alive"`, `node_id`, `uptime_seconds`
 - **`/readyz`**: Readiness probe — returns 200 only when node has ≥ `readiness_min_peers` peers, is not syncing, and has finalized events. Returns 503 with `reason` field when not ready.
 - **`/health`**: Maps to liveness handler for backward compatibility
@@ -130,6 +136,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** Trusted setup ceremony worked correctly but only ran locally. Production requires multi-party network contributions.
 
 **Resolution:**
+
 - Created `omnia-adapters/src/setup/ceremony_server.rs` — `CeremonyServer` coordinator
   - `CeremonyConfig` with `min_participants`, `max_participants`, `ceremony_id`, `degree`
   - `CeremonyPhase` lifecycle: `NotStarted` → `AcceptingContributions` → `Finalized`
@@ -153,6 +160,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** Dashboard stale (showing Phase 2 in progress), FAQ had outdated TODOs, missing Phase 3 ADRs.
 
 **Resolution:**
+
 - Updated `PROJECT_DASHBOARD.md`: All phases marked correctly (0–3 ✅, 4 🔄), test count 938+, date fixed to 2026-05-19, Phase 4 items listed
 - Created 7 new ADRs:
   - ADR-015: Leader Selection in Consensus Loop (VRF-based, stake-weighted)
@@ -174,6 +182,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** No baseline performance data captured. "10,000+ TPS" claim had no evidence.
 
 **Resolution:**
+
 - Created `docs/performance/BASELINE.md` with comprehensive template for capturing:
   - Consensus throughput at 4 configurations (100/s, 1K/s, 5K/s, 10K/s)
   - ZK performance at 4 batch sizes (1, 4, 16, 64 events)
@@ -192,6 +201,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 **Problem:** `cargo vet` had exemptions but no first-party audits. RUSTSEC-2024-0384 (instant) should be removed. Review dates approaching.
 
 **Resolution:**
+
 - Reviewed RUSTSEC-2024-0384: `instant` still in tree via `parking_lot 0.11.2` — kept with corrected justification
 - Verified RUSTSEC-2025-0055: `tracing-subscriber 0.2.25` still present via arkworks — kept with NOTE about dual versions
 - Updated all advisory review dates to 2027-03-01 (1-year review cycle)
@@ -208,28 +218,28 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 
 ## Metrics
 
-| Metric | Phase 3 End | Phase 4 End | Delta |
-|--------|-------------|-------------|-------|
-| Test count | 938+ | 980+ | +42 |
-| ADRs | 14 | 21 | +7 |
-| RUSTSEC ignores | 8 | 8 | Corrected justifications |
-| Feature flags | `ethereum-live` (empty) | `ethereum-live` (with alloy) | Functional |
-| Health endpoints | 1 (`/health`) | 3 (`/healthz`, `/readyz`, `/health`) | +2 K8s probes |
-| P2P protocols | Framework only | Full sync loop | Production-ready |
-| Settlement | Simulated only | Simulated + Live | Mainnet-ready |
+| Metric           | Phase 3 End             | Phase 4 End                          | Delta                    |
+| ---------------- | ----------------------- | ------------------------------------ | ------------------------ |
+| Test count       | 938+                    | 980+                                 | +42                      |
+| ADRs             | 14                      | 21                                   | +7                       |
+| RUSTSEC ignores  | 8                       | 8                                    | Corrected justifications |
+| Feature flags    | `ethereum-live` (empty) | `ethereum-live` (with alloy)         | Functional               |
+| Health endpoints | 1 (`/health`)           | 3 (`/healthz`, `/readyz`, `/health`) | +2 K8s probes            |
+| P2P protocols    | Framework only          | Full sync loop                       | Production-ready         |
+| Settlement       | Simulated only          | Simulated + Live                     | Mainnet-ready            |
 
 ---
 
 ## Security Posture
 
-| Item | Before Phase 4 | After Phase 4 |
-|------|----------------|----------------|
-| KyberSlash (RUSTSEC-2023-0079) | Ignored | ✅ Fixed (ml-kem migration) |
-| Ethereum settlement | Stub/NotImplemented | ✅ Real RPC via Alloy |
-| Slashing model | Binary (points) | ✅ 3-tier graded (ADR-011) |
-| K8s probes | Single endpoint | ✅ Liveness/Readiness separation |
-| Fast-sync | Framework only | ✅ Full P2P download loop |
-| Performance claims | "10,000+ TPS" (unsubstantiated) | "Target: 10K+ TPS" (honest) |
+| Item                           | Before Phase 4                  | After Phase 4                    |
+| ------------------------------ | ------------------------------- | -------------------------------- |
+| KyberSlash (RUSTSEC-2023-0079) | Ignored                         | ✅ Fixed (ml-kem migration)      |
+| Ethereum settlement            | Stub/NotImplemented             | ✅ Real RPC via Alloy            |
+| Slashing model                 | Binary (points)                 | ✅ 3-tier graded (ADR-011)       |
+| K8s probes                     | Single endpoint                 | ✅ Liveness/Readiness separation |
+| Fast-sync                      | Framework only                  | ✅ Full P2P download loop        |
+| Performance claims             | "10,000+ TPS" (unsubstantiated) | "Target: 10K+ TPS" (honest)      |
 
 ---
 
@@ -243,5 +253,6 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 6. **Parking lot upgrade** — Migrate to parking_lot 0.12.x to eliminate `instant` dependency (RUSTSEC-2024-0384)
 
 ---
+
 🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 🚀 **Next**: [Blueprint Reference](./blueprint-reference.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)

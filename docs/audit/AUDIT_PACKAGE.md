@@ -1,4 +1,5 @@
 # Omnia Protocol — External Audit Package
+
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
 > 📅 Last Updated: 2026-05-20
@@ -17,38 +18,38 @@ This document assembles the materials an external audit firm needs to efficientl
 
 These components handle consensus integrity, value transfer, and cryptographic security:
 
-| Component | Files | Rationale |
-|-----------|-------|-----------|
-| **Consensus Engine** | `substrate/src/consensus.rs` | BFT finality, witness assignment, commitment rules — consensus break = chain break |
-| **VRF** | `substrate/src/vrf.rs` | Leader selection via VRF (V1 legacy + V2 ECVRF) — manipulation = unfair leader selection |
-| **Slashing** | `substrate/src/slashing.rs`, `substrate/src/slashing_undo.rs` | Penalty enforcement — incorrect slashing = validator fund theft |
-| **Event Processing** | `substrate/src/event.rs`, `substrate/src/causal_graph.rs` | Event creation, DAG insertion, ancestry queries — data integrity foundation |
+| Component            | Files                                                         | Rationale                                                                                |
+| -------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Consensus Engine** | `substrate/src/consensus.rs`                                  | BFT finality, witness assignment, commitment rules — consensus break = chain break       |
+| **VRF**              | `substrate/src/vrf.rs`                                        | Leader selection via VRF (V1 legacy + V2 ECVRF) — manipulation = unfair leader selection |
+| **Slashing**         | `substrate/src/slashing.rs`, `substrate/src/slashing_undo.rs` | Penalty enforcement — incorrect slashing = validator fund theft                          |
+| **Event Processing** | `substrate/src/event.rs`, `substrate/src/causal_graph.rs`     | Event creation, DAG insertion, ancestry queries — data integrity foundation              |
 
 ### High Priority
 
 These components handle ZK proofs, cryptographic commitments, and key management:
 
-| Component | Files | Rationale |
-|-----------|-------|-----------|
-| **ZK Circuit** | `omnia-adapters/src/circuit.rs` | Groth16 rollup circuit — proof soundness = chain security |
-| **Poseidon Hash** | `omnia-adapters/src/poseidon.rs` | SNARK-friendly hash — non-standard parameters (see ADR-009, ADR-014) |
-| **ZK Prover** | `omnia-adapters/src/prover.rs`, `omnia-adapters/src/proof.rs` | Proof generation and verification — forgery = invalid state transitions accepted |
-| **Trusted Setup** | `omnia-adapters/src/setup/` | Powers of Tau ceremony — setup compromise = all proofs invalid |
-| **Quantum Commitments** | `binding/src/quantum_commit.rs` | Hybrid Ed25519+Dilithium commitments — forgery = provenance chain break |
-| **PQC Key Rotation** | `binding/src/key_rotation.rs` | Post-quantum key lifecycle — rotation failure = quantum-vulnerable state |
+| Component               | Files                                                         | Rationale                                                                        |
+| ----------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **ZK Circuit**          | `omnia-adapters/src/circuit.rs`                               | Groth16 rollup circuit — proof soundness = chain security                        |
+| **Poseidon Hash**       | `omnia-adapters/src/poseidon.rs`                              | SNARK-friendly hash — non-standard parameters (see ADR-009, ADR-014)             |
+| **ZK Prover**           | `omnia-adapters/src/prover.rs`, `omnia-adapters/src/proof.rs` | Proof generation and verification — forgery = invalid state transitions accepted |
+| **Trusted Setup**       | `omnia-adapters/src/setup/`                                   | Powers of Tau ceremony — setup compromise = all proofs invalid                   |
+| **Quantum Commitments** | `binding/src/quantum_commit.rs`                               | Hybrid Ed25519+Dilithium commitments — forgery = provenance chain break          |
+| **PQC Key Rotation**    | `binding/src/key_rotation.rs`                                 | Post-quantum key lifecycle — rotation failure = quantum-vulnerable state         |
 
 ### Medium Priority
 
 These components handle networking, storage, and API surfaces:
 
-| Component | Files | Rationale |
-|-----------|-------|-----------|
-| **Gossip Protocol** | `substrate/src/gossip.rs` | P2P message propagation — message tampering = consensus disruption |
-| **Network Layer** | `substrate/src/network.rs` | libp2p networking — peer manipulation = eclipse attacks |
-| **Keystore** | `substrate/src/keystore.rs` | AES-256-GCM encrypted key storage — key extraction = fund theft |
-| **REST API** | `node/src/api/` | HTTP endpoints — auth bypass = unauthorized operations |
-| **Fast Sync** | `substrate/src/fast_sync.rs` | State synchronization — malicious snapshots = state corruption |
-| **Ethereum Settlement** | `omnia-adapters/src/settlement/ethereum.rs` | On-chain proof submission — contract exploit = settlement bypass |
+| Component               | Files                                       | Rationale                                                          |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| **Gossip Protocol**     | `substrate/src/gossip.rs`                   | P2P message propagation — message tampering = consensus disruption |
+| **Network Layer**       | `substrate/src/network.rs`                  | libp2p networking — peer manipulation = eclipse attacks            |
+| **Keystore**            | `substrate/src/keystore.rs`                 | AES-256-GCM encrypted key storage — key extraction = fund theft    |
+| **REST API**            | `node/src/api/`                             | HTTP endpoints — auth bypass = unauthorized operations             |
+| **Fast Sync**           | `substrate/src/fast_sync.rs`                | State synchronization — malicious snapshots = state corruption     |
+| **Ethereum Settlement** | `omnia-adapters/src/settlement/ethereum.rs` | On-chain proof submission — contract exploit = settlement bypass   |
 
 ### Out of Scope
 
@@ -63,17 +64,17 @@ These components handle networking, storage, and API surfaces:
 
 Auditors should review these documents before starting code review:
 
-| Document | Location | Purpose |
-|----------|----------|---------|
-| Architecture Overview | `ARCHITECTURE.md` | System design and layer structure |
-| VRF Construction | `docs/adr/ADR-012-vrf-construction-choice.md` | Non-standard VRF (known issue, being addressed in Phase 5) |
-| Poseidon Parameters | `docs/adr/ADR-014-poseidon-parameter-migration.md` | Non-standard parameters, migration plan |
-| Poseidon Justification | `docs/adr/009-poseidon-parameter-justification.md` | Original parameter selection rationale |
-| Threat Model | `docs/security/THREAT_MODEL.md` | Attack surface, STRIDE classification |
-| Side Channel Audit | `docs/security/SIDE_CHANNEL_AUDIT.md` | Substrate crate audit results |
-| Self Assessment | `docs/audit/SELF_ASSESSMENT.md` | Internal security review findings |
-| Audit Scope (Detailed) | `docs/audit/AUDIT_SCOPE.md` | Detailed scope with line counts and complexity |
-| Attack Surface | `docs/audit/ATTACK_SURFACE.md` | Comprehensive attack surface inventory |
+| Document               | Location                                           | Purpose                                                    |
+| ---------------------- | -------------------------------------------------- | ---------------------------------------------------------- |
+| Architecture Overview  | `ARCHITECTURE.md`                                  | System design and layer structure                          |
+| VRF Construction       | `docs/adr/ADR-012-vrf-construction-choice.md`      | Non-standard VRF (known issue, being addressed in Phase 5) |
+| Poseidon Parameters    | `docs/adr/ADR-014-poseidon-parameter-migration.md` | Non-standard parameters, migration plan                    |
+| Poseidon Justification | `docs/adr/009-poseidon-parameter-justification.md` | Original parameter selection rationale                     |
+| Threat Model           | `docs/security/THREAT_MODEL.md`                    | Attack surface, STRIDE classification                      |
+| Side Channel Audit     | `docs/security/SIDE_CHANNEL_AUDIT.md`              | Substrate crate audit results                              |
+| Self Assessment        | `docs/audit/SELF_ASSESSMENT.md`                    | Internal security review findings                          |
+| Audit Scope (Detailed) | `docs/audit/AUDIT_SCOPE.md`                        | Detailed scope with line counts and complexity             |
+| Attack Surface         | `docs/audit/ATTACK_SURFACE.md`                     | Comprehensive attack surface inventory                     |
 
 ## Known Concerns
 
@@ -95,18 +96,18 @@ The following issues are already known and documented. Auditors should focus on 
 
 As of Phase 5, the codebase has:
 
-| Metric | Value |
-|--------|-------|
-| Total tests | 605+ (plus new Phase 5 tests) |
-| Fuzz targets | 11 |
-| Chaos test suites | 4 |
-| Lines of Rust code | 46,000+ |
-| Lint enforcement | `#![deny(unsafe_code) (see SAFETY.md)]`, `#![deny(clippy::unwrap_used)]` |
-| Error handling | All typed error enums, no `Result<_, String>` |
-| Cryptographic domain separation | BLAKE3 `OMNIA-*` prefix on all hashes |
-| Constant-time comparisons | `subtle::ConstantTimeEq` for all secret comparisons in substrate |
-| Formal verification | TLA+ models for consensus properties |
-| CI jobs | 12+ (test, clippy, fmt, fuzz, chaos, benchmarks) |
+| Metric                          | Value                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| Total tests                     | 605+ (plus new Phase 5 tests)                                            |
+| Fuzz targets                    | 11                                                                       |
+| Chaos test suites               | 4                                                                        |
+| Lines of Rust code              | 46,000+                                                                  |
+| Lint enforcement                | `#![deny(unsafe_code) (see SAFETY.md)]`, `#![deny(clippy::unwrap_used)]` |
+| Error handling                  | All typed error enums, no `Result<_, String>`                            |
+| Cryptographic domain separation | BLAKE3 `OMNIA-*` prefix on all hashes                                    |
+| Constant-time comparisons       | `subtle::ConstantTimeEq` for all secret comparisons in substrate         |
+| Formal verification             | TLA+ models for consensus properties                                     |
+| CI jobs                         | 12+ (test, clippy, fmt, fuzz, chaos, benchmarks)                         |
 
 ## Build & Test Instructions
 
@@ -186,5 +187,6 @@ We request the following from the audit firm:
 Use the findings template at `docs/audit/AUDIT_FINDINGS_TEMPLATE.md` for consistent formatting.
 
 ---
+
 🔙 **Back**: [Audit](./) | 🔄 **Related**: [Attack Surface](./ATTACK_SURFACE.md)
 🚀 **Next**: [Self Assessment](./SELF_ASSESSMENT.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)
