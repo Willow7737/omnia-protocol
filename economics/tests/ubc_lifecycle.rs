@@ -298,7 +298,16 @@ fn test_economics_state_full_lifecycle() {
         .unwrap();
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300));
 
-    // Step 3: Alice submits useful work for a reward
+    // Step 3: Alice submits useful work for a reward.
+    //
+    // The verifier_signature is empty because this test exercises the
+    // economics state machine's reward crediting logic, not the C-9
+    // Ed25519 signature verification. In non-production mode (which
+    // this test is gated on via #[cfg(not(feature = "production"))]
+    // above), an empty signature is accepted with a warning — see
+    // UsefulWorkProof::verify(). In production mode, a real 64-byte
+    // Ed25519 signature over `result_hash || compute_units_consumed`
+    // would be required.
     let proof = UsefulWorkProof::new(
         UsefulWorkType::AiTraining {
             model_hash: nonzero_hash(),
@@ -306,7 +315,7 @@ fn test_economics_state_full_lifecycle() {
         },
         nonzero_hash(),
         500, // 500 compute units → 500 UBC reward
-        vec![1, 2, 3, 4],
+        Vec::new(), // empty signature: testing-mode accepted path
     )
     .expect("valid proof should construct");
     state
