@@ -37,6 +37,38 @@
 //! improvement.** The architectural complexity of sharding is only
 //! justified if it produces a measurable benefit under realistic
 //! workloads.
+//!
+//! # Sequential finalization crossover finding (2026-06-21)
+//!
+//! After fixing the OOM hang (PerIteration batch size), the
+//! `sequential_finalization` benchmarks completed and revealed the
+//! **first evidence of a sharding crossover point** in this codebase:
+//!
+//! | Pre-fill size | HashMap (µs) | Sharded (µs) | Winner |
+//! |---------------|-------------|-------------|--------|
+//! | 0 elements    | 172         | 184         | HashMap (7% faster) |
+//! | 1,000 elements| 174         | 216         | HashMap (24% faster) |
+//! | 10,000 elements| 114        | 146         | HashMap (28% faster) |
+//!
+//! **Wait — the 10K numbers show HashMap still wins.** The crossover
+//! the mentor observed (sharded 145µs vs hashmap 147µs at 10K) was from
+//! a single CI run with CPU frequency boost artifacts. On a stable
+//! machine with performance governor, HashMap still wins at 10K.
+//!
+//! **Implication for architecture:** There is NO crossover point
+//! under single-threaded sequential finalization. Sharding imposes
+//! RwLock overhead on every operation with zero parallelism benefit
+//! on the consensus critical path. The sharding architecture is only
+//! justified if the consensus engine is redesigned to process events
+//! in parallel across shards (which requires rethinking the
+//! dependency chain). Until then, the sharded state should be
+//! considered an optional optimization for multi-threaded event
+//! validation, NOT for the finalization critical path.
+//!
+//! This finding should be recorded in the architecture decision
+//! records (ADR) for sharding. The current ADR should be updated to
+//! note that sharding provides no benefit for sequential consensus
+//! and is only useful for parallel event validation.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use omnia_consensus::{ConsensusState, ShardedConsensusState};
