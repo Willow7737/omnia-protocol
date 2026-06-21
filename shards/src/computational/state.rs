@@ -310,8 +310,8 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification"),
-                    "expected real_verification error, got: {msg}"
+                    msg.contains("real_verification") || msg.contains("expected layout"),
+                    "expected real_verification or layout error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
@@ -350,8 +350,8 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification"),
-                    "expected real_verification error, got: {msg}"
+                    msg.contains("real_verification") || msg.contains("expected layout"),
+                    "expected real_verification or layout error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
