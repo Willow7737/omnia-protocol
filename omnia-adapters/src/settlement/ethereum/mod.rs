@@ -550,7 +550,7 @@ impl EthereumLiveClient {
 }
 
 #[cfg(feature = "ethereum-live")]
-impl EthereumSettlementAdapter {
+impl EthereumAdapter {
     /// Verify a Groth16 proof against a `batch_merkle_root` that was
     /// fetched from a trusted on-chain source (e.g. the contract's
     /// `BatchDataHash` event or a `batchRoots(new_root)` mapping).

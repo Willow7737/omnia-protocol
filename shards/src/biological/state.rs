@@ -149,9 +149,7 @@ impl BiologicalState {
                         .map(|d| d.as_secs())
                         .unwrap_or(0);
                     if record.expires_at <= now {
-                        return Err(ShardError::ValidationFailed(
-                            "Consent has expired".into(),
-                        ));
+                        return Err(ShardError::ValidationFailed("Consent has expired".into()));
                     }
                 }
 
@@ -199,9 +197,7 @@ impl BiologicalState {
                         ));
                     }
 
-                    let vk_len = u32::from_le_bytes(
-                        zk_proof[0..4].try_into().unwrap_or([0u8; 4]),
-                    ) as usize;
+                    let vk_len = u32::from_le_bytes(zk_proof[0..4].try_into().unwrap_or([0u8; 4])) as usize;
 
                     if zk_proof.len() <= 4 + vk_len + 1 {
                         return Err(ShardError::ValidationFailed(

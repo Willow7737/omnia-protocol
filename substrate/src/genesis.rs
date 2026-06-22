@@ -207,17 +207,11 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
         // causing a silent chain split at genesis. We now propagate the
         // error so operators see "InvalidPublicKey" immediately.
         let ed25519_bytes = hex::decode(&v.ed25519_public_key).map_err(|e| {
-            GenesisError::InvalidPublicKey(
-                v.node_id,
-                format!("ed25519_public_key is not valid hex: {e}"),
-            )
+            GenesisError::InvalidPublicKey(v.node_id, format!("ed25519_public_key is not valid hex: {e}"))
         })?;
         state_preimage.extend_from_slice(&ed25519_bytes);
         let dilithium_bytes = hex::decode(&v.dilithium_public_key).map_err(|e| {
-            GenesisError::InvalidPublicKey(
-                v.node_id,
-                format!("dilithium_public_key is not valid hex: {e}"),
-            )
+            GenesisError::InvalidPublicKey(v.node_id, format!("dilithium_public_key is not valid hex: {e}"))
         })?;
         state_preimage.extend_from_slice(&dilithium_bytes);
     }
