@@ -238,6 +238,7 @@ mod tests {
             RecoveryConfig {
                 threshold: 3,
                 total_shares: 5,
+                secret_commitment: None,
             },
         );
         let op = IdentityOp::RecoverDid {
@@ -269,6 +270,7 @@ mod tests {
             RecoveryConfig {
                 threshold: 2,
                 total_shares: 3,
+                secret_commitment: None,
             },
         );
         let op = IdentityOp::RecoverDid {

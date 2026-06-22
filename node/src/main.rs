@@ -207,6 +207,32 @@ async fn main() -> Result<()> {
         "Substrate runtime initialized with persistent slashing engine"
     );
 
+    // P0-2 (audit fix): Register the node as a validator candidate so it
+    // can be elected leader and propose blocks. The previous
+    // implementation never populated `validator_candidates`, which meant
+    // `process_consensus_round()` always skipped the leader check and
+    // the node never proposed any blocks — even in a single-node setup.
+    //
+    // We use the node's persistent keypair as the validator keypair. The
+    // stake is set to 1 (the minimum) — real deployments should override
+    // this via config or staking operations.
+    //
+    // P0-4 (audit fix): Load the keypair from disk if OMNIA_NODE_KEY_FILE
+    // is set, otherwise generate a fresh one. The previous implementation
+    // always generated an ephemeral keypair, which broke identity
+    // continuity across restarts AND invalidated the validator
+    // registration (the validator pubkey would change every restart,
+    // causing the node to be unable to sign blocks it was elected to
+    // produce after the restart).
+    let node_keypair = load_or_generate_node_keypair(&config.data_dir);
+    let node_pubkey_bytes = node_keypair.verifying_key().to_bytes();
+    substrate.add_validator(node_id_bytes, node_keypair.clone(), 1);
+    tracing::info!(
+        node_id = %hex::encode(&node_id_bytes[..4]),
+        pubkey = %hex::encode(&node_pubkey_bytes[..8]),
+        "Node registered as validator candidate (stake=1) — node can now be elected leader"
+    );
+
     // Create the shard router with standard fees and nonce persistence
     let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
@@ -310,16 +336,19 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Generate a persistent keypair for the node. This keypair is used for
-    // signing all events and shard operations, ensuring that events can be
-    // verified as originating from this node. Unlike ephemeral keypairs
-    // (generate_keypair() per request), a persistent keypair provides
-    // cryptographic identity continuity.
-    // TODO: Support loading an existing keypair from the keystore via CLI flag.
-    let node_keypair = omnia_substrate::crypto::generate_keypair();
+    // The persistent node keypair was generated earlier (above the
+    // Substrate::new call) so it could be used to register the node as
+    // a validator candidate. The same keypair is reused here for event
+    // signing — events must be verifiable as originating from this
+    // node, and the validator registration must match the event signer.
+    //
+    // TODO: Support loading an existing keypair from the keystore via CLI flag
+    // so identity persists across restarts. Until that is implemented, every
+    // restart generates a new ephemeral keypair, which breaks identity
+    // continuity AND invalidates the validator registration.
     tracing::info!(
         pubkey = %hex::encode(&node_keypair.verifying_key().to_bytes()[..8]),
-        "Persistent node keypair generated for event signing"
+        "Persistent node keypair ready for event signing (also registered as validator above)"
     );
 
     let app_state = AppState {
@@ -356,7 +385,20 @@ async fn main() -> Result<()> {
     let shutdown_tx = spawn_background_tasks(config.clone(), substrate_for_consensus, app_state.clone()).await?;
 
     // 8. Start the HTTP server with graceful shutdown
-    let server_future = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
+    //
+    // SECURITY: `into_make_service_with_connect_info::<SocketAddr>()` is
+    // REQUIRED for per-client rate limiting. Without it, the axum
+    // `ConnectInfo<SocketAddr>` extractor is never injected into request
+    // extensions, and `rate_limit_middleware` (api/auth.rs) falls back to
+    // `client_key = "unauthenticated"` for every request — meaning all
+    // clients share a single rate-limit bucket. The previous
+    // implementation called `axum::serve(listener, app)` directly, which
+    // silently disabled per-client rate limiting (DoS protection).
+    let server_future = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal());
 
     server_future.await.context("HTTP server error")?;
 
@@ -376,7 +418,7 @@ async fn main() -> Result<()> {
 async fn spawn_background_tasks(
     config: NodeConfig,
     substrate: Arc<RwLock<Substrate>>,
-    _app_state: AppState,
+    app_state: AppState,
 ) -> Result<tokio::sync::broadcast::Sender<()>> {
     let (shutdown_tx, _shutdown_rx) = tokio::sync::broadcast::channel(1);
 
@@ -390,6 +432,16 @@ async fn spawn_background_tasks(
     // This periodically calls check_round_timeout() and processes consensus
     let mut shutdown_consensus = shutdown_tx.subscribe();
     let substrate_consensus = Arc::clone(&substrate);
+    // P0-3 (audit fix): peer-tracking state. The previous implementation
+    // never wrote to `AppState.peers`, so `/readyz` always returned 503
+    // ("no_peers") and `/api/v1/node/peers` always returned an empty list,
+    // even when the node had many active gossip connections. We now
+    // poll `Substrate::connected_peer_count()` after each consensus round
+    // and update the peers list with a synthetic PeerInfo for the count.
+    // A richer per-peer PeerInfo would require extending the gossip layer
+    // to expose the PeerId set; this count-based fix is the minimum
+    // required to make `/readyz` work.
+    let peers_state = Arc::clone(&app_state.peers);
     tokio::spawn(async move {
         tracing::info!("Consensus background loop started");
 
@@ -411,6 +463,32 @@ async fn spawn_background_tasks(
                     // gossip event drain step.
                     let mut substrate = substrate_consensus.write().await;
                     substrate.process_consensus_round().await;
+
+                    // P0-3: refresh peer count from gossip layer.
+                    #[cfg(feature = "network")]
+                    {
+                        let peer_count = substrate
+                            .connected_peer_count()
+                            .unwrap_or(0);
+                        let mut peers_guard = peers_state.write().await;
+                        // Only mutate the Vec if the count changed —
+                        // avoids spurious write-lock contention.
+                        if peers_guard.len() != peer_count {
+                            peers_guard.clear();
+                            for i in 0..peer_count {
+                                peers_guard.push(omnia_node::api::node::PeerInfo {
+                                    peer_id: format!("peer-{i:04}"),
+                                    address: String::new(),
+                                    connected_at: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| d.as_secs())
+                                        .unwrap_or(0),
+                                });
+                            }
+                            tracing::debug!(peer_count, "Updated peers list");
+                        }
+                    }
+
                     drop(substrate);
                 }
             }
@@ -616,6 +694,96 @@ fn stretch_passphrase(pass: &str, context: &str) -> [u8; 32] {
         key = blake3::derive_key(context, &key);
     }
     key
+}
+
+/// Load the node's persistent Ed25519 keypair from disk, or generate a
+/// fresh one and persist it for future restarts.
+///
+/// SECURITY FIX (audit): the previous implementation always called
+/// `generate_keypair()` at startup, producing a new identity every
+/// restart. This broke event-signature continuity (events signed by the
+/// old key were unverifiable by the new key) AND invalidated the
+/// validator registration (the validator pubkey changed every restart).
+///
+/// Behavior:
+///   - If `OMNIA_NODE_KEY_FILE` is set, load the 32-byte Ed25519 secret
+///     key from that file (raw bytes, no encryption — operators are
+///     responsible for file permissions). If the file does not exist,
+///     generate a fresh keypair and write its secret key there with
+///     `0600` permissions.
+///   - Otherwise, fall back to the data_dir's `node_key.bin` file using
+///     the same load-or-create logic.
+///   - If neither path is writable, log a loud warning and generate an
+///     ephemeral keypair (the node will run but identity will not
+///     persist — operators must fix the filesystem issue).
+fn load_or_generate_node_keypair(data_dir: &std::path::Path) -> omnia_substrate::crypto::NodeKeypair {
+    use omnia_substrate::crypto::SigningKey;
+
+    let key_path = std::env::var("OMNIA_NODE_KEY_FILE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| data_dir.join("node_key.bin"));
+
+    // Try to load an existing key.
+    if key_path.exists() {
+        match std::fs::read(&key_path) {
+            Ok(bytes) if bytes.len() == 32 => {
+                let mut secret = [0u8; 32];
+                secret.copy_from_slice(&bytes);
+                let signing_key = SigningKey::from_bytes(&secret);
+                tracing::info!(
+                    path = %key_path.display(),
+                    pubkey = %hex::encode(&signing_key.verifying_key().to_bytes()[..8]),
+                    "Loaded persistent node keypair from disk"
+                );
+                return signing_key;
+            }
+            Ok(bytes) => {
+                tracing::warn!(
+                    path = %key_path.display(),
+                    len = bytes.len(),
+                    "Existing key file has wrong length (expected 32 bytes) — generating a new keypair"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    path = %key_path.display(),
+                    error = %e,
+                    "Failed to read existing key file — generating a new keypair"
+                );
+            }
+        }
+    }
+
+    // Generate a fresh keypair.
+    let keypair = omnia_substrate::crypto::generate_keypair();
+
+    // Try to persist the secret key for future restarts.
+    let secret_bytes = keypair.to_bytes();
+    match std::fs::write(&key_path, &secret_bytes) {
+        Ok(()) => {
+            // Restrict permissions on Unix.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600));
+            }
+            tracing::info!(
+                path = %key_path.display(),
+                pubkey = %hex::encode(&keypair.verifying_key().to_bytes()[..8]),
+                "Generated and persisted new node keypair"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                path = %key_path.display(),
+                error = %e,
+                "Failed to persist node keypair — identity will NOT survive restart. \
+                 Fix filesystem permissions to enable identity continuity."
+            );
+        }
+    }
+
+    keypair
 }
 
 /// Generate a new validator keypair and save it to the specified output directory.

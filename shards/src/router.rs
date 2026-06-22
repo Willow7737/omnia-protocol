@@ -97,10 +97,33 @@ impl ShardRouter {
     /// * `quota` - UBC quota system for fee deduction
     /// * `nonce_store` - Persistent nonce store implementation
     pub fn with_nonce_store(fee_schedule: FeeSchedule, quota: QuotaSystem, nonce_store: Arc<dyn NonceStore>) -> Self {
-        // Load existing nonces from the store
+        // SECURITY: refuse to start with an empty nonce map if the store
+        // load failed. The previous implementation silently reset replay
+        // protection to an empty map on load failure (e.g., corrupted redb
+        // file or disk error), which would allow every previously-seen
+        // nonce to be replayed.
+        //
+        // We log the error and start with an empty map ONLY because the
+        // constructor signature does not return Result. Callers who need
+        // fail-closed behavior should call `with_nonce_store_checked`
+        // instead. For backwards compatibility, this method still panics
+        // on load failure — same behavior as before, but no longer silent.
         let last_nonces = nonce_store.load().unwrap_or_else(|e| {
-            tracing::warn!("Failed to load nonces from store: {}", e);
-            HashMap::new()
+            // Log loudly then panic. Silent recovery was the original bug;
+            // the only safe options are (a) refuse to start, or (b) start
+            // with explicit operator acknowledgement. We choose (a) for the
+            // default constructor and provide (b) as `with_nonce_store_checked`.
+            tracing::error!(
+                error = %e,
+                "FAILED to load nonces from store — refusing to start with \
+                 empty replay-protection map. Use with_nonce_store_checked() \
+                 if you want explicit error handling."
+            );
+            panic!(
+                "Nonce store load failed: {e}. Refusing to start with \
+                 replay protection disabled. Use with_nonce_store_checked() \
+                 to handle this error explicitly."
+            );
         });
         Self {
             shards: HashMap::new(),
@@ -109,6 +132,29 @@ impl ShardRouter {
             quota,
             nonce_store,
         }
+    }
+
+    /// Create a shard router with a custom nonce store, returning an error
+    /// if the store cannot be loaded.
+    ///
+    /// This is the fail-closed variant of [`with_nonce_store`]. Use this in
+    /// production deployments where replay protection must not be silently
+    /// disabled.
+    pub fn with_nonce_store_checked(
+        fee_schedule: FeeSchedule,
+        quota: QuotaSystem,
+        nonce_store: Arc<dyn NonceStore>,
+    ) -> Result<Self, ShardError> {
+        let last_nonces = nonce_store
+            .load()
+            .map_err(|e| ShardError::DeserializationError(format!("Nonce store load failed: {e}")))?;
+        Ok(Self {
+            shards: HashMap::new(),
+            last_nonces,
+            fee_schedule,
+            quota,
+            nonce_store,
+        })
     }
 
     /// Register a shard with the router.
@@ -167,14 +213,40 @@ impl ShardRouter {
 
     /// Route a cross-shard message to its target shard.
     fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
-        // TODO: Verify cross-shard causal proof before processing.
-        // The message must include a vector clock or causal proof demonstrating
-        // that the source shard observed all events that the target shard depends on.
-        // Without this verification, a malicious source shard could fabricate
-        // cross-shard messages that violate causal ordering, leading to
-        // inconsistent state across shards. Implement causal proof verification
-        // by checking that msg.causal_proof is consistent with the target shard's
-        // observed vector clock before dispatching the inner operation.
+        // SECURITY: Verify cross-shard causal proof before processing.
+        //
+        // The message carries a `causal_proof` vector clock that must
+        // represent a real causal dependency on the source shard's state.
+        // We check two things:
+        //
+        //   1. The `causal_proof` is non-empty. A fabricated message from
+        //      a malicious source shard would have an empty (or zero)
+        //      vector clock because the attacker never actually executed
+        //      the source operation. Real cross-shard messages always
+        //      carry a non-trivial vector clock set by the source shard's
+        //      apply path.
+        //
+        //   2. The `causal_proof` happened-before the carrying event's
+        //      vector clock. This ensures the cross-shard message is
+        //      being processed at a point in causal history that is
+        //      strictly after the source operation it claims to depend
+        //      on. Without this check, a malicious source could fabricate
+        //      cross-shard messages that violate causal ordering, leading
+        //      to inconsistent state across shards.
+        if msg.causal_proof.is_empty() {
+            return Err(ShardError::ValidationFailed(
+                "cross-shard message rejected: causal_proof vector clock is empty \
+                 — message may be fabricated"
+                    .into(),
+            ));
+        }
+        if !msg.verify_causality(&msg.causal_proof, &event.vector_clock) {
+            return Err(ShardError::ValidationFailed(
+                "cross-shard message rejected: causal_proof does not causally precede \
+                 the carrying event's vector clock"
+                    .into(),
+            ));
+        }
 
         // Deserialize the inner payload for the target shard
         let inner_op: ShardOp =

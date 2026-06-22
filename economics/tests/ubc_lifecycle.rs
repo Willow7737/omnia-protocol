@@ -260,6 +260,14 @@ fn test_governance_inactive_voter() {
 #[cfg(not(feature = "production"))]
 fn test_economics_state_full_lifecycle() {
     let mut state = EconomicsState::new();
+    // Set a verifier pubkey so SubmitWork is accepted. In non-production
+    // mode the proof's signature is empty (testing-only path), so any
+    // well-formed 32-byte public key works.
+    let verifier_pubkey = {
+        let kp = omnia_substrate::crypto::generate_keypair();
+        kp.verifying_key().to_bytes()
+    };
+    state.set_verifier_pubkey(verifier_pubkey);
     let epoch = state.current_epoch();
 
     // Step 1: Register two DIDs

@@ -33,8 +33,11 @@
 use ark_bn254::Bn254;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use ark_snark::CircuitSpecificSetupSNARK;
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use rand::SeedableRng;
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use rand_chacha::ChaCha8Rng;
 use subtle::ConstantTimeEq;
 
@@ -366,71 +369,108 @@ pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Resul
 /// It is INSECURE for multi-party ceremonies. The derived keys should NEVER be
 /// used in production. This function exists only for testing and single-party
 /// setups. For production, use a proper multi-party computation ceremony.
+///
+/// # Fail-closed behavior
+///
+/// This function will return [`SetupError::SrsNotReady`] if invoked from a
+/// non-test build. The deterministic Phase 2 derivation is fundamentally
+/// broken for multi-party ceremonies (the transcript is public, so anyone can
+/// re-derive the toxic waste and forge proofs). Production callers MUST
+/// implement a real Phase 2 MPC and use a different code path. Tests and
+/// single-party setups must opt in via the `unsafe-phase2-deterministic`
+/// feature, which is NOT enabled by default.
 pub fn derive_keys_deterministic_from_srs(
     srs: &PowersOfTau,
     circuit: &RollupCircuit,
 ) -> Result<CircuitKeyPair, SetupError> {
-    // Verify the SRS has contributions
-    if srs.contribution_count == 0 {
+    // Fail-closed: refuse to derive keys from a public transcript unless the
+    // caller has explicitly opted in via the `unsafe-phase2-deterministic`
+    // feature flag (tests + single-party setups only).
+    #[cfg(not(feature = "unsafe-phase2-deterministic"))]
+    {
+        let _ = (srs, circuit);
         return Err(SetupError::SrsNotReady(
-            "SRS has no contributions; run a ceremony first".to_string(),
+            "derive_keys_deterministic_from_srs is INSECURE for multi-party ceremonies: \
+             the SRS transcript is public, so anyone can re-derive the toxic waste and \
+             forge proofs. Enable the `unsafe-phase2-deterministic` feature ONLY for \
+             tests or single-party trusted setups. Production deployments MUST use a \
+             real Phase 2 MPC ceremony."
+                .to_string(),
         ));
     }
 
-    // Verify the SRS is well-formed
-    srs.verify_srs()?;
+    #[cfg(feature = "unsafe-phase2-deterministic")]
+    {
+        // Verify the SRS has contributions
+        if srs.contribution_count == 0 {
+            return Err(SetupError::SrsNotReady(
+                "SRS has no contributions; run a ceremony first".to_string(),
+            ));
+        }
 
-    // Derive deterministic Phase 2 seed from the SRS transcript
-    let transcript = srs.to_transcript();
-    let phase2_seed = blake3::derive_key("OMNIA-PHASE2-SEED", &transcript);
+        // Verify the SRS is well-formed
+        srs.verify_srs()?;
 
-    tracing::info!(
-        tau_contributions = srs.contribution_count,
-        tau_hash = ?&srs.transcript_hash[..4],
-        phase2_seed = ?&phase2_seed[..4],
-        "Deriving circuit keys deterministically from SRS transcript"
-    );
+        // Derive deterministic Phase 2 seed from the SRS transcript
+        let transcript = srs.to_transcript();
+        let phase2_seed = blake3::derive_key("OMNIA-PHASE2-SEED", &transcript);
 
-    // Use the deterministic seed to initialize the RNG
-    let mut rng = ChaCha8Rng::from_seed(phase2_seed);
+        tracing::info!(
+            tau_contributions = srs.contribution_count,
+            tau_hash = ?&srs.transcript_hash[..4],
+            phase2_seed = ?&phase2_seed[..4],
+            "Deriving circuit keys deterministically from SRS transcript"
+        );
 
-    // Perform the Groth16 setup with deterministic RNG
-    let (pk, vk) = Groth16::<Bn254>::setup((*circuit).clone(), &mut rng)
-        .map_err(|e| SetupError::KeyDerivationFailed(format!("Groth16 setup failed: {e}")))?;
+        // Use the deterministic seed to initialize the RNG
+        let mut rng = ChaCha8Rng::from_seed(phase2_seed);
 
-    // Serialize the proving key
-    let mut pk_bytes = Vec::new();
-    pk.serialize_uncompressed(&mut pk_bytes)
-        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
+        // Perform the Groth16 setup with deterministic RNG
+        let (pk, vk) = Groth16::<Bn254>::setup((*circuit).clone(), &mut rng)
+            .map_err(|e| SetupError::KeyDerivationFailed(format!("Groth16 setup failed: {e}")))?;
 
-    // Serialize the verifying key
-    let mut vk_bytes = Vec::new();
-    vk.serialize_uncompressed(&mut vk_bytes)
-        .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
+        // Serialize the proving key
+        let mut pk_bytes = Vec::new();
+        pk.serialize_uncompressed(&mut pk_bytes)
+            .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
 
-    // Verify transcript integrity: re-derive the seed and confirm it matches
-    let transcript2 = srs.to_transcript();
-    let phase2_seed2 = blake3::derive_key("OMNIA-PHASE2-SEED", &transcript2);
-    if phase2_seed != phase2_seed2 {
-        return Err(SetupError::InvalidContribution(
-            "SRS transcript integrity check failed — transcript changed during key derivation".to_string(),
-        ));
+        // Serialize the verifying key
+        let mut vk_bytes = Vec::new();
+        vk.serialize_uncompressed(&mut vk_bytes)
+            .map_err(|e| SetupError::SerializationFailed(e.to_string()))?;
+
+        // Verify transcript integrity: re-derive the seed and confirm it matches
+        let transcript2 = srs.to_transcript();
+        let phase2_seed2 = blake3::derive_key("OMNIA-PHASE2-SEED", &transcript2);
+        if phase2_seed != phase2_seed2 {
+            return Err(SetupError::InvalidContribution(
+                "SRS transcript integrity check failed — transcript changed during key derivation".to_string(),
+            ));
+        }
+
+        tracing::info!(
+            pk_size = pk_bytes.len(),
+            vk_size = vk_bytes.len(),
+            srs_hash = ?blake3::hash(&transcript).as_bytes()[..4],
+            tau_contributions = srs.contribution_count,
+            "Circuit keys derived deterministically from SRS with transcript binding"
+        );
+
+        return Ok(CircuitKeyPair {
+            proving_key: pk_bytes,
+            verifying_key: vk_bytes,
+            tau_hash: srs.transcript_hash,
+            tau_contributions: srs.contribution_count,
+        });
     }
 
-    tracing::info!(
-        pk_size = pk_bytes.len(),
-        vk_size = vk_bytes.len(),
-        srs_hash = ?blake3::hash(&transcript).as_bytes()[..4],
-        tau_contributions = srs.contribution_count,
-        "Circuit keys derived deterministically from SRS with transcript binding"
-    );
-
-    Ok(CircuitKeyPair {
-        proving_key: pk_bytes,
-        verifying_key: vk_bytes,
-        tau_hash: srs.transcript_hash,
-        tau_contributions: srs.contribution_count,
-    })
+    // When the `unsafe-phase2-deterministic` feature is NOT enabled, the
+    // early-return at the top of this function has already produced an
+    // `SrsNotReady` error. This line is unreachable in that case but keeps
+    // the function body type-correct.
+    #[cfg(not(feature = "unsafe-phase2-deterministic"))]
+    #[allow(unreachable_code)]
+    unreachable!("derive_keys_deterministic_from_srs: the feature-gated early return should have run")
 }
 
 /// Verify that a proving key and verifying key are consistent.
@@ -560,6 +600,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_from_srs_same_srs_same_keys() {
         // Same SRS must always produce the same keys
         let srs = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony failed");
@@ -579,6 +620,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_from_srs_different_srs_different_keys() {
         // Different SRS must produce different keys.
         // Use different num_participants to guarantee genuinely different
@@ -611,6 +653,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_produces_valid_keys() {
         let srs = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony failed");
         let circuit = RollupCircuit::empty();

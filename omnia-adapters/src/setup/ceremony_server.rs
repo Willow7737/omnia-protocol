@@ -397,6 +397,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_ceremony_server_lifecycle() {
         let server = test_server(3, 10);
 

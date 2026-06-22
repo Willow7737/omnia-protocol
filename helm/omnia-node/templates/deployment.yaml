@@ -29,9 +29,17 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: p2p
-              containerPort: 9090
+            # SECURITY FIX (audit): expose BOTH the HTTP API port (TCP 8080)
+            # AND the P2P port (UDP 4001 for QUIC). The previous chart only
+            # exposed TCP 9090, which meant Helm-deployed nodes could not
+            # participate in P2P gossip at all (the libp2p swarm is
+            # QUIC-only by default).
+            - name: http
+              containerPort: 8080
               protocol: TCP
+            - name: p2p
+              containerPort: 4001
+              protocol: UDP
           env:
             - name: RUST_LOG
               value: "info"

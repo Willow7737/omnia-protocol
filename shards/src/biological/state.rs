@@ -134,6 +134,27 @@ impl BiologicalState {
                     return Err(ShardError::ValidationFailed("Consent has been revoked".into()));
                 }
 
+                // SECURITY: enforce consent expiry at the apply path, not
+                // just at the validator. The validator (biological/validator.rs)
+                // already checks expiry using `SystemTime::now()`, but if
+                // any code calls `apply` directly (bypassing the validator),
+                // expired consents would otherwise be honored. We use
+                // `SystemTime::now()` here too — this is acceptable because
+                // the validator has already run by the time apply() is
+                // reached via the ShardRouter, and the explicit check here
+                // is purely defense-in-depth.
+                if record.expires_at != 0 {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    if record.expires_at <= now {
+                        return Err(ShardError::ValidationFailed(
+                            "Consent has expired".into(),
+                        ));
+                    }
+                }
+
                 // -----------------------------------------------------------------------
                 // Real ZK proof verification using ark-groth16.
                 // Enabled via the `real_verification` feature flag.
@@ -145,95 +166,138 @@ impl BiologicalState {
                     use ark_serialize::CanonicalDeserialize;
                     use ark_snark::SNARK;
 
-                    // The ZK proof must demonstrate that the consumer knows some
-                    // private data (e.g., a valid consent token) without revealing it.
+                    // SECURITY: The previous implementation accepted an
+                    // attacker-supplied VerifyingKey (deserialized from the
+                    // proof bytes themselves) AND an empty `public_inputs`
+                    // vector. An attacker could craft a vk+proof for a
+                    // no-public-input circuit and gain query access to any
+                    // consented biological data.
                     //
+                    // The fix below mirrors the computational shard's behavior:
+                    //   1. Reject empty `public_inputs` outright.
+                    //   2. Reject proofs shorter than a sane minimum length.
+                    //   3. Continue to require a real Groth16 verification
+                    //      equation (which now binds the public inputs to
+                    //      the proof).
+                    //
+                    // TODO(follow-up): the VerifyingKey should be a known,
+                    // on-chain-registered circuit VK — NOT embedded in the
+                    // caller's proof bytes. Once a VK registry exists, this
+                    // path must look up the VK by circuit ID rather than
+                    // deserializing it from `zk_proof`. Until then, callers
+                    // who can satisfy the public_inputs check below can
+                    // still verify against their own VK; this is a
+                    // stop-gap that closes the empty-public-inputs bypass.
+
                     // Layout of zk_proof bytes:
                     //   [0..4)         : verifying key length (u32 LE)
                     //   [4..4+vk_len)  : serialized VerifyingKey
                     //   [4+vk_len..]   : serialized Proof
-                    if zk_proof.len() > 8 {
-                        let vk_len = u32::from_le_bytes(zk_proof[0..4].try_into().unwrap_or([0u8; 4])) as usize;
+                    if zk_proof.len() <= 8 {
+                        return Err(ShardError::ValidationFailed(
+                            "ZK proof too short — must contain vk_len + verifying key + proof".into(),
+                        ));
+                    }
 
-                        if zk_proof.len() > 4 + vk_len + 1 {
-                            let vk_bytes = &zk_proof[4..4 + vk_len];
-                            let proof_slice = &zk_proof[4 + vk_len..];
+                    let vk_len = u32::from_le_bytes(
+                        zk_proof[0..4].try_into().unwrap_or([0u8; 4]),
+                    ) as usize;
 
-                            let vk = match ark_groth16::VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes) {
-                                Ok(vk) => vk,
-                                Err(e) => {
-                                    tracing::warn!(
-                                        subject = ?&subject[..4],
-                                        error = %e,
-                                        "Real ZK verification: failed to deserialize biological verifying key"
-                                    );
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: invalid verifying key: {e}"
-                                    )));
-                                }
-                            };
+                    if zk_proof.len() <= 4 + vk_len + 1 {
+                        return Err(ShardError::ValidationFailed(
+                            "ZK proof layout invalid — proof slice is empty after verifying key".into(),
+                        ));
+                    }
 
-                            let proof = match ark_groth16::Proof::<Bn254>::deserialize_uncompressed(proof_slice) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    tracing::warn!(
-                                        subject = ?&subject[..4],
-                                        error = %e,
-                                        "Real ZK verification: failed to deserialize biological proof"
-                                    );
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: invalid proof: {e}"
-                                    )));
-                                }
-                            };
+                    let vk_bytes = &zk_proof[4..4 + vk_len];
+                    let proof_slice = &zk_proof[4 + vk_len..];
 
-                            // Derive public inputs from the biological verification context.
-                            // In a full implementation, these would encode (subject, consumer, scope)
-                            // as field elements. For now, we use an empty public input list which
-                            // verifies that the proof is valid for a circuit with no public inputs.
-                            let public_inputs: Vec<ark_bn254::Fr> = vec![];
+                    let vk = match ark_groth16::VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes) {
+                        Ok(vk) => vk,
+                        Err(e) => {
+                            tracing::warn!(
+                                subject = ?&subject[..4],
+                                error = %e,
+                                "Real ZK verification: failed to deserialize biological verifying key"
+                            );
+                            return Err(ShardError::ValidationFailed(format!(
+                                "ZK proof verification failed: invalid verifying key: {e}"
+                            )));
+                        }
+                    };
 
-                            if public_inputs.is_empty() {
-                                tracing::warn!(
-                                    subject = ?&subject[..4],
-                                    "ZK proof verification with empty public inputs — accepting without meaningful verification. \
-                                     Compute proper public inputs from the biological context for real security."
-                                );
-                            }
+                    let proof = match ark_groth16::Proof::<Bn254>::deserialize_uncompressed(proof_slice) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            tracing::warn!(
+                                subject = ?&subject[..4],
+                                error = %e,
+                                "Real ZK verification: failed to deserialize biological proof"
+                            );
+                            return Err(ShardError::ValidationFailed(format!(
+                                "ZK proof verification failed: invalid proof: {e}"
+                            )));
+                        }
+                    };
 
-                            match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
-                                Ok(true) => {
-                                    tracing::info!(
-                                        subject = ?&subject[..4],
-                                        consumer = ?&consumer[..4],
-                                        "Real ZK verification: biological proof verified successfully"
-                                    );
-                                    return Ok(());
-                                }
-                                Ok(false) => {
-                                    tracing::warn!(
-                                        subject = ?&subject[..4],
-                                        "Real ZK verification: biological proof is invalid"
-                                    );
-                                    return Err(ShardError::ValidationFailed(
-                                        "ZK proof verification failed: proof is invalid".into(),
-                                    ));
-                                }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        subject = ?&subject[..4],
-                                        error = %e,
-                                        "Real ZK verification: biological verification error"
-                                    );
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: {e}"
-                                    )));
-                                }
-                            }
+                    // SECURITY: derive non-empty public inputs from the
+                    // biological context. We hash (subject, consumer) into
+                    // a single BN254 field element. This binds the proof
+                    // to the specific consent record being queried — an
+                    // attacker cannot reuse a proof meant for one
+                    // (subject, consumer) pair against a different one.
+                    let mut pub_input_preimage = Vec::with_capacity(64);
+                    pub_input_preimage.extend_from_slice(subject);
+                    pub_input_preimage.extend_from_slice(consumer);
+                    let pub_input_hash = blake3::hash(&pub_input_preimage);
+                    // Reduce the 32-byte hash to a BN254 scalar via
+                    // little-endian bytes → field element. ark_ff's
+                    // from_random_bytes performs a safe reduction.
+                    let pub_input_fr = ark_bn254::Fr::from_random_bytes(&pub_input_hash.as_bytes()[..]);
+                    let public_inputs: Vec<ark_bn254::Fr> = vec![pub_input_fr];
+
+                    // Empty public inputs were the original bypass —
+                    // explicitly reject them as a defense-in-depth check
+                    // in case the above derivation ever regresses.
+                    if public_inputs.is_empty() {
+                        tracing::error!(
+                            subject = ?&subject[..4],
+                            "ZK proof verification: public_inputs unexpectedly empty — rejecting"
+                        );
+                        return Err(ShardError::ValidationFailed(
+                            "ZK proof verification failed: public inputs must not be empty".into(),
+                        ));
+                    }
+
+                    match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
+                        Ok(true) => {
+                            tracing::info!(
+                                subject = ?&subject[..4],
+                                consumer = ?&consumer[..4],
+                                "Real ZK verification: biological proof verified successfully"
+                            );
+                            return Ok(());
+                        }
+                        Ok(false) => {
+                            tracing::warn!(
+                                subject = ?&subject[..4],
+                                "Real ZK verification: biological proof is invalid"
+                            );
+                            return Err(ShardError::ValidationFailed(
+                                "ZK proof verification failed: proof is invalid".into(),
+                            ));
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                subject = ?&subject[..4],
+                                error = %e,
+                                "Real ZK verification: biological verification error"
+                            );
+                            return Err(ShardError::ValidationFailed(format!(
+                                "ZK proof verification failed: {e}"
+                            )));
                         }
                     }
-                    // If proof bytes don't match the expected layout, fall through
-                    // to the default placeholder verification below.
                 }
 
                 // When real_verification is disabled, always reject ZK proofs

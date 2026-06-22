@@ -199,10 +199,26 @@ pub fn generate_genesis(config: &GenesisConfig) -> Result<GenesisBlock, GenesisE
     for v in &sorted_validators {
         state_preimage.extend_from_slice(&v.node_id.to_le_bytes());
         state_preimage.extend_from_slice(&v.initial_stake.to_le_bytes());
-        // Decode hex to raw bytes for deterministic hashing
-        let ed25519_bytes = hex::decode(&v.ed25519_public_key).unwrap_or_default();
+        // SECURITY FIX (audit): the previous implementation used
+        // `hex::decode(...).unwrap_or_default()`, which silently returned
+        // an empty Vec on malformed hex. A genesis config with a bad key
+        // would still produce a state root — but other nodes that
+        // rejected the same config would compute a different root,
+        // causing a silent chain split at genesis. We now propagate the
+        // error so operators see "InvalidPublicKey" immediately.
+        let ed25519_bytes = hex::decode(&v.ed25519_public_key).map_err(|e| {
+            GenesisError::InvalidPublicKey(
+                v.node_id,
+                format!("ed25519_public_key is not valid hex: {e}"),
+            )
+        })?;
         state_preimage.extend_from_slice(&ed25519_bytes);
-        let dilithium_bytes = hex::decode(&v.dilithium_public_key).unwrap_or_default();
+        let dilithium_bytes = hex::decode(&v.dilithium_public_key).map_err(|e| {
+            GenesisError::InvalidPublicKey(
+                v.node_id,
+                format!("dilithium_public_key is not valid hex: {e}"),
+            )
+        })?;
         state_preimage.extend_from_slice(&dilithium_bytes);
     }
     let state_root: [u8; 32] = blake3_hash_domain(b"omnia-genesis", &state_preimage);
