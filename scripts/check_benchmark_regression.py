@@ -222,9 +222,17 @@ def check_regressions(
         # keeping tight thresholds for stable benchmarks.
         bench_threshold = definition.get("threshold_pct", threshold_pct)
 
-        # Find the measured value — two-pass approach:
-        # 1. First try the most specific key (__thrpt for throughput)
-        # 2. Then fall back to exact source_bench or partial match
+        # Find the measured value — exact match only.
+        # The previous partial-match fallback (matching on the last path
+        # component) caused false regressions: e.g., source_bench
+        # "dag_insert/insert_latency/0" matched against measured key
+        # "consensus_realistic_workload/sequential_finalization_hashmap/0"
+        # because both end in "/0", producing a 399% false regression.
+        #
+        # If the exact source_bench key is not in the measured dict, the
+        # benchmark is reported as MISSING (not matched against a wrong
+        # benchmark). This is the correct behavior — a missing benchmark
+        # should not trigger a false regression.
         measured_val = None
 
         if unit == "events_per_sec":
@@ -235,15 +243,9 @@ def check_regressions(
             elif source_bench in measured:
                 measured_val = measured[source_bench]
         else:
-            # For latency, use the time measurement
+            # For latency, use the time measurement — exact match only
             if source_bench in measured:
                 measured_val = measured[source_bench]
-            else:
-                # Try partial match on the last component of source_bench
-                for mkey, mval in measured.items():
-                    if mkey.endswith("/" + source_bench.split("/")[-1]) and "__thrpt" not in mkey:
-                        measured_val = mval
-                        break
 
         if measured_val is None:
             regressions.append({
