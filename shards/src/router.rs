@@ -137,9 +137,9 @@ impl ShardRouter {
     /// Create a shard router with a custom nonce store, returning an error
     /// if the store cannot be loaded.
     ///
-    /// This is the fail-closed variant of [`with_nonce_store`]. Use this in
-    /// production deployments where replay protection must not be silently
-    /// disabled.
+    /// This is the fail-closed variant of [`Self::with_nonce_store`]. Use
+    /// this in production deployments where replay protection must not be
+    /// silently disabled.
     pub fn with_nonce_store_checked(
         fee_schedule: FeeSchedule,
         quota: QuotaSystem,

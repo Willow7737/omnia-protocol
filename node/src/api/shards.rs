@@ -206,10 +206,10 @@ async fn handle_generic_shard_op(
 /// Parse an economics operation from the request body.
 ///
 /// Supported operations:
-/// - `mint` — Mint UBC to a DID (params: `did`, `amount`) **[privileged]**
+/// - `mint` — Mint UBC to a DID (params: `did`, `amount`) **\[privileged\]**
 /// - `spend` — Spend UBC from a DID (params: `did`, `amount`)
 /// - `register` — Register a DID in the quota system (params: `did`)
-/// - `advance_epoch` — Advance to the next epoch **[privileged]**
+/// - `advance_epoch` — Advance to the next epoch **\[privileged\]**
 fn parse_economics_op(body: &ShardOperationRequest) -> Result<EconomicsOp, ApiParseError> {
     match body.operation.as_str() {
         "mint" => {

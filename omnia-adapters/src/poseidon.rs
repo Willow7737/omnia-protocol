@@ -123,7 +123,7 @@ const ALPHA: u64 = 5;
 /// - All y_j are distinct
 /// - x_i ≠ y_j for all i, j
 ///
-/// The matrix M[i][j] = 1 / (x_i + y_j) is a Cauchy matrix, which is
+/// The matrix `M[i][j] = 1 / (x_i + y_j)` is a Cauchy matrix, which is
 /// guaranteed to be MDS (Maximum Distance Separable) — providing the
 /// optimal diffusion property required by the Poseidon construction.
 ///

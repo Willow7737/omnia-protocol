@@ -763,7 +763,7 @@ impl OmniaNetwork {
     }
 }
 
-/// Try to extract a PeerId from a Multiaddr that ends with /p2p/<peer-id>.
+/// Try to extract a PeerId from a Multiaddr that ends with `/p2p/<peer-id>`.
 pub(crate) fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     use libp2p::multiaddr::Protocol;
     addr.iter().find_map(|proto| match proto {
