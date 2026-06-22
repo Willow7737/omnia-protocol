@@ -347,6 +347,17 @@ jobs:
           else
             echo "WARN: CPU governor not adjustable on this runner (non-fatal)"
           fi
+
+          # Verify the governor actually changed
+          echo "---CPU governor verification---"
+          if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+            for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+              actual=$(cat "$cpu" 2>/dev/null || echo "unreadable")
+              echo "  $(basename $(dirname $cpu)): $actual"
+            done
+          else
+            echo "  scaling_governor file not found — governor not adjustable on this runner"
+          fi
         continue-on-error: true
 
       - name: Build benchmarks
@@ -370,16 +381,21 @@ jobs:
       # benchmarks.yml workflow.
       - name: Run fast benchmarks (throughput + sharding, no ZK)
         run: |
-          # If no baseline exists, save one; otherwise compare against it.
-          # The baseline file is criterion's <bench-name>/main/estimates.json.
-          # Use --bench flags to target only criterion benchmarks (not lib tests,
-          # which don't understand --save-baseline).
-          if [ ! -f target/criterion/.omnia-baseline-saved ]; then
-            cargo bench -p omnia-benches --bench throughput --bench sharding_bench -- --save-baseline main 2>&1 | tee criterion_output.txt
-            touch target/criterion/.omnia-baseline-saved
-          else
-            cargo bench -p omnia-benches --bench throughput --bench sharding_bench -- --baseline main 2>&1 | tee criterion_output.txt
-          fi
+          # Always use --save-baseline main. Criterion's --baseline flag
+          # panics if no baseline exists for a specific bench binary.
+          # The marker-file approach (checking .omnia-baseline-saved) was
+          # flawed: the marker was created after the first bench binary
+          # (throughput+sharding) saved its baseline, but the second bench
+          # binary (baseline_bench) had never saved a baseline, causing
+          # --baseline main to panic.
+          #
+          # The regression gate (check_benchmark_regression.py) does NOT
+          # use Criterion's baseline mechanism — it parses criterion's
+          # stdout (the time: [...] lines) and compares against
+          # baselines.json. So we don't need --baseline for comparison;
+          # --save-baseline just saves Criterion's internal data for its
+          # own HTML reports.
+          cargo bench -p omnia-benches --bench throughput --bench sharding_bench -- --save-baseline main 2>&1 | tee criterion_output.txt
         timeout-minutes: 10
         continue-on-error: true  # Benchmarks are informational
 
@@ -389,27 +405,31 @@ jobs:
           # feature-gated under "full". By running WITHOUT --features full,
           # the ZK group emits a no-op "skipped_no_full_feature" bench and
           # the fast consensus/DAG/gossip benches run normally.
-          if [ -f target/criterion/.omnia-baseline-saved ]; then
-            cargo bench -p omnia-benches --bench baseline_bench -- --baseline main 2>&1 | tee -a criterion_output.txt
-          else
-            cargo bench -p omnia-benches --bench baseline_bench -- --save-baseline main 2>&1 | tee -a criterion_output.txt
-          fi
+          #
+          # Always use --save-baseline main (see comment above for why
+          # --baseline main panics on first run).
+          cargo bench -p omnia-benches --bench baseline_bench -- --save-baseline main 2>&1 | tee -a criterion_output.txt
         timeout-minutes: 8
         continue-on-error: true  # Benchmarks are informational
 
       # ── Regression gate ────────────────────────────────────────────
+      # The gate output is captured to regression_gate.txt and uploaded
+      # as a separate artifact so it can be reviewed without parsing
+      # the full criterion output.
       - name: Check benchmark regressions
         run: |
           python3 scripts/check_benchmark_regression.py \
             --baselines benches/baselines.json \
-            criterion_output.txt || true  # Informational only
+            criterion_output.txt 2>&1 | tee regression_gate.txt || true  # Informational only
 
       - name: Upload criterion results
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: criterion-comparison-results
-          path: criterion_output.txt
+          path: |
+            criterion_output.txt
+            regression_gate.txt
           retention-days: 30
 
   supply-chain:

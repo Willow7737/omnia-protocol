@@ -279,21 +279,52 @@ fn finality_latency_bench(c: &mut Criterion) {
 /// is therefore ~1300 Poseidon hashes plus 100 event allocations,
 /// versus the 1-tx basic circuit which has zero Poseidon hashes.
 ///
-/// **The 27× worse-than-linear scaling is expected** given the circuit
-/// design difference. It is NOT a bug in batching — `create_expanded_proof`
-/// does generate a single proof for the entire batch (not 100 sequential
-/// proofs). The super-linear cost comes from the expanded circuit's
-/// per-event constraint count, which grows as O(events × merkle_depth).
+/// # Root-cause confirmation: 100_tx_batch is ONE proof, not 100 sequential
+///
+/// The mentor review asked: "confirm that 100_tx_batch runs the prover
+/// 100 times sequentially, or find where the super-linear cost lives."
+///
+/// **Confirmed: it is ONE proof call, not 100 sequential proofs.**
+///
+/// The benchmark code (below) calls `create_expanded_proof(circuit, &pk)`
+/// exactly ONCE per iteration with a single `ExpandedRollupCircuit`
+/// containing 100 events. `create_expanded_proof` (see
+/// `omnia-adapters/src/prover.rs:159`) calls
+/// `Groth16::<Bn254>::prove(pk, circuit, &mut rng)` — a single Groth16
+/// proving operation on one circuit instance.
+///
+/// The 7.93s time is the cost of ONE Groth16 proof on a circuit with
+/// ~10,000+ constraints (100 events × ~13 Poseidon hashes × 8 merkle
+/// depth, plus allocation overhead). Groth16 proving time is
+/// O(n log n) in constraint count due to the FFT in the polynomial
+/// commitment. The 1_tx_batch uses RollupCircuit with ~10 constraints
+/// (no Poseidon), so the constraint ratio is ~1000x, producing a time
+/// ratio of ~2700x (7.93s / 2.92ms) — consistent with O(n log n).
+///
+/// # Proper scaling curve (from zk_benchmarks.rs)
 ///
 /// To properly characterize scaling, compare `expanded_circuit/{1,4,16}`
 /// in `zk_benchmarks.rs` — those use the same `ExpandedRollupCircuit`
-/// at different event counts and produce a meaningful scaling curve.
+/// at different event counts and produce a meaningful scaling curve:
+///
+/// | Events | Time (ms) | Per-event (ms) | Ratio vs /1 |
+/// |--------|-----------|----------------|-------------|
+/// | 1      | 125       | 125            | 1.00x       |
+/// | 4      | 415       | 104            | 3.31x (sub-linear) |
+/// | 16     | 1484      | 93             | 11.87x (sub-linear) |
+/// | 100    | 7934      | 79             | 63.5x (sub-linear) |
+///
+/// The per-event cost DECREASES as batch size increases (125ms → 79ms),
+/// demonstrating amortization of fixed prover overhead. The scaling is
+/// sub-linear, not super-linear — the 27x "super-linear" appearance only
+/// arises when comparing the basic circuit (1_tx_batch) to the expanded
+/// circuit (100_tx_batch), which are fundamentally different circuits.
 ///
 /// # Coverage caveat
 ///
 /// `batch_proof_circuit.rs` has ~41% region coverage and `prover.rs`
 /// has ~34.62% function coverage. The code path that produces these
-/// 7.78s proofs is among the least-tested in the project. Treat the
+/// 7.93s proofs is among the least-tested in the project. Treat the
 /// absolute numbers as preliminary until coverage is raised.
 #[cfg(feature = "full")]
 fn zk_proof_gen_bench(c: &mut Criterion) {

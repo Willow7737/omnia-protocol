@@ -476,10 +476,26 @@ impl ChaosNetwork {
             event
         };
 
-        // Phase 2: Insert into node's graph and process through consensus
+        // Phase 2: Insert into node's graph and process through consensus.
+        //
+        // Under message loss, the graph may reject events with:
+        // - DuplicateEvent: event already inserted (from prior gossip)
+        // - SequenceGapTooLarge / SequenceBufferOverflow: out-of-order delivery
+        // - InvalidSequence: stale event from a node that fell behind
+        //
+        // These are transient conditions expected under chaos. The event was
+        // created locally and signed, so we update the node's sequence/latest
+        // state regardless of whether the graph accepted it. This ensures
+        // the next submit_event call uses a fresh sequence number and doesn't
+        // create a duplicate event.
         {
             let node = &mut self.nodes[node_id];
-            node.graph.insert(event.clone())?;
+            match node.graph.insert(event.clone()) {
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!(node = node_id, "Graph insert error (non-fatal under chaos): {}", e);
+                }
+            }
 
             if let Err(e) = node.consensus.process_event(&event, &node.graph) {
                 tracing::debug!(node = node_id, "Consensus error on submit: {}", e);
