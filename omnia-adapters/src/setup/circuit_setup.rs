@@ -31,10 +31,15 @@
 //!   Knowledge* (IACR ePrint 2019/953)
 
 use ark_bn254::Bn254;
-use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
+#[cfg(feature = "unsafe-phase2-deterministic")]
+use ark_groth16::Groth16;
+use ark_groth16::{ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use ark_snark::CircuitSpecificSetupSNARK;
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use rand::SeedableRng;
+#[cfg(feature = "unsafe-phase2-deterministic")]
 use rand_chacha::ChaCha8Rng;
 use subtle::ConstantTimeEq;
 
@@ -366,7 +371,43 @@ pub fn derive_keys_from_srs(srs: &PowersOfTau, circuit: &RollupCircuit) -> Resul
 /// It is INSECURE for multi-party ceremonies. The derived keys should NEVER be
 /// used in production. This function exists only for testing and single-party
 /// setups. For production, use a proper multi-party computation ceremony.
+///
+/// # Fail-closed behavior
+///
+/// This function will return [`SetupError::SrsNotReady`] if invoked from a
+/// non-test build. The deterministic Phase 2 derivation is fundamentally
+/// broken for multi-party ceremonies (the transcript is public, so anyone can
+/// re-derive the toxic waste and forge proofs). Production callers MUST
+/// implement a real Phase 2 MPC and use a different code path. Tests and
+/// single-party setups must opt in via the `unsafe-phase2-deterministic`
+/// feature, which is NOT enabled by default.
 pub fn derive_keys_deterministic_from_srs(
+    srs: &PowersOfTau,
+    circuit: &RollupCircuit,
+) -> Result<CircuitKeyPair, SetupError> {
+    derive_keys_deterministic_from_srs_inner(srs, circuit)
+}
+
+#[cfg(not(feature = "unsafe-phase2-deterministic"))]
+fn derive_keys_deterministic_from_srs_inner(
+    _srs: &PowersOfTau,
+    _circuit: &RollupCircuit,
+) -> Result<CircuitKeyPair, SetupError> {
+    // Fail-closed: refuse to derive keys from a public transcript unless the
+    // caller has explicitly opted in via the `unsafe-phase2-deterministic`
+    // feature flag (tests + single-party setups only).
+    Err(SetupError::SrsNotReady(
+        "derive_keys_deterministic_from_srs is INSECURE for multi-party ceremonies: \
+         the SRS transcript is public, so anyone can re-derive the toxic waste and \
+         forge proofs. Enable the `unsafe-phase2-deterministic` feature ONLY for \
+         tests or single-party trusted setups. Production deployments MUST use a \
+         real Phase 2 MPC ceremony."
+            .to_string(),
+    ))
+}
+
+#[cfg(feature = "unsafe-phase2-deterministic")]
+fn derive_keys_deterministic_from_srs_inner(
     srs: &PowersOfTau,
     circuit: &RollupCircuit,
 ) -> Result<CircuitKeyPair, SetupError> {
@@ -560,6 +601,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_from_srs_same_srs_same_keys() {
         // Same SRS must always produce the same keys
         let srs = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony failed");
@@ -579,6 +621,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_from_srs_different_srs_different_keys() {
         // Different SRS must produce different keys.
         // Use different num_participants to guarantee genuinely different
@@ -611,6 +654,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_derive_keys_deterministic_produces_valid_keys() {
         let srs = super::super::powers_of_tau::run_ceremony(8, 3).expect("ceremony failed");
         let circuit = RollupCircuit::empty();

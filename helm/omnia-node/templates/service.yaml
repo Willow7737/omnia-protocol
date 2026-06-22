@@ -10,9 +10,17 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
+    # SECURITY FIX (audit): expose BOTH the HTTP API port AND the P2P
+    # port. The previous chart only exposed TCP 9090, which meant Helm-
+    # deployed nodes could not participate in P2P gossip. We now expose
+    # TCP 8080 for the HTTP API and UDP 4001 for QUIC P2P.
     - port: {{ .Values.service.port }}
-      targetPort: p2p
+      targetPort: http
       protocol: TCP
+      name: http
+    - port: {{ .Values.service.p2pPort }}
+      targetPort: p2p
+      protocol: UDP
       name: p2p
   selector:
     app: {{ include "omnia-node.name" . }}

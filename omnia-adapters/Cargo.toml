@@ -65,6 +65,10 @@ settlement-ffi = []
 cosmos = []
 ceremony = []
 celestia = ["dep:reqwest", "dep:serde_json"]
+# INSECURE: only enable for tests or single-party trusted setups.
+# Derives Phase 2 toxic waste from the (public) SRS transcript, which is
+# forgeable by anyone with the transcript. Production MUST use a real MPC.
+unsafe-phase2-deterministic = []
 
 [build-dependencies]
 rustc_version = "0.4"

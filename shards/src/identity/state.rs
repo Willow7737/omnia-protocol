@@ -99,6 +99,23 @@ pub struct RecoveryConfig {
     pub threshold: u8,
     /// Total number of shares created (N in K-of-N).
     pub total_shares: u8,
+    /// BLAKE3 commitment to the original recovery secret: `blake3(secret)`.
+    ///
+    /// Security: at `ConfigureRecovery` time, the caller supplies the secret
+    /// that will be Shamir-split. We store a commitment to that secret so
+    /// that `RecoverDid` can verify the reconstructed secret matches the
+    /// original BEFORE the derived public key is added to the DID's
+    /// authentication set. Without this check, an attacker who knows the
+    /// public `threshold` value can fabricate K shares, reconstruct an
+    /// arbitrary secret, derive the corresponding Ed25519 keypair (for which
+    /// they hold the private key), and inject their public key into the
+    /// DID's auth set — completely bypassing social recovery.
+    ///
+    /// The commitment is `blake3(secret)` — a binding (one-way) hash, not
+    /// a hiding one (recovery secrets are high-entropy 32-byte values, so
+    /// hiding is not a concern).
+    #[serde(default)]
+    pub secret_commitment: Option<[u8; 32]>,
 }
 
 /// The full state of the Identity shard.
@@ -239,6 +256,39 @@ impl IdentityState {
                 let reconstructed = ShamirRecovery::reconstruct(shares)
                     .map_err(|e| ShardError::ValidationFailed(format!("Recovery reconstruction failed: {e}")))?;
 
+                // SECURITY: verify the reconstructed secret matches the
+                // commitment stored at ConfigureRecovery time. Without this
+                // check, an attacker who knows the public `threshold` value
+                // can fabricate K shares, reconstruct an arbitrary secret,
+                // and inject the derived key into the DID's auth set.
+                // See RecoveryConfig::secret_commitment for full rationale.
+                if let Some(stored_commitment) = &config.secret_commitment {
+                    let reconstructed_commitment = blake3::hash(&reconstructed);
+                    if reconstructed_commitment.as_bytes() != stored_commitment {
+                        return Err(ShardError::ValidationFailed(
+                            "Recovery failed: reconstructed secret does not match stored commitment \
+                             — shares may be forged or corrupt"
+                                .into(),
+                        ));
+                    }
+                } else {
+                    // Legacy recovery configs (created before this fix was
+                    // deployed) have no commitment. Refuse recovery for them
+                    // rather than silently accepting forged shares. The DID
+                    // owner must re-run ConfigureRecovery to populate a
+                    // commitment before recovery can proceed.
+                    tracing::warn!(
+                        did = %did,
+                        "Recovery refused: no secret_commitment stored for this DID \
+                         — re-run ConfigureRecovery to enable secure recovery"
+                    );
+                    return Err(ShardError::ValidationFailed(
+                        "Recovery failed: no secret commitment stored — re-run ConfigureRecovery \
+                         with the original secret before recovery can proceed"
+                            .into(),
+                    ));
+                }
+
                 // Derive a new Ed25519 public key from the reconstructed secret
                 // using BLAKE3 domain separation. The derived key is deterministic:
                 // the same secret always produces the same public key.
@@ -370,11 +420,16 @@ impl IdentityState {
                 }
                 let shares = ShamirRecovery::split(secret, *threshold, *total_shares)
                     .map_err(|e| ShardError::ValidationFailed(format!("Recovery split failed: {e}")))?;
+                // Store a binding commitment to the secret so that RecoverDid
+                // can detect forged shares. See RecoveryConfig::secret_commitment
+                // for the full security rationale.
+                let secret_commitment = blake3::hash(secret);
                 self.recovery_registry.insert(
                     did.clone(),
                     RecoveryConfig {
                         threshold: *threshold,
                         total_shares: *total_shares,
+                        secret_commitment: Some(*secret_commitment.as_bytes()),
                     },
                 );
                 // Encrypt and persist shares instead of dropping them
@@ -419,11 +474,13 @@ impl IdentityState {
         }
         let shares = ShamirRecovery::split(secret, threshold, total)
             .map_err(|e| ShardError::ValidationFailed(format!("Recovery split failed: {e}")))?;
+        let secret_commitment = blake3::hash(secret);
         self.recovery_registry.insert(
             did.to_string(),
             RecoveryConfig {
                 threshold,
                 total_shares: total,
+                secret_commitment: Some(*secret_commitment.as_bytes()),
             },
         );
         Ok(shares)

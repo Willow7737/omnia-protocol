@@ -700,7 +700,7 @@ impl EncryptedKeyStore {
     /// Initialize keystore with a pre-derived encryption key.
     ///
     /// Generates a **random** keypair. For deterministic key derivation from
-    /// a mnemonic, use [`initialize_with_deterministic_key`] instead.
+    /// a mnemonic, use \[`initialize_with_deterministic_key`\] instead.
     ///
     /// Note: This function is retained for potential use by code that does not
     /// require deterministic key derivation.
@@ -712,7 +712,7 @@ impl EncryptedKeyStore {
 
     /// Initialize keystore with a pre-derived encryption key and a specific keypair.
     ///
-    /// This is used by [`from_mnemonic`] to create a keystore with a
+    /// This is used by \[`from_mnemonic`\] to create a keystore with a
     /// deterministic keypair derived from the BIP-39 mnemonic.
     fn initialize_with_deterministic_key(
         data_dir: &Path,

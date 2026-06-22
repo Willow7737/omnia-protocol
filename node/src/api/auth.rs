@@ -178,7 +178,7 @@ pub struct CallerIdentity {
 /// `None` means the cache has not been populated yet; `Some(inner)` holds
 /// the cached result of reading `OMNIA_JWT_SECRET` (where `inner` is
 /// `None` if the env var is unset). The cache persists for the process
-/// lifetime but can be reset in tests via [`reset_jwt_secret_for_test`].
+/// lifetime but can be reset in tests via \[`reset_jwt_secret_for_test`\].
 static JWT_SECRET: StdMutex<Option<Option<String>>> = StdMutex::new(None);
 
 /// Initialise the JWT secret cache. Called once at application startup.
@@ -197,7 +197,7 @@ pub fn init_jwt_secret() {
 ///
 /// Returns `None` if the variable is not set. The value is cached so
 /// that it is read at most once per process lifetime (unless explicitly
-/// reset via [`reset_jwt_secret_for_test`] in test code).
+/// reset via \[`reset_jwt_secret_for_test`\] in test code).
 fn jwt_secret() -> Option<String> {
     let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
     match &*guard {

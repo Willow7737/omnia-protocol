@@ -11,7 +11,12 @@ image:
 node:
   id: ""
   bootstrapNodes: ""
-  listenAddr: "/ip4/0.0.0.0/tcp/9090"
+  # SECURITY FIX (audit): use UDP/QUIC, not TCP. The Omnia node's libp2p
+  # swarm is QUIC-only by default (see docker/Dockerfile:62 which exposes
+  # 4001/udp, and docker/docker-compose.yml which sets OMNIA_LISTEN_ADDR
+  # to /ip4/0.0.0.0/udp/4001/quic-v1). The previous value
+  # /ip4/0.0.0.0/tcp/9090 caused Helm-deployed nodes to fail P2P entirely.
+  listenAddr: "/ip4/0.0.0.0/udp/4001/quic-v1"
   totalNodes: 5
   dataDir: /app/data
 
@@ -25,12 +30,20 @@ resources:
 
 service:
   type: ClusterIP
-  port: 9090
+  # HTTP API port. P2P (QUIC/UDP 4001) is exposed as a second port below.
+  port: 8080
+  # P2P port (UDP/QUIC). Required for gossip — without this, Helm-deployed
+  # nodes cannot participate in P2P.
+  p2pPort: 4001
 
+# SECURITY FIX (audit): probe paths and ports must match the actual
+# container endpoints. The Dockerfile HEALTHCHECK uses /health on port
+# 8080, and the HTTP API exposes /healthz and /readyz on the same port.
+# The previous values (/healthz on 9090) caused liveness probes to fail.
 livenessProbe:
   httpGet:
     path: /healthz
-    port: 9090
+    port: 8080
   initialDelaySeconds: 30
   periodSeconds: 30
   timeoutSeconds: 10
@@ -39,7 +52,7 @@ livenessProbe:
 readinessProbe:
   httpGet:
     path: /readyz
-    port: 9090
+    port: 8080
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
