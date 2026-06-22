@@ -759,7 +759,7 @@ fn load_or_generate_node_keypair(data_dir: &std::path::Path) -> omnia_substrate:
 
     // Try to persist the secret key for future restarts.
     let secret_bytes = keypair.to_bytes();
-    match std::fs::write(&key_path, &secret_bytes) {
+    match std::fs::write(&key_path, secret_bytes) {
         Ok(()) => {
             // Restrict permissions on Unix.
             #[cfg(unix)]

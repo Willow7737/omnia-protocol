@@ -643,13 +643,13 @@ impl Substrate {
             config
                 .consensus_data_dir
                 .as_ref()
-                .and_then(|dir| match RedbConsensusStore::open(dir) {
+                .map(|dir| match RedbConsensusStore::open(dir) {
                     Ok(store) => {
                         tracing::info!(
                             path = %dir.display(),
                             "Consensus: using persistent redb store"
                         );
-                        Some(Arc::new(store) as Arc<dyn ConsensusStore>)
+                        Arc::new(store) as Arc<dyn ConsensusStore>
                     }
                     Err(e) => {
                         tracing::error!(
