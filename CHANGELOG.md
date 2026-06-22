@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.74](https://github.com/Willow7737/omnia-protocol/compare/v0.1.73...v0.1.74) (2026-06-22)
+
+
+### Bug Fixes
+
+* **ci:** resolve cargo audit, cargo fmt, and compilation errors ([3823e09](https://github.com/Willow7737/omnia-protocol/commit/3823e091db14f42bec36092334cba44c6743cadf))
+* **clippy:** resolve bind_instead_of_map and needless_borrows warnings ([6f15cf9](https://github.com/Willow7737/omnia-protocol/commit/6f15cf9e81cd12dee5c7fe1e18b67b25ea1af49e))
+* **rustdoc:** resolve broken intra-doc links and HTML tags ([0c69fee](https://github.com/Willow7737/omnia-protocol/commit/0c69feed7b78865eb7af777223fca91cd2604504))
+* **security+node:** close 16 critical audit findings ([5d3d776](https://github.com/Willow7737/omnia-protocol/commit/5d3d7760edb99d9ab3cb4a056051969dfbf413fc))
+
 ## [0.1.73](https://github.com/Willow7737/omnia-protocol/compare/v0.1.72...v0.1.73) (2026-06-22)
 
 
