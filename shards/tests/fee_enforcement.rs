@@ -209,15 +209,37 @@ fn test_cross_shard_fee_deduction() {
             ),
         }))
         .expect("serialization should work"),
-        VectorClock::new(),
+        // causal_proof must be non-empty AND happened-before the event's vc.
+        // The test event's vc is VectorClock::with_node(creator, 1), so we
+        // use vc with count 0 at the same node — empty entry doesn't qualify,
+        // so we use a different node with count 1, then merge — but the
+        // simplest valid proof is just a non-zero count strictly less than
+        // the event's. Use the creator with count 0... actually is_empty()
+        // returns true for {node: 0}. Use a separate node with count 1
+        // and a target vc that has count >= 1 for that node.
+        VectorClock::with_node(test_node(2), 1),
     );
 
-    let payload = ShardPayload {
-        shard_id: ShardId::financial(),
-        operation: ShardOp::CrossShard(msg),
-        nonce: 1,
+    // The default test event uses VectorClock::with_node(creator, 1) which
+    // doesn't include test_node(2). For happened_before to return true,
+    // we need event.vc to have test_node(2) >= 1. Override the event vc.
+    let mut event = {
+        let vc = {
+            let mut v = VectorClock::with_node(test_node(1), 1);
+            v.merge(&VectorClock::with_node(test_node(2), 1));
+            v
+        };
+        let payload_bytes = ShardPayload {
+            shard_id: ShardId::financial(),
+            operation: ShardOp::CrossShard(msg),
+            nonce: 1,
+        }
+        .to_bytes()
+        .unwrap();
+        Event::new(test_node(1), 0, vc, None, None, payload_bytes).expect("event creation should succeed")
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
+    event.sign_with_keypair(&keypair).expect("signing");
+
     // The cross-shard fee is 15, and the DID has exactly 15, so it should succeed
     assert!(
         router.route_event(&event).is_ok(),
@@ -242,7 +264,9 @@ fn test_cross_shard_insufficient_balance() {
         ShardId::financial(),
         ShardId::identity(),
         vec![1, 2, 3],
-        VectorClock::new(),
+        // Provide a valid causal_proof so the test exercises the fee path
+        // rather than the (now-enforced) causality check.
+        VectorClock::with_node(test_node(2), 1),
     );
 
     let payload = ShardPayload {
@@ -250,7 +274,17 @@ fn test_cross_shard_insufficient_balance() {
         operation: ShardOp::CrossShard(msg),
         nonce: 1,
     };
-    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
+    // Build an event whose vc dominates the causal_proof so the causality
+    // check passes and the test reaches the fee-deduction step.
+    let mut event = {
+        let vc = {
+            let mut v = VectorClock::with_node(test_node(1), 1);
+            v.merge(&VectorClock::with_node(test_node(2), 1));
+            v
+        };
+        Event::new(test_node(1), 0, vc, None, None, payload.to_bytes().unwrap()).expect("event creation should succeed")
+    };
+    event.sign_with_keypair(&keypair).expect("signing");
     let result = router.route_event(&event);
     assert!(result.is_err(), "Cross-shard with insufficient balance should fail");
     match result.unwrap_err() {

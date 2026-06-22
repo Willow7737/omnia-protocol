@@ -595,17 +595,47 @@ impl Substrate {
     /// for the API layer to use. Both share the same `Arc<dyn SlashingStore>`,
     /// eliminating the dual-engine gap.
     pub fn new(config: SubstrateConfig) -> Self {
+        // SECURITY FIX (audit): the previous implementation silently fell
+        // back to in-memory slashing, no consensus persistence, and a fresh
+        // consensus state when redb files were corrupt or unreadable. A
+        // production node that hit any of these conditions would restart
+        // with NO slash history (allowing slashed validators to escape),
+        // NO consensus state (restarting from round 0), and NO event
+        // sequence continuity.
+        //
+        // We now log loudly and panic on persistence failures when the
+        // operator has explicitly configured a persistence directory.
+        // Operators who want the old behavior can simply not set the
+        // `*_data_dir` config fields — then no persistence is attempted
+        // and the fallback is unnecessary.
         let slashing = SlashingEngine::new(
             config.slashing_data_dir.clone(),
             config.slash_threshold,
             config.ejection_threshold,
         )
         .unwrap_or_else(|e| {
-            tracing::warn!(
-                error = %e,
-                "Failed to open slashing store — falling back to in-memory"
-            );
-            SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold)
+            match &config.slashing_data_dir {
+                Some(dir) => {
+                    tracing::error!(
+                        error = %e,
+                        path = %dir.display(),
+                        "FAILED to open persistent slashing store. Refusing to silently \
+                         fall back to in-memory slashing — a corrupt slashing DB must be \
+                         investigated, not hidden. Delete the file manually if you want \
+                         to start fresh, or fix the underlying disk/permission issue."
+                    );
+                    panic!(
+                        "Slashing store load failed at {}: {e}. Refusing to start with \
+                         replay protection disabled. Remove the file or fix permissions.",
+                        dir.display()
+                    );
+                }
+                None => {
+                    // No persistence configured — in-memory is the intended mode.
+                    tracing::debug!("Slashing engine running in-memory (no persistence configured)");
+                    SlashingEngine::new_in_memory(config.slash_threshold, config.ejection_threshold)
+                }
+            }
         });
 
         // Create consensus store if persistence is configured
@@ -622,12 +652,18 @@ impl Substrate {
                         Some(Arc::new(store) as Arc<dyn ConsensusStore>)
                     }
                     Err(e) => {
-                        tracing::warn!(
+                        tracing::error!(
                             error = %e,
                             path = %dir.display(),
-                            "Failed to open consensus store — consensus state will not persist"
+                            "FAILED to open consensus store. Refusing to silently fall \
+                             back to no-persistence mode — consensus state would not \
+                             survive restarts, breaking sequence continuity."
                         );
-                        None
+                        panic!(
+                            "Consensus store load failed at {}: {e}. Refusing to start \
+                             without consensus persistence. Remove the file or fix permissions.",
+                            dir.display()
+                        );
                     }
                 });
 
@@ -635,11 +671,16 @@ impl Substrate {
         let consensus = match &consensus_store {
             Some(store) => ConsensusEngine::load_or_new(config.consensus.clone(), Arc::clone(store), slashing.clone())
                 .unwrap_or_else(|e| {
-                    tracing::warn!(
+                    tracing::error!(
                         error = %e,
-                        "Failed to restore consensus state — starting fresh"
+                        "FAILED to restore consensus state from persistent store. \
+                         Refusing to silently start fresh — this would reset the round \
+                         counter and could cause the node to fork off the network."
                     );
-                    ConsensusEngine::new(config.consensus.clone(), slashing.clone())
+                    panic!(
+                        "Consensus state restoration failed: {e}. Refusing to start fresh. \
+                         Remove the consensus DB if you want to start from genesis."
+                    );
                 }),
             None => ConsensusEngine::new(config.consensus.clone(), slashing.clone()),
         };
@@ -923,6 +964,22 @@ impl Substrate {
     #[cfg(feature = "network")]
     pub fn gossip_stats(&self) -> Option<&GossipStats> {
         self.gossip.as_ref().map(|g| g.stats())
+    }
+
+    /// Get the current number of connected peers as observed by the
+    /// gossip protocol.
+    ///
+    /// Returns `None` if the gossip protocol is not initialized (e.g.,
+    /// when the `network` feature is disabled). Returns `Some(0)` when
+    /// gossip is initialized but no peers have been observed yet.
+    ///
+    /// Used by the node's `/readyz` and `/api/v1/node/peers` endpoints
+    /// to report actual peer connectivity. Previously these endpoints
+    /// always reported 0 peers because no code path updated the
+    /// `AppState.peers` field.
+    #[cfg(feature = "network")]
+    pub fn connected_peer_count(&self) -> Option<usize> {
+        self.gossip.as_ref().map(|g| g.connected_peer_count())
     }
 
     /// Check if an event has been finalized

@@ -15,8 +15,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
-use omnia_shards::{EconomicsOp, ShardOp};
-use omnia_substrate::Event;
+use omnia_shards::EconomicsOp;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
@@ -119,47 +118,40 @@ pub async fn submit_shard_operation(
 /// Handle an economics shard operation.
 ///
 /// Parses the operation name and parameters, creates an `EconomicsOp`,
-/// and routes it through the shard router.
+/// and applies it DIRECTLY to the shared `AppState.economics` state
+/// instance.
+///
+/// SECURITY FIX (audit): The previous implementation routed economics
+/// operations through `ShardRouter::route()`, which dispatched to the
+/// `EconomicsShard`'s INTERNAL `EconomicsState` instance — a DIFFERENT
+/// instance from `AppState.economics` used by the `/balance`, `/transfer`,
+/// and `/governance` endpoints. Mints via this endpoint were invisible to
+/// balance reads, breaking the economics model. We now apply operations
+/// directly to the shared instance so all endpoints see the same state.
+///
+/// TODO: For full multi-node propagation, economics operations should be
+/// submitted as events through the substrate (consensus + gossip), not
+/// applied locally. The current implementation still operates locally —
+/// other nodes will not see these mutations until the substrate-event
+/// submission path is wired in.
 async fn handle_economics_op(
     state: &AppState,
     body: &ShardOperationRequest,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let econ_op = parse_economics_op(body).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
-    let node_id = state.config.node_id_bytes();
-    // Use the node's persistent keypair for signing — events must be
-    // verifiable as originating from this node. Ephemeral keypairs would
-    // make signature verification meaningless.
-    let keypair = state.keypair.clone().ok_or_else(|| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "No persistent keypair configured"})),
-        )
-    })?;
-    let mut event = Event::genesis(node_id, Vec::new()).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": format!("Invalid event: {e}")})),
-        )
-    })?;
-    event.sign_with_keypair(&keypair).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
-        )
-    })?;
-
-    let shard_op = ShardOp::Economics(econ_op);
-
-    // Handle poisoned mutex gracefully instead of panicking.
-    let mut router = match state.shard_router.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            tracing::error!("shard_router mutex poisoned — recovering guard");
-            poisoned.into_inner()
-        }
-    };
-    match router.route(&event, shard_op) {
+    // Apply the operation directly to the shared AppState.economics
+    // instance. This fixes the dual-state disconnect.
+    //
+    // We pass `None` for `event_creator` — the economics state logs a
+    // warning for unauthenticated callers and applies weaker
+    // authorization checks (admin gating only). Production deployments
+    // should add a `caller_pubkey` field to ShardOperationRequest and
+    // populate it from the JWT subject claim so SpendUbc / Vote can
+    // verify the caller's DID matches.
+    let mut econ_state = state.economics.lock().await;
+    let current_epoch = econ_state.current_epoch();
+    match econ_state.apply(&econ_op, current_epoch, None) {
         Ok(()) => {
             tracing::info!(operation = %body.operation, "Economics operation processed successfully");
             Ok((
@@ -168,6 +160,7 @@ async fn handle_economics_op(
                     "status": "processed",
                     "shard_id": "economics",
                     "operation": body.operation,
+                    "note": "applied to local state only — multi-node propagation not yet wired",
                 })),
             ))
         }

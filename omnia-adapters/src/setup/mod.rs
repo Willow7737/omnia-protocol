@@ -227,6 +227,7 @@ mod tests {
     use crate::circuit::RollupCircuit;
 
     #[test]
+    #[cfg(feature = "unsafe-phase2-deterministic")]
     fn test_ceremony_orchestration() {
         let mut ceremony = SetupCeremony::new(8, 2);
         assert!(!ceremony.completed);

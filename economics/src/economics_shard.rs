@@ -132,6 +132,27 @@ impl EconomicsState {
         self.admin_keys.insert(key);
     }
 
+    /// Set the verifier public key used to authenticate useful-work proofs.
+    ///
+    /// Required before any `EconomicsOp::SubmitWork` can be accepted. The
+    /// previous implementation fell back to `[0u8; 32]` when this was
+    /// unset, which allowed forged work proofs (the all-zeros Ed25519
+    /// public key corresponds to a known secret key). Production
+    /// deployments MUST call this method before submitting work.
+    pub fn set_verifier_pubkey(&mut self, key: [u8; 32]) {
+        self.verifier_pubkey = Some(key);
+    }
+
+    /// Create a new economics state with the given verifier public key.
+    ///
+    /// Convenience constructor for production deployments that need to
+    /// accept useful-work proofs from day one.
+    pub fn with_verifier_pubkey(verifier_pubkey: [u8; 32]) -> Self {
+        let mut state = Self::new();
+        state.verifier_pubkey = Some(verifier_pubkey);
+        state
+    }
+
     /// Apply an economics operation, mutating state.
     ///
     /// # Arguments
@@ -212,22 +233,24 @@ impl EconomicsState {
                 }
                 proof.validate()?;
                 // SECURITY: Verify the work proof before accepting it.
-                // The verifier public key should be a well-known network parameter.
-                // TODO: Pass the actual verifier public key from network config
-                // rather than using a zeroed placeholder. This is safe for now
-                // because the `production` feature gate in `verify()` returns
-                // false (rejecting all proofs) until real ZK verification is
-                // implemented. In non-production mode, stub verification logs
-                // a warning.
-                // SECURITY: Use a configurable verifier public key. The all-zeros default
-                // allows any forged proof to pass — this MUST be overridden in production.
-                let verifier_pubkey = self.verifier_pubkey.unwrap_or_else(|| {
-                    tracing::error!(
-                        "No verifier public key configured — work proof verification is INSECURE. \
-                         Set a proper verifier key before deploying to production."
-                    );
-                    [0u8; 32]
-                });
+                // The verifier public key must be configured via EconomicsState
+                // construction. The previous implementation fell back to
+                // [0u8; 32] with only an `error!` log, which allowed an
+                // attacker to forge work proofs by signing with the secret
+                // key corresponding to the all-zeros Ed25519 public key.
+                //
+                // We now refuse to verify proofs when no verifier key is
+                // configured. Test code must explicitly set a verifier key
+                // (or use the `production` feature gate which rejects
+                // unsigned proofs entirely).
+                let verifier_pubkey = self.verifier_pubkey.ok_or_else(|| {
+                    EconomicsError::Unauthorized(
+                        "No verifier public key configured — work proof verification \
+                         refused. Configure a verifier key via EconomicsState construction \
+                         before submitting work."
+                            .into(),
+                    )
+                })?;
                 if !proof.verify(&verifier_pubkey) {
                     return Err(EconomicsError::WorkProofInvalid);
                 }

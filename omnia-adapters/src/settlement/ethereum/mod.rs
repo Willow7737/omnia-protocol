@@ -549,6 +549,37 @@ impl EthereumLiveClient {
     }
 }
 
+#[cfg(feature = "ethereum-live")]
+impl EthereumSettlementAdapter {
+    /// Verify a Groth16 proof against a `batch_merkle_root` that was
+    /// fetched from a trusted on-chain source (e.g. the contract's
+    /// `BatchDataHash` event or a `batchRoots(new_root)` mapping).
+    ///
+    /// SECURITY: this is the safe replacement for the
+    /// `SettlementAdapter::verify_proof` trait method when running in
+    /// Ethereum live mode. The trait method cannot safely derive the
+    /// `batch_merkle_root` from the prover's own proof bytes (a
+    /// malicious prover could craft proof bytes whose offset 192..224
+    /// matched the on-chain root, making the proof vacuously valid for
+    /// any (old_root, new_root) pair). Callers MUST fetch the
+    /// `batch_merkle_root` from the on-chain event log and pass it
+    /// here as a trusted parameter.
+    pub async fn verify_proof_with_root(
+        &self,
+        old_root: &[u8; 32],
+        new_root: &[u8; 32],
+        proof: &[u8],
+        batch_merkle_root: &[u8; 32],
+    ) -> Result<bool, SettlementError> {
+        if let Some(ref client) = self.live_client {
+            return client
+                .verify_proof_live(old_root, new_root, proof, batch_merkle_root)
+                .await;
+        }
+        Err(SettlementError::ConfigError("Live client not initialized".to_string()))
+    }
+}
+
 /// Helper: convert a byte slice of exactly 32 bytes into a fixed array.
 #[cfg(feature = "ethereum-live")]
 fn slice_to_array(slice: &[u8]) -> Result<[u8; 32], SettlementError> {
@@ -755,40 +786,45 @@ impl SettlementLayer for EthereumAdapter {
             EthereumMode::Live => {
                 #[cfg(feature = "ethereum-live")]
                 if let Some(ref client) = self.live_client {
-                    // C-3 fix (audit v0.1.68): Previously fabricated the
-                    // batch_merkle_root from old_root || new_root, making
-                    // the proof vacuously valid for any (old, new) pair.
+                    // SECURITY FIX (was C-3 audit note): the previous
+                    // implementation extracted `batch_merkle_root` from
+                    // `proof[192..224]` — i.e., from the prover's own
+                    // proof bytes. A malicious prover could fabricate any
+                    // (old_root, new_root) pair and craft proof bytes
+                    // whose offset 192..224 matched the on-chain root,
+                    // making the proof vacuously valid for any state
+                    // transition they wanted to "prove".
                     //
-                    // Now we use the batch_merkle_root from the ProofBundle
-                    // that was posted on-chain. The verifier fetches the
-                    // root from the contract's BatchDataHash event and
-                    // compares it. Since the SettlementLayer trait doesn't
-                    // pass the bundle, we compute the expected root from
-                    // the proof's public inputs (which include the real
-                    // batch_merkle_root as the third public input).
+                    // The Groth16 verification equation does NOT save us
+                    // here because the prover chooses the public inputs
+                    // (old_root, new_root, batch_merkle_root) and then
+                    // constructs the proof to satisfy the equation for
+                    // those inputs. The on-chain contract verifies the
+                    // equation but does NOT independently check that
+                    // `batch_merkle_root` matches an on-chain value
+                    // posted during `submit_root`.
                     //
-                    // The proof itself contains the batch_merkle_root as a
-                    // public input — the verifier checks that the proof's
-                    // public inputs match the on-chain values. If the root
-                    // was fabricated, the proof would fail verification
-                    // because the Groth16 verification equation binds the
-                    // public inputs to the proof.
+                    // Correct fix: the verifier must fetch the
+                    // `batch_merkle_root` from the on-chain
+                    // `BatchDataHash` event (or a `batchRoots(new_root)`
+                    // mapping) and pass it to `verify_proof_live` as a
+                    // trusted input — NOT extract it from the proof.
                     //
-                    // For now, we pass the root from the proof's public
-                    // input area (bytes 192..224 of the serialized proof
-                    // contain the third public input in the standard
-                    // Groth16 encoding). If the proof is too short, we
-                    // reject it.
-                    if proof.len() < 224 {
-                        return Err(SettlementError::ProofVerificationFailed(
-                            "Proof too short to contain batch_merkle_root public input".into(),
-                        ));
-                    }
-                    let mut batch_merkle_root = [0u8; 32];
-                    batch_merkle_root.copy_from_slice(&proof[192..224]);
-                    return client
-                        .verify_proof_live(old_root, new_root, proof, &batch_merkle_root)
-                        .await;
+                    // Since the `SettlementAdapter::verify_proof` trait
+                    // signature does not include the batch identifier or
+                    // batch_merkle_root, we fail-closed here and direct
+                    // callers to the explicit `verify_proof_with_root`
+                    // method, which takes the trusted root as a
+                    // parameter.
+                    let _ = (old_root, new_root, proof, client);
+                    return Err(SettlementError::ProofVerificationFailed(
+                        "Ethereum live verify_proof cannot safely derive batch_merkle_root \
+                         from the prover's own proof bytes — this would allow a malicious \
+                         prover to fabricate any (old_root, new_root) pair. \
+                         Use EthereumSettlementAdapter::verify_proof_with_root() and pass \
+                         the batch_merkle_root fetched from the on-chain BatchDataHash event."
+                            .into(),
+                    ));
                 }
 
                 #[cfg(not(feature = "ethereum-live"))]

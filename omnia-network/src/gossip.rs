@@ -428,6 +428,25 @@ impl GossipProtocol {
         silent_count * 3 > total
     }
 
+    /// Return the number of peers we have observed recently enough to
+    /// consider them "connected" for `/readyz` and node-info purposes.
+    ///
+    /// A peer is considered connected if it has been heard from within
+    /// the partition-detection threshold. This includes peers that sent
+    /// us gossip messages or that the network layer reported as
+    /// PeerConnected.
+    pub fn connected_peer_count(&self) -> usize {
+        if self.last_seen.is_empty() {
+            return 0;
+        }
+        let now = Instant::now();
+        let threshold = std::time::Duration::from_millis(self.config.partition_threshold_ms);
+        self.last_seen
+            .values()
+            .filter(|&&last| now.duration_since(last) <= threshold)
+            .count()
+    }
+
     /// Check for partition state changes and emit GossipEvents.
     ///
     /// Call this periodically (e.g., from the main run loop) to detect
