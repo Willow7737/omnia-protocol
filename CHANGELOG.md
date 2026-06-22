@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.73](https://github.com/Willow7737/omnia-protocol/compare/v0.1.72...v0.1.73) (2026-06-22)
+
+
+### Bug Fixes
+
+* **bench:** address 4 mentor review issues — governor verify, anomaly, ZK root-cause, gate output ([9ec7c31](https://github.com/Willow7737/omnia-protocol/commit/9ec7c3125c0f15a8d98b6c02c5d52391dfeb0d45))
+* **bench:** address 4 mentor review issues — governor verify, anomaly, ZK root-cause, gate output ([df53ec8](https://github.com/Willow7737/omnia-protocol/commit/df53ec878ddb60a735121409adb54452e297c768))
+* **bench:** fix baseline panic + false regression from partial-match ([63dfecb](https://github.com/Willow7737/omnia-protocol/commit/63dfecbd6e1e9769be9201831fa44fa5ab6051d3))
+* **chaos:** handle graph insert errors gracefully under message loss ([8ebaa71](https://github.com/Willow7737/omnia-protocol/commit/8ebaa7176754f366c7a623f49878e6061c7a8b82))
+
 ## [0.1.72](https://github.com/Willow7737/omnia-protocol/compare/v0.1.71...v0.1.72) (2026-06-21)
 
 
