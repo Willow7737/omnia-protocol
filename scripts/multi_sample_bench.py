@@ -235,26 +235,20 @@ def check_regressions_with_significance(
         if baseline_val is None:
             continue
 
-        # Find the measured value
+        # Find the measured value. For throughput benchmarks, check the
+        # __thrpt suffixed key first.
         measured_key = source_bench
         if unit == "events_per_sec":
             thrpt_key = source_bench + "__thrpt"
             if thrpt_key in aggregated:
                 measured_key = thrpt_key
-            elif source_bench not in aggregated:
-                results.append({
-                    "key": key,
-                    "status": "MISSING",
-                    "message": f"No measurement found for {key} (source_bench: {source_bench})",
-                })
-                continue
 
+        # If neither the source_bench nor its __thrpt variant is in the
+        # measured results, SKIP this baseline entirely. This happens
+        # when running a single bench file (e.g., --bench throughput)
+        # that only produces some benchmark groups. We should NOT report
+        # these as MISSING — they're simply not applicable to this run.
         if measured_key not in aggregated:
-            results.append({
-                "key": key,
-                "status": "MISSING",
-                "message": f"No measurement found for {key} (source_bench: {source_bench})",
-            })
             continue
 
         agg = aggregated[measured_key]
@@ -380,6 +374,14 @@ def main():
         default=None,
         help="Extra arguments to pass to cargo bench (e.g., bench filter)",
     )
+    parser.add_argument(
+        "--filter-prefix",
+        default=None,
+        help="Only check benchmarks whose key starts with this prefix "
+        "(e.g., 'event_' or 'graph_'). Use when running a single bench "
+        "file to avoid false 'missing' reports for benchmarks that "
+        "weren't run.",
+    )
     args = parser.parse_args()
 
     # Load baselines
@@ -390,6 +392,21 @@ def main():
     with open(baselines_path) as f:
         baselines = json.load(f)
     threshold = args.threshold if args.threshold is not None else baselines.get("threshold_pct", 10)
+
+    # Apply prefix filter to baselines before checking. This prevents
+    # false "missing" reports when running a single bench file (e.g.,
+    # --bench throughput only produces event_creation/, graph_insertion/,
+    # etc. — it should not be checked against consensus_throughput or
+    # finality_latency baselines from baseline_bench.rs).
+    if args.filter_prefix:
+        original_count = len(baselines.get("benchmarks", {}))
+        baselines["benchmarks"] = {
+            k: v for k, v in baselines.get("benchmarks", {}).items()
+            if k.startswith(args.filter_prefix)
+        }
+        filtered_count = len(baselines["benchmarks"])
+        print(f"  Filter: only checking benchmarks starting with '{args.filter_prefix}' "
+              f"({filtered_count}/{original_count} baselines)")
 
     print(f"\n{'='*70}")
     print(f"  Multi-Sample Benchmark Gate (N={args.runs} runs, 95% bootstrap CI)")

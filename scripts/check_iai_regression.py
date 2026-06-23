@@ -177,6 +177,18 @@ def main():
     if args.results_file:
         with open(args.results_file) as f:
             text = f.read()
+        # If the primary file has no parseable results, try the stderr
+        # file. iai-callgrind 0.13 may write benchmark output to stderr
+        # instead of stdout (the behavior changed between versions).
+        # The CI workflow redirects stderr to iai_stderr.txt.
+        if not parse_iai_output(text):
+            stderr_path = Path(args.results_file).parent / "iai_stderr.txt"
+            if stderr_path.exists():
+                with open(stderr_path) as f:
+                    stderr_text = f.read()
+                if parse_iai_output(stderr_text):
+                    print(f"::notice::IAI results found in {stderr_path.name} instead of {args.results_file}")
+                    text = stderr_text
     else:
         text = sys.stdin.read()
 

@@ -119,7 +119,12 @@ fn multi_node_throughput(c: &mut Criterion) {
     group.sample_size(10);
     group.throughput(Throughput::Elements(100)); // 100 events per iteration
 
-    for &n_nodes in &[3usize, 5, 7] {
+    // Only benchmark 3-node throughput in CI. The 5-node and 7-node
+    // variants take 56s and 391s respectively (per 2026-06-23 CI run),
+    // which exceeds the job timeout. The 3-node number is sufficient
+    // for regression detection — the scaling curve can be measured
+    // manually on a self-hosted runner.
+    for &n_nodes in &[3usize] {
         group.bench_with_input(BenchmarkId::new("n_nodes", n_nodes), &n_nodes, |b, &n| {
             b.iter_custom(|iters| {
                 let mut total = Duration::ZERO;
