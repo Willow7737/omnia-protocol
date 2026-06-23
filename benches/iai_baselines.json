@@ -1,0 +1,51 @@
+{
+  "_comment": "IAI-callgrind instruction-count baselines for hot-path functions. Unlike criterion (wall-clock time, subject to CPU frequency variance), iai-callgrind counts executed instructions, which are DETERMINISTIC for a given code path + compiler version + dependencies. A regression here means the code path executes more instructions than before — a real, non-noise signal. Updated 2026-06-23 from CI run 2026-06-22 (commit 0b66636, ubuntu-latest, valgrind 3.x, rustc 1.91.0).",
+  "_methodology": "These baselines were captured from a single CI run. Because iai-callgrind is deterministic, a single run is sufficient for a baseline (unlike criterion which needs statistical sampling). When the hot-path code changes, regenerate with: `cargo bench -p omnia-benches --bench hot_path_iai -- --save-baseline` and commit the updated .old files OR update this JSON. The Python gate script parses iai_output.txt and compares against these baselines.",
+  "version": "0.1.68",
+  "timestamp": "2026-06-22",
+  "environment": {
+    "os": "Linux (GitHub Actions ubuntu-latest, x86_64)",
+    "valgrind": "3.x (callgrind backend)",
+    "rustc": "1.91.0",
+    "profile": "release (lto=fat, codegen-units=1, strip=symbols)"
+  },
+  "_threshold_note": "IAI instruction counts are deterministic, so the threshold can be much tighter than criterion. We use 2% as the default — any change >2% in instruction count is almost certainly a real code-path change (not noise). Compiler version bumps may shift all numbers by a few %; in that case, regenerate baselines.",
+  "threshold_pct": 2,
+  "metrics": [
+    "Instructions",
+    "L1 Hits",
+    "L2 Hits",
+    "RAM Hits",
+    "Total read+write",
+    "Estimated Cycles"
+  ],
+  "benchmarks": {
+    "bench_vector_clock_merge_100": {
+      "description": "Vector clock merge with 100 nodes (deterministic instruction count)",
+      "Instructions": 186112,
+      "L1 Hits": 241876,
+      "L2 Hits": 11,
+      "RAM Hits": 506,
+      "Total read+write": 242393,
+      "Estimated Cycles": 259641
+    },
+    "bench_event_validate": {
+      "description": "Event creation + Ed25519 signature verification (deterministic instruction count)",
+      "Instructions": 817756,
+      "L1 Hits": 1116844,
+      "L2 Hits": 1043,
+      "RAM Hits": 1529,
+      "Total read+write": 1119416,
+      "Estimated Cycles": 1175574
+    },
+    "bench_causal_graph_insert": {
+      "description": "Causal graph insert (genesis + 1 child event, deterministic instruction count)",
+      "Instructions": 688049,
+      "L1 Hits": 957511,
+      "L2 Hits": 2088,
+      "RAM Hits": 1277,
+      "Total read+write": 960876,
+      "Estimated Cycles": 1012646
+    }
+  }
+}

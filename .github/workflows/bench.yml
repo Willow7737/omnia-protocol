@@ -28,14 +28,23 @@ on:
   workflow_dispatch:
     inputs:
       threshold:
-        description: 'Regression threshold % (default: 20)'
+        description: 'Regression threshold % (default: 10)'
         required: false
-        default: '20'
+        default: '10'
       run_zk:
         description: 'Run ZK benchmarks (slow, requires full feature)'
         required: false
         type: boolean
         default: true
+      run_multi_sample:
+        description: 'Run multi-sample significance gate (5 runs, 95% CI — slow)'
+        required: false
+        type: boolean
+        default: false
+      multi_sample_runs:
+        description: 'Number of runs for multi-sample gate (default: 5)'
+        required: false
+        default: '5'
 
 env:
   CARGO_TERM_COLOR: always
@@ -306,6 +315,26 @@ jobs:
           cargo bench -p omnia-benches --bench hot_path_iai 2>&1 | tee iai_output.txt
         continue-on-error: true  # iai-callgrind may fail in CI due to valgrind overhead
 
+      # ── IAI regression gate ─────────────────────────────────────────
+      # Unlike criterion (wall-clock time, subject to CPU frequency
+      # variance), iai-callgrind counts EXECUTED INSTRUCTIONS, which are
+      # DETERMINISTIC for a given code path + compiler version. A
+      # regression here is a real, non-noise signal. The threshold is 2%
+      # (vs 10% for criterion) because there is no noise to tolerate.
+      #
+      # The baselines live in benches/iai_baselines.json (committed to
+      # the repo, NOT cached) so the first run after a baseline update
+      # always has a comparison point. This fixes the "N/A on every run"
+      # problem that plagued the cache-based approach.
+      - name: IAI regression gate
+        if: always()
+        run: |
+          if [ ! -s iai_output.txt ]; then
+            echo "::warning::IAI output is empty — iai-callgrind may have failed. Skipping IAI gate."
+            exit 0
+          fi
+          python3 scripts/check_iai_regression.py iai_output.txt 2>&1 | tee iai_regression_gate.txt
+
       # ── Save IAI baselines for future runs ──────────────────────────
       # After a successful run, the .old files in target/iai/ become the
       # baseline for the next run. We save with the run_id-scoped key so
@@ -327,7 +356,81 @@ jobs:
           name: iai-callgrind-results
           path: |
             iai_output.txt
+            iai_regression_gate.txt
             target/iai/
+          retention-days: 30
+
+  # ── Multi-sample statistical significance gate ───────────────────
+  # Addresses mentor critique: single-sample point comparisons cannot
+  # distinguish "the code is faster" from "the runner was faster today."
+  # This job runs the criterion suite N times (default 5), computes a
+  # 95% bootstrap CI per benchmark, and only fails if the CI does NOT
+  # overlap the baseline AND the mean exceeds the threshold.
+  #
+  # This job is SLOW (5x the single-run cost) and runs only:
+  #   - On pushes to main (pre-merge validation)
+  #   - On manual workflow_dispatch with run_multi_sample=true
+  # Regular dev-branch pushes use the single-sample gate above.
+  multi-sample-bench:
+    name: Multi-Sample Significance Gate (N=5, 95% CI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: ${{ (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_multi_sample == 'true') }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: "1.91.0"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "omnia-bench-multi-${{ hashFiles('**/Cargo.lock') }}"
+
+      - name: Install gnuplot
+        run: sudo apt-get update && sudo apt-get install -y gnuplot
+
+      - name: Set CPU performance governor
+        run: |
+          if command -v cpupower &>/dev/null; then
+            sudo cpupower frequency-set -g performance || true
+          elif [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+            for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+              echo performance | sudo tee "$cpu" 2>/dev/null || true
+            done
+          fi
+        continue-on-error: true
+
+      # Run the multi-sample gate. The script wraps `cargo bench`,
+      # runs it --runs times, and applies the bootstrap CI test.
+      # Default N=5; override via workflow_dispatch input.
+      - name: Run multi-sample significance gate
+        run: |
+          python3 scripts/multi_sample_bench.py \
+            --runs ${{ github.event.inputs.multi_sample_runs || '5' }} \
+            --bench throughput \
+            --baselines benches/baselines.json \
+            --output multi_sample_results.txt 2>&1 | tee multi_sample_gate.txt
+
+      - name: Run multi-sample on baseline_bench (consensus + DAG + gossip)
+        run: |
+          python3 scripts/multi_sample_bench.py \
+            --runs ${{ github.event.inputs.multi_sample_runs || '5' }} \
+            --bench baseline_bench \
+            --baselines benches/baselines.json \
+            --output multi_sample_baseline_results.txt 2>&1 | tee -a multi_sample_gate.txt
+        continue-on-error: true  # baseline_bench may have flaky groups
+
+      - name: Upload multi-sample results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: multi-sample-results
+          path: |
+            multi_sample_gate.txt
+            multi_sample_results.txt
+            multi_sample_baseline_results.txt
           retention-days: 30
 
   update-baseline:
