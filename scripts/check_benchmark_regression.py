@@ -382,7 +382,7 @@ def main():
         print("::warning::No benchmark results could be parsed from input")
         # Still try to load baselines and report missing
         baselines = load_baselines(args.baselines)
-        threshold = args.threshold or baselines.get("threshold_pct", 20)
+        threshold = args.threshold or baselines.get("threshold_pct", 10)
         bench_defs = baselines.get("benchmarks", {})
         print(f"\nParsed 0 benchmark measurements from output.")
         print(f"Expected {len(bench_defs)} benchmarks from baselines.json.")
@@ -391,7 +391,7 @@ def main():
 
     # Load baselines
     baselines = load_baselines(args.baselines)
-    threshold = args.threshold or baselines.get("threshold_pct", 20)
+    threshold = args.threshold or baselines.get("threshold_pct", 10)
 
     # Check regressions
     results = check_regressions(measured, baselines, threshold)
@@ -472,7 +472,25 @@ def main():
         sys.exit(1)
 
     if missing_count > 0:
-        print("::warning::Some benchmarks were not measured — results may be incomplete")
+        total = ok_count + regression_count + missing_count + skip_count
+        # Fail CI if more than half the benchmarks are missing. The previous
+        # behavior was to emit only a ::warning:: (which GitHub Actions
+        # surfaces as a yellow exclamation mark but does NOT fail the job).
+        # A green checkmark with 8/10 metrics missing is a false verdict.
+        # The 50% threshold accommodates expected partial-output cases
+        # (e.g., ZK benchmarks gated behind a feature flag, runner crashes
+        # that produce half the output) while catching the degenerate case
+        # where most of the gate is unmeasured.
+        if total > 0 and missing_count * 2 > total:
+            print(
+                f"::error::Benchmark regression gate FAILED — {missing_count}/{total} "
+                f"benchmarks missing (>50%). The gate cannot produce a meaningful "
+                f"verdict with most metrics unmeasured. Check the benchmark output "
+                f"for crashes, timeouts, or feature-flag mismatches."
+            )
+            sys.exit(1)
+        else:
+            print(f"::warning::Some benchmarks were not measured ({missing_count}/{total}) — results may be incomplete")
 
     if skip_count > 0:
         print(f"::notice::{skip_count} benchmark(s) excluded from gate (see baselines.json 'gated': false) — reported informatively only")

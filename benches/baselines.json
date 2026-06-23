@@ -1,6 +1,7 @@
 {
   "_comment": "Baseline performance values from v0.1.68 (2026-06-07). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated ZK baselines to reflect actual expanded circuit performance (100 events, merkle_depth=8).",
   "_caveat": "ALL baselines are SINGLE-NODE SYNTHETIC measurements. They do NOT reflect real-world multi-node distributed performance. Consensus throughput (7K-12K ops/s) assumes trivial single-node finality (total_nodes=1 or 3 with no network). Finality latency (~24 µs) and gossip propagation (~25 µs) measure create→serialize→deserialize→insert on one machine with no network I/O. Real-world deployments will see 100-1000x higher latency due to network round-trips, BFT supermajority waiting, and ZK proof generation overhead. These numbers are useful for detecting regressions in the hot path, NOT for capacity planning.",
+  "_gating_strategy": "Updated 2026-06-23: the benchmark gate now has THREE layers, each addressing a different variance source: (1) IAI-callgrind gate (benches/iai_baselines.json) — DETERMINISTIC instruction counts, 2% threshold on shared runners, 1% on self-hosted. This is the primary regression signal — if IAI regresses, the code path genuinely changed. (2) Multi-sample criterion gate (scripts/multi_sample_bench.py) — runs N=5 times on shared runners (N=10 on self-hosted), computes 95% bootstrap CI, only fails if CI does NOT overlap baseline AND mean exceeds threshold. This filters out single-run noise. (3) Single-sample criterion gate (scripts/check_benchmark_regression.py) — fast, runs on every push, but with wider thresholds to avoid false positives from runner variance. The thresholds below are for layer (3). Layers (1) and (2) have their own thresholds (2% and 5% respectively on self-hosted).",
   "version": "0.1.68",
   "timestamp": "2026-06-07",
   "environment": {
@@ -10,17 +11,17 @@
     "rustc": "1.91.0",
     "profile": "release (lto=fat, codegen-units=1, strip=symbols)"
   },
-  "threshold_pct": 25,
+  "threshold_pct": 10,
   "benchmarks": {
     "consensus_throughput": {
       "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O — NOT representative of real-world multi-node throughput)",
       "unit": "events_per_sec",
-      "baseline": 10000,
+      "baseline": 12000,
       "direction": "higher_is_better",
       "source_bench": "tx_throughput/sustained_tps_single_node",
       "gated": true,
-      "threshold_pct": 40,
-      "gated_reason": "Updated 2026-06-21: baseline raised from 7000 to 10000 ops/s. The stale 7000 baseline (set 2026-06-07) was making the gate decorative — current measurements consistently range 11,900-15,400 ops/s, so a regression from 15,000 to 5,000 would have passed with a green checkmark (+43% above baseline). The new 10,000 baseline with the 40% threshold means the gate fails at <6,000 ops/s, catching catastrophic regressions while accommodating the ±30% CI runner variance. Re-gated with per-benchmark threshold of 40% (vs the default 25%). GitHub Actions ubuntu-latest runners have ±30% inter-run CPU variance (heterogeneous Intel/AMD generations, 2.7-3.8 GHz clock range). For production-grade gating, move to a self-hosted runner with stable CPU affinity and reduce the threshold to 15-20%."
+      "threshold_pct": 15,
+      "gated_reason": "Updated 2026-06-23 per mentor review: baseline raised from 10000 to 12000 ops/s (measured value 12583 in 2026-06-22 CI run) and threshold tightened from 40% to 15%. The previous 10000/40% combo was decorative — a real-world 60% regression to 5000 ops/s would still pass (+125% above baseline). At 12000/15%, the gate fails at <10200 ops/s, catching meaningful regressions. The 15% threshold accommodates GitHub Actions runner variance (Intel/AMD heterogeneous, 2.7-3.8 GHz clock range — observed ±20% inter-run variance). For production-grade gating, move to a self-hosted runner with stable CPU affinity and reduce to 8-10%."
     },
     "finality_latency_mean": {
       "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99. For true tail percentiles, post-process the JSON 'samples' array or implement a custom Measurement harness. Renamed 2026-06-21 from 'finality_latency_p99' which was misleading (the number was always a mean, never a percentile).",
@@ -51,8 +52,8 @@
       "baseline": 2500000,
       "direction": "lower_is_better",
       "source_bench": "groth16_proof_generation/basic_circuit",
-      "threshold_pct": 30,
-      "note": "Updated 2026-06-19: source_bench was 'zk_proof_gen/1_tx_batch' (from baseline_bench.rs, which runs under --features full with continue-on-error and frequently times out before reaching the ZK group). Now points to 'groth16_proof_generation/basic_circuit' from zk_benchmarks.rs, which is the same Groth16 basic-circuit proof generation and runs reliably in the standalone ZK benchmark step. Threshold raised from 25% to 30% on 2026-06-21: the Groth16 prover performs large FFT/polynomial allocations whose timing depends on allocator state (fragmentation, prior frees). Run-to-run variance of ~10% is expected even on the same code. The 30% threshold accommodates this while still catching real regressions. Mentor review observed a trend: 2.50ms → 2.88ms → 3.11ms (24.4% total). This may be runner variance or a real slow drift; 5+ runs on a dedicated machine are needed to distinguish. If the trend continues past 30%, investigate arkworks version bumps or allocator changes."
+      "threshold_pct": 20,
+      "note": "Updated 2026-06-23 per mentor review: threshold tightened from 30% to 20%. Mentor observed the previous 30% threshold allowed a 2.50ms → 3.11ms drift (24.4%) to pass undetected. The 20% threshold catches real regressions while accommodating Groth16 allocator-state variance (~10% observed run-to-run). The ZK gate is now enforced (no longer || true in CI) so this threshold actually matters. For production-grade ZK benchmarking, use a dedicated machine with jemalloc or mimalloc and pinned CPU affinity to reduce variance to <3%, then tighten to 10%."
     },
     "zk_proof_gen_expanded_100": {
       "description": "ZK proof generation (Groth16 expanded circuit, 100 tx batch, merkle_depth=8)",
@@ -60,8 +61,8 @@
       "baseline": 8000000000,
       "direction": "lower_is_better",
       "source_bench": "zk_proof_gen/100_tx_batch",
-      "threshold_pct": 30,
-      "note": "Renamed 2026-06-19 from 'zk_proof_gen_expanded_4' — the '_4' suffix was misleading (the benchmark uses 100 events, not 4). Updated from 317M ns — expanded circuit with 100 events and merkle_depth=8 genuinely takes ~7.9s. Previous baseline was for a smaller circuit. Threshold raised from 25% to 30% on 2026-06-21: mentor review observed 11.5% run-to-run variance (7.78s → 8.67s) on the same code. At the 8-second scale, the Groth16 prover's memory allocation pattern (large FFT buffers, polynomial evaluations) is the dominant non-deterministic factor. The system allocator's behavior varies based on prior allocation state, producing ~10% timing variance. For production-grade ZK benchmarking, use a dedicated machine with jemalloc or mimalloc and pinned CPU affinity to reduce variance to <3%."
+      "threshold_pct": 20,
+      "note": "Updated 2026-06-23 per mentor review: threshold tightened from 30% to 20%. Mentor observed 11.5% run-to-run variance (7.78s → 8.67s) on the same code at the 8-second scale. The 20% threshold provides headroom for allocator variance while catching real regressions. The ZK gate is now enforced (no longer || true in CI). For production-grade ZK benchmarking, use a dedicated machine with jemalloc or mimalloc and pinned CPU affinity to reduce variance to <3%, then tighten to 10%."
     },
     "deterministic_compute": {
       "description": "Deterministic hash-based leader selection compute latency (NOT a VRF — see ADR-012)",
