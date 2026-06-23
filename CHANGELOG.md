@@ -9,6 +9,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.76](https://github.com/Willow7737/omnia-protocol/compare/v0.1.75...v0.1.76) (2026-06-23)
+
+
+### Features
+
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([38513ae](https://github.com/Willow7737/omnia-protocol/commit/38513aee136c6636026ad8c55c31b522a39dbdc9))
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([fb8231a](https://github.com/Willow7737/omnia-protocol/commit/fb8231aa83067e939f659a1048bc7a99d731ca96))
+
 ## [0.1.75](https://github.com/Willow7737/omnia-protocol/compare/v0.1.74...v0.1.75) (2026-06-23)
 
 
