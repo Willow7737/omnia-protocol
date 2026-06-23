@@ -9,6 +9,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.75](https://github.com/Willow7737/omnia-protocol/compare/v0.1.74...v0.1.75) (2026-06-23)
+
+
+### Features
+
+* **bench:** 3-layer benchmark gate — IAI + multi-sample + self-hosted runner ([a4de84a](https://github.com/Willow7737/omnia-protocol/commit/a4de84ae82f2f681c88d635e8f2a8c0bdf8c2d22))
+* **bench:** 3-layer benchmark gate — IAI + multi-sample + self-hosted runner ([519c370](https://github.com/Willow7737/omnia-protocol/commit/519c370272bb389560852c534eeecde6f005674e))
+
+
+### Bug Fixes
+
+* **ci+mentor:** address benchmark gate critique and compilation error ([0b66636](https://github.com/Willow7737/omnia-protocol/commit/0b666365e83984c835146cb8b6438fae7e7fde3d))
+
 ## [0.1.74](https://github.com/Willow7737/omnia-protocol/compare/v0.1.73...v0.1.74) (2026-06-22)
 
 
