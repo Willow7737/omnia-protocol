@@ -4694,6 +4694,7 @@ dependencies = [
  "iai-callgrind",
  "omnia-adapters",
  "omnia-binding",
+ "omnia-chaos-tests",
  "omnia-consensus",
  "omnia-crypto",
  "omnia-economics",

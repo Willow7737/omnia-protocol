@@ -92,6 +92,49 @@
       "baseline": 25180,
       "direction": "lower_is_better",
       "source_bench": "graph_insertion/insert_chain"
+    },
+    "network_sim_finality_3_node": {
+      "description": "Multi-node finality latency (3 nodes, in-process sim — includes gossip + BFT voting, NOT real network). This is the closest synthetic approximation of 'real consensus latency' without TCP/UDP I/O. Real-world latency will be 10-100x higher.",
+      "unit": "ns",
+      "baseline": 500000,
+      "direction": "lower_is_better",
+      "source_bench": "network_sim/finality_latency/n_nodes/3",
+      "threshold_pct": 25,
+      "note": "Added 2026-06-23 per mentor review: single-node benchmarks cannot produce performance claims suitable for documentation. This benchmark measures the FULL consensus pipeline (event creation → gossip → peer receipt → graph insert → consensus → finality) across 3 nodes. The 25% threshold accommodates ChaosNetwork's non-deterministic event ordering (round-robin submit with per-round sync). Baseline is a conservative placeholder — first CI run will establish the real number."
+    },
+    "network_sim_finality_5_node": {
+      "description": "Multi-node finality latency (5 nodes, in-process sim — includes gossip + BFT voting). Measures how finality latency scales with node count.",
+      "unit": "ns",
+      "baseline": 800000,
+      "direction": "lower_is_better",
+      "source_bench": "network_sim/finality_latency/n_nodes/5",
+      "threshold_pct": 25
+    },
+    "network_sim_throughput_3_node": {
+      "description": "Multi-node sustained throughput (3 nodes, 100 events, in-process sim). This is the 'real TPS' number for the consensus system — includes cross-node contention and BFT voting overhead.",
+      "unit": "events_per_sec",
+      "baseline": 500,
+      "direction": "higher_is_better",
+      "source_bench": "network_sim/throughput/n_nodes/3",
+      "threshold_pct": 25,
+      "note": "Baseline is conservative. Single-node throughput is ~12000 ops/s; multi-node will be 10-50x lower due to per-event gossip + consensus rounds."
+    },
+    "network_sim_partition_recovery": {
+      "description": "Partition recovery latency (5 nodes, 10-round partition, heal → first finality). Measures the sync/recovery path after a network partition heals.",
+      "unit": "ns",
+      "baseline": 1000000,
+      "direction": "lower_is_better",
+      "source_bench": "network_sim/partition_recovery/5_node_partition_heal",
+      "threshold_pct": 30,
+      "note": "Higher threshold (30%) because partition recovery involves non-deterministic event exchange order."
+    },
+    "network_sim_crash_recovery": {
+      "description": "Crash recovery latency (5 nodes, crash node 0, restart → catch up). Measures the genesis-replay / fast-sync path.",
+      "unit": "ns",
+      "baseline": 1500000,
+      "direction": "lower_is_better",
+      "source_bench": "network_sim/crash_recovery/5_node_crash_restart",
+      "threshold_pct": 30
     }
   }
 }
