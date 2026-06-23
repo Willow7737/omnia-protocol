@@ -68,8 +68,20 @@ fn bench_groth16_proof_generation(c: &mut Criterion) {
         })
     });
 
-    // Expanded circuit with different batch sizes
-    for &num_events in &[1, 4, 16] {
+    // Expanded circuit with different batch sizes.
+    //
+    // This is the PROPER scaling curve — same circuit type at different
+    // batch sizes. The per-event cost should DECREASE as batch size
+    // increases (amortization of fixed prover overhead). See
+    // docs/benchmarks/zk-scaling-analysis.md for why comparing these
+    // numbers to basic_circuit is not meaningful.
+    //
+    // NOTE: 100 events takes ~8s per iteration. With sample_size(10)
+    // and measurement_time(30s), criterion will run 3-4 iterations of
+    // the 100-event bench, which is enough for a point estimate but
+    // not for tight statistics. For production-grade scaling analysis,
+    // run on a self-hosted runner with --sample-size 30.
+    for &num_events in &[1, 4, 16, 100] {
         let merkle_depth = 8;
         let (pk, _vk) = generate_trusted_setup_expanded(num_events, merkle_depth).expect("expanded setup failed");
 

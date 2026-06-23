@@ -365,7 +365,20 @@ def main():
         "--threshold",
         type=float,
         default=None,
-        help="Override regression threshold (percentage, default: from baselines.json or 20)",
+        help="Override regression threshold (percentage, default: from baselines.json or 10)",
+    )
+    parser.add_argument(
+        "--zk-only",
+        action="store_true",
+        help="Only check ZK benchmarks (keys starting with 'zk_'). Use when "
+        "processing ZK-only criterion output to avoid false 'missing' reports "
+        "for non-ZK benchmarks that weren't run.",
+    )
+    parser.add_argument(
+        "--filter-prefix",
+        default=None,
+        help="Only check benchmarks whose key starts with this prefix "
+        "(e.g., 'zk_' or 'gossip_'). Generalization of --zk-only.",
     )
     args = parser.parse_args()
 
@@ -393,6 +406,23 @@ def main():
     baselines = load_baselines(args.baselines)
     threshold = args.threshold or baselines.get("threshold_pct", 10)
 
+    # Apply ZK-only or prefix filter to baselines before checking.
+    # This prevents false "missing" reports when processing a partial
+    # criterion output (e.g., ZK-only output shouldn't be checked
+    # against consensus/latency baselines).
+    filter_prefix = args.filter_prefix
+    if args.zk_only:
+        filter_prefix = "zk_"
+    if filter_prefix:
+        original_count = len(baselines.get("benchmarks", {}))
+        baselines["benchmarks"] = {
+            k: v for k, v in baselines.get("benchmarks", {}).items()
+            if k.startswith(filter_prefix)
+        }
+        filtered_count = len(baselines["benchmarks"])
+        print(f"  Filter: only checking benchmarks starting with '{filter_prefix}' "
+              f"({filtered_count}/{original_count} baselines)")
+
     # Check regressions
     results = check_regressions(measured, baselines, threshold)
 
@@ -400,6 +430,8 @@ def main():
     print(f"\n{'='*70}")
     print(f"  Benchmark Regression Gate Report (threshold: {threshold}%)")
     print(f"  Baseline version: {baselines.get('version', 'unknown')}")
+    if filter_prefix:
+        print(f"  Filter: {filter_prefix}*")
     print(f"{'='*70}\n")
 
     ok_count = 0
