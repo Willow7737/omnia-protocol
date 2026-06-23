@@ -381,16 +381,16 @@ jobs:
       - name: Run iai-callgrind benchmarks
         run: |
           # Build first (separately) so compilation output doesn't
-          # pollute the IAI benchmark output. iai-callgrind writes
-          # benchmark results to stdout, but `cargo bench 2>&1` merges
-          # stderr (compilation warnings, progress) into stdout, which
-          # can confuse the parser.
+          # pollute the IAI benchmark output.
           cargo bench -p omnia-benches --bench hot_path_iai --no-run 2>&1 | tail -5
 
-          # Run the benchmarks. Only capture stdout (where iai-callgrind
-          # writes results). Redirect stderr to a separate file for
-          # debugging if the run fails.
-          cargo bench -p omnia-benches --bench hot_path_iai 2>iai_stderr.txt | tee iai_output.txt
+          # Run the benchmarks. Capture BOTH stdout and stderr into
+          # iai_output.txt — iai-callgrind 0.13 writes benchmark results
+          # to stderr (not stdout), so `2>iai_stderr.txt | tee` would
+          # capture an empty file. The parser is robust enough to handle
+          # mixed output (it only matches lines with the IAI metric
+          # pattern and bench name pattern, ignoring cargo noise).
+          cargo bench -p omnia-benches --bench hot_path_iai 2>&1 | tee iai_output.txt
         continue-on-error: true  # iai-callgrind may fail in CI due to valgrind overhead
 
       # ── IAI regression gate ─────────────────────────────────────────
