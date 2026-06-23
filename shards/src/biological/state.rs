@@ -160,6 +160,7 @@ impl BiologicalState {
                 #[cfg(feature = "real_verification")]
                 {
                     use ark_bn254::Bn254;
+                    use ark_ff::fields::Field;
                     use ark_groth16::Groth16;
                     use ark_serialize::CanonicalDeserialize;
                     use ark_snark::SNARK;
@@ -246,15 +247,21 @@ impl BiologicalState {
                     pub_input_preimage.extend_from_slice(subject);
                     pub_input_preimage.extend_from_slice(consumer);
                     let pub_input_hash = blake3::hash(&pub_input_preimage);
-                    // Reduce the 32-byte hash to a BN254 scalar via
-                    // little-endian bytes → field element. ark_ff's
-                    // from_random_bytes performs a safe reduction.
-                    let pub_input_fr = ark_bn254::Fr::from_random_bytes(&pub_input_hash.as_bytes()[..]);
+
+                    // Reduce the 32-byte BLAKE3 hash to a BN254 scalar.
+                    // `Field::from_random_bytes` performs a safe modular
+                    // reduction from arbitrary-length bytes to a field
+                    // element. The result is non-zero with overwhelming
+                    // probability for any non-degenerate (subject, consumer)
+                    // pair (BLAKE3 outputs look uniformly random).
+                    let hash_bytes = pub_input_hash.as_bytes();
+                    let pub_input_fr = ark_bn254::Fr::from_random_bytes(hash_bytes)
+                        .expect("non-zero BLAKE3 hash always reduces to a valid Fr element");
                     let public_inputs: Vec<ark_bn254::Fr> = vec![pub_input_fr];
 
-                    // Empty public inputs were the original bypass —
-                    // explicitly reject them as a defense-in-depth check
-                    // in case the above derivation ever regresses.
+                    // Defense-in-depth: the construction above guarantees
+                    // a single non-empty public input. Explicitly reject
+                    // empty inputs in case the derivation ever regresses.
                     if public_inputs.is_empty() {
                         tracing::error!(
                             subject = ?&subject[..4],
@@ -272,16 +279,16 @@ impl BiologicalState {
                                 consumer = ?&consumer[..4],
                                 "Real ZK verification: biological proof verified successfully"
                             );
-                            return Ok(());
+                            Ok(())
                         }
                         Ok(false) => {
                             tracing::warn!(
                                 subject = ?&subject[..4],
                                 "Real ZK verification: biological proof is invalid"
                             );
-                            return Err(ShardError::ValidationFailed(
+                            Err(ShardError::ValidationFailed(
                                 "ZK proof verification failed: proof is invalid".into(),
-                            ));
+                            ))
                         }
                         Err(e) => {
                             tracing::warn!(
@@ -289,9 +296,9 @@ impl BiologicalState {
                                 error = %e,
                                 "Real ZK verification: biological verification error"
                             );
-                            return Err(ShardError::ValidationFailed(format!(
+                            Err(ShardError::ValidationFailed(format!(
                                 "ZK proof verification failed: {e}"
-                            )));
+                            )))
                         }
                     }
                 }
@@ -302,15 +309,6 @@ impl BiologicalState {
                     let _ = zk_proof; // suppress unused warning
                     Err(ShardError::ValidationFailed(
                         "ZK proof verification requires 'real_verification' feature to be enabled".into(),
-                    ))
-                }
-
-                // When real_verification is enabled but proof didn't match expected layout
-                #[cfg(feature = "real_verification")]
-                {
-                    Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: proof does not match expected layout for real verification"
-                            .into(),
                     ))
                 }
             }
@@ -381,8 +379,11 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification") || msg.contains("expected layout"),
-                    "expected real_verification or layout error, got: {msg}"
+                    msg.contains("real_verification")
+                        || msg.contains("expected layout")
+                        || msg.contains("too short")
+                        || msg.contains("layout invalid"),
+                    "expected real_verification, layout, or too-short error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
@@ -425,8 +426,11 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification") || msg.contains("expected layout"),
-                    "expected real_verification or layout error, got: {msg}"
+                    msg.contains("real_verification")
+                        || msg.contains("expected layout")
+                        || msg.contains("too short")
+                        || msg.contains("layout invalid"),
+                    "expected real_verification, layout, or too-short error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),

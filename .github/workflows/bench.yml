@@ -206,12 +206,21 @@ jobs:
         continue-on-error: true
 
       # ── Regression gate for ZK benchmarks only ──────────────────────
+      # SECURITY FIX (mentor review 2026-06-23): removed `|| true` so the
+      # ZK gate can actually fail CI. The previous behavior made the gate
+      # decorative — any regression, no matter how severe, was masked by
+      # the `|| true` shell short-circuit. The per-benchmark thresholds in
+      # baselines.json (20% for ZK) accommodate the ~10-15% allocator-state
+      # variance inherent to Groth16 proof generation while still catching
+      # real regressions. If the ZK benchmarks produce partial output (e.g.,
+      # feature-flag mismatch), the regression script's >50%-missing check
+      # will fail CI with a clear error message.
       - name: Check ZK benchmark regressions
         run: |
           python3 scripts/check_benchmark_regression.py \
             --baselines benches/baselines.json \
             ${{ github.event.inputs.threshold != '' && format('--threshold {0}', github.event.inputs.threshold) || '' }} \
-            zk_criterion_output.txt 2>&1 | tee zk_regression_gate.txt || true  # ZK benchmarks have high variance; informational only
+            zk_criterion_output.txt 2>&1 | tee zk_regression_gate.txt
 
       - name: Upload ZK criterion results
         if: always()
@@ -262,13 +271,35 @@ jobs:
       # prior baseline, IAI reports N/A for all comparisons (no regression
       # signal). This step restores the baseline from the previous run's
       # cache so IAI can compare against it.
+      #
+      # FIX (mentor review 2026-06-23): the previous save key included
+      # `${{ github.sha }}`, which created a new cache entry per commit.
+      # GitHub Actions cache save SKIPS when an exact-match key already
+      # exists — but since the key was SHA-specific, every commit was a
+      # cache miss on save, and the restore-keys prefix fallback only
+      # found the MOST RECENT SHA-keyed cache (which may have been from
+      # a different branch with stale baselines).
+      #
+      # The correct pattern (per actions/cache docs) is:
+      #   - Restore with a broad prefix (restore-keys) to find the most
+      #     recent baseline from any prior run on this OS+job.
+      #   - Save with a key that includes run_id (monotonically
+      #     increasing per workflow run) so each run gets its own cache
+      #     entry. This avoids the "cache already exists, skip save"
+      #     problem while still allowing the next run to find this run's
+      #     baselines via the prefix fallback.
+      #
+      # The run_id-scoped key means the cache grows by one entry per run,
+      # but GitHub auto-evicts old entries (LRU, 7-day TTL, 10GB limit).
+      # The important property is that the NEXT run always finds the
+      # PREVIOUS run's baselines.
       - name: Restore IAI baselines
         uses: actions/cache@v4
         with:
           path: target/iai/
-          key: iai-baselines-${{ runner.os }}-${{ github.job }}
+          key: iai-baselines-${{ runner.os }}-${{ github.job }}-${{ github.run_id }}
           restore-keys: |
-            iai-baselines-${{ runner.os }}-${{ github.job }}
+            iai-baselines-${{ runner.os }}-${{ github.job }}-
 
       - name: Run iai-callgrind benchmarks
         run: |
@@ -277,14 +308,17 @@ jobs:
 
       # ── Save IAI baselines for future runs ──────────────────────────
       # After a successful run, the .old files in target/iai/ become the
-      # baseline for the next run. The cache action automatically saves
-      # the path on job success.
+      # baseline for the next run. We save with the run_id-scoped key so
+      # the cache action always writes a new entry (no skip-on-exact-match).
+      # The `always()` condition ensures baselines are saved even if the
+      # bench step failed (continue-on-error), because partial baselines
+      # are still better than no baselines for the next run.
       - name: Save IAI baselines
         if: always()
         uses: actions/cache/save@v4
         with:
           path: target/iai/
-          key: iai-baselines-${{ runner.os }}-${{ github.job }}-${{ github.sha }}
+          key: iai-baselines-${{ runner.os }}-${{ github.job }}-${{ github.run_id }}
 
       - name: Upload iai results
         if: always()
