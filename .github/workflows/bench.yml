@@ -380,7 +380,17 @@ jobs:
 
       - name: Run iai-callgrind benchmarks
         run: |
-          cargo bench -p omnia-benches --bench hot_path_iai 2>&1 | tee iai_output.txt
+          # Build first (separately) so compilation output doesn't
+          # pollute the IAI benchmark output. iai-callgrind writes
+          # benchmark results to stdout, but `cargo bench 2>&1` merges
+          # stderr (compilation warnings, progress) into stdout, which
+          # can confuse the parser.
+          cargo bench -p omnia-benches --bench hot_path_iai --no-run 2>&1 | tail -5
+
+          # Run the benchmarks. Only capture stdout (where iai-callgrind
+          # writes results). Redirect stderr to a separate file for
+          # debugging if the run fails.
+          cargo bench -p omnia-benches --bench hot_path_iai 2>iai_stderr.txt | tee iai_output.txt
         continue-on-error: true  # iai-callgrind may fail in CI due to valgrind overhead
 
       # ── IAI regression gate ─────────────────────────────────────────
@@ -424,6 +434,7 @@ jobs:
           name: iai-callgrind-results
           path: |
             iai_output.txt
+            iai_stderr.txt
             iai_regression_gate.txt
             target/iai/
           retention-days: 30
@@ -473,22 +484,28 @@ jobs:
       # Run the multi-sample gate. The script wraps `cargo bench`,
       # runs it --runs times, and applies the bootstrap CI test.
       # Default N=5; override via workflow_dispatch input.
-      - name: Run multi-sample significance gate
+      #
+      # We run BOTH bench files (throughput + baseline_bench) so the
+      # multi-sample gate checks all applicable baselines. Each run
+      # only checks baselines whose source_bench was actually measured
+      # (the script skips baselines not produced by the current bench
+      # file, rather than reporting them as MISSING).
+      - name: Run multi-sample significance gate (throughput)
         run: |
           python3 scripts/multi_sample_bench.py \
             --runs ${{ github.event.inputs.multi_sample_runs || '5' }} \
             --bench throughput \
             --baselines benches/baselines.json \
-            --output multi_sample_results.txt 2>&1 | tee multi_sample_gate.txt
+            --output multi_sample_throughput_results.txt 2>&1 | tee multi_sample_gate.txt
+        continue-on-error: true  # Don't fail the job yet — baseline_bench runs next
 
-      - name: Run multi-sample on baseline_bench (consensus + DAG + gossip)
+      - name: Run multi-sample significance gate (baseline_bench)
         run: |
           python3 scripts/multi_sample_bench.py \
             --runs ${{ github.event.inputs.multi_sample_runs || '5' }} \
             --bench baseline_bench \
             --baselines benches/baselines.json \
             --output multi_sample_baseline_results.txt 2>&1 | tee -a multi_sample_gate.txt
-        continue-on-error: true  # baseline_bench may have flaky groups
 
       - name: Upload multi-sample results
         if: always()
