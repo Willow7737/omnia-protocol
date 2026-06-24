@@ -25,6 +25,17 @@ import sys
 from pathlib import Path
 
 
+# ANSI escape code pattern. iai-callgrind 0.13 outputs color codes
+# (ESC [ ... m) even when stdout is piped. These must be stripped
+# before parsing or the regex won't match metric values.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m|\x1b")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    return ANSI_ESCAPE.sub("", text)
+
+
 def parse_iai_output(text: str) -> dict[str, dict[str, int]]:
     """Parse iai-callgrind text output.
 
@@ -43,7 +54,11 @@ def parse_iai_output(text: str) -> dict[str, dict[str, int]]:
     current_bench = None
 
     for line in text.splitlines():
-        stripped = line.strip()
+        # Strip ANSI escape codes — iai-callgrind 0.13 outputs color
+        # codes (ESC[0m etc.) even when piped. Without this, the regex
+        # won't match because ESC characters are embedded between the
+        # metric name, the number, and the pipe.
+        stripped = strip_ansi(line).strip()
         if not stripped:
             continue
 
