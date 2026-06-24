@@ -407,15 +407,6 @@ jobs:
       - name: IAI regression gate
         if: always()
         run: |
-          echo "=== iai_output.txt size ==="
-          wc -c iai_output.txt 2>/dev/null || echo "FILE NOT FOUND"
-          echo "=== iai_output.txt first 20 lines ==="
-          head -20 iai_output.txt 2>/dev/null || echo "CANNOT READ FILE"
-          echo "=== iai_output.txt last 20 lines ==="
-          tail -20 iai_output.txt 2>/dev/null || echo "CANNOT READ FILE"
-          echo "=== iai_stderr.txt size ==="
-          wc -c iai_stderr.txt 2>/dev/null || echo "NO STDERR FILE"
-          echo "=== Running IAI gate ==="
           if [ ! -s iai_output.txt ]; then
             echo "::warning::IAI output is empty — iai-callgrind may have failed. Skipping IAI gate."
             exit 0

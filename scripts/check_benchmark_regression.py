@@ -17,6 +17,16 @@ import os
 from pathlib import Path
 
 
+# ANSI escape code pattern. Both criterion and iai-callgrind output
+# color codes even when piped. These must be stripped before parsing.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m|\x1b")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    return ANSI_ESCAPE.sub("", text)
+
+
 def parse_time_value(s: str) -> float:
     """Parse a time string like '17.610 µs' or '1.73 ms' or '389.30 ns' into nanoseconds."""
     s = s.strip()
@@ -47,7 +57,7 @@ def parse_criterion_output(text: str) -> dict[str, float]:
     current_bench = None
 
     for line in text.splitlines():
-        line_stripped = line.strip()
+        line_stripped = strip_ansi(line).strip()
         if not line_stripped:
             continue
 
