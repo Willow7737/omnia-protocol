@@ -408,13 +408,6 @@ jobs:
       - name: IAI regression gate
         if: always()
         run: |
-          echo "=== File size ==="
-          wc -c iai_output.txt 2>/dev/null || echo "FILE NOT FOUND"
-
-          echo "=== Hex dump of first 200 bytes (to check for ANSI/ESC chars) ==="
-          head -c 200 iai_output.txt | xxd | head -20
-
-          echo "=== Running gate ==="
           if [ ! -s iai_output.txt ]; then
             echo "::warning::IAI output is empty — iai-callgrind may have failed. Skipping IAI gate."
             exit 0
