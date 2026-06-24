@@ -99,6 +99,8 @@ curl http://localhost:8080/healthz
 
 The `KeyRotationProof` must be shared with all other validators. They verify the signature from the old key over the new public key. Once >2/3 of validators acknowledge the rotation, it is finalized.
 
+> **v0.1.69**: Node keypair is now persistent. Use `OMNIA_NODE_KEY_FILE` to specify the keypair path. To rotate: generate a new keypair with `omnia-node keygen`, replace the file, and restart.
+
 ---
 
 ## Emergency Slashing
@@ -183,6 +185,8 @@ docker compose down
 # Reset minority partition nodes and restart
 docker compose up -d
 ```
+
+> **v0.1.69**: `/readyz` now reports actual peer count via `GossipProtocol::connected_peer_count()`. The background consensus loop polls this every 1s and updates `AppState.peers`.
 
 ---
 
@@ -289,8 +293,13 @@ omnia-node setup-verify --degree 65536 --num-contributions 3
 | POST   | `/api/v1/governance/vote`             | Cast quadratic-weighted vote |
 | GET    | `/api/v1/economics/balance/:did`      | Check UBC balance            |
 | POST   | `/api/v1/economics/transfer`          | Spend UBC tokens             |
+| GET    | `/api/v1/ceremony/state`              | Current MPC ceremony state   |
+| POST   | `/api/v1/ceremony/contribute`         | Submit ceremony contribution |
+| GET    | `/api/v1/ceremony/transcript`         | Download ceremony transcript |
+| POST   | `/api/v1/ceremony/finalize`           | Finalize ceremony            |
+| GET    | `/api/v1/errors`                      | Recent error log             |
 
-**Security:** All endpoints require JWT authentication. Privileged operations require admin JWT. See [validator-setup.md](./validator-setup.md) for configuration.
+**Security:** Write endpoints require JWT authentication; 5 read endpoints are public: `/api/v1/node/info`, `/api/v1/node/peers`, `/api/v1/errors`, `/api/v1/ceremony/state`, `/api/v1/ceremony/transcript`. Privileged operations require admin JWT. See [validator-setup.md](./validator-setup.md) for configuration.
 
 Swagger UI: `http://localhost:8080/swagger-ui`
 OpenAPI spec: `http://localhost:8080/api-docs/openapi.json`

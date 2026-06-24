@@ -145,6 +145,22 @@ cargo build --features persistent-storage
 
 ---
 
+### `swagger-ui`
+
+**Crate:** `omnia-node`
+
+**Purpose:** Embeds Swagger UI assets (~11MB). Required for `/swagger-ui` and `/api-docs/openapi.json` endpoints.
+
+**Without flag (default):** The Swagger UI and OpenAPI JSON endpoints are not available.
+
+**Build:**
+
+```bash
+cargo build --features swagger-ui
+```
+
+---
+
 ## omnia-node Feature Profiles
 
 The `omnia-node` crate provides pre-configured profiles:
@@ -154,6 +170,7 @@ The `omnia-node` crate provides pre-configured profiles:
 | `full` (default) | network, zk, bls, pqc, metrics | `cargo build -p omnia-node`                                        |
 | `light`          | minimal                        | `cargo build -p omnia-node --no-default-features --features light` |
 | Full + Ethereum  | full + ethereum-live           | `cargo build -p omnia-node --features ethereum-live`               |
+| `docker-tests`   | full + docker integration      | `cargo build -p omnia-node --features docker-tests`                |
 
 ---
 
@@ -186,7 +203,6 @@ These are not compile-time feature flags but runtime configuration options that 
 | -------------------------- | ------- | ------------------------------------- |
 | `OMNIA_JWT_SECRET`         | (none)  | HMAC secret for JWT auth              |
 | `OMNIA_AUTHORIZED_CALLERS` | (none)  | Comma-separated authorized caller IDs |
-| `OMNIA_AUTHORIZED_ADMINS`  | (none)  | Comma-separated admin caller IDs      |
 | `OMNIA_RATE_LIMIT_RPS`     | (none)  | Max requests per second per IP        |
 
 ### Logging Configuration

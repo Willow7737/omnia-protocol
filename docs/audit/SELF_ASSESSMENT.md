@@ -2,11 +2,13 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Version:** v4.0.0
 **Date:** 2026-03-05
 **Document version:** 2.0
+
+> **v0.1.69:** 16 critical security vulnerabilities identified and fixed. See `SECURITY.md` and `AUDIT_FIX_NOTES.md` for details.
 
 ---
 

@@ -14,6 +14,8 @@
 
 Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNARK Circuit Hardening & Benchmarking, and Operator Stake Slashing. All 13 work items have been implemented and committed.
 
+> **Note:** Phase 3 C-1/C-2 upgraded SSS/DKG share encryption from XOR to real AES-256-GCM.
+
 ---
 
 ## Critical (C) — Completed
@@ -159,7 +161,7 @@ Phase 2 addressed three strategic pillars: Cryptographic Key Management, ZK-SNAR
 | omnia-adapters  | 81       | ✅ All passing     |
 | omnia-shards    | 56       | ✅ All passing     |
 | omnia-binding   | 49       | ✅ All passing     |
-| **Total**       | **537+** | **✅ All passing** |
+| **Total**       | **Run `cargo test --workspace` for current count** | **✅ All passing** |
 
 ---
 

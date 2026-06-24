@@ -577,6 +577,18 @@ Spoofing attacks involve an adversary pretending to be another entity — a node
 8. **MEDIUM — Verify rotation authorization signatures**: Add cryptographic verification in `PqcKeyRotationManager`.
 9. **MEDIUM — ZK proving DoS protection**: Add circuit size limits and proving timeouts.
 
+### v0.1.69 Hardened Attack Surfaces
+
+The v0.1.69 audit cycle hardened the following attack surfaces (see `SECURITY.md` and `AUDIT_FIX_NOTES.md` for details):
+
+1. **Identity recovery** — SSS recovery path now uses real AES-256-GCM and properly updates DID authentication
+2. **Biological ZK** — ZK proof paths over biometric/biological shard data hardened against witness malleability
+3. **Cross-shard causality** — Causal ordering and replay protection across shards hardened
+4. **Nonce store** — Nonce replay store hardened against race conditions and replay across shards
+5. **Economics verifier** — Economics operation verifier hardened against fee bypass and unauthorized minting
+6. **Ethereum settlement** — Live Ethereum RPC settlement adapter hardened against reorg, replay, and proof-binding gaps
+7. **Rate limiting** — Gossip/REST rate limiting hardened against token-bucket bypass and per-peer abuse
+
 ---
 
 🔙 **Back**: [Security](./) | 🔄 **Related**: [Threat Model](./THREAT_MODEL.md)

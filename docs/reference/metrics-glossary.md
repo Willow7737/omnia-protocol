@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Definitions of key metrics, terms, and abbreviations used across Omnia Protocol documentation
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Protocol Terms
 
@@ -83,6 +83,10 @@
 | QUIC         | Quick UDP Internet Connections                |
 | RPC          | Remote Procedure Call                         |
 | SBOM         | Software Bill of Materials                    |
+| IAI          | Iai-Callgrind (deterministic instruction-count profiler) |
+| ML-KEM       | Module-Lattice-Based Key Encapsulation Mechanism (FIPS-203) |
+| BIP-39       | Bitcoin Improvement Proposal 39 (mnemonic seed phrases) |
+| SLIP-0010    | Satoshilab Improvement Proposal 10 (hierarchical deterministic key derivation) |
 
 ---
 

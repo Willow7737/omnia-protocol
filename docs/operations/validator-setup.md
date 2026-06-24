@@ -60,6 +60,13 @@ OMNIA_NODE_ID=1 OMNIA_HTTP_PORT=8080 OMNIA_LOG_LEVEL=info omnia-node
 
 **Configuration precedence:** CLI flags > env vars > TOML config file > defaults.
 
+### Additional Environment Variables
+
+| Variable                | Default                     | Description                                                              |
+| ----------------------- | --------------------------- | ------------------------------------------------------------------------ |
+| `OMNIA_NODE_KEY_FILE`   | `data_dir/node_key.bin`     | Path to persistent libp2p node keypair (v0.1.69 fix; falls back to file) |
+| `OMNIA_CORS_ORIGINS`    | (none)                      | Comma-separated list of allowed CORS origins for the HTTP API            |
+
 ### Important Configuration Notes
 
 - `node_id` must be a non-zero `u64` value (strings like `bootstrap` or `node1` are invalid)
@@ -110,6 +117,12 @@ When `omnia-node` starts, it follows this sequence:
 11. Start axum HTTP server on `0.0.0.0:{http_port}`
 12. Wait for SIGINT/SIGTERM for graceful shutdown
 
+**v0.1.69 audit fixes (added to startup sequence):**
+
+- After keypair generation: Load persistent node keypair via `load_or_generate_node_keypair()` — loads from `OMNIA_NODE_KEY_FILE` or `data_dir/node_key.bin` (v0.1.69 fix: previously always generated ephemeral keys)
+- After substrate init: Register node as validator candidate via `substrate.add_validator()` (v0.1.69 fix: previously never registered, node could never be elected leader)
+- After HTTP server setup: HTTP server uses `into_make_service_with_connect_info::<SocketAddr>()` (v0.1.69 fix: required for per-client rate limiting)
+
 ## Data Directory Layout
 
 ```
@@ -120,7 +133,8 @@ data/
 │   └── nonces.redb
 ├── consensus/         # RedbConsensusStore database
 │   └── consensus.redb
-└── snapshots/         # State snapshots (via CLI subcommand)
+├── snapshots/         # State snapshots (via CLI subcommand)
+└── node_key.bin       # Persistent libp2p node keypair (v0.1.69)
 ```
 
 ## Docker Deployment

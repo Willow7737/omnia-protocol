@@ -1,5 +1,11 @@
 # Baseline Benchmark Report — v0.1.48
 
+> ⚠️ **HISTORICAL DOCUMENT** — v0.1.48 baseline (2026-05-23).
+> Current baselines are in `benches/baselines.json` (v0.1.68).
+> See `docs/reference/benchmark-gates.md` for the 3-layer gate architecture.
+> See `docs/benchmarks/zk-scaling-analysis.md` for the ZK scaling investigation.
+> See `docs/performance/BASELINE.md` for current performance numbers.
+
 > Sprint 0 — Phase 0 Throughput Optimization (Micro-Benchmark Phase A)
 
 ## Methodology

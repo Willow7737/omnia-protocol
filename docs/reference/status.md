@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-05-26
+> 📅 Last Updated: 2026-06-24
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -205,8 +205,9 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 4**                 | 9       | 9       | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Future**                  | 8       | 4       | 0          | 0            | 4              | 0          | █████░░░░░ 50%  |
 | **v0.1.56 + v0.1.68 Audit** | 23      | 9       | 0          | 0            | 0              | 14         | ████░░░░░░ 39%  |
+| **v0.1.69 Critical Audit**  | 16      | 16      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Limit Verification**      | 39      | 39      | 0          | 0            | 0              | 0          | ██████████ 100% |
-| **TOTAL**                   | **170** | **141** | **0**      | **1**        | **4**          | **25**     | █████████░ 93%  |
+| **TOTAL**                   | **186** | **157** | **0**      | **1**        | **4**          | **14**     | ██████████ 96%  |
 
 ---
 
@@ -283,6 +284,34 @@ _Legend:_
 | CRDT batch merge (1K ops/batch)          | ~100K ops/s (est., no dedicated benchmark)    | 100 batches                                               |
 
 > See [docs/reference/LIMITS.md](./LIMITS.md) for the complete verified limits reference.
+
+## 15. v0.1.69 Critical Security Audit (16 findings, all closed)
+
+> The following 16 critical security vulnerabilities were identified and fixed in v0.1.69.
+> See SECURITY.md for the full list.
+
+| ID            | Finding                                       | Status        |
+| :------------ | :-------------------------------------------- | :------------ |
+| **C-1**       | Identity recovery secret_commitment           | ✅ Remediated |
+| **C-2**       | Biological ZK non-empty public_inputs         | ✅ Remediated |
+| **C-3**       | Cross-shard causal proof verification         | ✅ Remediated |
+| **C-4**       | Nonce store fail-closed                       | ✅ Remediated |
+| **C-5**       | Economics verifier_pubkey required            | ✅ Remediated |
+| **C-6**       | Ethereum verify_proof_with_root               | ✅ Remediated |
+| **C-7**       | Per-client rate limiting                      | ✅ Remediated |
+| **C-8**       | /readyz peer tracking                         | ✅ Remediated |
+| **C-9**       | Validator registration                        | ✅ Remediated |
+| **C-10**      | Persistent node keypair                       | ✅ Remediated |
+| **C-11**      | Dual EconomicsState                           | ✅ Remediated |
+| **C-12**      | Shard ops bypass                              | ✅ Remediated |
+| **C-13**      | Helm chart                                    | ✅ Remediated |
+| **C-14**      | Substrate fallback                            | ✅ Remediated |
+| **C-15**      | Genesis hex                                   | ✅ Remediated |
+| **C-16**      | Phase 2 ceremony                              | ✅ Remediated |
+
+---
+
+🔙 **Back**: [Reference Index](../) | 🔄 **Related**: [Roadmap](./roadmap.md)
 
 > **Accuracy note**: Numbers marked (est.) are approximate and environment-dependent. They come from simple test timings (`omnia-limit-verification`), not from rigorous Criterion benchmarks. For reproducible benchmark results, run the Criterion suite: `cargo bench --bench baseline_bench`, `cargo bench --bench throughput`.
 

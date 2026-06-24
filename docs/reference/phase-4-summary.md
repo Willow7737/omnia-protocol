@@ -64,7 +64,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 | LivenessViolation  | Warning (1%)       | Warning (1%)        | Jailed (5%, 500r) |
 | InvalidAttestation | Warning (2%)       | Jailed (10%, 2000r) | Ejected (100%)    |
 
-**Files changed:** `substrate/src/slashing.rs`
+**Files changed:** `omnia-consensus/src/slashing.rs`
 
 ---
 

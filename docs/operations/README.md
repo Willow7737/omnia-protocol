@@ -6,14 +6,15 @@
 
 ## Operations Documents
 
-| Document                                 | Description                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------- | --- | ------------------------------------------------- |
-| [validator-setup.md](validator-setup.md) | Validator setup guide — key generation, node configuration, startup |
-| [monitoring.md](monitoring.md)           | Monitoring setup — Grafana, Prometheus, alert rules                 |
-| [deployment.md](deployment.md)           | Deployment procedures — Docker Compose, Kubernetes/Helm             |
-| [runbook.md](runbook.md)                 | Operations runbook — key rotation, slashing, partition recovery     |
-| [feature-flags.md](feature-flags.md)     | Feature flag reference                                              |
-| [cli-and-api.md](cli-and-api.md)         | CLI subcommands and REST API reference                              |     | Feature flag reference for operator configuration |
+| Document                                                         | Description                                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [validator-setup.md](validator-setup.md)                         | Validator setup guide — key generation, node configuration, startup |
+| [monitoring.md](monitoring.md)                                   | Monitoring setup — Grafana, Prometheus, alert rules                 |
+| [deployment.md](deployment.md)                                   | Deployment procedures — Docker Compose, Kubernetes/Helm             |
+| [runbook.md](runbook.md)                                         | Operations runbook — key rotation, slashing, partition recovery     |
+| [feature-flags.md](feature-flags.md)                             | Feature flag reference                                              |
+| [cli-and-api.md](cli-and-api.md)                                 | CLI subcommands and REST API reference                              |
+| [self-hosted-runner-setup.md](self-hosted-runner-setup.md)       | Self-hosted GitHub Actions runner setup guide                       |
 
 ## Quick Reference
 

@@ -2,11 +2,13 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Version**: 1.0
 **Prepared**: 2026-05-19
 **Phase**: 5 (Testnet Launch & Audit Preparation)
+
+> **v0.1.69 audit cycle:** 16 critical findings, all remediated. See `AUDIT_FIX_NOTES.md`.
 
 ## Purpose
 

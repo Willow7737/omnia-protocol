@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Migration path for each cryptographic primitive if it is compromised
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Overview
 
@@ -103,6 +103,20 @@ The most complex migration — requires new circuit, new Poseidon parameters, ne
 | 4    | Regenerate trusted setup                                | Week 4    |
 | 5    | Migrate active proofs                                   | Weeks 4-8 |
 | 6    | Sunset Poseidon-based proofs                            | Week 8    |
+
+### VRF V1→V2 Migration
+
+The VRF construction has two versions:
+
+- **V1 (default)** — Legacy deterministic-hash VRF (Ed25519 signature + BLAKE3 derivation). This is the current default for backwards compatibility.
+- **V2 (implemented per ADR-012 v2.0.0)** — ECVRF with Fiat-Shamir + Ed25519 per RFC 9381. Implemented in `omnia-crypto/src/vrf.rs` (`ecvrf_prove()` / `ecvrf_verify()` / `select_leader_v2()`). Provides uniqueness, unpredictability, and zero-knowledge properties that V1 does not formally satisfy.
+
+V2 is implemented and available behind `VrfVersion::V2`, but V1 remains the default pending a coordinated network-wide migration. Migration steps:
+
+1. **Disclosure** — Announce V1 deprecation date and V2 cutover date
+2. **Deprecation** — Both V1 and V2 accepted; new validators encouraged to use V2
+3. **Migration** — Network reaches supermajority on V2 leader selection
+4. **Sunset** — V1 leader selection disabled at protocol version boundary
 
 ---
 

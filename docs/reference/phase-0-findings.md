@@ -7,7 +7,7 @@
 **Version:** v4.0.0
 **Date:** 2026-03-05
 **Auditor:** Phase 0 Internal Audit
-**Scope:** Full codebase — 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests)
+**Scope:** Full codebase — 14 crates (substrate, shards, economics, zk, binding, node, chaos-tests)
 
 ---
 
@@ -539,7 +539,7 @@ All BLAKE3 calls across the codebase have been updated to use `blake3_hash_domai
 **Severity:** Medium
 **Category:** Code Quality
 **Location:** Multiple files across all crates
-**Status:** Open
+**Status:** ✅ Completed in Phase 1
 
 ### Description
 
@@ -580,7 +580,7 @@ node/src/main.rs:11
 **Severity:** Medium
 **Category:** Code Quality
 **Location:** `economics/src/error.rs`, `substrate/src/slashing_undo.rs`, and 9 other files
-**Status:** Open
+**Status:** ✅ Completed in Phase 1
 
 ### Description
 
@@ -668,7 +668,7 @@ pub struct GossipStats {
 
 ### Description
 
-All 7 crates enforce `#![forbid(unsafe_code)]` in their `lib.rs`:
+All crates enforce `#![deny(unsafe_code)]` (C-1 audit fix: changed from `forbid` to `deny` because `blst` transitively needs `unsafe`; see SAFETY.md) in their `lib.rs`:
 
 | Crate               | Directive                 |
 | ------------------- | ------------------------- |
@@ -827,7 +827,7 @@ ignore = [
 **Severity:** Low
 **Category:** Documentation
 **Location:** Multiple doc files across `docs/` and `ops/`
-**Status:** Partial
+**Status:** ✅ Completed in Phase 1
 
 ### Description
 
@@ -875,14 +875,14 @@ See `docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md` for the full 70+ discrepa
 | FIND-020 | No governance quorum                         | Medium        | Fixed   |
 | FIND-021 | No MAX_PAYLOAD_SIZE at gossip level          | Medium        | Fixed   |
 | FIND-022 | Missing BLAKE3 domain separation             | Medium        | Fixed   |
-| FIND-023 | Extensive unwrap() in production code        | Medium        | Open    |
-| FIND-024 | Result<\_, String> errors in critical paths  | Medium        | Open    |
+| FIND-023 | Extensive unwrap() in production code        | Medium        | ✅ Completed in Phase 1    |
+| FIND-024 | Result<\_, String> errors in critical paths  | Medium        | ✅ Completed in Phase 1    |
 | FIND-025 | f64 in gossip stats                          | Medium        | Fixed   |
 | FIND-030 | No unsafe code                               | Informational | Clean   |
 | FIND-031 | No interior mutability in shard state        | Informational | Clean   |
 | FIND-032 | Grafana default password                     | Low           | Fixed   |
 | FIND-033 | 9 ignored RUSTSEC advisories                 | Low           | Open    |
-| FIND-034 | Documentation severely out of date           | Low           | Partial |
+| FIND-034 | Documentation severely out of date           | Low           | ✅ Completed in Phase 1 |
 
 **Totals**: 13 Fixed, 3 Open, 2 Clean, 1 Partial
 

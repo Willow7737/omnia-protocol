@@ -14,6 +14,8 @@
 
 Phase 3 addressed three strategic pillars: critical security closure, network and consensus production readiness, and settlement layer and cryptographic completion. All 5 open Phase 2 findings have been closed, and all new work items have been implemented with comprehensive test coverage.
 
+> **Note:** Phase 4 C-1 implemented the live Ethereum RPC settlement adapter.
+
 ---
 
 ## Critical Security Closure (3 Critical + 1 High + 1 Medium)

@@ -520,6 +520,68 @@ pass; existing tests should not regress.
 
 ---
 
+## v0.1.69 Critical Security Audit (16 findings, all applied)
+
+**Date**: 2026-06-22
+**Commit**: `5d3d776`
+**Status**: All 16 findings remediated and verified
+
+A comprehensive audit of the full codebase (all 14 crates, ~85K LoC)
+identified 16 critical security vulnerabilities. All were remediated
+in a single commit and verified with cargo test, cargo clippy, cargo
+audit, and cargo fmt.
+
+### Cryptographic Fixes (7)
+
+| # | Finding | Fix | File |
+|---|---------|-----|------|
+| 1 | Phase 2 ceremony derives toxic waste from public SRS transcript | Fail-closed unless `unsafe-phase2-deterministic` feature enabled | `omnia-adapters/src/setup/circuit_setup.rs` |
+| 2 | Identity RecoverDid accepts forged shares | Added `RecoveryConfig.secret_commitment`, verified before key rotation | `shards/src/identity/state.rs` |
+| 3 | Biological ZK accepts attacker-supplied VerifyingKey with empty public_inputs | Derive non-empty inputs from (subject, consumer) via BLAKE3→Fr; reject empty; enforce consent expiry | `shards/src/biological/state.rs` |
+| 4 | Cross-shard causal proof not verified | `route_cross_shard` now requires non-empty `causal_proof` and verifies happened-before relationship | `shards/src/router.rs` |
+| 5 | Nonce store load failure silently resets replay protection | `with_nonce_store` now panics; added `with_nonce_store_checked` returning Result | `shards/src/router.rs` |
+| 6 | Economics verifier_pubkey falls back to [0u8; 32] | Returns `Unauthorized` error when unset; added `set_verifier_pubkey` / `with_verifier_pubkey` | `economics/src/economics_shard.rs` |
+| 7 | Ethereum verify_proof trusts prover bytes for Merkle root | Trait method fails-closed; added `verify_proof_with_root` requiring trusted root parameter | `omnia-adapters/src/settlement/ethereum/mod.rs` |
+
+### Node Infrastructure Fixes (9)
+
+| # | Finding | Fix | File |
+|---|---------|-----|------|
+| 8 | Per-client rate limiting broken (no connect_info) | Added `into_make_service_with_connect_info::<SocketAddr>()` | `node/src/main.rs` |
+| 9 | /readyz always returns 503 (peers never populated) | Added `GossipProtocol::connected_peer_count()` + peer-refresh in consensus loop | `node/src/main.rs`, `omnia-network/src/gossip.rs` |
+| 10 | Node never registers as validator candidate | Call `substrate.add_validator()` at startup | `node/src/main.rs` |
+| 11 | Dual EconomicsState instances (mints invisible to balance reads) | `handle_economics_op` now applies directly to `AppState.economics` | `node/src/api/shards.rs` |
+| 12 | Shard ops bypass consensus (local-only, no gossip) | Removed empty-payload `Event::genesis` path; applies to shared state | `node/src/api/shards.rs` |
+| 13 | Helm chart broken (TCP not UDP, wrong probe paths) | Fixed listenAddr to UDP QUIC, added UDP container/service ports, fixed probes | `helm/omnia-node/` |
+| 14 | Substrate silent fallback to in-memory on persistence failure | `Substrate::new` now panics loudly with actionable error messages | `substrate/src/lib.rs` |
+| 15 | Persistent keypair never loaded (ephemeral every restart) | Added `load_or_generate_node_keypair` loading from `OMNIA_NODE_KEY_FILE` or `data_dir/node_key.bin` | `node/src/main.rs` |
+| 16 | Genesis hex decode silently accepts malformed keys | `hex::decode` errors now propagate as `GenesisError::InvalidPublicKey` | `substrate/src/genesis.rs` |
+
+### Updates to Deferred v0.1.68 Items
+
+- **H-14 (persistent node keypair)**: ✅ Applied in v0.1.69 via `load_or_generate_node_keypair` (finding #15 above).
+- **C-4 (f64 → basis points in SlashPenalty)**: Slashing test coverage prerequisite is now complete — 6 new IAI benchmarks + 20 new unit tests added (50→70 tests in slashing.rs). Coverage improved from ~57% to ~65%. Migration ready to begin.
+- **C-5 (asymmetric JWT)**: H-14 dependency is now satisfied. C-5 is unblocked and ready to implement.
+- **C-7 (vrf.rs rename)**: Still deferred. Status accurate.
+- **C-8 (pipeline workers)**: Still deferred. The `pipeline.rs` module is 262 lines of dead code retained for future use.
+
+### IAI Instruction-Count Baselines
+
+On 2026-06-23, IAI-callgrind baselines were captured for 9 hot-path
+benchmarks (54 metrics total) across 6 metrics each (Instructions,
+L1 Hits, L2 Hits, RAM Hits, Total read+write, Estimated Cycles).
+The baselines are committed to `benches/iai_baselines.json` and
+enforced by `scripts/check_iai_regression.py` with a 2% threshold.
+This provides the deterministic regression layer mentioned in the
+"Recommended next steps" above.
+
+The 6 new slashing benchmarks cover:
+- `bench_check_equivocation_detected` / `_not_detected`
+- `bench_record_offense_equivocation` / `_liveness`
+- `bench_check_liveness_violation` / `_no_violation`
+
+---
+
 ## Addendum: Benchmark Throughput Investigation (2026-06-19)
 
 ### Observation
@@ -617,3 +679,12 @@ runner variance**:
    numbers (not these single-node synthetic benchmarks) once they are
    available. The `baselines.json` `_caveat` field now documents this
    explicitly.
+
+**Update (2026-06-23)**: The baseline was subsequently raised to 12,000
+ops/s with a 15% threshold (fails at <10,200 ops/s) based on multiple
+CI runs consistently measuring 11,900–15,400 ops/s. The 3-layer
+benchmark gate (IAI + multi-sample + single-sample) was also implemented
+to address the variance concern — see `docs/reference/benchmark-gates.md`
+for the full architecture. Network-simulated multi-node benchmarks were
+added in `benches/benches/network_sim.rs` to provide real consensus
+latency numbers (not just function-call latency).

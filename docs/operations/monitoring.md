@@ -36,14 +36,20 @@ The `omnia-node.json` dashboard includes the following panels:
 
 The `NodeMetrics` struct in `node/src/state.rs` registers these metrics with the default Prometheus registry:
 
-| Metric Name                         | Type       | Description                         |
-| ----------------------------------- | ---------- | ----------------------------------- |
-| `omnia_node_events_submitted_total` | IntCounter | Total events submitted via the API  |
-| `omnia_node_events_finalized_total` | IntCounter | Total events finalized by consensus |
-| `omnia_node_peers_connected`        | IntGauge   | Current number of connected peers   |
-| `omnia_node_consensus_round`        | IntGauge   | Current consensus round             |
-| `omnia_node_shard_operations_total` | IntCounter | Total shard operations processed    |
-| `omnia_node_http_requests_total`    | IntCounter | Total HTTP requests served          |
+| Metric Name                                  | Type       | Description                                       |
+| -------------------------------------------- | ---------- | ------------------------------------------------- |
+| `omnia_node_events_submitted_total`          | IntCounter | Total events submitted via the API                |
+| `omnia_node_events_finalized_total`          | IntCounter | Total events finalized by consensus               |
+| `omnia_node_peers_connected`                 | IntGauge   | Current number of connected peers                 |
+| `omnia_node_consensus_round`                 | IntGauge   | Current consensus round                           |
+| `omnia_node_shard_operations_total`          | IntCounter | Total shard operations processed                  |
+| `omnia_node_http_requests_total`             | IntCounter | Total HTTP requests served                        |
+| `omnia_consensus_tps`                         | IntCounter | Consensus transactions per second                 |
+| `omnia_consensus_finality_latency_seconds`   | Histogram  | Latency from event submission to finality         |
+| `omnia_gossip_propagation_latency_seconds`   | Histogram  | Latency for gossip message propagation            |
+| `omnia_dag_events_total`                     | IntCounter | Total DAG events processed                        |
+| `omnia_dag_insertion_latency_seconds`        | Histogram  | Latency for DAG event insertion                   |
+| `omnia_node_memory_rss_bytes`                | IntGauge   | Current resident set size (RSS) in bytes          |
 
 Additional substrate-level metrics (gossip, slashing, consensus latency, fee revenue, graph size) are registered by the substrate crate's own instrumentation.
 
@@ -75,16 +81,16 @@ global:
 scrape_configs:
   - job_name: "omnia-bootstrap"
     static_configs:
-      - targets: ["omnia-bootstrap:9090"]
+      - targets: ["omnia-bootstrap:8080"]
     metrics_path: /metrics
 
   - job_name: "omnia-nodes"
     static_configs:
       - targets:
-          - "omnia-node-1:9091"
-          - "omnia-node-2:9092"
-          - "omnia-node-3:9093"
-          - "omnia-node-4:9094"
+          - "omnia-node-1:8080"
+          - "omnia-node-2:8080"
+          - "omnia-node-3:8080"
+          - "omnia-node-4:8080"
     metrics_path: /metrics
 ```
 

@@ -62,9 +62,11 @@
 4. Verify the deployment:
    ```bash
    kubectl get pods -l app=omnia-node
-   kubectl port-forward svc/omnia-node 9090:9090
+   kubectl port-forward svc/omnia-node 9090:8080
    curl http://localhost:9090/healthz
    ```
+
+> **Note**: The Helm chart exposes BOTH TCP 8080 (HTTP API) AND UDP 4001 (P2P/QUIC). Without UDP 4001, Helm-deployed nodes cannot participate in P2P gossip. This was fixed in the v0.1.69 audit.
 
 ## Configuration
 
@@ -75,7 +77,7 @@
 | `RUST_LOG`                 | `info`                  | Log level (trace, debug, info, warn, error)      |
 | `OMNIA_NODE_ID`            | (required)              | Unique node identifier (u64)                     |
 | `OMNIA_BOOTSTRAP_NODES`    | (empty)                 | Comma-separated list of bootstrap node addresses |
-| `OMNIA_LISTEN_ADDR`        | `/ip4/0.0.0.0/tcp/9090` | Libp2p listen address                            |
+| `OMNIA_LISTEN_ADDR`        | `/ip4/0.0.0.0/udp/4001/quic-v1` | Libp2p listen address                            |
 | `OMNIA_TOTAL_NODES`        | `5`                     | Expected number of nodes in the network          |
 | `OMNIA_DATA_DIR`           | `/app/data`             | Data directory for persistent storage            |
 | `OMNIA_JWT_SECRET`         | (none)                  | HMAC secret for JWT auth                         |
@@ -93,6 +95,8 @@ See `node/omnia-node.toml.example` for the full configuration file format.
 3. For Kubernetes: `helm upgrade omnia-node ./helm/omnia-node -f my-values.yaml`
 4. Monitor the health endpoint: `curl http://localhost:9090/healthz`
 5. Check logs for errors: `docker logs omnia-bootstrap` or `kubectl logs -l app=omnia-node`
+
+> **Note**: A sled-to-redb migration runs automatically on startup if a legacy sled database is detected. See `substrate/src/migration.rs`.
 
 ## Rollback Procedure
 

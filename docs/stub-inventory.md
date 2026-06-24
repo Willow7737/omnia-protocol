@@ -128,3 +128,57 @@ This document catalogs all stub, placeholder, and partial implementations in the
 | Validator Network    | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+
+---
+
+## Deferred v0.1.68 Audit Items
+
+The following items were identified during the v0.1.68 audit cycle but explicitly deferred to a later milestone. They are tracked here so they are not lost.
+
+### Pipeline workers (C-8 deferred) — **DEAD CODE** ⚠️
+
+- **File**: `node/src/pipeline.rs` (262 lines)
+- **Status**: Deferred — `node/src/pipeline.rs` is 262 lines of dead code
+- **What's missing**: Real worker threads that process pipeline stages; current code is unreachable
+- **Phase**: Deferred from v0.1.68 audit
+
+### Asymmetric JWT (C-5 deferred) — **UNBLOCKED** ⚠️
+
+- **Status**: Deferred — H-14 dependency now satisfied, unblocked
+- **What's missing**: Migration from symmetric to asymmetric (RS256/ES256) JWT signing
+- **Phase**: Deferred from v0.1.68 audit (now unblocked)
+
+### VRF rename (C-7 deferred) — **RENAME** ⚠️
+
+- **File**: `substrate/src/vrf.rs` (legacy path)
+- **Status**: Deferred — `vrf.rs` → `deterministic_selection.rs` rename
+- **What's missing**: Module rename to reflect the actual (non-spec-compliant V1) construction; ECVRF V2 lives in `omnia-crypto/src/vrf.rs`
+- **Phase**: Deferred from v0.1.68 audit
+
+### LRU creator buffer (H-4 deferred) — **ANTI-SPAM** ⚠️
+
+- **Status**: Deferred — bounded creator map for anti-spam
+- **What's missing**: Bounded LRU map limiting per-creator event backlog to prevent unbounded memory growth under adversarial load
+- **Phase**: Deferred from v0.1.68 audit
+
+### Chaos test safety checker (H-11 deferred) — **AUTOMATION** ⚠️
+
+- **Status**: Deferred — automated safety property verification
+- **What's missing**: Automated verification of safety properties (e.g. no double-spend, causal consistency) at the end of each chaos test run
+- **Phase**: Deferred from v0.1.68 audit
+
+### Substrate write lock scope (H-3 deferred) — **CONTENTION** ⚠️
+
+- **File**: `substrate/src/consensus.rs`
+- **Status**: Deferred — reduce lock holding time
+- **What's missing**: Narrow the substrate write-lock critical section to reduce contention; currently the lock is held across the full consensus round
+- **Phase**: Deferred from v0.1.68 audit
+
+| Deferred Item                       | Layer | Status       | File                                | Phase         |
+| ----------------------------------- | ----- | ------------ | ----------------------------------- | ------------- |
+| Pipeline workers (C-8)              | —     | ⚠️ DEFERRED  | `node/src/pipeline.rs`              | v0.1.68 audit |
+| Asymmetric JWT (C-5)                | —     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
+| VRF rename (C-7)                    | 1     | ⚠️ DEFERRED  | `substrate/src/vrf.rs`              | v0.1.68 audit |
+| LRU creator buffer (H-4)            | 1     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
+| Chaos test safety checker (H-11)    | —     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
+| Substrate write lock scope (H-3)    | 1     | ⚠️ DEFERRED  | `substrate/src/consensus.rs`        | v0.1.68 audit |
