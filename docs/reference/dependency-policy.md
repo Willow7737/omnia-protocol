@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Policy for managing dependencies — pinning, audits, and exemptions
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Pinning
 
@@ -46,9 +46,9 @@ New dependencies MUST be reviewed for:
 
 ### redb
 
-**Used by:** `omnia-node` (via `omnia-substrate` and `omnia-shards`)
+**Used by:** `omnia-node` (via `omnia-substrate`, `omnia-shards`, and `omnia-consensus`)
 
-**Purpose:** Embedded key-value database for persistent slashing state (`RedbSlashingStore`), nonce tracking (`RedbNonceStore`), and consensus state (`RedbConsensusStore`).
+**Purpose:** Embedded key-value database for persistent slashing state (`RedbSlashingStore`), nonce tracking (`RedbNonceStore`), and consensus state (`RedbConsensusStore`). In `omnia-consensus`, redb backs the consensus store (`consensus_store.rs`) and the slashing engine (`slashing.rs`).
 
 **Properties:**
 
@@ -71,7 +71,7 @@ cargo audit --deny warnings
 
 ### cargo-vet
 
-Audits dependencies for correctness and safety by importing audit records from trusted sources (Mozilla, Google) and maintaining our own audit records in `supply-chain/audits.toml`.
+Audits dependencies for correctness and safety by importing audit records from trusted sources (Mozilla, Google) and maintaining our own audit records in `supply-chain/audits.toml`. The cargo-vet configuration lives in `supply-chain/config.toml`, and per-crate audit justifications live in `supply-chain/audits.toml` (see also `supply-chain/imports.lock`).
 
 ```bash
 cargo vet --check

@@ -6,7 +6,7 @@
 
 **Version:** v4.0.0
 **Date:** 2026-03-05
-**Scope:** Full codebase — 7 crates, 13 documentation files, Docker/monitoring infrastructure
+**Scope:** Full codebase — 14 crates, 129+ documentation files, Docker/monitoring infrastructure
 **Status:** Phase 0 Complete
 
 ---
@@ -62,7 +62,7 @@ The original self-assessment (`docs/audit/SELF_ASSESSMENT.md`) made several clai
 
 ## 3. Discrepancy Report Status
 
-The original discrepancy report (`docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md`) identified **70+ discrepancies** across **13 documentation files**. The following table summarizes the resolution status of each file's discrepancies after Phase 0.
+The original discrepancy report (`docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md`) identified **70+ discrepancies** across **129+ documentation files**. The following table summarizes the resolution status of each file's discrepancies after Phase 0.
 
 | #   | File                                             | Original Discrepancies | Resolved by Phase 0 | Remaining | Notes                                                                                                                                  |
 | --- | ------------------------------------------------ | ---------------------- | ------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -111,7 +111,7 @@ The original discrepancy report (`docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.
 | `omnia-binding`     | ~25        | 2 test files      | —              | —                           | —                 |
 | `omnia-node`        | ~30        | 1 test file       | —              | —                           | —                 |
 | `omnia-chaos-tests` | —          | 4 test files      | —              | —                           | ~15 scenarios     |
-| **Total**           | **~295**   | **23 files**      | **2 files**    | **5 primary + 2 secondary** | **~15 scenarios** |
+| **Total**           | **Run `cargo test --workspace` for current count**   | **23 files**      | **2 files**    | **5 primary + 2 secondary** | **~15 scenarios** |
 
 ### 4.2 New Tests Added in Phase 0
 

@@ -6,7 +6,7 @@
 
 ## Phase 0 Security Findings
 
-**Version:** v4.0.0 | **Scope:** Full codebase — 7 crates | **Total findings:** 19
+**Version:** v4.0.0 | **Scope:** Full codebase — 14 crates | **Total findings:** 19
 
 ### Critical (All Fixed)
 
@@ -40,7 +40,7 @@
 
 | ID       | Finding                               | Status                                                             |
 | -------- | ------------------------------------- | ------------------------------------------------------------------ |
-| FIND-030 | No unsafe code                        | ✅ Clean — `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates |
+| FIND-030 | No unsafe code                        | ✅ Clean — `#![deny(unsafe_code) (see SAFETY.md)]` on all 14 crates |
 | FIND-031 | No interior mutability in shard state | ✅ Clean — correct pattern                                         |
 | FIND-032 | Grafana default password              | ✅ Fixed — Required env var                                        |
 | FIND-033 | 9 ignored RUSTSEC advisories          | 🔄 Open — Quarterly review                                         |
@@ -73,6 +73,10 @@
 | R9  | No formal verification beyond bounded TLA+ | High                  | Extended verification planned            |
 | R10 | RF fingerprinting is a stub                | Medium                | Hardware integration needed              |
 | R11 | pqc_dilithium no constant-time guarantee   | Medium → ✅ Mitigated | ML-KEM migration, hybrid mode            |
+
+## v0.1.69 Critical Security Audit (16 findings)
+
+The v0.1.69 audit cycle identified and remediated 16 critical security vulnerabilities across identity recovery, biological ZK, cross-shard causality, the nonce store, the economics verifier, Ethereum settlement, and rate limiting. Full details live in `SECURITY.md` and `AUDIT_FIX_NOTES.md`. Hardened attack surfaces are summarized in `docs/security/THREAT_MODEL.md` (§v0.1.69 Hardened Attack Surfaces).
 
 ## Key Audit Documents
 

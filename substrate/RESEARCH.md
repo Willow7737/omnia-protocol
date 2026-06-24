@@ -153,6 +153,8 @@ After analyzing all options, Omnia Layer 1 uses a **hybrid causal consensus**:
 
 **No real-world network testing** — All testing has been done in simulated environments. Real-world network conditions (latency spikes, partitions, adversarial behavior) have not been tested.
 
+> **Network-simulated multi-node benchmarks** have been added (`benches/benches/network_sim.rs`) showing real consensus latency with gossip + BFT voting. See `docs/performance/BASELINE.md`.
+
 ---
 
 ## 📚 References

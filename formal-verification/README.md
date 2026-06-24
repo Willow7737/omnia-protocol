@@ -2,7 +2,7 @@
 
 This directory contains TLA+ specifications that model the Omnia consensus protocol and its CRDT convergence properties, verifying safety and liveness through exhaustive state-space exploration using the TLC model checker.
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Last Updated:** 2026-03-05
 
 ## Protocol Model
@@ -14,6 +14,8 @@ The Omnia consensus is modeled as a hybrid of three established approaches:
 - **CRDT-based state convergence** — the gossip substrate ensures all honest nodes eventually converge on the same event graph.
 
 The TLA+ spec captures the core state machine: event creation, gossip propagation, equivocation by Byzantine nodes, fame decisions, and the consensus lifecycle from pending through to committed.
+
+> **See `consensus/CONSENSUS_SPEC.md` for the English-language companion specification (A-2 audit fix).**
 
 ## Spec Design
 

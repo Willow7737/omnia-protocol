@@ -133,7 +133,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 
 - More than `f` Byzantine validators (BFT assumption violated).
 - Network partition lasting longer than `MAX_EVENT_AGE_MS` (events age out before GST).
-- Per-creator buffer overflow (creator spams > 256 out-of-order events — addressed by H-4 fix).
+- Per-creator buffer overflow (creator spams > 256 out-of-order events — addressed by H-4 fix, PLANNED/not yet implemented).
 
 ---
 
@@ -145,7 +145,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 - **Timestamp drift**: `MAX_TIMESTAMP_DRIFT_MS = 120_000` and `MAX_EVENT_AGE_MS = 31_536_000_000` (1 year).
 - **Nonce enforcement**: Per-creator strictly-increasing nonces with gap limit (`NONCE_GAP_LIMIT`).
 - **Fee burning (C-6 fix)**: Fees deducted before shard dispatch and NOT refunded on failure — anti-spam by cost.
-- **Per-creator buffer cap (H-4 fix)**: LRU-bounded creator map prevents unbounded memory growth from attacker-registered NodeIds.
+- **Per-creator buffer cap (H-4 fix)**: LRU-bounded creator map prevents unbounded memory growth from attacker-registered NodeIds. **PLANNED (not yet implemented)** — the LRU buffer described here is part of the H-4 design but has not yet landed in `omnia-consensus`. See the H-4 entry in the relevant phase summary for current status.
 
 ---
 
@@ -169,6 +169,6 @@ On corrupt database (M-10 fix): the file is renamed to `.corrupt`, an ERROR is l
 - `omnia-consensus/src/slashing.rs` — Slashing engine (C-3, C-4, M-10 fixes)
 - `formal-verification/OmniaConsensus.tla` — TLA+ specification
 - ADR-011 — Gradual slashing model
-- ADR-012 — VRF construction choice (currently deterministic hash, ECVRF migration planned)
+- ADR-012 — VRF construction choice (V2 ECVRF with Fiat-Shamir + Ed25519 is now implemented per ADR-012 v2.0.0; V1 deterministic-hash remains the default for backwards compatibility)
 - ADR-015 — Leader selection consensus loop
 - ADR-018 — Consensus state persistence

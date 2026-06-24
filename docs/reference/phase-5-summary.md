@@ -56,7 +56,7 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 
 **Changes**:
 
-- **`substrate/src/vrf.rs`**: Replaced broken BLAKE3-based ECVRF with a Fiat-Shamir + Ed25519 signature construction:
+- **`omnia-crypto/src/vrf.rs`**: Replaced broken BLAKE3-based ECVRF with a Fiat-Shamir + Ed25519 signature construction:
   - `VrfVersion` enum: `V1` (legacy, default) and `V2` (ECVRF, target)
   - `EcvrfOutput` struct: `gamma` (32 bytes), `c` (16 bytes challenge), `s` (64 bytes Ed25519 signature)
   - `ecvrf_prove()` — Hash-to-curve commitment → gamma derivation → Fiat-Shamir challenge → Ed25519 signature over transcript
@@ -224,6 +224,13 @@ After Phase 5, the project is in a **testnet-ready** state with:
 - Throughput optimization to approach production targets
 
 **Estimated timeline from Phase 5 completion to safe mainnet: 3–6 months**, primarily driven by the external audit cycle and testnet stability period.
+
+### Post-Phase 5 Work
+
+- v0.1.69: 16 critical security fixes (see SECURITY.md)
+- 3-layer benchmark gate (IAI + multi-sample + self-hosted runner)
+- Network-simulated multi-node benchmarks
+- ZK scaling analysis (sub-linear, not super-linear)
 
 ---
 

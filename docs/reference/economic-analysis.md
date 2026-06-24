@@ -6,7 +6,7 @@
 
 **Phase F2 Deliverable**
 **Sprint 6 — Security Hardening**
-**Version:** 4.0.0
+**Version:** v0.1.68
 
 ---
 
@@ -361,6 +361,8 @@ The `TimeLockVoting` struct provides:
 
 The `SlashingEngine` (defined in `substrate/src/slashing.rs`) uses the following parameters:
 
+> **Note:** ADR-011 graded slashing was implemented in Phase 4 (H-1). The binary model described above has been replaced with graded tiers (Warning, Jailed, Ejected) with configurable thresholds. See `omnia-consensus/src/slashing.rs`.
+
 | Parameter                  | Value        | Description                                          |
 | -------------------------- | ------------ | ---------------------------------------------------- |
 | Slash threshold            | 500 points   | Points at which a node is slashed (stake forfeited)  |
@@ -437,6 +439,8 @@ To incentivize the detection and reporting of Byzantine behavior, we recommend a
 - 10% to reporter (whistle-blower incentive)
 - 50% burned (deflationary pressure)
 - 40% to treasury (RPGF and community funding)
+
+> **v0.1.69 audit fix (C-6):** fees are non-refundable on operation failure.
 
 ---
 

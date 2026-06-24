@@ -26,7 +26,7 @@ Phase 2 pre-work review identified **5 findings** across 3 severity levels. Thes
 **Severity:** Critical
 **Category:** Security
 **Location:** `shards/src/identity/state.rs:66-67`
-**Status:** Open
+**Status:** ✅ Closed in Phase 3 (SSS recovery now updates DID authentication with the recovered key)
 
 ### Description
 
@@ -59,7 +59,7 @@ IdentityOp::RecoverDid { did, shares } => {
 
 ### Remediation
 
-**Status: Open** — Requires the following changes:
+**Status: ✅ Closed in Phase 3** — Implemented in Phase 3. See `shards/src/identity/state.rs` for the DID authentication update flow:
 
 1. After successful secret reconstruction, derive the new public key from the recovered secret
 2. Add the new public key to `doc.authentication`
@@ -74,7 +74,7 @@ IdentityOp::RecoverDid { did, shares } => {
 **Severity:** Critical
 **Category:** Security
 **Location:** `shards/src/identity/state.rs:407-408`
-**Status:** Open
+**Status:** ✅ Closed in Phase 3 (replaced XOR with real AES-256-GCM encryption)
 
 ### Description
 
@@ -110,7 +110,7 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 
 ### Remediation
 
-**Status: Open** — Replace XOR encryption with AES-256-GCM, following the same pattern used in `substrate/src/keystore.rs`:
+**Status: ✅ Closed in Phase 3** — Implemented in Phase 3 using real AES-256-GCM, following the same pattern as `substrate/src/keystore.rs`:
 
 1. Use `aes_gcm_encrypt()` / `aes_gcm_decrypt()` with HKDF-SHA256 key derivation
 2. Each share gets its own random salt + nonce (same format as keystore: `salt(32) || nonce(12) || ciphertext+tag`)
@@ -124,7 +124,7 @@ fn xor_with_key(data: &[u8], key: &[u8; 32]) -> Vec<u8> {
 **Severity:** Critical
 **Category:** Security
 **Location:** `substrate/src/threshold.rs:674-678`
-**Status:** Open
+**Status:** ✅ Closed in Phase 3 (replaced XOR with real AES-256-GCM encryption)
 
 ### Description
 
@@ -160,7 +160,7 @@ let encrypted = xor_encrypt_dkg(&share_data, &share_seed);
 
 ### Remediation
 
-**Status: Open** — Replace `xor_encrypt_dkg()` with AES-256-GCM encryption:
+**Status: ✅ Closed in Phase 3** — `xor_encrypt_dkg()` replaced with AES-256-GCM encryption:
 
 1. Use a per-share random salt + nonce with HKDF-SHA256 key derivation
 2. Encrypt the BLS secret key bytes using `aes_gcm_encrypt()` (same as keystore)
@@ -179,7 +179,7 @@ let encrypted = xor_encrypt_dkg(&share_data, &share_seed);
 **Severity:** High
 **Category:** Cryptographic Integrity
 **Location:** `omnia-adapters/src/circuit.rs:479-510`
-**Status:** Open
+**Status:** ✅ Closed in Phase 3 (dummy field values replaced with proper witness binding)
 
 ### Description
 
@@ -232,7 +232,7 @@ pub fn empty(num_events: usize, merkle_depth: usize) -> Self {
 
 ### Remediation
 
-**Status: Open** — Replace dummy values with random field elements:
+**Status: ✅ Closed in Phase 3** — Dummy values replaced with proper witness binding:
 
 1. Use `Fr::rand()` for all witness values in `empty()` to ensure all constraint branches are exercised during setup
 2. Rename `empty()` to `for_setup()` to clarify its purpose
@@ -251,7 +251,7 @@ pub fn empty(num_events: usize, merkle_depth: usize) -> Self {
 **Severity:** Medium
 **Category:** Cryptographic Integrity
 **Location:** `omnia-adapters/src/setup/powers_of_tau.rs:113`
-**Status:** Open
+**Status:** ✅ Closed in Phase 3 (transcript hash now initialized with proper BLAKE3 commitment)
 
 ### Description
 
@@ -291,7 +291,7 @@ transcript_hash: [0u8; 32],  // Should be BLAKE3 of initial generator state
 
 ### Remediation
 
-**Status: Open** — Initialize the transcript hash with a proper commitment to the initial SRS state:
+**Status: ✅ Closed in Phase 3** — Transcript hash initialized with a proper commitment to the initial SRS state:
 
 1. Compute `transcript_hash = BLAKE3("OMNIA-CEREMONY-INIT-V1" || to_transcript())` in `PowersOfTau::new()`
 2. This creates a verifiable binding between the initial generator state and the first contribution
@@ -304,13 +304,13 @@ transcript_hash: [0u8; 32],  // Should be BLAKE3 of initial generator state
 
 | ID          | Title                                                | Severity | Status |
 | ----------- | ---------------------------------------------------- | -------- | ------ |
-| FIND-P2-001 | SSS recovery does not update DID authentication      | Critical | Open   |
-| FIND-P2-002 | SSS share encryption uses XOR instead of AES-256-GCM | Critical | Open   |
-| FIND-P2-003 | DKG share packages use XOR encryption                | Critical | Open   |
-| FIND-P2-010 | ZK circuit uses dummy field values for trusted setup | High     | Open   |
-| FIND-P2-011 | Trusted setup transcript hash initialized to zero    | Medium   | Open   |
+| FIND-P2-001 | SSS recovery does not update DID authentication      | Critical | ✅ Closed in Phase 3   |
+| FIND-P2-002 | SSS share encryption uses XOR instead of AES-256-GCM | Critical | ✅ Closed in Phase 3   |
+| FIND-P2-003 | DKG share packages use XOR encryption                | Critical | ✅ Closed in Phase 3   |
+| FIND-P2-010 | ZK circuit uses dummy field values for trusted setup | High     | ✅ Closed in Phase 3   |
+| FIND-P2-011 | Trusted setup transcript hash initialized to zero    | Medium   | ✅ Closed in Phase 3   |
 
-**Totals**: 0 Fixed, 3 Critical Open, 1 High Open, 1 Medium Open
+**Totals**: 5 Fixed (all closed in Phase 3), 0 Open
 
 ---
 

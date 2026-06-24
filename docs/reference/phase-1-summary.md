@@ -15,7 +15,7 @@
 | #   | Finding                              | Severity | Status          | Notes                                                                                           |
 | --- | ------------------------------------ | -------- | --------------- | ----------------------------------------------------------------------------------------------- |
 | 1   | FIND-024: Typed Error Migration      | Medium   | ✅ Complete     | 34 typed error enums with `thiserror`; zero `Result<_, String>` remaining                       |
-| 2   | FIND-023: `unwrap()` Replacement     | Medium   | ✅ Complete     | `#![deny(clippy::unwrap_used)]` on all 7 crates; zero production `unwrap()`                     |
+| 2   | FIND-023: `unwrap()` Replacement     | Medium   | ✅ Complete     | `#![deny(clippy::unwrap_used)]` on all 14 crates; zero production `unwrap()`                     |
 | 3   | E2E REST API Integration Tests       | High     | ✅ Complete     | 19 test functions covering 9 endpoints × 4 auth states, rate limiting, ACL, CORS, error formats |
 | 4   | Code Coverage Integration            | Medium   | ✅ Complete     | `cargo llvm-cov` replaces tarpaulin in CI; 70% target with 5% threshold                         |
 | 5   | FIND-033: RUSTSEC Advisory Review    | Low      | ✅ Complete     | Removed stale RUSTSEC-2025-0055; added review dates to all 8 remaining ignores                  |
@@ -58,12 +58,12 @@ All modules now use `thiserror`-derived error enums. The following error types e
 | `quantum_commit`    | `BindingError`           | binding   |
 | `provenance`        | `ProvenanceTrackerError` | binding   |
 | `key_rotation`      | `KeyRotationError`       | binding   |
-| `poseidon`          | `ZkError`                | zk        |
-| `settlement`        | `SettlementError`        | zk        |
-| `prover`            | `ProverError`            | zk        |
-| `proof_bundle`      | `ProofBundleError`       | zk        |
-| `setup`             | `SetupError`             | zk        |
-| `operator`          | `OperatorError`          | zk        |
+| `poseidon`          | `ZkError`                | omnia-adapters        |
+| `settlement`        | `SettlementError`        | omnia-adapters        |
+| `prover`            | `ProverError`            | omnia-adapters        |
+| `proof_bundle`      | `ProofBundleError`       | omnia-adapters        |
+| `setup`             | `SetupError`             | omnia-adapters        |
+| `operator`          | `OperatorError`          | omnia-adapters        |
 | `economics`         | `EconomicsError`         | economics |
 | `time_lock`         | `TimeLockError`          | economics |
 | `auth`              | `AuthError`              | node      |
@@ -72,7 +72,7 @@ All modules now use `thiserror`-derived error enums. The following error types e
 
 ### FIND-023: Systematic `unwrap()` Replacement
 
-- `#![deny(clippy::unwrap_used)]` enforced on all 7 library crates
+- `#![deny(clippy::unwrap_used)]` enforced on all 14 library crates
 - `#[allow(clippy::unwrap_used)]` on all `#[cfg(test)]` modules
 - Zero production `unwrap()` calls remain
 - `.expect()` calls limited to metric initialization and signal handler setup (acceptable cases)
@@ -166,9 +166,9 @@ The verifier at `omnia-adapters/contracts/ethereum/OmniaRollup.sol` was already 
 | `cargo test -p omnia-node --test integration -- --test-threads=1`                 | ✅ 6/6 Pass   |
 | `cargo test --workspace --exclude omnia-fuzz --lib`                               | ✅ All Pass   |
 | `cargo fmt --all -- --check`                                                      | ✅ Pass       |
-| `#![deny(clippy::unwrap_used)]` on all 7 crates                                   | ✅ Confirmed  |
-| `#![deny(unsafe_code) (see SAFETY.md)]` on all 7 crates                           | ✅ Confirmed  |
-| `#![warn(missing_docs)]` on all 7 crates                                          | ✅ Confirmed  |
+| `#![deny(clippy::unwrap_used)]` on all 14 crates                                   | ✅ Confirmed  |
+| `#![deny(unsafe_code) (see SAFETY.md)]` on all 14 crates                           | ✅ Confirmed  |
+| `#![warn(missing_docs)]` on all 14 crates                                          | ✅ Confirmed  |
 
 ### Bug Fix: Route Path Parameter Syntax
 
