@@ -1,105 +1,162 @@
 # Performance Baselines & Benchmark Gates
 
-> Audience: Developers
-> Context: Measured performance data and benchmark gates for the Omnia Protocol
-> Last Updated: 2026-05-23
+> Audience: Developers, CI Engineers
+> Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
+> Last Updated: 2026-06-24
+
+## 3-Layer Gate Architecture
+
+The benchmark regression gate has three layers, each addressing a
+different variance source. All three run in CI via
+`.github/workflows/bench.yml` (shared runners) and
+`.github/workflows/bench-self-hosted.yml` (self-hosted runners).
+
+| Layer | What it measures | Script | Threshold (shared) | Threshold (self-hosted) |
+|-------|-----------------|--------|---------------------|-------------------------|
+| 1. IAI-Callgrind | Deterministic instruction counts | `scripts/check_iai_regression.py` | 2% | 1% |
+| 2. Multi-sample Criterion | Wall-clock with 95% bootstrap CI | `scripts/multi_sample_bench.py` | 10% (CI overlap test) | 5% (CI overlap test) |
+| 3. Single-sample Criterion | Wall-clock point estimate | `scripts/check_benchmark_regression.py` | 10% (per-bench overrides) | 5% |
+
+**Layer 1 (IAI)** is the primary regression signal — if IAI regresses,
+the code path genuinely changed (more instructions executed). IAI
+counts are DETERMINISTIC for a given code path + compiler version.
+
+**Layer 2 (Multi-sample)** runs each criterion benchmark N times
+(N=5 on shared runners, N=10 on self-hosted), computes a 95%
+bootstrap confidence interval, and only fails if the CI does NOT
+overlap the baseline AND the mean exceeds the threshold. This
+filters out single-run noise.
+
+**Layer 3 (Single-sample)** is the fast gate for every-push validation.
+It runs once and uses wider thresholds to avoid false positives from
+runner variance.
 
 ## Test Environment
 
-```bash
-OS: Linux 5.10.134 (x86_64, cloud instance)
-CPU: Intel Xeon, 4 cores
-RAM: 8 GiB
-Rust: rustc 1.95.0 (59807616e 2026-04-14)
-Build: cargo build --release (opt-level=2, no LTO, codegen-units=16)
-Runtime: synchronous micro-benchmarks (Phase A)
-Consensus: BFT with configurable total_nodes
-Event size: 64 bytes (default)
+```
+Shared runners (bench.yml):
+  OS: Linux (GitHub Actions ubuntu-latest, x86_64)
+  CPU: 4 cores (heterogeneous Intel/AMD, 2.7-3.8 GHz — ±20% inter-run variance)
+  RAM: 16 GiB
+  Rust: rustc 1.91.0
+  Build: release (lto=fat, codegen-units=1, strip=symbols)
+
+Self-hosted runners (bench-self-hosted.yml):
+  OS: Ubuntu 22.04+ LTS (bare metal preferred)
+  CPU: 8+ physical cores (pinned, performance governor, ASLR disabled)
+  RAM: 32 GiB
+  Rust: rustc 1.91.0
+  Build: release (lto=fat, codegen-units=1, strip=symbols)
+  Setup: see docs/operations/self-hosted-runner-setup.md
 ```
 
-## Consensus Throughput
+## Current Baselines (v0.1.68)
 
-### Methodology
+Source of truth: `benches/baselines.json` (criterion) and
+`benches/iai_baselines.json` (IAI instruction counts).
 
-- Direct synchronous micro-benchmarks using crate APIs
-- Single-node measurement (total_nodes=1) for pipeline throughput
-- Batch size: 1000 events, 10 iterations
-- See `docs/benchmarks/baseline-v0.1.48.md` for full details
+### Criterion Baselines (Layer 2 + Layer 3)
 
-### Results (v0.1.48)
+| Benchmark | Baseline | Threshold | Direction | Source Bench |
+|-----------|----------|-----------|-----------|--------------|
+| consensus_throughput | 12,000 ops/s | 15% | higher_is_better | tx_throughput/sustained_tps_single_node |
+| finality_latency_mean | 24,520 ns | 10% | lower_is_better | finality_latency/creation_to_finality_mean |
+| dag_insert_p50 | 22,750 ns | 10% | lower_is_better | dag_insert/insert_latency/0 |
+| gossip_propagation_p50 | 24,160 ns | 10% | lower_is_better | gossip_latency/propagation_single_node_sim |
+| zk_proof_gen_basic | 2,500,000 ns | 20% | lower_is_better | groth16_proof_generation/basic_circuit |
+| zk_proof_gen_expanded_100 | 8,000,000,000 ns | 20% | lower_is_better | zk_proof_gen/100_tx_batch |
+| deterministic_compute | 21,550 ns | 10% | lower_is_better | deterministic_hash/deterministic_compute |
+| vector_clock_merge_100 | 4,342 ns | 10% | lower_is_better | vector_clock/merge_100_nodes |
+| event_creation_sign | 21,750 ns | 10% | lower_is_better | event_creation/create_and_sign |
+| graph_insertion | 25,180 ns | 10% | lower_is_better | graph_insertion/insert_chain |
 
-> **Reproduction**: Run `cargo bench --bench baseline_bench` and `cargo bench --bench throughput` for current measurements. The v0.1.48 micro-benchmarks used `total_nodes=3` with 1 registered validator.
+### Network-Simulated Baselines (Layer 3, in-process multi-node)
 
-| Metric                           | Value            |
-| -------------------------------- | ---------------- |
-| **Sustained TPS**                | 7,190 events/sec |
-| **Finality p50**                 | 93.47 µs         |
-| **Finality p95**                 | 154.76 µs        |
-| **Finality p99**                 | 177.06 µs        |
-| **DAG Insert p50 (0 events)**    | 18.09 µs         |
-| **DAG Insert p50 (1000 events)** | 18.28 µs         |
-| **Gossip propagation p50 (sim)** | 38.93 µs         |
+These benchmarks use the `ChaosNetwork` in-process simulation framework
+to measure the FULL consensus pipeline: event creation → gossip → peer
+receipt → graph insert → consensus → finality. Numbers are still
+synthetic (no real TCP/UDP) but include multi-node coordination overhead.
 
-### Previous Load Test Results (v0.1.47, tokio-based)
+| Benchmark | Baseline | Threshold | Description |
+|-----------|----------|-----------|-------------|
+| network_sim_finality_3_node | 29,745 ns | 25% | 3-node finality latency (full pipeline) |
+| network_sim_finality_5_node | 37,726 ns | 25% | 5-node finality latency (scaling curve) |
+| network_sim_throughput_3_node | 72 elem/s | 40% | 3-node sustained TPS with contention |
+| network_sim_partition_recovery | 104,890 ns | 30% | Partition heal → first finality |
+| network_sim_crash_recovery | 220,810 ns | 30% | Crash → restart → state sync |
 
-| Config | Events/sec Submitted | Events/sec Finalized | p50 Latency | p90 Latency | p99 Latency | Peak Memory |
-| ------ | -------------------- | -------------------- | ----------- | ----------- | ----------- | ----------- |
-| 100/s  | 100.0                | 100.0                | 0.21 ms     | 0.29 ms     | 0.38 ms     | 5.8 MB      |
-| 500/s  | 500.0                | 500.0                | 1.21 ms     | 1.53 ms     | 1.79 ms     | 14.4 MB     |
-| 1000/s | 527.2                | 527.2                | 1.91 ms     | 2.25 ms     | 2.78 ms     | 22.5 MB     |
-| 5000/s | 429.9                | 429.9                | 2.19 ms     | 2.66 ms     | 2.95 ms     | 23.2 MB     |
+### IAI Instruction-Count Baselines (Layer 1, deterministic)
 
-## ZK Performance
+Source: `benches/iai_baselines.json`. All counts are DETERMINISTIC —
+no noise tolerance needed. The 2% threshold only accommodates minor
+compiler-version drift.
 
-| Operation                              | Time                       |
-| -------------------------------------- | -------------------------- |
-| Poseidon hash (off-chain)              | 95.50 µs (p50: 92.00 µs)   |
-| Groth16 proof gen (basic, 1 tx)        | 1.73 ms (p50: 1.77 ms)     |
-| Groth16 proof gen (expanded, 4 events) | 317.01 ms (p50: 311.43 ms) |
-| Groth16 proof verify (single)          | 2.67 ms (p50: 2.65 ms)     |
-| Trusted setup (basic)                  | 5.00 ms (p50: 5.03 ms)     |
-| Trusted setup (expanded, 4 events)     | 410.57 ms (p50: 411.93 ms) |
-| Merkle tree build (64 leaves)          | 348.00 µs                  |
-| Merkle tree build (256 leaves)         | 5.31 ms                    |
+| Benchmark | Instructions | L1 Hits | Est. Cycles | Description |
+|-----------|-------------|---------|-------------|-------------|
+| bench_vector_clock_merge_100 | 186,112 | 241,874 | 259,739 | Vector clock merge (100 nodes) |
+| bench_event_validate | 813,549 | 1,111,138 | 1,169,423 | Event creation + Ed25519 verification |
+| bench_causal_graph_insert | 688,409 | 958,136 | 1,012,761 | Causal graph insert (genesis + 1 child) |
+| bench_check_equivocation_detected | 669,587 | 934,657 | 978,617 | Constant-time equivocation detection (positive) |
+| bench_check_equivocation_not_detected | 670,823 | 936,052 | 980,017 | Equivocation detection (negative, common case) |
+| bench_record_offense_equivocation | 10,869 | 14,592 | 24,707 | Record 500-point offense (state mutation) |
+| bench_record_offense_liveness | 10,869 | 14,596 | 24,691 | Record 100-point offense (different branch) |
+| bench_check_liveness_violation | 10,869 | 14,596 | 24,691 | Liveness check with violation detected |
+| bench_check_liveness_no_violation | 4,902 | 6,507 | 12,822 | Liveness check, no violation (common case) |
 
-## VRF Performance
+## ZK Scaling Analysis
 
-| Operation                         | Time                     |
-| --------------------------------- | ------------------------ |
-| VRF compute                       | 18.73 µs (p50: 17.62 µs) |
-| VRF verify                        | 38.61 µs (p50: 36.98 µs) |
-| Leader selection (100 validators) | 0.64 µs (p50: 0.55 µs)   |
+The ZK proof system scales **sub-linearly** (better than linear) with
+batch size. Per-event cost DECREASES from 125ms (1 event) to 79ms
+(100 events) due to amortization of fixed Groth16 prover overhead.
 
-## Throughput Bottleneck Analysis
+| Events | Time (ms) | Per-event (ms) | Ratio vs 1-event |
+|--------|-----------|----------------|-------------------|
+| 1 | 125 | 125 | 1.00x |
+| 4 | 415 | 104 | 3.31x (sub-linear) |
+| 16 | 1,484 | 93 | 11.87x (sub-linear) |
+| 100 | 7,934 | 79 | 63.5x (sub-linear) |
 
-The true pipeline throughput is ~7,190 events/sec (measured without tokio overhead). Remaining bottlenecks for real-world deployment:
+See `docs/benchmarks/zk-scaling-analysis.md` for the full analysis
+explaining why the "27x superlinear scaling" observation was a
+misinterpretation (comparing two different circuits).
 
-- Network I/O (gossip, QUIC transport) — 1-10ms per hop
-- BFT supermajority requirement — 3-of-4 nodes must agree
-- ZK proof generation — ~79ms/event for expanded circuits
-- Signature verification — batch verification could help
+## CI Workflow Structure
 
-## Benchmark Gates (Performance Regression Thresholds)
+### Shared Runner (bench.yml)
 
-| Metric                     | Baseline (v0.1.48) | Gate                                | Action if Exceeded                  |
-| -------------------------- | ------------------ | ----------------------------------- | ----------------------------------- |
-| Single-node throughput     | ~7,190 events/sec  | <80% of baseline (5,752 events/sec) | Block merge, investigate regression |
-| Finality p99               | 177.06 µs          | >3× baseline (531 µs)               | Block merge, investigate regression |
-| DAG insert p50             | 18.09 µs           | >5× baseline (90 µs)                | Block merge, investigate regression |
-| Gossip p50 (sim)           | 38.93 µs           | >3× baseline (117 µs)               | Block merge, investigate            |
-| VRF compute                | 18.73 µs           | >2× baseline (37 µs)                | Block merge, investigate            |
-| ZK proof gen (basic)       | 1.73 ms            | >2× baseline (3.46 ms)              | Block merge, investigate            |
-| ZK proof gen (expanded, 4) | 317.01 ms          | >2× baseline (634 ms)               | Block merge, investigate            |
-| Memory at 1000/s (tokio)   | 22.5 MB            | >2× baseline (45 MB)                | Block merge, investigate            |
+| Job | What it does | Timeout |
+|-----|-------------|---------|
+| criterion-bench | Fast criterion benchmarks (throughput, baseline, sharding) + regression gate | 30 min |
+| zk-bench | ZK benchmarks (slow, 85s+ per sample) + ZK-only regression gate | 45 min |
+| network-sim-bench | Multi-node ChaosNetwork benchmarks + regression gate | 30 min |
+| iai-callgrind-bench | IAI instruction-count benchmarks + IAI regression gate | 30 min |
+| multi-sample-bench | N=5 multi-sample significance gate (main pushes + manual) | 60 min |
 
-### Gate Rationale
+### Self-Hosted Runner (bench-self-hosted.yml)
 
-- **Throughput**: 80% threshold allows for ~20% variance due to environmental factors while catching real regressions. The jump from initial tokio-based measurements to ~7,190 events/sec was a methodology fix, not a code improvement.
-- **Latency**: 3× threshold for p99 allows for normal variance while catching genuine degradation. True regressions typically show 5-10× degradation.
-- **DAG insert**: 5× threshold because insert operations are fast (~18 µs) and even small perturbations can cause percentage-wise large swings that are not regressions.
-- **ZK operations**: 2× threshold because these are compute-bound and should be highly deterministic.
+| Job | What it does | Timeout |
+|-----|-------------|---------|
+| preflight | Verify self-hosted runner is online | 5 min |
+| criterion-self-hosted | N=10 multi-sample, 5% threshold | 90 min |
+| iai-self-hosted | IAI gate, 1% threshold | 30 min |
+| zk-self-hosted | ZK multi-sample, 5% threshold | 60 min |
+
+## Historical Baselines
+
+### v0.1.48 (2026-05-23)
+
+| Metric | Value |
+|--------|-------|
+| Sustained TPS | 7,190 events/sec |
+| Finality p50 | 93.47 µs |
+| DAG Insert p50 | 18.09 µs |
+| Gossip propagation p50 (sim) | 38.93 µs |
+| ZK proof gen (basic, 1 tx) | 1.73 ms |
+| ZK proof gen (expanded, 4 events) | 317.01 ms |
+
+See `docs/benchmarks/baseline-v0.1.48.md` for the full v0.1.48 report.
 
 ---
 
-Back: [reference/](./) | Related: [roadmap.md](./roadmap.md)
+Back: [reference/](./) | Related: [roadmap.md](./roadmap.md), [zk-scaling-analysis.md](../benchmarks/zk-scaling-analysis.md)
 Next: [blueprint-reference.md](./blueprint-reference.md)
