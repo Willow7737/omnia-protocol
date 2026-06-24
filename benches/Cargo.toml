@@ -24,7 +24,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 # via `cargo install iai-callgrind-runner --version 0.13.4` to match this
 # library version. If you bump this version, also update the CI install
 # command AND regenerate Cargo.lock (cargo update -p iai-callgrind).
-iai-callgrind = "0.13"
+iai-callgrind = "0.16"
 tokio = { version = "1.38", features = ["full"] }
 rand = "0.8"
 postcard = { version = "1", features = ["alloc"] }
