@@ -33,6 +33,8 @@ If the caller has insufficient UBC, the operation is rejected with `ShardError::
 
 A `ShardRouter::new_without_fees()` constructor is available for testing.
 
+v0.1.69 audit fix: `with_nonce_store` now panics on load failure (was silent reset). Added `with_nonce_store_checked()` returning `Result`. Cross-shard `route_cross_shard` now verifies `causal_proof` is non-empty and happened-before the event's vector clock.
+
 Located in: `shards/src/router.rs`
 
 ## Cross-Shard Transactions
@@ -55,6 +57,8 @@ The `FeeSchedule` maps each `ShardOp` variant to a fixed `u64` fee:
 
 Fees are deducted atomically before shard dispatch. No fee refund on operation failure.
 
+v0.1.69 audit fix (C-6): fees are non-refundable on operation failure.
+
 ## Replay Protection
 
 Per-creator nonce tracking with `RedbNonceStore` persistence across restarts. Production nodes **MUST** use persistent nonce storage; in-memory nonce tracking (the fallback when no data dir is configured) loses replay protection state on restart.
@@ -68,7 +72,7 @@ Per-creator nonce tracking with `RedbNonceStore` persistence across restarts. Pr
 ### IdentityShard
 
 - `did:omnia:` method with full validation (`shards/src/identity/did.rs`)
-- Shamir's Secret Sharing over GF(256) for social recovery (`shards/src/identity/recovery.rs`)
+- Shamir's Secret Sharing over GF(256) for social recovery (`shards/src/identity/recovery.rs`). v0.1.69 audit fix: `ConfigureRecovery` now stores `BLAKE3(secret)` as `secret_commitment` in `RecoveryConfig`. `RecoverDid` verifies the reconstructed secret matches the commitment before rotating keys — closes forged-shares attack. See `shards/src/identity/state.rs`.
 - Privacy-preserving biometric anchors: `BLAKE3(salt || template)` — template never stored in cleartext (`shards/src/identity/biometric.rs`)
 - `AgentIdentity` with 5 capability types (`shards/src/identity/agent.rs`)
 - Encrypted share storage with AES-256-GCM
@@ -85,7 +89,7 @@ Per-creator nonce tracking with `RedbNonceStore` persistence across restarts. Pr
 
 - Consent registry with `ConsentRecord`
 - `BiologicalOp::GrantAccess` / `RevokeAccess` for patient-controlled data sharing
-- `BiologicalOp::QueryWithZkProof` — ZK proof for privacy-preserving queries (stub verifier for now)
+- `BiologicalOp::QueryWithZkProof` — ZK proof for privacy-preserving queries. Real Groth16 verification is implemented behind the `real_verification` feature flag. Public inputs are derived from `(subject, consumer)` via BLAKE3→BN254-Fr (closes attacker-supplied VerifyingKey attack from v0.1.69 audit). See `shards/src/biological/state.rs`.
 
 ## Shard Architecture Diagram
 

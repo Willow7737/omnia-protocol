@@ -92,6 +92,9 @@ mod tests {
 - ✅ Clippy passes: `cargo clippy -- -D warnings`
 - ✅ Format is correct: `cargo fmt --check`
 - ✅ Documentation is complete: `cargo doc`
+- ✅ cargo audit (with ignored advisories)
+- ✅ cargo doc --workspace --no-deps (rustdoc links)
+- ✅ 3-layer benchmark regression gate (IAI + multi-sample + criterion)
 
 ### 2. Documentation Contributions 📝
 
@@ -286,8 +289,8 @@ What actually happens
 ## Environment
 
 - OS: macOS 12.0
-- Rust: 1.75.0
-- Version: 4.0.0
+- Rust: 1.91.0
+- Version: 0.1.68
 ```
 
 ### Feature Requests

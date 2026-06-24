@@ -19,14 +19,19 @@ This document covers the operational aspects of running Omnia Protocol nodes, in
 
 The `omnia-node` binary supports the following subcommands:
 
-| Subcommand         | Description                          | Key Flags                                  |
-| ------------------ | ------------------------------------ | ------------------------------------------ |
-| `run`              | Run the node (default)               | All `--node-id`, `--http-port`, etc. flags |
-| `keygen`           | Generate validator keypair           | `--output-dir`, `--passphrase`             |
-| `setup-contribute` | Contribute to Powers of Tau ceremony | `--degree`, `--min-participants`, `--seed` |
-| `setup-verify`     | Verify Powers of Tau ceremony        | `--degree`, `--num-contributions`          |
-| `snapshot`         | Take a state snapshot                | `--output`                                 |
-| `restore`          | Restore from a snapshot              | `--input`                                  |
+| Subcommand            | Description                          | Key Flags                                  |
+| --------------------- | ------------------------------------ | ------------------------------------------ |
+| `run`                 | Run the node (default)               | All `--node-id`, `--http-port`, etc. flags |
+| `keygen`              | Generate validator keypair           | `--output-dir`, `--passphrase`             |
+| `setup-contribute`    | Contribute to Powers of Tau ceremony | `--degree`, `--min-participants`, `--seed` |
+| `setup-verify`        | Verify Powers of Tau ceremony        | `--degree`, `--num-contributions`          |
+| `ceremony-serve`      | Run the MPC ceremony server          | `--degree`, `--bind-addr`                  |
+| `ceremony-contribute` | Contribute to an MPC ceremony        | `--server-addr`, `--contribution-file`     |
+| `ceremony-verify`     | Verify an MPC ceremony transcript    | `--transcript`, `--output`                 |
+| `genesis-init`        | Initialize genesis state from config | `--config`, `--data-dir`                   |
+| `genesis-validate`    | Validate genesis state file          | `--input`                                  |
+| `snapshot`            | Take a state snapshot                | `--output`                                 |
+| `restore`             | Restore from a snapshot              | `--input`                                  |
 
 All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMNIA_NODE_ID=1`).
 
@@ -34,7 +39,7 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 ## REST API Endpoints
 
-The node exposes 9 REST API endpoints under `/api/v1/`:
+The node exposes 14 REST API endpoints under `/api/v1/`:
 
 | Method | Path                                   | Description                  |
 | ------ | -------------------------------------- | ---------------------------- |
@@ -49,6 +54,13 @@ The node exposes 9 REST API endpoints under `/api/v1/`:
 | POST   | `/api/v1/governance/vote`              | Cast quadratic-weighted vote |
 | GET    | `/api/v1/economics/balance/{did}`      | Check UBC balance            |
 | POST   | `/api/v1/economics/transfer`           | Spend UBC tokens             |
+| GET    | `/api/v1/ceremony/state`               | Current MPC ceremony state   |
+| POST   | `/api/v1/ceremony/contribute`          | Submit ceremony contribution |
+| GET    | `/api/v1/ceremony/transcript`          | Download ceremony transcript |
+| POST   | `/api/v1/ceremony/finalize`            | Finalize ceremony            |
+| GET    | `/api/v1/errors`                       | Recent error log             |
+
+**Public endpoints:** 5 endpoints are PUBLIC (no JWT): `/api/v1/node/info`, `/api/v1/node/peers`, `/api/v1/errors`, `/api/v1/ceremony/state`, `/api/v1/ceremony/transcript`
 
 **Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
@@ -76,7 +88,7 @@ redb is a production-quality embedded key-value store written in pure Rust. Key 
 
 ```rust
 // node/src/main.rs — Slashing persistence
-let mut substrate_config = SubstrateConfig::new(node_id_bytes);
+let mut substrate_config = SubstrateConfig::try_new(node_id_bytes)?;
 substrate_config.slashing_data_dir = Some(slashing_dir.to_path_buf());
 
 // node/src/main.rs — Nonce persistence
@@ -93,6 +105,9 @@ data/
 │   └── slashing.redb  # redb single-file database
 ├── nonces/            # RedbNonceStore database
 │   └── nonces.redb    # redb single-file database
+├── consensus/         # RedbConsensusStore database
+│   └── consensus.redb # redb single-file database
+├── node_key.bin       # Persistent libp2p node keypair (v0.1.69)
 └── snapshots/         # State snapshots (via CLI subcommand)
 ```
 

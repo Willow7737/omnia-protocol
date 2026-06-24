@@ -35,7 +35,11 @@ UBC tokens are **soulbound** — they cannot be transferred between identities.
 - `ScientificSimulation { simulation_id, params_hash }` — Distributed computation
 - `DistributedStorage { data_hash, storage_duration }` — Data hosting
 
-Verification is currently a stub (`UsefulWorkProof::verify_stub()`) that checks for non-zero result hash and positive compute units. Reward amount equals compute units consumed (1:1 ratio).
+v0.1.69 audit fix: `EconomicsState::apply()` now requires a configured `verifier_pubkey` via `set_verifier_pubkey()` or `with_verifier_pubkey()`. The previous fallback to `[0u8; 32]` (which corresponds to a known Ed25519 secret key) allowed forged work proofs. See `economics/src/economics_shard.rs`.
+
+### Unified EconomicsState
+
+The node binary constructs a single `EconomicsState::new()` stored in `AppState.economics: Arc<Mutex<EconomicsState>>`. All HTTP endpoints (balance, transfer, governance, shard operations) share this instance. v0.1.69 audit fix: shard operations now apply directly to `AppState.economics` (previously used a separate EconomicsShard internal state, causing mints to be invisible to balance reads).
 
 ## Governance — ✅ Implemented (partially)
 

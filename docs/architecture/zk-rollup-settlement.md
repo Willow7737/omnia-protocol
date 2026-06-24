@@ -21,7 +21,7 @@ The `SettlementAdapter` trait (`omnia-adapters/src/settlement/mod.rs`) is the pr
 pub trait SettlementAdapter: Send + Sync {
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError>;
     async fn fetch_finality(&self, tx: TxHash) -> Result<FinalityProof, SettlementError>;
-    async fn verify_inclusion(&self, proof: &MerkleProof) -> Result<bool, SettlementError>;
+    async fn verify_inclusion(&self, proof: &MerkleProof, leaf: &[u8; 32]) -> Result<bool, SettlementError>;
     fn is_live(&self) -> bool { false }
 }
 ```
@@ -60,6 +60,10 @@ pub trait SettlementLayer: Send + Sync {
 - Gas estimation and confirmation waiting with configurable `confirmation_blocks`
 
 Located in: `omnia-adapters/src/settlement/ethereum/`
+
+### v0.1.69 Security Fix: verify_proof_with_root
+
+The `SettlementAdapter::verify_proof` trait method now fails-closed in Ethereum live mode. It cannot safely derive `batch_merkle_root` from the prover's own proof bytes (a malicious prover could craft proof bytes whose offset 192..224 matched the on-chain root). Use `EthereumAdapter::verify_proof_with_root()` instead, which requires the `batch_merkle_root` as a trusted parameter fetched from the on-chain event log. See `omnia-adapters/src/settlement/ethereum/mod.rs`.
 
 ## Other Adapters — Stubs
 

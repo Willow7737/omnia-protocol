@@ -7,7 +7,7 @@
 ## Implementation Status
 
 ```
-[█████████████████████████░░░] 90% Complete
+[███████████████████████████░] 96% Complete
 ```
 
 | Layer                         | Status         | Tests         |
@@ -25,7 +25,7 @@
 
 ## Technology Stack
 
-### Core Crates (7 + support)
+### Core Crates (14 crates)
 
 | Crate             | Purpose                                                                 | Key Dependencies                              |
 | ----------------- | ----------------------------------------------------------------------- | --------------------------------------------- |
@@ -49,6 +49,8 @@
 | ML-KEM-768         | `ml-kem` 0.2 (FIPS-203)                     | `binding/src/quantum_commit.rs`   |
 | BLS12-381          | `blst`                                      | `substrate/src/bls.rs`            |
 | Shamir's SSS       | GF(256) with AES irreducible polynomial     | `shards/src/identity/recovery.rs` |
+| VRF V2 (ECVRF)     | ECVRF construction (spec-compliant V2)      | `omnia-crypto/src/vrf.rs`         |
+| ML-KEM-768         | `ml-kem` 0.2 (FIPS-203)                     | `binding/src/quantum_commit.rs`   |
 
 ### State Management
 
@@ -97,6 +99,8 @@
 | ZK circuit hash      | ⚠️ Poseidon implemented | Round constants use BLAKE3 derivation; dual-hash transition started |
 | RF fingerprinting    | ⚠️ Stub                 | SDR hardware (HackRF/USRP)                                          |
 | Proof-of-useful-work | ⚠️ Stub                 | Production verification                                             |
+
+> **Note:** 3-layer benchmark gate operational (IAI + multi-sample + criterion). Network-simulated multi-node benchmarks added.
 
 ## What Doesn't Exist Yet 🌑
 

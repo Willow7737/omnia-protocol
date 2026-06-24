@@ -22,7 +22,7 @@ pub async fn process_consensus(&mut self) -> Vec<EventId> {
     let mut all_committed = Vec::new();
     let to_process: Vec<EventId> = self.unprocessed_events.drain(..).collect();
     for id in &to_process {
-        if let Some(event) = graph.get(id) {
+        if let Some(event) = graph.get_checked(id) {
             if let Ok(committed) = self.consensus.process_event(event, &graph) {
                 all_committed.extend(committed);
             }
@@ -33,6 +33,8 @@ pub async fn process_consensus(&mut self) -> Vec<EventId> {
 ```
 
 This makes each consensus iteration O(k), where k is the number of new events since the last iteration.
+
+> Note: The actual consensus loop calls `process_consensus_round()` (not just `process_consensus()`), which: (1) drains gossip events, (2) checks leader duty and calls `propose_block()`, (3) calls `process_consensus()`, (4) forwards committed events to the shard processor.
 
 ## Queue Invariants
 

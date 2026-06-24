@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
-> 📅 Last Updated: 2026-05-26
+> 📅 Last Updated: 2026-06-24
 
 ## Phase 0: The Seed ✅ Complete
 
@@ -141,6 +141,18 @@ _Goal: Proof of Concept_
 12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
 13. Mobile wallet
 14. Throughput optimization (multi-threaded, sharded consensus)
+
+### v0.1.69 Critical Security Hardening (2026-06-22)
+
+16 critical security vulnerabilities identified and fixed. See SECURITY.md for the full list. Key fixes: identity recovery secret_commitment, biological ZK non-empty public_inputs, cross-shard causal proof verification, nonce store fail-closed, economics verifier_pubkey required, Ethereum verify_proof_with_root, per-client rate limiting, /readyz peer tracking, validator registration, persistent node keypair.
+
+### 3-Layer Benchmark Gate (2026-06-23)
+
+Implemented IAI-callgrind (deterministic instruction counts, 2% threshold), multi-sample criterion (95% bootstrap CI, N=5), and self-hosted runner workflow. Added network-simulated multi-node benchmarks. See `docs/reference/benchmark-gates.md`.
+
+### ZK Scaling Analysis (2026-06-23)
+
+Investigated and debunked '27x superlinear scaling' — actual scaling is sub-linear (per-event cost decreases from 125ms to 79ms for 1→100 events). See `docs/benchmarks/zk-scaling-analysis.md`.
 
 ### Timeline
 

@@ -332,7 +332,7 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 ### REST API
 
-9 endpoints under `/api/v1/` with Swagger UI at `/swagger-ui`:
+14 endpoints under `/api/v1/` plus 4 root-level endpoints (`/healthz`, `/readyz`, `/health`, `/metrics`) with Swagger UI at `/swagger-ui`:
 
 | Method | Path                                   | Description                  |
 | ------ | -------------------------------------- | ---------------------------- |
@@ -350,18 +350,25 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 **Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Endpoints require valid JWT tokens. Privileged operations (mint UBC, advance epoch) require admin JWT. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
+5 endpoints are PUBLIC (no JWT required): `/api/v1/node/info`, `/api/v1/node/peers`, `/api/v1/errors`, `/api/v1/ceremony/state`, `/api/v1/ceremony/transcript`.
+
 ### Prometheus Metrics
 
-6 node-level metrics registered in `NodeMetrics` (`node/src/state.rs`):
+11 node-level metrics registered in `NodeMetrics` (`node/src/state.rs`):
 
-| Metric                              | Type    | Description                   |
-| ----------------------------------- | ------- | ----------------------------- |
-| `omnia_node_events_submitted_total` | Counter | Events submitted via API      |
-| `omnia_node_events_finalized_total` | Counter | Events finalized by consensus |
-| `omnia_node_peers_connected`        | Gauge   | Connected peers               |
-| `omnia_node_consensus_round`        | Gauge   | Current consensus round       |
-| `omnia_node_shard_operations_total` | Counter | Shard operations processed    |
-| `omnia_node_http_requests_total`    | Counter | HTTP requests served          |
+| Metric                                          | Type    | Description                                |
+| ----------------------------------------------- | ------- | ------------------------------------------ |
+| `omnia_node_events_submitted_total`             | Counter | Events submitted via API                   |
+| `omnia_node_events_finalized_total`             | Counter | Events finalized by consensus              |
+| `omnia_node_peers_connected`                    | Gauge   | Connected peers                            |
+| `omnia_node_shard_operations_total`             | Counter | Shard operations processed                 |
+| `omnia_node_http_requests_total`                | Counter | HTTP requests served                       |
+| `omnia_consensus_tps`                           | Gauge   | Consensus throughput (events/sec)          |
+| `omnia_consensus_finality_latency_seconds`      | Histogram | Finality latency observed by consensus   |
+| `omnia_gossip_propagation_latency_seconds`      | Histogram | Gossip propagation latency               |
+| `omnia_dag_events_total`                        | Counter | Total DAG events inserted                  |
+| `omnia_dag_insertion_latency_seconds`           | Histogram | CausalGraph insertion latency           |
+| `omnia_node_memory_rss_bytes`                   | Gauge   | Process RSS memory in bytes                |
 
 ---
 

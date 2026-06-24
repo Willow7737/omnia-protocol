@@ -51,6 +51,8 @@ pub trait SettlementLayer {
 - Returns typed errors (`SettlementError` enum), not strings
 - Ethereum adapter has dual mode: Simulated (default) and Live (feature-gated)
 
+> Note: The actual `SettlementLayer` trait is `#[async_trait]` async. See `omnia-adapters/src/settlement/mod.rs` for the current definition. A new `SettlementAdapter` trait (3 methods: `submit_root`, `fetch_finality`, `verify_inclusion`) is the preferred interface for new code.
+
 See [ADR-002](../reference/adr-index.md#adr-002-settlement-layer-trait) for the full decision record.
 
 ### Gossip Substrate Interface — ADR-003
@@ -101,6 +103,8 @@ See [ADR-007](../reference/adr-index.md#adr-007-binding-shard-interface) for the
 | ADR-019 | Fast-Sync Protocol                 | BLAKE3 checkpoints, supermajority          |
 | ADR-020 | Kyber KEM / ML-KEM Integration     | FIPS-203, wire-compatible                  |
 | ADR-021 | Gossip Message Compression         | Snappy for >256 bytes                      |
+
+> ADR-012 updated to v2.0.0 in Phase 5: V2 ECVRF (Fiat-Shamir + Ed25519) implemented but V1 (deterministic hash) remains the default.
 
 See [adr-index.md](../reference/adr-index.md) for the complete ADR index with summaries.
 

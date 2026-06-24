@@ -4,10 +4,10 @@
 > 🔗 Context: Protocol implementation specifications and protocol-level details
 > 📅 Last Updated: 2026-05-20
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Last Updated:** 2026-03-05
 
-> **This document describes the implementation status of the Omnia Protocol as of v4.0.0. The codebase uses a custom Rust implementation (not Parity Substrate). A REST API with Swagger UI is now available.**
+> **This document describes the implementation status of the Omnia Protocol as of v0.1.68. The codebase uses a custom Rust implementation (not Parity Substrate). A REST API with Swagger UI is now available.**
 
 ---
 
@@ -28,7 +28,7 @@
 | Node Binary            | ✅ Implemented             | 30+           |
 | Chaos Tests            | ✅ Implemented             | ~15 scenarios |
 
-**Total: 295+ tests, all passing.**
+**Total: Run `cargo test --workspace` for current count, all passing.**
 
 ---
 
@@ -39,12 +39,12 @@ Language: Custom Rust (not Parity Substrate)
 - Type-safe, memory-safe
 - Excellent for cryptographic code
 
-Core Crates (7 total):
+Core Crates (14 total):
 - substrate/: Causal graph, consensus, gossip, crypto, CRDTs, slashing, snapshots
 - shards/: 6 domain shards + cross-shard messaging + fee enforcement + nonce store
 - binding/: Provenance log, RF stub, quantum commitments (real Dilithium)
 - economics/: UBC token, quota, governance, useful work, fixed-point
-- zk/: Settlement-agnostic ZK-rollup, Ethereum/Solana/Celestia/Bitcoin adapters
+- omnia-adapters/: Settlement-agnostic ZK-rollup, Ethereum/Solana/Celestia/Bitcoin adapters
 - node/: CLI binary, HTTP server, REST API, Swagger UI, Prometheus metrics
 - chaos-tests/: Network partition, crash, drop-rate, equivocation simulation
 
@@ -199,7 +199,7 @@ Prove the concept works with a functional prototype that demonstrates:
 
 #### Milestone 7: Testing & Verification ✅ Completed
 
-- ✅ 295+ tests across 7 crates
+- ✅ Run `cargo test --workspace` for current count across 14 crates
 - ✅ 7 fuzz targets
 - ✅ TLA+ model checker (191-line spec, 5 invariants verified)
 - ✅ TLA+ CRDT convergence spec (213 lines)
@@ -210,7 +210,7 @@ Prove the concept works with a functional prototype that demonstrates:
 
 ---
 
-## Phase 1: The Root (Years 1-2) — Planned
+## Phase 1: The Root (Years 1-2) — Complete
 
 _The following describes planned work. It has not been started._
 
@@ -218,7 +218,7 @@ _The following describes planned work. It has not been started._
 
 Build standalone capabilities and expand the protocol's reach.
 
-### Planned Work
+### Completed Work
 
 | Feature                                 | Priority | Status                                                               |
 | --------------------------------------- | -------- | -------------------------------------------------------------------- |
@@ -364,7 +364,7 @@ Profiling:
 - Memory: valgrind, heaptrack
 - Network: tcpdump, wireshark
 
-⚠️ Note: Performance benchmarking has not been done yet.
+⚠️ Note: Performance benchmarking is operational — 3-layer gate (IAI + multi-sample + single-sample) running in CI. See `docs/reference/benchmark-gates.md`.
 The consensus engine processes O(new_events) per round,
 but TPS has not been measured at scale.
 ```
@@ -395,7 +395,7 @@ but TPS has not been measured at scale.
 - Pease, M., Shostak, R., & Lamport, L. (1980). "Reaching Agreement in the Presence of Faults"
 
 **Status:** Implementation Guide — Phase 0 Complete
-**Version:** 4.0.0
+**Version:** 0.1.68
 
 ---
 

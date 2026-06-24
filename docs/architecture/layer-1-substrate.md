@@ -51,7 +51,7 @@ For mathematical convergence proofs, see [crdt-convergence.md](./crdt-convergenc
 - Snappy compression for messages >256 bytes
 - Gossip-about-gossip pattern (inspired by Hashgraph)
 - Bandwidth-efficient: only missing events transmitted
-- Located in: `substrate/src/gossip.rs`, `substrate/src/network.rs`
+- Located in: `omnia-network/src/gossip.rs`, `omnia-network/src/network.rs` (re-exported by substrate)
 
 ### 6. ConsensusEngine
 
@@ -63,6 +63,8 @@ For mathematical convergence proofs, see [crdt-convergence.md](./crdt-convergenc
 - Consensus state persisted across restarts via `RedbConsensusStore`
 - Located in: `substrate/src/consensus.rs`
 
+v0.1.69 audit fix (H-12): `SubstrateConfig::try_new()` propagates invalid `OMNIA_CONSENSUS_SEED` errors instead of silently falling back to a random seed (which would fork the node). `Substrate::new` now panics loudly on persistence failure instead of silently falling back to in-memory state.
+
 For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 
 ### 7. SlashingEngine
@@ -73,6 +75,8 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - `SlashingUndoManager` for governance-based reversal
 - Located in: `substrate/src/slashing.rs`, `substrate/src/slashing_undo.rs`
 
+v0.1.69 audit fix (M-10): `RedbSlashingStore::open()` recovers from corrupt DB by renaming to `.corrupt` and creating fresh.
+
 ### 8. State Management
 
 - `state_root()` — Merkle root of the entire graph state
@@ -80,7 +84,7 @@ For pipeline and queue design, see [pipeline-design.md](./pipeline-design.md).
 - `prune_old_events()` — Event pruning for long-term sustainability
 - `StateSnapshot` — Serialized snapshot with integrity verification
 - Fast-sync protocol for new nodes (BLAKE3 checkpoints, supermajority agreement)
-- Located in: `substrate/src/snapshot.rs`, `substrate/src/fast_sync.rs`
+- Located in: `substrate/src/snapshot.rs`, `omnia-network/src/fast_sync.rs` (re-exported by substrate)
 
 ### 9. KeyStore and Crypto
 

@@ -8,7 +8,7 @@
   </a>
   <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
   <img src="https://img.shields.io/badge/Tests-Run_cargo_test-00ff88?style=for-the-badge&logo=rust" alt="Tests">
-  <img src="https://img.shields.io/badge/Lines-83,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
+  <img src="https://img.shields.io/badge/Lines-85,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/Rust-1.91-orange?style=for-the-badge&logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/Phases_0--4-Complete-brightgreen?style=for-the-badge" alt="Phases 0-4">
@@ -349,6 +349,27 @@ _Goal: Performance Validation_
 - 📋 External security audit
 - 📋 Public testnet launch
 
+#### v0.1.69 Critical Security Hardening
+
+16 critical security vulnerabilities identified and fixed in v0.1.69. See [SECURITY.md](./SECURITY.md) for the full list. Key fixes:
+
+- Identity recovery `secret_commitment` — fixed in `shards/src/identity/recovery.rs`
+- Biological ZK non-empty `public_inputs` — fixed in `shards/src/biological/validator.rs`
+- Cross-shard causal proof verification — fixed in `shards/src/cross_shard.rs`
+- Nonce store fail-closed — fixed in `shards/src/nonce_store.rs`
+- Economics `verifier_pubkey` required — fixed in `economics/src/useful_work.rs`
+- Ethereum `verify_proof_with_root` — fixed in `omnia-adapters/src/settlement/ethereum/live.rs`
+- Per-client rate limiting — fixed in `substrate/src/rate_limiter.rs`
+- `/readyz` peer tracking — fixed in `node/src/http.rs`
+- Validator registration — fixed in `economics/src/economics_shard.rs`
+- Dual `EconomicsState` — fixed in `economics/src/lib.rs`
+- Shard ops bypass — fixed in `shards/src/shard.rs`
+- Helm chart — fixed in `helm/omnia-node/`
+- Substrate fallback — fixed in `substrate/src/lib.rs`
+- Persistent node keypair — fixed in `node/src/main.rs`
+- Genesis hex — fixed in `substrate/src/genesis.rs`
+- Phase 2 ceremony — fixed in `omnia-adapters/src/setup/ceremony_server.rs`
+
 ### Future Phases
 
 | Phase                     | Goal                                            | Status       |
@@ -371,9 +392,9 @@ _Goal: Performance Validation_
 
 | Metric                       | Measured                                    | Conditions                                                                                        | Hardware                                      |
 | ---------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| **Synchronous pipeline**     | ~7,190 evt/s (v0.1.48 micro-benchmark)      | Release build, single-node, no async                                                              | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Synchronous pipeline**     | ~12,000 ops/s (v0.1.68 baseline, `benches/baselines.json`) | Release build, single-node, no async                                                              | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
 | **Async (tokio)**            | Obsoleted by sync benchmark                 | Previous tokio-based measurement was an artifact of async runtime overhead, not a consensus limit | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
-| **Finality latency p50**     | 93 µs (Criterion benchmark)                 | Synchronous, single-node                                                                          | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
+| **Finality latency p50**     | 24.5 µs (v0.1.68 baseline, `benches/baselines.json`) | Synchronous, single-node                                                                          | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
 | **Graph insert p50**         | 18 µs (Criterion benchmark, insertion only) | O(1) amortized, 0→1000 events                                                                     | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
 | **Ed25519 verify**           | ~27,000 sig/s (est., test timing)           | Standalone                                                                                        | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
 | **Groth16 prove (expanded)** | ~88 ms/event (Criterion benchmark)          | BN254, R1CS                                                                                       | AMD Ryzen 9 7950X, 64 GB DDR5-6000, Linux 6.8 |
@@ -385,7 +406,9 @@ _Goal: Performance Validation_
 
 ### ZK Throughput Bottleneck
 
-The consensus pipeline can process ~7,190 events/sec, but Groth16 proof generation for the expanded circuit runs at ~88 ms/event (~11.4 events/sec). This creates a **~560× throughput gap** between consensus and ZK settlement. In practice, ZK rollups will batch events and generate proofs asynchronously — the pipeline design decouples consensus from proof generation so that slow proving does not block transaction finality. This is the expected trade-off for Groth16 on BN254 and will be addressed with hardware acceleration, proof aggregation, or alternative SNARK constructions in future phases.
+The consensus pipeline can process ~12,000 ops/s (v0.1.68 baseline), but Groth16 proof generation for the expanded circuit runs at ~88 ms/event (~11.4 events/sec). This creates a **~560× throughput gap** between consensus and ZK settlement. In practice, ZK rollups will batch events and generate proofs asynchronously — the pipeline design decouples consensus from proof generation so that slow proving does not block transaction finality. This is the expected trade-off for Groth16 on BN254 and will be addressed with hardware acceleration, proof aggregation, or alternative SNARK constructions in future phases.
+
+> **Sub-linear ZK scaling (2026-06-23):** The previously-rumoured "27× superlinear scaling" was investigated and debunked. Actual ZK proving scales **sub-linearly**: per-event cost decreases from ~125 ms (1 event) to ~79 ms (100 events) as batching amortizes fixed costs. See [`docs/benchmarks/zk-scaling-analysis.md`](docs/benchmarks/zk-scaling-analysis.md) for the full analysis.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
-> 📅 Last Updated: 2026-05-26
+> 📅 Last Updated: 2026-06-24
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
@@ -10,11 +10,11 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 
 | Metric                  | Value                                                                                                                                                                                                                       | Status                                                   |
 | :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- |
-| **Version**             | v0.1.56                                                                                                                                                                                                                     | Latest release                                           |
+| **Version**             | v0.1.68                                                                                                                                                                                                                     | Latest release                                           |
 | **Phase**               | Post-Phase 5: Audit & Hardening                                                                                                                                                                                             | 🔄 In Progress                                           |
-| **Overall Completion**  | **93%** (8/23 audit findings remediated; 15 medium-priority tracked)                                                                                                                                                        | All core layers implemented; 7 high + 1 medium bug fixed |
+| **Overall Completion**  | **96%** (8 of 23 v0.1.68 audit findings remediated + 16 of 16 v0.1.69 critical findings closed; 15 medium-priority tracked)                                                                                                                  | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance                                                                                                                                                                                              | Needs Growth                                             |
-| **Code Health**         | 1,382 tests (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                                                       | Verified                                                 |
+| **Code Health**         | Run `cargo test --workspace` for current count (1,283 sync + 99 async), 81,000+ lines, 224 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                  | Verified                                                 |
 | **Network Status**      | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack                                                                                                                                              | Integration complete                                     |
 | **Security Posture**    | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved                                         |
 | **Mutation Testing**    | 75% minimum score on primitives; consensus sharded across 4 parallel jobs                                                                                                                                                   | Nightly CI                                               |
@@ -22,11 +22,11 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 ### Completion Bar
 
 ```
-[██████████████████████████░░] 93%
+[███████████████████████████░] 96%
 ```
 
-> **Note**: The 93% figure reflects the full v0.1.68 codebase audit across all 14 crates.
-> All Phase 0–5 milestones are complete. 8 of 23 audit findings have been remediated
+> **Note**: The 96% figure reflects the full v0.1.68 codebase audit across all 14 crates.
+> All Phase 0–5 milestones are complete. 8 of 23 v0.1.68 audit findings remediated + 16 of 16 v0.1.69 critical findings closed
 > (7 high-priority: BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS,
 > DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence; 1 medium: signature
 > dedup). 1 additional finding resolved post-audit (AUDIT-16: event signing now uses persistent
@@ -253,6 +253,7 @@ The economics crate (`omnia-economics`) implements Layer 5 with these core modul
 
 _Every major decision and status change is logged here._
 
+- **2026-06-22 | v0.1.69:** 16 critical security fixes applied (identity recovery, biological ZK, cross-shard causality, nonce store, economics verifier, Ethereum settlement, rate limiting, /readyz, validator registration, dual EconomicsState, shard ops bypass, Helm chart, substrate fallback, persistent keypair, genesis hex, Phase 2 ceremony)
 - **2026-06-01:** Benchmark accuracy audit: Fixed non-existent benchmark commands in v0.1.48 docs (`omnia-bench-standalone`, `omnia-zk-bench`, `omnia-vrf-bench` don't exist; replaced with actual Criterion commands). Added accuracy qualifiers to all performance claims — numbers from simple test timings now marked (est.), Criterion benchmark numbers marked accordingly. Flagged CRDT batch merge (~100K ops/s) as having no dedicated benchmark. Fixed CausalGraph insertion discrepancy (1,417 evt/s is full create+sign+insert cycle; insertion-only is ~55,000 evt/s). Corrected `total_nodes` documentation (benchmark code uses 3, not 1). Updated line/file counts (224 files, 81,000+ lines). Added profile discrepancy note (LIMITS.md says lto=fat; v0.1.48 used no LTO).
 - **2026-06-01:** Documentation overhaul: Updated all stats to reflect true current state (224 source files, 81,000+ lines, 1,382 tests). Fixed Phase vs Sprint confusion across all markdowns — "Sprint" now only refers to Phase 0 throughput sub-iterations (Sprints 0–5), while "Phase" refers to project-level milestones (Phases 0–5). Removed agent-ctx folder. Updated AUDIT-16 to remediated (event signing now uses persistent keypair). Added honest performance numbers table to README (~7,190 evt/s sync; initial tokio measurement obsoleted by 13.6× sync improvement). Fixed Celestia adapter status across docs (implemented, not stub). Corrected architecture box from SPRINT 0-4 to SPRINTS 0-5.
 - **2026-05-26:** All 7 high-priority audit findings remediated and 1 medium (AUDIT-12: signature dedup). Full workspace test suite verified: 910 unit tests + 189 BLS feature tests all passing. 25 CI workflow fixes applied (actions/checkout v4, Docker MSRV 1.91, OpenSSL 3.1.8, forge error handling). Updated test for dedup behavior (combine_signatures now correctly rejects duplicate-inflated partials). Fixed governance.rs rustdoc link. Added Section 14 (Verified Protocol Limits) to status.md with 40+ verified constants and throughput estimates.
@@ -272,7 +273,7 @@ _Every major decision and status change is logged here._
 
 ---
 
-_Last Updated: 2026-06-01_
+_Last Updated: 2026-06-24_
 _Version: 10.0.0_
 
 ---

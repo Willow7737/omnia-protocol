@@ -76,6 +76,10 @@ Social recovery with configurable guardian threshold. The `IdentityOp::Configure
 
 The reconstructed secret is used to rotate the DID's public key and authentication methods via `complete_recovery()`, which adds the recovered key to DID authentication (rotation, not replacement). A `recovery_count` is incremented to prevent replay attacks.
 
+### v0.1.69 Security Fix: Secret Commitment
+
+`ConfigureRecovery` now stores `BLAKE3(secret)` as `secret_commitment: Option<[u8; 32]>` in `RecoveryConfig`. `RecoverDid` verifies the reconstructed secret matches this commitment before rotating keys. Without this check, an attacker who knew the public `threshold` could fabricate K shares, reconstruct an arbitrary secret, and inject their public key into the DID's auth set. See `shards/src/identity/state.rs:260-300`.
+
 ## Reputation System — Partially Implemented
 
 | Component                              | Status                                   |

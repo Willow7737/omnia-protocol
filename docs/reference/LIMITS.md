@@ -1,7 +1,7 @@
 # Omnia Protocol — Verified Limits & Benchmarks
 
 > **Audience**: Performance engineers, validators, integrators
-> **Last Verified**: 2026-05-26 (v0.1.56, release build)
+> **Last Verified**: 2026-06-24 (v0.1.68, release build)
 > **Test Suite**: `omnia-limit-verification` (39 tests, all passing)
 
 This document records every absolute limit in the Omnia Protocol, verified by
@@ -43,6 +43,10 @@ tested at scale) are marked with ⏳.
 | Constant                     |        Value | Unit   | Verified |
 | :--------------------------- | -----------: | :----- | :------: |
 | `MAX_PENDING_EVENTS`         |      100,000 | events |    ✅    |
+| `MAX_EVENTS_PER_GOSSIP`      |          100 | events |    ✅    |
+| `MAX_SEEN_EVENTS`            |      100,000 | events |    ✅    |
+| `MAX_BATCH_GOSSIP_SIZE`      | 1,048,576 (1 MiB) | bytes | ✅   |
+| `DEFAULT_PARTITION_THRESHOLD_MS` | 30,000    | ms     |    ✅    |
 | Gossip heartbeat interval    |          500 | ms     |    —     |
 | Fanout degree                |            4 | peers  |    —     |
 | Mesh size (N)                |            4 | peers  |    —     |
@@ -93,10 +97,12 @@ tested at scale) are marked with ⏳.
 
 ## 7. Throughput Benchmarks (Release Build)
 
-All benchmarks run on a single thread, release profile. Limit verification tests use the workspace default profile (`lto = "fat"`, `codegen-units = 1`). The v0.1.48 micro-benchmarks used a different profile (opt-level=2, no LTO, codegen-units=16).
+All benchmarks run on a single thread, release profile. Limit verification tests use the workspace default profile (`lto = "fat"`, `codegen-units = 1`). The v0.1.48 micro-benchmarks used a different profile (opt-level=2, no LTO, codegen-units=16). The numbers below are the v0.1.68 baselines from `benches/baselines.json` (12,000 ops/s sustained throughput, 24.5 μs finality latency).
 
 | Benchmark                          |                     Rate |     Latency | Conditions                                                           |
 | :--------------------------------- | -----------------------: | ----------: | :------------------------------------------------------------------- |
+| Sustained throughput (v0.1.68)     |    ~**12,000** ops/s     |     ~24.5 μs | v0.1.68 baseline (`benches/baselines.json`); single-node release     |
+| Finality latency (v0.1.68)         |           —              |     ~24.5 μs | v0.1.68 baseline (`benches/baselines.json`)                          |
 | CausalGraph insertion (full cycle) |         ~**1,400** evt/s | ~700 μs/evt | 10K events, 0B payload, linear chain; includes create+sign+insert    |
 | CausalGraph insertion only         | ~**55,000** evt/s (est.) |  ~18 μs/evt | DAG insert p50 from Criterion benchmarks; insertion only, no signing |
 | ConsensusEngine processing         |         ~**9,000** evt/s | ~111 μs/evt | 1K events, 0B payload, linear chain; total_nodes=4                   |
@@ -154,9 +160,9 @@ Tested with 150 candidates (stake 110–1,510), 10,000 rounds:
 | omnia-node                     |        37 |       ✅        |
 | omnia-chaos-tests              |        84 |       ✅        |
 | Limit verification             |        39 |       ✅        |
-| **Total**                      | **1,315** | **All passing** |
+| **Total**                      | Run `cargo test --workspace` for current count | **All passing** |
 
-> Note: Test counts vary by feature configuration. The 1,382 figure includes feature-gated tests (BLS, arkworks/ark-bn254, etc.) that are only compiled when those features are enabled.
+> Note: Test counts vary by feature configuration. The 1,382 figure includes feature-gated tests (BLS, arkworks/ark-bn254, etc.) that are only compiled when those features are enabled. Run `cargo test --workspace` for the current count.
 
 ---
 
