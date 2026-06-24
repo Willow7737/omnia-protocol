@@ -2,10 +2,10 @@
 
 > 🎯 Audience: Operators, Architects
 > 🔗 Context: Vulnerability disclosure policy, security review process, and threat model references
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Document version**: 4.0
-**Last Updated**: 2026-05-16
+**Document version**: 5.0
+**Last Updated**: 2026-06-24
 
 ## Supported Versions
 
@@ -54,17 +54,70 @@ The following are considered in scope for vulnerability reports:
   - Trusted setup ceremony integrity in `omnia-adapters/src/setup/`
   - Quantum commitment verification in `binding/src/quantum_commit.rs`
   - PQC key rotation in `binding/src/key_rotation.rs`
-- Consensus or state corruption vulnerabilities in `shards/` or `substrate/`
+- Consensus or state corruption vulnerabilities in `shards/`, `omnia-consensus/`, or `substrate/`
 - Authentication or authorization bypass
 - Denial-of-service vectors in the protocol layer
 - Data integrity violations in the provenance log or state snapshots
 - Side-channel vulnerabilities in cryptographic comparison operations
+- **Newly hardened surfaces (v0.1.69)** — bounty researchers should re-examine:
+  - Identity recovery with `secret_commitment` (`shards/src/identity/state.rs`)
+  - Biological ZK with non-empty `public_inputs` (`shards/src/biological/state.rs`)
+  - Cross-shard causal proof verification (`shards/src/router.rs`)
+  - Economics `verifier_pubkey` fail-closed (`economics/src/economics_shard.rs`)
+  - Ethereum `verify_proof_with_root` (`omnia-adapters/src/settlement/ethereum/mod.rs`)
+  - Per-client rate limiting (`node/src/api/auth.rs`)
+  - Persistent node keypair (`node/src/main.rs`)
 
 The following are out of scope:
 
 - Theoretical attacks without practical exploit demonstration
 - Social engineering attacks
 - Issues in third-party dependencies (report to the upstream maintainer)
+
+## v0.1.69 Critical Security Hardening (2026-06-22)
+
+A comprehensive audit of the codebase identified 16 critical security
+vulnerabilities. All 16 were remediated in commit `5d3d776` (2026-06-22)
+and pushed to the `dev` branch. Below is a summary of each fix with the
+affected file and the attack it closes.
+
+### Cryptographic Security Fixes
+
+| # | Fix | File | Attack Closed |
+|---|-----|------|---------------|
+| 1 | Phase 2 ceremony fail-closed | `omnia-adapters/src/setup/circuit_setup.rs` | `derive_keys_deterministic_from_srs` derived toxic waste from the PUBLIC SRS transcript — anyone with the transcript could forge proofs. Now fails-closed unless `unsafe-phase2-deterministic` feature is enabled. |
+| 2 | Identity recovery secret commitment | `shards/src/identity/state.rs` | `RecoverDid` accepted forged shares — never compared the reconstructed secret to a stored commitment. Added `RecoveryConfig.secret_commitment` field, verified before key rotation. |
+| 3 | Biological ZK non-empty public inputs | `shards/src/biological/state.rs` | ZK verification accepted attacker-supplied VerifyingKey with empty `public_inputs`. Now derives non-empty inputs from `(subject, consumer)` via BLAKE3→BN254-Fr, rejects empty inputs, enforces consent expiry. |
+| 4 | Cross-shard causal proof verification | `shards/src/router.rs` | `route_cross_shard` ignored `msg.causal_proof` entirely. Now requires non-empty `causal_proof` and verifies it happened-before the event's vector clock. |
+| 5 | Nonce store fail-closed | `shards/src/router.rs` | `with_nonce_store` silently reset replay protection to empty on load failure. Now panics loudly; added `with_nonce_store_checked` returning `Result`. |
+| 6 | Economics verifier pubkey required | `economics/src/economics_shard.rs` | `verifier_pubkey.unwrap_or([0u8; 32])` allowed forged work proofs (all-zeros pubkey has a known secret key). Now returns `Unauthorized` error when unset. |
+| 7 | Ethereum verify_proof_with_root | `omnia-adapters/src/settlement/ethereum/mod.rs` | `verify_proof` extracted `batch_merkle_root` from the prover's own proof bytes. Added `verify_proof_with_root` requiring the root as a trusted on-chain parameter. |
+
+### Node Infrastructure Fixes
+
+| # | Fix | File | Attack Closed |
+|---|-----|------|---------------|
+| 8 | Per-client rate limiting | `node/src/main.rs` | `axum::serve` was called without `into_make_service_with_connect_info`, so all clients shared one rate-limit bucket. Now injects `ConnectInfo<SocketAddr>` for per-client rate limiting. |
+| 9 | /readyz peer tracking | `node/src/main.rs`, `omnia-network/src/gossip.rs` | `state.peers` was never populated — `/readyz` always returned 503. Added `GossipProtocol::connected_peer_count()` and a peer-refresh step in the consensus loop. |
+| 10 | Validator registration | `node/src/main.rs` | `validator_candidates` was never populated — the node could never be elected leader. Now calls `substrate.add_validator()` at startup. |
+| 11 | Unified EconomicsState | `node/src/api/shards.rs` | `/shards/economics/operations` applied mints to the EconomicsShard's internal state, invisible to `/economics/balance`. Now applies directly to the shared `AppState.economics` instance. |
+| 12 | Shard ops no longer bypass consensus | `node/src/api/shards.rs` | Previous handler created `Event::genesis` with EMPTY payload and called `router.route()` — events never entered the causal graph. Now applies directly to shared state. |
+| 13 | Helm chart TCP/UDP fix | `helm/omnia-node/` | `listenAddr` used TCP 9090 (should be UDP QUIC 4001); container/service only exposed TCP; probe paths/ports mismatched Dockerfile. All fixed. |
+| 14 | Substrate fail-closed persistence | `substrate/src/lib.rs` | `Substrate::new` silently fell back to in-memory slashing/consensus on persistence failure. Now panics loudly with actionable error messages. |
+| 15 | Persistent node keypair | `node/src/main.rs` | Always generated an ephemeral keypair at startup, breaking identity continuity. Added `load_or_generate_node_keypair` loading from `OMNIA_NODE_KEY_FILE` or `data_dir/node_key.bin`. |
+| 16 | Genesis hex validation | `substrate/src/genesis.rs` | `hex::decode(...).unwrap_or_default()` silently returned empty Vec on malformed keys. Now propagates `GenesisError::InvalidPublicKey`. |
+
+### Post-Fix Verification
+
+All fixes were verified with:
+- `cargo check --workspace`: clean compilation
+- `cargo test -p omnia-shards`: 180 tests pass
+- `cargo test -p omnia-economics`: 36 tests pass
+- `cargo test -p omnia-substrate --features network`: 89 tests pass
+- `cargo test -p omnia-node --features full`: 85 tests pass
+- `cargo test -p omnia-adapters --features arkworks`: 142 tests pass
+- `cargo clippy --workspace -- -D warnings`: clean
+- `cargo audit` (with CI ignore list): exit 0
 
 ## Security Review Process
 
@@ -74,11 +127,16 @@ All changes to the Omnia Protocol codebase are subject to security review accord
 
 Every pull request that touches the following directories **requires** security review before merge:
 
-- `substrate/` — Core causal graph and CRDT primitives
+- `omnia-primitives/` — Core types (Event, VectorClock, wire format)
+- `omnia-crypto/` — Cryptographic primitives (Ed25519, BLS12-381, AES-256-GCM, keystore, VRF, threshold)
+- `omnia-consensus/` — Consensus engine, DAG, CRDTs, slashing, event pool
+- `omnia-network/` — P2P networking (libp2p, gossipsub, Kademlia, fast-sync)
+- `omnia-adapters/` — Zero-knowledge proof circuits, Poseidon hash, trusted setup ceremony, settlement adapters
+- `binding/` — Quantum commitments, RF fingerprinting, provenance logs, PQC key rotation
 - `shards/` — Shard state machines and operation handlers
 - `economics/` — UBC token logic and governance
-- `omnia-adapters/` — Zero-knowledge proof circuits, Poseidon hash, trusted setup ceremony, and verification
-- `binding/` — Quantum commitments, RF fingerprinting, provenance logs, PQC key rotation
+- `substrate/` — Integration facade (re-exports + genesis/snapshot/migration)
+- `node/` — Node binary (HTTP API, auth, rate limiting, consensus loop)
 
 ### Review Roles
 
@@ -136,8 +194,15 @@ Omnia Protocol employs fuzz testing to uncover edge cases in serialization, dese
 - Gossip message deserialization
 - Consensus state transitions
 - Rate limiter behavior
+- Causal graph insertion (out-of-order events)
+- Event validation (signature, timestamp, payload size)
+- Shard routing (nonce, fee, replay protection)
+- Raw vector clock binary format parsing
 
-Fuzzing is integrated into CI and runs on every merge to the main branch. New fuzz targets should be added whenever a new shard type or state format is introduced.
+12 fuzz targets are maintained in the [`fuzz/`](fuzz/) directory. Fuzzing is
+integrated into CI via `scripts/fuzz.sh` (runs 7 of 12 targets — the
+remaining 4 are invoked manually). New fuzz targets should be added
+whenever a new shard type or state format is introduced.
 
 ## Side-Channel Resistance
 
@@ -157,6 +222,14 @@ for the full audit report covering:
 **Remaining concern**: The `pqc-dilithium` crate has not been formally audited for timing
 side-channels. Monitor upstream updates and consider switching to a formally verified
 implementation (e.g., `liboqs` bindings) for mainnet.
+
+**v0.1.69 hardening**: The biological shard's ZK proof verification was
+hardened against an attacker-supplied VerifyingKey attack. Public inputs
+are now derived from `(subject, consumer)` via BLAKE3→BN254-Fr, preventing
+proof reuse across different consent records. The economics verifier
+now requires a configured `verifier_pubkey`, closing the all-zeros pubkey
+forgery. The identity recovery path now verifies a `secret_commitment`
+before rotating keys, closing the forged-shares attack.
 
 ## Bug Bounty Program
 
