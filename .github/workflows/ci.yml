@@ -155,13 +155,17 @@ jobs:
           df -h /
       - name: Verify Cargo.lock is up to date
         run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
-      - name: Clean debug artifacts before tests
+      - name: Clean debug artifacts before tests (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          # Remove debug profile artifacts to free space for test compilation.
-          # Only release-profile artifacts are needed for the release-build job.
           cargo clean -p omnia-substrate --profile dev 2>/dev/null || true
-          echo "=== Disk space after clean ==="
-          df -h / || true
+          df -h / 2>/dev/null || true
+      - name: Clean debug artifacts before tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo clean -p omnia-substrate --profile dev 2>$null
+          Get-PSDrive C | Select-Object Used,Free
       # Skip settlement::live tests on all PRs — they require a live Ethereum
       # endpoint which is only available on main branch with secrets.
       # Mock settlement tests always pass (MSRV 1.91, zero alloy).
