@@ -392,9 +392,24 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let creator = event.creator;
 
         // P0-1 security fix: verify event signature BEFORE any other check.
-        // Without this, any peer can forge events with creator = <victim_node_id>
-        // and the consensus engine will slash the victim for equivocation.
-        // The entire slashing security model is bypassable without this check.
+        //
+        // Signature verification is already performed by Event::validate()
+        // which is called by:
+        //   - Substrate::submit_event() (local/API events)
+        //   - GossipProtocol::validate_event() (gossiped events)
+        //
+        // However, process_event is also called directly from test code and
+        // from ChaosNetwork, which may bypass validate(). This check is
+        // defense-in-depth: it ensures no code path can process an
+        // unsigned/forged event through consensus, which would allow
+        // frame-an-honest-validator attacks (slash the victim for
+        // equivocation on an event they didn't sign).
+        //
+        // Performance note: this call is redundant when events arrive via
+        // submit_event() or gossip (both call validate() first). The cost
+        // is ~40µs per event (Ed25519 verification). For paths where
+        // validate() has already been called, a future optimization could
+        // add a validated flag to Event to skip the re-verification.
         if !event.verify_signature() {
             tracing::warn!(
                 node = ?&creator[..4],

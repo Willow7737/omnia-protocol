@@ -24,14 +24,14 @@
       "gated_reason": "Updated 2026-06-25: baseline set to 7577 ops/s (single-sample CI run) / 7708 ops/s (multi-sample mean). Includes P0-1 Ed25519 signature verification cost. The 15% threshold accommodates GitHub Actions runner variance."
     },
     "finality_latency_mean": {
-      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network). Includes P0-1 Ed25519 signature verification on every event.",
+      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network). Includes P0-1 Ed25519 signature verification on every event (redundant with validate() but defense-in-depth).",
       "unit": "ns",
-      "baseline": 65065,
+      "baseline": 72330,
       "direction": "lower_is_better",
       "source_bench": "finality_latency/creation_to_finality_mean",
       "former_name": "finality_latency_p99",
       "former_source_bench": "finality_latency/creation_to_finality_p50_p95_p99",
-      "note": "Updated 2026-06-25: baseline set to 65065 ns (single-sample) / 72330 ns (multi-sample mean). The ~2.6x increase from the pre-P0-1 baseline (24520 ns) is the cost of Ed25519 signature verification on the consensus hot path."
+      "note": "Updated 2026-06-25: baseline set to 72330 ns (multi-sample mean, N=5, CV=5.2%). The ~2.9x increase from the pre-P0-1 baseline (24520 ns) is from the redundant Ed25519 verification in process_event. Event::validate() already calls verify_signature() — the P0-1 check is defense-in-depth for code paths that bypass validate(). Future optimization: add a 'validated' flag to Event to skip re-verification."
     },
     "dag_insert_p50": {
       "description": "DAG insert latency p50 (0 pre-existing events, in-memory only)",
