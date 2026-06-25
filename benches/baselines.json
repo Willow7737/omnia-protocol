@@ -14,23 +14,24 @@
   "threshold_pct": 10,
   "benchmarks": {
     "consensus_throughput": {
-      "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O — NOT representative of real-world multi-node throughput)",
+      "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O — NOT representative of real-world multi-node throughput). Includes P0-1 Ed25519 signature verification on every event (added 2026-06-25).",
       "unit": "events_per_sec",
-      "baseline": 12000,
+      "baseline": 8218,
       "direction": "higher_is_better",
       "source_bench": "tx_throughput/sustained_tps_single_node",
       "gated": true,
       "threshold_pct": 15,
-      "gated_reason": "Updated 2026-06-23 per mentor review: baseline raised from 10000 to 12000 ops/s (measured value 12583 in 2026-06-22 CI run) and threshold tightened from 40% to 15%. The previous 10000/40% combo was decorative — a real-world 60% regression to 5000 ops/s would still pass (+125% above baseline). At 12000/15%, the gate fails at <10200 ops/s, catching meaningful regressions. The 15% threshold accommodates GitHub Actions runner variance (Intel/AMD heterogeneous, 2.7-3.8 GHz clock range — observed ±20% inter-run variance). For production-grade gating, move to a self-hosted runner with stable CPU affinity and reduce to 8-10%."
+      "gated_reason": "Updated 2026-06-25: baseline lowered from 12000 to 8218 ops/s to reflect the performance cost of the P0-1 security fix (event.verify_signature() on every process_event call). The previous 12000 baseline was measured on insecure code that did NOT verify signatures — any peer could forge events in any validator's name. The 31.5% throughput reduction is the cost of preventing frame-an-honest-validator attacks. The 15% threshold accommodates GitHub Actions runner variance."
     },
     "finality_latency_mean": {
-      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99. For true tail percentiles, post-process the JSON 'samples' array or implement a custom Measurement harness. Renamed 2026-06-21 from 'finality_latency_p99' which was misleading (the number was always a mean, never a percentile).",
+      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Includes P0-1 Ed25519 signature verification on every event (added 2026-06-25). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99.",
       "unit": "ns",
-      "baseline": 24520,
+      "baseline": 63465,
       "direction": "lower_is_better",
       "source_bench": "finality_latency/creation_to_finality_mean",
       "former_name": "finality_latency_p99",
-      "former_source_bench": "finality_latency/creation_to_finality_p50_p95_p99"
+      "former_source_bench": "finality_latency/creation_to_finality_p50_p95_p99",
+      "note": "Updated 2026-06-25: baseline raised from 24520 to 63465 ns to reflect the P0-1 security fix (event.verify_signature() on every process_event call). The 158.8% latency increase is the cost of Ed25519 signature verification on the consensus hot path — preventing forged events and false slashing."
     },
     "dag_insert_p50": {
       "description": "DAG insert latency p50 (0 pre-existing events, in-memory only)",
