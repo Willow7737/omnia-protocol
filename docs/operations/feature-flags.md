@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Feature flags and their operational impact for running Omnia Protocol nodes
-> 📅 Last Updated: 2026-05-21
+> 📅 Last Updated: 2026-06-24
 
 ## Feature Flags
 

@@ -162,7 +162,7 @@ Tested with 150 candidates (stake 110–1,510), 10,000 rounds:
 | Limit verification             |        39 |       ✅        |
 | **Total**                      | Run `cargo test --workspace` for current count | **All passing** |
 
-> Note: Test counts vary by feature configuration. The 1,382 figure includes feature-gated tests (BLS, arkworks/ark-bn254, etc.) that are only compiled when those features are enabled. Run `cargo test --workspace` for the current count.
+> Note: Test counts vary by feature configuration. The historical test count figure includes feature-gated tests (BLS, arkworks/ark-bn254, etc.) that are only compiled when those features are enabled. Run `cargo test --workspace` for the current count.
 
 ---
 

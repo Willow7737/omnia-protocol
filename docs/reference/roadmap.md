@@ -24,7 +24,7 @@ _Goal: Proof of Concept_
 ## Phase 1: Hardening ✅ Complete
 
 - ✅ FIND-024: Typed Error Migration — 34 typed error enums with `thiserror`
-- ✅ FIND-023: `unwrap()` Replacement — `#![deny(clippy::unwrap_used)]` on all 7 crates
+- ✅ FIND-023: `unwrap()` Replacement — `#![deny(clippy::unwrap_used)]` on all 14 crates
 - ✅ E2E REST API Integration Tests — 19 test functions
 - ✅ Code Coverage Integration — `cargo llvm-cov` in CI
 - ✅ FIND-033: RUSTSEC Advisory Review — stale ignores removed
@@ -79,7 +79,7 @@ _Goal: Proof of Concept_
 
 ## Phase 5: Testnet Launch & Validation ✅ Complete
 
-- ✅ C-1: Real performance benchmarking (~7,190 events/sec synchronous single-node; 13.6× improvement over initial tokio-based measurements)
+- ✅ C-1: Real performance benchmarking (~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) synchronous single-node; 13.6× improvement over initial tokio-based measurements)
 - ✅ H-1: Multi-node BFT testnet validation
 - ✅ H-2: VRF migration to ECVRF per RFC 9381
 - ✅ H-3: Genesis tooling — network bootstrap procedure

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Vulnerability disclosure and bounty reward structure
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Version**: 1.0
 **Effective Date**: 2026-05-21
@@ -36,6 +36,12 @@ The following components are within the scope of the bug bounty program:
   - BLS12-381 signature aggregation
 - **Consensus mechanism**: BFT finality, leader selection, slashing, equivocation detection
 - **Network protocol**: libp2p gossip, Kademlia DHT, message compression
+- **Newly hardened components (v0.1.69)** — bounty researchers should re-examine these recently remediated surfaces for residual or bypass vulnerabilities:
+  - Identity recovery with `secret_commitment` (`shards/src/identity/state.rs`)
+  - Biological ZK with non-empty `public_inputs` (`shards/src/biological/state.rs`)
+  - Cross-shard causal proof verification (`shards/src/router.rs`)
+  - Economics `verifier_pubkey` fail-closed (`economics/src/economics_shard.rs`)
+  - Ethereum `verify_proof_with_root` (`omnia-adapters/src/settlement/ethereum/mod.rs`)
 
 ### Out of Scope
 

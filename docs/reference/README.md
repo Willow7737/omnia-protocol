@@ -2,12 +2,12 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Index for reference material including roadmaps, benchmarks, ADRs, and policy documents
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Reference Documents
 
 | Document                                         | Description                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------------- | --- | ----------------------------------------------- |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
 | [roadmap.md](roadmap.md)                         | Implementation roadmap — Phase 0 through Phase 5+                   |
 | [benchmark-gates.md](benchmark-gates.md)         | Performance baselines and benchmark data                            |
 | [blueprint-reference.md](blueprint-reference.md) | Blueprint/spec reference — implementation status                    |
@@ -15,9 +15,9 @@
 | [adr-index.md](adr-index.md)                     | Architecture Decision Record index (ADR-001 through ADR-021)        |
 | [security-audit.md](security-audit.md)           | Security audit package — findings, validated audits, attack surface |
 | [dependency-policy.md](dependency-policy.md)     | Dependency policy — pinning, audits, exemptions                     |
-| [implementation-spec.md](implementation-spec.md) | Protocol implementation specifications                              |     | Dependency policy — pinning, audits, exemptions |
+| [implementation-spec.md](implementation-spec.md) | Protocol implementation specifications                              |
 | [crypto-migration.md](crypto-migration.md)       | Cryptographic migration playbook                                    |
-| [economic-analysis.md](economic-analysis.md)     | Economic parameter analysis for mainnet readiness                   |     | Cryptographic migration playbook                |
+| [economic-analysis.md](economic-analysis.md)     | Economic parameter analysis for mainnet readiness                   |
 
 ### Phase Reports
 

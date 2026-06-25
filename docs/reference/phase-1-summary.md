@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 1 milestones and deliverables
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Completed:** 2026-05-18
 **Baseline Commit:** `6dc8dbd` on `main`
@@ -16,7 +16,7 @@
 | --- | ------------------------------------ | -------- | --------------- | ----------------------------------------------------------------------------------------------- |
 | 1   | FIND-024: Typed Error Migration      | Medium   | ✅ Complete     | 34 typed error enums with `thiserror`; zero `Result<_, String>` remaining                       |
 | 2   | FIND-023: `unwrap()` Replacement     | Medium   | ✅ Complete     | `#![deny(clippy::unwrap_used)]` on all 14 crates; zero production `unwrap()`                     |
-| 3   | E2E REST API Integration Tests       | High     | ✅ Complete     | 19 test functions covering 9 endpoints × 4 auth states, rate limiting, ACL, CORS, error formats |
+| 3   | E2E REST API Integration Tests       | High     | ✅ Complete     | 19 test functions covering 14 endpoints × 4 auth states, rate limiting, ACL, CORS, error formats |
 | 4   | Code Coverage Integration            | Medium   | ✅ Complete     | `cargo llvm-cov` replaces tarpaulin in CI; 70% target with 5% threshold                         |
 | 5   | FIND-033: RUSTSEC Advisory Review    | Low      | ✅ Complete     | Removed stale RUSTSEC-2025-0055; added review dates to all 8 remaining ignores                  |
 | 6   | FIND-034: Documentation Sprint       | Low      | ✅ Complete     | 50+ discrepancy fixes across 12 documentation files                                             |
@@ -83,7 +83,7 @@ New file: `node/tests/api_integration.rs` (1,275 lines, 19 test functions)
 
 Test coverage:
 
-- **Auth matrix**: 9 endpoints × 4 auth states (no auth → 401, valid JWT → 200/201/400/404, expired JWT → 401, wrong JWT → 401)
+- **Auth matrix**: 14 endpoints × 4 auth states (no auth → 401, valid JWT → 200/201/400/404, expired JWT → 401, wrong JWT → 401)
 - **Rate limiting**: Rapid requests trigger 429 after bucket exhaustion
 - **Privileged operations**: MintUbc/AdvanceEpoch with non-admin → 403, admin → 200
 - **CORS**: OPTIONS preflight and cross-origin request headers

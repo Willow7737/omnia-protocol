@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Maps each development phase to concrete user-facing capabilities and feature availability
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 This document maps Omnia's development phases to the capabilities available to users, operators, and developers at each stage. Understanding phase alignment helps stakeholders know what they can do today and what's coming next.
 
@@ -23,13 +23,13 @@ Phase 0 delivered the core protocol: a causal graph consensus engine, six domain
 
 | Capability             | Implementation | Notes                                                               |
 | ---------------------- | -------------- | ------------------------------------------------------------------- |
-| Causal graph consensus | ✅             | 454+ substrate tests, ~7,190 events/sec single-node (synchronous)   |
+| Causal graph consensus | ✅             | 454+ substrate tests, ~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) single-node (synchronous)   |
 | 6 domain shards        | ✅             | Financial, Computational, Physical, Biological, Identity, Economics |
 | DID identity system    | ✅             | `did:omnia:` method, Shamir recovery, biometric anchors             |
 | UBC economics          | ✅             | 1,000 UBC/month soulbound quota, quadratic voting                   |
 | ZK-rollup (arkworks)   | ✅             | Groth16 + Poseidon on BN254                                         |
 | PQC signatures         | ✅             | ML-KEM-768 (FIPS-203) + Ed25519 hybrid                              |
-| REST API               | ✅             | JWT auth, rate limiting, 9 endpoints                                |
+| REST API               | ✅             | JWT auth, rate limiting, 14 endpoints                                |
 
 ---
 
@@ -41,7 +41,7 @@ Phase 1 eliminated the most dangerous code quality issues: production `unwrap()`
 
 ### What Changed for Users
 
-- **Developers**: All 7 crates enforce `#![deny(clippy::unwrap_used)]` and use 34 typed error enums. E2E API test suite covers 9 endpoints across 4 auth states.
+- **Developers**: All 14 crates enforce `#![deny(clippy::unwrap_used)]` and use 34 typed error enums. E2E API test suite covers 14 endpoints across 4 auth states.
 - **Operators**: API is now production-hardened with comprehensive auth testing. No functional changes to node operation.
 - **Architects**: Rustdoc coverage improved for 7 security-critical modules (35 documentation items).
 
@@ -141,11 +141,11 @@ Phase 4 delivered real Ethereum settlement via Alloy, wired gradual slashing per
 
 **Status**: ✅ Complete
 
-Phase 5 captured real benchmark data (~7,190 events/sec synchronous single-node; a 13.6× improvement over initial tokio-based measurements), validated multi-node BFT consensus, migrated VRF to ECVRF per RFC 9381, added genesis tooling, and prepared the external audit package.
+Phase 5 captured real benchmark data (~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) synchronous single-node; a 13.6× improvement over initial tokio-based measurements), validated multi-node BFT consensus, migrated VRF to ECVRF per RFC 9381, added genesis tooling, and prepared the external audit package.
 
 ### What Changed for Users
 
-- **All Users**: Aspirational throughput claims have been replaced with honest measured data: ~7,190 events/sec synchronous single-node (a 13.6× improvement over the initial tokio-based measurement). This transparency allows realistic planning.
+- **All Users**: Aspirational throughput claims have been replaced with honest measured data: ~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) synchronous single-node (a 13.6× improvement over the initial tokio-based measurement). This transparency allows realistic planning.
 - **Operators**: Genesis tooling enables network bootstrapping with a validated initial validator set. VRF leader selection now uses a standard ECVRF construction.
 - **Developers**: Poseidon dual-hash foundation enables future migration to Filecoin/Neptune reference parameters. Bug bounty program is active ($100–$50,000).
 - **Architects**: External audit package assembled. Side-channel audit for ZK and binding crates completed.
@@ -154,7 +154,7 @@ Phase 5 captured real benchmark data (~7,190 events/sec synchronous single-node;
 
 | Capability             | Implementation | Notes                                                                       |
 | ---------------------- | -------------- | --------------------------------------------------------------------------- |
-| Real benchmarks        | ✅             | ~7,190 evt/s sync single-node (13.6× improvement over initial measurements) |
+| Real benchmarks        | ✅             | ~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) sync single-node (13.6× improvement over initial measurements) |
 | Multi-node BFT         | ✅             | 4-node test validated                                                       |
 | ECVRF (RFC 9381)       | ✅             | V2 with Fiat-Shamir + Ed25519                                               |
 | Genesis tooling        | ✅             | GenesisConfig, ValidatorInfo, TOML templates                                |

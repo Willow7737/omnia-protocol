@@ -318,7 +318,7 @@ _Goal: Production Hardening_
 
 _Goal: Performance Validation_
 
-- ✅ Real performance benchmarking (~7,190 events/sec synchronous single-node; ~13.6× improvement over initial tokio-based measurements)
+- ✅ Real performance benchmarking (12,000 ops/s (v0.1.68); ~7,190 ops/s (v0.1.48 historical) synchronous single-node; ~13.6× improvement over initial tokio-based measurements)
 - ✅ Multi-node BFT testnet validation (3-node E2E via real libp2p)
 - ✅ VRF migration to ECVRF per RFC 9381
 - ✅ Genesis tooling — network bootstrap procedure

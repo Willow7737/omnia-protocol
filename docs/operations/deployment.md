@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Deployment procedures for Docker Compose and Kubernetes/Helm
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Quick Start: Docker Compose (Development)
 

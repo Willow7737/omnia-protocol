@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Documents the consensus queue invariants and O(new_events) processing guarantee
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Task**: 1.1 — Document the consensus queue invariants
 **Date**: 2026-05-14
@@ -13,7 +13,7 @@ The consensus queue (`Substrate::unprocessed_events`) is the mechanism that make
 
 ## Why the Queue Makes Consensus O(new_events) Instead of O(n)
 
-Without the queue, the consensus engine would need to scan the entire causal graph on each iteration to find unprocessed events. For a graph with N events, this would be O(N) per iteration, which is unacceptable for a protocol targeting 10,000 TPS.
+Without the queue, the consensus engine would need to scan the entire causal graph on each iteration to find unprocessed events. For a graph with N events, this would be O(N) per iteration, which is unacceptable for a protocol targeting 10,000 TPS (v0.1.48 target; v0.1.68 measured: 12,000 ops/s).
 
 The `unprocessed_events` queue tracks only the events that have been inserted into the graph but not yet processed by consensus. When a new event arrives (either locally via `submit_event()` or from the network via gossip), its `EventId` is appended to the queue. When `process_consensus()` runs, it drains the queue entirely:
 
@@ -151,7 +151,7 @@ In both cases, the event is in the graph before its ID is added to the queue. Th
 | Consensus per event | O(k × ancestry) | Ancestry checks are O(k) in worst case       |
 | Total per iteration | O(k)            | Dominated by consensus, not queue management |
 
-The queue ensures that consensus processing scales with the rate of new events, not with the total history size. For a protocol targeting 10,000 TPS with a 100ms consensus interval, k ≈ 1,000 events per iteration — a manageable workload.
+The queue ensures that consensus processing scales with the rate of new events, not with the total history size. For a protocol targeting 10,000 TPS (v0.1.48 target; v0.1.68 measured: 12,000 ops/s) with a 100ms consensus interval (v0.1.48; current: 1s interval), k ≈ 1,000 events per iteration — a manageable workload.
 
 ---
 

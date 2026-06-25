@@ -2,12 +2,12 @@
 
 > 🎯 Audience: Architects
 > 🔗 Context: Comprehensive architecture specification covering all layers, node binary, and cross-layer interactions
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
-**Last Updated:** 2026-03-05
+**Version:** v0.1.68
+**Last Updated:** 2026-06-24
 
-> **This document describes the full architecture of the Omnia Protocol as implemented in v4.0.0. Sections are labeled with their implementation status: ✅ Implemented, ⚠️ Partially Implemented (has stubs), 🔮 Aspirational (no code).**
+> **This document describes the full architecture of the Omnia Protocol as implemented in v0.1.68. Sections are labeled with their implementation status: ✅ Implemented, ⚠️ Partially Implemented (has stubs), 🔮 Aspirational (no code).**
 
 ## Table of Contents
 
@@ -417,7 +417,7 @@ The TLA+ model (`formal-verification/OmniaConsensus.tla`, 191 lines) verifies:
 
 ### Throughput
 
-✅ **Benchmarked (Phase 5).** ~7,190 evt/s single-node synchronous. The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
+✅ **Benchmarked (Phase 5).** 12,000 ops/s (v0.1.68) single-node synchronous. The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
 
 ### Latency
 
@@ -506,7 +506,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 - Ben-Sasson, E., et al. (2014). "Zerocash: Decentralized Anonymous Payments from Bitcoin"
 
 **Status:** Architecture Specification — Partially Implemented
-**Version:** 4.0.0
+**Version:** v0.1.68
 
 ---
 

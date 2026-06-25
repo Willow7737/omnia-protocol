@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Phase 0 implements settlement-agnostic ZK-rollup architecture for bridging to L1 chains
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Overview
 

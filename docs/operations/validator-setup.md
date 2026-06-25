@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Step-by-step guide for setting up and running an Omnia Protocol validator node
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Prerequisites
 

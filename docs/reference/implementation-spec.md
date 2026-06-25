@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Protocol implementation specifications and protocol-level details
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Version:** v0.1.68
 **Last Updated:** 2026-03-05
@@ -65,7 +65,7 @@ State Management:
 - Redb-backed persistent slashing and nonce stores
 
 HTTP/REST API (axum):
-- 9 endpoints under /api/v1/
+- 14 endpoints under /api/v1/
 - Swagger UI at /swagger-ui
 - OpenAPI spec at /api-docs/openapi.json
 - Prometheus metrics at /metrics
@@ -189,8 +189,8 @@ Prove the concept works with a functional prototype that demonstrates:
 
 - ✅ CLI with clap (args + env vars + TOML config)
 - ✅ HTTP server (axum) with health/metrics/API
-- ✅ REST API with 9 endpoints + Swagger UI
-- ✅ Prometheus metrics (6 node-level counters/gauges)
+- ✅ REST API with 14 endpoints + Swagger UI
+- ✅ Prometheus metrics (11 node-level counters/gauges)
 - ✅ Graceful shutdown (SIGINT/SIGTERM)
 - ✅ Persistent slashing and nonce stores (redb)
 - ✅ State snapshot/restore subcommands

@@ -97,5 +97,5 @@ single-event processing in the Omnia Protocol, based on v0.1.48 micro-benchmark 
 ## Notes
 
 - All benchmarks run on: Linux 5.10.134 (x86_64), Intel Xeon 4 cores, 8 GiB RAM
-- Rust: rustc 1.95.0, release profile (opt-level=2, no LTO)
+- Rust: rustc 1.91.0, release profile (opt-level=2, no LTO)
 - Compare against the baseline in `docs/benchmarks/baseline-v0.1.48.md`

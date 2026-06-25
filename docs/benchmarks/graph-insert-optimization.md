@@ -104,13 +104,13 @@ The new `PruningAwarePool` uses:
 
 ### Hardware
 
-- CPU: Intel Xeon, 4 cores
+- CPU: heterogeneous Intel/AMD (GitHub Actions ubuntu-latest)
 - RAM: 8 GiB
 - OS: Linux 5.10.134 (x86_64, cloud instance)
 
 ### Software
 
-- Rust toolchain: rustc 1.95.0 (59807616e 2026-04-14)
+- Rust toolchain: rustc 1.91.0 (59807616e 2026-04-14)
 - Profile: `--release` (opt-level=2, no LTO, codegen-units=16)
 
 ### Test Scenarios

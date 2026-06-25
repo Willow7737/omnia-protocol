@@ -2,7 +2,8 @@
 
 **Project**: Omnia Protocol  
 **Phase**: Phase 0 — Throughput Optimization  
-**Date**: 2026-05-22  
+**Date**: 2026-06-24  
+**Last Updated**: 2026-06-24  
 **Status**: Scope Defined — Engagement Pending
 
 ---
@@ -90,7 +91,7 @@ The `CompactEncoder` uses delta-compressed vector clocks. Review should verify:
 
 ### 4.2 Manual Review
 
-- Line-by-line review of all `unsafe` code (currently: zero instances, enforced by `#![forbid(unsafe_code)]`)
+- Line-by-line review of all `unsafe` code (currently: zero instances, enforced by `#![deny(unsafe_code) (see SAFETY.md)]`)
 - Thread safety analysis of all concurrent code paths
 - Cryptographic protocol review (VRF, BLS aggregation, ZK circuit constraints)
 - State machine review (consensus state transitions, CRDT merge properties)

@@ -102,7 +102,7 @@ payload || self_parent || other_parent`).
 
 #### C-1 — unsafe_code + SAFETY.md
 
-- Changed `#![forbid(unsafe_code)]` → `#![deny(unsafe_code)]` in
+- Changed `#![deny(unsafe_code) (see SAFETY.md)]` → `#![deny(unsafe_code)]` in
   `substrate/src/lib.rs` (blst transitively requires `unsafe` FFI; `forbid`
   is viral and would prevent the `bls` feature from compiling).
 - Created `SAFETY.md` at workspace root documenting the blst unsafe usage
@@ -218,7 +218,7 @@ payload || self_parent || other_parent`).
 
 #### L-17 — STATUS.md hardcoded test count
 
-- `docs/reference/status.md:223` no longer hardcodes "1,382 tests pass";
+- `docs/reference/status.md:223` no longer hardcodes "Run `cargo test --workspace` for current count tests pass";
   replaced with instruction to run `cargo test --workspace`.
 
 #### L-19 — README benchmark hardware spec
@@ -229,7 +229,7 @@ payload || self_parent || other_parent`).
 
 #### L-20 — README hardcoded test count
 
-- `README.md:113` no longer hardcodes "1,382 tests — all passing";
+- `README.md:113` no longer hardcodes "Run `cargo test --workspace` for current count tests — all passing";
   replaced with instruction to run `cargo test --workspace`.
 
 #### L-23 — Workspace version mismatch

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Consensus pipeline, mempool, leader selection, and queue invariants
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Overview
 

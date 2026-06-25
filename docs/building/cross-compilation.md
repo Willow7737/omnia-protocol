@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Building Omnia Protocol for different target platforms
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Docker Build (Recommended)
 

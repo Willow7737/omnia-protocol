@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Common questions about the Omnia Protocol, its economics, security model, and practical usage
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## General Questions
 

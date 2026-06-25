@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Community standards and enforcement guidelines for all participants
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Our Pledge
 

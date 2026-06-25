@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the security documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Version**: 1.0
 **Date**: 2026-05-19

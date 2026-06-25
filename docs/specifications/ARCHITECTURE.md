@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Part of the specifications documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 > 🎯 This content has been consolidated into [docs/architecture/full-spec.md](../architecture/full-spec.md).
 

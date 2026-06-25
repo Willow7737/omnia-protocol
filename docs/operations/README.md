@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Index for all operational guides, runbooks, and deployment procedures
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Operations Documents
 

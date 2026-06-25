@@ -2,9 +2,9 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Validated audit results for Phase 0
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Date:** 2026-03-05
 **Scope:** Full codebase — 14 crates, 129+ documentation files, Docker/monitoring infrastructure
 **Status:** Phase 0 Complete
@@ -264,7 +264,7 @@ The following risks are accepted for Phase 0 and internal devnet deployment:
 2. **FIND-024**: Begin typed error migration — start with `slashing_undo.rs` and `cross_shard.rs`
 3. **Documentation sprint**: Resolve remaining 42 discrepancies in audit/spec documents
 4. **Add `cargo llvm-cov` to CI**: Enable code coverage tracking
-5. **End-to-end API tests**: Add `reqwest`-based integration tests for all 9 REST endpoints with JWT auth
+5. **End-to-end API tests**: Add `reqwest`-based integration tests for all 14 REST endpoints with JWT auth
 
 ### 8.2 Short-Term (Before Mainnet)
 

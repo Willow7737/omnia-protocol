@@ -4,7 +4,7 @@
 > 🔗 Context: Part of the audit documentation section
 > 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Date:** 2026-03-05
 **Document version:** 2.0
 
@@ -14,7 +14,7 @@
 
 ## 1. Purpose
 
-This document provides an honest and transparent assessment of the Omnia Protocol's current security posture as of v4.0.0. It catalogs known issues that have been fixed, remaining risks that have not yet been addressed, test coverage status, fuzzing efforts, and dependency audit results. The intent is to give auditors a complete picture of where the protocol stands — both strengths and weaknesses — so they can focus their efforts on the areas that need the most attention.
+This document provides an honest and transparent assessment of the Omnia Protocol's current security posture as of v0.1.68. It catalogs known issues that have been fixed, remaining risks that have not yet been addressed, test coverage status, fuzzing efforts, and dependency audit results. The intent is to give auditors a complete picture of where the protocol stands — both strengths and weaknesses — so they can focus their efforts on the areas that need the most attention.
 
 ---
 
@@ -86,7 +86,7 @@ The `ShardRouter::route_event()` method now: (a) checks the nonce for replay pro
 
 - CLI with clap (configurable via args + env vars with `OMNIA_` prefix)
 - HTTP health endpoint (`/health`) and Prometheus metrics (`/metrics`)
-- REST API with 9 endpoints under `/api/v1/` + Swagger UI at `/swagger-ui`
+- REST API with 14 endpoints under `/api/v1/` + Swagger UI at `/swagger-ui`
 - Graceful shutdown on SIGINT/SIGTERM
 - 6 CLI subcommands: `run`, `keygen`, `setup-contribute`, `setup-verify`, `snapshot`, `restore`
 - Persistent slashing (redb) and nonce (redb) state
@@ -103,7 +103,7 @@ These risks are known but not yet mitigated. They are listed in approximate orde
 
 ### 3.1 REST API Security (Critical) → ✅ Resolved (FIND-001)
 
-The `omnia-node` HTTP API (`node/src/api/`) previously exposed 9 endpoints with no security controls. This has been addressed in Phase 0:
+The `omnia-node` HTTP API (`node/src/api/`) previously exposed 14 endpoints with no security controls. This has been addressed in Phase 0:
 
 - **JWT authentication** — `node/src/api/auth.rs` (645 lines) validates JWT tokens via `jsonwebtoken` crate. Configured via `OMNIA_JWT_SECRET` env var.
 - **AuthorizedCallers ACL** — Only registered caller IDs can access the API. Configured via `OMNIA_AUTHORIZED_CALLERS` env var.
@@ -176,7 +176,7 @@ Both `RedbSlashingStore` and `RedbNonceStore` use redb, which is a production-qu
 
 ### 4.1 Unit and Integration Tests
 
-The protocol has 295+ tests across 7 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
+The protocol has Run `cargo test --workspace` for current count across 14 crates (substrate, shards, economics, zk, binding, node, chaos-tests). These cover:
 
 | Crate         | Test categories                                                                                                                                                                                                              |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
