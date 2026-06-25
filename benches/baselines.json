@@ -1,12 +1,12 @@
 {
-  "_comment": "Baseline performance values from v0.1.68 (2026-06-07). Used by CI benchmark regression gate. See docs/benchmarks/baseline-v0.1.48.md for historical methodology. Updated ZK baselines to reflect actual expanded circuit performance (100 events, merkle_depth=8).",
-  "_caveat": "ALL baselines are SINGLE-NODE SYNTHETIC measurements. They do NOT reflect real-world multi-node distributed performance. Consensus throughput (7K-12K ops/s) assumes trivial single-node finality (total_nodes=1 or 3 with no network). Finality latency (~24 µs) and gossip propagation (~25 µs) measure create→serialize→deserialize→insert on one machine with no network I/O. Real-world deployments will see 100-1000x higher latency due to network round-trips, BFT supermajority waiting, and ZK proof generation overhead. These numbers are useful for detecting regressions in the hot path, NOT for capacity planning.",
-  "_gating_strategy": "Updated 2026-06-23: the benchmark gate now has THREE layers, each addressing a different variance source: (1) IAI-callgrind gate (benches/iai_baselines.json) — DETERMINISTIC instruction counts, 2% threshold on shared runners, 1% on self-hosted. This is the primary regression signal — if IAI regresses, the code path genuinely changed. (2) Multi-sample criterion gate (scripts/multi_sample_bench.py) — runs N=5 times on shared runners (N=10 on self-hosted), computes 95% bootstrap CI, only fails if CI does NOT overlap baseline AND mean exceeds threshold. This filters out single-run noise. (3) Single-sample criterion gate (scripts/check_benchmark_regression.py) — fast, runs on every push, but with wider thresholds to avoid false positives from runner variance. The thresholds below are for layer (3). Layers (1) and (2) have their own thresholds (2% and 5% respectively on self-hosted).",
+  "_comment": "Baseline performance values from v0.1.75 (2026-06-25). All baselines now include the P0-1 Ed25519 signature verification on every ConsensusEngine::process_event call — this is a security-critical fix that prevents frame-an-honest-validator attacks. The performance cost (~31% throughput reduction, ~158% latency increase) is the correct and expected cost of secure consensus.",
+  "_caveat": "ALL baselines are SINGLE-NODE SYNTHETIC measurements. They do NOT reflect real-world multi-node distributed performance. Consensus throughput assumes trivial single-node finality. Finality latency and gossip propagation measure create→serialize→deserialize→insert on one machine with no network I/O. Real-world deployments will see 100-1000x higher latency due to network round-trips, BFT supermajority waiting, and ZK proof generation overhead. These numbers are useful for detecting regressions in the hot path, NOT for capacity planning.",
+  "_gating_strategy": "3-layer gate: (1) IAI-callgrind (deterministic instruction counts, 2% threshold), (2) multi-sample criterion (95% bootstrap CI, N=5), (3) single-sample criterion (fast, 10% threshold). See docs/reference/benchmark-gates.md.",
   "version": "0.1.75",
-  "timestamp": "2026-06-07",
+  "timestamp": "2026-06-25",
   "environment": {
     "os": "Linux (GitHub Actions ubuntu-latest, x86_64)",
-    "cpu": "4 cores (NOTE: GitHub Actions runners have variable CPU generations — Intel vs AMD, different clock speeds. Inter-run variance of ±30% is common; the 2026-06-19 run measured 12,190 ops/s vs the 7,000 baseline, which is attributed to runner variance rather than code changes. See AUDIT_FIX_NOTES.md for the investigation.)",
+    "cpu": "4 cores (heterogeneous Intel/AMD, ±20% inter-run variance)",
     "ram": "16 GiB",
     "rustc": "1.91.0",
     "profile": "release (lto=fat, codegen-units=1, strip=symbols)"
@@ -14,130 +14,129 @@
   "threshold_pct": 10,
   "benchmarks": {
     "consensus_throughput": {
-      "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O — NOT representative of real-world multi-node throughput). Includes P0-1 Ed25519 signature verification on every event (added 2026-06-25).",
+      "description": "Sustained TPS (SINGLE-NODE SYNTHETIC, total_nodes=3, 1000-event batch, no network I/O). Includes P0-1 Ed25519 signature verification on every event.",
       "unit": "events_per_sec",
-      "baseline": 8218,
+      "baseline": 7577,
       "direction": "higher_is_better",
       "source_bench": "tx_throughput/sustained_tps_single_node",
       "gated": true,
       "threshold_pct": 15,
-      "gated_reason": "Updated 2026-06-25: baseline lowered from 12000 to 8218 ops/s to reflect the performance cost of the P0-1 security fix (event.verify_signature() on every process_event call). The previous 12000 baseline was measured on insecure code that did NOT verify signatures — any peer could forge events in any validator's name. The 31.5% throughput reduction is the cost of preventing frame-an-honest-validator attacks. The 15% threshold accommodates GitHub Actions runner variance."
+      "gated_reason": "Updated 2026-06-25: baseline set to 7577 ops/s (single-sample CI run) / 7708 ops/s (multi-sample mean). Includes P0-1 Ed25519 signature verification cost. The 15% threshold accommodates GitHub Actions runner variance."
     },
     "finality_latency_mean": {
-      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network — NOT real-world distributed finality latency). Includes P0-1 Ed25519 signature verification on every event (added 2026-06-25). Criterion's default harness reports the mean of per-iteration elapsed times with a 95% CI, NOT p99.",
+      "description": "Finality latency mean (SINGLE-NODE SYNTHETIC, creation to commitment, no network). Includes P0-1 Ed25519 signature verification on every event.",
       "unit": "ns",
-      "baseline": 63465,
+      "baseline": 65065,
       "direction": "lower_is_better",
       "source_bench": "finality_latency/creation_to_finality_mean",
       "former_name": "finality_latency_p99",
       "former_source_bench": "finality_latency/creation_to_finality_p50_p95_p99",
-      "note": "Updated 2026-06-25: baseline raised from 24520 to 63465 ns to reflect the P0-1 security fix (event.verify_signature() on every process_event call). The 158.8% latency increase is the cost of Ed25519 signature verification on the consensus hot path — preventing forged events and false slashing."
+      "note": "Updated 2026-06-25: baseline set to 65065 ns (single-sample) / 72330 ns (multi-sample mean). The ~2.6x increase from the pre-P0-1 baseline (24520 ns) is the cost of Ed25519 signature verification on the consensus hot path."
     },
     "dag_insert_p50": {
       "description": "DAG insert latency p50 (0 pre-existing events, in-memory only)",
       "unit": "ns",
-      "baseline": 22750,
+      "baseline": 20827,
       "direction": "lower_is_better",
       "source_bench": "dag_insert/insert_latency/0"
     },
     "gossip_propagation_p50": {
-      "description": "Gossip propagation latency p50 (SINGLE-NODE SIM: create->serialize->deserialize->insert, no network I/O — NOT real-world propagation latency)",
+      "description": "Gossip propagation latency p50 (SINGLE-NODE SIM: create->serialize->deserialize->insert, no network I/O)",
       "unit": "ns",
-      "baseline": 24160,
+      "baseline": 22893,
       "direction": "lower_is_better",
       "source_bench": "gossip_latency/propagation_single_node_sim"
     },
     "zk_proof_gen_basic": {
       "description": "ZK proof generation (Groth16 basic circuit, 1 tx)",
       "unit": "ns",
-      "baseline": 2500000,
+      "baseline": 1742500,
       "direction": "lower_is_better",
       "source_bench": "groth16_proof_generation/basic_circuit",
       "threshold_pct": 20,
-      "note": "Updated 2026-06-23 per mentor review: threshold tightened from 30% to 20%. Mentor observed the previous 30% threshold allowed a 2.50ms → 3.11ms drift (24.4%) to pass undetected. The 20% threshold catches real regressions while accommodating Groth16 allocator-state variance (~10% observed run-to-run). The ZK gate is now enforced (no longer || true in CI) so this threshold actually matters. For production-grade ZK benchmarking, use a dedicated machine with jemalloc or mimalloc and pinned CPU affinity to reduce variance to <3%, then tighten to 10%."
+      "note": "Updated 2026-06-25: baseline lowered from 2,500,000 to 1,742,500 ns (1.74 ms). The 30% improvement is due to the v0.1.69 ceremony fix making derive_keys_deterministic_from_srs fail-closed, so the operator falls back to generate_trusted_setup which uses fresh randomness (faster)."
     },
     "zk_proof_gen_expanded_100": {
       "description": "ZK proof generation (Groth16 expanded circuit, 100 tx batch, merkle_depth=8)",
       "unit": "ns",
-      "baseline": 8000000000,
+      "baseline": 4774800000,
       "direction": "lower_is_better",
       "source_bench": "zk_proof_gen/100_tx_batch",
       "threshold_pct": 20,
-      "note": "Updated 2026-06-23 per mentor review: threshold tightened from 30% to 20%. Mentor observed 11.5% run-to-run variance (7.78s → 8.67s) on the same code at the 8-second scale. The 20% threshold provides headroom for allocator variance while catching real regressions. The ZK gate is now enforced (no longer || true in CI). For production-grade ZK benchmarking, use a dedicated machine with jemalloc or mimalloc and pinned CPU affinity to reduce variance to <3%, then tighten to 10%."
+      "note": "Updated 2026-06-25: baseline lowered from 8,000,000,000 to 4,774,800,000 ns (4.77 s). The 40% improvement is from the same ceremony fix as zk_proof_gen_basic. The 100-event expanded circuit now takes 4.77s instead of 8.0s."
     },
     "deterministic_compute": {
       "description": "Deterministic hash-based leader selection compute latency (NOT a VRF — see ADR-012)",
       "unit": "ns",
-      "baseline": 21550,
+      "baseline": 19473,
       "direction": "lower_is_better",
-      "source_bench": "deterministic_hash/deterministic_compute",
-      "note": "Renamed 2026-06-19 from 'vrf_compute' — the module implements a deterministic hash construction (Ed25519 sig + BLAKE3), NOT a Verifiable Random Function per RFC 9381. C-7 (vrf.rs → deterministic_selection.rs rename) was deferred; the benchmark group was already named 'deterministic_hash' so only the baseline key was stale."
+      "source_bench": "deterministic_hash/deterministic_compute"
     },
     "vector_clock_merge_100": {
       "description": "Vector clock merge (100 nodes)",
       "unit": "ns",
-      "baseline": 4342,
+      "baseline": 3840,
       "direction": "lower_is_better",
       "source_bench": "vector_clock/merge_100_nodes"
     },
     "event_creation_sign": {
       "description": "Event creation + signing (create_and_sign)",
       "unit": "ns",
-      "baseline": 21750,
+      "baseline": 19755,
       "direction": "lower_is_better",
       "source_bench": "event_creation/create_and_sign"
     },
     "graph_insertion": {
       "description": "Graph insertion (insert_chain)",
       "unit": "ns",
-      "baseline": 25180,
+      "baseline": 20460,
       "direction": "lower_is_better",
       "source_bench": "graph_insertion/insert_chain"
     },
     "network_sim_finality_3_node": {
-      "description": "Multi-node finality latency (3 nodes, in-process sim — includes gossip + BFT voting, NOT real network). This is the closest synthetic approximation of 'real consensus latency' without TCP/UDP I/O. Real-world latency will be 10-100x higher.",
+      "description": "Multi-node finality latency (3 nodes, in-process sim). Includes P0-1 signature verification on every event on every node.",
       "unit": "ns",
-      "baseline": 29745,
+      "baseline": 157720,
       "direction": "lower_is_better",
       "source_bench": "network_sim/finality_latency/n_nodes/3",
       "threshold_pct": 25,
-      "note": "Updated 2026-06-23 with real CI measurement (29.75 µs). Previous placeholder was 500 µs — the actual number is 17x faster because the in-process sim has no real network I/O. The 25% threshold accommodates ChaosNetwork's non-deterministic event ordering."
+      "note": "Updated 2026-06-25: baseline raised from 29745 to 157720 ns. The ~5x increase is because ChaosNetwork events now go through ConsensusEngine::process_event which verifies Ed25519 signatures on every event on every node."
     },
     "network_sim_finality_5_node": {
-      "description": "Multi-node finality latency (5 nodes, in-process sim — includes gossip + BFT voting). Measures how finality latency scales with node count.",
+      "description": "Multi-node finality latency (5 nodes, in-process sim). Includes P0-1 signature verification.",
       "unit": "ns",
-      "baseline": 37726,
+      "baseline": 246120,
       "direction": "lower_is_better",
       "source_bench": "network_sim/finality_latency/n_nodes/5",
       "threshold_pct": 25,
-      "note": "Updated 2026-06-23 with real CI measurement (37.73 µs). Scaling: 3-node=29.75µs, 5-node=37.73µs (1.27x for 1.67x more nodes — sub-linear)."
+      "note": "Updated 2026-06-25: baseline raised from 37726 to 246120 ns. Same P0-1 cause as 3-node."
     },
     "network_sim_throughput_3_node": {
-      "description": "Multi-node sustained throughput (3 nodes, 100 events, in-process sim). This is the 'real TPS' number for the consensus system — includes cross-node contention and BFT voting overhead.",
+      "description": "Multi-node sustained throughput (3 nodes, 100 events, in-process sim). Includes P0-1 signature verification.",
       "unit": "events_per_sec",
-      "baseline": 72,
+      "baseline": 65,
       "direction": "higher_is_better",
       "source_bench": "network_sim/throughput/n_nodes/3",
       "threshold_pct": 40,
-      "note": "Updated 2026-06-23 with real CI measurement (72 elem/s). Previous placeholder was 500 elem/s — the actual number is 7x lower because each event requires multiple consensus rounds across all 3 nodes. The 40% threshold accommodates the high variance observed in CI (59-92 elem/s range). 5-node and 7-node throughput benchmarks are excluded from CI (take 56s and 391s respectively) but can be run manually on a self-hosted runner."
+      "note": "Updated 2026-06-25: baseline lowered from 72 to 65 elem/s. The 9.6% reduction is from P0-1 signature verification overhead."
     },
     "network_sim_partition_recovery": {
-      "description": "Partition recovery latency (5 nodes, 10-round partition, heal → first finality). Measures the sync/recovery path after a network partition heals.",
+      "description": "Partition recovery latency (5 nodes, 10-round partition, heal → first finality). Includes P0-1 signature verification.",
       "unit": "ns",
-      "baseline": 104890,
+      "baseline": 312000,
       "direction": "lower_is_better",
       "source_bench": "network_sim/partition_recovery/5_node_partition_heal",
       "threshold_pct": 30,
-      "note": "Updated 2026-06-23 with real CI measurement (104.89 µs). Previous placeholder was 1 ms — actual is 10x faster."
+      "note": "Updated 2026-06-25: baseline raised from 104890 to 312000 ns. P0-1 signature verification on recovery events."
     },
     "network_sim_crash_recovery": {
-      "description": "Crash recovery latency (5 nodes, crash node 0, restart → catch up). Measures the genesis-replay / fast-sync path.",
+      "description": "Crash recovery latency (5 nodes, crash node 0, restart → catch up). Includes P0-1 signature verification.",
       "unit": "ns",
-      "baseline": 220810,
+      "baseline": 366520,
       "direction": "lower_is_better",
       "source_bench": "network_sim/crash_recovery/5_node_crash_restart",
       "threshold_pct": 30,
-      "note": "Updated 2026-06-23 with real CI measurement (220.81 µs). Previous placeholder was 1.5 ms — actual is 7x faster."
+      "note": "Updated 2026-06-25: baseline raised from 220810 to 366520 ns. P0-1 signature verification on sync events."
     }
   }
 }
