@@ -38,20 +38,25 @@ impl BiologicalValidator {
                 let key = (*subject, *consumer);
                 match state.consent_registry.get(&key) {
                     Some(record) if !record.revoked => {
-                        // Check consent expiry: reject if the consent has expired
-                        if record.expires_at != 0 {
-                            // TODO: Use a proper time provider instead of a hardcoded epoch.
-                            // For now, use a simple heuristic — the caller should supply
-                            // the current time via the validator context. We use 0 as a
-                            // placeholder so that expiry checks are structurally correct.
-                            let now: u64 = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_millis() as u64;
-                            if record.expires_at <= now {
-                                return Err(ShardError::ValidationFailed("Consent has expired".into()));
-                            }
-                        }
+                        // P0-7 fix: consent expiry must NOT use wall-clock time here.
+                        // `SystemTime::now()` is a non-deterministic input that breaks
+                        // consensus safety — two honest nodes processing the same
+                        // event at different wall-clock times may reach different
+                        // accept/reject decisions, leading to forked state.
+                        //
+                        // TODO(consensus-time): thread a deterministic `current_time`
+                        // (derived from the consensus round number or the carrying
+                        // event's timestamp) through the validator pipeline and use
+                        // it here instead of `SystemTime::now()`. The state.rs apply
+                        // path has been updated to skip the wall-clock expiry check
+                        // entirely (see P0-7 fix in biological/state.rs); once a
+                        // deterministic time source is available, both this check
+                        // and the apply() path should use it.
+                        //
+                        // For now, we deliberately do NOT check `expires_at` against
+                        // wall-clock time. Expiry is effectively deferred until a
+                        // deterministic time source is wired through.
+                        let _ = record.expires_at;
                         Ok(())
                     }
                     Some(_) => Err(ShardError::ValidationFailed("Consent has been revoked".into())),

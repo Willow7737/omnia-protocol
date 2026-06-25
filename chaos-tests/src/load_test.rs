@@ -152,8 +152,9 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
     }
 
     use omnia_substrate::{
-        CausalGraph, ConsensusConfig, ConsensusEngine, Event, EventId, NodeId, SlashingEngine, VectorClock,
-        DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD,
+        blake3_domain::blake3_hash_domain, crypto::NodeKeypair, generate_keypair, CausalGraph, ConsensusConfig,
+        ConsensusEngine, Event, EventId, NodeId, SlashingEngine, VectorClock, DEFAULT_EJECTION_THRESHOLD,
+        DEFAULT_SLASH_THRESHOLD,
     };
 
     // Use configurable total_nodes for BFT quorum calculation.
@@ -165,7 +166,12 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         config.total_nodes
     };
 
-    let node_id: NodeId = [1u8; 32];
+    // P0-1 fix: generate a keypair and derive node_id from the public key
+    // via BLAKE3 domain separation, matching the production derivation.
+    // All events created by this load test are signed with this keypair
+    // so that ConsensusEngine::process_event's verify_signature() check passes.
+    let node_keypair = generate_keypair();
+    let node_id: NodeId = blake3_hash_domain(b"omnia-creator", &node_keypair.verifying_key().to_bytes());
     let mut seed = [0u8; 32];
     seed[0] = 1;
     let consensus_config = ConsensusConfig {
@@ -195,6 +201,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
     let create_and_submit = |graph: &mut CausalGraph,
                              consensus: &mut ConsensusEngine,
                              node_id: NodeId,
+                             node_keypair: &NodeKeypair,
                              sequence: &mut u64,
                              self_parent: &mut Option<EventId>,
                              vector_clock: &mut VectorClock,
@@ -205,7 +212,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
         // Update vector clock
         vector_clock.set(node_id, *sequence + 1);
 
-        let event = if self_parent.is_none() {
+        let mut event = if self_parent.is_none() {
             Event::genesis(node_id, payload)
         } else {
             Event::new(
@@ -218,6 +225,11 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
             )
         }
         .expect("event creation should not fail");
+
+        // P0-1 fix: sign the event so verify_signature() passes
+        event
+            .sign_with_keypair(node_keypair)
+            .expect("event signing should not fail");
 
         let event_id = event.id;
 
@@ -262,6 +274,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
             &mut graph,
             &mut consensus,
             node_id,
+            &node_keypair,
             &mut next_sequence,
             &mut self_parent,
             &mut vector_clock,
@@ -288,6 +301,7 @@ pub async fn run_load_test(config: &LoadTestConfig) -> Result<LoadTestResult, Lo
             &mut graph,
             &mut consensus,
             node_id,
+            &node_keypair,
             &mut next_sequence,
             &mut self_parent,
             &mut vector_clock,

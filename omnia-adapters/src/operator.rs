@@ -171,11 +171,34 @@ impl RollupOperator {
         }
 
         // Build ExpandedRollupCircuit from actual state roots.
-        // C-1 fix (audit v0.1.68): Previously used ExpandedRollupCircuit::empty()
-        // which proves over an all-zero witness — the proof does not bind to
-        // any real state transition. Now uses from_state_roots() with the
-        // actual old and new state roots, binding the proof to the real
-        // state transition.
+        //
+        // P0-3 fix: from_state_roots() uses placeholder zero witnesses for
+        // all per-event constraints (Merkle paths, state transitions, etc.).
+        // For event_count > 0, the circuit is UNSATISFIABLE — proof creation
+        // will fail. We guard against this here and return a clear error
+        // instead of producing a proof that can never succeed.
+        //
+        // TODO: Wire ExpandedRollupCircuit::from_batch() with real Merkle
+        // proofs (from build_poseidon_merkle_tree) and intermediate state
+        // roots. This requires the operator to track per-event witness data
+        // during batch accumulation. See circuit.rs:589-687 for the
+        // constructor and circuit.rs:420-496 for from_batch().
+        if event_count > 0 {
+            tracing::error!(
+                event_count = event_count,
+                "ZK rollup: non-empty batch proof not yet implemented — \
+                 ExpandedRollupCircuit::from_state_roots uses placeholder \
+                 zero witnesses that make the circuit unsatisfiable. \
+                 Wire ExpandedRollupCircuit::from_batch with real witness data."
+            );
+            return Err(RollupError::Prover(ProverError::CircuitError(
+                "Non-empty batch proof not yet implemented — witness data is \
+                 placeholder zeros. Use ExpandedRollupCircuit::from_batch with \
+                 real Merkle proofs and intermediate state roots."
+                    .to_string(),
+            )));
+        }
+
         let circuit = ExpandedRollupCircuit::from_state_roots(
             *_old_root,
             *_new_root,

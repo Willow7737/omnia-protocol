@@ -1609,7 +1609,20 @@ impl SlashingEngine {
             std::process::abort()
         });
         match state.jail_registry.get(&validator_id) {
-            Some(jail) => current_round < jail.release_round,
+            Some(jail) => {
+                // P0-5 fix: non-auto-release validators must stay jailed forever.
+                // The previous implementation only checked release_round, allowing
+                // manually-jailed validators (e.g. 2nd-tier equivocation offenders
+                // with auto_release=false) to rejoin consensus prematurely after
+                // their nominal jail term elapsed. `is_jailed_at` is the check
+                // that consensus uses to determine participation eligibility, so
+                // a false return here lets a slashed validator sign again without
+                // a manual release — defeating the slashing penalty.
+                if !jail.auto_release {
+                    return true; // Permanently jailed until manual release
+                }
+                current_round < jail.release_round
+            }
             None => false,
         }
     }
@@ -1713,11 +1726,42 @@ impl SlashingEngine {
     /// (e.g., `burn_percentage: 1.0` in `assert!(matches!(...))`),
     /// which are not on the consensus critical path.
     pub fn compute_burn_amount(stake: u64, burn_percentage: f64) -> u64 {
-        // H-6 fix: Use u128 intermediate to avoid f64 non-determinism.
-        // Convert percentage to basis points (1% = 100 bps, 5.0% = 500 bps).
-        // Then: burn = stake * bps / 10_000
-        let bps = (burn_percentage * 100.0) as u128;
-        ((stake as u128) * bps / 10_000) as u64
+        // P0-4 fix: The f64→u128 conversion (`burn_percentage * 100.0`) is
+        // non-deterministic across CPU architectures (x87 FPU 80-bit extended
+        // vs SSE2 64-bit). Two nodes with different CPUs can compute different
+        // slash amounts → state divergence → fork.
+        //
+        // The new compute_burn_amount_bp() function uses pure integer
+        // arithmetic (u64 basis points) and is fully deterministic.
+        // This deprecated f64-based function delegates to it after converting.
+        let bps = (burn_percentage * 100.0) as u64;
+        Self::compute_burn_amount_bp(stake, bps)
+    }
+
+    /// Compute the burn amount using integer basis points (10000 = 100%).
+    ///
+    /// This is the deterministic replacement for `compute_burn_amount`.
+    /// Uses pure u128 intermediate arithmetic — no f64, no platform-dependent
+    /// rounding. Two nodes with different CPUs will always compute the same
+    /// result.
+    ///
+    /// # Arguments
+    ///
+    /// * `stake` — The validator's total stake in u64 units.
+    /// * `burn_bps` — Burn percentage in basis points (100 = 1%, 10000 = 100%).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omnia_consensus::SlashingEngine;
+    /// // Burn 5% of a 10,000 stake = 500
+    /// assert_eq!(SlashingEngine::compute_burn_amount_bp(10_000, 500), 500);
+    /// // Burn 100% of a 10,000 stake = 10,000
+    /// assert_eq!(SlashingEngine::compute_burn_amount_bp(10_000, 10_000), 10_000);
+    /// ```
+    pub fn compute_burn_amount_bp(stake: u64, burn_bps: u64) -> u64 {
+        // u128 intermediate prevents overflow for any stake < 2^96
+        ((stake as u128) * (burn_bps as u128) / 10_000) as u64
     }
 
     /// Compute the burn amount for a specific validator given a burn percentage.
@@ -2885,8 +2929,14 @@ mod tests {
 
         // is_jailed for non-auto-release: always true regardless of round
         assert!(engine.is_jailed(node2, 300));
-        // is_jailed_at: based on round vs release_round
-        assert!(!engine.is_jailed_at(node2, 300)); // 300 >= 200, so not jailed_at
+        // P0-5 fix: is_jailed_at now also honors auto_release=false — a
+        // manually-jailed validator stays jailed forever (until manual
+        // release), even past their nominal release_round. This is the
+        // check consensus uses to decide participation eligibility, so a
+        // false return here would let a slashed validator sign again
+        // without an explicit release.
+        assert!(engine.is_jailed_at(node2, 300)); // auto_release=false → permanently jailed
+        assert!(engine.is_jailed_at(node2, 9999)); // even past release_round=200
     }
 
     // ── Additional ADR-011 comprehensive tests ─────────────────────

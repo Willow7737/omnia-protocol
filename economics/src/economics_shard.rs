@@ -177,7 +177,25 @@ impl EconomicsState {
                 // Production deployments MUST call add_admin_key() before
                 // accepting events. The node startup code should configure
                 // admin keys from OMNIA_AUTHORIZED_CALLERS.
-                if !self.admin_keys.is_empty() {
+                // P0-9 fix: fail-closed on empty admin_keys in production builds.
+                // Non-production builds log a warning for backward compatibility with tests.
+                if self.admin_keys.is_empty() {
+                    #[cfg(feature = "production")]
+                    {
+                        return Err(EconomicsError::Unauthorized(
+                            "MintUbc requires admin authorization — no admin_keys configured. \
+                             Set admin_keys via EconomicsState::add_admin_key() before deploying \
+                             to production. (Build with --features production to enforce this.)"
+                                .into(),
+                        ));
+                    }
+                    #[cfg(not(feature = "production"))]
+                    {
+                        tracing::warn!(
+                            "MintUbc accepted without admin verification — configure admin_keys for production"
+                        );
+                    }
+                } else {
                     let submitter = event_creator.ok_or_else(|| {
                         EconomicsError::ValidationFailed("MintUbc requires authenticated event creator".into())
                     })?;
@@ -186,11 +204,6 @@ impl EconomicsState {
                             "MintUbc requires admin authorization. Use SubmitWork with verified proof instead.".into(),
                         ));
                     }
-                } else {
-                    tracing::warn!(
-                        "MintUbc accepted without admin verification — admin_keys is empty. \
-                         Configure admin_keys for production to prevent unauthorized minting."
-                    );
                 }
                 if !self.quota.is_registered(did) {
                     self.quota.register_did(did);
@@ -217,11 +230,24 @@ impl EconomicsState {
                 // Gate work submission: only authorized submitters can mint UBC
                 // Until real ZK verification is implemented, require admin authorization
                 // when admin_keys is configured.
+                // P0-9 fix: fail-closed on empty admin_keys in production builds.
+                // Non-production builds log a warning for backward compatibility with tests.
                 if self.admin_keys.is_empty() {
-                    // When no admin keys configured, log a warning but allow (testing mode)
-                    tracing::warn!(
-                        "SubmitWork accepted without admin verification - configure admin_keys for production"
-                    );
+                    #[cfg(feature = "production")]
+                    {
+                        return Err(EconomicsError::Unauthorized(
+                            "SubmitWork requires admin authorization — no admin_keys configured. \
+                             Set admin_keys via EconomicsState::add_admin_key() before deploying \
+                             to production. (Build with --features production to enforce this.)"
+                                .into(),
+                        ));
+                    }
+                    #[cfg(not(feature = "production"))]
+                    {
+                        tracing::warn!(
+                            "SubmitWork accepted without admin verification — configure admin_keys for production"
+                        );
+                    }
                 } else {
                     // Admin verification required
                     let submitter = event_creator.ok_or_else(|| {

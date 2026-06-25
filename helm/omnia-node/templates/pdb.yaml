@@ -1,0 +1,20 @@
+# P0-10 fix: PodDisruptionBudget keeps a quorum of Omnia nodes available
+# during voluntary disruptions (node drains, cluster autoscaler, etc.).
+# `minAvailable: replicaCount - 1` allows one pod at a time to be
+# disrupted, which preserves BFT quorum as long as replicaCount >= 2*f+1
+# overall. With replicaCount=1, minAvailable becomes 0 (no voluntary
+# disruption protection) — operators scaling up should re-evaluate.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "omnia-node.fullname" . }}
+  labels:
+    app: {{ include "omnia-node.name" . }}
+    chart: {{ include "omnia-node.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  minAvailable: {{ .Values.replicaCount | sub1 }}
+  selector:
+    matchLabels:
+      app: {{ include "omnia-node.name" . }}

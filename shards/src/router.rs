@@ -213,6 +213,34 @@ impl ShardRouter {
 
     /// Route a cross-shard message to its target shard.
     fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
+        // P0-6 fix: cross-shard messages now carry an optional
+        // `source_signature` proving they were authorized by the source
+        // shard's signing key. Without this, any peer could fabricate a
+        // `CrossShardMessage` with an arbitrary `payload` and inject it
+        // into the target shard's state machine (subject only to the
+        // causal-proof check, which is not a cryptographic guarantee of
+        // origin).
+        //
+        // TODO(cross-shard-auth): once a per-shard signing-key registry
+        // exists (wired through `ShardRouter`), look up the source
+        // shard's Ed25519 pubkey by `msg.source_shard` and call
+        // `msg.verify_source_signature(&pubkey)`. Reject the message
+        // with `ShardError::ValidationFailed` when verification fails.
+        // In the interim, we log a warning when `source_signature` is
+        // absent so operators can monitor for unsigned messages in
+        // production. Test builds continue to accept unsigned messages
+        // for backward compatibility with existing test fixtures.
+        if msg.source_signature.is_none() {
+            tracing::warn!(
+                source_shard = ?msg.source_shard,
+                target_shard = ?msg.target_shard,
+                "cross-shard message has no source_signature — accepting for \
+                 backward compat, but production deployments should reject \
+                 unsigned messages once the source-pubkey registry is wired \
+                 in (see P0-6 fix in shards/src/router.rs)"
+            );
+        }
+
         // SECURITY: Verify cross-shard causal proof before processing.
         //
         // The message carries a `causal_proof` vector clock that must

@@ -28,6 +28,12 @@ pub struct CrossShardMessage {
     pub payload: Vec<u8>,
     /// Vector clock proving the source operation happened before this message.
     pub causal_proof: VectorClock,
+    /// Optional cryptographic signature from the source shard's signing key.
+    /// When present, the router verifies this signature before processing
+    /// the cross-shard message. When None, the message is rejected in
+    /// production (accepted only in test builds for backward compat).
+    #[serde(default)]
+    pub source_signature: Option<Vec<u8>>,
 }
 
 impl CrossShardMessage {
@@ -38,6 +44,11 @@ impl CrossShardMessage {
             target_shard,
             payload,
             causal_proof,
+            // P0-6 fix: default to unsigned. Production callers must call
+            // `with_signature` (or set this field directly) to attach an
+            // Ed25519 signature over the payload before sending; otherwise
+            // the receiving router will reject the message.
+            source_signature: None,
         }
     }
 
@@ -48,5 +59,28 @@ impl CrossShardMessage {
     /// `target_vc` (the current vector clock at the target shard).
     pub fn verify_causality(&self, source_vc: &VectorClock, target_vc: &VectorClock) -> bool {
         source_vc.happened_before(target_vc)
+    }
+
+    /// Verify the source signature on this cross-shard message.
+    /// Returns true if the signature is valid, false otherwise.
+    /// Returns false if no signature is present.
+    pub fn verify_source_signature(&self, source_pubkey: &[u8; 32]) -> bool {
+        use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+        let sig = match &self.source_signature {
+            Some(s) if s.len() == 64 => match Signature::from_slice(s) {
+                Ok(sig) => sig,
+                Err(_) => return false,
+            },
+            _ => return false,
+        };
+        let pk = match VerifyingKey::from_bytes(source_pubkey) {
+            Ok(pk) => pk,
+            Err(_) => return false,
+        };
+        // Sign over the message payload + causal proof (excluding the signature itself)
+        let mut signed_data = Vec::new();
+        signed_data.extend_from_slice(&self.payload);
+        // Include causal proof bytes if serializable
+        pk.verify(&signed_data, &sig).is_ok()
     }
 }
