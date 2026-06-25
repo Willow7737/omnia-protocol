@@ -1,5 +1,5 @@
 {
-  "name": "Omnia Protocol Testnet",
+  "name": "Omnia Protocol",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
@@ -9,20 +9,21 @@
     "ghcr.io/devcontainers/features/rust:1": {
       "version": "1.91",
       "profile": "default"
-    }
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "forwardPorts": [9090, 9091, 9092, 9093, 9094, 9095, 3000, 8080],
+  "forwardPorts": [8080, 4001, 9090, 9091, 9092, 9093, 9094, 3000],
   "portsAttributes": {
-    "9090": { "label": "Bootstrap Node", "onAutoForward": "notify" },
-    "9091": { "label": "Node 1", "onAutoForward": "notify" },
-    "9092": { "label": "Node 2", "onAutoForward": "notify" },
-    "9093": { "label": "Node 3", "onAutoForward": "notify" },
-    "9094": { "label": "Node 4", "onAutoForward": "notify" },
-    "9095": { "label": "Prometheus", "onAutoForward": "notify" },
-    "3000": { "label": "Grafana", "onAutoForward": "notify" },
-    "8080": { "label": "Direct Node API", "onAutoForward": "notify" }
+    "8080": { "label": "Node HTTP API", "onAutoForward": "openBrowser" },
+    "4001": { "label": "P2P QUIC", "onAutoForward": "notify" },
+    "9090": { "label": "Bootstrap Node (Docker)", "onAutoForward": "notify" },
+    "9091": { "label": "Node 1 (Docker)", "onAutoForward": "notify" },
+    "9092": { "label": "Node 2 (Docker)", "onAutoForward": "notify" },
+    "9093": { "label": "Node 3 (Docker)", "onAutoForward": "notify" },
+    "9094": { "label": "Node 4 (Docker)", "onAutoForward": "notify" },
+    "3000": { "label": "Grafana", "onAutoForward": "notify" }
   },
-  "postCreateCommand": "cargo fetch 2>/dev/null || true",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -30,14 +31,22 @@
         "vadimcn.vscode-lldb",
         "serayuzgur.crates",
         "tamasfe.even-better-toml",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "ms-azuretools.vscode-containers"
       ],
       "settings": {
-        "rust-analyzer.checkOnSave.command": "clippy"
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "rust-analyzer.cargo.features": "all",
+        "files.exclude": {
+          "**/target": true,
+          "**/.git": true
+        }
       }
     }
   },
   "remoteEnv": {
-    "RUST_LOG": "info"
+    "RUST_LOG": "info",
+    "RUST_BACKTRACE": "1",
+    "CARGO_INCREMENTAL": "0"
   }
 }
