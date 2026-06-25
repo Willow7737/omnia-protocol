@@ -149,7 +149,15 @@ fn build_test_app_state(port: u16) -> AppState {
     shard_router.register(Box::new(IdentityShard::new()));
     shard_router.register(Box::new(EconomicsShard::new()));
 
-    let economics = EconomicsState::new();
+    // Generate the node keypair once and reuse it for both the economics
+    // admin_keys and the AppState.keypair field.
+    let node_keypair = omnia_substrate::crypto::generate_keypair();
+    let mut economics = EconomicsState::new();
+    // P0-9 fix: when the 'production' feature is enabled (via --all-features),
+    // MintUbc fails-closed on empty admin_keys. Add the node's own keypair
+    // as an admin key so tests can mint UBC. In production, the operator
+    // would configure admin keys via OMNIA_AUTHORIZED_CALLERS.
+    economics.add_admin_key(node_keypair.verifying_key().to_bytes());
     let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
     let config = NodeConfig {
@@ -181,7 +189,7 @@ fn build_test_app_state(port: u16) -> AppState {
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
         is_syncing: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        keypair: Some(omnia_substrate::crypto::generate_keypair()),
+        keypair: Some(node_keypair),
         settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
         #[cfg(feature = "zk")]
         ceremony_server: None,
