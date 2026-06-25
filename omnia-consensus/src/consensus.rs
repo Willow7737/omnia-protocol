@@ -1413,7 +1413,7 @@ pub enum ConsensusError {
     Config(String),
     /// Event signature verification failed — the event may be forged.
     /// P0-1 fix: prevents frame-an-honest-validator attacks where a
-    /// malicious peer submits a forged event with creator = <victim>.
+    /// malicious peer submits a forged event with creator = `victim`.
     #[error("invalid event signature from node {0:?}")]
     InvalidSignature(NodeId),
 }
