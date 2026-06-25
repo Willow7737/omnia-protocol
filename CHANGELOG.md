@@ -9,6 +9,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.76](https://github.com/Willow7737/omnia-protocol/compare/v0.1.75...v0.1.76) (2026-06-25)
+
+
+### Features
+
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([38513ae](https://github.com/Willow7737/omnia-protocol/commit/38513aee136c6636026ad8c55c31b522a39dbdc9))
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([fb8231a](https://github.com/Willow7737/omnia-protocol/commit/fb8231aa83067e939f659a1048bc7a99d731ca96))
+
+
+### Bug Fixes
+
+* **bench:** resolve 3 CI failures from first real run ([784797f](https://github.com/Willow7737/omnia-protocol/commit/784797f0c221e7c4121c86c8d04df88e0b9be07c))
+* **bench:** resolve 3 CI failures from first real run ([a751b27](https://github.com/Willow7737/omnia-protocol/commit/a751b2779b888799b7f5286737d49e229550e2ba))
+* **bench:** update baselines for P0-1 signature verification cost ([9877df7](https://github.com/Willow7737/omnia-protocol/commit/9877df7cfb17cec77e8327c3e2337bb66e962aa6))
+* **ci:** rustdoc HTML tag + sign test events for P0-1 signature verification ([ee0e76f](https://github.com/Willow7737/omnia-protocol/commit/ee0e76f17854c4bc8bbf21d50f39b1d76d505a4e))
+* **iai:** capture stderr — iai-callgrind 0.13 writes to stderr, not stdout ([5492596](https://github.com/Willow7737/omnia-protocol/commit/5492596c569b9b7985c83c5129ba998b51b989d4))
+* **iai:** strip ANSI escape codes — root cause of 9/9 missing ([c3eb212](https://github.com/Willow7737/omnia-protocol/commit/c3eb2127df55b96228d04cd464145a251edd031b))
+* **iai:** strip ANSI escape codes — root cause of 9/9 missing ([d632285](https://github.com/Willow7737/omnia-protocol/commit/d632285c623a2c6f2dc8b7972a2669798f6c0c24))
+* **security:** close 11 P0 critical findings from new audit ([d5928e8](https://github.com/Willow7737/omnia-protocol/commit/d5928e809327274bb7e663cbc7f4f9de3ecd9cb1))
+* **security:** close 11 P0 critical findings from new audit ([cee569b](https://github.com/Willow7737/omnia-protocol/commit/cee569be892db4406bddc739f5a5e5a9395808f2))
+* **tests:** sign events in chaos-tests load_test for P0-1 signature verification ([028eef5](https://github.com/Willow7737/omnia-protocol/commit/028eef57fe469340ca7d24edaaf9e73dcec0b7f6))
+
+
+### Documentation
+
+* **benchmarks:** rewrite benchmark-gates.md for 3-layer gate + update BASELINE.md ([b51ddef](https://github.com/Willow7737/omnia-protocol/commit/b51ddefa4e11f22e21ce0534f58671492e1ae23e))
+* comprehensive update of 25 architecture, operations, and reference docs ([cf96377](https://github.com/Willow7737/omnia-protocol/commit/cf963779d0ecd17bcf6eb41ba7ca07f54698cde9))
+* final consistency sweep — fix all remaining stale references across 91 files ([e0c53b4](https://github.com/Willow7737/omnia-protocol/commit/e0c53b4c0ea73af8255e5cefc39413c7334d63a6))
+* final consistency sweep — fix all remaining stale references across 91 files ([3bc4be1](https://github.com/Willow7737/omnia-protocol/commit/3bc4be1d5c812d5eb4a03f53fd0b5952f9a61f5d))
+* **security:** document 16 critical v0.1.69 fixes in SECURITY.md + AUDIT_FIX_NOTES.md ([65de793](https://github.com/Willow7737/omnia-protocol/commit/65de793d3e385fe7dafd809667e78d4d419beb29))
+* update 20 phase summaries, security docs, reference docs, formal verification ([f0a6605](https://github.com/Willow7737/omnia-protocol/commit/f0a66055f9c43aa5b8f62e0b63187db967d24c52))
+* update 20 phase summaries, security docs, reference docs, formal verification ([5567ac7](https://github.com/Willow7737/omnia-protocol/commit/5567ac7b2895d132c97f88a1d1f2bfd7573c5cb7))
+
 ## [0.1.75](https://github.com/Willow7737/omnia-protocol/compare/v0.1.74...v0.1.75) (2026-06-23)
 
 
