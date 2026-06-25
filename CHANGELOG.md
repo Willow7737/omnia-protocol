@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers, Operators
 > 🔗 Context: Version history and migration notes for all releases
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 All notable changes to this project will be documented in this file.
 
@@ -903,7 +903,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- comprehensive documentation audit — align all markdown with v4.0.0 codebase ([e37d6ef](commit/e37d6ef91c9c2b271ba99d6f970617dad7e8d591))
+- comprehensive documentation audit — align all markdown with current codebase ([e37d6ef](commit/e37d6ef91c9c2b271ba99d6f970617dad7e8d591))
 - comprehensive repository beautification (excluding workflows due to permissions) ([5d8088d](commit/5d8088de797abff9f926086e8fa4695b809d4b21))
 - comprehensive repository beautification and enhancement ([52bca8e](commit/52bca8e7f3d6871509dded8034c093a9a719cf1d))
 - configure community channels and issue templates ([9b038df](commit/9b038dfc503b3c9f7b8068ec2066f7630b89371f))

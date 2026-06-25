@@ -16,7 +16,7 @@
 | ---------------- | --------------------------------------------------- |
 | **Date**         | 2026-05-23                                          |
 | **Commit**       | d52b7da (v0.1.48)                                   |
-| **Rust Version** | 1.95.0 (59807616e 2026-04-14)                       |
+| **Rust Version** | 1.95.0 (59807616e 2026-04-14) (historical — current CI uses 1.91.0)                       |
 | **OS**           | Linux 5.10.134 (x86_64, cloud instance)             |
 | **CPU**          | Intel Xeon, 4 cores                                 |
 | **RAM**          | 8 GiB                                               |

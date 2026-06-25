@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Contribution guidelines, CI gates, and code review process for the Rust-only codebase
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 Thank you for your interest in contributing to Omnia! Whether you're a cryptographer, Rust developer, or visionary, there's a place for you.
 

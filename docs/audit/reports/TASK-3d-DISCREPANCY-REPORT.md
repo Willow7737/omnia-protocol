@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Auditor:** Technical Documentation Auditor (Task 3-d)
 **Date:** 2026-03-05
@@ -59,7 +59,7 @@
 
 | #   | Discrepancy                            | Doc Says          | Code Reality                                                                                                                                                                   |
 | --- | -------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Stale commit reference                 | `SPRINT_3_COMMIT` | Should reference current v4.0.0 codebase                                                                                                                                       |
+| 1   | Stale commit reference                 | `SPRINT_3_COMMIT` | Should reference current codebase                                                                                                                                       |
 | 2   | Missing HTTP API attack surface        | Not listed        | The node exposes 9+ HTTP endpoints with no authentication, no rate limiting, and no authorization. Anyone can submit events, mint UBC, create proposals, transfer tokens, etc. |
 | 3   | Missing keygen security concerns       | Not mentioned     | `run_keygen()` writes private key as raw binary (`validator_key.bin`), not encrypted. Doc comment says "in production, this would be encrypted."                               |
 | 4   | Missing trusted setup ceremony risks   | Not mentioned     | `setup-contribute` and `setup-verify` subcommands expose ZK trusted setup ceremony operations. A compromised ceremony allows forging proofs.                                   |
@@ -70,8 +70,8 @@
 
 | #   | Discrepancy                           | Doc Says                                                                                | Code Reality                                                                                                                                                                                                                                |
 | --- | ------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Stale commit reference                | `SPRINT_3_COMMIT`                                                                       | Should reference v4.0.0                                                                                                                                                                                                                     |
-| 2   | Crate count wrong                     | "5 crates"                                                                              | Now 7 crates: substrate, shards, economics, zk, binding, node, chaos-tests                                                                                                                                                                  |
+| 1   | Stale commit reference                | `SPRINT_3_COMMIT`                                                                       | Should reference current version                                                                                                                                                                                                                     |
+| 2   | Crate count wrong                     | "5 crates"                                                                              | Now 14 crates: omnia-primitives, omnia-crypto, omnia-consensus, omnia-network, omnia-adapters, substrate, shards, binding, economics, node, chaos-tests, fuzz, benches, tests                                                                                                                                                                  |
 | 3   | Test count wrong                      | "278+ tests"                                                                            | Additional tests in node (config, API) and chaos-tests crates                                                                                                                                                                               |
 | 4   | Fuzz targets wrong                    | 4 targets: `causal_graph_insert`, `event_validate`, `shard_route`, `vector_clock_merge` | `scripts/fuzz.sh` lists 7 targets: `fuzz_event_deserialization`, `fuzz_gossip_message`, `fuzz_zk_proof_deserialization`, `fuzz_consensus_state_transition`, `fuzz_vector_clock_merge`, `fuzz_rate_limiter`, `fuzz_snapshot_deserialization` |
 | 5   | Missing node crate in repo structure  | Not listed                                                                              | `node/` crate with `main.rs`, `lib.rs`, `config.rs`, `http.rs`, `state.rs`, `api/`                                                                                                                                                          |
@@ -89,7 +89,7 @@
 
 | #   | Discrepancy                      | Doc Says                | Code Reality                                                                                                        |
 | --- | -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 1   | Stale commit reference           | `SPRINT_3_COMMIT`       | Should reference v4.0.0                                                                                             |
+| 1   | Stale commit reference           | `SPRINT_3_COMMIT`       | Should reference current version                                                                                             |
 | 2   | Missing node crate from in-scope | Not listed              | `node/` crate is security-relevant: HTTP API with no auth, CLI keygen writing unencrypted keys, TOML config parsing |
 | 3   | Missing chaos-tests              | Not listed              | `chaos-tests/` is in-scope for verifying safety/liveness claims                                                     |
 | 4   | Missing HTTP API attack surface  | Not in trust boundaries | REST API has no authentication; anyone can submit events, mint UBC, transfer tokens                                 |
@@ -100,7 +100,7 @@
 
 | #   | Discrepancy                        | Doc Says                                             | Code Reality                                                                                           |
 | --- | ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 1   | Stale commit reference             | `SPRINT_3_COMMIT`                                    | Should reference v4.0.0                                                                                |
+| 1   | Stale commit reference             | `SPRINT_3_COMMIT`                                    | Should reference current version                                                                                |
 | 2   | Fuzz targets count wrong           | 4 fuzz targets                                       | `scripts/fuzz.sh` lists 7 targets                                                                      |
 | 3   | Missing chaos tests                | "No chaos testing framework (planned for Sprint 3+)" | `omnia-chaos-tests` crate exists with full ChaosNetwork/ChaosNode framework                            |
 | 4   | Test count wrong                   | "278+ tests"                                         | Additional tests in node and chaos-tests crates                                                        |
@@ -135,13 +135,13 @@
 | #   | Discrepancy                             | Doc Says                                                                  | Code Reality                                                                                                                                                           |
 | --- | --------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Test count wrong                        | "200+ tests"                                                              | Now 278+ tests across all crates                                                                                                                                       |
-| 2   | REST API status wrong                   | No mention of REST API                                                    | Full REST API with 9 endpoints, Swagger UI, and OpenAPI spec generation exists                                                                                         |
+| 2   | REST API status wrong                   | No mention of REST API                                                    | Full REST API with 14 endpoints, Swagger UI, and OpenAPI spec generation exists                                                                                         |
 | 3   | Fee Structure status wrong              | "🌑 Not Implemented"                                                      | `FeeSchedule` is fully implemented with standard fees (2-15 UBC per operation). `QuotaSystem` deducts fees atomically.                                                 |
 | 4   | Slashing status wrong in security table | "🌑 Not implemented" for economic security (slashing, staking)            | `SlashingEngine` is fully implemented with equivocation/liveness/invalid attestation detection, persistent sled storage, and configurable thresholds                   |
 | 5   | Quantum Commitments status wrong        | "⚠️ Stub" — "What's not real: 🌑 Requires CRYSTALS-Dilithium integration" | Dilithium verification is real (not a stub). `verify_dilithium()` calls `pqc_dilithium::verify()`. The hybrid Ed25519+Dilithium scheme is implemented.                 |
 | 6   | ZK circuit status wrong                 | "⚠️ Stub" for ZK circuit                                                  | `RollupCircuit` is a real R1CS circuit with Groth16 proving/verification. `ExpandedRollupCircuit` adds Merkle path verification. Both use simplified hash placeholder. |
 | 7   | Layer 4 is labeled "Identity Layer"     | Separate layer                                                            | Identity is implemented within the shards crate (`IdentityShard`), not as a separate crate/layer                                                                       |
-| 8   | Version wrong                           | "Version: 2.0"                                                            | Should be v4.0.0                                                                                                                                                       |
+| 8   | Version wrong                           | "Version: 2.0"                                                            | Should be current version                                                                                                                                                       |
 | 9   | Missing node crate                      | Not in architecture                                                       | `omnia-node` provides the binary entrypoint, HTTP server, REST API, CLI, and configuration                                                                             |
 | 10  | Missing chaos tests                     | Not mentioned                                                             | `omnia-chaos-tests` provides partition/crash/Byzantine simulation                                                                                                      |
 
@@ -157,7 +157,7 @@
 | 6   | Missing chaos tests        | Not mentioned                                                                        | `omnia-chaos-tests` crate exists                                                                                     |
 | 7   | Phase 1 table wrong        | Lists "Fee mechanism", "Slashing", "Real PQC signatures (Dilithium)" as "📋 Planned" | Fee mechanism: ✅ Implemented. Slashing: ✅ Implemented. Dilithium: ✅ Implemented (real verification).              |
 | 8   | ZK circuit status wrong    | "🌑 Full ZK circuit (arkworks R1CS) — Not yet started"                               | `RollupCircuit` and `ExpandedRollupCircuit` exist with real R1CS constraints and Groth16 proving/verification        |
-| 9   | Version wrong              | "Version: 2.0"                                                                       | Should be v4.0.0                                                                                                     |
+| 9   | Version wrong              | "Version: 2.0"                                                                       | Should be current version                                                                                                     |
 | 10  | Missing Swagger/OpenAPI    | Not mentioned                                                                        | `utoipa` + `utoipa-swagger-ui` provide interactive API docs at `/swagger-ui`                                         |
 | 11  | Missing Docker deployment  | Not mentioned                                                                        | Dockerfile + docker-compose with 5-node testnet + monitoring stack                                                   |
 

@@ -1,5 +1,7 @@
 # Batch Protocol Specification
 
+> 📅 Last Updated: 2026-06-24
+
 ## Overview
 
 The batch protocol groups events into batches for amortized validation, proof generation,

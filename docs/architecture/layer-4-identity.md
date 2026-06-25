@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Layer 4 enables self-sovereign identity where individuals, AI agents, and collectives own their identity forever
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Overview
 

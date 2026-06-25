@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 5 milestones and deliverables
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Phase**: 5 of N
 **Status**: Complete (with real benchmark data captured)
@@ -169,7 +169,7 @@ Test results verified per crate:
 
 ## Performance Baseline (Captured on 2026-05-19)
 
-**Test Environment**: Linux 5.10.134, Intel Xeon 4-core, 8.1 GiB RAM, rustc 1.95.0
+**Test Environment**: Linux 5.10.134, Intel Xeon 4-core, 8.1 GiB RAM, rustc 1.91.0
 
 **Consensus Throughput (single-node, release build)**:
 

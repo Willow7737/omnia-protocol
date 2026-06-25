@@ -2,11 +2,11 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Consolidated security audit findings, validated audits, and attack surface documentation
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Phase 0 Security Findings
 
-**Version:** v4.0.0 | **Scope:** Full codebase — 14 crates | **Total findings:** 19
+**Version:** v0.1.68 | **Scope:** Full codebase — 14 crates | **Total findings:** 19
 
 ### Critical (All Fixed)
 

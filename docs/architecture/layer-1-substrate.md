@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Foundation layer enabling the network to agree on what happened without global clock time or a single authority
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Core Components
 
@@ -119,7 +119,7 @@ See [ADR-012](../reference/adr-index.md#adr-012-vrf-construction-choice) for the
 | Property    | Blockchain          | Causal Graph (Omnia)                                  |
 | ----------- | ------------------- | ----------------------------------------------------- |
 | Ordering    | Total (sequential)  | Partial (parallel)                                    |
-| Throughput  | ~100-1000 TPS       | ~7,190 events/sec (single-node measured, synchronous) |
+| Throughput  | ~100-1000 TPS       | ~7,190 events/sec (v0.1.48 historical; v0.1.68 baseline: 12,000 ops/s) (single-node measured, synchronous) |
 | Latency     | ~12s block time     | Not yet benchmarked at scale                          |
 | Concurrency | None (single chain) | Automatic (DAG)                                       |
 | Finality    | Probabilistic       | Deterministic (BFT)                                   |
@@ -144,7 +144,7 @@ See `substrate/RESEARCH.md` for detailed comparative analysis.
 
 ## Performance
 
-⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Actual measured single-node throughput is ~7,190 events/sec** (synchronous; see [benchmark-gates.md](../reference/benchmark-gates.md) for full benchmark results). Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements. CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
+⚠️ The `CausalGraph` uses an `unprocessed_events` queue so that consensus only processes new events each round — O(new_events) processing. **Actual measured single-node throughput is ~7,190 events/sec (v0.1.48 historical; v0.1.68 baseline: 12,000 ops/s)** (synchronous; see [benchmark-gates.md](../reference/benchmark-gates.md) for full benchmark results). Multi-node distributed throughput will be lower due to network latency and BFT consensus requirements. CausalGraph insertion is O(1) amortized via hash map operations, not O(1) guaranteed.
 
 ## Testing Strategy
 

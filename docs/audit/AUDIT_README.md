@@ -2,9 +2,9 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Date:** 2026-03-05
 **Document version:** 2.0
 
@@ -32,7 +32,7 @@ This document provides everything an external security auditor needs to begin re
 
 ### 2.2 Build Commands
 
-Build the entire workspace (all 7 crates):
+Build the entire workspace (all 14 crates):
 
 ```bash
 cargo build --workspace
@@ -82,7 +82,7 @@ If clippy produces any warnings, the CI will fail. The codebase should be clippy
 cargo test --workspace
 ```
 
-This runs tests across all 7 crates, including unit tests, integration tests, property-based tests, adversarial tests, and chaos tests.
+This runs tests across all 14 crates, including unit tests, integration tests, property-based tests, adversarial tests, and chaos tests.
 
 ### 3.2 Run Tests for a Specific Crate
 

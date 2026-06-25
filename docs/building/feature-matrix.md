@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Feature flags and build profiles for the Omnia Protocol workspace
-> 📅 Last Updated: 2026-05-21
+> 📅 Last Updated: 2026-06-24
 
 ## Workspace Feature Flags
 

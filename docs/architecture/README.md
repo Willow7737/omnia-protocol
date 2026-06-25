@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Index for all architecture documents describing the Omnia Protocol's layered design
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 ## Layer Overview
 
@@ -59,7 +59,7 @@ Omnia Protocol is a five-layer distributed system designed to enable trustless c
 | `node/`             | Binary entrypoint, REST API, health/metrics                     | 37+           |
 | `chaos-tests/`      | Network partitions, crash recovery, byzantine, message loss     | ~15 scenarios |
 
-**Total: 800+ lib tests + integration/chaos/fuzz tests, all passing.**
+**Run `cargo test --workspace` for current count (lib + integration/chaos/fuzz tests).**
 
 ---
 

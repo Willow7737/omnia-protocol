@@ -206,7 +206,7 @@ subsequent accesses to fail.
   continues operating.
 - The consensus state can always be rebuilt from the causal graph, so
   temporary inconsistency after a panic is acceptable.
-- `#![forbid(unsafe_code)]` and `#![deny(clippy::unwrap_used)]` reduce
+- `#![deny(unsafe_code) (see SAFETY.md)]` and `#![deny(clippy::unwrap_used)]` reduce
   the likelihood of panics in the first place.
 
 ### Risk 3: Memory Overhead

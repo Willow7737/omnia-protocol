@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Architects
 > 🔗 Context: Part of the adr documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 **Status**: Accepted
 **Date:** 2026-05-14

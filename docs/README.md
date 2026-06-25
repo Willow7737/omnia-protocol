@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Central navigation hub for all Omnia Protocol documentation
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
 Welcome to the Omnia Protocol documentation hub. This index provides structured navigation to every document in the repository, organized by audience and topic.
 

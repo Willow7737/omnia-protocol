@@ -16,7 +16,7 @@ The following versions of Omnia Protocol are currently being supported with secu
 | 0.1.x   | :white_check_mark: |
 | < 0.1   | :x:                |
 
-**Note**: The current crate versions in `Cargo.toml` are `0.1.0` for both
+**Note**: The current crate versions in `Cargo.toml` are `0.1.68 (workspace version)` for both
 `omnia-adapters` and `omnia-binding`. Security patches are applied to the `0.1.x`
 line until a stable `1.0.0` release.
 

@@ -2,9 +2,9 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Audit findings from Phase 0 implementation
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Date:** 2026-03-05
 **Auditor:** Phase 0 Internal Audit
 **Scope:** Full codebase — 14 crates (substrate, shards, economics, zk, binding, node, chaos-tests)
@@ -13,7 +13,7 @@
 
 ## Executive Summary
 
-Phase 0 identified **19 findings** across 5 severity levels. Of these, **13 have been fixed**, **3 remain open**, and **3 are informational (clean)**. No `unsafe` code exists in any crate (all enforce `#![forbid(unsafe_code)]`). The most critical issues — unauthenticated REST API, permissionless minting, and creator-pubkey binding gap — have been resolved. The remaining open items (systematic `unwrap()` removal, typed error migration, RUSTSEC advisory review) are medium-to-low severity and do not block testnet deployment.
+Phase 0 identified **19 findings** across 5 severity levels. Of these, **13 have been fixed**, **3 remain open**, and **3 are informational (clean)**. No `unsafe` code exists in any crate (all enforce `#![deny(unsafe_code) (see SAFETY.md)]`). The most critical issues — unauthenticated REST API, permissionless minting, and creator-pubkey binding gap — have been resolved. The remaining open items (systematic `unwrap()` removal, typed error migration, RUSTSEC advisory review) are medium-to-low severity and do not block testnet deployment.
 
 ---
 
@@ -672,13 +672,13 @@ All crates enforce `#![deny(unsafe_code)]` (C-1 audit fix: changed from `forbid`
 
 | Crate               | Directive                 |
 | ------------------- | ------------------------- |
-| `omnia-substrate`   | `#![forbid(unsafe_code)]` |
-| `omnia-shards`      | `#![forbid(unsafe_code)]` |
-| `omnia-economics`   | `#![forbid(unsafe_code)]` |
-| `omnia-adapters`    | `#![forbid(unsafe_code)]` |
-| `omnia-binding`     | `#![forbid(unsafe_code)]` |
-| `omnia-node`        | `#![forbid(unsafe_code)]` |
-| `omnia-chaos-tests` | `#![forbid(unsafe_code)]` |
+| `omnia-substrate`   | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-shards`      | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-economics`   | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-adapters`    | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-binding`     | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-node`        | `#![deny(unsafe_code) (see SAFETY.md)]` |
+| `omnia-chaos-tests` | `#![deny(unsafe_code) (see SAFETY.md)]` |
 
 ### Impact
 
@@ -688,13 +688,13 @@ No impact — this is a positive finding. `forbid` is the strongest lint level (
 
 ```
 $ rg "forbid\(unsafe_code\)" --glob '**/lib.rs'
-binding/src/lib.rs:51:#![forbid(unsafe_code)]
-economics/src/lib.rs:22:#![forbid(unsafe_code)]
-omnia-adapters/src/lib.rs:48:#![forbid(unsafe_code)]
-chaos-tests/src/lib.rs:36:#![forbid(unsafe_code)]
-node/src/lib.rs:15:#![forbid(unsafe_code)]
-shards/src/lib.rs:43:#![forbid(unsafe_code)]
-substrate/src/lib.rs:21:#![forbid(unsafe_code)]
+binding/src/lib.rs:51:#![deny(unsafe_code) (see SAFETY.md)]
+economics/src/lib.rs:22:#![deny(unsafe_code) (see SAFETY.md)]
+omnia-adapters/src/lib.rs:48:#![deny(unsafe_code) (see SAFETY.md)]
+chaos-tests/src/lib.rs:36:#![deny(unsafe_code) (see SAFETY.md)]
+node/src/lib.rs:15:#![deny(unsafe_code) (see SAFETY.md)]
+shards/src/lib.rs:43:#![deny(unsafe_code) (see SAFETY.md)]
+substrate/src/lib.rs:21:#![deny(unsafe_code) (see SAFETY.md)]
 ```
 
 ### Remediation
@@ -833,7 +833,7 @@ ignore = [
 
 The discrepancy report (TASK-3d) identified 70+ discrepancies across 13 documentation files. Major issues include:
 
-- Stale version references (`SPRINT_3_COMMIT` instead of `v4.0.0`)
+- Stale version references (`SPRINT_3_COMMIT` instead of `v0.1.68`)
 - Wrong test counts ("278+" vs. actual)
 - Missing coverage of node crate, chaos tests, REST API, Swagger UI
 - Incorrect status for implemented features (fees, slashing, PQC signatures, ZK circuits all marked as "not implemented")
@@ -853,7 +853,7 @@ See `docs/audit/reports/TASK-3d-DISCREPANCY-REPORT.md` for the full 70+ discrepa
 
 **Status: Partial** — Phase 0 findings update addresses the most critical discrepancies (this document, the roadmap, and the validated audit). Full documentation update requires:
 
-1. Update all version references to `v4.0.0`
+1. Update all version references to `v0.1.68`
 2. Fix test counts, crate lists, and feature status tables
 3. Update RUNBOOK.md with correct API paths, CLI subcommands, and Docker config
 4. Update ARCHITECTURE.md and IMPLEMENTATION.md status tables

@@ -2,9 +2,9 @@
 
 > 🎯 Audience: Security Researchers
 > 🔗 Context: Part of the audit documentation section
-> 📅 Last Updated: 2026-05-20
+> 📅 Last Updated: 2026-06-24
 
-**Version:** v4.0.0
+**Version:** v0.1.68
 **Date:** 2026-03-05
 **Document version:** 2.0
 
