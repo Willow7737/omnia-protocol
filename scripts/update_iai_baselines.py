@@ -68,7 +68,7 @@ def main():
         baselines = {
             "_comment": "IAI-callgrind instruction-count baselines (auto-generated).",
             "_methodology": "Regenerate with: python3 scripts/update_iai_baselines.py <iai_output>",
-            "version": "0.1.68",
+            "version": "0.1.75",
             "threshold_pct": 2,
             "metrics": ["Instructions", "L1 Hits", "L2 Hits", "RAM Hits", "Total read+write", "Estimated Cycles"],
             "benchmarks": {},

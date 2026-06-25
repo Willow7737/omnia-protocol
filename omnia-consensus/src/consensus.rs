@@ -391,6 +391,19 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         let event_id = event.id;
         let creator = event.creator;
 
+        // P0-1 security fix: verify event signature BEFORE any other check.
+        // Without this, any peer can forge events with creator = <victim_node_id>
+        // and the consensus engine will slash the victim for equivocation.
+        // The entire slashing security model is bypassable without this check.
+        if !event.verify_signature() {
+            tracing::warn!(
+                node = ?&creator[..4],
+                event = ?&event_id[..4],
+                "Rejecting event with invalid signature — possible forgery attempt"
+            );
+            return Err(ConsensusError::InvalidSignature(creator));
+        }
+
         // Skip if already processed
         if self.event_states.contains_key(&event_id) {
             return Ok(Vec::new());
@@ -1398,6 +1411,11 @@ pub enum ConsensusError {
     /// Configuration or state restoration error.
     #[error("config error: {0}")]
     Config(String),
+    /// Event signature verification failed — the event may be forged.
+    /// P0-1 fix: prevents frame-an-honest-validator attacks where a
+    /// malicious peer submits a forged event with creator = <victim>.
+    #[error("invalid event signature from node {0:?}")]
+    InvalidSignature(NodeId),
 }
 
 #[cfg(test)]

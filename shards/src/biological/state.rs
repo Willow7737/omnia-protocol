@@ -134,24 +134,22 @@ impl BiologicalState {
                     return Err(ShardError::ValidationFailed("Consent has been revoked".into()));
                 }
 
-                // SECURITY: enforce consent expiry at the apply path, not
-                // just at the validator. The validator (biological/validator.rs)
-                // already checks expiry using `SystemTime::now()`, but if
-                // any code calls `apply` directly (bypassing the validator),
-                // expired consents would otherwise be honored. We use
-                // `SystemTime::now()` here too — this is acceptable because
-                // the validator has already run by the time apply() is
-                // reached via the ShardRouter, and the explicit check here
-                // is purely defense-in-depth.
-                if record.expires_at != 0 {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    if record.expires_at <= now {
-                        return Err(ShardError::ValidationFailed("Consent has expired".into()));
-                    }
-                }
+                // P0-7 fix: SystemTime::now() breaks consensus determinism — two honest
+                // nodes processing the same event at different wall-clock times may reach
+                // different accept/reject decisions. The consent expiry check is deferred
+                // to the validator layer which should use consensus round numbers, not
+                // wall-clock time. See biological/validator.rs.
+                // TODO: Thread current_time from the event timestamp or consensus round
+                // through the apply pipeline. For now, skip the expiry check in apply()
+                // and rely on the validator's check (which also needs fixing).
+                //
+                // The previous block read:
+                //     if record.expires_at != 0 {
+                //         let now = std::time::SystemTime::now()...
+                //         if record.expires_at <= now { return Err(...); }
+                //     }
+                // and was removed because wall-clock time is a non-deterministic
+                // input that violates consensus safety invariants.
 
                 // -----------------------------------------------------------------------
                 // Real ZK proof verification using ark-groth16.

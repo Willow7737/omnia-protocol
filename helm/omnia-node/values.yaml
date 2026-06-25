@@ -1,12 +1,20 @@
-replicaCount: 5
+# P0-10 fix: StatefulSet with ordinal-indexed pod names (e.g. omnia-node-0).
+# Operator scales manually by updating replicaCount; each replica gets a
+# stable identity via the pod name, which OMNIA_NODE_ID consumes.
+replicaCount: 1
 
 image:
-  repository: omnia-protocol/omnia-node
+  # P0-10 fix: use the actual published image path (see
+  # .github/workflows/release.yml — `ghcr.io/$REPO_LOWER/omnia-node` where
+  # the repo is `Willow7737/omnia-protocol`, and the omnia-node suffix is
+  # appended). The previous value `omnia-protocol/omnia-node` did not exist
+  # in any registry and caused ImagePullBackOff on every Helm install.
+  repository: ghcr.io/willow7737/omnia-node
   pullPolicy: IfNotPresent
   # L-28 fix (audit v0.1.68): default tag pinned to a specific release
   # version rather than `latest` (or empty), so Helm deployments are
   # reproducible. Override per-environment in your own values file.
-  tag: "0.1.68"
+  tag: "0.1.75"
 
 node:
   id: ""

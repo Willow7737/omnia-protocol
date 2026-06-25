@@ -1,7 +1,7 @@
 {
   "_comment": "IAI-callgrind instruction-count baselines for hot-path functions. Unlike criterion (wall-clock time, subject to CPU frequency variance), iai-callgrind counts executed instructions, which are DETERMINISTIC for a given code path + compiler version + dependencies. A regression here means the code path executes more instructions than before \u2014 a real, non-noise signal. Updated 2026-06-23 from CI run 2026-06-23 (commit fb8231a, ubuntu-latest, valgrind 3.x, rustc 1.91.0).",
   "_methodology": "These baselines were captured from a single CI run. Because iai-callgrind is deterministic, a single run is sufficient for a baseline (unlike criterion which needs statistical sampling). When the hot-path code changes, regenerate with: `cargo bench -p omnia-benches --bench hot_path_iai -- --save-baseline` and commit the updated .old files OR update this JSON. The Python gate script parses iai_output.txt and compares against these baselines.",
-  "version": "0.1.68",
+  "version": "0.1.75",
   "timestamp": "2026-06-23",
   "environment": {
     "os": "Linux (GitHub Actions ubuntu-latest, x86_64)",

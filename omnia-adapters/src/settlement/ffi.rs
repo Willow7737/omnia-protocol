@@ -139,7 +139,11 @@ extern "C" {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `rpc_url` is a valid null-terminated C string.
+    /// The caller must ensure `rpc_url` points to at least `rpc_url_len`
+    /// bytes of valid memory. The C side reads exactly `rpc_url_len` bytes
+    /// (the buffer is NOT required to be null-terminated; see the P0-8 fix
+    /// in `FfiSettlementAdapter::init` for why we still append a `\0`
+    /// byte defensively).
     pub fn settlement_init(rpc_url: *const u8, rpc_url_len: usize) -> CSettlementResult;
 }
 
@@ -167,10 +171,24 @@ extern "C" {
 ///
 /// All FFI calls are isolated in this module. The C library is
 /// responsible for thread safety and error handling.
+///
+/// # Concurrency
+///
+/// `FfiSettlementAdapter` is `Send + Sync` because all shared mutable
+/// state is protected by atomic operations. The `initialized` flag is
+/// an `AtomicBool` (P0-8 fix: previously a plain `bool`, which is
+/// unsound under concurrent access from the async trait methods that
+/// implement `SettlementAdapter: Send + Sync`).
 #[cfg(all(feature = "settlement-ffi", has_settlement_lib))]
 pub struct FfiSettlementAdapter {
     /// Whether the FFI client has been initialized.
-    initialized: bool,
+    ///
+    /// P0-8 fix: this is an `AtomicBool` so that concurrent `submit_root`/
+    /// `fetch_finality`/`verify_inclusion`/`is_live` calls from multiple
+    /// threads do not race on a non-atomic `bool` read/write (which is
+    /// undefined behavior in Rust and would let a peer thread observe a
+    /// torn value or skip the initialization gate entirely).
+    initialized: std::sync::atomic::AtomicBool,
     /// RPC URL (stored for potential re-initialization).
     rpc_url: String,
 }
@@ -183,7 +201,7 @@ impl FfiSettlementAdapter {
     /// Operations called before initialization will return an error.
     pub fn new(rpc_url: &str) -> Self {
         Self {
-            initialized: false,
+            initialized: std::sync::atomic::AtomicBool::new(false),
             rpc_url: rpc_url.to_string(),
         }
     }
@@ -198,11 +216,24 @@ impl FfiSettlementAdapter {
     /// This function calls external C code via FFI. The C library
     /// must be properly linked and initialized.
     pub unsafe fn init(&mut self) -> Result<(), SettlementError> {
-        let rpc_bytes = self.rpc_url.as_bytes();
-        let result = settlement_init(rpc_bytes.as_ptr(), rpc_bytes.len());
+        // P0-8 fix: the C `settlement_init` is documented as taking
+        // (ptr, len), but defensively append a `\0` so that if the C
+        // implementation ALSO happens to treat the buffer as a
+        // null-terminated C string (a common implementation mistake),
+        // we do not read past the end of `rpc_bytes` into unrelated
+        // heap memory. The trailing `\0` is excluded from the length
+        // we pass so a (ptr, len)-style C function still gets the exact
+        // RPC URL with no terminator.
+        let mut rpc_bytes = self.rpc_url.as_bytes().to_vec();
+        rpc_bytes.push(0);
+        let result = settlement_init(rpc_bytes.as_ptr(), rpc_bytes.len().saturating_sub(1));
 
         if result.success {
-            self.initialized = true;
+            // P0-8 fix: store through an AtomicBool with SeqCst ordering
+            // so that subsequent `submit_root` / `fetch_finality` /
+            // `verify_inclusion` calls on other threads observe the
+            // initialization before any FFI call is made.
+            self.initialized.store(true, std::sync::atomic::Ordering::SeqCst);
             Ok(())
         } else {
             let msg_end = result
@@ -223,27 +254,40 @@ impl FfiSettlementAdapter {
 #[async_trait::async_trait]
 impl SettlementAdapter for FfiSettlementAdapter {
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError> {
-        if !self.initialized {
+        // P0-8 fix: load the initialization flag atomically. Previously
+        // this was a plain `bool` read, which is UB under concurrent
+        // access from multiple async tasks sharing the same adapter.
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(SettlementError::ConfigError(
                 "FFI settlement adapter not initialized".to_string(),
             ));
         }
 
-        // Safety: `root` is a fixed-size array, so the pointer is valid
-        // for 32 bytes. The C function returns a CTxHash by value.
+        // SAFETY: `root` is a fixed-size `[u8; 32]` array allocated on
+        // the stack of this function; `root.as_ptr()` is therefore valid
+        // for reads of exactly 32 bytes for the duration of the FFI call.
+        // The C function returns a `CTxHash` by value (a 32-byte POD), so
+        // there is no aliasing or lifetime concern on the return path.
+        // The C library is responsible for not storing the pointer beyond
+        // the call (per the documented ABI in the `extern "C"` block).
         let c_result = unsafe { settlement_submit_root(root.as_ptr(), 32) };
 
         Ok(TxHash(c_result.data))
     }
 
     async fn fetch_finality(&self, tx: TxHash) -> Result<FinalityProof, SettlementError> {
-        if !self.initialized {
+        // P0-8 fix: load the initialization flag atomically (see submit_root).
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(SettlementError::ConfigError(
                 "FFI settlement adapter not initialized".to_string(),
             ));
         }
 
-        // Safety: `tx.0` is a fixed-size array, pointer is valid for 32 bytes.
+        // SAFETY: `tx.0` is a fixed-size `[u8; 32]` array; `tx.0.as_ptr()`
+        // is valid for reads of exactly 32 bytes for the duration of the
+        // FFI call. The C function returns a `CFinalityProof` by value
+        // (a POD struct), so no aliasing concern arises on return. The C
+        // library must not retain the pointer beyond the call.
         let c_result = unsafe { settlement_fetch_finality(tx.0.as_ptr()) };
 
         Ok(FinalityProof {
@@ -255,7 +299,8 @@ impl SettlementAdapter for FfiSettlementAdapter {
     }
 
     async fn verify_inclusion(&self, leaf: &[u8; 32], proof: &MerkleProof) -> Result<bool, SettlementError> {
-        if !self.initialized {
+        // P0-8 fix: load the initialization flag atomically (see submit_root).
+        if !self.initialized.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(SettlementError::ConfigError(
                 "FFI settlement adapter not initialized".to_string(),
             ));
@@ -265,8 +310,45 @@ impl SettlementAdapter for FfiSettlementAdapter {
         let sibling_bytes: Vec<u8> = proof.siblings.iter().flat_map(|s| s.iter().copied()).collect();
         let direction_bytes: Vec<u8> = proof.directions.iter().map(|&d| d as u8).collect();
 
-        // Safety: sibling_bytes and direction_bytes are valid Vec<u8> buffers
-        // whose pointers remain valid for the duration of the FFI call.
+        // P0-8 fix: guard the empty-vec case before passing to C. An empty
+        // `Vec<u8>` produces a dangling pointer from `.as_ptr()`, which is
+        // technically valid in Rust for zero-length reads but is a common
+        // source of UB when the C side dereferences it unconditionally
+        // (e.g., `memcpy(dst, ptr, 0)` is fine, but `ptr[0]` is not).
+        // Reject up-front so the C function never sees a zero-length
+        // sibling buffer.
+        if sibling_bytes.is_empty() {
+            return Err(SettlementError::ContractError(
+                "FFI verify_inclusion rejected: empty sibling proof — \
+                 Merkle proof must contain at least one sibling"
+                    .to_string(),
+            ));
+        }
+        // Similarly guard the directions buffer; it must be at least one
+        // byte long if there is at least one sibling.
+        if direction_bytes.is_empty() {
+            return Err(SettlementError::ContractError(
+                "FFI verify_inclusion rejected: empty directions buffer — \
+                 must contain one byte per sibling"
+                    .to_string(),
+            ));
+        }
+
+        // SAFETY:
+        //   - `leaf.as_ptr()` points to a fixed `[u8; 32]` borrowed for the
+        //     duration of the call (caller's stack frame); valid for 32 bytes.
+        //   - `sibling_bytes.as_ptr()` is valid for `sibling_count * 32`
+        //     bytes (we verified `sibling_bytes` is non-empty above; the C
+        //     ABI requires `sibling_count * 32` bytes — i.e. one 32-byte
+        //     sibling hash per entry in `proof.siblings`).
+        //   - `direction_bytes.as_ptr()` is valid for `sibling_count` bytes.
+        //   - `sibling_count` is passed as `proof.siblings.len()`, which
+        //     matches the number of 32-byte chunks in `sibling_bytes` and
+        //     the number of bytes in `direction_bytes`.
+        //   - The C function returns `CInclusionResult` by value (a POD
+        //     struct), so there is no aliasing or lifetime concern on the
+        //     return path. The C library must not retain any of the
+        //     pointers beyond the call.
         let c_result = unsafe {
             settlement_verify_inclusion(
                 leaf.as_ptr(), // leaf value provided by caller
@@ -287,7 +369,9 @@ impl SettlementAdapter for FfiSettlementAdapter {
     }
 
     fn is_live(&self) -> bool {
-        self.initialized
+        // P0-8 fix: load atomically. Previously this was a plain `bool`
+        // read, which is unsound under concurrent access.
+        self.initialized.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

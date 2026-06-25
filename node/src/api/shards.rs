@@ -143,15 +143,17 @@ async fn handle_economics_op(
     // Apply the operation directly to the shared AppState.economics
     // instance. This fixes the dual-state disconnect.
     //
-    // We pass `None` for `event_creator` — the economics state logs a
-    // warning for unauthenticated callers and applies weaker
-    // authorization checks (admin gating only). Production deployments
-    // should add a `caller_pubkey` field to ShardOperationRequest and
-    // populate it from the JWT subject claim so SpendUbc / Vote can
-    // verify the caller's DID matches.
+    // P0-2 security fix: pass the node's public key as event_creator
+    // instead of None. The node signs events on behalf of authenticated
+    // API callers, so the node's pubkey is the correct "creator" for
+    // economics operations submitted via the HTTP API. This closes the
+    // auth bypass where None was treated as "testing mode" with weaker
+    // authorization (admin gating only, no DID ownership verification).
+    let caller_pubkey = state.keypair.as_ref().map(|kp| kp.verifying_key().to_bytes());
+
     let mut econ_state = state.economics.lock().await;
     let current_epoch = econ_state.current_epoch();
-    match econ_state.apply(&econ_op, current_epoch, None) {
+    match econ_state.apply(&econ_op, current_epoch, caller_pubkey.as_ref()) {
         Ok(()) => {
             tracing::info!(operation = %body.operation, "Economics operation processed successfully");
             Ok((

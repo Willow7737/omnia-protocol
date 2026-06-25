@@ -1,5 +1,9 @@
 apiVersion: apps/v1
-kind: Deployment
+# P0-10 fix: StatefulSet (not Deployment) so each replica gets a stable
+# network identity and persistent identity across restarts — required for
+# BFT consensus, which assumes a peer's identity is stable. A Deployment
+# would rotate pod identities on every reschedule.
+kind: StatefulSet
 metadata:
   name: {{ include "omnia-node.fullname" . }}
   labels:
@@ -8,6 +12,9 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
+  # P0-10 fix: serviceName is required for StatefulSet and gives each pod a
+  # stable DNS name (e.g. omnia-node-0.omnia-node.default.svc.cluster.local).
+  serviceName: {{ include "omnia-node.fullname" . }}
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
@@ -43,8 +50,16 @@ spec:
           env:
             - name: RUST_LOG
               value: "info"
+            # P0-10 fix: derive OMNIA_NODE_ID from the StatefulSet pod name
+            # (e.g. "omnia-node-0"). The previous default of node.id: ""
+            # caused every replica to share the same node identity, which
+            # broke BFT (duplicate validator IDs) and gossip (every pod
+            # advertised the same peer ID). Using metadata.name guarantees a
+            # unique, stable identity per ordinal.
             - name: OMNIA_NODE_ID
-              value: {{ .Values.node.id | quote }}
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: OMNIA_BOOTSTRAP_NODES
               value: {{ .Values.node.bootstrapNodes | quote }}
             - name: OMNIA_LISTEN_ADDR
@@ -53,6 +68,26 @@ spec:
               value: {{ .Values.node.totalNodes | quote }}
             - name: OMNIA_DATA_DIR
               value: {{ .Values.node.dataDir | quote }}
+            # P0-10 fix: JWT secret is required by the HTTP API for
+            # authenticated endpoints (admin/mint/spend). Must be
+            # provisioned out-of-band (e.g. via Sealed Secrets /
+            # external-secrets) before the chart is installed. Without this,
+            # the node either refuses to start or silently runs in a
+            # degraded/insecure mode.
+            - name: OMNIA_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "omnia-node.fullname" . }}-jwt
+                  key: jwt-secret
+          # P0-10 fix: mount the ConfigMap (created by configmap.yaml when
+          # configMap.data is non-empty) as environment variables. The
+          # ConfigMap was previously rendered but never referenced, so user
+          # overrides silently no-op'd. `optional: true` keeps the chart
+          # installable when configMap.data is the default `{}`.
+          envFrom:
+            - configMapRef:
+                name: {{ include "omnia-node.fullname" . }}-config
+                optional: true
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
