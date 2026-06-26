@@ -42,6 +42,54 @@ use crate::config::NodeConfig;
 /// When this limit is reached, the oldest 10% of events are evicted.
 const MAX_STORED_EVENTS: usize = 100_000;
 
+/// Maximum number of transfer records to keep in memory.
+///
+/// Transfer history is bounded to prevent unbounded memory growth on
+/// long-running nodes. When this limit is reached, the oldest 10% of
+/// records are evicted (mirroring the event store eviction policy).
+const MAX_TRANSFER_HISTORY: usize = 10_000;
+
+/// A recorded UBC spend/transfer operation, retained in memory for
+/// the `GET /api/v1/economics/transfers` endpoint.
+///
+/// UBC is soulbound — the "transfer" actually spends (burns) tokens
+/// from the sender's balance. The `to_did` field is recorded for
+/// informational/provenance purposes only.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TransferRecord {
+    /// Hex-encoded unique transfer ID (BLAKE3 of the transfer fields).
+    pub id: String,
+    /// Sender DID (the authenticated caller at the time of the transfer).
+    pub from_did: String,
+    /// Recipient DID (informational — UBC is soulbound).
+    pub to_did: String,
+    /// Amount spent.
+    pub amount: u64,
+    /// Unix-millisecond timestamp when the transfer was recorded.
+    pub timestamp: u64,
+    /// Status of the transfer — always `"completed"` on success,
+    /// since failed transfers are not appended to the history.
+    pub status: String,
+    /// Resulting balance of the sender after the spend.
+    pub new_balance: u64,
+}
+
+/// Append a transfer record to the bounded history log.
+///
+/// When the log exceeds `MAX_TRANSFER_HISTORY`, the oldest 10% of
+/// records are evicted to prevent unbounded memory growth.
+pub async fn record_transfer(
+    history: &Arc<RwLock<Vec<TransferRecord>>>,
+    record: TransferRecord,
+) {
+    let mut h = history.write().await;
+    if h.len() >= MAX_TRANSFER_HISTORY {
+        let to_remove = MAX_TRANSFER_HISTORY / 10;
+        h.drain(0..to_remove);
+    }
+    h.push(record);
+}
+
 /// Type alias for the in-memory event store.
 ///
 /// Uses `IndexMap` (insertion-order preserving) rather than `HashMap`
@@ -291,6 +339,11 @@ pub struct AppState {
     /// Uses `IndexMap` for deterministic insertion-order eviction
     /// (see [`store_event`] and the `EventStore` type alias). H-5 fix.
     pub event_store: Arc<RwLock<EventStore>>,
+    /// Bounded in-memory log of UBC spend (transfer) operations.
+    ///
+    /// See [`TransferRecord`] and [`record_transfer`]. Used by the
+    /// `GET /api/v1/economics/transfers` endpoint.
+    pub transfer_history: Arc<RwLock<Vec<TransferRecord>>>,
     /// Known peers in the network.
     pub peers: Arc<RwLock<Vec<PeerInfo>>>,
     /// Prometheus metrics counters and gauges.

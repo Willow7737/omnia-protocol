@@ -185,6 +185,7 @@ fn build_test_app_state(port: u16) -> AppState {
         shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
+        transfer_history: Arc::new(RwLock::new(Vec::new())),
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),

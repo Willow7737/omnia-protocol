@@ -765,6 +765,31 @@ impl Substrate {
         self.validator_candidates.insert(node_id, (keypair, stake));
     }
 
+    /// Get an iterator over the registered validator candidates.
+    ///
+    /// Each entry is `(NodeId, stake)` — the keypair is intentionally
+    /// not exposed through this accessor to avoid leaking private signing
+    /// material to API callers. Use `add_validator` or
+    /// `with_validator_candidates` to populate the registry.
+    ///
+    /// Used by the `GET /api/v1/validators` endpoint.
+    pub fn validator_candidates_iter(&self) -> impl Iterator<Item = (&NodeId, u64)> {
+        self.validator_candidates.iter().map(|(id, (_kp, stake))| (id, *stake))
+    }
+
+    /// Number of registered validator candidates.
+    pub fn validator_count(&self) -> usize {
+        self.validator_candidates.len()
+    }
+
+    /// Current consensus round number.
+    ///
+    /// Used by the `GET /api/v1/validators` endpoint to determine
+    /// whether each validator is currently jailed.
+    pub fn current_round(&self) -> u64 {
+        self.consensus.current_round()
+    }
+
     /// Get a reference to the mempool.
     pub fn mempool(&self) -> &Mempool {
         &self.mempool

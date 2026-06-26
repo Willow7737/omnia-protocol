@@ -4,8 +4,9 @@
 //! (spending) UBC tokens:
 //! - `GET /api/v1/economics/balance/:did` — check UBC balance
 //! - `POST /api/v1/economics/transfer` — spend/transfer UBC
+//! - `GET /api/v1/economics/transfers` — list recent transfer records
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
@@ -14,7 +15,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 
 use crate::api::auth::CallerIdentity;
-use crate::state::AppState;
+use crate::state::{AppState, TransferRecord};
 
 /// Request body for a UBC transfer (spend) operation.
 ///
@@ -146,17 +147,47 @@ pub async fn transfer_ubc(
     match result {
         Ok(()) => {
             let new_balance = economics.balance_of(&from_did).unwrap_or(0);
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+
+            // Derive a stable transfer ID: BLAKE3 of (from_did, to_did, amount, timestamp).
+            // Using BLAKE3 (rather than a UUID) keeps IDs deterministic and
+            // auditable — anyone with the same inputs can recompute the ID.
+            let id_input = format!("{from_did}|{}|{}|{now_ms}", body.to_did, body.amount);
+            let id = blake3::hash(id_input.as_bytes())
+                .to_hex()
+                .to_string();
+
+            let record = TransferRecord {
+                id: id.clone(),
+                from_did: from_did.clone(),
+                to_did: body.to_did.clone(),
+                amount: body.amount,
+                timestamp: now_ms,
+                status: "completed".to_string(),
+                new_balance,
+            };
+
+            // Release the economics lock before acquiring the history lock
+            // to avoid lock-ordering surprises across endpoints.
+            drop(economics);
+            crate::state::record_transfer(&state.transfer_history, record).await;
+
             tracing::info!(
                 from_did = %from_did,
                 to_did = %body.to_did,
                 amount = body.amount,
                 new_balance = new_balance,
+                transfer_id = %id,
                 "UBC spend operation completed"
             );
             Ok((
                 StatusCode::OK,
                 Json(json!({
                     "status": "completed",
+                    "id": id,
                     "from_did": from_did,
                     "to_did": body.to_did,
                     "amount": body.amount,
@@ -182,6 +213,53 @@ pub async fn transfer_ubc(
             ))
         }
     }
+}
+
+/// Query parameters for `GET /api/v1/economics/transfers`.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListTransfersQuery {
+    /// Maximum number of records to return (default: 50, max: 1000).
+    #[serde(default = "default_transfer_limit")]
+    pub limit: usize,
+}
+
+fn default_transfer_limit() -> usize {
+    50
+}
+
+/// Maximum number of transfer records to return per request.
+const MAX_TRANSFER_LIST_LIMIT: usize = 1000;
+
+/// Handler for `GET /api/v1/economics/transfers`.
+///
+/// Returns the most recent UBC spend operations, newest first.
+/// Failed transfers are not recorded in the history — only successful
+/// spends appear here.
+#[utoipa::path(
+    get,
+    path = "/api/v1/economics/transfers",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of records to return (default 50, max 1000)")
+    ),
+    responses(
+        (status = 200, description = "List of transfer records"),
+    )
+)]
+pub async fn list_transfers(
+    State(state): State<AppState>,
+    Query(query): Query<ListTransfersQuery>,
+) -> Json<Value> {
+    let limit = query.limit.min(MAX_TRANSFER_LIST_LIMIT);
+    let history = state.transfer_history.read().await;
+
+    // Newest first — Vec's natural order is oldest first.
+    let transfers: Vec<&TransferRecord> = history.iter().rev().take(limit).collect();
+
+    Json(json!({
+        "transfers": transfers,
+        "count": transfers.len(),
+        "total_in_history": history.len(),
+    }))
 }
 
 #[cfg(test)]

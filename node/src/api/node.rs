@@ -1,8 +1,10 @@
-//! Node info and peers API handlers
+//! Node info, peers, and validators API handlers
 //!
-//! Provides endpoints for querying node metadata and the peer list:
+//! Provides endpoints for querying node metadata, the peer list, and the
+//! validator set:
 //! - `GET /api/v1/node/info` — node identity, version, uptime, consensus state
 //! - `GET /api/v1/node/peers` — connected peer addresses
+//! - `GET /api/v1/validators` — registered validators with slash points and jail status
 
 use axum::extract::State;
 use axum::Json;
@@ -97,4 +99,96 @@ pub struct PeerInfo {
     pub address: String,
     /// Unix timestamp when the peer was discovered.
     pub connected_at: u64,
+}
+
+/// Handler for `GET /api/v1/validators`.
+///
+/// Returns the list of validator candidates registered with this node,
+/// along with each validator's stake, slash points, and jail status.
+///
+/// Slash points and jail status are sourced from the slashing engine
+/// (persistent redb store). Stake comes from the substrate's
+/// `validator_candidates` registry. The keypair itself is intentionally
+/// NOT exposed — only the public NodeId (hex-encoded) is returned.
+#[utoipa::path(
+    get,
+    path = "/api/v1/validators",
+    responses(
+        (status = 200, description = "Validator list"),
+    )
+)]
+pub async fn list_validators(
+    State(state): State<AppState>,
+) -> Json<Value> {
+    // Read consensus round and validator candidates from the substrate.
+    let (validators_with_stake, current_round) = {
+        let substrate = state.substrate.read().await;
+        let round = substrate.current_round();
+        let entries: Vec<(String, u64)> = substrate
+            .validator_candidates_iter()
+            .map(|(node_id, stake)| (hex::encode(node_id), stake))
+            .collect();
+        (entries, round)
+    };
+
+    // Read slash points and jail status from the slashing engine.
+    let slashing = state.slashing.lock().await;
+    let mut validators: Vec<Value> = Vec::with_capacity(validators_with_stake.len());
+
+    for (node_id_hex, stake) in validators_with_stake {
+        // Decode the hex back to NodeId for slashing-engine lookups.
+        // If decoding fails (shouldn't happen since we just encoded it),
+        // report zero slash points rather than failing the whole request.
+        let node_id_bytes = hex::decode(&node_id_hex).unwrap_or_default();
+        let node_id_array: [u8; 32] = if node_id_bytes.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&node_id_bytes);
+            arr
+        } else {
+            // Skip malformed entries rather than panicking.
+            continue;
+        };
+
+        let slash_points = slashing.slash_points_of(&node_id_array);
+        let is_jailed = slashing.is_jailed(node_id_array, current_round);
+
+        let status = if is_jailed {
+            "jailed"
+        } else if slash_points > 0 {
+            "slashed"
+        } else {
+            "active"
+        };
+
+        validators.push(json!({
+            "node_id": node_id_hex,
+            "stake": stake,
+            "slash_points": slash_points,
+            "is_jailed": is_jailed,
+            "status": status,
+            "current_round": current_round,
+        }));
+    }
+
+    let total_stake: u64 = validators
+        .iter()
+        .filter_map(|v| v.get("stake").and_then(|s| s.as_u64()))
+        .sum();
+    let active_count = validators
+        .iter()
+        .filter(|v| v.get("status").and_then(|s| s.as_str()) == Some("active"))
+        .count();
+    let jailed_count = validators
+        .iter()
+        .filter(|v| v.get("status").and_then(|s| s.as_str()) == Some("jailed"))
+        .count();
+
+    Json(json!({
+        "validators": validators,
+        "count": validators.len(),
+        "active_count": active_count,
+        "jailed_count": jailed_count,
+        "total_stake": total_stake,
+        "current_round": current_round,
+    }))
 }
