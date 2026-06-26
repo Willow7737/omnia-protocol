@@ -222,9 +222,7 @@ pub async fn cast_vote(
         (status = 200, description = "List of proposals"),
     )
 )]
-pub async fn list_proposals(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+pub async fn list_proposals(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let economics = state.economics.lock().await;
     // Clone the proposals to avoid holding the lock while serializing —
     // also lets us add a derived `status` field per proposal without
@@ -245,7 +243,10 @@ pub async fn list_proposals(
             let mut obj = base.as_object().cloned().unwrap_or_default();
             obj.insert("status".to_string(), json!(status));
             // Compute participation totals for convenience
-            let total = p.votes_for.saturating_add(p.votes_against).saturating_add(p.votes_abstain);
+            let total = p
+                .votes_for
+                .saturating_add(p.votes_against)
+                .saturating_add(p.votes_abstain);
             obj.insert("total_participation".to_string(), json!(total));
             Value::Object(obj)
         })

@@ -257,10 +257,7 @@ const MAX_LIST_LIMIT: usize = 1000;
         (status = 200, description = "List of events", body = [StoredEvent]),
     )
 )]
-pub async fn list_events(
-    State(state): State<AppState>,
-    Query(query): Query<ListEventsQuery>,
-) -> Json<Value> {
+pub async fn list_events(State(state): State<AppState>, Query(query): Query<ListEventsQuery>) -> Json<Value> {
     let limit = query.limit.min(MAX_LIST_LIMIT);
     let store = state.event_store.read().await;
 

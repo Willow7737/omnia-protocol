@@ -156,9 +156,7 @@ pub async fn transfer_ubc(
             // Using BLAKE3 (rather than a UUID) keeps IDs deterministic and
             // auditable — anyone with the same inputs can recompute the ID.
             let id_input = format!("{from_did}|{}|{}|{now_ms}", body.to_did, body.amount);
-            let id = blake3::hash(id_input.as_bytes())
-                .to_hex()
-                .to_string();
+            let id = blake3::hash(id_input.as_bytes()).to_hex().to_string();
 
             let record = TransferRecord {
                 id: id.clone(),
@@ -245,10 +243,7 @@ const MAX_TRANSFER_LIST_LIMIT: usize = 1000;
         (status = 200, description = "List of transfer records"),
     )
 )]
-pub async fn list_transfers(
-    State(state): State<AppState>,
-    Query(query): Query<ListTransfersQuery>,
-) -> Json<Value> {
+pub async fn list_transfers(State(state): State<AppState>, Query(query): Query<ListTransfersQuery>) -> Json<Value> {
     let limit = query.limit.min(MAX_TRANSFER_LIST_LIMIT);
     let history = state.transfer_history.read().await;
 

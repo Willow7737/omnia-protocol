@@ -78,10 +78,7 @@ pub struct TransferRecord {
 ///
 /// When the log exceeds `MAX_TRANSFER_HISTORY`, the oldest 10% of
 /// records are evicted to prevent unbounded memory growth.
-pub async fn record_transfer(
-    history: &Arc<RwLock<Vec<TransferRecord>>>,
-    record: TransferRecord,
-) {
+pub async fn record_transfer(history: &Arc<RwLock<Vec<TransferRecord>>>, record: TransferRecord) {
     let mut h = history.write().await;
     if h.len() >= MAX_TRANSFER_HISTORY {
         let to_remove = MAX_TRANSFER_HISTORY / 10;

@@ -117,9 +117,7 @@ pub struct PeerInfo {
         (status = 200, description = "Validator list"),
     )
 )]
-pub async fn list_validators(
-    State(state): State<AppState>,
-) -> Json<Value> {
+pub async fn list_validators(State(state): State<AppState>) -> Json<Value> {
     // Read consensus round and validator candidates from the substrate.
     let (validators_with_stake, current_round) = {
         let substrate = state.substrate.read().await;
