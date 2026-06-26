@@ -265,8 +265,9 @@ pub async fn list_events(
     let store = state.event_store.read().await;
 
     // IndexMap preserves insertion order. Iterate in reverse so the
-    // newest events come first.
-    let events: Vec<&StoredEvent> = store.iter().rev().take(limit).collect();
+    // newest events come first. `.values().rev()` gives us only the
+    // StoredEvent references (not the keys).
+    let events: Vec<&StoredEvent> = store.values().rev().take(limit).collect();
 
     Json(json!({
         "events": events,
