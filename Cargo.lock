@@ -4892,7 +4892,6 @@ dependencies = [
  "indexmap 2.14.0",
  "jsonwebtoken",
  "omnia-adapters",
- "omnia-binding",
  "omnia-crypto",
  "omnia-economics",
  "omnia-network",
