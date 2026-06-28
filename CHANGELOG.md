@@ -9,6 +9,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.77](https://github.com/Willow7737/omnia-protocol/compare/v0.1.76...v0.1.77) (2026-06-28)
+
+
+### Features
+
+* **api:** add list endpoints for events, proposals, transfers, validators ([cf7fe12](https://github.com/Willow7737/omnia-protocol/commit/cf7fe125b90701d2063bc2fe6f982cbdb13be666))
+* **api:** add list endpoints for events, proposals, transfers, validators ([72d40f3](https://github.com/Willow7737/omnia-protocol/commit/72d40f36cd31da5288c35a253ddd55d4abd7d409))
+
+
+### Bug Fixes
+
+* **api:** use .values().rev() on IndexMap to get &StoredEvent, not (&K, &V) ([cbb26d2](https://github.com/Willow7737/omnia-protocol/commit/cbb26d2e47f71911c38c71392aece2a6f957af72))
+
 ## [0.1.76](https://github.com/Willow7737/omnia-protocol/compare/v0.1.75...v0.1.76) (2026-06-25)
 
 
