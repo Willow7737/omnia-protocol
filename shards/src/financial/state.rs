@@ -22,7 +22,7 @@
 //! resolved at the re-export level: `shards::FinancialAccountBalance` vs
 //! `consensus::crdt::AccountBalance`.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use omnia_substrate::{Event, VectorClock};
 use serde::{Deserialize, Serialize};
@@ -104,7 +104,13 @@ impl Default for AccountBalance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinancialState {
     /// Per-account balances.
-    pub balances: HashMap<AccountId, AccountBalance>,
+    ///
+    /// BTreeMap (not HashMap) for deterministic serialization — HashMap
+    /// iteration order is non-deterministic, which would cause
+    /// state_snapshot() to produce different bytes on different nodes
+    /// for the same logical state, breaking consensus agreement on the
+    /// state root. Audit C5.
+    pub balances: BTreeMap<AccountId, AccountBalance>,
     /// Total supply across all accounts.
     pub total_supply: u64,
     /// Public key of the mint authority. Only this key (or `None` for unrestricted)
@@ -127,7 +133,7 @@ impl FinancialState {
     /// a state that allows minting.
     pub fn new() -> Self {
         Self {
-            balances: HashMap::new(),
+            balances: BTreeMap::new(),
             total_supply: 0,
             mint_authority: None,
             last_query_result: None,
@@ -139,7 +145,7 @@ impl FinancialState {
     /// Only the specified public key will be allowed to mint new tokens.
     pub fn with_mint_authority(mint_authority: [u8; 32]) -> Self {
         Self {
-            balances: HashMap::new(),
+            balances: BTreeMap::new(),
             total_supply: 0,
             mint_authority: Some(mint_authority),
             last_query_result: None,

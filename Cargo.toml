@@ -21,7 +21,7 @@ resolver = "2"
 # L-23 fix (audit v0.1.68): aligned with latest CHANGELOG entry (v0.1.75).
 # P0-11 fix: previously pinned at 0.1.68 while CHANGELOG / release-please
 # manifest had advanced — bumped to 0.1.75 to eliminate version drift.
-version = "0.1.75"
+version = "0.1.76"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"

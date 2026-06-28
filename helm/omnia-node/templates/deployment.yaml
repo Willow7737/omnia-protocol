@@ -47,16 +47,25 @@ spec:
             - name: p2p
               containerPort: 4001
               protocol: UDP
+          # P0-10 fix: command override extracts the ordinal from the pod
+          # name (e.g. "omnia-node-0" → 0) and adds 1, since node_id 0 is
+          # invalid per config.rs validation. The previous chart set
+          # OMNIA_NODE_ID=metadata.name directly, but node_id is parsed as
+          # u64 in node/src/config.rs — values like "omnia-node-0" crashed
+          # the pod on startup with "invalid digit found in string".
+          command:
+            - /bin/sh
+            - -c
+            - |
+              ORDINAL="${POD_NAME##*-}"
+              NODE_ID=$((ORDINAL + 1))
+              export OMNIA_NODE_ID="${NODE_ID}"
+              echo "Derived OMNIA_NODE_ID=${OMNIA_NODE_ID} from POD_NAME=${POD_NAME}"
+              exec /app/omnia-node run
           env:
             - name: RUST_LOG
               value: "info"
-            # P0-10 fix: derive OMNIA_NODE_ID from the StatefulSet pod name
-            # (e.g. "omnia-node-0"). The previous default of node.id: ""
-            # caused every replica to share the same node identity, which
-            # broke BFT (duplicate validator IDs) and gossip (every pod
-            # advertised the same peer ID). Using metadata.name guarantees a
-            # unique, stable identity per ordinal.
-            - name: OMNIA_NODE_ID
+            - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name

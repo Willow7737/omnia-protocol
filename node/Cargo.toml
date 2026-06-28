@@ -13,7 +13,11 @@ omnia-substrate = { path = "../substrate", default-features = false }   # Layer 
 omnia-primitives = { path = "../omnia-primitives" }  # Shared types: Event, VectorClock, wire format
 omnia-shards = { path = "../shards" }         # Layer 2: domain shard routing and fee enforcement
 omnia-economics = { path = "../economics" }   # Layer 5: UBC token, governance, useful-work rewards
-omnia-binding = { path = "../binding" }       # Layer 3: physical-digital binding layer
+# C6 fix: omnia-binding removed from the node binary — the node never
+# imports it (verified: zero `use omnia_binding::` in node/src/). The
+# binding crate is still used by tests/ and benches/ which depend on
+# it directly. Keeping it here just bloated compile time and misled
+# contributors into thinking the node uses Layer 3 features.
 omnia-network = { path = "../omnia-network", default-features = false, optional = true }  # P2P networking layer
 omnia-adapters = { path = "../omnia-adapters", default-features = false } # ZK-rollup settlement adapters (required for SettlementAdapter trait)
 omnia-crypto = { path = "../omnia-crypto", default-features = false, optional = true }     # Crypto primitives (for light mode keygen)

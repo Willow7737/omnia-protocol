@@ -154,7 +154,7 @@ Fuzz targets are located in `fuzz/fuzz_targets/`. The `scripts/fuzz.sh` script r
 FUZZ_TIME=300 ./scripts/fuzz.sh
 ```
 
-**Available fuzz targets** (7 total, defined in `scripts/fuzz.sh`):
+**Available fuzz targets** (12 total, defined in `scripts/fuzz.sh`):
 
 | Target                            | What it fuzzes                            |
 | --------------------------------- | ----------------------------------------- |
@@ -405,7 +405,7 @@ omnia-protocol/
 │       └── lib.rs                # ChaosNode, ChaosNetwork (982 lines)
 ├── fuzz/                         # Fuzz targets
 │   ├── Cargo.toml
-│   └── fuzz_targets/             # 7 fuzz targets (see scripts/fuzz.sh)
+│   └── fuzz_targets/             # 12 fuzz targets (see scripts/fuzz.sh)
 ├── formal-verification/          # TLA+ model
 │   ├── OmniaConsensus.tla        # TLA+ specification (191 lines)
 │   ├── OmniaConsensus.cfg        # TLC model checker config
@@ -424,7 +424,7 @@ omnia-protocol/
 │   │       └── omnia-alerts.yml  # 4 alert rules
 │   └── README.md
 ├── scripts/                      # Build and security scripts
-│   ├── fuzz.sh                   # Run all 7 fuzz targets
+│   ├── fuzz.sh                   # Run all 12 fuzz targets
 │   ├── generate-fuzz-seeds.sh    # Generate corpus seeds
 │   ├── reproducible-build.sh     # Deterministic binary build
 │   └── generate-sbom.sh          # CycloneDX SBOM generation

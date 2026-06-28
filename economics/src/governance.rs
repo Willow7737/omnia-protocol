@@ -17,7 +17,7 @@
 //! identical results across all platforms (x86, ARM, etc.), preventing
 //! consensus divergence.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -128,13 +128,13 @@ impl Proposal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GovernanceState {
     /// DID → base voting weight (quadratic: weight = isqrt(stake)).
-    pub voting_weights: HashMap<String, u64>,
+    pub voting_weights: BTreeMap<String, u64>,
     /// DID → last epoch when the DID participated in a vote.
-    pub last_active: HashMap<String, u64>,
+    pub last_active: BTreeMap<String, u64>,
     /// Decay rate per inactive epoch in PPM (e.g., 100_000 = 10% decay).
     pub decay_rate: DecayRate,
     /// Active proposals keyed by ID.
-    pub proposals: HashMap<String, Proposal>,
+    pub proposals: BTreeMap<String, Proposal>,
     /// Minimum quorum percentage (0–100) required for a proposal to pass.
     ///
     /// The total votes cast on a proposal must represent at least this
@@ -148,7 +148,7 @@ pub struct GovernanceState {
     pub time_lock_ms: u64,
     /// Tracks which (proposal_id, did) pairs have already voted, preventing
     /// double-voting.
-    pub voted: HashSet<(String, String)>,
+    pub voted: BTreeSet<(String, String)>,
 }
 
 impl GovernanceState {
@@ -172,13 +172,13 @@ impl GovernanceState {
     /// ```
     pub fn new(decay_rate: DecayRate) -> Self {
         Self {
-            voting_weights: HashMap::new(),
-            last_active: HashMap::new(),
+            voting_weights: BTreeMap::new(),
+            last_active: BTreeMap::new(),
             decay_rate,
-            proposals: HashMap::new(),
+            proposals: BTreeMap::new(),
             quorum_percentage: DEFAULT_QUORUM_PERCENTAGE,
             time_lock_ms: DEFAULT_TIME_LOCK_MS,
-            voted: HashSet::new(),
+            voted: BTreeSet::new(),
         }
     }
 

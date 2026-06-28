@@ -6,7 +6,7 @@
 //! is the central registry that ties identities to their compute
 //! allowances.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -39,7 +39,7 @@ pub struct QuotaSystem {
     /// # Warning  
     /// This field is pub for backward compatibility but direct modification
     /// bypasses register_did() validation. Prefer register_did() for mutations.
-    pub tokens: HashMap<String, UbcToken>,
+    pub tokens: BTreeMap<String, UbcToken>,
 }
 
 impl QuotaSystem {
@@ -49,7 +49,7 @@ impl QuotaSystem {
             current_epoch: 0,
             epoch_duration_ms,
             default_quota,
-            tokens: HashMap::new(),
+            tokens: BTreeMap::new(),
         }
     }
 

@@ -23,7 +23,7 @@
 
 use omnia_substrate::vector_clock::NodeId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// Errors that can occur during time-locked voting operations.
@@ -173,7 +173,7 @@ pub struct TimeLockVoting {
     /// Configuration for time-locked voting.
     pub config: TimeLockConfig,
     /// All locked stakes, indexed by owner.
-    stakes: HashMap<NodeId, Vec<LockedStake>>,
+    stakes: BTreeMap<NodeId, Vec<LockedStake>>,
 }
 
 impl TimeLockVoting {
@@ -181,7 +181,7 @@ impl TimeLockVoting {
     pub fn new(config: TimeLockConfig) -> Self {
         Self {
             config,
-            stakes: HashMap::new(),
+            stakes: BTreeMap::new(),
         }
     }
 
