@@ -65,6 +65,22 @@ macro_rules! impl_shard {
                 }
             }
 
+            /// Create a shard wrapping an existing state instance.
+            ///
+            /// Used when the caller wants to share a single state instance
+            /// between the consensus path (ShardRouter) and another consumer
+            /// (e.g. the HTTP API in node/src/main.rs). Without this, calling
+            /// `new()` would create a SECOND instance that diverges from the
+            /// first — the C4 audit finding.
+            ///
+            /// Note: the shard takes ownership of the state. For true sharing,
+            /// wrap the state in `Arc<RwLock<...>>` at the caller side and
+            /// use `new_with_arc` (not yet implemented — would require a
+            /// separate macro variant).
+            pub fn new_with_state(state: $state) -> Self {
+                Self { state }
+            }
+
             /// Get a reference to the internal state.
             pub fn state(&self) -> &$state {
                 &self.state

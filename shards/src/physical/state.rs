@@ -4,7 +4,7 @@
 //! append-only list of provenance events that records its entire history.
 //! This is naturally CRDT-friendly because appends are commutative.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
@@ -29,14 +29,14 @@ pub struct ProvenanceEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhysicalState {
     /// Provenance logs — maps item IDs to their ordered list of events.
-    pub provenance: HashMap<super::ops::ItemId, Vec<ProvenanceEvent>>,
+    pub provenance: BTreeMap<super::ops::ItemId, Vec<ProvenanceEvent>>,
 }
 
 impl PhysicalState {
     /// Create an empty physical state.
     pub fn new() -> Self {
         Self {
-            provenance: HashMap::new(),
+            provenance: BTreeMap::new(),
         }
     }
 

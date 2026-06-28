@@ -3,7 +3,7 @@
 //! Maintains the consent registry and data vault references. Consent is
 //! modeled as a set of granted access records that can be revoked.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
@@ -42,14 +42,14 @@ type ConsentKey = (super::ops::SubjectId, super::ops::ConsumerId);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BiologicalState {
     /// Consent registry — maps (subject, consumer) pairs to their consent records.
-    pub consent_registry: HashMap<ConsentKey, ConsentRecord>,
+    pub consent_registry: BTreeMap<ConsentKey, ConsentRecord>,
 }
 
 impl BiologicalState {
     /// Create an empty biological state.
     pub fn new() -> Self {
         Self {
-            consent_registry: HashMap::new(),
+            consent_registry: BTreeMap::new(),
         }
     }
 

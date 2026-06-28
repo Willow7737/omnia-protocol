@@ -484,7 +484,11 @@ jobs:
         run: cargo install cargo-vet --locked
       - name: Run cargo-vet
         run: cargo vet
-        continue-on-error: true  # Track progress without blocking CI
+        # H6 fix: removed continue-on-error. cargo-vet now ENFORCES —
+        # any un-audited dependency blocks CI. The previous setting
+        # made the gate decorative. Exemptions in supply-chain/config.toml
+        # all have substantive notes (≥30 chars, verified by the
+        # exemption-notes check below).
       - name: Verify exemption notes
         run: |
           python3 -c "

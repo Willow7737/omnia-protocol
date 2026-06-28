@@ -3,7 +3,7 @@
 //! Maintains the task queue and proof registry. Tasks progress through
 //! a lifecycle: Submitted → Proved → Verified.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
@@ -45,13 +45,13 @@ pub struct TaskEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputationalState {
     /// Task registry — maps task IDs to task entries.
-    pub tasks: HashMap<super::ops::TaskId, TaskEntry>,
+    pub tasks: BTreeMap<super::ops::TaskId, TaskEntry>,
 }
 
 impl ComputationalState {
     /// Create an empty computational state.
     pub fn new() -> Self {
-        Self { tasks: HashMap::new() }
+        Self { tasks: BTreeMap::new() }
     }
 
     /// Apply a computational operation, mutating state.

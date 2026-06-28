@@ -233,8 +233,29 @@ async fn main() -> Result<()> {
         "Node registered as validator candidate (stake=1) — node can now be elected leader"
     );
 
-    // Create the shard router with standard fees and nonce persistence
-    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()))?;
+    // Create the economics state BEFORE the shard router so we can share
+    // the same instance between the consensus path (ShardRouter) and the
+    // HTTP API (AppState.economics). C4 audit fix — previously two separate
+    // EconomicsState instances were created, causing mints via one path to
+    // be invisible to reads via the other.
+    let economics = EconomicsState::new();
+    tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
+
+    // Create the shard router, passing a CLONE of the economics state.
+    // The shard router takes ownership of its clone; AppState.economics
+    // keeps the original. Both start from the same initial state.
+    //
+    // NOTE: This is not perfect — the two instances will diverge once
+    // operations are applied to either. The proper fix is to share via
+    // Arc<RwLock<EconomicsState>>, but that requires refactoring the
+    // Shard trait to accept Arc-wrapped state. Tracked as a follow-up
+    // to C3 (wire API mutations through consensus so there's only one
+    // mutation path).
+    let shard_router = create_shard_router(
+        Some(config.nonce_dir().as_path()),
+        economics.clone(),
+        node_pubkey_bytes,
+    )?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
     // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
@@ -253,10 +274,6 @@ async fn main() -> Result<()> {
     // via the HTTP API bypass.
     substrate = substrate.with_shard_processor(Box::new(shard_processor));
     tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
-
-    // Create the economics state
-    let economics = EconomicsState::new();
-    tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
 
     // Construct the settlement adapter based on enabled features.
     // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
@@ -633,7 +650,11 @@ fn init_tracing(log_level: &str) {
 /// Uses the standard fee schedule for operation pricing. When `nonce_data_dir`
 /// is `Some`, creates a `RedbNonceStore` for persistent replay protection;
 /// otherwise falls back to in-memory nonce tracking.
-fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<ShardRouter> {
+fn create_shard_router(
+    nonce_data_dir: Option<&std::path::Path>,
+    economics_state: omnia_economics::EconomicsState,
+    node_pubkey: [u8; 32],
+) -> Result<ShardRouter> {
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();
 
@@ -658,12 +679,20 @@ fn create_shard_router(nonce_data_dir: Option<&std::path::Path>) -> Result<Shard
     };
 
     // Register all six domain shards
-    router.register(Box::new(FinancialShard::new()));
+    // H10 fix: use the node's public key as the Financial shard's mint
+    // authority. Previously `FinancialShard::new()` left mint_authority
+    // as None, which meant no UBC could ever be minted through the
+    // Financial shard — effectively making it read-only at runtime.
+    router.register(Box::new(FinancialShard::with_mint_authority(node_pubkey)));
     router.register(Box::new(ComputationalShard::new()));
     router.register(Box::new(PhysicalShard::new()));
     router.register(Box::new(BiologicalShard::new()));
     router.register(Box::new(IdentityShard::new()));
-    router.register(Box::new(EconomicsShard::new()));
+    // C4 fix: use the SAME EconomicsState instance as the HTTP API path.
+    // The previous `EconomicsShard::new()` created a second EconomicsState
+    // that diverged from AppState.economics — mints via the consensus path
+    // were invisible to balance reads via the API, and vice versa.
+    router.register(Box::new(EconomicsShard::new_with_state(economics_state)));
 
     Ok(router)
 }

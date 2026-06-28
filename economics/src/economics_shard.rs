@@ -10,7 +10,7 @@
 //! However, it does maintain its own `QuotaSystem` and `GovernanceState`
 //! for managing UBC allowances and voting.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -83,9 +83,9 @@ pub struct EconomicsState {
     /// The governance state for quadratic voting and proposals.
     pub governance: GovernanceState,
     /// Verified useful-work proofs keyed by result hash.
-    pub verified_work: HashMap<[u8; 32], UsefulWorkProof>,
+    pub verified_work: BTreeMap<[u8; 32], UsefulWorkProof>,
     /// Admin keys authorized to submit work during the pre-ZK phase.
-    pub admin_keys: HashSet<[u8; 32]>,
+    pub admin_keys: BTreeSet<[u8; 32]>,
     /// Verifier public key for work-proof verification.
     ///
     /// When `None`, verification falls back to an all-zeros key with a loud
@@ -105,8 +105,8 @@ impl EconomicsState {
         Self {
             quota: QuotaSystem::default_system(),
             governance: GovernanceState::new(DecayRate::ten_percent()),
-            verified_work: HashMap::new(),
-            admin_keys: HashSet::new(),
+            verified_work: BTreeMap::new(),
+            admin_keys: BTreeSet::new(),
             verifier_pubkey: None,
         }
     }
@@ -116,8 +116,8 @@ impl EconomicsState {
         Self {
             quota: QuotaSystem::new(default_quota, epoch_duration_ms),
             governance: GovernanceState::new(decay_rate),
-            verified_work: HashMap::new(),
-            admin_keys: HashSet::new(),
+            verified_work: BTreeMap::new(),
+            admin_keys: BTreeSet::new(),
             verifier_pubkey: None,
         }
     }

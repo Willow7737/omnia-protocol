@@ -10,7 +10,7 @@
 //! - Privacy-preserving biometric anchors
 //! - AI agent identity with capability-based access control
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
@@ -73,7 +73,7 @@ pub struct DidDocument {
     /// Number of times recovery has been performed (prevents replay).
     pub recovery_count: u32,
     /// Service endpoints associated with this DID.
-    pub services: HashMap<String, String>,
+    pub services: BTreeMap<String, String>,
 }
 
 impl DidDocument {
@@ -87,7 +87,7 @@ impl DidDocument {
             recovery_enabled: false,
             authentication: vec![public_key],
             recovery_count: 0,
-            services: HashMap::new(),
+            services: BTreeMap::new(),
         }
     }
 }
@@ -122,31 +122,34 @@ pub struct RecoveryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityState {
     /// DID document registry — maps DID strings to their documents.
-    pub dids: HashMap<Did, DidDocument>,
+    ///
+    /// BTreeMap (not HashMap) for deterministic serialization order —
+    /// required for consensus state_root agreement. Audit C5.
+    pub dids: BTreeMap<Did, DidDocument>,
     /// Social recovery configurations (Shamir's Secret Sharing).
-    pub recovery_registry: HashMap<Did, RecoveryConfig>,
+    pub recovery_registry: BTreeMap<Did, RecoveryConfig>,
     /// Encrypted shares keyed by DID string.
-    pub shares: HashMap<String, Vec<EncryptedShare>>,
+    pub shares: BTreeMap<String, Vec<EncryptedShare>>,
     /// AI agent identities keyed by agent DID.
-    pub agent_registry: HashMap<Did, AgentIdentity>,
+    pub agent_registry: BTreeMap<Did, AgentIdentity>,
     /// Biometric anchors keyed by DID.
-    pub biometric_registry: HashMap<Did, BiometricAnchor>,
+    pub biometric_registry: BTreeMap<Did, BiometricAnchor>,
     /// Set of used share index combinations per DID to prevent replay.
     /// Keyed by DID, value is a set of sorted share-index tuples that have
     /// already been used for recovery.
-    pub used_recovery_shares: HashMap<Did, HashSet<Vec<u8>>>,
+    pub used_recovery_shares: BTreeMap<Did, BTreeSet<Vec<u8>>>,
 }
 
 impl IdentityState {
     /// Create an empty identity state.
     pub fn new() -> Self {
         Self {
-            dids: HashMap::new(),
-            recovery_registry: HashMap::new(),
-            shares: HashMap::new(),
-            agent_registry: HashMap::new(),
-            biometric_registry: HashMap::new(),
-            used_recovery_shares: HashMap::new(),
+            dids: BTreeMap::new(),
+            recovery_registry: BTreeMap::new(),
+            shares: BTreeMap::new(),
+            agent_registry: BTreeMap::new(),
+            biometric_registry: BTreeMap::new(),
+            used_recovery_shares: BTreeMap::new(),
         }
     }
 
