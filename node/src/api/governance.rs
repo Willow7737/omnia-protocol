@@ -2,6 +2,7 @@
 //!
 //! Provides endpoints for creating governance proposals and casting votes:
 //! - `POST /api/v1/governance/proposals` — submit a new proposal
+//! - `GET /api/v1/governance/proposals` — list all proposals
 //! - `POST /api/v1/governance/vote` — cast a vote on a proposal
 
 use axum::extract::State;
@@ -206,6 +207,54 @@ pub async fn cast_vote(
             ))
         }
     }
+}
+
+/// Handler for `GET /api/v1/governance/proposals`.
+///
+/// Returns all proposals currently tracked by the governance state.
+/// Proposals are returned in insertion order (which approximates creation
+/// order, since `HashMap` does not preserve it; for true chronological
+/// ordering, sort by `created_at_epoch` client-side).
+#[utoipa::path(
+    get,
+    path = "/api/v1/governance/proposals",
+    responses(
+        (status = 200, description = "List of proposals"),
+    )
+)]
+pub async fn list_proposals(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let economics = state.economics.lock().await;
+    // Clone the proposals to avoid holding the lock while serializing —
+    // also lets us add a derived `status` field per proposal without
+    // mutating the underlying governance state.
+    let proposals: Vec<Value> = economics
+        .governance
+        .proposals
+        .values()
+        .map(|p| {
+            let status = if p.execution_time.is_some() {
+                "passed"
+            } else if p.is_expired(economics.current_epoch()) {
+                "expired"
+            } else {
+                "voting"
+            };
+            let base = serde_json::to_value(p).unwrap_or_else(|_| json!({}));
+            let mut obj = base.as_object().cloned().unwrap_or_default();
+            obj.insert("status".to_string(), json!(status));
+            // Compute participation totals for convenience
+            let total = p
+                .votes_for
+                .saturating_add(p.votes_against)
+                .saturating_add(p.votes_abstain);
+            obj.insert("total_participation".to_string(), json!(total));
+            Value::Object(obj)
+        })
+        .collect();
+    Ok(Json(json!({
+        "proposals": proposals,
+        "count": proposals.len(),
+    })))
 }
 
 /// Parse a vote choice string into a `VoteChoice` enum.

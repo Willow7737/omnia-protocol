@@ -285,6 +285,7 @@ mod tests {
             shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
             economics: Arc::new(Mutex::new(EconomicsState::new())),
             event_store: Arc::new(RwLock::new(event_store)),
+            transfer_history: Arc::new(RwLock::new(Vec::new())),
             peers: Arc::new(RwLock::new(peers)),
             #[cfg(feature = "metrics")]
             metrics: Arc::new(metrics),

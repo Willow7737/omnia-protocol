@@ -3,9 +3,10 @@
 //! Provides endpoints for submitting new events to the substrate
 //! and retrieving events by their identifier:
 //! - `POST /api/v1/events` — submit a new event
+//! - `GET /api/v1/events` — list recently submitted events
 //! - `GET /api/v1/events/:id` — retrieve an event by ID
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use omnia_substrate::Event;
@@ -218,4 +219,56 @@ pub async fn get_event(
             Json(json!({"error": format!("Event not found: {id}")})),
         )),
     }
+}
+
+/// Query parameters for `GET /api/v1/events`.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListEventsQuery {
+    /// Maximum number of events to return (default: 100, max: 1000).
+    ///
+    /// The most recently submitted events are returned first.
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+fn default_limit() -> usize {
+    100
+}
+
+/// Maximum number of events the API will return in a single request.
+const MAX_LIST_LIMIT: usize = 1000;
+
+/// Handler for `GET /api/v1/events`.
+///
+/// Returns the most recently submitted events from the in-memory event
+/// store, newest first. The store preserves insertion order via
+/// `IndexMap`, so "newest" is well-defined.
+///
+/// # Query parameters
+///
+/// - `limit` — maximum number of events to return (default 100, max 1000)
+#[utoipa::path(
+    get,
+    path = "/api/v1/events",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of events to return (default 100, max 1000)")
+    ),
+    responses(
+        (status = 200, description = "List of events", body = [StoredEvent]),
+    )
+)]
+pub async fn list_events(State(state): State<AppState>, Query(query): Query<ListEventsQuery>) -> Json<Value> {
+    let limit = query.limit.min(MAX_LIST_LIMIT);
+    let store = state.event_store.read().await;
+
+    // IndexMap preserves insertion order. Iterate in reverse so the
+    // newest events come first. `.values().rev()` gives us only the
+    // StoredEvent references (not the keys).
+    let events: Vec<&StoredEvent> = store.values().rev().take(limit).collect();
+
+    Json(json!({
+        "events": events,
+        "count": events.len(),
+        "total_in_store": store.len(),
+    }))
 }
