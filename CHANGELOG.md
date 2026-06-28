@@ -9,6 +9,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.77](https://github.com/Willow7737/omnia-protocol/compare/v0.1.76...v0.1.77) (2026-06-28)
+
+
+### Features
+
+* **api:** add list endpoints for events, proposals, transfers, validators ([cf7fe12](https://github.com/Willow7737/omnia-protocol/commit/cf7fe125b90701d2063bc2fe6f982cbdb13be666))
+* **api:** add list endpoints for events, proposals, transfers, validators ([72d40f3](https://github.com/Willow7737/omnia-protocol/commit/72d40f36cd31da5288c35a253ddd55d4abd7d409))
+
+
+### Bug Fixes
+
+* **api:** use .values().rev() on IndexMap to get &StoredEvent, not (&K, &V) ([cbb26d2](https://github.com/Willow7737/omnia-protocol/commit/cbb26d2e47f71911c38c71392aece2a6f957af72))
+
+## [0.1.76](https://github.com/Willow7737/omnia-protocol/compare/v0.1.75...v0.1.76) (2026-06-25)
+
+
+### Features
+
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([38513ae](https://github.com/Willow7737/omnia-protocol/commit/38513aee136c6636026ad8c55c31b522a39dbdc9))
+* **bench:** ZK discovery fix, slashing IAI, network-sim, scaling analysis ([fb8231a](https://github.com/Willow7737/omnia-protocol/commit/fb8231aa83067e939f659a1048bc7a99d731ca96))
+
+
+### Bug Fixes
+
+* **bench:** resolve 3 CI failures from first real run ([784797f](https://github.com/Willow7737/omnia-protocol/commit/784797f0c221e7c4121c86c8d04df88e0b9be07c))
+* **bench:** resolve 3 CI failures from first real run ([a751b27](https://github.com/Willow7737/omnia-protocol/commit/a751b2779b888799b7f5286737d49e229550e2ba))
+* **bench:** update baselines for P0-1 signature verification cost ([9877df7](https://github.com/Willow7737/omnia-protocol/commit/9877df7cfb17cec77e8327c3e2337bb66e962aa6))
+* **ci:** rustdoc HTML tag + sign test events for P0-1 signature verification ([ee0e76f](https://github.com/Willow7737/omnia-protocol/commit/ee0e76f17854c4bc8bbf21d50f39b1d76d505a4e))
+* **iai:** capture stderr — iai-callgrind 0.13 writes to stderr, not stdout ([5492596](https://github.com/Willow7737/omnia-protocol/commit/5492596c569b9b7985c83c5129ba998b51b989d4))
+* **iai:** strip ANSI escape codes — root cause of 9/9 missing ([c3eb212](https://github.com/Willow7737/omnia-protocol/commit/c3eb2127df55b96228d04cd464145a251edd031b))
+* **iai:** strip ANSI escape codes — root cause of 9/9 missing ([d632285](https://github.com/Willow7737/omnia-protocol/commit/d632285c623a2c6f2dc8b7972a2669798f6c0c24))
+* **security:** close 11 P0 critical findings from new audit ([d5928e8](https://github.com/Willow7737/omnia-protocol/commit/d5928e809327274bb7e663cbc7f4f9de3ecd9cb1))
+* **security:** close 11 P0 critical findings from new audit ([cee569b](https://github.com/Willow7737/omnia-protocol/commit/cee569be892db4406bddc739f5a5e5a9395808f2))
+* **tests:** sign events in chaos-tests load_test for P0-1 signature verification ([028eef5](https://github.com/Willow7737/omnia-protocol/commit/028eef57fe469340ca7d24edaaf9e73dcec0b7f6))
+
+
+### Documentation
+
+* **benchmarks:** rewrite benchmark-gates.md for 3-layer gate + update BASELINE.md ([b51ddef](https://github.com/Willow7737/omnia-protocol/commit/b51ddefa4e11f22e21ce0534f58671492e1ae23e))
+* comprehensive update of 25 architecture, operations, and reference docs ([cf96377](https://github.com/Willow7737/omnia-protocol/commit/cf963779d0ecd17bcf6eb41ba7ca07f54698cde9))
+* final consistency sweep — fix all remaining stale references across 91 files ([e0c53b4](https://github.com/Willow7737/omnia-protocol/commit/e0c53b4c0ea73af8255e5cefc39413c7334d63a6))
+* final consistency sweep — fix all remaining stale references across 91 files ([3bc4be1](https://github.com/Willow7737/omnia-protocol/commit/3bc4be1d5c812d5eb4a03f53fd0b5952f9a61f5d))
+* **security:** document 16 critical v0.1.69 fixes in SECURITY.md + AUDIT_FIX_NOTES.md ([65de793](https://github.com/Willow7737/omnia-protocol/commit/65de793d3e385fe7dafd809667e78d4d419beb29))
+* update 20 phase summaries, security docs, reference docs, formal verification ([f0a6605](https://github.com/Willow7737/omnia-protocol/commit/f0a66055f9c43aa5b8f62e0b63187db967d24c52))
+* update 20 phase summaries, security docs, reference docs, formal verification ([5567ac7](https://github.com/Willow7737/omnia-protocol/commit/5567ac7b2895d132c97f88a1d1f2bfd7573c5cb7))
+
+## [0.1.75](https://github.com/Willow7737/omnia-protocol/compare/v0.1.74...v0.1.75) (2026-06-23)
+
+
+### Features
+
+* **bench:** 3-layer benchmark gate — IAI + multi-sample + self-hosted runner ([a4de84a](https://github.com/Willow7737/omnia-protocol/commit/a4de84ae82f2f681c88d635e8f2a8c0bdf8c2d22))
+* **bench:** 3-layer benchmark gate — IAI + multi-sample + self-hosted runner ([519c370](https://github.com/Willow7737/omnia-protocol/commit/519c370272bb389560852c534eeecde6f005674e))
+
+
+### Bug Fixes
+
+* **ci+mentor:** address benchmark gate critique and compilation error ([0b66636](https://github.com/Willow7737/omnia-protocol/commit/0b666365e83984c835146cb8b6438fae7e7fde3d))
+
+## [0.1.74](https://github.com/Willow7737/omnia-protocol/compare/v0.1.73...v0.1.74) (2026-06-22)
+
+
+### Bug Fixes
+
+* **ci:** resolve cargo audit, cargo fmt, and compilation errors ([3823e09](https://github.com/Willow7737/omnia-protocol/commit/3823e091db14f42bec36092334cba44c6743cadf))
+* **clippy:** resolve bind_instead_of_map and needless_borrows warnings ([6f15cf9](https://github.com/Willow7737/omnia-protocol/commit/6f15cf9e81cd12dee5c7fe1e18b67b25ea1af49e))
+* **rustdoc:** resolve broken intra-doc links and HTML tags ([0c69fee](https://github.com/Willow7737/omnia-protocol/commit/0c69feed7b78865eb7af777223fca91cd2604504))
+* **security+node:** close 16 critical audit findings ([5d3d776](https://github.com/Willow7737/omnia-protocol/commit/5d3d7760edb99d9ab3cb4a056051969dfbf413fc))
+
+## [0.1.73](https://github.com/Willow7737/omnia-protocol/compare/v0.1.72...v0.1.73) (2026-06-22)
+
+
+### Bug Fixes
+
+* **bench:** address 4 mentor review issues — governor verify, anomaly, ZK root-cause, gate output ([9ec7c31](https://github.com/Willow7737/omnia-protocol/commit/9ec7c3125c0f15a8d98b6c02c5d52391dfeb0d45))
+* **bench:** address 4 mentor review issues — governor verify, anomaly, ZK root-cause, gate output ([df53ec8](https://github.com/Willow7737/omnia-protocol/commit/df53ec878ddb60a735121409adb54452e297c768))
+* **bench:** fix baseline panic + false regression from partial-match ([63dfecb](https://github.com/Willow7737/omnia-protocol/commit/63dfecbd6e1e9769be9201831fa44fa5ab6051d3))
+* **chaos:** handle graph insert errors gracefully under message loss ([8ebaa71](https://github.com/Willow7737/omnia-protocol/commit/8ebaa7176754f366c7a623f49878e6061c7a8b82))
+
+## [0.1.72](https://github.com/Willow7737/omnia-protocol/compare/v0.1.71...v0.1.72) (2026-06-21)
+
+
+### Bug Fixes
+
+* **bench:** address 6 mentor review issues — hang, ungating, ZK drift ([7815de8](https://github.com/Willow7737/omnia-protocol/commit/7815de8116072824ff943eef07d9d1cf739eaba1))
+* **bench:** address 6 mentor review issues — hang, ungating, ZK drift ([5e79051](https://github.com/Willow7737/omnia-protocol/commit/5e79051f55239a0647e315a99393cd1194b2e134))
+* **bench:** address 6 mentor review issues — script bug, CI split, baselines ([b19b8ac](https://github.com/Willow7737/omnia-protocol/commit/b19b8ac1b6eda09e26d91c62a2ba0a648b8046d0))
+* **bench:** address 6 mentor review issues — script bug, CI split, baselines ([76c83ef](https://github.com/Willow7737/omnia-protocol/commit/76c83efdc76dd94ab32ac75d60c746b6ab8aa297))
+
+## [0.1.71](https://github.com/Willow7737/omnia-protocol/compare/v0.1.70...v0.1.71) (2026-06-21)
+
+
+### Bug Fixes
+
+* accept 'expected layout' error in ZK proof rejection tests ([550bf62](https://github.com/Willow7737/omnia-protocol/commit/550bf62f230a6a26b9ebbf95aca9b265b0620fe7))
+* add ENV_LOCK to node/tests/integration.rs for env var race ([4551b97](https://github.com/Willow7737/omnia-protocol/commit/4551b979507c27a65970fbf9abfa359432497fcb))
+* add hex dependency to omnia-economics for C-7/C-8 caller binding ([d5da3f4](https://github.com/Willow7737/omnia-protocol/commit/d5da3f45d7e080c2e3f3799853ce362ea71fb0b5))
+* apply audit report security fixes (C-6, C-7, C-8, C-12, C-15, H-4, H-13) ([a0a2b02](https://github.com/Willow7737/omnia-protocol/commit/a0a2b0224e13edf47d2cfd91c414d800fd1d9c3c))
+* apply final audit fixes (C-1, C-2, C-3/C-4, C-9) ([0725fc7](https://github.com/Willow7737/omnia-protocol/commit/0725fc78982b915e0dc9852c2e6d290d82f1fb94))
+* apply remaining audit fixes (C-10, C-11, C-14, H-6, H-7, H-8, H-10) ([1bf6676](https://github.com/Willow7737/omnia-protocol/commit/1bf66765789a3b98a7b63c4dfd1e10ceca93aa17))
+* **bench+coverage:** address mentor review — 5 critical issues ([ad76223](https://github.com/Willow7737/omnia-protocol/commit/ad76223470e189f5c3ab0bc1672e26252bcc3f83))
+* **bench+coverage:** address mentor review — 5 critical issues ([#219](https://github.com/Willow7737/omnia-protocol/issues/219)) ([86e2070](https://github.com/Willow7737/omnia-protocol/commit/86e20704364ab2c70175f3e7c3654eab143c2b3b))
+* **ci:** increase fuzz smoke test timeout from 10s to 120s ([24a58b4](https://github.com/Willow7737/omnia-protocol/commit/24a58b48e41a64612ff223161a061088886ac110))
+* **ci:** increase fuzz smoke timeout from 120s to 180s for libp2p ([3cb4f8d](https://github.com/Willow7737/omnia-protocol/commit/3cb4f8dc435404518b6cda0cc95756484454501c))
+* **ci:** increase fuzz smoke timeout from 180s to 300s for gossip ([e497bfe](https://github.com/Willow7737/omnia-protocol/commit/e497bfef952539b5adb5fd25d2d38a14752e1ea0))
+* **ci:** update cargo audit in nightly-fuzz.yml and release.yml ([4de45ec](https://github.com/Willow7737/omnia-protocol/commit/4de45ec95229b1dac2d84860b46715ae761d1618))
+* **ci:** update cargo audit in nightly-fuzz.yml and release.yml ([7b16712](https://github.com/Willow7737/omnia-protocol/commit/7b16712ead6305e42ad05a5db8ee7563e7006108))
+* **ci:** use --bench flags to avoid --save-baseline on lib tests ([f15ed77](https://github.com/Willow7737/omnia-protocol/commit/f15ed777cfabe5f162a72c42a39106607d124b00))
+* **ci:** use cargo-msrv 0.19.1 compatible syntax ([5ae7f25](https://github.com/Willow7737/omnia-protocol/commit/5ae7f256519f52ba60ff6077d92e5fa38d8f620e))
+* docker compose e2e path + skip in all-features CI ([2c832cf](https://github.com/Willow7737/omnia-protocol/commit/2c832cf3c8fc71ee571ba31a54b4421f1ebdc44f))
+* gate celestia mock tests with #[cfg(not(feature = "celestia"))] ([78f35d8](https://github.com/Willow7737/omnia-protocol/commit/78f35d8cd7fbc92ce3adea73dfc745717d93b52d))
+* gate test_economics_state_full_lifecycle with #[cfg(not(feature = "production"))] ([db5a4c2](https://github.com/Willow7737/omnia-protocol/commit/db5a4c2242e55cbf7dfccadf1f2389c9254940ad))
+* resolve CI failures — fmt + fast_sync/circuit compile errors ([5f54171](https://github.com/Willow7737/omnia-protocol/commit/5f5417177f207829452876e1b8867515856d48cb))
+* resolve dead_code + clippy warnings under -D warnings ([1bacc7d](https://github.com/Willow7737/omnia-protocol/commit/1bacc7d52cde719b18d7d2b3ed173f6fe3c32e8a))
+* rustfmt integration.rs + pin cargo-msrv to 0.19.1 ([72cff8a](https://github.com/Willow7737/omnia-protocol/commit/72cff8a0016cef764a6a2777268affab98a157f4))
+
+
+### Documentation
+
+* comprehensive markdown audit — 36 files updated, 2 removed ([60c0a1a](https://github.com/Willow7737/omnia-protocol/commit/60c0a1ae41632dea72d06f53085b63bac4af1583))
+* comprehensive markdown audit — 36 files updated, 2 removed ([e28696c](https://github.com/Willow7737/omnia-protocol/commit/e28696c1ccc267a9bb75fd664683f0ae13388eda))
+
+
+### Tests
+
+* mark deprecated-dkg test_dkg_phase_transitions as #[ignore] ([0feb0c3](https://github.com/Willow7737/omnia-protocol/commit/0feb0c3396219bab5026445425f6cad986958029))
+
+
+### CI
+
+* bump actions/checkout from v4 to v5 (Node.js 20 deprecation) ([6d37603](https://github.com/Willow7737/omnia-protocol/commit/6d37603cb6553af509079ab26977dff4aadd028f))
+* bump actions/upload-artifact and download-artifact from v4 to v5 ([3033b84](https://github.com/Willow7737/omnia-protocol/commit/3033b841639d2595ea882d4a1f1a3bdccd8dfa1f))
+
 ## [0.1.70](https://github.com/Willow7737/omnia-protocol/compare/v0.1.69...v0.1.70) (2026-06-19)
 
 
