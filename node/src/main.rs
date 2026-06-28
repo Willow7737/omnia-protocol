@@ -251,11 +251,7 @@ async fn main() -> Result<()> {
     // Shard trait to accept Arc-wrapped state. Tracked as a follow-up
     // to C3 (wire API mutations through consensus so there's only one
     // mutation path).
-    let shard_router = create_shard_router(
-        Some(config.nonce_dir().as_path()),
-        economics.clone(),
-        node_pubkey_bytes,
-    )?;
+    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()), economics.clone(), node_pubkey_bytes)?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
     // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
