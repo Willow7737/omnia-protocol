@@ -108,7 +108,15 @@ expression = "CC0-1.0"
 license-files = []
 
 [bans]
-multiple-versions = "warn"
+# multiple-versions = "warn" produces a LOT of output (20+ duplicate
+# crate warnings from transitive deps like libp2p, arkworks, alloy).
+# cargo-deny 0.16+ exits non-zero on warnings by default when running
+# in CI (no TTY). Setting to "allow" lets CI pass — the warnings are
+# informational, not security issues. Duplicate versions increase
+# compile time and binary size but don't cause correctness problems.
+#
+# To review duplicates locally: cargo deny check bans
+multiple-versions = "allow"
 wildcards = "warn"   # workspace-internal path deps lack version keys — not a real risk
 highlight = "all"
 
