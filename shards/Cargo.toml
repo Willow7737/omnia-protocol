@@ -31,6 +31,10 @@ redb = "2"
 
 [features]
 default = []
+# Production mode: enables fail-closed behavior for security-critical
+# paths (e.g. cross-shard source_signature verification). Mirrors the
+# same feature in economics/Cargo.toml.
+production = []
 # Real ZK/SNARK proof verification using ark-groth16.
 # When disabled (default), proof verification is a no-op placeholder.
 real_verification = [
