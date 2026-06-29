@@ -2075,9 +2075,7 @@ impl SlashingEngine {
                 validator_id: *id,
                 round: current_round,
                 offense: Some(SlashOffense::LivenessViolation),
-                penalty: Some(SlashPenalty::Warning {
-                    burn_percentage_bps: 0,
-                }),
+                penalty: Some(SlashPenalty::Warning { burn_percentage_bps: 0 }),
                 timestamp: current_timestamp(),
             });
         }
