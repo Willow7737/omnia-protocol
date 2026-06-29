@@ -25,7 +25,7 @@ A comprehensive architecture audit identified 8 critical, 10 high-severity, and 
 | H3 | Dual competing redb stores | TRUE | `RedbSlashingStore` + `RedbConsensusStore` with non-atomic cross-store writes. |
 | H4 | SlashingBackend trait design conflict | TRUE | Trait requires `&mut self` but `SlashingEngine` is `Clone + Arc<RwLock<>>`. |
 | H5 | Lock-then-IO TOCTOU in SlashingEngine | TRUE | Drop write lock, re-acquire read for `persist_state()`. |
-| H6 | cargo-vet is decorative | **PARTIAL** | `continue-on-error: true` was real. **Fixed.** But audit exaggerated: 281 exemptions (not 567), all with substantive notes (≥30 chars). |
+| H6 | cargo-vet is decorative | **PARTIAL** | `continue-on-error: true` was real. Re-added with honest tracking doc (`docs/audit/cargo-vet-gap.md`) listing 222 unvetted deps. The gate is intentionally non-blocking until deps are actually audited. 567 exemptions exist in `supply-chain/config.toml`, all with notes. |
 | H7 | Self-authored audit | TRUE | No external firm engaged. Documentation-only fix. |
 | H8 | Bus factor of 1 | TRUE | CODEOWNERS = `* @Willow7737`. |
 | H9 | Helm OMNIA_NODE_ID bug | TRUE | **Fixed:** command override extracts ordinal from pod name. |
@@ -42,7 +42,7 @@ A comprehensive architecture audit identified 8 critical, 10 high-severity, and 
 
 ### High
 
-- **H6:** Removed `continue-on-error: true` from the cargo-vet CI step. The gate now enforces.
+- **H6:** Initially removed `continue-on-error: true`, but this exposed 222 unvetted dependencies (ark-ff, aws-lc-rs, secp256k1, etc.) that have no audit entry. Re-added `continue-on-error: true` with an honest comment and created `docs/audit/cargo-vet-gap.md` tracking the 222 deps. The gate is intentionally non-blocking until the deps are actually audited — marking them `safe-to-deploy` without review would be dishonest. 567 exemptions exist in `supply-chain/config.toml`, all with substantive notes.
 - **H9:** Helm `deployment.yaml` now uses a command override (`/bin/sh -c`) to extract the pod ordinal from `metadata.name` and derive `OMNIA_NODE_ID` as `ordinal + 1`. The previous `valueFrom: fieldRef: metadata.name` produced strings like `"omnia-node-0"` which failed `u64` parsing.
 - **H10:** `FinancialShard::new_with_state(FinancialState::with_mint_authority(node_pubkey))` — the node's public key is now the mint authority. Previously `mint_authority: None` blocked all minting.
 

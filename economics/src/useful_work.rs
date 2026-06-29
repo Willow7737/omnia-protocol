@@ -123,11 +123,36 @@ impl UsefulWorkProof {
     /// work was verified. This replaces the previous stub that only checked
     /// `result_hash != [0;32]` (non-cryptographic).
     ///
+    /// F-6 caveat (architecture audit 2026-06-29): The verifier signature
+    /// proves that a trusted verifier ATTESTED to the work — it does NOT
+    /// prove that the work was actually done. Real PoUW verification
+    /// (zkML for AI training, folding schemes for scientific computation)
+    /// is not yet implemented. In production, PoUW reward minting should
+    /// be gated behind `OMNIA_ALLOW_UNVERIFIED_POUW=1` until real
+    /// verification lands.
+    ///
     /// In production mode, real Ed25519 verification is always performed.
     /// In non-production mode, if the verifier_signature is empty, a
     /// warning is logged and the proof is accepted (testing mode). If
     /// the signature is non-empty, it is verified cryptographically.
     pub fn verify(&self, verifier_pubkey: &[u8; 32]) -> bool {
+        // F-6 fix: in production, require explicit opt-in for PoUW rewards
+        // since real work verification is not yet implemented.
+        #[cfg(feature = "production")]
+        {
+            let allow_unverified = std::env::var("OMNIA_ALLOW_UNVERIFIED_POUW")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            if !allow_unverified {
+                tracing::error!(
+                    "PoUW proof rejected — set OMNIA_ALLOW_UNVERIFIED_POUW=1 to accept \
+                     attested-but-unverified work proofs in production. Real PoUW verification \
+                     (zkML/folding) is not yet implemented."
+                );
+                return false;
+            }
+        }
+
         // Construct the message that the verifier should have signed:
         // result_hash (32 bytes) || compute_units_consumed (8 bytes LE)
         let mut message = Vec::with_capacity(40);

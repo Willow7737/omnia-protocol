@@ -142,21 +142,20 @@ pub enum SlashOutcome {
 /// Graded penalty system for graduated slashing.
 ///
 /// # Non-Determinism Warning
-/// The `burn_percentage: f64` field uses floating-point arithmetic which is
-/// non-deterministic across platforms (x86 vs ARM). In a blockchain context,
-/// different nodes may compute different slash amounts. Consider migrating to
-/// fixed-point (basis points as u64 where 10000 = 100%) in a future version.
+/// The `burn_percentage_bps: u64` field uses basis-point arithmetic (10000 = 100%)
+/// for deterministic cross-platform results. F-20 fix — previously used f64
+/// which is non-deterministic across x86/ARM/SSE/AVX.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SlashPenalty {
     /// First offense below threshold: warning + small stake burn.
     Warning {
-        /// Percentage of staked amount to burn (e.g., 1.0 = 1%).
-        burn_percentage: f64,
+        /// Percentage of staked amount to burn, in basis points (10000 = 100%, 100 = 1%).
+        burn_percentage_bps: u64,
     },
     /// Repeated offenses: partial slash + jail period.
     Jailed {
-        /// Percentage of staked amount to burn (e.g., 5.0 = 5%).
-        burn_percentage: f64,
+        /// Percentage of staked amount to burn, in basis points (10000 = 100%, 500 = 5%).
+        burn_percentage_bps: u64,
         /// Number of rounds the validator is jailed.
         jail_rounds: u64,
         /// Whether jail expires automatically.
@@ -164,8 +163,8 @@ pub enum SlashPenalty {
     },
     /// Egregious or accumulated: full slash + ejection.
     Ejected {
-        /// Percentage of staked amount to burn (100% = full slash).
-        burn_percentage: f64,
+        /// Percentage of staked amount to burn, in basis points (10000 = 100%).
+        burn_percentage_bps: u64,
         /// Reason for ejection.
         reason: String,
     },
@@ -412,11 +411,37 @@ impl RedbSlashingStore {
         // would prevent the node from starting at all, which is worse for
         // liveness than losing slash history (the operator can manually
         // review the .corrupt file and re-apply slashes if needed).
+        //
+        // F-26 fix: require explicit operator opt-in via
+        // OMNIA_ALLOW_SLASHING_DB_RESET=1 before auto-recovering. Without
+        // the env var, the node halts and requires manual intervention.
+        // This prevents a Byzantine validator with disk write access from
+        // intentionally corrupting their own slashing DB to clear their
+        // slash history.
         let db = match redb::Database::create(path) {
             Ok(db) => db,
             Err(e) => {
-                // Backup corrupt file (best-effort — if rename fails, we
-                // still try to create fresh).
+                // F-26 fix: check for explicit operator opt-in
+                let allow_reset = std::env::var("OMNIA_ALLOW_SLASHING_DB_RESET")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+
+                if !allow_reset {
+                    tracing::error!(
+                        corrupt_path = %path.display(),
+                        original_error = %e,
+                        "Slashing database is corrupt. Refusing to auto-recover without \
+                         OMNIA_ALLOW_SLASHING_DB_RESET=1 env var. \
+                         To recover: (1) review the corrupt file, (2) set the env var, \
+                         (3) restart the node. Halting."
+                    );
+                    return Err(SlashingStoreError::Persistence(format!(
+                        "Slashing DB at {} is corrupt. Set OMNIA_ALLOW_SLASHING_DB_RESET=1 to auto-recover (loses slash history). Error: {}",
+                        path.display(), e
+                    )));
+                }
+
+                // Operator has opted in — backup corrupt file and start fresh
                 let backup = path.with_extension("db.corrupt");
                 if let Err(rename_err) = std::fs::rename(path, &backup) {
                     tracing::error!(
@@ -431,7 +456,8 @@ impl RedbSlashingStore {
                     corrupt_backup = %backup.display(),
                     original_error = %e,
                     "Slashing database was corrupt — renamed to .corrupt and starting fresh. \
-                     ALL SLASH HISTORY IS LOST. Manual review required before rejoining consensus."
+                     ALL SLASH HISTORY IS LOST. Manual review required before rejoining consensus. \
+                     (OMNIA_ALLOW_SLASHING_DB_RESET=1 was set)"
                 );
                 redb::Database::create(path).map_err(|e2| SlashingStoreError::Persistence(e2.to_string()))?
             }
@@ -1514,19 +1540,19 @@ impl SlashingEngine {
                 // 3rd+ (2+ prior) → Ejected(100%)
                 if same_type_count == 0 {
                     SlashPenalty::Jailed {
-                        burn_percentage: 5.0,
+                        burn_percentage_bps: 500, // 5%
                         jail_rounds: 1000,
                         auto_release: true,
                     }
                 } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
-                        burn_percentage: 25.0,
+                        burn_percentage_bps: 2500, // 25%
                         jail_rounds: 5000,
                         auto_release: false,
                     }
                 } else {
                     SlashPenalty::Ejected {
-                        burn_percentage: 100.0,
+                        burn_percentage_bps: 10000, // 100%
                         reason: "repeat_equivocation".into(),
                     }
                 }
@@ -1536,10 +1562,12 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Warning(1%)
                 // 3rd+ (2+ prior) → Jailed(5%, 500 rounds, auto-release)
                 if same_type_count < 2 {
-                    SlashPenalty::Warning { burn_percentage: 1.0 }
+                    SlashPenalty::Warning {
+                        burn_percentage_bps: 100,
+                    } // 1%
                 } else {
                     SlashPenalty::Jailed {
-                        burn_percentage: 5.0,
+                        burn_percentage_bps: 500, // 5%
                         jail_rounds: 500,
                         auto_release: true,
                     }
@@ -1550,16 +1578,18 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Jailed(10%, 2000 rounds, auto-release)
                 // 3rd+ (2+ prior) → Ejected(100%)
                 if same_type_count == 0 {
-                    SlashPenalty::Warning { burn_percentage: 2.0 }
+                    SlashPenalty::Warning {
+                        burn_percentage_bps: 200,
+                    } // 2%
                 } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
-                        burn_percentage: 10.0,
+                        burn_percentage_bps: 1000, // 10%
                         jail_rounds: 2000,
                         auto_release: true,
                     }
                 } else {
                     SlashPenalty::Ejected {
-                        burn_percentage: 100.0,
+                        burn_percentage_bps: 10000, // 100%
                         reason: "repeat_invalid_attestation".into(),
                     }
                 }
@@ -1723,7 +1753,7 @@ impl SlashingEngine {
     /// file for coverage are TEST-ONLY code and do NOT introduce any
     /// new f64 usage in consensus-critical paths. The only f64
     /// references in new code are test-assertion values
-    /// (e.g., `burn_percentage: 1.0` in `assert!(matches!(...))`),
+    /// (e.g., `burn_percentage_bps: 100` in `assert!(matches!(...))`),
     /// which are not on the consensus critical path.
     pub fn compute_burn_amount(stake: u64, burn_percentage: f64) -> u64 {
         // P0-4 fix: The f64→u128 conversion (`burn_percentage * 100.0`) is
@@ -1779,9 +1809,9 @@ impl SlashingEngine {
     ///
     /// The absolute burn amount. Returns `0` if the validator is not
     /// registered (has no stake).
-    fn burn_amount_for(&self, validator_id: NodeId, burn_percentage: f64) -> u64 {
+    fn burn_amount_for(&self, validator_id: NodeId, burn_percentage_bps: u64) -> u64 {
         let stake = self.stake_of(&validator_id);
-        Self::compute_burn_amount(stake, burn_percentage)
+        Self::compute_burn_amount_bp(stake, burn_percentage_bps)
     }
 
     /// Compute the burn amount for a specific validator given a burn percentage.
@@ -1808,18 +1838,18 @@ impl SlashingEngine {
     /// let node = [1u8; 32];
     ///
     /// // Unregistered → None
-    /// assert!(engine.compute_burn_amount_for(node, 5.0).is_none());
+    /// assert!(engine.compute_burn_amount_for(node, 500).is_none());
     ///
     /// engine.register_validator(node, 10_000);
-    /// // 5% of 10_000 = 500
-    /// assert_eq!(engine.compute_burn_amount_for(node, 5.0), Some(500));
+    /// // 5% of 10_000 = 500 (500 bps = 5%)
+    /// assert_eq!(engine.compute_burn_amount_for(node, 500), Some(500));
     /// ```
-    pub fn compute_burn_amount_for(&self, validator_id: NodeId, burn_percentage: f64) -> Option<u64> {
+    pub fn compute_burn_amount_for(&self, validator_id: NodeId, burn_percentage_bps: u64) -> Option<u64> {
         let stake = self.stake_of(&validator_id);
         if stake == 0 {
             return None;
         }
-        Some(Self::compute_burn_amount(stake, burn_percentage))
+        Some(Self::compute_burn_amount_bp(stake, burn_percentage_bps))
     }
 
     /// Record an offense and apply the graded penalty per ADR-011.
@@ -1872,9 +1902,9 @@ impl SlashingEngine {
 
         // 2. Apply the penalty based on its tier
         match &penalty {
-            SlashPenalty::Warning { burn_percentage } => {
+            SlashPenalty::Warning { burn_percentage_bps } => {
                 // Record offense, emit warning event, compute small burn
-                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage);
+                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage_bps);
 
                 // Record the offense (accumulates points and typed history)
                 let _outcome = self.record_offense(validator_id, offense);
@@ -1894,7 +1924,7 @@ impl SlashingEngine {
                     round: current_round,
                     offense: Some(offense),
                     penalty: Some(SlashPenalty::Warning {
-                        burn_percentage: *burn_percentage,
+                        burn_percentage_bps: *burn_percentage_bps,
                     }),
                     timestamp: current_timestamp(),
                 });
@@ -1907,11 +1937,11 @@ impl SlashingEngine {
             }
 
             SlashPenalty::Jailed {
-                burn_percentage,
+                burn_percentage_bps,
                 jail_rounds,
                 auto_release,
             } => {
-                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage);
+                let burn_amount = self.burn_amount_for(validator_id, *burn_percentage_bps);
 
                 // Record the offense (accumulates points and typed history)
                 let _outcome = self.record_offense(validator_id, offense);
@@ -1967,7 +1997,7 @@ impl SlashingEngine {
             }
 
             SlashPenalty::Ejected {
-                burn_percentage: _,
+                burn_percentage_bps: _,
                 reason: _,
             } => {
                 // Record the offense (accumulates points and typed history)
@@ -2045,7 +2075,7 @@ impl SlashingEngine {
                 validator_id: *id,
                 round: current_round,
                 offense: Some(SlashOffense::LivenessViolation),
-                penalty: Some(SlashPenalty::Warning { burn_percentage: 0.0 }),
+                penalty: Some(SlashPenalty::Warning { burn_percentage_bps: 0 }),
                 timestamp: current_timestamp(),
             });
         }
@@ -2367,7 +2397,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 ..
             }
         ));
@@ -2378,7 +2408,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 25.0,
+                burn_percentage_bps: 2500,
                 ..
             }
         ));
@@ -2499,7 +2529,12 @@ mod tests {
 
         // First liveness: Warning
         let penalty = engine.compute_penalty(node, &SlashOffense::LivenessViolation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 1.0 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 100
+            }
+        ));
     }
 
     // ── Graded slashing (ADR-011) tests ────────────────────────────
@@ -2612,7 +2647,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 jail_rounds: 1000,
                 auto_release: true,
             }
@@ -2620,7 +2655,12 @@ mod tests {
 
         // Similarly, first InvalidAttestation should be Warning(2%)
         let penalty = engine.compute_penalty(node, &SlashOffense::InvalidAttestation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 2.0 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 200
+            }
+        ));
     }
 
     #[test]
@@ -2851,7 +2891,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 jail_rounds: 1000,
                 auto_release: true,
             }
@@ -2862,7 +2902,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 jail_rounds: 500,
                 auto_release: true,
             }
@@ -2876,15 +2916,15 @@ mod tests {
         engine.register_validator(node, 10_000);
 
         // 5% of 10_000 = 500
-        assert_eq!(engine.burn_amount_for(node, 5.0), 500);
+        assert_eq!(engine.burn_amount_for(node, 500), 500);
         // 1% of 10_000 = 100
-        assert_eq!(engine.burn_amount_for(node, 1.0), 100);
+        assert_eq!(engine.burn_amount_for(node, 100), 100);
         // 25% of 10_000 = 2500
-        assert_eq!(engine.burn_amount_for(node, 25.0), 2500);
+        assert_eq!(engine.burn_amount_for(node, 2500), 2500);
 
         // Unregistered validator: 0 stake → 0 burn
         let unregistered = [0xFF; 32];
-        assert_eq!(engine.burn_amount_for(unregistered, 5.0), 0);
+        assert_eq!(engine.burn_amount_for(unregistered, 500), 0);
     }
 
     #[test]
@@ -2948,13 +2988,13 @@ mod tests {
         engine.register_validator(v, 10_000);
 
         // Registered validator: returns Some(amount)
-        assert_eq!(engine.compute_burn_amount_for(v, 5.0), Some(500));
-        assert_eq!(engine.compute_burn_amount_for(v, 1.0), Some(100));
-        assert_eq!(engine.compute_burn_amount_for(v, 100.0), Some(10_000));
+        assert_eq!(engine.compute_burn_amount_for(v, 500), Some(500));
+        assert_eq!(engine.compute_burn_amount_for(v, 100), Some(100));
+        assert_eq!(engine.compute_burn_amount_for(v, 10000), Some(10_000));
 
         // Unregistered validator: returns None
         let unregistered = [0xF1; 32];
-        assert_eq!(engine.compute_burn_amount_for(unregistered, 5.0), None);
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 500), None);
     }
 
     #[test]
@@ -3117,7 +3157,7 @@ mod tests {
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 jail_rounds: 1000,
                 auto_release: true,
             }
@@ -3125,14 +3165,19 @@ mod tests {
 
         // First invalid attestation should be 1st-tier: Warning(2%)
         let penalty = engine.compute_penalty(v, &SlashOffense::InvalidAttestation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage: 2.0 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 200
+            }
+        ));
 
         // But 3rd liveness should be 3rd-tier: Jailed(5%, 500 rounds)
         let penalty = engine.compute_penalty(v, &SlashOffense::LivenessViolation);
         assert!(matches!(
             penalty,
             SlashPenalty::Jailed {
-                burn_percentage: 5.0,
+                burn_percentage_bps: 500,
                 jail_rounds: 500,
                 auto_release: true,
             }
@@ -3479,7 +3524,7 @@ mod tests {
         // validator (stake == 0).
         let engine = SlashingEngine::new_in_memory(500, 2000);
         let unregistered = node(99);
-        assert_eq!(engine.compute_burn_amount_for(unregistered, 50.0), None);
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 5000), None);
     }
 
     #[test]
@@ -3488,9 +3533,9 @@ mod tests {
         let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 1_000);
-        assert_eq!(engine.compute_burn_amount_for(n, 10.0), Some(100));
+        assert_eq!(engine.compute_burn_amount_for(n, 1000), Some(100));
         // Also verify a 0% burn on a registered validator returns Some(0).
-        assert_eq!(engine.compute_burn_amount_for(n, 0.0), Some(0));
+        assert_eq!(engine.compute_burn_amount_for(n, 0), Some(0));
     }
 
     #[test]
@@ -3657,7 +3702,9 @@ mod tests {
                 validator_id: v,
                 round,
                 offense: Some(SlashOffense::Equivocation),
-                penalty: Some(SlashPenalty::Warning { burn_percentage: 1.0 }),
+                penalty: Some(SlashPenalty::Warning {
+                    burn_percentage_bps: 100,
+                }),
                 timestamp: ts,
             });
         }

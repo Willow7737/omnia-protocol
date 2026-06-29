@@ -296,14 +296,28 @@ impl GossipProtocol {
     /// network task (running in a spawned task) picks it up and calls
     /// OmniaNetwork::publish(). This works even after start() because
     /// the command channel is independent of the Swarm ownership.
+    ///
+    /// F-21 fix: This method is called by Substrate::submit_event AFTER
+    /// the event has already been inserted into the graph. The previous
+    /// implementation called graph.insert(event.clone()) again here,
+    /// which returned Err(DuplicateEvent) and caused every local-event
+    /// submission to fail when gossip was initialized.
+    ///
+    /// The graph insert has been removed. Callers that need to insert
+    /// AND broadcast should call Substrate::submit_event (which does
+    /// both in the correct order). Callers that need to broadcast an
+    /// already-inserted event (e.g., relaying a remote event) can call
+    /// this method directly.
     pub async fn broadcast_event(&mut self, event: Event) -> Result<(), GossipError> {
-        // Add to our graph first
-        {
-            let mut graph = self.graph.write().await;
-            graph
-                .insert(event.clone())
-                .map_err(|e| GossipError::GraphError(e.to_string()))?;
-        }
+        // F-21 fix: do NOT re-insert the event into the graph here.
+        // Substrate::submit_event already inserted it. Re-inserting
+        // returns Err(DuplicateEvent) which propagates as a GossipError
+        // and fails the entire submit_event call.
+        //
+        // The original comment "Add to our graph first" was correct
+        // when broadcast_event was the only insertion path, but
+        // Substrate::submit_event was later wired to insert first,
+        // creating a double-insert.
 
         // Send publish command to the network task
         let bytes = event

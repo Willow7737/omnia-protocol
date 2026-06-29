@@ -230,15 +230,35 @@ impl ShardRouter {
         // absent so operators can monitor for unsigned messages in
         // production. Test builds continue to accept unsigned messages
         // for backward compatibility with existing test fixtures.
+        // F-13 fix: in production builds, reject cross-shard messages
+        // without a source_signature. The previous code only logged a
+        // warning — any peer could fabricate a CrossShardMessage with
+        // an arbitrary payload and inject it into the target shard's
+        // state machine. Now production builds fail-closed.
+        //
+        // Non-production builds still accept unsigned messages for
+        // backward compatibility with test fixtures.
         if msg.source_signature.is_none() {
-            tracing::warn!(
-                source_shard = ?msg.source_shard,
-                target_shard = ?msg.target_shard,
-                "cross-shard message has no source_signature — accepting for \
-                 backward compat, but production deployments should reject \
-                 unsigned messages once the source-pubkey registry is wired \
-                 in (see P0-6 fix in shards/src/router.rs)"
-            );
+            #[cfg(feature = "production")]
+            {
+                tracing::error!(
+                    source_shard = ?msg.source_shard,
+                    target_shard = ?msg.target_shard,
+                    "cross-shard message rejected — no source_signature (production mode)"
+                );
+                return Err(ShardError::ValidationFailed(
+                    "cross-shard message missing source_signature in production mode".into(),
+                ));
+            }
+            #[cfg(not(feature = "production"))]
+            {
+                tracing::warn!(
+                    source_shard = ?msg.source_shard,
+                    target_shard = ?msg.target_shard,
+                    "cross-shard message has no source_signature — accepting in \
+                     non-production mode. Production builds reject unsigned messages."
+                );
+            }
         }
 
         // SECURITY: Verify cross-shard causal proof before processing.
@@ -476,12 +496,10 @@ impl Default for ShardRouter {
     }
 }
 
-// The EventProcessor trait lives in the deprecated omnia-substrate crate.
-// Allow deprecated usage here since this impl provides backward compatibility
-// for consumers that still reference the substrate layer.
-#[allow(deprecated)]
+// F-23 fix: removed stale #[allow(deprecated)] markers. The EventProcessor
+// trait and the omnia-substrate crate have no #[deprecated] attribute —
+// the markers were left over from a previous deprecation that was reverted.
 impl omnia_substrate::EventProcessor for ShardRouter {
-    #[allow(deprecated)]
     fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
         self.route_event(event).map_err(|e| match e {
             ShardError::DeserializationError(msg) => omnia_substrate::EventProcessorError::Deserialization(msg),
@@ -547,9 +565,8 @@ impl MutexShardRouter {
     }
 }
 
-#[allow(deprecated)]
+// F-23 fix: removed stale #[allow(deprecated)] — see comment above.
 impl omnia_substrate::EventProcessor for MutexShardRouter {
-    #[allow(deprecated)]
     fn process_event(&mut self, event: &Event) -> Result<(), omnia_substrate::EventProcessorError> {
         let mut guard = self
             .inner
