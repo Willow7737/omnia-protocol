@@ -1562,7 +1562,9 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Warning(1%)
                 // 3rd+ (2+ prior) → Jailed(5%, 500 rounds, auto-release)
                 if same_type_count < 2 {
-                    SlashPenalty::Warning { burn_percentage_bps: 100 } // 1%
+                    SlashPenalty::Warning {
+                        burn_percentage_bps: 100,
+                    } // 1%
                 } else {
                     SlashPenalty::Jailed {
                         burn_percentage_bps: 500, // 5%
@@ -1576,7 +1578,9 @@ impl SlashingEngine {
                 // 2nd (1 prior) → Jailed(10%, 2000 rounds, auto-release)
                 // 3rd+ (2+ prior) → Ejected(100%)
                 if same_type_count == 0 {
-                    SlashPenalty::Warning { burn_percentage_bps: 200 } // 2%
+                    SlashPenalty::Warning {
+                        burn_percentage_bps: 200,
+                    } // 2%
                 } else if same_type_count == 1 {
                     SlashPenalty::Jailed {
                         burn_percentage_bps: 1000, // 10%
@@ -2071,7 +2075,9 @@ impl SlashingEngine {
                 validator_id: *id,
                 round: current_round,
                 offense: Some(SlashOffense::LivenessViolation),
-                penalty: Some(SlashPenalty::Warning { burn_percentage_bps: 0 }),
+                penalty: Some(SlashPenalty::Warning {
+                    burn_percentage_bps: 0,
+                }),
                 timestamp: current_timestamp(),
             });
         }
@@ -2525,7 +2531,12 @@ mod tests {
 
         // First liveness: Warning
         let penalty = engine.compute_penalty(node, &SlashOffense::LivenessViolation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage_bps: 100 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 100
+            }
+        ));
     }
 
     // ── Graded slashing (ADR-011) tests ────────────────────────────
@@ -2646,7 +2657,12 @@ mod tests {
 
         // Similarly, first InvalidAttestation should be Warning(2%)
         let penalty = engine.compute_penalty(node, &SlashOffense::InvalidAttestation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage_bps: 200 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 200
+            }
+        ));
     }
 
     #[test]
@@ -2902,15 +2918,15 @@ mod tests {
         engine.register_validator(node, 10_000);
 
         // 5% of 10_000 = 500
-        assert_eq!(engine.burn_amount_for(node, 5.0), 500);
+        assert_eq!(engine.burn_amount_for(node, 500), 500);
         // 1% of 10_000 = 100
-        assert_eq!(engine.burn_amount_for(node, 1.0), 100);
+        assert_eq!(engine.burn_amount_for(node, 100), 100);
         // 25% of 10_000 = 2500
-        assert_eq!(engine.burn_amount_for(node, 25.0), 2500);
+        assert_eq!(engine.burn_amount_for(node, 2500), 2500);
 
         // Unregistered validator: 0 stake → 0 burn
         let unregistered = [0xFF; 32];
-        assert_eq!(engine.burn_amount_for(unregistered, 5.0), 0);
+        assert_eq!(engine.burn_amount_for(unregistered, 500), 0);
     }
 
     #[test]
@@ -2974,13 +2990,13 @@ mod tests {
         engine.register_validator(v, 10_000);
 
         // Registered validator: returns Some(amount)
-        assert_eq!(engine.compute_burn_amount_for(v, 5.0), Some(500));
-        assert_eq!(engine.compute_burn_amount_for(v, 1.0), Some(100));
-        assert_eq!(engine.compute_burn_amount_for(v, 100.0), Some(10_000));
+        assert_eq!(engine.compute_burn_amount_for(v, 500), Some(500));
+        assert_eq!(engine.compute_burn_amount_for(v, 100), Some(100));
+        assert_eq!(engine.compute_burn_amount_for(v, 10000), Some(10_000));
 
         // Unregistered validator: returns None
         let unregistered = [0xF1; 32];
-        assert_eq!(engine.compute_burn_amount_for(unregistered, 5.0), None);
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 500), None);
     }
 
     #[test]
@@ -3151,7 +3167,12 @@ mod tests {
 
         // First invalid attestation should be 1st-tier: Warning(2%)
         let penalty = engine.compute_penalty(v, &SlashOffense::InvalidAttestation);
-        assert!(matches!(penalty, SlashPenalty::Warning { burn_percentage_bps: 200 }));
+        assert!(matches!(
+            penalty,
+            SlashPenalty::Warning {
+                burn_percentage_bps: 200
+            }
+        ));
 
         // But 3rd liveness should be 3rd-tier: Jailed(5%, 500 rounds)
         let penalty = engine.compute_penalty(v, &SlashOffense::LivenessViolation);
@@ -3505,7 +3526,7 @@ mod tests {
         // validator (stake == 0).
         let engine = SlashingEngine::new_in_memory(500, 2000);
         let unregistered = node(99);
-        assert_eq!(engine.compute_burn_amount_for(unregistered, 50.0), None);
+        assert_eq!(engine.compute_burn_amount_for(unregistered, 5000), None);
     }
 
     #[test]
@@ -3514,9 +3535,9 @@ mod tests {
         let mut engine = SlashingEngine::new_in_memory(500, 2000);
         let n = node(1);
         engine.register_validator(n, 1_000);
-        assert_eq!(engine.compute_burn_amount_for(n, 10.0), Some(100));
+        assert_eq!(engine.compute_burn_amount_for(n, 1000), Some(100));
         // Also verify a 0% burn on a registered validator returns Some(0).
-        assert_eq!(engine.compute_burn_amount_for(n, 0.0), Some(0));
+        assert_eq!(engine.compute_burn_amount_for(n, 0), Some(0));
     }
 
     #[test]
@@ -3683,7 +3704,9 @@ mod tests {
                 validator_id: v,
                 round,
                 offense: Some(SlashOffense::Equivocation),
-                penalty: Some(SlashPenalty::Warning { burn_percentage_bps: 100 }),
+                penalty: Some(SlashPenalty::Warning {
+                    burn_percentage_bps: 100,
+                }),
                 timestamp: ts,
             });
         }
