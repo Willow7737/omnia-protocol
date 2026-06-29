@@ -9,6 +9,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.78](https://github.com/Willow7737/omnia-protocol/compare/v0.1.77...v0.1.78) (2026-06-29)
+
+
+### Bug Fixes
+
+* **audit:** resolve 10 findings from architecture design flaw audit ([14e8753](https://github.com/Willow7737/omnia-protocol/commit/14e875389ec53f598b02ccf20ddc779ca404a391))
+* **audit:** resolve 10 findings from architecture design flaw audit ([fcd7107](https://github.com/Willow7737/omnia-protocol/commit/fcd7107df90da63423e94b1e1044bee194173c81))
+* **ci:** re-add cargo-vet continue-on-error with honest tracking doc ([dbc73bb](https://github.com/Willow7737/omnia-protocol/commit/dbc73bb1c19b36842eab845c3beada1622180cb2))
+* **ci:** remove omnia-binding from omnia-node deps in Cargo.lock ([181f97d](https://github.com/Willow7737/omnia-protocol/commit/181f97d7152bd1adfd872049cbb74f31223fbf9e))
+* **ci:** update Cargo.lock for 0.1.76 + fmt the create_shard_router call ([3c3cf08](https://github.com/Willow7737/omnia-protocol/commit/3c3cf0868ffc0d1c8ea0336e7b2414c372df5ea2))
+
 ## [0.1.77](https://github.com/Willow7737/omnia-protocol/compare/v0.1.76...v0.1.77) (2026-06-28)
 
 
