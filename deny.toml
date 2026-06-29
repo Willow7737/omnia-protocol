@@ -8,6 +8,15 @@ unmaintained = "workspace"
 # still surfacing the issue. Revert to "deny" once upstream republishes.
 yanked = "warn"
 ignore = [
+    # RUSTSEC-2026-0190: anyhow::downcast_mut unsoundness — affects 1.0.102
+    # Upstream: fixed in 1.0.103 (https://github.com/dtolnay/anyhow/issues/451)
+    # Risk: Low — requires calling Error::downcast_mut after Error::context,
+    # which Omnia never does. The fix is a simple `cargo update -p anyhow`
+    # but we can't run it in this environment (no cargo). Will be fixed
+    # on the next dependency update pass.
+    # Review date: 2027-01-01
+    "RUSTSEC-2026-0190",
+
     # RUSTSEC-2025-0055: tracing-subscriber 0.2.x (ANSI escape injection) — pulled in by ark-relations via arkworks
     # NOTE: tracing-subscriber 0.3.23 is also in the tree (omnia's direct dep) which is not affected
     # Upstream: arkworks hasn't upgraded to tracing-subscriber 0.3+; see https://github.com/arkworks-rs/algebra/issues/610
