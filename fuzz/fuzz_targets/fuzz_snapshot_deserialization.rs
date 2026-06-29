@@ -6,7 +6,8 @@
 //! handles tampered data gracefully.
 
 #![no_main]
-#![allow(deprecated)] // StateSnapshot still lives in omnia-substrate until extraction
+// F-23 fix: removed stale #![allow(deprecated)] — StateSnapshot has no
+// #[deprecated] attribute, and omnia-substrate is not a deprecated crate.
 
 use libfuzzer_sys::fuzz_target;
 use omnia_substrate::StateSnapshot;

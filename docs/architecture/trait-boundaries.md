@@ -15,19 +15,17 @@ The Omnia Protocol uses Rust traits to define strict boundaries between architec
 The `EventProcessor` trait defines how each shard processes events. Every domain shard implements this trait.
 
 ```rust
-pub trait EventProcessor {
-    fn validate(&self, event: &Event) -> Result<(), EventProcessorError>;
+pub trait EventProcessor: Send + Sync {
     fn process_event(&mut self, event: &Event) -> Result<(), EventProcessorError>;
-    fn state_snapshot(&self) -> Result<ShardState, EventProcessorError>;
 }
 ```
 
 **Key decisions (ADR-001):**
 
-- `validate()` takes `&self` (no mutation) — validation is side-effect-free
 - `process_event()` takes `&mut self` — explicit mutation
-- `state_snapshot()` takes `&self` — no hidden mutation through validate or snapshot
-- No interior mutability (`RefCell`, `Mutex`, etc.) — ensures deterministic state machines
+- The trait has a single method. Validation and state snapshot are handled by the `Shard` trait (see below), not `EventProcessor`. F-22 fix — the previous version of this doc showed a 3-method trait that never existed in the code.
+- `Send + Sync` bound — allows the processor to be shared across threads via `Arc<Mutex<>>`.
+- No interior mutability (`RefCell`, `Mutex`, etc.) in the trait itself — ensures deterministic state machines. The `MutexShardRouter` wrapper provides the outer `Arc<Mutex<>>` for thread safety.
 
 See [ADR-001](../reference/adr-index.md#adr-001-event-processor-trait) for the full decision record.
 

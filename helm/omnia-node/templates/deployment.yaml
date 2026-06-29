@@ -106,14 +106,33 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+      # F-14 fix: volumeClaimTemplates replaces the standalone PVC.
+      # The previous pvc.yaml created a single PVC referenced by name,
+      # which meant only pod 0 could mount it (ReadWriteOnce). With
+      # volumeClaimTemplates, each pod in the StatefulSet gets its own
+      # PVC (e.g. data-omnia-node-0, data-omnia-node-1), so multi-
+      # replica BFT deployments actually work.
+      {{- if .Values.persistence.enabled }}
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+            labels:
+              app: {{ include "omnia-node.name" . }}
+              release: {{ .Release.Name }}
+          spec:
+            accessModes:
+              - {{ .Values.persistence.accessMode }}
+            {{- if .Values.persistence.storageClass }}
+            storageClassName: {{ .Values.persistence.storageClass }}
+            {{- end }}
+            resources:
+              requests:
+                storage: {{ .Values.persistence.size }}
+      {{- else }}
       volumes:
         - name: data
-        {{- if .Values.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ include "omnia-node.fullname" . }}
-        {{- else }}
           emptyDir: {}
-        {{- end }}
+      {{- end }}
       nodeSelector:
         {{- toYaml .Values.nodeSelector | nindent 8 }}
       tolerations:
