@@ -9,6 +9,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.79](https://github.com/Willow7737/omnia-protocol/compare/v0.1.78...v0.1.79) (2026-06-29)
+
+
+### Bug Fixes
+
+* **audit:** resolve 9 findings from second architecture audit (F-1 to F-27) ([3f841f8](https://github.com/Willow7737/omnia-protocol/commit/3f841f87598aa320ae0998ceb5fbf1f2de2a3362))
+* **audit:** resolve 9 findings from second architecture audit (F-1 to F-27) ([5e222f3](https://github.com/Willow7737/omnia-protocol/commit/5e222f3b3f70c853657f986d271a7c43d72d1197))
+* **ci:** add production feature to shards crate for F-13 cfg gate ([10a3c10](https://github.com/Willow7737/omnia-protocol/commit/10a3c10622087c1026b8389b741e8991b748bd4d))
+* **ci:** bump anyhow to 1.0.103 + clean up deny.toml ([8fc27e2](https://github.com/Willow7737/omnia-protocol/commit/8fc27e2262b62ef2a4b8f31f666cd82ec16c967b))
+* **ci:** fix f64 test calls + fmt for F-20 burn_percentage_bps migration ([5fb2196](https://github.com/Willow7737/omnia-protocol/commit/5fb2196ad0c937681bf6ec3bad0c8ea99df411ba))
+* **ci:** revert anyhow to 1.0.102 + ignore RUSTSEC-2026-0190 ([0ded742](https://github.com/Willow7737/omnia-protocol/commit/0ded7429772a66b686553900c3fecf0792c7f6f6))
+* **ci:** set cargo-deny multiple-versions to allow ([f645d7c](https://github.com/Willow7737/omnia-protocol/commit/f645d7ca80a2f047811d94d37119c7ef602643ee))
+
 ## [0.1.78](https://github.com/Willow7737/omnia-protocol/compare/v0.1.77...v0.1.78) (2026-06-29)
 
 
