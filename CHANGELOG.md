@@ -9,6 +9,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.80](https://github.com/Willow7737/omnia-protocol/compare/v0.1.79...v0.1.80) (2026-06-30)
+
+
+### Bug Fixes
+
+* **audit:** resolve 6 findings from third-pass audit (NEW-C1 through NEW-L1) ([62855b5](https://github.com/Willow7737/omnia-protocol/commit/62855b502c031bd5618c0767daf88083582dde77))
+* **audit:** resolve 6 findings from third-pass audit (NEW-C1 through NEW-L1) ([25ac0ec](https://github.com/Willow7737/omnia-protocol/commit/25ac0ec8548a576427aa658bfc0e46567d561924))
+* **ci:** handle to_bytes() Result + fmt + dead_code warning ([dbe6237](https://github.com/Willow7737/omnia-protocol/commit/dbe62379342da02866b6e7487f3b4957ef9aee2e))
+* **ci:** remove unused import + clear env var in tests + use try_new ([1e663bb](https://github.com/Willow7737/omnia-protocol/commit/1e663bbe831c33a1ca1ddbd16cac801f7824cb3a))
+* **ci:** use InvalidTotalNodes variant + fmt fixes ([03033cf](https://github.com/Willow7737/omnia-protocol/commit/03033cf778bcecc1f256910ad085d697d3ee1e19))
+* **test:** generate real Ed25519 signature for PoUW test proof ([44687e8](https://github.com/Willow7737/omnia-protocol/commit/44687e8e0df052a8921b70f71ef59bb8d4e11691))
+* **test:** sign cross-shard messages in fee_enforcement tests ([7c68400](https://github.com/Willow7737/omnia-protocol/commit/7c6840054810847f6b2c0c38edb9f3d575d81625))
+* **test:** use same verifier keypair for state + proof signing ([4bedc3e](https://github.com/Willow7737/omnia-protocol/commit/4bedc3ecb62bd8c85ef59dab4e5aa32ebc157bcd))
+
 ## [0.1.79](https://github.com/Willow7737/omnia-protocol/compare/v0.1.78...v0.1.79) (2026-06-29)
 
 
