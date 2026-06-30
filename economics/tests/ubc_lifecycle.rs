@@ -10,11 +10,11 @@
 //! 6. Quadratic voting weight calculation
 //! 7. Reputation decay for inactive voters
 
+use ed25519_dalek::{Signature, Signer, SigningKey};
 use omnia_economics::{
     DecayRate, EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof, UsefulWorkType,
     VoteChoice, DEFAULT_UBC_QUOTA,
 };
-use ed25519_dalek::{Signature, Signer, SigningKey};
 
 /// Helper: create a non-zero result hash.
 fn nonzero_hash() -> [u8; 32] {
