@@ -77,10 +77,12 @@ impl CrossShardMessage {
             Ok(pk) => pk,
             Err(_) => return false,
         };
-        // Sign over the message payload + causal proof (excluding the signature itself)
+        // NEW-C1 fix: sign over BOTH payload AND causal_proof (not just payload).
+        // The previous code only signed self.payload, allowing an attacker to
+        // swap causal_proof without invalidating the signature.
         let mut signed_data = Vec::new();
         signed_data.extend_from_slice(&self.payload);
-        // Include causal proof bytes if serializable
+        signed_data.extend_from_slice(&self.causal_proof.to_bytes());
         pk.verify(&signed_data, &sig).is_ok()
     }
 }

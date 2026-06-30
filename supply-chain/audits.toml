@@ -49,11 +49,14 @@ criteria = "safe-to-deploy"
 version = "0.1.0"
 notes = "Core substrate layer — our own code."
 
-[[audits.omnia-zk]]
+# NEW-L1 fix: renamed omnia-zk → omnia-adapters (the crate was renamed
+# in Phase 2 but this audit entry was never updated). The stale entry
+# would never match any actual crate version in cargo-vet.
+[[audits.omnia-adapters]]
 who = "Omnia Protocol Contributors"
 criteria = "safe-to-deploy"
 version = "0.1.0"
-notes = "ZK rollup module — our own code."
+notes = "ZK rollup + settlement adapters — our own code."
 
 # ── Phase 3/4 dependency audits ──────────────────────────────────────────────
 

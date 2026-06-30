@@ -213,52 +213,45 @@ impl ShardRouter {
 
     /// Route a cross-shard message to its target shard.
     fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
-        // P0-6 fix: cross-shard messages now carry an optional
-        // `source_signature` proving they were authorized by the source
-        // shard's signing key. Without this, any peer could fabricate a
-        // `CrossShardMessage` with an arbitrary `payload` and inject it
-        // into the target shard's state machine (subject only to the
-        // causal-proof check, which is not a cryptographic guarantee of
-        // origin).
+        // NEW-C1 fix: the previous F-13 fix checked signature PRESENCE
+        // (is_none()) but never called verify_source_signature(). Any
+        // Some(random_bytes) passed. Now we:
+        //   1. Reject if source_signature is None (all builds, not just
+        //      production — there is no legitimate reason to accept
+        //      unsigned cross-shard messages in any build)
+        //   2. Verify the signature against the event creator's public key
         //
-        // TODO(cross-shard-auth): once a per-shard signing-key registry
-        // exists (wired through `ShardRouter`), look up the source
-        // shard's Ed25519 pubkey by `msg.source_shard` and call
-        // `msg.verify_source_signature(&pubkey)`. Reject the message
-        // with `ShardError::ValidationFailed` when verification fails.
-        // In the interim, we log a warning when `source_signature` is
-        // absent so operators can monitor for unsigned messages in
-        // production. Test builds continue to accept unsigned messages
-        // for backward compatibility with existing test fixtures.
-        // F-13 fix: in production builds, reject cross-shard messages
-        // without a source_signature. The previous code only logged a
-        // warning — any peer could fabricate a CrossShardMessage with
-        // an arbitrary payload and inject it into the target shard's
-        // state machine. Now production builds fail-closed.
+        // The event creator's pubkey is the node that originated the
+        // cross-shard message. In a multi-node setup, a per-shard signing
+        // key registry would be more correct, but for now the event
+        // creator's key is the right authority to check.
         //
-        // Non-production builds still accept unsigned messages for
-        // backward compatibility with test fixtures.
+        // Tests that need to send unsigned cross-shard messages should
+        // sign them with a test keypair and embed the signature.
         if msg.source_signature.is_none() {
-            #[cfg(feature = "production")]
-            {
-                tracing::error!(
-                    source_shard = ?msg.source_shard,
-                    target_shard = ?msg.target_shard,
-                    "cross-shard message rejected — no source_signature (production mode)"
-                );
-                return Err(ShardError::ValidationFailed(
-                    "cross-shard message missing source_signature in production mode".into(),
-                ));
-            }
-            #[cfg(not(feature = "production"))]
-            {
-                tracing::warn!(
-                    source_shard = ?msg.source_shard,
-                    target_shard = ?msg.target_shard,
-                    "cross-shard message has no source_signature — accepting in \
-                     non-production mode. Production builds reject unsigned messages."
-                );
-            }
+            tracing::error!(
+                source_shard = ?msg.source_shard,
+                target_shard = ?msg.target_shard,
+                "cross-shard message rejected — no source_signature"
+            );
+            return Err(ShardError::ValidationFailed(
+                "cross-shard message missing source_signature".into(),
+            ));
+        }
+
+        // NEW-C1 fix: actually verify the signature, not just check presence.
+        // The event creator's public key is the authority that should have
+        // signed the cross-shard message.
+        if !msg.verify_source_signature(&event.creator_pubkey) {
+            tracing::error!(
+                source_shard = ?msg.source_shard,
+                target_shard = ?msg.target_shard,
+                creator = ?&event.creator_pubkey[..4],
+                "cross-shard message rejected — source_signature verification failed"
+            );
+            return Err(ShardError::ValidationFailed(
+                "cross-shard message source_signature verification failed".into(),
+            ));
         }
 
         // SECURITY: Verify cross-shard causal proof before processing.
@@ -414,8 +407,29 @@ impl ShardRouter {
         // Only persist nonce and insert into in-memory map if operation succeeded
         if result.is_ok() {
             self.last_nonces.insert(creator, payload.nonce);
+            // NEW-M7 fix: on save_incremental failure, halt the node instead
+            // of logging a warning. The previous code silently diverged — the
+            // in-memory nonce map had the new nonce but the persistent store
+            // didn't. On restart, the stale persisted nonce allowed replay of
+            // all post-failure events. Now we fail-closed: the node halts so
+            // the operator can fix the disk issue before more events are
+            // processed.
             if let Err(e) = self.nonce_store.save_incremental(&creator, payload.nonce) {
-                tracing::warn!("Failed to persist nonce for creator: {}", e);
+                tracing::error!(
+                    creator = ?&creator[..4],
+                    error = %e,
+                    "CRITICAL: Failed to persist nonce — halting to prevent \
+                     replay attacks. Fix the disk issue and restart."
+                );
+                // Panic is intentional — this is a consensus-safety issue.
+                // Silent continuation would allow replay of processed events
+                // after restart.
+                panic!(
+                    "Nonce persistence failed for creator {:?}: {}. \
+                     Halting to prevent replay protection bypass. \
+                     Fix the disk issue and restart.",
+                    &creator[..4], e
+                );
             }
         }
 
