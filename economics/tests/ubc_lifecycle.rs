@@ -261,13 +261,11 @@ fn test_governance_inactive_voter() {
 #[cfg(not(feature = "production"))]
 fn test_economics_state_full_lifecycle() {
     let mut state = EconomicsState::new();
-    // Set a verifier pubkey so SubmitWork is accepted. In non-production
-    // mode the proof's signature is empty (testing-only path), so any
-    // well-formed 32-byte public key works.
-    let verifier_pubkey = {
-        let kp = omnia_substrate::crypto::generate_keypair();
-        kp.verifying_key().to_bytes()
-    };
+    // Set a verifier pubkey so SubmitWork is accepted. NEW-H1 fix: the
+    // verifier signature is now verified unconditionally, so we need a
+    // real keypair that we can also use to sign the proof.
+    let verifier_keypair = SigningKey::from_bytes(&[1u8; 32]);
+    let verifier_pubkey = verifier_keypair.verifying_key().to_bytes();
     state.set_verifier_pubkey(verifier_pubkey);
     let epoch = state.current_epoch();
 
@@ -310,12 +308,10 @@ fn test_economics_state_full_lifecycle() {
     // Step 3: Alice submits useful work for a reward.
     //
     // NEW-H1 fix: PoUW verification is now fail-closed unconditionally —
-    // empty verifier_signature is always rejected. We generate a real
-    // Ed25519 signature over result_hash || compute_units_consumed.
+    // empty verifier_signature is always rejected. We use the same
+    // verifier_keypair that was set on the state to sign the proof.
     let result_hash = nonzero_hash();
     let compute_units: u64 = 500;
-    let verifier_keypair = SigningKey::from_bytes(&[1u8; 32]);
-    let verifier_pubkey = verifier_keypair.verifying_key().to_bytes();
 
     // Sign result_hash (32 bytes) || compute_units_consumed (8 bytes LE)
     let mut message = Vec::with_capacity(40);
@@ -341,7 +337,7 @@ fn test_economics_state_full_lifecycle() {
                 proof,
             },
             epoch,
-            Some(&verifier_pubkey),
+            None,
         )
         .unwrap();
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300 + 500));
