@@ -428,7 +428,8 @@ impl ShardRouter {
                     "Nonce persistence failed for creator {:?}: {}. \
                      Halting to prevent replay protection bypass. \
                      Fix the disk issue and restart.",
-                    &creator[..4], e
+                    &creator[..4],
+                    e
                 );
             }
         }
