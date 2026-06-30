@@ -183,6 +183,10 @@ pub const TARGET_FINALITY_MS: u64 = 5_000;
 /// — especially those that surface errors to the operator (e.g. `main()`) —
 /// should use [`try_parse_consensus_seed`] instead, which returns a `Result`
 /// rather than silently falling back to a random seed on invalid hex.
+///
+/// NEW-M1: this function is now unused since SubstrateConfig::new() delegates
+/// to try_new(). Kept for backward compat with any external callers.
+#[allow(dead_code)]
 fn parse_consensus_seed() -> [u8; 32] {
     if let Ok(hex_seed) = std::env::var("OMNIA_CONSENSUS_SEED") {
         if hex_seed.len() == 64 {
@@ -517,9 +521,9 @@ impl SubstrateConfig {
         // the node to compute wrong supermajority thresholds and silently
         // fork from the network.
         let total_nodes: usize = match std::env::var("OMNIA_TOTAL_NODES") {
-            Ok(v) => v.parse().map_err(|_| {
-                ConsensusSeedError::InvalidTotalNodes { raw: v }
-            })?,
+            Ok(v) => v
+                .parse()
+                .map_err(|_| ConsensusSeedError::InvalidTotalNodes { raw: v })?,
             Err(_) => {
                 tracing::warn!("OMNIA_TOTAL_NODES not set, defaulting to 4 — configure this for production");
                 4

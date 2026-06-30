@@ -82,7 +82,9 @@ impl CrossShardMessage {
         // swap causal_proof without invalidating the signature.
         let mut signed_data = Vec::new();
         signed_data.extend_from_slice(&self.payload);
-        signed_data.extend_from_slice(&self.causal_proof.to_bytes());
+        if let Ok(proof_bytes) = self.causal_proof.to_bytes() {
+            signed_data.extend_from_slice(&proof_bytes);
+        }
         pk.verify(&signed_data, &sig).is_ok()
     }
 }
