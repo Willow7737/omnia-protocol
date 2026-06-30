@@ -14,6 +14,7 @@ use omnia_economics::{
     DecayRate, EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof, UsefulWorkType,
     VoteChoice, DEFAULT_UBC_QUOTA,
 };
+use ed25519_dalek::{Signature, Signer, SigningKey};
 
 /// Helper: create a non-zero result hash.
 fn nonzero_hash() -> [u8; 32] {
@@ -308,22 +309,29 @@ fn test_economics_state_full_lifecycle() {
 
     // Step 3: Alice submits useful work for a reward.
     //
-    // The verifier_signature is empty because this test exercises the
-    // economics state machine's reward crediting logic, not the C-9
-    // Ed25519 signature verification. In non-production mode (which
-    // this test is gated on via #[cfg(not(feature = "production"))]
-    // above), an empty signature is accepted with a warning — see
-    // UsefulWorkProof::verify(). In production mode, a real 64-byte
-    // Ed25519 signature over `result_hash || compute_units_consumed`
-    // would be required.
+    // NEW-H1 fix: PoUW verification is now fail-closed unconditionally —
+    // empty verifier_signature is always rejected. We generate a real
+    // Ed25519 signature over result_hash || compute_units_consumed.
+    let result_hash = nonzero_hash();
+    let compute_units: u64 = 500;
+    let verifier_keypair = SigningKey::from_bytes(&[1u8; 32]);
+    let verifier_pubkey = verifier_keypair.verifying_key().to_bytes();
+
+    // Sign result_hash (32 bytes) || compute_units_consumed (8 bytes LE)
+    let mut message = Vec::with_capacity(40);
+    message.extend_from_slice(&result_hash);
+    message.extend_from_slice(&compute_units.to_le_bytes());
+    let signature: Signature = verifier_keypair.sign(&message);
+    let verifier_sig = signature.to_bytes().to_vec();
+
     let proof = UsefulWorkProof::new(
         UsefulWorkType::AiTraining {
             model_hash: nonzero_hash(),
             training_data_hash: nonzero_hash(),
         },
-        nonzero_hash(),
-        500,        // 500 compute units → 500 UBC reward
-        Vec::new(), // empty signature: testing-mode accepted path
+        result_hash,
+        compute_units, // 500 compute units → 500 UBC reward
+        verifier_sig,
     )
     .expect("valid proof should construct");
     state
@@ -333,7 +341,7 @@ fn test_economics_state_full_lifecycle() {
                 proof,
             },
             epoch,
-            None,
+            Some(&verifier_pubkey),
         )
         .unwrap();
     assert_eq!(state.balance_of("did:omnia:alice"), Some(DEFAULT_UBC_QUOTA - 300 + 500));
