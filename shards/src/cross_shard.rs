@@ -58,7 +58,7 @@ impl CrossShardMessage {
     /// that `verify_source_signature` checks. The signature is stored
     /// in `source_signature`.
     pub fn sign(&mut self, keypair: &omnia_substrate::crypto::NodeKeypair) {
-        use ed25519_dalek::{Signer, SigningKey};
+        use ed25519_dalek::Signer;
 
         let mut signed_data = Vec::new();
         signed_data.extend_from_slice(&self.payload);

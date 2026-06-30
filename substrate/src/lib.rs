@@ -1214,6 +1214,8 @@ mod tests {
 
     #[test]
     fn test_substrate_creation() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config);
 
@@ -1225,6 +1227,8 @@ mod tests {
     #[cfg(feature = "network")]
     #[tokio::test]
     async fn test_substrate_start_stop() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let mut substrate = Substrate::new(config);
 
@@ -1241,6 +1245,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_event() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
@@ -1256,6 +1262,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_substrate_stats() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config);
 
@@ -1281,6 +1289,8 @@ mod tests {
 
     #[test]
     fn test_substrate_config_with_network_size() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::with_network_size(test_node(1), 10);
         assert_eq!(config.total_nodes, 10);
         assert_eq!(config.consensus.total_nodes, 10);
