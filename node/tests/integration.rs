@@ -74,7 +74,8 @@ async fn start_test_server() -> (
         id
     };
 
-    let substrate_config = SubstrateConfig::new(node_id_bytes);
+    let substrate_config =
+        SubstrateConfig::try_new(node_id_bytes).unwrap_or_else(|e| panic!("Failed to create SubstrateConfig: {e:?}"));
     let substrate = Substrate::new(substrate_config);
     let slashing = substrate.slashing.clone();
 

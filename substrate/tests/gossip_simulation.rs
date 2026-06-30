@@ -35,7 +35,8 @@ impl TestNetwork {
 
         for i in 0..node_count {
             let node_id = test_node(i as u8 + 1);
-            let config = SubstrateConfig::with_network_size(node_id, node_count);
+            let config = SubstrateConfig::try_with_network_size(node_id, node_count)
+                .unwrap_or_else(|e| panic!("Failed to create SubstrateConfig: {e:?}"));
             let substrate = Substrate::new(config);
             nodes.push(Arc::new(RwLock::new(substrate)));
         }

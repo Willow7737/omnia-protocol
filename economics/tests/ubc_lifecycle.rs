@@ -10,6 +10,7 @@
 //! 6. Quadratic voting weight calculation
 //! 7. Reputation decay for inactive voters
 
+use ed25519_dalek::{Signature, Signer, SigningKey};
 use omnia_economics::{
     DecayRate, EconomicsError, EconomicsOp, EconomicsState, QuotaSystem, UbcToken, UsefulWorkProof, UsefulWorkType,
     VoteChoice, DEFAULT_UBC_QUOTA,
@@ -260,13 +261,11 @@ fn test_governance_inactive_voter() {
 #[cfg(not(feature = "production"))]
 fn test_economics_state_full_lifecycle() {
     let mut state = EconomicsState::new();
-    // Set a verifier pubkey so SubmitWork is accepted. In non-production
-    // mode the proof's signature is empty (testing-only path), so any
-    // well-formed 32-byte public key works.
-    let verifier_pubkey = {
-        let kp = omnia_substrate::crypto::generate_keypair();
-        kp.verifying_key().to_bytes()
-    };
+    // Set a verifier pubkey so SubmitWork is accepted. NEW-H1 fix: the
+    // verifier signature is now verified unconditionally, so we need a
+    // real keypair that we can also use to sign the proof.
+    let verifier_keypair = SigningKey::from_bytes(&[1u8; 32]);
+    let verifier_pubkey = verifier_keypair.verifying_key().to_bytes();
     state.set_verifier_pubkey(verifier_pubkey);
     let epoch = state.current_epoch();
 
@@ -308,22 +307,27 @@ fn test_economics_state_full_lifecycle() {
 
     // Step 3: Alice submits useful work for a reward.
     //
-    // The verifier_signature is empty because this test exercises the
-    // economics state machine's reward crediting logic, not the C-9
-    // Ed25519 signature verification. In non-production mode (which
-    // this test is gated on via #[cfg(not(feature = "production"))]
-    // above), an empty signature is accepted with a warning — see
-    // UsefulWorkProof::verify(). In production mode, a real 64-byte
-    // Ed25519 signature over `result_hash || compute_units_consumed`
-    // would be required.
+    // NEW-H1 fix: PoUW verification is now fail-closed unconditionally —
+    // empty verifier_signature is always rejected. We use the same
+    // verifier_keypair that was set on the state to sign the proof.
+    let result_hash = nonzero_hash();
+    let compute_units: u64 = 500;
+
+    // Sign result_hash (32 bytes) || compute_units_consumed (8 bytes LE)
+    let mut message = Vec::with_capacity(40);
+    message.extend_from_slice(&result_hash);
+    message.extend_from_slice(&compute_units.to_le_bytes());
+    let signature: Signature = verifier_keypair.sign(&message);
+    let verifier_sig = signature.to_bytes().to_vec();
+
     let proof = UsefulWorkProof::new(
         UsefulWorkType::AiTraining {
             model_hash: nonzero_hash(),
             training_data_hash: nonzero_hash(),
         },
-        nonzero_hash(),
-        500,        // 500 compute units → 500 UBC reward
-        Vec::new(), // empty signature: testing-mode accepted path
+        result_hash,
+        compute_units, // 500 compute units → 500 UBC reward
+        verifier_sig,
     )
     .expect("valid proof should construct");
     state

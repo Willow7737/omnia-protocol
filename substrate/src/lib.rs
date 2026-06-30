@@ -183,6 +183,10 @@ pub const TARGET_FINALITY_MS: u64 = 5_000;
 /// — especially those that surface errors to the operator (e.g. `main()`) —
 /// should use [`try_parse_consensus_seed`] instead, which returns a `Result`
 /// rather than silently falling back to a random seed on invalid hex.
+///
+/// NEW-M1: this function is now unused since SubstrateConfig::new() delegates
+/// to try_new(). Kept for backward compat with any external callers.
+#[allow(dead_code)]
 fn parse_consensus_seed() -> [u8; 32] {
     if let Ok(hex_seed) = std::env::var("OMNIA_CONSENSUS_SEED") {
         if hex_seed.len() == 64 {
@@ -283,6 +287,17 @@ pub enum ConsensusSeedError {
         actual: usize,
         /// Required length (always 64).
         expected: usize,
+    },
+
+    /// `OMNIA_TOTAL_NODES` was set but could not be parsed as a usize.
+    /// NEW-M1 fix: prevents silent fallback to 4 on a typo'd value.
+    #[error(
+        "OMNIA_TOTAL_NODES='{raw}' is not a valid usize. \
+         Fix the value or unset the variable to use the default (4)."
+    )]
+    InvalidTotalNodes {
+        /// The raw (invalid) string that was provided.
+        raw: String,
     },
 
     /// The system RNG was unavailable and no seed was provided via the env var.
@@ -467,23 +482,30 @@ impl SubstrateConfig {
     /// with standard thresholds (slash at 500, eject at 2000).
     /// Production callers should set `slashing_data_dir` before
     /// constructing the substrate.
+    ///
+    /// NEW-M1 fix: this method now delegates to try_new() and panics on
+    /// invalid OMNIA_CONSENSUS_SEED / OMNIA_TOTAL_NODES instead of
+    /// silently falling back. The silent fallback was the H-12 bug that
+    /// was supposed to be fixed — this closes the gap.
+    #[deprecated(note = "Use try_new() for proper error propagation. \
+                         This method panics on invalid env vars.")]
     pub fn new(node_id: NodeId) -> Self {
-        let total_nodes: usize = std::env::var("OMNIA_TOTAL_NODES")
-            .map(|v| v.parse().unwrap_or(4))
-            .unwrap_or_else(|_| {
-                tracing::warn!("OMNIA_TOTAL_NODES not set, defaulting to 4 — configure this for production");
-                4
-            });
-        let seed = parse_consensus_seed();
-        Self::build_config(node_id, total_nodes, seed)
+        Self::try_new(node_id)
+            .unwrap_or_else(|e| panic!("SubstrateConfig::new failed: {e:?}. Use try_new() for error propagation."))
     }
 
     /// Create a substrate configuration with a custom network size.
     ///
     /// Slashing defaults to in-memory mode with standard thresholds.
+    #[deprecated(note = "Use try_with_network_size() for proper error propagation. \
+                         This method panics on invalid env vars.")]
     pub fn with_network_size(node_id: NodeId, total_nodes: usize) -> Self {
-        let seed = parse_consensus_seed();
-        Self::build_config(node_id, total_nodes, seed)
+        Self::try_with_network_size(node_id, total_nodes).unwrap_or_else(|e| {
+            panic!(
+                "SubstrateConfig::with_network_size failed: {e:?}. \
+                    Use try_with_network_size() for error propagation."
+            )
+        })
     }
 
     /// Like [`SubstrateConfig::new`] but propagates consensus-seed errors
@@ -494,12 +516,19 @@ impl SubstrateConfig {
     /// error message and exit instead of unknowingly forking off the
     /// network with a different seed.
     pub fn try_new(node_id: NodeId) -> ConsensusSeedResult<Self> {
-        let total_nodes: usize = std::env::var("OMNIA_TOTAL_NODES")
-            .map(|v| v.parse().unwrap_or(4))
-            .unwrap_or_else(|_| {
+        // NEW-M1 fix: also validate OMNIA_TOTAL_NODES — the previous code
+        // used .unwrap_or(4) which silently fell back on a typo, causing
+        // the node to compute wrong supermajority thresholds and silently
+        // fork from the network.
+        let total_nodes: usize = match std::env::var("OMNIA_TOTAL_NODES") {
+            Ok(v) => v
+                .parse()
+                .map_err(|_| ConsensusSeedError::InvalidTotalNodes { raw: v })?,
+            Err(_) => {
                 tracing::warn!("OMNIA_TOTAL_NODES not set, defaulting to 4 — configure this for production");
                 4
-            });
+            }
+        };
         let seed = try_parse_consensus_seed()?;
         Ok(Self::build_config(node_id, total_nodes, seed))
     }
@@ -1185,6 +1214,8 @@ mod tests {
 
     #[test]
     fn test_substrate_creation() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config);
 
@@ -1196,6 +1227,8 @@ mod tests {
     #[cfg(feature = "network")]
     #[tokio::test]
     async fn test_substrate_start_stop() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let mut substrate = Substrate::new(config);
 
@@ -1212,6 +1245,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_event() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
@@ -1227,6 +1262,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_substrate_stats() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::new(test_node(1));
         let substrate = Substrate::new(config);
 
@@ -1252,6 +1289,8 @@ mod tests {
 
     #[test]
     fn test_substrate_config_with_network_size() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
         let config = SubstrateConfig::with_network_size(test_node(1), 10);
         assert_eq!(config.total_nodes, 10);
         assert_eq!(config.consensus.total_nodes, 10);

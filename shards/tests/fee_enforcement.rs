@@ -198,7 +198,7 @@ fn test_cross_shard_fee_deduction() {
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
 
-    let msg = CrossShardMessage::new(
+    let mut msg = CrossShardMessage::new(
         ShardId::identity(),
         ShardId::identity(),
         postcard::to_allocvec(&ShardOp::Identity(omnia_shards::IdentityOp::CreateDid {
@@ -219,6 +219,10 @@ fn test_cross_shard_fee_deduction() {
         // and a target vc that has count >= 1 for that node.
         VectorClock::with_node(test_node(2), 1),
     );
+
+    // NEW-C1 fix: sign the cross-shard message with the event creator's
+    // keypair. The router now requires a valid source_signature.
+    msg.sign(&keypair);
 
     // The default test event uses VectorClock::with_node(creator, 1) which
     // doesn't include test_node(2). For happened_before to return true,
@@ -260,7 +264,7 @@ fn test_cross_shard_insufficient_balance() {
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
 
-    let msg = CrossShardMessage::new(
+    let mut msg = CrossShardMessage::new(
         ShardId::financial(),
         ShardId::identity(),
         vec![1, 2, 3],
@@ -268,6 +272,9 @@ fn test_cross_shard_insufficient_balance() {
         // rather than the (now-enforced) causality check.
         VectorClock::with_node(test_node(2), 1),
     );
+
+    // NEW-C1 fix: sign the cross-shard message.
+    msg.sign(&keypair);
 
     let payload = ShardPayload {
         shard_id: ShardId::financial(),

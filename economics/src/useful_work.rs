@@ -136,21 +136,20 @@ impl UsefulWorkProof {
     /// warning is logged and the proof is accepted (testing mode). If
     /// the signature is non-empty, it is verified cryptographically.
     pub fn verify(&self, verifier_pubkey: &[u8; 32]) -> bool {
-        // F-6 fix: in production, require explicit opt-in for PoUW rewards
-        // since real work verification is not yet implemented.
-        #[cfg(feature = "production")]
-        {
-            let allow_unverified = std::env::var("OMNIA_ALLOW_UNVERIFIED_POUW")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false);
-            if !allow_unverified {
-                tracing::error!(
-                    "PoUW proof rejected — set OMNIA_ALLOW_UNVERIFIED_POUW=1 to accept \
-                     attested-but-unverified work proofs in production. Real PoUW verification \
-                     (zkML/folding) is not yet implemented."
-                );
-                return false;
-            }
+        // NEW-H1 fix: the previous F-6 fix gated on #[cfg(feature = "production")]
+        // but the production feature is NOT in the default feature set. The default
+        // binary build accepted unverified PoUW proofs. Now fail-closed is
+        // unconditional — there is no legitimate reason to accept unverified work
+        // proofs in any build. Tests that need relaxed verification should use
+        // a separate test-relaxed feature scoped to [dev-dependencies].
+        if self.verifier_signature.is_empty() {
+            tracing::error!(
+                "Work proof rejected — no verifier signature. \
+                 Real PoUW verification (zkML/folding) is not yet implemented. \
+                 The verifier signature proves a trusted verifier ATTESTED to \
+                 the work, not that the work was actually done (F-6 caveat)."
+            );
+            return false;
         }
 
         // Construct the message that the verifier should have signed:
@@ -158,20 +157,6 @@ impl UsefulWorkProof {
         let mut message = Vec::with_capacity(40);
         message.extend_from_slice(&self.result_hash);
         message.extend_from_slice(&self.compute_units_consumed.to_le_bytes());
-
-        if self.verifier_signature.is_empty() {
-            // No signature provided
-            #[cfg(feature = "production")]
-            {
-                tracing::error!("Production mode: work proof rejected — no verifier signature");
-                return false;
-            }
-            #[cfg(not(feature = "production"))]
-            {
-                tracing::warn!("Work proof accepted without verifier signature — testing mode only");
-                return self.result_hash.iter().any(|&b| b != 0) && self.compute_units_consumed > 0;
-            }
-        }
 
         // Verify the Ed25519 signature against the verifier's public key
         use ed25519_dalek::{Signature, Verifier, VerifyingKey};

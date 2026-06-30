@@ -159,7 +159,8 @@ impl ValidationPool {
     ///
     /// Performs:
     /// 1. Hash integrity check
-    /// 2. Event insertion into the sharded state (if not already present)
+    /// 2. Signature verification (NEW-H4 fix — defence-in-depth)
+    /// 3. Event insertion into the sharded state (if not already present)
     ///
     /// Returns a [`ValidationResult`] indicating success or failure.
     fn validate_and_insert(event: &Event, state: &ShardedConsensusState) -> ValidationResult {
@@ -171,6 +172,19 @@ impl ValidationPool {
                 event_id,
                 valid: false,
                 error: Some("hash integrity check failed".to_string()),
+            };
+        }
+
+        // NEW-H4 fix: verify signature in the thread pool for defence-in-depth.
+        // ConsensusEngine::process_event re-verifies at consensus.rs:413, but
+        // verifying here too prevents polluting the sharded state with
+        // attacker-chosen EventIds in Pending state. The module docstring
+        // claimed signature verification was performed — now it actually is.
+        if !event.verify_signature() {
+            return ValidationResult {
+                event_id,
+                valid: false,
+                error: Some("signature verification failed".to_string()),
             };
         }
 

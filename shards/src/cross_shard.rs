@@ -45,11 +45,30 @@ impl CrossShardMessage {
             payload,
             causal_proof,
             // P0-6 fix: default to unsigned. Production callers must call
-            // `with_signature` (or set this field directly) to attach an
+            // `sign` (or set this field directly) to attach an
             // Ed25519 signature over the payload before sending; otherwise
             // the receiving router will reject the message.
             source_signature: None,
         }
+    }
+
+    /// Sign this cross-shard message with the given Ed25519 keypair.
+    ///
+    /// Signs over `payload || causal_proof.to_bytes()` — the same data
+    /// that `verify_source_signature` checks. The signature is stored
+    /// in `source_signature`.
+    pub fn sign(&mut self, keypair: &omnia_substrate::crypto::NodeKeypair) {
+        use ed25519_dalek::Signer;
+
+        let mut signed_data = Vec::new();
+        signed_data.extend_from_slice(&self.payload);
+        if let Ok(proof_bytes) = self.causal_proof.to_bytes() {
+            signed_data.extend_from_slice(&proof_bytes);
+        }
+
+        // NodeKeypair is ed25519_dalek::SigningKey
+        let sig: ed25519_dalek::Signature = keypair.sign(&signed_data);
+        self.source_signature = Some(sig.to_bytes().to_vec());
     }
 
     /// Verify that the source event causally precedes this message.
@@ -77,10 +96,14 @@ impl CrossShardMessage {
             Ok(pk) => pk,
             Err(_) => return false,
         };
-        // Sign over the message payload + causal proof (excluding the signature itself)
+        // NEW-C1 fix: sign over BOTH payload AND causal_proof (not just payload).
+        // The previous code only signed self.payload, allowing an attacker to
+        // swap causal_proof without invalidating the signature.
         let mut signed_data = Vec::new();
         signed_data.extend_from_slice(&self.payload);
-        // Include causal proof bytes if serializable
+        if let Ok(proof_bytes) = self.causal_proof.to_bytes() {
+            signed_data.extend_from_slice(&proof_bytes);
+        }
         pk.verify(&signed_data, &sig).is_ok()
     }
 }

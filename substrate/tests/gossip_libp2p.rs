@@ -254,7 +254,8 @@ async fn spawn_node(
         id[1] = ((port >> 8) & 0xFF) as u8;
         id
     };
-    let config = SubstrateConfig::with_network_size(node_id, 4);
+    let config = SubstrateConfig::try_with_network_size(node_id, 4)
+        .unwrap_or_else(|e| panic!("Failed to create SubstrateConfig: {e:?}"));
     let substrate = Substrate::new(config);
 
     Ok(TestNode {
