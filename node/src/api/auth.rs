@@ -217,7 +217,7 @@ fn jwt_secret() -> Option<String> {
 /// process, and some tests need to verify behaviour when the env var is
 /// unset.
 #[cfg(test)]
-fn reset_jwt_secret_for_test() {
+pub fn reset_jwt_secret_for_test() {
     let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
     *guard = None;
 }
