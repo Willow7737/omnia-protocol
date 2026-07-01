@@ -63,7 +63,7 @@ redb = "2"
 hex = "0.4"
 
 # AES-256-GCM authenticated encryption for encrypting private key files
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 
 # BLAKE3 hash for key derivation from passphrase
 blake3 = "1.5"

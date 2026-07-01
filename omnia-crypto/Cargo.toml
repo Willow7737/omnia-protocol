@@ -9,7 +9,7 @@ rust-version = { workspace = true }
 omnia-primitives = { path = "../omnia-primitives" }
 ed25519-dalek = { version = "2.1", features = ["serde"] }
 blst = { version = "0.3", optional = true }
-aes-gcm = { version = "0.10", optional = true }
+aes-gcm = { version = "0.11", optional = true }
 bip39 = { version = "2.0", features = ["zeroize", "rand"], optional = true }
 hkdf = { version = "0.12", optional = true }
 pqc_dilithium = { version = "0.2", optional = true }

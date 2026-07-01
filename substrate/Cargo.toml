@@ -36,7 +36,7 @@ blake3 = "1.5"
 futures = "0.3"
 
 # AES-256-GCM authenticated encryption for keystore
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 
 # BIP-39 mnemonic support for keystore
 bip39 = { version = "2", features = ["zeroize", "rand"] }
