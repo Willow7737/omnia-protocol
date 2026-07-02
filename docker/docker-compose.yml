@@ -28,6 +28,13 @@ services:
       retries: 10
       start_period: 30s
 
+  # Worker nodes dial the bootstrap by DNS name. The address may be given
+  # with or without a trailing `/p2p/<PeerId>` component:
+  #   - without: the peer identity is learned during the QUIC handshake
+  #   - with:    the identity is verified against the pinned PeerId; since
+  #              the node derives its libp2p identity from the persistent
+  #              keypair in its data volume, the PeerId is stable across
+  #              restarts and safe to pin
   omnia-node-1:
     build:
       context: ../

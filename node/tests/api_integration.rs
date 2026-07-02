@@ -1470,3 +1470,40 @@ async fn test_transfer_insufficient_balance_returns_400() {
         "Error should mention transfer failure"
     );
 }
+
+// ---- Regression: repeated submissions must chain, not equivocate ----
+
+/// The submit handler used to create every API event via `Event::genesis()`
+/// — creator + sequence 0 each time — so the second submission was
+/// indistinguishable from a Byzantine fork (same creator + sequence,
+/// different event ID) and the consensus layer slashed the node's own
+/// validator. All subsequent submissions then failed with `NodeSlashed`.
+///
+/// After the chaining fix each submission extends the previous event
+/// (sequence + 1, self-parent link), so any number of submissions succeeds.
+#[tokio::test]
+async fn test_repeated_submissions_chain_and_do_not_self_slash() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    for i in 0..5 {
+        let body = json!({
+            "payload": hex::encode(format!("event {i}").as_bytes()),
+            "event_type": "test"
+        });
+        let resp = client
+            .post(format!("{}/api/v1/events", server.base_url))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            201,
+            "submission {i} must succeed — before the chaining fix the second \
+             submission self-slashed the validator and every later one failed"
+        );
+    }
+}
