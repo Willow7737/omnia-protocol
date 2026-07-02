@@ -43,7 +43,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=2
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1/p2p/12D3KooWMpf7aMvDjbDXLFTyajPrUunTU2EcRSgv3CVJMMmYpsn5
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/udp/4001/quic-v1
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
@@ -69,7 +69,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=3
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1/p2p/12D3KooWMpf7aMvDjbDXLFTyajPrUunTU2EcRSgv3CVJMMmYpsn5
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/udp/4001/quic-v1
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
@@ -95,7 +95,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=4
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1/p2p/12D3KooWMpf7aMvDjbDXLFTyajPrUunTU2EcRSgv3CVJMMmYpsn5
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/udp/4001/quic-v1
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
@@ -121,7 +121,7 @@ services:
     environment:
       - RUST_LOG=info
       - OMNIA_NODE_ID=5
-      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1/p2p/12D3KooWMpf7aMvDjbDXLFTyajPrUunTU2EcRSgv3CVJMMmYpsn5
+      - OMNIA_BOOTSTRAP_NODES=/dns4/omnia-bootstrap/udp/4001/quic-v1
       - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/udp/4001/quic-v1
       - OMNIA_HTTP_PORT=8080
       - OMNIA_DATA_DIR=/app/data
