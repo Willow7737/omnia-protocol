@@ -943,13 +943,15 @@ mod tests {
                 identity: Some(secret),
                 ..Default::default()
             };
-            let net = OmniaNetwork::with_config(
-                "/ip4/127.0.0.1/udp/0/quic-v1".parse().expect("valid multiaddr"),
-                config,
-            )
-            .await
-            .expect("network construction");
-            assert_eq!(net.local_peer_id(), expected, "PeerId must be derived from the persistent key");
+            let net =
+                OmniaNetwork::with_config("/ip4/127.0.0.1/udp/0/quic-v1".parse().expect("valid multiaddr"), config)
+                    .await
+                    .expect("network construction");
+            assert_eq!(
+                net.local_peer_id(),
+                expected,
+                "PeerId must be derived from the persistent key"
+            );
         }
 
         let ephemeral = OmniaNetwork::with_config(
@@ -958,7 +960,11 @@ mod tests {
         )
         .await
         .expect("network construction");
-        assert_ne!(ephemeral.local_peer_id(), expected, "no identity configured → random PeerId");
+        assert_ne!(
+            ephemeral.local_peer_id(),
+            expected,
+            "no identity configured → random PeerId"
+        );
     }
 
     #[test]

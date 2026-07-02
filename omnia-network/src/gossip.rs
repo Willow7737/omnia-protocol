@@ -409,10 +409,7 @@ impl GossipProtocol {
                                 // testnet (whose bootstrap address has no peer
                                 // ID) could never form a network.
                                 info!(addr = %addr_str, "Dialing bootstrap peer (identity learned on handshake)");
-                                if let Err(e) = cmd_tx
-                                    .send(NetworkCommand::DialAddress { addr: dial_addr })
-                                    .await
-                                {
+                                if let Err(e) = cmd_tx.send(NetworkCommand::DialAddress { addr: dial_addr }).await {
                                     warn!("Failed to send DialAddress command for bootstrap peer: {}", e);
                                 }
                             }
