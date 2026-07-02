@@ -9,6 +9,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use omnia_primitives::blake3_hash_domain;
 use omnia_substrate::Event;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -100,8 +101,6 @@ pub async fn submit_event(
         ));
     }
 
-    let node_id = state.config.node_id_bytes();
-
     // Use the node's persistent keypair for signing — events must be
     // verifiable as originating from this node. Ephemeral keypairs would
     // make signature verification meaningless.
@@ -111,28 +110,78 @@ pub async fn submit_event(
             Json(json!({"error": "No persistent keypair configured"})),
         )
     })?;
-    let mut event = Event::genesis(node_id, payload_bytes.clone()).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": format!("Invalid event: {e}")})),
-        )
-    })?;
-    event.sign_with_keypair(&keypair).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
-        )
-    })?;
 
-    let event_id_hex = hex::encode(event.id);
-    let creator_hex = hex::encode(&event.creator[..4]);
-    let timestamp = event.timestamp;
+    // The on-chain creator identity is derived from the signing key by
+    // `sign_with_keypair` (creator = blake3("omnia-creator", pubkey)), not
+    // the configured node ID. Chain lookups must use the same identity.
+    let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
 
-    // Attempt to submit to the substrate
-    let submit_result = {
+    // Build and submit under a single substrate write lock so that two
+    // concurrent submissions cannot mint the same sequence number.
+    //
+    // Every event must extend this creator's previous event: re-using a
+    // (creator, sequence) pair is equivocation and the consensus layer
+    // slashes the validator for it. The previous implementation created
+    // every API event via `Event::genesis()` — creator + sequence 0 each
+    // time — so the *second* submission was indistinguishable from a
+    // Byzantine fork and permanently slashed the node's own validator.
+    let (submit_result, event_id_hex, event_sequence, timestamp) = {
         let mut substrate = state.substrate.write().await;
-        substrate.submit_event(event).await
+
+        let mut event = {
+            let graph = substrate.graph().await;
+            let own_events = graph.by_creator(&creator);
+            match own_events.into_iter().max_by_key(|e| e.sequence) {
+                // First event from this validator — a genuine genesis.
+                None => Event::genesis(creator, payload_bytes.clone()),
+                Some(latest) => {
+                    let sequence = latest.sequence + 1;
+                    let self_parent = latest.id;
+                    // Advance our own clock entry on top of everything
+                    // observed (convention: own entry = sequence + 1, so
+                    // genesis is seq 0 / clock 1).
+                    let mut vector_clock = graph.frontier().clone();
+                    vector_clock.set(creator, sequence + 1);
+                    // Two-parent, Hashgraph-style: reference the newest
+                    // tip from another creator when one exists.
+                    let other_parent = graph
+                        .tips()
+                        .filter_map(|id| graph.get(id))
+                        .filter(|e| e.creator != creator)
+                        .max_by_key(|e| e.timestamp)
+                        .map(|e| e.id);
+                    Event::new(
+                        creator,
+                        sequence,
+                        vector_clock,
+                        Some(self_parent),
+                        other_parent,
+                        payload_bytes.clone(),
+                    )
+                }
+            }
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": format!("Invalid event: {e}")})),
+                )
+            })?
+        };
+
+        event.sign_with_keypair(&keypair).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": format!("Signing failed: {e}")})),
+            )
+        })?;
+
+        let event_id_hex = hex::encode(event.id);
+        let event_sequence = event.sequence;
+        let timestamp = event.timestamp;
+        let result = substrate.submit_event(event).await;
+        (result, event_id_hex, event_sequence, timestamp)
     };
+    let creator_hex = hex::encode(&creator[..4]);
 
     match submit_result {
         Ok(()) => {
@@ -140,7 +189,7 @@ pub async fn submit_event(
             let stored = StoredEvent {
                 id: event_id_hex.clone(),
                 creator: creator_hex,
-                sequence: 0,
+                sequence: event_sequence,
                 timestamp,
                 payload: body.payload.clone(),
                 event_type: body.event_type.clone(),
@@ -170,7 +219,7 @@ pub async fn submit_event(
             let stored = StoredEvent {
                 id: event_id_hex.clone(),
                 creator: creator_hex,
-                sequence: 0,
+                sequence: event_sequence,
                 timestamp,
                 payload: body.payload.clone(),
                 event_type: body.event_type.clone(),

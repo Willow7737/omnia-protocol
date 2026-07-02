@@ -401,11 +401,17 @@ impl GossipProtocol {
                                     warn!("Failed to send Dial command for bootstrap peer: {}", e);
                                 }
                             }
-                            (None, _) => {
-                                warn!(
-                                    addr = %addr_str,
-                                    "Bootstrap address missing /p2p peer ID, skipping"
-                                );
+                            (None, dial_addr) => {
+                                // No /p2p component — dial the raw address and
+                                // learn the peer's identity during the handshake.
+                                // Previously these addresses were silently
+                                // skipped, which meant the stock docker-compose
+                                // testnet (whose bootstrap address has no peer
+                                // ID) could never form a network.
+                                info!(addr = %addr_str, "Dialing bootstrap peer (identity learned on handshake)");
+                                if let Err(e) = cmd_tx.send(NetworkCommand::DialAddress { addr: dial_addr }).await {
+                                    warn!("Failed to send DialAddress command for bootstrap peer: {}", e);
+                                }
                             }
                         }
                     }

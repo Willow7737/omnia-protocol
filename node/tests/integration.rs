@@ -58,6 +58,11 @@ async fn start_test_server() -> (
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // Set JWT secret before building the router so auth middleware can read it
     std::env::set_var("OMNIA_JWT_SECRET", TEST_JWT_SECRET);
+    // Reset the JWT secret cache and re-initialize from the env var we just set.
+    // Without this, create_token() reads a stale cache from a prior test run
+    // and returns SecretNotConfigured.
+    omnia_node::api::auth::reset_jwt_secret_for_test();
+    omnia_node::api::auth::init_jwt_secret();
     let env_guard = EnvGuard {
         keys: vec!["OMNIA_JWT_SECRET"],
     };

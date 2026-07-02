@@ -52,6 +52,14 @@ use tokio::sync::mpsc;
 /// traversal, and transport fallback options.
 #[derive(Debug, Clone)]
 pub struct NetworkConfig {
+    /// Ed25519 secret-key bytes for a persistent swarm identity.
+    ///
+    /// When `Some`, the node's libp2p `PeerId` is derived from this key and
+    /// survives restarts, so bootstrap multiaddrs pinned with `/p2p/<PeerId>`
+    /// stay valid. When `None` a fresh identity is generated on every start
+    /// (the previous behaviour), which invalidates pinned addresses on each
+    /// restart.
+    pub identity: Option<[u8; 32]>,
     /// Multiaddresses of bootstrap/seed peers for initial DHT population.
     pub bootstrap_peers: Vec<Multiaddr>,
     /// Relay server multiaddresses for NAT traversal.
@@ -73,6 +81,7 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
+            identity: None,
             bootstrap_peers: Vec::new(),
             relay_servers: Vec::new(),
             dht_protocol: "/omnia/kad/1.0.0".to_string(),
@@ -421,6 +430,13 @@ pub enum NetworkCommand {
         /// Topic to subscribe to
         topic: String,
     },
+    /// Dial an address without a known peer ID (e.g. a bootstrap
+    /// multiaddr lacking a `/p2p` component). The remote identity is
+    /// learned during the connection handshake.
+    DialAddress {
+        /// Multiaddress to dial
+        addr: Multiaddr,
+    },
     /// Dial a specific peer at the given address.
     Dial {
         /// Peer to dial
@@ -462,7 +478,11 @@ impl OmniaNetwork {
         listen_addr: Multiaddr,
         config: NetworkConfig,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let local_key = identity::Keypair::generate_ed25519();
+        let local_key = match config.identity {
+            Some(secret) => identity::Keypair::ed25519_from_bytes(secret)
+                .map_err(|e| format!("invalid persistent identity key: {e}"))?,
+            None => identity::Keypair::generate_ed25519(),
+        };
         let local_peer_id = PeerId::from(local_key.public());
 
         // ── GossipSub config ─────────────────────────────────────────
@@ -575,6 +595,14 @@ impl OmniaNetwork {
         self.local_peer_id
     }
 
+    /// Dial an address whose peer ID is not yet known. The remote
+    /// identity is verified during the transport handshake and learned
+    /// via the identify/kademlia behaviours.
+    pub fn dial_addr(&mut self, addr: Multiaddr) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.swarm.dial(addr)?;
+        Ok(())
+    }
+
     /// Dial a peer at the given address
     pub fn dial(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let p2p_addr = addr.with(libp2p::multiaddr::Protocol::P2p(peer_id));
@@ -651,6 +679,11 @@ impl OmniaNetwork {
                         Some(NetworkCommand::Subscribe { topic }) => {
                             if let Err(e) = self.subscribe(&topic) {
                                 tracing::warn!("Subscribe failed: {:?}", e);
+                            }
+                        }
+                        Some(NetworkCommand::DialAddress { addr }) => {
+                            if let Err(e) = self.dial_addr(addr) {
+                                tracing::warn!("Dial (no peer ID) failed: {:?}", e);
                             }
                         }
                         Some(NetworkCommand::Dial { peer_id, addr }) => {
@@ -890,6 +923,48 @@ mod tests {
         assert!(config.enable_dcutr);
         assert!(config.enable_tcp_fallback);
         assert!(!config.listen_addresses.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_persistent_identity_yields_stable_peer_id() {
+        // Two networks built from the same secret must present the same
+        // PeerId — this is what lets operators pin `/p2p/<PeerId>` in
+        // bootstrap multiaddrs across restarts. A `None` identity must
+        // still produce a fresh (random) PeerId.
+        let secret = [7u8; 32];
+        let expected = PeerId::from(
+            identity::Keypair::ed25519_from_bytes(secret)
+                .expect("valid secret")
+                .public(),
+        );
+
+        for _ in 0..2 {
+            let config = NetworkConfig {
+                identity: Some(secret),
+                ..Default::default()
+            };
+            let net =
+                OmniaNetwork::with_config("/ip4/127.0.0.1/udp/0/quic-v1".parse().expect("valid multiaddr"), config)
+                    .await
+                    .expect("network construction");
+            assert_eq!(
+                net.local_peer_id(),
+                expected,
+                "PeerId must be derived from the persistent key"
+            );
+        }
+
+        let ephemeral = OmniaNetwork::with_config(
+            "/ip4/127.0.0.1/udp/0/quic-v1".parse().expect("valid multiaddr"),
+            NetworkConfig::default(),
+        )
+        .await
+        .expect("network construction");
+        assert_ne!(
+            ephemeral.local_peer_id(),
+            expected,
+            "no identity configured → random PeerId"
+        );
     }
 
     #[test]

@@ -251,7 +251,8 @@ mod tests {
             readiness_max_finalization_age: 600,
         };
 
-        let substrate_config = omnia_substrate::SubstrateConfig::new(config.node_id_bytes());
+        let substrate_config = omnia_substrate::SubstrateConfig::try_new(config.node_id_bytes())
+            .expect("valid substrate config in test fixture");
         let substrate = Substrate::new(substrate_config);
         let slashing_engine = substrate.slashing.clone();
 

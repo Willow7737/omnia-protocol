@@ -1436,6 +1436,57 @@ async fn test_transfer_success_returns_200() {
     );
 }
 
+// ---- economics: transfer 400 self-transfer ----
+
+#[tokio::test]
+async fn test_transfer_to_self_returns_400() {
+    let server = setup_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 10_000);
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": REGULAR_CALLER,
+        "amount": 500
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 400, "Self-transfer should return 400");
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("soulbound"),
+        "Error should explain that UBC is soulbound"
+    );
+
+    // The balance must be untouched — nothing was burned.
+    let resp = client
+        .get(format!(
+            "{}/api/v1/economics/balance/{}",
+            server.base_url, REGULAR_CALLER
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+    assert!(
+        body["balance"].as_u64().unwrap() >= 10_000,
+        "Rejected self-transfer must not burn any UBC"
+    );
+}
+
 // ---- economics: transfer 400 insufficient balance ----
 
 #[tokio::test]
@@ -1469,4 +1520,41 @@ async fn test_transfer_insufficient_balance_returns_400() {
         body["error"].as_str().unwrap().contains("Transfer failed"),
         "Error should mention transfer failure"
     );
+}
+
+// ---- Regression: repeated submissions must chain, not equivocate ----
+
+/// The submit handler used to create every API event via `Event::genesis()`
+/// — creator + sequence 0 each time — so the second submission was
+/// indistinguishable from a Byzantine fork (same creator + sequence,
+/// different event ID) and the consensus layer slashed the node's own
+/// validator. All subsequent submissions then failed with `NodeSlashed`.
+///
+/// After the chaining fix each submission extends the previous event
+/// (sequence + 1, self-parent link), so any number of submissions succeeds.
+#[tokio::test]
+async fn test_repeated_submissions_chain_and_do_not_self_slash() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+
+    for i in 0..5 {
+        let body = json!({
+            "payload": hex::encode(format!("event {i}").as_bytes()),
+            "event_type": "test"
+        });
+        let resp = client
+            .post(format!("{}/api/v1/events", server.base_url))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            201,
+            "submission {i} must succeed — before the chaining fix the second \
+             submission self-slashed the validator and every later one failed"
+        );
+    }
 }
