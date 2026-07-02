@@ -119,6 +119,20 @@ pub async fn transfer_ubc(
         );
     }
 
+    // Reject self-transfers. UBC is soulbound: a "transfer" spends (burns)
+    // the sender's tokens without crediting the recipient, so sending to
+    // yourself can only destroy your own balance. Fail loudly instead of
+    // letting callers burn tokens by accident.
+    if body.to_did == from_did {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "Cannot transfer to yourself: UBC is soulbound, so a transfer burns the sender's tokens without crediting the recipient. A self-transfer would only destroy your balance.",
+                "from_did": from_did,
+            })),
+        ));
+    }
+
     let mut economics = state.economics.lock().await;
 
     // Ensure the sender (authenticated caller) is registered
