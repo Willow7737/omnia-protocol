@@ -212,11 +212,14 @@ fn jwt_secret() -> Option<String> {
 
 /// Reset the JWT secret cache so the env var will be re-read on next access.
 ///
-/// Only available in test builds. Necessary because `OnceLock` (or any
-/// caching mechanism) persists across test functions within the same
-/// process, and some tests need to verify behaviour when the env var is
-/// unset.
-#[cfg(test)]
+/// Intended for tests. This cannot be `#[cfg(test)]`-gated: that gate only
+/// exists when compiling the library's own unit tests, so integration test
+/// binaries under `tests/` (which link the regular library build) would get
+/// a "cannot find function" compile error — exactly what broke CI on dev.
+/// The function is harmless in production (it only clears a cache that is
+/// repopulated from the env var on next access), so it is exposed but
+/// hidden from docs.
+#[doc(hidden)]
 pub fn reset_jwt_secret_for_test() {
     let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
     *guard = None;
