@@ -560,7 +560,14 @@ async fn spawn_background_tasks(
 
             // A2: Build a NetworkConfig that includes the bootstrap peers
             // from CLI/TOML, so the Kademlia DHT is seeded correctly.
+            //
+            // The swarm identity is derived from the node's persistent
+            // keypair, so the libp2p PeerId survives restarts and pinned
+            // `/p2p/<PeerId>` bootstrap addresses stay valid. Previously
+            // the identity was regenerated on every start, which broke
+            // any pinned address as soon as the node restarted.
             let network_config = NetworkConfig {
+                identity: Some(load_or_generate_node_keypair(&config.data_dir).to_bytes()),
                 bootstrap_peers: config
                     .bootstrap_nodes
                     .iter()
