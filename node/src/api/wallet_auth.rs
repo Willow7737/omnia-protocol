@@ -21,8 +21,10 @@
 //!
 //! The DID is derived deterministically from the public key so any client can
 //! compute it offline: `did:omnia:` followed by the first 32 hex characters of
-//! `blake3(public_key_bytes)`. The mobile wallet reproduces this exact rule to
-//! display the user's DID before ever contacting the node.
+//! `sha256(public_key_bytes)`. SHA-256 (rather than BLAKE3) is used here so the
+//! mobile wallet can reproduce the exact rule with a ubiquitous, well-tested
+//! hash implementation, and display the user's DID before ever contacting the
+//! node.
 //!
 //! # Security properties
 //!
@@ -48,6 +50,7 @@ use tokio::sync::Mutex;
 use utoipa::ToSchema;
 
 use omnia_substrate::crypto::{Signature, VerifyingKey};
+use sha2::{Digest, Sha256};
 
 use crate::api::auth::create_token;
 use crate::state::AppState;
@@ -100,12 +103,12 @@ fn now_ms() -> u64 {
 /// Derive the deterministic DID for an Ed25519 public key.
 ///
 /// Returns `did:omnia:` + the first 32 hex characters of
-/// `blake3(public_key_bytes)`. This rule is duplicated verbatim in the mobile
+/// `sha256(public_key_bytes)`. This rule is duplicated verbatim in the mobile
 /// wallet so both sides agree on the identity for a given key.
 pub fn did_from_public_key(public_key_bytes: &[u8]) -> String {
-    let hash = blake3::hash(public_key_bytes);
-    let hex = hash.to_hex();
-    format!("did:omnia:{}", &hex[..32])
+    let digest = Sha256::digest(public_key_bytes);
+    let hex_digest = hex::encode(digest);
+    format!("did:omnia:{}", &hex_digest[..32])
 }
 
 /// Decode a hex string into a fixed-size byte array of length `N`.
@@ -342,6 +345,16 @@ mod tests {
         assert!(did1.starts_with("did:omnia:"));
         // 10 chars for "did:omnia:" + 32 hex chars.
         assert_eq!(did1.len(), "did:omnia:".len() + 32);
+    }
+
+    #[test]
+    fn did_derivation_matches_shared_cross_repo_vector() {
+        // This exact literal is also asserted in the Flutter wallet's
+        // key_manager_test.dart. If either side changes the hash or the
+        // truncation, this vector breaks and the wallet <-> node identities
+        // silently diverge. Keep the two in lockstep.
+        let did = did_from_public_key(&[7u8; 32]);
+        assert_eq!(did, "did:omnia:4bb06f8e4e3a7715d201d573d0aa4237");
     }
 
     #[test]
