@@ -287,6 +287,7 @@ mod tests {
             economics: Arc::new(Mutex::new(EconomicsState::new())),
             event_store: Arc::new(RwLock::new(event_store)),
             transfer_history: Arc::new(RwLock::new(Vec::new())),
+            challenges: crate::api::wallet_auth::new_challenge_store(),
             peers: Arc::new(RwLock::new(peers)),
             #[cfg(feature = "metrics")]
             metrics: Arc::new(metrics),

@@ -19,6 +19,7 @@ pub mod events;
 pub mod governance;
 pub mod node;
 pub mod shards;
+pub mod wallet_auth;
 
 use std::sync::Arc;
 
@@ -53,6 +54,8 @@ use crate::state::AppState;
         crate::api::node::node_peers,
         crate::api::node::list_validators,
         crate::api::errors::error_codes,
+        crate::api::wallet_auth::request_challenge,
+        crate::api::wallet_auth::login,
     ),
     components(schemas(
         crate::api::events::SubmitEventRequest,
@@ -64,6 +67,10 @@ use crate::state::AppState;
         crate::api::node::PeerInfo,
         crate::api::errors::ErrorCode,
         crate::api::errors::ErrorResponse,
+        crate::api::wallet_auth::ChallengeRequest,
+        crate::api::wallet_auth::ChallengeResponse,
+        crate::api::wallet_auth::LoginRequest,
+        crate::api::wallet_auth::LoginResponse,
     ))
 )]
 pub struct ApiDoc;
@@ -88,6 +95,8 @@ pub struct ApiDoc;
 /// | POST   | `/api/v1/economics/transfer`              | `economics::transfer_ubc` | JWT |
 /// | GET    | `/api/v1/economics/transfers`             | `economics::list_transfers` | JWT |
 /// | GET    | `/api/v1/errors`                          | `errors::error_codes`  | Public |
+/// | POST   | `/api/v1/auth/challenge`                  | `wallet_auth::request_challenge` | Public |
+/// | POST   | `/api/v1/auth/login`                      | `wallet_auth::login`   | Public |
 /// | GET    | `/api/v1/ceremony/state`                  | `ceremony::ceremony_state` | Public |
 /// | POST   | `/api/v1/ceremony/contribute`             | `ceremony::ceremony_contribute` | JWT |
 /// | GET    | `/api/v1/ceremony/transcript`             | `ceremony::ceremony_transcript` | Public |
@@ -124,7 +133,10 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/validators", get(node::list_validators))
         .route("/errors", get(errors::error_codes))
         .route("/ceremony/state", get(ceremony::ceremony_state))
-        .route("/ceremony/transcript", get(ceremony::ceremony_transcript));
+        .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
+        // Wallet challenge/signature login — issues JWTs, so must be public.
+        .route("/auth/challenge", post(wallet_auth::request_challenge))
+        .route("/auth/login", post(wallet_auth::login));
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
