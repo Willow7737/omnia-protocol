@@ -9,6 +9,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.81](https://github.com/Willow7737/omnia-protocol/compare/v0.1.80...v0.1.81) (2026-07-03)
+
+
+### Bug Fixes
+
+* **docker:** add bootstrap peer ID to OMNIA_BOOTSTRAP_NODES ([f615b46](https://github.com/Willow7737/omnia-protocol/commit/f615b46fd671a32b13a1c61625d1951608e3b945))
+* **docker:** add bootstrap peer ID to OMNIA_BOOTSTRAP_NODES ([18da0ba](https://github.com/Willow7737/omnia-protocol/commit/18da0ba6d43e395e3fc6e6067dd8594c73a162d3))
+* **test:** reset JWT secret cache + use try_new in integration tests ([5d84153](https://github.com/Willow7737/omnia-protocol/commit/5d841532259d57729ee4297f852e68b5dd911d0d))
+
 ## [0.1.80](https://github.com/Willow7737/omnia-protocol/compare/v0.1.79...v0.1.80) (2026-06-30)
 
 
