@@ -125,6 +125,7 @@ async fn start_test_server() -> (
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         transfer_history: Arc::new(RwLock::new(Vec::new())),
+        challenges: omnia_node::api::wallet_auth::new_challenge_store(),
         peers: Arc::new(RwLock::new(Vec::new())),
         #[cfg(feature = "metrics")]
         metrics: Arc::new(metrics),

@@ -68,6 +68,12 @@ aes-gcm = "0.10"
 # BLAKE3 hash for key derivation from passphrase
 blake3 = "1.5"
 
+# SHA-256 for deterministic wallet DID derivation from Ed25519 public keys.
+# Chosen over BLAKE3 for the DID because self-custodial clients (the Flutter
+# wallet) must reproduce the exact hash, and SHA-256 has a battle-tested,
+# ubiquitous implementation on every client platform.
+sha2 = "0.10"
+
 # Secure memory zeroization for key material cleanup
 zeroize = { version = "1", features = ["derive"] }
 
