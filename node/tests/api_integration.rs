@@ -187,6 +187,7 @@ fn build_test_app_state(port: u16) -> AppState {
         economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         transfer_history: Arc::new(RwLock::new(Vec::new())),
+        challenges: omnia_node::api::wallet_auth::new_challenge_store(),
         peers: Arc::new(RwLock::new(Vec::new())),
         metrics: Arc::new(metrics),
         started_at: Instant::now(),
@@ -1557,4 +1558,153 @@ async fn test_repeated_submissions_chain_and_do_not_self_slash() {
              submission self-slashed the validator and every later one failed"
         );
     }
+}
+
+// ===========================================================================
+//  Wallet challenge/signature authentication
+// ===========================================================================
+
+/// End-to-end: an on-device Ed25519 keypair completes challenge → sign →
+/// login, and the issued JWT works against an authenticated economics
+/// endpoint for the DID derived from the key.
+#[tokio::test]
+async fn test_wallet_challenge_login_flow() {
+    use omnia_node::api::wallet_auth::did_from_public_key;
+    use omnia_substrate::crypto::{Signer, SigningKey};
+
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    // Generate a fresh on-device keypair.
+    let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+    let pubkey_bytes = signing_key.verifying_key().to_bytes();
+    let pubkey_hex = hex::encode(pubkey_bytes);
+    let expected_did = did_from_public_key(&pubkey_bytes);
+
+    // Step 1: request a challenge.
+    let chal: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": pubkey_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    let nonce = chal["nonce"].as_str().unwrap().to_string();
+    assert_eq!(
+        chal["did"].as_str().unwrap(),
+        expected_did,
+        "server DID must match client-derived DID"
+    );
+    assert_eq!(chal["message"].as_str().unwrap(), format!("omnia-auth:{nonce}"));
+
+    // Step 2: sign the challenge message and log in.
+    let message = format!("omnia-auth:{nonce}");
+    let signature = signing_key.sign(message.as_bytes());
+    let sig_hex = hex::encode(signature.to_bytes());
+
+    let login_resp = client
+        .post(format!("{}/api/v1/auth/login", server.base_url))
+        .json(&json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(login_resp.status(), 200, "valid login should return 200");
+    let login: Value = login_resp.json().await.unwrap();
+    let token = login["token"].as_str().unwrap().to_string();
+    assert_eq!(login["did"].as_str().unwrap(), expected_did);
+
+    // Step 3: use the JWT against an authenticated endpoint for this DID.
+    let bal_resp = client
+        .get(format!("{}/api/v1/economics/balance/{}", server.base_url, expected_did))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bal_resp.status(), 200, "balance lookup with wallet JWT should succeed");
+    let bal: Value = bal_resp.json().await.unwrap();
+    assert_eq!(bal["did"].as_str().unwrap(), expected_did);
+    assert!(
+        bal["is_registered"].as_bool().unwrap(),
+        "login should have registered the DID"
+    );
+}
+
+/// A reused nonce must be rejected (single-use replay protection).
+#[tokio::test]
+async fn test_wallet_login_nonce_is_single_use() {
+    use omnia_substrate::crypto::{Signer, SigningKey};
+
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+    let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
+
+    let chal: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": pubkey_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let nonce = chal["nonce"].as_str().unwrap().to_string();
+    let sig_hex = hex::encode(signing_key.sign(format!("omnia-auth:{nonce}").as_bytes()).to_bytes());
+    let payload = json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce });
+
+    // First login consumes the nonce.
+    let first = client
+        .post(format!("{}/api/v1/auth/login", server.base_url))
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 200);
+
+    // Replay with the same nonce must fail.
+    let second = client
+        .post(format!("{}/api/v1/auth/login", server.base_url))
+        .json(&payload)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second.status(), 401, "reused nonce must be rejected");
+}
+
+/// A signature that does not match the challenge must be rejected.
+#[tokio::test]
+async fn test_wallet_login_bad_signature_rejected() {
+    use omnia_substrate::crypto::{Signer, SigningKey};
+
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+    let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
+
+    let chal: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": pubkey_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let nonce = chal["nonce"].as_str().unwrap().to_string();
+
+    // Sign the WRONG message.
+    let sig_hex = hex::encode(signing_key.sign(b"omnia-auth:not-the-nonce").to_bytes());
+
+    let resp = client
+        .post(format!("{}/api/v1/auth/login", server.base_url))
+        .json(&json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 401, "signature over wrong message must be rejected");
 }

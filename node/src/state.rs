@@ -341,6 +341,12 @@ pub struct AppState {
     /// See [`TransferRecord`] and [`record_transfer`]. Used by the
     /// `GET /api/v1/economics/transfers` endpoint.
     pub transfer_history: Arc<RwLock<Vec<TransferRecord>>>,
+    /// Outstanding wallet-login challenges, keyed by nonce.
+    ///
+    /// Populated by `POST /api/v1/auth/challenge` and consumed (single-use)
+    /// by `POST /api/v1/auth/login`. Entries are TTL-bound and pruned lazily.
+    /// See [`crate::api::wallet_auth`].
+    pub challenges: crate::api::wallet_auth::ChallengeStore,
     /// Known peers in the network.
     pub peers: Arc<RwLock<Vec<PeerInfo>>>,
     /// Prometheus metrics counters and gauges.
