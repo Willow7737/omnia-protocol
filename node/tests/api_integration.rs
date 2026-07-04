@@ -1593,7 +1593,11 @@ async fn test_wallet_challenge_login_flow() {
         .unwrap();
 
     let nonce = chal["nonce"].as_str().unwrap().to_string();
-    assert_eq!(chal["did"].as_str().unwrap(), expected_did, "server DID must match client-derived DID");
+    assert_eq!(
+        chal["did"].as_str().unwrap(),
+        expected_did,
+        "server DID must match client-derived DID"
+    );
     assert_eq!(chal["message"].as_str().unwrap(), format!("omnia-auth:{nonce}"));
 
     // Step 2: sign the challenge message and log in.
@@ -1622,7 +1626,10 @@ async fn test_wallet_challenge_login_flow() {
     assert_eq!(bal_resp.status(), 200, "balance lookup with wallet JWT should succeed");
     let bal: Value = bal_resp.json().await.unwrap();
     assert_eq!(bal["did"].as_str().unwrap(), expected_did);
-    assert!(bal["is_registered"].as_bool().unwrap(), "login should have registered the DID");
+    assert!(
+        bal["is_registered"].as_bool().unwrap(),
+        "login should have registered the DID"
+    );
 }
 
 /// A reused nonce must be rejected (single-use replay protection).
