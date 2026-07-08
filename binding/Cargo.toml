@@ -19,7 +19,7 @@ postcard = { version = "1", features = ["alloc"] }
 blake3 = "1.5"
 thiserror = "2.0"
 tracing = "0.1"
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+ed25519-dalek = { version = "3.0", features = ["rand_core"] }
 pqc_dilithium = { version = "0.2", optional = true }
 rand = "0.8"
 serde_bytes = "0.11"

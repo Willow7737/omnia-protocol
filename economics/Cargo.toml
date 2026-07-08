@@ -16,7 +16,7 @@ thiserror = "2.0"
 tracing = "0.1"
 hex = "0.4"
 # C-9 fix: Ed25519 signature verification for useful-work proofs
-ed25519-dalek = { version = "2.1", features = ["serde"] }
+ed25519-dalek = { version = "3.0", features = ["serde"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

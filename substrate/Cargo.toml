@@ -26,7 +26,7 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 postcard = { version = "1", features = ["alloc"] }
 
 # FIX 2: Ed25519 signatures
-ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
+ed25519-dalek = { version = "3.0", features = ["rand_core", "serde"] }
 rand = "0.8"
 
 # FIX 4: Async runtime

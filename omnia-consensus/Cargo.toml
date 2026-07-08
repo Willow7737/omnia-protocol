@@ -27,5 +27,5 @@ persistent-storage = []
 [dev-dependencies]
 proptest = "1.4"
 tempfile = "3"
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+ed25519-dalek = { version = "3.0", features = ["rand_core"] }
 rand = "0.8"
