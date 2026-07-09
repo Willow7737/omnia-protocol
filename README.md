@@ -6,7 +6,7 @@
   <a href="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml">
     <img src="https://github.com/Willow7737/omnia-protocol/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status">
   </a>
-  <img src="https://img.shields.io/badge/Status-Active_Development-00ff88?style=for-the-badge&logo=github" alt="Status">
+  <img src="https://img.shields.io/badge/Status-Live_Testnet-00ff88?style=for-the-badge&logo=github" alt="Status">
   <img src="https://img.shields.io/badge/Tests-Run_cargo_test-00ff88?style=for-the-badge&logo=rust" alt="Tests">
   <img src="https://img.shields.io/badge/Lines-85,000+-ff6b6b?style=for-the-badge&logo=rust" alt="Lines">
   <img src="https://img.shields.io/badge/License-CC0_Public_Domain-ff6b6b?style=for-the-badge" alt="License">
@@ -35,7 +35,35 @@
 | 💻 Contributor          | [CONTRIBUTING.md](CONTRIBUTING.md)                                             | [docs/architecture/](docs/architecture/)                                       |
 | 🏗️ Systems Architect    | [docs/reference/blueprint-reference.md](docs/reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](docs/architecture/trait-boundaries.md) |
 | 📦 Validator Operator   | [docs/building/feature-matrix.md](docs/building/feature-matrix.md)             | [docs/operations/validator-setup.md](docs/operations/validator-setup.md)       |
+| 📱 Wallet user          | [Omnia Wallet](https://github.com/Willow7737/Omnia-Wallet)                     | [Live node](#-live-right-now)                                                  |
 | 📊 Performance Engineer | [docs/reference/benchmark-gates.md](docs/reference/benchmark-gates.md)         | [docs/architecture/pipeline-design.md](docs/architecture/pipeline-design.md)   |
+
+
+---
+
+## 🟢 Live Right Now
+
+The Omnia stack is no longer only a codebase — it is **running in production (testnet)** with a full client ecosystem:
+
+| Piece | Where | Status |
+| :---- | :---- | :----- |
+| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (single node, v0.1.76+, protocol `/omnia/4.0.0`) |
+| **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
+| **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
+| **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
+
+The wallet talks to this node over three auth endpoints added in July 2026 (`node/src/api/wallet_auth.rs`):
+
+- `POST /api/v1/auth/challenge` + `POST /api/v1/auth/login` — self-custody login: an on-device Ed25519 key signs a single-use nonce (`"omnia-auth:" + nonce`, verified with `verify_strict`); the node derives `did:omnia:` + `sha256(pubkey)[..32]`, registers it in the UBC quota system, and issues a JWT.
+- `POST /api/v1/auth/register` — JWT-authenticated, idempotent DID registration for externally-minted JWTs (the wallet's Supabase sign-in mints node JWTs via an edge function).
+
+Try it:
+
+```bash
+curl https://78.47.43.136.sslip.io/api/v1/node/info
+```
+
+The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
 
 ---
 
@@ -216,7 +244,7 @@ cargo bench --no-run
 | Solana settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
-| Mobile wallet              | 🌑 Not started          | Planned for post-testnet                             |
+| Mobile wallet              | ✅ **Shipped (v1)**     | [`Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) — dual-mode auth, live against the testnet node |
 | Validator network          | 🌑 Not started          | Single-node operator currently                       |
 | Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
 | Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
@@ -347,7 +375,7 @@ _Goal: Performance Validation_
 - ✅ Event submission now uses node's persistent keypair (not ephemeral)
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
-- 📋 Public testnet launch
+- ✅ Public testnet node **live** (single node at `78.47.43.136.sslip.io`; multi-node rollout planned)
 
 #### v0.1.69 Critical Security Hardening
 
@@ -370,11 +398,22 @@ _Goal: Performance Validation_
 - Genesis hex — fixed in `substrate/src/genesis.rs`
 - Phase 2 ceremony — fixed in `omnia-adapters/src/setup/ceremony_server.rs`
 
+### Phase 5.5: Live Node & Wallet Ecosystem (July 2026) ✅ Shipped
+
+_Goal: Real users on a real node_
+
+- ✅ Public testnet node deployed (`https://78.47.43.136.sslip.io`, Docker, single node)
+- ✅ Wallet challenge/signature auth — `POST /api/v1/auth/challenge` + `/auth/login` (Ed25519, single-use TTL nonces, domain-separated messages, `verify_strict`, auto DID registration)
+- ✅ `POST /api/v1/auth/register` — idempotent DID registration for externally-minted JWTs (DID taken from the verified JWT `sub`, never the request body)
+- ✅ SHA-256 DID derivation shared with clients (`did:omnia:` + `sha256(pubkey)[..32]`, cross-repo pinned test vector)
+- ✅ **Omnia Wallet v1** ([repo](https://github.com/Willow7737/Omnia-Wallet)): Flutter, dual-mode auth (self-custody keys or Google/GitHub/email via Supabase + `mint-node-jwt` edge function), balance/send/history with per-transaction detail, governance voting, QR send/receive, address book, team news feed with threaded replies and images, in-app notifications, biometric app lock — verified E2E against the live node
+- ✅ Web dashboard + website deployed (`omnia-protocol-interface`, `omnia-web`)
+
 ### Future Phases
 
 | Phase                     | Goal                                            | Status       |
 | ------------------------- | ----------------------------------------------- | ------------ |
-| Phase 6: Public Testnet   | Multi-node testnet, external audit              | 📋 Planned   |
+| Phase 6: Public Testnet   | Multi-node testnet, external audit              | 🔄 In progress (single node live) |
 | Phase 7: Mainnet          | Sybil resistance, GC, formal verification       | 📋 Planned   |
 | Phase 8: Decentralization | Hardware mesh, production PoUW                  | 📋 Long-term |
 | Phase 9: Universality     | Relativistic consensus, physical-digital fusion | 📋 Long-term |

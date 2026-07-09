@@ -39,12 +39,15 @@ All CLI flags support `OMNIA_` prefix environment variable overrides (e.g., `OMN
 
 ## REST API Endpoints
 
-The node exposes 14 REST API endpoints under `/api/v1/`:
+The node exposes 17 REST API endpoints under `/api/v1/`:
 
 | Method | Path                                   | Description                  |
 | ------ | -------------------------------------- | ---------------------------- |
 | GET    | `/health`                              | Node liveness probe          |
 | GET    | `/metrics`                             | Prometheus metrics           |
+| POST   | `/api/v1/auth/challenge`               | Wallet login step 1: issue single-use nonce for an Ed25519 pubkey |
+| POST   | `/api/v1/auth/login`                   | Wallet login step 2: verify signature, register DID, issue JWT |
+| POST   | `/api/v1/auth/register`                | Register the JWT's own DID (idempotent; for externally-minted JWTs) |
 | GET    | `/api/v1/node/info`                    | Node identity and status     |
 | GET    | `/api/v1/node/peers`                   | Connected peer list          |
 | POST   | `/api/v1/events`                       | Submit a new event           |

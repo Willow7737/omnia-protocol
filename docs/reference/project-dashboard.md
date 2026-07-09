@@ -2,20 +2,21 @@
 
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-07-09
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
-## Current Project Status: Phases 0–5 Complete | Post-Phase 5: Audit & Hardening
+## Current Project Status: Live Testnet (single node) + Wallet Ecosystem Shipped
 
 | Metric                  | Value                                                                                                                                                                                                                       | Status                                                   |
 | :---------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- |
-| **Version**             | v0.1.68                                                                                                                                                                                                                     | Latest release                                           |
-| **Phase**               | Post-Phase 5: Audit & Hardening                                                                                                                                                                                             | 🔄 In Progress                                           |
+| **Version**             | v0.1.76+                                                                                                                                                                                                                     | Latest release                                           |
+| **Phase**               | Phase 6 (Public Testnet): single node **live**, wallet ecosystem shipped; multi-node + external audit next                                                                                                                  | 🔄 In Progress                                           |
 | **Overall Completion**  | **96%** (8 of 23 v0.1.68 audit findings remediated + 16 of 16 v0.1.69 critical findings closed; 15 medium-priority tracked)                                                                                                                  | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance                                                                                                                                                                                              | Needs Growth                                             |
 | **Code Health**         | Run `cargo test --workspace` for current count (1,283 sync + 99 async), 86,000+ lines, 225 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                  | Verified                                                 |
-| **Network Status**      | P2P wired to consensus via gossip; Docker 5-node testnet with monitoring stack                                                                                                                                              | Integration complete                                     |
+| **Network Status**      | 🟢 **Public node live** at `https://78.47.43.136.sslip.io` (Docker, single node); P2P wired to consensus via gossip; Docker 5-node testnet + monitoring for local runs                                                       | Live                                                     |
+| **Client Ecosystem**    | 📱 [Omnia Wallet v1](https://github.com/Willow7737/Omnia-Wallet) (Flutter, dual-mode auth, verified E2E against the live node) · 🖥️ [web dashboard](https://github.com/Willow7737/omnia-protocol-interface) · 🌐 [site](https://github.com/Willow7737/omnia-web) | Shipped                                                  |
 | **Security Posture**    | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved                                         |
 | **Mutation Testing**    | 75% minimum score on primitives; consensus sharded across 4 parallel jobs                                                                                                                                                   | Nightly CI                                               |
 
