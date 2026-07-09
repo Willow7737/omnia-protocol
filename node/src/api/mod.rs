@@ -56,6 +56,7 @@ use crate::state::AppState;
         crate::api::errors::error_codes,
         crate::api::wallet_auth::request_challenge,
         crate::api::wallet_auth::login,
+        crate::api::wallet_auth::register,
     ),
     components(schemas(
         crate::api::events::SubmitEventRequest,
@@ -97,6 +98,7 @@ pub struct ApiDoc;
 /// | GET    | `/api/v1/errors`                          | `errors::error_codes`  | Public |
 /// | POST   | `/api/v1/auth/challenge`                  | `wallet_auth::request_challenge` | Public |
 /// | POST   | `/api/v1/auth/login`                      | `wallet_auth::login`   | Public |
+/// | POST   | `/api/v1/auth/register`                   | `wallet_auth::register` | JWT   |
 /// | GET    | `/api/v1/ceremony/state`                  | `ceremony::ceremony_state` | Public |
 /// | POST   | `/api/v1/ceremony/contribute`             | `ceremony::ceremony_contribute` | JWT |
 /// | GET    | `/api/v1/ceremony/transcript`             | `ceremony::ceremony_transcript` | Public |
@@ -140,6 +142,9 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
+        // Register the caller's DID (for externally-minted JWTs, e.g. the
+        // wallet's Supabase sign-in; challenge/signature login self-registers)
+        .route("/auth/register", post(wallet_auth::register))
         // Events
         .route("/events", post(events::submit_event).get(events::list_events))
         .route("/events/:id", get(events::get_event))
