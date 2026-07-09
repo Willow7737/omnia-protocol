@@ -95,3 +95,10 @@ Stage Summary:
   - `decrement_slash_count_by` clamps to zero (does not error when amount > current, only errors when current == 0).
   - `undo_slash` works post-ejection and decrements points back below the ejection_threshold.
   - `compute_burn_amount_for` returns `None` for unregistered (stake == 0) and `Some(0)` for a registered validator with 0% burn.
+
+
+## 2026-07-09 — Live testnet + wallet ecosystem documentation refresh
+
+- **Context:** the stack went live: public single-node testnet at `https://78.47.43.136.sslip.io` (v0.1.76+), Omnia Wallet v1 shipped ([Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)) with dual-mode auth, and the node grew three wallet-auth endpoints (`/auth/challenge`, `/auth/login`, `/auth/register` — PRs #264/#265/#271).
+- **Docs updated:** README (Live Right Now section, stub table, Phase 5.5, Phase 6 status), docs/reference/status.md (REQ-6.4 done, REQ-W.* section, totals), project-dashboard.md, roadmap.md, stub-inventory.md, use-cases/faq.md, operations/cli-and-api.md (auth endpoints), reference/benchmark-gates.md (fresh local reference run).
+- **Verification:** full wallet flow verified E2E against the live node (challenge → login → DID registered with 1,000 UBC quota → balance); criterion benchmark suite re-run locally (see benchmark-gates.md for numbers + environment caveats).

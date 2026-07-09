@@ -77,11 +77,11 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 ## Phase 1: Planned Features (Not Started)
 
-### Mobile Wallet — **NOT STARTED** 🌑
+### Mobile Wallet — **SHIPPED** ✅
 
-- **Status**: No code exists
-- **What's planned**: React Native / Flutter wallet with biometric auth, QR-based transfers, UBC balance tracking
-- **Phase**: Planned for Phase 1
+- **Status**: v1 shipped July 2026 — lives in its own repo: [Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)
+- **What shipped**: Flutter wallet with dual-mode auth (on-device Ed25519 challenge/signature login **or** Google/GitHub/email via Supabase + `mint-node-jwt` edge function), UBC balance/send/history with per-transaction detail, governance voting, QR-based transfers, address book, biometric app lock, team news feed, in-app notifications — verified end-to-end against the live testnet node
+- **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`)
 
 ### Validator Network — **NOT STARTED** 🌑
 
@@ -124,7 +124,7 @@ This document catalogs all stub, placeholder, and partial implementations in the
 | Solana Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
 | Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
 | Cosmos Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
-| Mobile Wallet        | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+| Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅ SHIPPED (v1, July 2026) | Dual-mode auth, live vs. testnet node | Done |
 | Validator Network    | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |

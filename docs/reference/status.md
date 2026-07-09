@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-07-09
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -94,7 +94,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.1** | Real ZK Circuit (arkworks R1CS + Groth16)            | P0       | ✅ Completed   |
 | **REQ-6.2** | Real PQC Signatures (Dilithium)                      | P0       | ✅ Completed   |
 | **REQ-6.3** | Fee Mechanism (FeeSchedule + QuotaSystem)            | P1       | ✅ Completed   |
-| **REQ-6.4** | Mobile Wallet                                        | P1       | 🌑 Not Started |
+| **REQ-6.4** | Mobile Wallet                                        | P1       | ✅ Completed   |
 | **REQ-6.5** | Validator Network                                    | P0       | 🌑 Not Started |
 | **REQ-6.6** | Slashing (3-tier Gradual: Warning → Jail → Ejection) | P1       | ✅ Completed   |
 | **REQ-6.7** | Conviction Voting                                    | P2       | 🌑 Not Started |
@@ -136,7 +136,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-P4.2** | Solana Settlement Adapter                   | P1       | 🔄 Stub        |
 | **REQ-P4.3** | Celestia Settlement Adapter                 | P1       | 🔄 Stub        |
 | **REQ-P4.4** | Validator Network (multi-node)              | P0       | 🌑 Not Started |
-| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🌑 Not Started |
+| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🔄 Live (single node) |
 | **REQ-P4.6** | Dynamic Fee Mechanism (EIP-1559-style)      | P1       | 📋 Planned     |
 | **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2       | ✅ Completed   |
 | **REQ-P4.8** | VRF Spec Compliance (ADR-012)               | P2       | 📋 Deferred    |
@@ -188,6 +188,21 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 ---
 
+## 16. Live Testnet & Wallet Ecosystem (July 2026)
+
+The protocol is now **running in public** with a full client ecosystem. Node: `https://78.47.43.136.sslip.io` (single node, v0.1.76+, protocol `/omnia/4.0.0`).
+
+| ID          | Requirement                                                        | Priority | Status       |
+| :---------- | :----------------------------------------------------------------- | :------- | :----------- |
+| **REQ-W.1** | Wallet challenge/signature auth (`/auth/challenge`, `/auth/login`) | P0       | ✅ Completed |
+| **REQ-W.2** | Idempotent DID registration for external JWTs (`/auth/register`)   | P0       | ✅ Completed |
+| **REQ-W.3** | SHA-256 DID derivation shared with clients (pinned test vector)    | P0       | ✅ Completed |
+| **REQ-W.4** | Mobile wallet v1 ([Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)): balance, send, history, governance | P1 | ✅ Completed |
+| **REQ-W.5** | Dual-mode auth (self-custody + Supabase via `mint-node-jwt`)       | P1       | ✅ Completed |
+| **REQ-W.6** | Public single-node testnet deployment                              | P0       | ✅ Completed |
+
+---
+
 ## 📊 Summary of Completion
 
 | Category                    | Total   | ✅ Done | ⚠️ Partial | 🔄 Stub/Open | 🌑 Not Started | 📋 Planned | Progress        |
@@ -203,11 +218,12 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 0 (Sprint 4)**      | 18      | 18      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Phase 3**                 | 10      | 10      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Phase 4**                 | 9       | 9       | 0          | 0            | 0              | 0          | ██████████ 100% |
-| **Future**                  | 8       | 4       | 0          | 0            | 4              | 0          | █████░░░░░ 50%  |
+| **Future**                  | 8       | 5       | 0          | 0            | 3              | 0          | ██████░░░░ 63%  |
 | **v0.1.56 + v0.1.68 Audit** | 23      | 9       | 0          | 0            | 0              | 14         | ████░░░░░░ 39%  |
 | **v0.1.69 Critical Audit**  | 16      | 16      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Limit Verification**      | 39      | 39      | 0          | 0            | 0              | 0          | ██████████ 100% |
-| **TOTAL**                   | **186** | **157** | **0**      | **1**        | **4**          | **14**     | ██████████ 96%  |
+| **Wallet & Live Testnet**   | 6       | 6       | 0          | 0            | 0              | 0          | ██████████ 100% |
+| **TOTAL**                   | **192** | **164** | **0**      | **1**        | **3**          | **14**     | █████████░ 85%  |
 
 ---
 
