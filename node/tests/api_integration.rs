@@ -1632,6 +1632,70 @@ async fn test_wallet_challenge_login_flow() {
     );
 }
 
+/// `POST /auth/register` registers the authenticated caller's DID —
+/// the path used by wallets whose JWT was minted outside the node
+/// (e.g. Supabase-account sign-in), where no challenge/login ever ran.
+#[tokio::test]
+async fn test_auth_register_registers_external_did() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    // A DID the node has never seen, with a JWT minted directly (as the
+    // Supabase edge function does — same secret, sub = did).
+    let did = "did:omnia:9f1e2d3c";
+    let token = make_valid_token(did);
+
+    // Before registration, balance is a 404.
+    let before = client
+        .get(format!("{}/api/v1/economics/balance/{}", server.base_url, did))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(before.status(), 404, "unregistered DID should 404");
+
+    // Register.
+    let reg = client
+        .post(format!("{}/api/v1/auth/register", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reg.status(), 200);
+    let reg_body: Value = reg.json().await.unwrap();
+    assert_eq!(reg_body["did"].as_str().unwrap(), did);
+    assert!(reg_body["newly_registered"].as_bool().unwrap());
+    assert!(reg_body["is_registered"].as_bool().unwrap());
+
+    // Idempotent: second call succeeds and reports it already existed.
+    let again = client
+        .post(format!("{}/api/v1/auth/register", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(again.status(), 200);
+    let again_body: Value = again.json().await.unwrap();
+    assert!(!again_body["newly_registered"].as_bool().unwrap());
+
+    // Balance now resolves.
+    let after = client
+        .get(format!("{}/api/v1/economics/balance/{}", server.base_url, did))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(after.status(), 200, "registered DID should have a balance");
+
+    // No JWT -> 401.
+    let anon = client
+        .post(format!("{}/api/v1/auth/register", server.base_url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), 401, "register requires a JWT");
+}
+
 /// A reused nonce must be rejected (single-use replay protection).
 #[tokio::test]
 async fn test_wallet_login_nonce_is_single_use() {

@@ -325,6 +325,60 @@ pub async fn login(
     ))
 }
 
+/// Handler for `POST /api/v1/auth/register` (authenticated).
+///
+/// Registers the **authenticated caller's** DID in the economics quota
+/// system if it is not registered yet. Idempotent: calling it for an
+/// already-registered DID is a no-op that reports the current state.
+///
+/// This exists for clients whose JWTs are minted *outside* the
+/// challenge/signature flow — e.g. the mobile wallet's Supabase sign-in,
+/// where a server-assisted JWT carries a DID the node has never seen.
+/// Challenge/signature logins never need it (login already registers).
+///
+/// The DID comes from the verified JWT `sub` claim, never the request body,
+/// so a caller can only ever register itself.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/register",
+    responses(
+        (status = 200, description = "DID registered (or already was)"),
+        (status = 401, description = "Missing/invalid JWT"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn register(
+    State(state): State<AppState>,
+    axum::Extension(caller): axum::Extension<crate::api::auth::CallerIdentity>,
+) -> (StatusCode, Json<Value>) {
+    let did = caller.caller_id;
+
+    let mut economics = state.economics.lock().await;
+    let newly_registered = if economics.quota.is_registered(&did) {
+        false
+    } else {
+        economics.quota.register_did(&did);
+        tracing::info!(did = %did, "Registered DID via /auth/register");
+        true
+    };
+
+    let balance = economics.balance_of(&did).unwrap_or(0);
+    let quota = economics.quota.quota_of(&did).unwrap_or(0);
+    let epoch = economics.current_epoch();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "did": did,
+            "newly_registered": newly_registered,
+            "balance": balance,
+            "monthly_quota": quota,
+            "current_epoch": epoch,
+            "is_registered": true,
+        })),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
