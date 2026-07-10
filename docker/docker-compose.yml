@@ -13,7 +13,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9090:8080/tcp"
@@ -49,7 +49,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9091:8080/tcp"
@@ -75,7 +75,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9092:8080/tcp"
@@ -101,7 +101,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9093:8080/tcp"
@@ -127,7 +127,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=omnia-testnet-jwt-secret-CHANGE-ME
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
     ports:
       - "9094:8080/tcp"
