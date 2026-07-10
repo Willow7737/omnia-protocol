@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Index and summaries of all Architecture Decision Records (ADRs)
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-07-10
 
 > **Note:** ADR-004 is intentionally reserved/skipped.
 
@@ -30,6 +30,10 @@
 | ADR-019 | Fast-Sync Protocol                 | ✅ Adopted | BLAKE3 checkpoints, supermajority selection, P2P download                                       |
 | ADR-020 | Kyber KEM / ML-KEM Integration     | ✅ Adopted | FIPS-203 ML-KEM-768 (replaces pqc_kyber after KyberSlash)                                       |
 | ADR-021 | Gossip Message Compression         | ✅ Adopted | Snappy compression for messages >256 bytes                                                      |
+| ADR-022 | Architecture Audit Remediation     | 🔄 Proposed | Remediation plan for first independent architecture audit                                       |
+| ADR-023 | Second Audit Remediation           | 🔄 Proposed | Verification + fixes for findings F-1 through F-27                                              |
+| ADR-024 | Third-Pass Audit Remediation       | 🔄 Proposed | Verification + fixes for findings NEW-C1 through NEW-L2                                         |
+| ADR-025 | Two-Lane Consensus                 | 🔄 Proposed | Lane 0 consensusless UBC fast path + Lane 1 DAG-native commit rule; ZK demoted to checkpointing |
 
 ## Source Files
 
@@ -57,6 +61,10 @@ All ADRs are located in `docs/adr/`:
 | `ADR-019-fast-sync-protocol.md`                | Fast-Sync Protocol                 |
 | `ADR-020-kyber-kem-ml-kem-integration.md`      | Kyber KEM / ML-KEM Integration     |
 | `ADR-021-gossip-message-compression.md`        | Gossip Message Compression         |
+| `ADR-022-architecture-audit-remediation.md`    | Architecture Audit Remediation     |
+| `ADR-023-second-audit-remediation.md`          | Second Audit Remediation           |
+| `ADR-024-third-audit-remediation.md`           | Third-Pass Audit Remediation       |
+| `ADR-025-two-lane-consensus.md`                | Two-Lane Consensus                 |
 
 ---
 
