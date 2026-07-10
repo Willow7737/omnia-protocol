@@ -175,8 +175,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **AUDIT-11** | `aes_gcm.rs` uses `expect()` instead of returning `Result`            | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-12** | `combine_signatures` doesn't deduplicate partials                     | 🟡 Medium | ✅ Remediated |
 | **AUDIT-13** | PQC feature declared but no implementation                            | 🟡 Medium | 📋 Tracked    |
-| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated         | 🟡 Medium | 📋 Tracked    |
-| **AUDIT-15** | Pipeline workers are stubs (log only, no processing)                  | 🟡 Medium | 📋 Tracked    |
+| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated         | 🟡 Medium | ✅ Remediated (ADR-025 Stage 1: bloom dedup + priority queue wired into `GossipProtocol`; compact wire format v2 for broadcast) |
+| **AUDIT-15** | Pipeline workers are stubs (log only, no processing)                  | 🟡 Medium | 📋 Tracked — superseded per ADR-025 Stage 3 (Lane 0 ack-aggregation workers replace the stub pipeline) |
 | **AUDIT-16** | Event submission uses ephemeral keypairs                              | 🟡 Medium | ✅ Remediated |
 | **AUDIT-17** | `UsefulWorkProof::verify_stub()` is only verification                 | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-18** | `UsefulWorkType` fields are private (can't construct externally)      | 🟡 Medium | 📋 Tracked    |

@@ -300,6 +300,49 @@ impl Event {
         Self::new(creator, 0, vector_clock, None, None, payload)
     }
 
+    /// Reconstruct a signed event from its content fields, recomputing the
+    /// derived fields instead of trusting the wire.
+    ///
+    /// Wire formats that omit derivable fields (compact gossip encoding)
+    /// use this constructor: the creator identity is re-derived from the
+    /// public key (`blake3_hash_domain("omnia-creator", pubkey)`) and the
+    /// event ID is recomputed from the content hash, so a sender cannot
+    /// claim an ID or creator that does not match what was signed. The
+    /// returned event has [`EventStatus::Pending`] and a zero ack count —
+    /// consensus state is never accepted from the wire.
+    ///
+    /// Callers must still run [`validate()`](Self::validate) to check the
+    /// signature against the recomputed ID.
+    #[allow(clippy::too_many_arguments)] // mirrors the wire layout 1:1
+    pub fn from_signed_parts(
+        sequence: u64,
+        timestamp: u64,
+        vector_clock: VectorClock,
+        self_parent: Option<EventId>,
+        other_parent: Option<EventId>,
+        payload: Payload,
+        creator_pubkey: [u8; 32],
+        signature: [u8; 64],
+    ) -> Result<Self, EventValidationError> {
+        let creator = blake3_hash_domain(b"omnia-creator", &creator_pubkey);
+        let mut event = Self {
+            id: [0u8; 32],
+            creator,
+            sequence,
+            timestamp,
+            vector_clock,
+            self_parent,
+            other_parent,
+            payload,
+            creator_pubkey,
+            signature,
+            status: EventStatus::Pending,
+            ack_count: 0,
+        };
+        event.id = event.compute_hash()?;
+        Ok(event)
+    }
+
     /// Compute the BLAKE3 hash of this event (used as its ID).
     /// Includes creator_pubkey and vector_clock in the hash input for binding.
     fn compute_hash(&self) -> Result<EventId, EventValidationError> {

@@ -1,23 +1,31 @@
 //! Compact event encoding for gossip optimization
 //!
-//! Uses protobuf-style encoding with delta compression for vector clocks
-//! to reduce per-event wire size by ~40%. Vector clocks are delta-encoded
-//! against the sender's last-known frontier, sending only the differences.
+//! Two complementary mechanisms live here:
 //!
-//! # Wire Format
+//! 1. **Broadcast wire format (integrated)** — [`encode_compact_wire`] /
+//!    [`decode_compact_wire`] serialize events for the gossip topic with
+//!    every *derivable* field elided: the 32-byte event ID (content hash),
+//!    the 32-byte creator (hash of the public key), and the sender-claimed
+//!    consensus status. The receiver recomputes them via
+//!    `Event::from_signed_parts`, saving 64+ bytes per event AND removing
+//!    the sender's ability to even express a mismatching ID or creator.
+//!    Messages carry wire-format version byte `2`
+//!    (`WIRE_FORMAT_VERSION_COMPACT_EVENT`); receivers accept both this
+//!    and the full version-1 format.
 //!
-//! A `CompactEvent` is encoded with postcard and optionally compressed
-//! with snappy (consistent with the existing gossip serialization).
-//! The delta clock is varint-encoded for compactness.
-//!
-//! # Delta Compression
-//!
-//! When a node knows the remote peer's frontier (the last vector clock
-//! it saw from that peer), it can encode only the entries that have
-//! advanced since then. The receiver reconstructs the full vector clock
-//! by applying the delta to its local frontier for that peer.
+//! 2. **Per-peer delta compression (reserved for the sync path)** —
+//!    [`CompactEncoder`] delta-encodes vector clocks against a per-peer
+//!    frontier. This needs point-to-point context (each peer has a
+//!    different frontier), which gossipsub topic broadcast cannot provide;
+//!    it is intended for the fast-sync / event-request path where the
+//!    remote frontier is known. Note that since the bincode→postcard wire
+//!    migration, clock *values* are already varint-encoded on the wire —
+//!    the remaining delta win is dropping unchanged entries (32-byte node
+//!    IDs), which only a real frontier enables.
 
-use omnia_primitives::{Event, EventId, NodeId, VectorClock};
+use omnia_primitives::{
+    Event, EventId, NodeId, VectorClock, MAX_POSTCARD_INPUT_SIZE, WIRE_FORMAT_VERSION_COMPACT_EVENT,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -491,6 +499,95 @@ impl CompactEncoder {
     }
 }
 
+// ── Peer-agnostic wire helpers (broadcast path) ─────────────────────────
+//
+// `CompactEncoder::encode`/`decode` delta-compress against a *per-peer*
+// frontier, which fits point-to-point sync but not gossipsub broadcast
+// (one published message reaches peers with different frontiers, and the
+// postcard wire format already varint-encodes clock values). What broadcast
+// CAN safely shed are the event's *derivable* fields: the 32-byte creator
+// (a domain-separated hash of the public key) and the 32-byte event ID
+// (the content hash), plus the sender-claimed consensus status. The
+// receiver recomputes all of them via `Event::from_signed_parts`, so a
+// sender cannot even express a mismatching ID or creator on the wire.
+
+/// Compact broadcast representation: an [`Event`] minus every field the
+/// receiver can (and must) derive itself — `id`, `creator`, `status`,
+/// and `ack_count`. Saves 64+ bytes per event on the wire.
+#[derive(Serialize, Deserialize)]
+struct CompactWireEvent {
+    sequence: u64,
+    timestamp: u64,
+    vector_clock: VectorClock,
+    self_parent: Option<EventId>,
+    other_parent: Option<EventId>,
+    payload: Vec<u8>,
+    creator_pubkey: [u8; 32],
+    #[serde(with = "serde_array_64")]
+    signature: [u8; 64],
+}
+
+/// Encode an event for topic broadcast: `[version 2] ++ postcard(CompactWireEvent)`.
+///
+/// Derivable fields (`id`, `creator`, consensus status) are omitted; the
+/// receiver recomputes them from the signed content. The round trip is
+/// lossless by construction — there is nothing to reconstruct that is not
+/// carried verbatim or recomputed from it.
+pub fn encode_compact_wire(event: &Event) -> Result<Vec<u8>, EncodingError> {
+    let wire = CompactWireEvent {
+        sequence: event.sequence,
+        timestamp: event.timestamp,
+        vector_clock: event.vector_clock.clone(),
+        self_parent: event.self_parent,
+        other_parent: event.other_parent,
+        payload: event.payload.clone(),
+        creator_pubkey: event.creator_pubkey,
+        signature: event.signature,
+    };
+    let mut bytes = vec![WIRE_FORMAT_VERSION_COMPACT_EVENT];
+    bytes.extend(postcard::to_allocvec(&wire).map_err(|e| EncodingError::SerializationError(e.to_string()))?);
+    Ok(bytes)
+}
+
+/// Check whether a wire message carries a compact-encoded event.
+pub fn is_compact_wire(data: &[u8]) -> bool {
+    data.first() == Some(&WIRE_FORMAT_VERSION_COMPACT_EVENT)
+}
+
+/// Decode a compact wire message produced by [`encode_compact_wire`].
+///
+/// The creator identity and event ID are recomputed from the carried
+/// content (see [`Event::from_signed_parts`]); the returned event has
+/// `Pending` status and a zero ack count — a receiver never trusts a
+/// sender's claimed consensus state. Callers MUST still run
+/// `Event::validate()` on the result to check the signature against the
+/// recomputed ID.
+pub fn decode_compact_wire(data: &[u8]) -> Result<Event, EncodingError> {
+    if !is_compact_wire(data) {
+        return Err(EncodingError::InvalidFormat(
+            "missing compact wire version byte".to_string(),
+        ));
+    }
+    if data.len() > MAX_POSTCARD_INPUT_SIZE {
+        return Err(EncodingError::InvalidFormat(
+            "compact wire input exceeds size limit".to_string(),
+        ));
+    }
+    let wire: CompactWireEvent =
+        postcard::from_bytes(&data[1..]).map_err(|e| EncodingError::DeserializationError(e.to_string()))?;
+    Event::from_signed_parts(
+        wire.sequence,
+        wire.timestamp,
+        wire.vector_clock,
+        wire.self_parent,
+        wire.other_parent,
+        wire.payload,
+        wire.creator_pubkey,
+        wire.signature,
+    )
+    .map_err(|e| EncodingError::DeserializationError(e.to_string()))
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -718,5 +815,101 @@ mod tests {
 
         let stored = encoder.get_frontier(&peer_id).unwrap();
         assert_eq!(*stored, frontier);
+    }
+
+    // ── Peer-agnostic wire helper tests ─────────────────────────────────
+
+    #[test]
+    fn test_compact_wire_roundtrip_validates() {
+        // A signed event must survive the wire round trip losslessly:
+        // same ID, and Event::validate() (hash + signature) must pass on
+        // the reconstructed event.
+        let keypair = omnia_crypto::generate_keypair();
+        let mut event = Event::genesis(node(7), vec![1, 2, 3, 4]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+
+        let bytes = encode_compact_wire(&event).unwrap();
+        assert!(is_compact_wire(&bytes));
+        assert_eq!(bytes[0], WIRE_FORMAT_VERSION_COMPACT_EVENT);
+
+        let decoded = decode_compact_wire(&bytes).unwrap();
+        assert_eq!(decoded.id, event.id);
+        assert_eq!(decoded.vector_clock, event.vector_clock);
+        assert_eq!(decoded.self_parent, event.self_parent);
+        assert_eq!(decoded.other_parent, event.other_parent);
+        decoded
+            .validate()
+            .expect("reconstructed event must pass hash + signature validation");
+    }
+
+    #[test]
+    fn test_compact_wire_roundtrip_with_parents() {
+        let keypair = omnia_crypto::generate_keypair();
+        let mut clock = VectorClock::new();
+        clock.set(node(1), 3);
+        clock.set(node(2), 7);
+        let mut event =
+            Event::new(node(1), 3, clock, Some([11u8; 32]), Some([22u8; 32]), vec![9, 9]).expect("valid event");
+        event.sign_with_keypair(&keypair).expect("signing");
+
+        let bytes = encode_compact_wire(&event).unwrap();
+        let decoded = decode_compact_wire(&bytes).unwrap();
+        assert_eq!(decoded.self_parent, Some([11u8; 32]));
+        assert_eq!(decoded.other_parent, Some([22u8; 32]));
+        decoded.validate().expect("reconstructed event must validate");
+    }
+
+    #[test]
+    fn test_compact_wire_smaller_than_full_format() {
+        // The compact format elides id (32B) + creator (32B) + consensus
+        // status, so it must always beat the full format by ~64 bytes.
+        let keypair = omnia_crypto::generate_keypair();
+        let mut clock = VectorClock::new();
+        for i in 0..10u8 {
+            clock.set(node(i + 1), 1000 + i as u64);
+        }
+        let mut event = Event::new(node(1), 5, clock, Some([1u8; 32]), None, vec![0u8; 64]).expect("valid event");
+        event.sign_with_keypair(&keypair).expect("signing");
+
+        let full = event.to_bytes().expect("full serialization");
+        let compact = encode_compact_wire(&event).unwrap();
+        assert!(
+            compact.len() + 60 <= full.len(),
+            "compact ({}) should be at least 60 bytes smaller than full ({})",
+            compact.len(),
+            full.len()
+        );
+    }
+
+    #[test]
+    fn test_decode_compact_wire_rejects_wrong_version() {
+        let data = [1u8, 0, 0, 0];
+        assert!(!is_compact_wire(&data));
+        assert!(decode_compact_wire(&data).is_err());
+    }
+
+    #[test]
+    fn test_decode_compact_wire_rejects_garbage() {
+        let data = [WIRE_FORMAT_VERSION_COMPACT_EVENT, 0xFF, 0xFF];
+        assert!(decode_compact_wire(&data).is_err());
+    }
+
+    #[test]
+    fn test_compact_wire_tamper_fails_validation() {
+        // Tampering with the payload changes the recomputed event ID, so
+        // the signature (made over the original ID) no longer verifies.
+        let keypair = omnia_crypto::generate_keypair();
+        let mut event = Event::genesis(node(3), vec![1, 2, 3]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+
+        let mut bytes = encode_compact_wire(&event).unwrap();
+        let last = bytes.len() - 1; // flips a signature byte
+        bytes[last] ^= 0xFF;
+
+        // Decode may succeed (the bytes are structurally valid), but the
+        // reconstructed event must fail validation.
+        if let Ok(decoded) = decode_compact_wire(&bytes) {
+            assert!(decoded.validate().is_err(), "tampered event must not pass validation");
+        }
     }
 }
