@@ -260,14 +260,30 @@ pub async fn get_event(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let store = state.event_store.read().await;
     match store.get(&id) {
-        Some(event) => Ok(Json(
-            serde_json::to_value(event).unwrap_or_else(|_| json!({"error": "Serialization failed"})),
-        )),
+        Some(event) => {
+            let mut value = serde_json::to_value(event).unwrap_or_else(|_| json!({"error": "Serialization failed"}));
+            drop(store);
+            // Lane 0 (ADR-025): expose fast-path finality when the ID is a
+            // full 32-byte event ID and Lane 0 is enabled.
+            if let Some(event_id) = decode_event_id(&id) {
+                let substrate = state.substrate.read().await;
+                if substrate.lane0_enabled() {
+                    value["lane0_final"] = json!(substrate.lane0_is_final(&event_id));
+                }
+            }
+            Ok(Json(value))
+        }
         None => Err((
             StatusCode::NOT_FOUND,
             Json(json!({"error": format!("Event not found: {id}")})),
         )),
     }
+}
+
+/// Decode a hex event ID into a 32-byte array, if well-formed.
+fn decode_event_id(hex_id: &str) -> Option<[u8; 32]> {
+    let bytes = hex::decode(hex_id).ok()?;
+    bytes.as_slice().try_into().ok()
 }
 
 /// Query parameters for `GET /api/v1/events`.
