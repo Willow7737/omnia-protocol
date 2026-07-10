@@ -203,6 +203,21 @@ The protocol is now **running in public** with a full client ecosystem. Node: `h
 
 ---
 
+## 17. ADR-025 Two-Lane Consensus — Rollout Tracking
+
+Staged, benchmark-gated rollout per [ADR-025](../adr/ADR-025-two-lane-consensus.md).
+Every stage is tracked here so nothing falls through.
+
+| Stage | Scope                                                                    | Status | Evidence |
+| :---- | :----------------------------------------------------------------------- | :----- | :------- |
+| **1** | Integrate idle gossip components (AUDIT-14): bloom dedup, priority queue, compact wire v2 | ✅ Done | PR #276 |
+| **2** | Real 3-node testnet + honest multi-node baselines                        | 🔄 Tooling ready — awaiting multi-host run | `scripts/testnet-bench.sh`, [testnet-benchmark runbook](../operations/testnet-benchmark.md); node metrics wired |
+| **3** | Lane 0: consensusless UBC fast path (quorum acks, G-Set certificate CRDTs); absorbs AUDIT-15 | 🌑 Not started | — |
+| **4** | Lane 1: DAG-native commit rule + TLA+ spec extension                     | 🌑 Not started | — |
+| **5** | Consensus arena: adversarial property-based CI gate                      | 🌑 Not started | — |
+
+---
+
 ## 📊 Summary of Completion
 
 | Category                    | Total   | ✅ Done | ⚠️ Partial | 🔄 Stub/Open | 🌑 Not Started | 📋 Planned | Progress        |
