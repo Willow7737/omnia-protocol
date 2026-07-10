@@ -233,6 +233,30 @@ async fn main() -> Result<()> {
         "Node registered as validator candidate (stake=1) — node can now be elected leader"
     );
 
+    // Lane 0 (ADR-025): enable the consensusless fast path when a static
+    // validator set is configured. A malformed spec is a hard startup
+    // error — a typo must not silently disable finality.
+    if let Ok(spec) = std::env::var("OMNIA_LANE0_VALIDATORS") {
+        match omnia_substrate::lane0::ValidatorSet::parse(&spec) {
+            Ok(Some(validators)) => {
+                let member = validators.contains(&node_pubkey_bytes);
+                tracing::info!(
+                    validators = validators.len(),
+                    total_stake = validators.total_stake(),
+                    this_node_is_validator = member,
+                    "Lane 0 fast-path finality enabled"
+                );
+                substrate.init_lane0(validators);
+            }
+            Ok(None) => {
+                tracing::info!("OMNIA_LANE0_VALIDATORS is empty — Lane 0 disabled");
+            }
+            Err(e) => {
+                anyhow::bail!("Invalid OMNIA_LANE0_VALIDATORS: {e}");
+            }
+        }
+    }
+
     // Create the economics state BEFORE the shard router so we can share
     // the same instance between the consensus path (ShardRouter) and the
     // HTTP API (AppState.economics). C4 audit fix — previously two separate
@@ -619,6 +643,12 @@ async fn spawn_background_tasks(
                     // starting the network run loop
                     if let Err(e) = network.subscribe("omnia_events") {
                         tracing::warn!(error = %e, "Failed to subscribe to omnia_events topic");
+                    }
+                    // Lane 0 (ADR-025): finality acks ride their own topic.
+                    // Subscribing is harmless when Lane 0 is disabled —
+                    // received acks are simply never folded.
+                    if let Err(e) = network.subscribe(omnia_substrate::lane0::LANE0_ACKS_TOPIC) {
+                        tracing::warn!(error = %e, "Failed to subscribe to Lane 0 acks topic");
                     }
 
                     // Wire the network into the substrate's gossip protocol.

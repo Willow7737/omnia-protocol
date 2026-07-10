@@ -60,6 +60,7 @@ pub mod event;
 pub mod genesis;
 pub mod genesis_replay;
 pub mod keystore;
+pub mod lane0;
 pub mod mempool;
 pub mod migration;
 pub mod rate_limiter;
@@ -613,6 +614,13 @@ pub struct Substrate {
     /// advancement, enabling crash recovery without genesis replay.
     /// If `None`, consensus state is in-memory only.
     consensus_store: Option<Arc<dyn ConsensusStore>>,
+    /// Lane 0 validator set (ADR-025). `None` = Lane 0 disabled.
+    lane0_validators: Option<lane0::ValidatorSet>,
+    /// Lane 0 finality certificates (grow-only ack sets per event).
+    lane0_store: lane0::CertificateStore,
+    /// Own Lane 0 acks awaiting broadcast (flushed each consensus round
+    /// and on local submission).
+    lane0_outbox: Vec<lane0::SignedAck>,
 }
 
 impl Substrate {
@@ -732,6 +740,9 @@ impl Substrate {
             max_block_events,
             validator_candidates: HashMap::new(),
             consensus_store,
+            lane0_validators: None,
+            lane0_store: lane0::CertificateStore::new(),
+            lane0_outbox: Vec::new(),
         }
     }
 
@@ -872,15 +883,28 @@ impl Substrate {
     pub async fn process_consensus_round(&mut self) {
         // 1. Drain network events into graph + queue
         #[cfg(feature = "network")]
-        if let Some(ref mut gossip) = self.gossip {
-            match gossip.process_pending_events().await {
-                Ok(inserted) => {
-                    self.unprocessed_events.extend(inserted);
+        {
+            let mut newly_inserted: Vec<EventId> = Vec::new();
+            let mut aux_messages: Vec<(String, Vec<u8>)> = Vec::new();
+            if let Some(ref mut gossip) = self.gossip {
+                match gossip.process_pending_events().await {
+                    Ok(inserted) => {
+                        newly_inserted = inserted;
+                    }
+                    Err(e) => {
+                        tracing::warn!("Gossip processing error: {}", e);
+                    }
                 }
-                Err(e) => {
-                    tracing::warn!("Gossip processing error: {}", e);
-                }
+                aux_messages = gossip.take_aux_messages();
             }
+            self.unprocessed_events.extend(newly_inserted.iter().copied());
+
+            // Lane 0 (ADR-025): fold acks received from peers, ack the
+            // events this node just validated + inserted, and broadcast
+            // our own acks.
+            self.lane0_fold_received(aux_messages);
+            self.lane0_ack_inserted(&newly_inserted);
+            self.lane0_flush_outbox().await;
         }
 
         // 2. Check if we are the leader for this round
@@ -971,11 +995,12 @@ impl Substrate {
         event.validate().map_err(SubstrateError::from)?;
 
         // Remove Arc, use event directly with clones
-        {
+        let inserted_ids = {
             let mut graph = self.graph.write().await;
             let inserted_ids = graph.insert(event.clone()).map_err(SubstrateError::from)?;
-            self.unprocessed_events.extend(inserted_ids);
-        }
+            self.unprocessed_events.extend(inserted_ids.iter().copied());
+            inserted_ids
+        };
 
         // Track for consensus processing (already extended above)
 
@@ -1001,6 +1026,13 @@ impl Substrate {
             gossip.broadcast_event(event).await.map_err(SubstrateError::from)?;
         }
 
+        // Lane 0 (ADR-025): ack the freshly inserted event(s) immediately
+        // so locally submitted operations reach fast-path finality without
+        // waiting for the next consensus round tick.
+        self.lane0_ack_inserted(&inserted_ids);
+        #[cfg(feature = "network")]
+        self.lane0_flush_outbox().await;
+
         Ok(())
     }
 
@@ -1018,6 +1050,122 @@ impl Substrate {
     #[cfg(feature = "network")]
     pub fn gossip_stats(&self) -> Option<&GossipStats> {
         self.gossip.as_ref().map(|g| g.stats())
+    }
+
+    // ── Lane 0 (ADR-025): consensusless fast-path finality ──────────────
+
+    /// Enable Lane 0 with a static validator set (see [`lane0`]).
+    ///
+    /// Until enabled, Lane 0 is inert: no acks are signed, published, or
+    /// accepted.
+    pub fn init_lane0(&mut self, validators: lane0::ValidatorSet) {
+        tracing::info!(
+            validators = validators.len(),
+            total_stake = validators.total_stake(),
+            "Lane 0 enabled (static validator set)"
+        );
+        self.lane0_validators = Some(validators);
+    }
+
+    /// Whether Lane 0 is enabled.
+    pub fn lane0_enabled(&self) -> bool {
+        self.lane0_validators.is_some()
+    }
+
+    /// Whether an event has reached Lane 0 finality (stake-weighted
+    /// quorum of validator acks). Always `false` when Lane 0 is disabled.
+    pub fn lane0_is_final(&self, event_id: &EventId) -> bool {
+        self.lane0_store.is_final(event_id)
+    }
+
+    /// Lane 0 counters `(acks_accepted, acks_rejected, events_finalized)`,
+    /// or `None` when Lane 0 is disabled.
+    pub fn lane0_stats(&self) -> Option<(u64, u64, u64)> {
+        self.lane0_validators.as_ref().map(|_| self.lane0_store.stats())
+    }
+
+    /// Sign Lane 0 acks for freshly inserted events, fold them into the
+    /// local certificate store, and queue them for broadcast.
+    ///
+    /// No-op unless Lane 0 is enabled AND this node's keypair is a member
+    /// of the validator set. The events have already passed full
+    /// validation (`Event::validate`) and causal-graph insertion — that
+    /// is exactly what the ack attests to.
+    fn lane0_ack_inserted(&mut self, event_ids: &[EventId]) {
+        let Some(ref validators) = self.lane0_validators else {
+            return;
+        };
+        let Some((keypair, _stake)) = self.validator_candidates.get(&self.config.node_id) else {
+            return;
+        };
+        if !validators.contains(&keypair.verifying_key().to_bytes()) {
+            return;
+        }
+        let keypair = keypair.clone();
+        for event_id in event_ids {
+            let ack = lane0::SignedAck::sign(*event_id, &keypair);
+            // Fold our own ack locally first (a single-validator set
+            // self-finalizes here), then queue for broadcast.
+            if let Ok(lane0::AckOutcome::NewlyFinal) = self.lane0_store.add_ack(ack.clone(), validators) {
+                tracing::debug!(event = %hex::encode(&event_id[..4]), "Lane 0 final (local quorum)");
+            }
+            self.lane0_outbox.push(ack);
+        }
+    }
+
+    /// Fold acks received from the network into the certificate store.
+    fn lane0_fold_received(&mut self, payloads: Vec<(String, Vec<u8>)>) {
+        let Some(ref validators) = self.lane0_validators else {
+            return;
+        };
+        for (topic, data) in payloads {
+            if topic != lane0::LANE0_ACKS_TOPIC {
+                continue;
+            }
+            match lane0::decode_ack_batch(&data) {
+                Ok(acks) => {
+                    for ack in acks {
+                        match self.lane0_store.add_ack(ack, validators) {
+                            Ok(lane0::AckOutcome::NewlyFinal) => {
+                                tracing::debug!("Lane 0 final (network quorum)");
+                            }
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::warn!("Lane 0 ack rejected: {e}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Lane 0 ack batch rejected: {e}");
+                }
+            }
+        }
+    }
+
+    /// Broadcast queued Lane 0 acks on the dedicated gossip topic.
+    #[cfg(feature = "network")]
+    async fn lane0_flush_outbox(&mut self) {
+        if self.lane0_outbox.is_empty() {
+            return;
+        }
+        let Some(ref mut gossip) = self.gossip else {
+            return;
+        };
+        // Respect the wire bound: send in chunks if the outbox is huge.
+        for chunk in self.lane0_outbox.chunks(lane0::MAX_ACKS_PER_MESSAGE) {
+            match lane0::encode_ack_batch(chunk) {
+                Ok(bytes) => {
+                    if let Err(e) = gossip.publish_raw(lane0::LANE0_ACKS_TOPIC, bytes).await {
+                        tracing::warn!("Lane 0 ack broadcast failed: {e}");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Lane 0 ack encoding failed: {e}");
+                }
+            }
+        }
+        self.lane0_outbox.clear();
     }
 
     /// Get the current number of connected peers as observed by the

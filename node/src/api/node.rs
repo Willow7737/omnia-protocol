@@ -45,6 +45,23 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
         }
     };
 
+    // The node's Ed25519 validator public key — operators need the full
+    // hex value to build the Lane 0 validator set (OMNIA_LANE0_VALIDATORS).
+    let validator_pubkey = state
+        .keypair
+        .as_ref()
+        .map(|k| hex::encode(k.verifying_key().to_bytes()));
+    let lane0 = {
+        let substrate = state.substrate.read().await;
+        substrate.lane0_stats().map(|(accepted, rejected, finalized)| {
+            json!({
+                "acks_accepted": accepted,
+                "acks_rejected": rejected,
+                "events_finalized": finalized,
+            })
+        })
+    };
+
     Json(json!({
         "node_id": node_id_hex,
         "node_id_num": state.config.node_id,
@@ -54,6 +71,8 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
         "peers": peer_count,
         "finalized_height": event_count,
         "shard_count": shard_count,
+        "validator_pubkey": validator_pubkey,
+        "lane0": lane0,
         "listen_addr": state.config.listen_addr,
         "data_dir": state.config.data_dir.to_string_lossy(),
     }))
