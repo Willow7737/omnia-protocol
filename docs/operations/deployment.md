@@ -81,6 +81,8 @@
 | `OMNIA_TOTAL_NODES`        | `5`                     | Expected number of nodes in the network          |
 | `OMNIA_DATA_DIR`           | `/app/data`             | Data directory for persistent storage            |
 | `OMNIA_JWT_SECRET`         | (none)                  | HMAC secret for JWT auth                         |
+
+> **Rotation:** the node reads `OMNIA_JWT_SECRET` once at startup and caches it, so rotating requires recreating the container. Use `scripts/rotate-jwt-secret.sh` — it generates a fresh secret into `docker/.env` (git-ignored; compose substitutes it), recreates the containers, and prints the value to mirror into Supabase's edge-function secrets. All outstanding JWTs are invalidated on rotation; the wallet re-authenticates transparently on the next 401. Rotate on a schedule (e.g. monthly) or immediately on suspected leak — the compose default (`omnia-testnet-jwt-secret-CHANGE-ME`) is public and must never run in production.
 | `OMNIA_AUTHORIZED_CALLERS` | (none)                  | Comma-separated authorized caller IDs            |
 | `OMNIA_RATE_LIMIT_RPS`     | (none)                  | Max requests per second per IP                   |
 
