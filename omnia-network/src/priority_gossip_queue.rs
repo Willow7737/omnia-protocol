@@ -165,22 +165,26 @@ impl PriorityGossipQueue {
     /// Enqueue an event at the given priority level.
     ///
     /// If the queue for this priority level is at capacity, the oldest
-    /// event is dropped to make room.
-    pub fn enqueue(&mut self, event_id: EventId, priority: GossipPriority) {
+    /// event is dropped to make room. The dropped event ID is returned so
+    /// callers that keep event payloads in a side store can evict them.
+    pub fn enqueue(&mut self, event_id: EventId, priority: GossipPriority) -> Option<EventId> {
         let queue = &mut self.queues[priority as usize];
         let max = self.config.max_for_priority(priority);
 
         // If at capacity, drop the oldest event
+        let mut evicted = None;
         if queue.len() >= max {
             if let Some(dropped) = queue.pop_front() {
                 self.seen.remove(&dropped);
                 self.total_dropped += 1;
+                evicted = Some(dropped);
             }
         }
 
         self.seen.insert(event_id);
         queue.push_back(event_id);
         self.total_enqueued += 1;
+        evicted
     }
 
     /// Dequeue the highest-priority event.
@@ -362,9 +366,10 @@ mod tests {
         let mut queue = PriorityGossipQueue::new(config);
 
         // Fill the Normal queue beyond capacity
-        queue.enqueue(eid(1), GossipPriority::Normal);
-        queue.enqueue(eid(2), GossipPriority::Normal);
-        queue.enqueue(eid(3), GossipPriority::Normal); // Should drop eid(1)
+        assert_eq!(queue.enqueue(eid(1), GossipPriority::Normal), None);
+        assert_eq!(queue.enqueue(eid(2), GossipPriority::Normal), None);
+        // Should drop (and report) eid(1)
+        assert_eq!(queue.enqueue(eid(3), GossipPriority::Normal), Some(eid(1)));
 
         assert_eq!(queue.len_by_priority(GossipPriority::Normal), 2);
         assert_eq!(queue.dequeue(), Some(eid(2))); // eid(1) was dropped

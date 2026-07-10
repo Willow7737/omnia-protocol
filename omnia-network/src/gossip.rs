@@ -3,7 +3,7 @@
 //! Refactored from std::sync::Mutex to tokio::sync::RwLock to prevent deadlocks
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -14,8 +14,11 @@ use tokio::sync::{mpsc, RwLock};
 use tracing::{info, warn};
 
 use crate::blake3_domain::blake3_hash_domain;
+use crate::compact_event_encoding::{decode_compact_wire, encode_compact_wire, is_compact_wire};
 use crate::compression::{deserialize_with_compression, serialize_with_compression};
+use crate::gossip_bloom_filter::GossipBloomFilter;
 use crate::network::{extract_peer_id_from_multiaddr, NetworkCommand, NetworkEvent, OmniaNetwork};
+use crate::priority_gossip_queue::{GossipPriority, PriorityGossipQueue, PriorityQueueConfig};
 use omnia_consensus::causal_graph::{CausalGraph, CausalGraphError};
 use omnia_consensus::rate_limiter::RateLimiter;
 use omnia_primitives::{Event, EventBatch, EventId, EventRequest, MAX_PAYLOAD_SIZE};
@@ -29,13 +32,20 @@ const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 /// Constant topic name for Omnia events gossip. Avoids per-call allocation.
 const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
 
-/// Maximum number of seen event IDs to retain for dedup.
-/// When exceeded, entries older than SEEN_EVENTS_RETAIN_ROUNDS processing
-/// rounds are evicted.
+/// Expected number of events per bloom-filter rotation window for dedup.
+///
+/// The rotating [`GossipBloomFilter`] is sized for this many events at a
+/// 0.1% false-positive rate (~350 KiB for both filters combined). When the
+/// active filter reaches this count it rotates, expiring entries older
+/// than two windows.
 const MAX_SEEN_EVENTS: usize = 100_000;
 
-/// Number of processing rounds to retain seen event IDs before eviction.
-const SEEN_EVENTS_RETAIN_ROUNDS: u64 = 10_000;
+/// Target false-positive rate for the dedup bloom filter.
+///
+/// A bloom "maybe seen" answer is always confirmed against the pending
+/// queue and the causal graph before an event is dropped, so a false
+/// positive costs one exact lookup — never a lost event.
+const SEEN_FILTER_FP_RATE: f64 = 0.001;
 
 /// Configuration for the gossip protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,17 +196,22 @@ pub struct GossipProtocol {
     graph: Arc<RwLock<CausalGraph>>,
     // Command channel to publish through the network task.
     network_cmd_tx: Option<mpsc::Sender<NetworkCommand>>,
-    // Network event receiver — drained into pending_events by
+    // Network event receiver — drained into the pending queue by
     // process_pending_events() so that p2p events flow through consensus.
     /// Network event receiver
     pub network_rx: Option<mpsc::Receiver<NetworkEvent>>,
-    pending_events: VecDeque<Event>,
+    /// Priority-ordered pending event IDs: consensus-relevant merge events
+    /// are dequeued (and therefore inserted into the graph) first.
+    pending_queue: PriorityGossipQueue,
+    /// Payloads for queued event IDs. Kept in lockstep with `pending_queue`.
+    pending_store: HashMap<EventId, Event>,
     stats: GossipStats,
     last_sync: Instant,
     running: bool,
-    seen_events: HashMap<[u8; 32], u64>,
-    /// Monotonically increasing round counter for seen_events eviction.
-    seen_events_round: u64,
+    /// Rotating bloom filter for duplicate suppression (see
+    /// [`MAX_SEEN_EVENTS`] / [`SEEN_FILTER_FP_RATE`]). "Maybe seen" answers
+    /// are confirmed exactly before dropping an event.
+    seen_filter: GossipBloomFilter,
     /// Tracks when each peer was last heard from (for partition detection).
     last_seen: HashMap<PeerId, Instant>,
     /// Whether a partition is currently detected (to avoid duplicate events).
@@ -209,18 +224,29 @@ impl GossipProtocol {
     /// Create a new gossip protocol instance
     pub fn new(node_id: NodeId, config: GossipConfig, graph: Arc<RwLock<CausalGraph>>) -> Self {
         let rate_limiter = RateLimiter::new(config.burst_capacity, config.max_events_per_second);
+        // Map the single `max_pending` knob onto per-priority capacities:
+        // Normal (regular events) keeps the full configured bound; the
+        // other levels get a tenth each, so worst-case memory stays within
+        // 1.3× of the pre-priority-queue bound.
+        let per_level = (config.max_pending / 10).max(1024);
+        let queue_config = PriorityQueueConfig {
+            max_critical: per_level,
+            max_high: per_level,
+            max_normal: config.max_pending,
+            max_low: per_level,
+        };
         Self {
             node_id,
             config,
             graph,
             network_cmd_tx: None,
             network_rx: None,
-            pending_events: VecDeque::new(),
+            pending_queue: PriorityGossipQueue::new(queue_config),
+            pending_store: HashMap::new(),
             stats: GossipStats::default(),
             last_sync: Instant::now(),
             running: false,
-            seen_events: HashMap::new(),
-            seen_events_round: 0,
+            seen_filter: GossipBloomFilter::new(MAX_SEEN_EVENTS, SEEN_FILTER_FP_RATE),
             last_seen: HashMap::new(),
             partition_active: false,
             rate_limiter,
@@ -319,12 +345,21 @@ impl GossipProtocol {
         // Substrate::submit_event was later wired to insert first,
         // creating a double-insert.
 
-        // Send publish command to the network task
-        let bytes = event
-            .to_bytes()
-            .map_err(|e| GossipError::SerializationError(e.to_string()))?;
+        // Serialize with the compact wire format (delta-encoded vector
+        // clock, ~40% smaller); fall back to the full event format for the
+        // rare clock shapes compact encoding cannot represent losslessly.
+        let bytes = match encode_compact_wire(&event) {
+            Ok(bytes) => bytes,
+            Err(_) => event
+                .to_bytes()
+                .map_err(|e| GossipError::SerializationError(e.to_string()))?,
+        };
         let bytes_len = bytes.len();
         let event_id_prefix = &event.id[..4];
+
+        // Mark our own broadcast as seen so a relayed echo of it is
+        // suppressed by dedup instead of paying validation again.
+        self.seen_filter.insert(&event.id);
         if let Some(ref cmd_tx) = self.network_cmd_tx {
             let result = cmd_tx
                 .send(NetworkCommand::Publish {
@@ -515,18 +550,28 @@ impl GossipProtocol {
                         data,
                         propagation_source,
                         ..
-                    }) => match Event::from_bytes(&data) {
-                        Ok(event) => {
-                            drained.push(DrainedEvent::Gossip {
-                                event: Box::new(event),
-                                source: propagation_source,
-                            });
+                    }) => {
+                        // Dispatch on the wire-format version byte: compact
+                        // events (version 2) reconstruct the full event; any
+                        // other prefix takes the full-event path.
+                        let parsed = if is_compact_wire(&data) {
+                            decode_compact_wire(&data).map_err(|e| e.to_string())
+                        } else {
+                            Event::from_bytes(&data).map_err(|e| e.to_string())
+                        };
+                        match parsed {
+                            Ok(event) => {
+                                drained.push(DrainedEvent::Gossip {
+                                    event: Box::new(event),
+                                    source: propagation_source,
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Failed to deserialize gossip event: {e}");
+                                self.stats.events_rejected += 1;
+                            }
                         }
-                        Err(e) => {
-                            warn!("Failed to deserialize gossip event: {:?}", e);
-                            self.stats.events_rejected += 1;
-                        }
-                    },
+                    }
                     Ok(NetworkEvent::PeerConnected(peer_id)) => {
                         drained.push(DrainedEvent::PeerConnected(peer_id));
                     }
@@ -592,34 +637,36 @@ impl GossipProtocol {
                         continue;
                     }
 
-                    if !self.seen_events.contains_key(&event.id) {
-                        self.seen_events.insert(event.id, self.seen_events_round);
-                        // FIX 8: Enforce max_pending limit
-                        if self.pending_events.len() >= self.config.max_pending {
-                            if let Some(dropped) = self.pending_events.pop_front() {
-                                tracing::warn!("Pending events queue overflow - dropping event {:?}", dropped.id);
-                            }
-                        }
-                        self.pending_events.push_back(*event);
-                        self.stats.events_received += 1;
-                        // Evict old entries using round-based eviction.
-                        // Note: seen_events_round is incremented once per
-                        // *new* event processed (not per processing round),
-                        // so it effectively counts total unique events seen.
-                        // If per-round semantics are desired, this increment
-                        // should be moved to the outer loop (once per
-                        // process_pending_events call) instead of per-event.
-                        self.seen_events_round += 1;
-                        if self.seen_events.len() > MAX_SEEN_EVENTS {
-                            let cutoff = self.seen_events_round.saturating_sub(SEEN_EVENTS_RETAIN_ROUNDS);
-                            self.seen_events.retain(|_, &mut round| round > cutoff);
-                            tracing::debug!(
-                                "seen_events exceeded {}, evicted entries older than round {}",
-                                MAX_SEEN_EVENTS,
-                                cutoff
-                            );
-                        }
+                    // Duplicate suppression: a bloom "not seen" answer is
+                    // authoritative (no false negatives) — the event is new.
+                    // A bloom "maybe seen" answer is confirmed against the
+                    // pending queue and the causal graph before dropping, so
+                    // a false positive costs one exact lookup, never a lost
+                    // event. This also recovers events that were evicted
+                    // from an overflowing queue: they stay absent from both
+                    // exact stores, so a retransmission is re-admitted.
+                    if self.seen_filter.contains(&event.id)
+                        && (self.pending_queue.contains(&event.id) || self.graph.read().await.contains(&event.id))
+                    {
+                        continue;
                     }
+                    self.seen_filter.insert(&event.id);
+                    if self.seen_filter.active_count() >= self.seen_filter.expected_items() {
+                        // Rotation expires entries older than two windows,
+                        // keeping the false-positive rate bounded.
+                        self.seen_filter.rotate();
+                    }
+
+                    let priority = Self::classify_priority(&event);
+                    if let Some(evicted) = self.pending_queue.enqueue(event.id, priority) {
+                        // FIX 8 (carried over): bounded pending queue —
+                        // capacity overflow drops the oldest event at the
+                        // same priority level.
+                        self.pending_store.remove(&evicted);
+                        tracing::warn!("Pending events queue overflow - dropping event {:?}", evicted);
+                    }
+                    self.pending_store.insert(event.id, *event);
+                    self.stats.events_received += 1;
                 }
                 DrainedEvent::PeerConnected(peer_id) => {
                     info!("Peer connected: {:?}", peer_id);
@@ -633,11 +680,14 @@ impl GossipProtocol {
             }
         }
 
-        // Process all pending events (both locally created and network received)
-        // Use a while-let loop to avoid the unnecessary drain+collect allocation.
+        // Process all pending events in priority order: consensus-relevant
+        // merge events are inserted into the graph before regular events.
         {
             let mut graph = self.graph.write().await;
-            while let Some(event) = self.pending_events.pop_front() {
+            while let Some(event_id) = self.pending_queue.dequeue() {
+                let Some(event) = self.pending_store.remove(&event_id) else {
+                    continue;
+                };
                 match graph.insert(event) {
                     Ok(ids) => {
                         self.stats.events_accepted += 1;
@@ -655,6 +705,22 @@ impl GossipProtocol {
         }
 
         Ok(inserted_ids)
+    }
+
+    /// Classify an incoming event's gossip priority.
+    ///
+    /// Merge events (those carrying an `other_parent`) knit the causal DAG
+    /// across creators and are what round/witness structure advances on,
+    /// so they are processed before regular single-chain events. `Critical`
+    /// and `Low` are reserved for consensus-flagged messages and sync
+    /// retransmissions respectively (retransmissions are currently
+    /// suppressed by dedup before they reach the queue).
+    fn classify_priority(event: &Event) -> GossipPriority {
+        if event.other_parent.is_some() {
+            GossipPriority::High
+        } else {
+            GossipPriority::Normal
+        }
     }
 }
 
@@ -1047,42 +1113,155 @@ mod tests {
         assert_ne!(GossipEvent::PartitionDetected, GossipEvent::PartitionHealed);
     }
 
-    // ── Task 30: Bounded Caches and Pruning Tests ──────────────────────
+    // ── AUDIT-14: idle component integration tests ─────────────────────
 
-    #[test]
-    fn test_seen_events_cleared_when_exceeds_max() {
+    /// The dedup path must suppress a duplicate delivery: same event sent
+    /// twice through the network channel is inserted exactly once and
+    /// counted as received exactly once.
+    #[tokio::test]
+    async fn test_duplicate_event_suppressed() {
+        use tokio::sync::mpsc;
+
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
-        let mut protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
+        let mut gossip = GossipProtocol::new(node(1), GossipConfig::default(), graph);
 
-        // Insert MAX_SEEN_EVENTS + 1 unique entries directly using
-        // 4-byte indices to avoid hash collisions in the 32-byte EventId.
-        for i in 0..=MAX_SEEN_EVENTS {
-            let mut id = [0u8; 32];
-            id[0] = (i & 0xFF) as u8;
-            id[1] = ((i >> 8) & 0xFF) as u8;
-            id[2] = ((i >> 16) & 0xFF) as u8;
-            id[3] = ((i >> 24) & 0xFF) as u8;
-            protocol.seen_events.insert(id, i as u64);
+        let (tx, rx) = mpsc::channel(10);
+        gossip.network_rx = Some(rx);
+
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(node(2), vec![1, 2, 3]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+        let bytes = event.to_bytes().expect("test event serialization");
+
+        for _ in 0..2 {
+            tx.send(NetworkEvent::GossipReceived {
+                topic: "omnia_events".to_string(),
+                data: bytes.clone(),
+                propagation_source: PeerId::random(),
+            })
+            .await
+            .expect("send should succeed");
         }
+        drop(tx);
 
-        // The map should have exactly MAX_SEEN_EVENTS + 1 entries
-        assert_eq!(protocol.seen_events.len(), MAX_SEEN_EVENTS + 1);
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
+        assert_eq!(inserted.len(), 1, "Duplicate must be suppressed");
+        assert_eq!(gossip.stats().events_received, 1);
+        assert_eq!(gossip.stats().events_accepted, 1);
+    }
 
-        // Simulate the round-based cleanup that happens in process_pending_events
-        protocol.seen_events_round = (MAX_SEEN_EVENTS + 1) as u64;
-        if protocol.seen_events.len() > MAX_SEEN_EVENTS {
-            let cutoff = protocol.seen_events_round.saturating_sub(SEEN_EVENTS_RETAIN_ROUNDS);
-            protocol.seen_events.retain(|_, &mut round| round > cutoff);
-        }
+    /// A duplicate arriving in a LATER processing round (after the first
+    /// copy is already in the graph) must be suppressed via the
+    /// bloom-positive → graph-confirm path.
+    #[tokio::test]
+    async fn test_duplicate_across_rounds_suppressed() {
+        use tokio::sync::mpsc;
 
-        // After eviction, recent entries should remain
-        assert!(
-            !protocol.seen_events.is_empty(),
-            "Eviction should keep recent entries, not clear everything"
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(node(1), GossipConfig::default(), graph);
+
+        let (tx, rx) = mpsc::channel(10);
+        gossip.network_rx = Some(rx);
+
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(node(2), vec![7]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+        let bytes = event.to_bytes().expect("test event serialization");
+
+        let send = |data: Vec<u8>| {
+            let tx = tx.clone();
+            async move {
+                tx.send(NetworkEvent::GossipReceived {
+                    topic: "omnia_events".to_string(),
+                    data,
+                    propagation_source: PeerId::random(),
+                })
+                .await
+                .expect("send should succeed");
+            }
+        };
+
+        send(bytes.clone()).await;
+        let first = gossip.process_pending_events().await.expect("first round");
+        assert_eq!(first.len(), 1);
+
+        send(bytes).await;
+        let second = gossip.process_pending_events().await.expect("second round");
+        assert_eq!(
+            second.len(),
+            0,
+            "Retransmission of an inserted event must be suppressed"
         );
+        assert_eq!(gossip.stats().events_received, 1);
+    }
+
+    /// A compact-encoded (wire version 2) event must be decoded, validated,
+    /// and inserted exactly like a full-format event.
+    #[tokio::test]
+    async fn test_compact_wire_event_accepted() {
+        use tokio::sync::mpsc;
+
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(node(1), GossipConfig::default(), graph);
+
+        let (tx, rx) = mpsc::channel(10);
+        gossip.network_rx = Some(rx);
+
+        let keypair = generate_keypair();
+        let mut event = Event::genesis(node(3), vec![4, 5, 6]).expect("valid genesis event");
+        event.sign_with_keypair(&keypair).expect("signing");
+        let event_id = event.id;
+        let bytes = encode_compact_wire(&event).expect("compact encoding");
+        assert!(is_compact_wire(&bytes));
+
+        tx.send(NetworkEvent::GossipReceived {
+            topic: "omnia_events".to_string(),
+            data: bytes,
+            propagation_source: PeerId::random(),
+        })
+        .await
+        .expect("send should succeed");
+        drop(tx);
+
+        let inserted = gossip.process_pending_events().await.expect("process should succeed");
+        assert_eq!(inserted.len(), 1);
+        assert_eq!(gossip.stats().events_accepted, 1);
+        assert_eq!(gossip.stats().events_rejected, 0);
+
+        let g = gossip.graph().read().await;
+        assert!(g.contains(&event_id));
+    }
+
+    /// Merge events (other_parent set) classify as High priority; regular
+    /// events classify as Normal.
+    #[test]
+    fn test_classify_priority() {
+        let keypair = generate_keypair();
+        let mut regular = Event::genesis(node(2), vec![1]).expect("valid genesis event");
+        regular.sign_with_keypair(&keypair).expect("signing");
+        assert_eq!(GossipProtocol::classify_priority(&regular), GossipPriority::Normal);
+
+        let mut clock = VectorClock::new();
+        clock.set(node(2), 2);
+        let mut merge = Event::new(node(2), 1, clock, Some([1u8; 32]), Some([2u8; 32]), vec![1]).expect("valid event");
+        merge.sign_with_keypair(&keypair).expect("signing");
+        assert_eq!(GossipProtocol::classify_priority(&merge), GossipPriority::High);
+    }
+
+    /// The dedup filter must stay memory-bounded: its estimated size is a
+    /// function of the configured window, not of how many events pass by.
+    #[test]
+    fn test_seen_filter_memory_bounded() {
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let protocol = GossipProtocol::new(node(1), GossipConfig::default(), graph);
+
+        // ~1.44 MiB * items/1e5 for both filters at 0.1% FPR — well under
+        // the ~4.4 MiB the old exact HashMap needed for the same window.
         assert!(
-            protocol.seen_events.len() <= MAX_SEEN_EVENTS,
-            "After eviction, size should not exceed MAX_SEEN_EVENTS"
+            protocol.seen_filter.estimated_size() < 1_000_000,
+            "bloom filter pair should be well under 1 MB, got {}",
+            protocol.seen_filter.estimated_size()
         );
+        assert_eq!(protocol.seen_filter.expected_items(), MAX_SEEN_EVENTS);
     }
 }
