@@ -72,6 +72,11 @@ pub struct TransferRecord {
     pub status: String,
     /// Resulting balance of the sender after the spend.
     pub new_balance: u64,
+    /// Hex-encoded ID of the causal-graph event that records this transfer
+    /// on-chain (provenance + Lane 0 finality). `None` if the provenance
+    /// event could not be submitted (the balance change still succeeded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
 }
 
 /// Append a transfer record to the bounded history log.

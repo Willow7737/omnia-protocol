@@ -1437,6 +1437,59 @@ async fn test_transfer_success_returns_200() {
     );
 }
 
+// ---- economics: transfer emits an on-chain provenance event ----
+
+#[tokio::test]
+async fn test_transfer_emits_provenance_event() {
+    let server = setup_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 250,
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+
+    // Every transfer is now recorded as a signed causal-graph event.
+    let event_id = body["event_id"].as_str();
+    assert!(
+        event_id.is_some() && event_id.unwrap().len() == 64,
+        "transfer response must carry a 32-byte hex provenance event_id, got {:?}",
+        body["event_id"]
+    );
+
+    // The transfer listing carries the same event_id.
+    let list: Value = client
+        .get(format!("{}/api/v1/economics/transfers", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let recorded = list["transfers"][0]["event_id"].as_str();
+    assert_eq!(
+        recorded, event_id,
+        "listed transfer must link the same provenance event"
+    );
+}
+
 // ---- economics: transfer 400 self-transfer ----
 
 #[tokio::test]
