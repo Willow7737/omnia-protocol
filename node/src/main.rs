@@ -257,25 +257,17 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Create the economics state BEFORE the shard router so we can share
-    // the same instance between the consensus path (ShardRouter) and the
-    // HTTP API (AppState.economics). C4 audit fix — previously two separate
-    // EconomicsState instances were created, causing mints via one path to
-    // be invisible to reads via the other.
+    // C4 resolved (single source of truth): the economics state lives
+    // ONLY inside the shard router's registered economics shard. Both the
+    // consensus/event path (via the substrate's shard processor) and the
+    // HTTP API reach that one instance through the same
+    // `Arc<Mutex<ShardRouter>>` — there is no separate `AppState.economics`
+    // copy to diverge. The API accesses it via `ShardRouter::economics_mut`
+    // (see the `with_economics` helper).
     let economics = EconomicsState::new();
     tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
 
-    // Create the shard router, passing a CLONE of the economics state.
-    // The shard router takes ownership of its clone; AppState.economics
-    // keeps the original. Both start from the same initial state.
-    //
-    // NOTE: This is not perfect — the two instances will diverge once
-    // operations are applied to either. The proper fix is to share via
-    // Arc<RwLock<EconomicsState>>, but that requires refactoring the
-    // Shard trait to accept Arc-wrapped state. Tracked as a follow-up
-    // to C3 (wire API mutations through consensus so there's only one
-    // mutation path).
-    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()), economics.clone(), node_pubkey_bytes)?;
+    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()), economics, node_pubkey_bytes)?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
     // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
@@ -393,7 +385,6 @@ async fn main() -> Result<()> {
         substrate: Arc::clone(&substrate_for_consensus),
         slashing: Arc::new(Mutex::new(slashing_engine)),
         shard_router: shared_shard_router,
-        economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         transfer_history: Arc::new(RwLock::new(Vec::new())),
         challenges: omnia_node::api::wallet_auth::new_challenge_store(),

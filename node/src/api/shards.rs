@@ -22,6 +22,7 @@ use utoipa::ToSchema;
 
 use crate::api::auth::AuthorizedCallers;
 use crate::api::auth::CallerIdentity;
+use crate::api::economics::with_economics;
 use crate::api::governance::ApiParseError;
 use crate::state::AppState;
 
@@ -151,33 +152,34 @@ async fn handle_economics_op(
     // authorization (admin gating only, no DID ownership verification).
     let caller_pubkey = state.keypair.as_ref().map(|kp| kp.verifying_key().to_bytes());
 
-    let mut econ_state = state.economics.lock().await;
-    let current_epoch = econ_state.current_epoch();
-    match econ_state.apply(&econ_op, current_epoch, caller_pubkey.as_ref()) {
-        Ok(()) => {
-            tracing::info!(operation = %body.operation, "Economics operation processed successfully");
-            Ok((
-                StatusCode::OK,
-                Json(json!({
-                    "status": "processed",
-                    "shard_id": "economics",
-                    "operation": body.operation,
-                    "note": "applied to local state only — multi-node propagation not yet wired",
-                })),
-            ))
+    with_economics(state, |econ_state| {
+        let current_epoch = econ_state.current_epoch();
+        match econ_state.apply(&econ_op, current_epoch, caller_pubkey.as_ref()) {
+            Ok(()) => {
+                tracing::info!(operation = %body.operation, "Economics operation processed successfully");
+                Ok((
+                    StatusCode::OK,
+                    Json(json!({
+                        "status": "processed",
+                        "shard_id": "economics",
+                        "operation": body.operation,
+                        "note": "applied to local state only — multi-node propagation not yet wired",
+                    })),
+                ))
+            }
+            Err(e) => {
+                tracing::warn!(operation = %body.operation, error = %e, "Economics operation failed");
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "error": format!("Operation failed: {e}"),
+                        "shard_id": "economics",
+                        "operation": body.operation,
+                    })),
+                ))
+            }
         }
-        Err(e) => {
-            tracing::warn!(operation = %body.operation, error = %e, "Economics operation failed");
-            Err((
-                StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "error": format!("Operation failed: {e}"),
-                    "shard_id": "economics",
-                    "operation": body.operation,
-                })),
-            ))
-        }
-    }
+    })?
 }
 
 /// Handle a generic (non-economics) shard operation.

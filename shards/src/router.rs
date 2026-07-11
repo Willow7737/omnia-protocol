@@ -477,6 +477,36 @@ impl ShardRouter {
         self.shards.len()
     }
 
+    /// Borrow the registered economics shard's [`EconomicsState`], the
+    /// single source of truth for UBC balances, quotas, and governance.
+    ///
+    /// Both the consensus/event path (this router, via the substrate's
+    /// shard processor) and the HTTP API share one `Arc<Mutex<ShardRouter>>`,
+    /// so this accessor lets the API read/write the very same economics
+    /// state the event path mutates — eliminating the divergent second
+    /// copy the C4 audit flagged.
+    ///
+    /// Returns `None` if no economics shard is registered.
+    pub fn economics(&self) -> Option<&omnia_economics::EconomicsState> {
+        self.shards
+            .get(&ShardId::economics())?
+            .as_any()
+            .downcast_ref::<crate::EconomicsShard>()
+            .map(|s| s.state())
+    }
+
+    /// Mutably borrow the registered economics shard's [`EconomicsState`].
+    ///
+    /// See [`economics`](Self::economics). Returns `None` if no economics
+    /// shard is registered.
+    pub fn economics_mut(&mut self) -> Option<&mut omnia_economics::EconomicsState> {
+        self.shards
+            .get_mut(&ShardId::economics())?
+            .as_any_mut()
+            .downcast_mut::<crate::EconomicsShard>()
+            .map(|s| s.state_mut())
+    }
+
     /// Convert a creator public key to a DID string.
     ///
     /// DIDs are derived as `did:omnia:<hex(pubkey)>` so that each Ed25519
