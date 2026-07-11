@@ -169,5 +169,69 @@ omnia-node --node-id 1 --http-port 8080
 
 ---
 
-🔙 **Back**: [operations/](./) | 🔄 **Related**: [runbook.md](./runbook.md)
+## Multi-Node Lane 0 Validator Testnet
+
+To run a multi-node testnet where transfers reach **Lane 0 fast-path
+finality** (ADR-025), every node must share the *same* validator set, keyed
+by each node's Ed25519 public key. Because a node's pubkey is derived from
+its keypair, the set has to be known before boot — a chicken-and-egg the
+setup script resolves by pre-generating the keys.
+
+### One-command setup
+
+```sh
+# Generates a persistent keypair per node, assembles OMNIA_LANE0_VALIDATORS
+# from their public keys, and writes docker/.env (with a fresh
+# OMNIA_JWT_SECRET if none exists, and OMNIA_RATE_LIMIT_RPS=1000).
+./scripts/setup-validators.sh            # 3 nodes, stake 1 each
+# NODES=5 STAKE=1 ./scripts/setup-validators.sh   # to scale
+```
+
+This writes `ops/testnet-keys/nodeK/` (git-ignored secrets):
+`validator_key.bin` (the raw 32-byte secret each node loads via
+`OMNIA_NODE_KEY_FILE`) and `validator_pubkey.txt`. `docker-compose.testnet.yml`
+mounts each into its node, so pubkeys — and therefore the validator set —
+stay stable across restarts.
+
+### Bring the testnet up
+
+```sh
+docker compose -f docker/docker-compose.testnet.yml up -d --build
+# add --profile monitoring for Prometheus (:9095) + Grafana (:3000)
+```
+
+Compose reads `docker/.env` automatically, so `OMNIA_LANE0_VALIDATORS`,
+`OMNIA_JWT_SECRET`, and `OMNIA_RATE_LIMIT_RPS` flow to all three nodes.
+
+### Verify
+
+```sh
+# Each node should report a `lane0` stats object (not null) and its own pubkey.
+for p in 9090 9091 9092; do
+  curl -s http://localhost:$p/api/v1/node/info \
+    | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["node_id"], d["lane0"], d["validator_pubkey"][:8])'
+done
+```
+
+Once the nodes have meshed (`/api/v1/node/peers` shows peers), a UBC
+transfer's provenance event is acked by the stake-weighted quorum and
+`GET /api/v1/events/:id` reports `lane0_final: true`. Capture multi-node
+throughput/finality with `scripts/testnet-bench.sh` — see the
+[testnet benchmark runbook](./testnet-benchmark.md).
+
+### Rotating keys
+
+Delete `ops/testnet-keys/` and re-run `setup-validators.sh` to regenerate
+all validator keypairs and the matching set. (Re-running without deleting
+reuses existing keys, keeping the set stable.)
+
+### Security note
+
+`setup-validators.sh` writes **unencrypted** raw keys for a local/dev
+testnet. Production validators should use the encrypted keygen path
+(`--passphrase`, Step 1 above) and a secrets manager, not committed files.
+
+---
+
+🔙 **Back**: [operations/](./) | 🔄 **Related**: [runbook.md](./runbook.md), [testnet-benchmark.md](./testnet-benchmark.md)
 🚀 **Next**: [monitoring.md](./monitoring.md) | 📜 **Source of Truth**: [Restructuring Blueprint](../reference/blueprint-reference.md)
