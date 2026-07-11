@@ -3,7 +3,7 @@
 //! Refactored from std::sync::Mutex to tokio::sync::RwLock to prevent deadlocks
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,6 +31,13 @@ const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 
 /// Constant topic name for Omnia events gossip. Avoids per-call allocation.
 const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
+
+/// Maximum buffered auxiliary-topic messages (non-event topics such as
+/// Lane 0 ack batches). When full, the oldest message is dropped —
+/// auxiliary protocols must tolerate loss (Lane 0 certificates are
+/// grow-only CRDTs, so a dropped ack batch only delays finality until
+/// the next delivery).
+const MAX_AUX_MESSAGES: usize = 4096;
 
 /// Expected number of events per bloom-filter rotation window for dedup.
 ///
@@ -205,6 +212,10 @@ pub struct GossipProtocol {
     pending_queue: PriorityGossipQueue,
     /// Payloads for queued event IDs. Kept in lockstep with `pending_queue`.
     pending_store: HashMap<EventId, Event>,
+    /// Buffered messages from non-event topics (e.g. Lane 0 ack batches),
+    /// as `(topic, payload)` pairs. Bounded by [`MAX_AUX_MESSAGES`];
+    /// drained by [`take_aux_messages`](Self::take_aux_messages).
+    aux_messages: VecDeque<(String, Vec<u8>)>,
     stats: GossipStats,
     last_sync: Instant,
     running: bool,
@@ -243,6 +254,7 @@ impl GossipProtocol {
             network_rx: None,
             pending_queue: PriorityGossipQueue::new(queue_config),
             pending_store: HashMap::new(),
+            aux_messages: VecDeque::new(),
             stats: GossipStats::default(),
             last_sync: Instant::now(),
             running: false,
@@ -536,7 +548,15 @@ impl GossipProtocol {
         // This avoids borrow-checker conflicts between the mutable borrow
         // on network_rx and immutable borrows on other self fields.
         enum DrainedEvent {
-            Gossip { event: Box<Event>, source: PeerId },
+            Gossip {
+                event: Box<Event>,
+                source: PeerId,
+            },
+            Aux {
+                topic: String,
+                data: Vec<u8>,
+                source: PeerId,
+            },
             PeerConnected(PeerId),
             PeerDisconnected(PeerId),
         }
@@ -546,6 +566,19 @@ impl GossipProtocol {
         if let Some(ref mut rx) = self.network_rx {
             loop {
                 match rx.try_recv() {
+                    Ok(NetworkEvent::GossipReceived {
+                        topic,
+                        data,
+                        propagation_source,
+                    }) if topic != OMNIA_EVENTS_TOPIC => {
+                        // Non-event topic (e.g. Lane 0 acks): buffer the raw
+                        // payload for the substrate layer to decode.
+                        drained.push(DrainedEvent::Aux {
+                            topic,
+                            data,
+                            source: propagation_source,
+                        });
+                    }
                     Ok(NetworkEvent::GossipReceived {
                         data,
                         propagation_source,
@@ -668,6 +701,14 @@ impl GossipProtocol {
                     self.pending_store.insert(event.id, *event);
                     self.stats.events_received += 1;
                 }
+                DrainedEvent::Aux { topic, data, source } => {
+                    self.last_seen.insert(source, Instant::now());
+                    // Bounded buffer: drop the oldest message when full.
+                    if self.aux_messages.len() >= MAX_AUX_MESSAGES {
+                        self.aux_messages.pop_front();
+                    }
+                    self.aux_messages.push_back((topic, data));
+                }
                 DrainedEvent::PeerConnected(peer_id) => {
                     info!("Peer connected: {:?}", peer_id);
                     self.last_seen.insert(peer_id, Instant::now());
@@ -705,6 +746,35 @@ impl GossipProtocol {
         }
 
         Ok(inserted_ids)
+    }
+
+    /// Drain buffered messages from non-event topics (e.g. Lane 0 ack
+    /// batches), as `(topic, payload)` pairs in arrival order.
+    ///
+    /// Aux messages are buffered by [`process_pending_events`](Self::process_pending_events);
+    /// call this after it to pick them up.
+    pub fn take_aux_messages(&mut self) -> Vec<(String, Vec<u8>)> {
+        self.aux_messages.drain(..).collect()
+    }
+
+    /// Publish a raw payload on an arbitrary gossipsub topic.
+    ///
+    /// Used for auxiliary protocols (e.g. Lane 0 finality acks) that ride
+    /// their own topic beside the event topic. The caller is responsible
+    /// for the payload's wire format and any subscription to the topic.
+    pub async fn publish_raw(&mut self, topic: &str, data: Vec<u8>) -> Result<(), GossipError> {
+        let bytes_len = data.len();
+        if let Some(ref cmd_tx) = self.network_cmd_tx {
+            cmd_tx
+                .send(NetworkCommand::Publish {
+                    topic: topic.to_string(),
+                    data,
+                })
+                .await
+                .map_err(|e| GossipError::NetworkError(format!("publish_raw({topic}): {e}")))?;
+            self.stats.bytes_sent += bytes_len as u64;
+        }
+        Ok(())
     }
 
     /// Classify an incoming event's gossip priority.
