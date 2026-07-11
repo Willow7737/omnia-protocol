@@ -2,7 +2,42 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-06-24
+> Last Updated: 2026-07-09
+
+
+## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
+
+A full re-run of the criterion suite (`throughput`, `baseline_bench`,
+`network_sim`) on a Linux x86_64 dev container (4 cores, rustc 1.94.1,
+release profile). **These numbers are a health reference, not new
+baselines** — `baselines.json` stays calibrated to GitHub Actions
+runners, because swapping in numbers from different hardware would
+mis-tune the CI gates.
+
+| Benchmark | v0.1.75 CI baseline | 2026-07-09 measured | Δ vs baseline |
+|-----------|--------------------:|--------------------:|:--------------|
+| Sustained TPS (single node, 1000-event batch) | 7,577 ev/s | **~7,675 ev/s** (130.3 ms/batch) | +1% ✅ |
+| Finality latency mean | 78.9 µs | 70.6 µs | −11% ✅ |
+| DAG insert p50 (empty graph) | 23.3 µs | 19.6 µs | −16% ✅ |
+| Gossip propagation (single-node sim) | 24.9 µs | 21.2 µs | −15% ✅ |
+| Deterministic leader compute | 21.6 µs | 18.0 µs | −17% ✅ |
+| Vector clock merge (100 nodes) | 4.06 µs | 3.43 µs | −15% ✅ |
+| Event create + sign | 21.9 µs | 18.3 µs | −16% ✅ |
+| Graph insertion (chain) | 22.7 µs | 19.8 µs | −13% ✅ |
+| Net-sim finality, 3 nodes | 157.7 µs | 172.5 µs | +9% (within 30% gate) |
+| Net-sim finality, 5 nodes | 246.1 µs | 273.8 µs | +11% (within 30% gate) |
+| Net-sim throughput, 3 nodes | 65 ev/s | ~77 ev/s | +18% ✅ |
+| Partition recovery (5 nodes) | 312.0 µs | 352.9 µs | +13% (within 35% gate) |
+| Crash recovery (5 nodes) | 366.5 µs | 300.3 µs | −18% ✅ |
+
+**Reading:** no regressions. The hot path (event creation, DAG insert,
+gossip, finality) runs 10–17% faster than the CI-calibrated baselines —
+an expected hardware delta, and consistent across every hot-path bench.
+The four network-sim results above baseline are all high-variance
+benches (non-deterministic ChaosNetwork ordering) and sit comfortably
+inside their widened gate thresholds. ZK benches (`zk_proof_gen/*`)
+were skipped in this run — they require `--features full` (arkworks)
+and are tracked by the dedicated ZK CI job.
 
 ## 3-Layer Gate Architecture
 

@@ -32,7 +32,7 @@ Think of it like the internet. No one owns the internet; it's just a set of rule
 
 ### Q: What is the current state of the project?
 
-**A:** All 5 core layers are implemented and tested (938+ tests passing). The protocol has causal graph consensus with VRF-based leader selection, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 + Poseidon proofs on BN254 with Merkle path verification. ML-KEM-768 (FIPS-203) post-quantum cryptography and fee enforcement are implemented. Phase 3 added Kademlia DHT peer discovery, GossipSub peer scoring, consensus state persistence, fast-sync protocol, message compression, and gradual slashing. Some features like real RF fingerprinting remain stubs awaiting hardware. Bitcoin/Solana/Celestia settlement adapters are stubs. There is no mobile wallet and no validator network yet.
+**A:** All 5 core layers are implemented and tested (938+ tests passing). The protocol has causal graph consensus with VRF-based leader selection, 6 domain shards (Financial, Computational, Physical, Biological, Identity, Economics), a binding layer with provenance tracking, identity hardening with DIDs and Shamir's Secret Sharing, and an economics layer with UBC and quadratic voting. The ZK-rollup settlement layer uses real arkworks R1CS + Groth16 + Poseidon proofs on BN254 with Merkle path verification. ML-KEM-768 (FIPS-203) post-quantum cryptography and fee enforcement are implemented. Phase 3 added Kademlia DHT peer discovery, GossipSub peer scoring, consensus state persistence, fast-sync protocol, message compression, and gradual slashing. Some features like real RF fingerprinting remain stubs awaiting hardware. Bitcoin/Solana/Celestia settlement adapters are stubs. A Flutter mobile wallet shipped in July 2026 ([Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)) and runs against a live public testnet node; a multi-node validator network is not built yet.
 
 ### Q: How do I run the tests?
 
@@ -255,7 +255,7 @@ The reconstructed secret is used to rotate the DID's public key and authenticati
 
 ### Q: How do I get started?
 
-**A:** You can interact with Omnia via the Rust library or the `omnia-node` binary with REST API (Sprint 3). There is no wallet and no mobile app yet. To experiment:
+**A:** The easiest way is the **Omnia Wallet** mobile app ([repo](https://github.com/Willow7737/Omnia-Wallet)) against the live testnet node at `https://78.47.43.136.sslip.io` — create a self-custody wallet or sign in with Google/GitHub/email. You can also interact via the Rust library or the `omnia-node` binary's REST API. To experiment locally:
 
 1. Clone the repository
 2. Run `cargo test --workspace` to see all tests passing
@@ -264,11 +264,11 @@ The reconstructed secret is used to rotate the DID's public key and authenticati
 
 ### Q: Which wallet should I use?
 
-**A:** No wallet exists yet. All interaction is via the Rust library API. A mobile wallet is planned for Phase 1.
+**A:** Use the official **Omnia Wallet** ([Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)) — Flutter, Android/iOS. It supports self-custody (keys generated on-device, challenge/signature login) and account sign-in (Google/GitHub/email via Supabase), with balance, send, history, governance voting, QR transfers, and a team news feed.
 
 ### Q: Can I use Omnia on my phone?
 
-**A:** No mobile app exists yet. A mobile wallet is planned for Phase 1.
+**A:** Yes — the Omnia Wallet shipped in July 2026: [Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet). Build it with Flutter (`flutter run`) or grab a release build; it points at the live testnet node by default.
 
 ### Q: How long does a transaction take?
 

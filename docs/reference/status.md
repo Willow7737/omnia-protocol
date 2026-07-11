@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-07-09
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -94,7 +94,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-6.1** | Real ZK Circuit (arkworks R1CS + Groth16)            | P0       | ✅ Completed   |
 | **REQ-6.2** | Real PQC Signatures (Dilithium)                      | P0       | ✅ Completed   |
 | **REQ-6.3** | Fee Mechanism (FeeSchedule + QuotaSystem)            | P1       | ✅ Completed   |
-| **REQ-6.4** | Mobile Wallet                                        | P1       | 🌑 Not Started |
+| **REQ-6.4** | Mobile Wallet                                        | P1       | ✅ Completed   |
 | **REQ-6.5** | Validator Network                                    | P0       | 🌑 Not Started |
 | **REQ-6.6** | Slashing (3-tier Gradual: Warning → Jail → Ejection) | P1       | ✅ Completed   |
 | **REQ-6.7** | Conviction Voting                                    | P2       | 🌑 Not Started |
@@ -136,7 +136,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-P4.2** | Solana Settlement Adapter                   | P1       | 🔄 Stub        |
 | **REQ-P4.3** | Celestia Settlement Adapter                 | P1       | 🔄 Stub        |
 | **REQ-P4.4** | Validator Network (multi-node)              | P0       | 🌑 Not Started |
-| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🌑 Not Started |
+| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🔄 Live (single node) |
 | **REQ-P4.6** | Dynamic Fee Mechanism (EIP-1559-style)      | P1       | 📋 Planned     |
 | **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2       | ✅ Completed   |
 | **REQ-P4.8** | VRF Spec Compliance (ADR-012)               | P2       | 📋 Deferred    |
@@ -175,8 +175,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **AUDIT-11** | `aes_gcm.rs` uses `expect()` instead of returning `Result`            | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-12** | `combine_signatures` doesn't deduplicate partials                     | 🟡 Medium | ✅ Remediated |
 | **AUDIT-13** | PQC feature declared but no implementation                            | 🟡 Medium | 📋 Tracked    |
-| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated         | 🟡 Medium | 📋 Tracked    |
-| **AUDIT-15** | Pipeline workers are stubs (log only, no processing)                  | 🟡 Medium | 📋 Tracked    |
+| **AUDIT-14** | PriorityGossipQueue/BloomFilter/CompactEncoder not integrated         | 🟡 Medium | ✅ Remediated (ADR-025 Stage 1: bloom dedup + priority queue wired into `GossipProtocol`; compact wire format v2 for broadcast) |
+| **AUDIT-15** | Pipeline workers are stubs (log only, no processing)                  | 🟡 Medium | 📋 Tracked — superseded per ADR-025 Stage 3 (Lane 0 ack-aggregation workers replace the stub pipeline) |
 | **AUDIT-16** | Event submission uses ephemeral keypairs                              | 🟡 Medium | ✅ Remediated |
 | **AUDIT-17** | `UsefulWorkProof::verify_stub()` is only verification                 | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-18** | `UsefulWorkType` fields are private (can't construct externally)      | 🟡 Medium | 📋 Tracked    |
@@ -185,6 +185,36 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **AUDIT-21** | Docker healthcheck endpoint mismatch                                  | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-22** | Deprecated `substrate` facade crate (heavy `node` dependency)         | 🟡 Medium | 📋 Tracked    |
 | **AUDIT-23** | Quorum check uses base weights instead of effective weights           | 🟡 Medium | 📋 Tracked    |
+
+---
+
+## 16. Live Testnet & Wallet Ecosystem (July 2026)
+
+The protocol is now **running in public** with a full client ecosystem. Node: `https://78.47.43.136.sslip.io` (single node, v0.1.76+, protocol `/omnia/4.0.0`).
+
+| ID          | Requirement                                                        | Priority | Status       |
+| :---------- | :----------------------------------------------------------------- | :------- | :----------- |
+| **REQ-W.1** | Wallet challenge/signature auth (`/auth/challenge`, `/auth/login`) | P0       | ✅ Completed |
+| **REQ-W.2** | Idempotent DID registration for external JWTs (`/auth/register`)   | P0       | ✅ Completed |
+| **REQ-W.3** | SHA-256 DID derivation shared with clients (pinned test vector)    | P0       | ✅ Completed |
+| **REQ-W.4** | Mobile wallet v1 ([Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)): balance, send, history, governance | P1 | ✅ Completed |
+| **REQ-W.5** | Dual-mode auth (self-custody + Supabase via `mint-node-jwt`)       | P1       | ✅ Completed |
+| **REQ-W.6** | Public single-node testnet deployment                              | P0       | ✅ Completed |
+
+---
+
+## 17. ADR-025 Two-Lane Consensus — Rollout Tracking
+
+Staged, benchmark-gated rollout per [ADR-025](../adr/ADR-025-two-lane-consensus.md).
+Every stage is tracked here so nothing falls through.
+
+| Stage | Scope                                                                    | Status | Evidence |
+| :---- | :----------------------------------------------------------------------- | :----- | :------- |
+| **1** | Integrate idle gossip components (AUDIT-14): bloom dedup, priority queue, compact wire v2 | ✅ Done | PR #276 |
+| **2** | Real 3-node testnet + honest multi-node baselines                        | 🔄 Tooling ready — awaiting multi-host run | `scripts/testnet-bench.sh`, [testnet-benchmark runbook](../operations/testnet-benchmark.md); node metrics wired |
+| **3** | Lane 0: consensusless UBC fast path (quorum acks, G-Set certificate CRDTs); absorbs AUDIT-15 | 🔄 v1 shipped — static validator set (`OMNIA_LANE0_VALIDATORS`); dynamic set arrives with Lane 1 | `substrate/src/lane0.rs`; `lane0_final` in event API; `lane0` stats in node info |
+| **4** | Lane 1: DAG-native commit rule + TLA+ spec extension                     | 🌑 Not started | — |
+| **5** | Consensus arena: adversarial property-based CI gate                      | 🌑 Not started | — |
 
 ---
 
@@ -203,11 +233,12 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **Phase 0 (Sprint 4)**      | 18      | 18      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Phase 3**                 | 10      | 10      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Phase 4**                 | 9       | 9       | 0          | 0            | 0              | 0          | ██████████ 100% |
-| **Future**                  | 8       | 4       | 0          | 0            | 4              | 0          | █████░░░░░ 50%  |
+| **Future**                  | 8       | 5       | 0          | 0            | 3              | 0          | ██████░░░░ 63%  |
 | **v0.1.56 + v0.1.68 Audit** | 23      | 9       | 0          | 0            | 0              | 14         | ████░░░░░░ 39%  |
 | **v0.1.69 Critical Audit**  | 16      | 16      | 0          | 0            | 0              | 0          | ██████████ 100% |
 | **Limit Verification**      | 39      | 39      | 0          | 0            | 0              | 0          | ██████████ 100% |
-| **TOTAL**                   | **186** | **157** | **0**      | **1**        | **4**          | **14**     | ██████████ 96%  |
+| **Wallet & Live Testnet**   | 6       | 6       | 0          | 0            | 0              | 0          | ██████████ 100% |
+| **TOTAL**                   | **192** | **164** | **0**      | **1**        | **3**          | **14**     | █████████░ 85%  |
 
 ---
 

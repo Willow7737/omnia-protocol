@@ -33,7 +33,8 @@ pub mod priority_gossip_queue;
 
 // Re-export commonly used types
 pub use compact_event_encoding::{
-    CompactEncoder, CompactEvent, DeltaClock, EncodingError, DEFAULT_ID_TRUNCATION_BYTES, DEFAULT_MAX_DELTA_CLOCK_SIZE,
+    decode_compact_wire, encode_compact_wire, is_compact_wire, CompactEncoder, CompactEvent, DeltaClock, EncodingError,
+    DEFAULT_ID_TRUNCATION_BYTES, DEFAULT_MAX_DELTA_CLOCK_SIZE,
 };
 pub use fast_sync::{
     select_target_checkpoint, FastSyncManager, SyncCheckpoint, SyncError, SyncNetwork, SyncRequest, SyncResponse,

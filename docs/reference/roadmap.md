@@ -139,7 +139,7 @@ _Goal: Proof of Concept_
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
 12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
-13. Mobile wallet
+13. ~~Mobile wallet~~ ✅ Shipped July 2026 — [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) (Flutter, dual-mode auth, live against the public testnet node)
 14. Throughput optimization (multi-threaded, sharded consensus)
 
 ### v0.1.69 Critical Security Hardening (2026-06-22)

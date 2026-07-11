@@ -95,3 +95,37 @@ Stage Summary:
   - `decrement_slash_count_by` clamps to zero (does not error when amount > current, only errors when current == 0).
   - `undo_slash` works post-ejection and decrements points back below the ejection_threshold.
   - `compute_burn_amount_for` returns `None` for unregistered (stake == 0) and `Some(0)` for a registered validator with 0% burn.
+
+
+## 2026-07-09 — Live testnet + wallet ecosystem documentation refresh
+
+- **Context:** the stack went live: public single-node testnet at `https://78.47.43.136.sslip.io` (v0.1.76+), Omnia Wallet v1 shipped ([Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)) with dual-mode auth, and the node grew three wallet-auth endpoints (`/auth/challenge`, `/auth/login`, `/auth/register` — PRs #264/#265/#271).
+- **Docs updated:** README (Live Right Now section, stub table, Phase 5.5, Phase 6 status), docs/reference/status.md (REQ-6.4 done, REQ-W.* section, totals), project-dashboard.md, roadmap.md, stub-inventory.md, use-cases/faq.md, operations/cli-and-api.md (auth endpoints), reference/benchmark-gates.md (fresh local reference run).
+- **Verification:** full wallet flow verified E2E against the live node (challenge → login → DID registered with 1,000 UBC quota → balance); criterion benchmark suite re-run locally (see benchmark-gates.md for numbers + environment caveats).
+
+## 2026-07-10 — ADR-025 Stage 1: idle gossip components integrated (AUDIT-14)
+
+- **Context:** ADR-025 (Two-Lane Consensus) Stage 1 — wire the built-but-idle performance components into the live gossip path.
+- **`GossipBloomFilter` integrated:** replaces the exact `seen_events` HashMap in `GossipProtocol` for duplicate suppression (~350 KiB bounded vs ~4.4 MiB, no O(n) retain scans). Bloom "maybe seen" answers are confirmed against the pending queue + causal graph before dropping, so false positives cost one lookup, never a lost event; count-based rotation bounds the FPR. Bonus: events evicted from an overflowing queue are now re-admittable on retransmission (previously lost until sync).
+- **`PriorityGossipQueue` integrated:** replaces the FIFO `pending_events` VecDeque. Merge events (`other_parent` set — what round/witness structure advances on) classify High and are inserted into the graph before regular events. `enqueue` now returns the evicted ID so the payload side-store stays in lockstep.
+- **Compact wire format (version byte 2):** broadcast now elides the *derivable* event fields — id (32 B), creator (32 B), consensus status — recomputed on receive via the new `Event::from_signed_parts` (omnia-primitives), saving 64+ bytes/event and making a mismatching id/creator inexpressible on the wire. Receivers accept both v1 (full) and v2 (compact); v2 reserved in `wire_format.rs`.
+- **Honest finding:** the originally claimed ~40% delta-clock savings were already delivered by the bincode→postcard migration (postcard varints everything); empty-frontier delta encoding measured 1 byte LARGER than v1. Per-peer delta encoding (`CompactEncoder`) is therefore reserved for the sync path (real frontiers) — documented in the module header.
+- **Verification:** omnia-network 127 tests, omnia-primitives 67, substrate (--features network) 89, chaos-tests 75, node 96 — all green; `cargo fmt --all --check` clean; both CI clippy invocations clean.
+
+## 2026-07-10 — ADR-025 Stage 2 tooling: testnet benchmark + metrics wiring
+
+- **Found while building the tooling:** the Sprint-0 throughput metrics (`omnia_dag_events_total`, `omnia_consensus_tps`, `omnia_node_events_finalized_total`, `omnia_node_consensus_round`, `omnia_node_peers_connected`, `omnia_node_memory_rss_bytes`) were registered but never incremented — `/metrics` reported them flat zero. Wired them into the node's 1 s consensus loop (delta-based counters from graph length / `ConsensusStats.committed`, gauges for round/peers/RSS via new `NodeMetrics::sample_memory_rss`).
+- **`scripts/testnet-bench.sh` (new, +x):** mints an HS256 node JWT from `OMNIA_JWT_SECRET` with openssl, drives `POST /api/v1/events` load at a node, then polls every node's `omnia_dag_events_total` until the events propagate; reports submission rate, per-node propagation %, convergence time, finalized/peers/RSS; writes a JSON report. Detects HTTP 429 throttling and points at `OMNIA_RATE_LIMIT_RPS`.
+- **Compose files:** `OMNIA_RATE_LIMIT_RPS` now passes through both `docker-compose.yml` and `docker-compose.testnet.yml` (default 10 unchanged) so benchmark runs can raise the API rate limit without editing files.
+- **Runbook:** `docs/operations/testnet-benchmark.md` — prerequisites, usage, how to record results in benchmark-gates.md, interpretation guide.
+- **Accounting:** new status.md §17 tracks all five ADR-025 stages with evidence links.
+- **Personally verified end-to-end:** ran a local dev-build node, first run caught two real bugs (default 10 rps rate limit throttled 171/200 submissions; a transient `/metrics` scrape aborted the script under `set -o pipefail`) — both fixed; final run: 200/200 accepted, `dag_events_total` 0→200, convergence detected at 7.78 s, valid JSON report, RSS sampled (~58 MB).
+
+## 2026-07-10 — ADR-025 Stage 3 v1: Lane 0 consensusless fast-path finality
+
+- **`substrate/src/lane0.rs` (new):** `SignedAck` (Ed25519 over `blake3_hash_domain("omnia-lane0-ack", event_id)` — domain-separated so acks can never be replayed as event signatures, proven by test), `ValidatorSet` (static, parsed from `OMNIA_LANE0_VALIDATORS`, >2/3-stake quorum in u128 math), `FinalityCertificate` (grow-only ack set keyed by validator pubkey — G-Set CRDT: idempotent/commutative merge, proven order-independent by test), bounded `CertificateStore` (100k in-flight + 100k finalized, FIFO eviction). 14 unit tests.
+- **Gossip plumbing (omnia-network):** `GossipProtocol` gains topic-dispatched receive — non-event topics buffer into a bounded aux queue (`take_aux_messages`) — and `publish_raw(topic, data)` for auxiliary protocols. Acks ride the new `omnia_lane0_acks` topic; the event topic and wire format are untouched.
+- **Substrate wiring:** validators ack events at both insertion points (local `submit_event` = immediate flush; gossip-received events each consensus round), fold peers' acks, and broadcast their own (batched, ≤1024/message). Lane 0 is **inert unless `OMNIA_LANE0_VALIDATORS` is set** — a malformed spec fails startup loudly rather than silently disabling finality.
+- **Operator surface:** `validator_pubkey` (full hex, needed to build the validator set) + `lane0` stats in `GET /api/v1/node/info`; `lane0_final` on `GET /api/v1/events/:id`; env passthrough in both compose files; deployment.md env table + setup note.
+- **Static-set rationale:** ADR-025 routes validator-set *changes* through Lane 1 (contested shared state). Until Lane 1 lands, the set is operator-pinned config — same trust model as the existing `OMNIA_TOTAL_NODES`.
+- **Personally verified live:** booted a node → read `validator_pubkey` from node info → restarted with itself as the 1-validator set → submitted an event via authenticated API → `GET /api/v1/events/:id` returned `lane0_final: true`, node info `lane0: {acks_accepted:1, acks_rejected:0, events_finalized:1}`.

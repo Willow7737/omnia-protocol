@@ -10,7 +10,18 @@
 ///
 /// - Version `0` was the old bincode 1.x format (no version prefix).
 /// - Version `1` is the current postcard format (with version prefix).
+/// - Version `2` is reserved for compact gossip event encoding
+///   ([`WIRE_FORMAT_VERSION_COMPACT_EVENT`]).
 pub const WIRE_FORMAT_VERSION: u8 = 1;
+
+/// Wire format version byte for compact-encoded gossip events.
+///
+/// Messages with this prefix carry a postcard-serialized `CompactEvent`
+/// (delta-encoded vector clock) instead of a full `Event`. The encoder and
+/// decoder live in `omnia-network::compact_event_encoding`; the constant is
+/// declared here so the version-byte namespace has a single source of truth
+/// and future format bumps cannot collide with it.
+pub const WIRE_FORMAT_VERSION_COMPACT_EVENT: u8 = 2;
 
 /// Maximum allowed input size for postcard deserialization (10 MiB).
 ///

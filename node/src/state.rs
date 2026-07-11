@@ -302,6 +302,23 @@ impl NodeMetrics {
             .clone();
         Ok(NODE_METRICS.get().expect("metrics just initialized").clone())
     }
+
+    /// Sample process resident memory (RSS) and update the gauge.
+    ///
+    /// On Linux this parses `VmRSS` from `/proc/self/status`; on other
+    /// platforms the gauge is left untouched (it stays 0).
+    pub fn sample_memory_rss(&self) {
+        #[cfg(target_os = "linux")]
+        if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+            for line in status.lines() {
+                if let Some(rest) = line.strip_prefix("VmRSS:") {
+                    let kb: i64 = rest.trim().trim_end_matches("kB").trim().parse().unwrap_or(0);
+                    self.node_memory_rss_bytes.set(kb.saturating_mul(1024));
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /// Shared application state accessible to all HTTP handlers.

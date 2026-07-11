@@ -20,3 +20,6 @@ target/
 target/
 substrate/target/
 scripts/__pycache__/
+
+# Per-deployment secrets for docker compose (never commit)
+docker/.env

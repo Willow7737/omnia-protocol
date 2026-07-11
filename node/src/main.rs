@@ -233,6 +233,30 @@ async fn main() -> Result<()> {
         "Node registered as validator candidate (stake=1) — node can now be elected leader"
     );
 
+    // Lane 0 (ADR-025): enable the consensusless fast path when a static
+    // validator set is configured. A malformed spec is a hard startup
+    // error — a typo must not silently disable finality.
+    if let Ok(spec) = std::env::var("OMNIA_LANE0_VALIDATORS") {
+        match omnia_substrate::lane0::ValidatorSet::parse(&spec) {
+            Ok(Some(validators)) => {
+                let member = validators.contains(&node_pubkey_bytes);
+                tracing::info!(
+                    validators = validators.len(),
+                    total_stake = validators.total_stake(),
+                    this_node_is_validator = member,
+                    "Lane 0 fast-path finality enabled"
+                );
+                substrate.init_lane0(validators);
+            }
+            Ok(None) => {
+                tracing::info!("OMNIA_LANE0_VALIDATORS is empty — Lane 0 disabled");
+            }
+            Err(e) => {
+                anyhow::bail!("Invalid OMNIA_LANE0_VALIDATORS: {e}");
+            }
+        }
+    }
+
     // Create the economics state BEFORE the shard router so we can share
     // the same instance between the consensus path (ShardRouter) and the
     // HTTP API (AppState.economics). C4 audit fix — previously two separate
@@ -457,12 +481,24 @@ async fn spawn_background_tasks(
     // to expose the PeerId set; this count-based fix is the minimum
     // required to make `/readyz` work.
     let peers_state = Arc::clone(&app_state.peers);
+    #[cfg(feature = "metrics")]
+    let node_metrics = Arc::clone(&app_state.metrics);
     tokio::spawn(async move {
         tracing::info!("Consensus background loop started");
 
         // Round timer: fires at the consensus round interval (default 1 second)
         let round_duration = tokio::time::Duration::from_millis(1000);
         let mut round_timer = tokio::time::interval(round_duration);
+
+        // Last-sampled values for delta-based counters. The Sprint-0
+        // throughput metrics were registered but never updated, so
+        // /metrics reported them flat zero; sampling here once per round
+        // makes DAG growth, finality, peers, and RSS observable — the
+        // signals multi-node benchmarks converge on (ADR-025 Stage 2).
+        #[cfg(feature = "metrics")]
+        let mut last_dag_total: u64 = 0;
+        #[cfg(feature = "metrics")]
+        let mut last_committed: u64 = 0;
 
         loop {
             tokio::select! {
@@ -479,12 +515,33 @@ async fn spawn_background_tasks(
                     let mut substrate = substrate_consensus.write().await;
                     substrate.process_consensus_round().await;
 
+                    // Sample the round-level metrics (see declaration above).
+                    #[cfg(feature = "metrics")]
+                    {
+                        let dag_total = substrate.graph().await.len() as u64;
+                        if dag_total > last_dag_total {
+                            node_metrics.dag_events_total.inc_by(dag_total - last_dag_total);
+                            last_dag_total = dag_total;
+                        }
+                        let stats = substrate.consensus_stats();
+                        if stats.committed > last_committed {
+                            let delta = stats.committed - last_committed;
+                            node_metrics.events_finalized.inc_by(delta);
+                            node_metrics.consensus_tps.inc_by(delta);
+                            last_committed = stats.committed;
+                        }
+                        node_metrics.consensus_round.set(substrate.current_round() as i64);
+                        node_metrics.sample_memory_rss();
+                    }
+
                     // P0-3: refresh peer count from gossip layer.
                     #[cfg(feature = "network")]
                     {
                         let peer_count = substrate
                             .connected_peer_count()
                             .unwrap_or(0);
+                        #[cfg(feature = "metrics")]
+                        node_metrics.peers_connected.set(peer_count as i64);
                         let mut peers_guard = peers_state.write().await;
                         // Only mutate the Vec if the count changed —
                         // avoids spurious write-lock contention.
@@ -586,6 +643,12 @@ async fn spawn_background_tasks(
                     // starting the network run loop
                     if let Err(e) = network.subscribe("omnia_events") {
                         tracing::warn!(error = %e, "Failed to subscribe to omnia_events topic");
+                    }
+                    // Lane 0 (ADR-025): finality acks ride their own topic.
+                    // Subscribing is harmless when Lane 0 is disabled —
+                    // received acks are simply never folded.
+                    if let Err(e) = network.subscribe(omnia_substrate::lane0::LANE0_ACKS_TOPIC) {
+                        tracing::warn!(error = %e, "Failed to subscribe to Lane 0 acks topic");
                     }
 
                     // Wire the network into the substrate's gossip protocol.
