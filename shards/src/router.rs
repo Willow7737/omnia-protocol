@@ -320,10 +320,18 @@ impl ShardRouter {
     ///
     /// * `event` — The event whose payload contains the shard operation.
     ///
+    /// Not every event carries a shard operation. The substrate DAG also
+    /// carries events whose payloads are opaque to the shard layer — raw
+    /// API event submissions and transfer-provenance receipts, for
+    /// example. Such events are **skipped** (returned `Ok`) rather than
+    /// rejected: a payload that does not deserialize as a [`ShardPayload`]
+    /// is simply "not for the shards", not an error to log on every
+    /// committed non-shard event.
+    ///
     /// # Errors
     ///
-    /// - [`ShardError::ValidationFailed`] — payload deserialization failed,
-    ///   payload exceeds `MAX_PAYLOAD_SIZE`, or replay detected (nonce too low).
+    /// - [`ShardError::ValidationFailed`] — payload exceeds
+    ///   `MAX_PAYLOAD_SIZE`, or replay detected (nonce too low).
     /// - [`ShardError::InsufficientFee`] — the caller lacks sufficient UBC quota.
     /// - [`ShardError::UnknownShard`] — the target shard is not registered.
     ///
@@ -347,8 +355,13 @@ impl ShardRouter {
             )));
         }
 
-        let payload = ShardPayload::from_bytes(&event.payload)
-            .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {e}")))?;
+        // A payload that isn't a ShardPayload is a non-shard event (raw API
+        // submission, transfer receipt, …) — skip it cleanly rather than
+        // erroring on every committed non-shard event.
+        let payload = match ShardPayload::from_bytes(&event.payload) {
+            Ok(payload) => payload,
+            Err(_) => return Ok(()),
+        };
 
         // Replay protection — check nonce
         let creator = event.creator_pubkey;

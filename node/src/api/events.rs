@@ -239,6 +239,88 @@ pub async fn submit_event(
     }
 }
 
+/// Result of building, signing, and submitting a node event.
+pub(crate) struct SubmittedEvent {
+    /// Hex-encoded ID of the built event.
+    pub event_id_hex: String,
+    /// `Ok` if the substrate accepted the event; `Err(reason)` otherwise.
+    /// The event ID is returned regardless, for diagnostics/linking.
+    pub submit_result: std::result::Result<(), String>,
+}
+
+/// Build a node-signed event carrying `payload_bytes`, extending this
+/// node's own event chain, and submit it to the substrate under a single
+/// write lock.
+///
+/// The chain-extension logic mirrors [`submit_event`]: the event always
+/// extends this creator's latest event (never a second genesis — a reused
+/// `(creator, sequence)` pair is equivocation and slashes the node's
+/// validator). Build and submit happen under one write lock so two
+/// concurrent submissions cannot mint the same sequence number.
+pub(crate) async fn build_sign_submit_event(
+    state: &AppState,
+    payload_bytes: Vec<u8>,
+) -> Result<SubmittedEvent, (StatusCode, Json<Value>)> {
+    let keypair = state.keypair.clone().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "No persistent keypair configured"})),
+        )
+    })?;
+    let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
+
+    let (submit_result, event_id_hex) = {
+        let mut substrate = state.substrate.write().await;
+        let mut event = {
+            let graph = substrate.graph().await;
+            let own_events = graph.by_creator(&creator);
+            match own_events.into_iter().max_by_key(|e| e.sequence) {
+                None => Event::genesis(creator, payload_bytes.clone()),
+                Some(latest) => {
+                    let sequence = latest.sequence + 1;
+                    let self_parent = latest.id;
+                    let mut vector_clock = graph.frontier().clone();
+                    vector_clock.set(creator, sequence + 1);
+                    let other_parent = graph
+                        .tips()
+                        .filter_map(|id| graph.get(id))
+                        .filter(|e| e.creator != creator)
+                        .max_by_key(|e| e.timestamp)
+                        .map(|e| e.id);
+                    Event::new(
+                        creator,
+                        sequence,
+                        vector_clock,
+                        Some(self_parent),
+                        other_parent,
+                        payload_bytes.clone(),
+                    )
+                }
+            }
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": format!("Invalid event: {e}")})),
+                )
+            })?
+        };
+        event.sign_with_keypair(&keypair).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("Signing failed: {e}")})),
+            )
+        })?;
+        let event_id_hex = hex::encode(event.id);
+        let result = substrate.submit_event(event).await.map_err(|e| e.to_string());
+        (result, event_id_hex)
+    };
+
+    Ok(SubmittedEvent {
+        event_id_hex,
+        submit_result,
+    })
+}
+
 /// Handler for `GET /api/v1/events/:id`.
 ///
 /// Looks up an event by its hex-encoded ID in the in-memory
@@ -281,7 +363,7 @@ pub async fn get_event(
 }
 
 /// Decode a hex event ID into a 32-byte array, if well-formed.
-fn decode_event_id(hex_id: &str) -> Option<[u8; 32]> {
+pub(crate) fn decode_event_id(hex_id: &str) -> Option<[u8; 32]> {
     let bytes = hex::decode(hex_id).ok()?;
     bytes.as_slice().try_into().ok()
 }

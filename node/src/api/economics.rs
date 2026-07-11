@@ -15,7 +15,42 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 
 use crate::api::auth::CallerIdentity;
+use crate::api::events::build_sign_submit_event;
 use crate::state::{AppState, TransferRecord};
+
+/// Domain-tagged wire prefix for transfer-provenance event payloads.
+///
+/// Guarantees a transfer receipt can never be mistaken for a shard
+/// operation and is self-identifying to future decoders.
+const TRANSFER_PAYLOAD_TAG: &[u8] = b"OMNIA_XFER_V1";
+
+/// On-chain provenance record for a UBC transfer, embedded (tagged +
+/// postcard-encoded) in the payload of a causal-graph event.
+///
+/// This is the Step-1 provenance carrier (ADR-025): every transfer becomes
+/// a signed, Lane-0-finalized, gossiped DAG event. The authoritative
+/// balance change still happens in the economics state — event-sourced
+/// balance application across nodes is the follow-on that requires sharing
+/// the economics state between the API and the shard router.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TransferEventPayload {
+    from_did: String,
+    to_did: String,
+    amount: u64,
+    transfer_id: String,
+    timestamp: u64,
+}
+
+/// Encode a transfer receipt as `TAG ++ postcard(payload)`.
+fn encode_transfer_payload(p: &TransferEventPayload) -> Vec<u8> {
+    let mut bytes = TRANSFER_PAYLOAD_TAG.to_vec();
+    // postcard encoding of a small struct is infallible in practice; on the
+    // impossible error, fall back to just the tag (an empty-body receipt).
+    if let Ok(body) = postcard::to_allocvec(p) {
+        bytes.extend(body);
+    }
+    bytes
+}
 
 /// Request body for a UBC transfer (spend) operation.
 ///
@@ -172,6 +207,45 @@ pub async fn transfer_ubc(
             let id_input = format!("{from_did}|{}|{}|{now_ms}", body.to_did, body.amount);
             let id = blake3::hash(id_input.as_bytes()).to_hex().to_string();
 
+            // Release the economics lock BEFORE taking the substrate write
+            // lock (event submission) or the history lock, to keep a single
+            // consistent lock order across endpoints.
+            drop(economics);
+
+            // Record the transfer on-chain as a signed causal-graph event:
+            // provenance + Lane 0 fast-path finality + gossip propagation.
+            // The authoritative balance change already happened above; if
+            // the provenance event fails to submit, the transfer still
+            // succeeded — we just record event_id: None and log it.
+            let payload = encode_transfer_payload(&TransferEventPayload {
+                from_did: from_did.clone(),
+                to_did: body.to_did.clone(),
+                amount: body.amount,
+                transfer_id: id.clone(),
+                timestamp: now_ms,
+            });
+            let event_id = match build_sign_submit_event(&state, payload).await {
+                Ok(submitted) => match submitted.submit_result {
+                    Ok(()) => Some(submitted.event_id_hex),
+                    Err(e) => {
+                        tracing::warn!(
+                            transfer_id = %id,
+                            error = %e,
+                            "Transfer succeeded but provenance event was not accepted by the substrate"
+                        );
+                        None
+                    }
+                },
+                Err((_status, body)) => {
+                    tracing::warn!(
+                        transfer_id = %id,
+                        error = %body.0,
+                        "Transfer succeeded but provenance event could not be built"
+                    );
+                    None
+                }
+            };
+
             let record = TransferRecord {
                 id: id.clone(),
                 from_did: from_did.clone(),
@@ -180,11 +254,8 @@ pub async fn transfer_ubc(
                 timestamp: now_ms,
                 status: "completed".to_string(),
                 new_balance,
+                event_id: event_id.clone(),
             };
-
-            // Release the economics lock before acquiring the history lock
-            // to avoid lock-ordering surprises across endpoints.
-            drop(economics);
             crate::state::record_transfer(&state.transfer_history, record).await;
 
             tracing::info!(
@@ -193,6 +264,7 @@ pub async fn transfer_ubc(
                 amount = body.amount,
                 new_balance = new_balance,
                 transfer_id = %id,
+                event_id = ?event_id,
                 "UBC spend operation completed"
             );
             Ok((
@@ -204,6 +276,7 @@ pub async fn transfer_ubc(
                     "to_did": body.to_did,
                     "amount": body.amount,
                     "new_balance": new_balance,
+                    "event_id": event_id,
                     "note": "UBC is soulbound — tokens are spent (consumed), not transferred to the recipient",
                 })),
             ))
@@ -262,12 +335,37 @@ pub async fn list_transfers(State(state): State<AppState>, Query(query): Query<L
     let history = state.transfer_history.read().await;
 
     // Newest first — Vec's natural order is oldest first.
-    let transfers: Vec<&TransferRecord> = history.iter().rev().take(limit).collect();
+    let records: Vec<&TransferRecord> = history.iter().rev().take(limit).collect();
+    let count = records.len();
+    let total = history.len();
+
+    // When Lane 0 is enabled, annotate each record that has a provenance
+    // event with its fast-path finality status (single substrate read lock
+    // for the whole page).
+    let substrate = state.substrate.read().await;
+    let lane0_enabled = substrate.lane0_enabled();
+    let transfers: Vec<Value> = records
+        .into_iter()
+        .map(|r| {
+            let mut v = serde_json::to_value(r).unwrap_or_else(|_| json!({}));
+            if lane0_enabled {
+                let is_final = r
+                    .event_id
+                    .as_deref()
+                    .and_then(crate::api::events::decode_event_id)
+                    .map(|id| substrate.lane0_is_final(&id))
+                    .unwrap_or(false);
+                v["lane0_final"] = json!(is_final);
+            }
+            v
+        })
+        .collect();
+    drop(substrate);
 
     Json(json!({
         "transfers": transfers,
-        "count": transfers.len(),
-        "total_in_history": history.len(),
+        "count": count,
+        "total_in_history": total,
     }))
 }
 
@@ -283,6 +381,44 @@ mod tests {
         assert_eq!(req.from_did, "did:omnia:abc");
         assert_eq!(req.to_did, "did:omnia:def");
         assert_eq!(req.amount, 100);
+    }
+
+    #[test]
+    fn test_transfer_payload_roundtrip() {
+        let p = TransferEventPayload {
+            from_did: "did:omnia:aaaa".to_string(),
+            to_did: "did:omnia:bbbb".to_string(),
+            amount: 250,
+            transfer_id: "cafef00d".to_string(),
+            timestamp: 1_752_000_000_000,
+        };
+        let bytes = encode_transfer_payload(&p);
+        // Tagged so it's self-identifying and never a valid ShardPayload.
+        assert!(bytes.starts_with(TRANSFER_PAYLOAD_TAG));
+        let body = &bytes[TRANSFER_PAYLOAD_TAG.len()..];
+        let decoded: TransferEventPayload = postcard::from_bytes(body).unwrap();
+        assert_eq!(decoded.from_did, p.from_did);
+        assert_eq!(decoded.to_did, p.to_did);
+        assert_eq!(decoded.amount, p.amount);
+        assert_eq!(decoded.transfer_id, p.transfer_id);
+        assert_eq!(decoded.timestamp, p.timestamp);
+    }
+
+    #[test]
+    fn test_transfer_payload_not_a_shard_payload() {
+        // The router must skip transfer receipts (they aren't shard ops).
+        let p = TransferEventPayload {
+            from_did: "did:omnia:aaaa".to_string(),
+            to_did: "did:omnia:bbbb".to_string(),
+            amount: 1,
+            transfer_id: "id".to_string(),
+            timestamp: 0,
+        };
+        let bytes = encode_transfer_payload(&p);
+        assert!(
+            omnia_shards::ShardPayload::from_bytes(&bytes).is_err(),
+            "transfer receipt must not deserialize as a ShardPayload"
+        );
     }
 
     #[test]
