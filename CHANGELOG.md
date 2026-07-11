@@ -9,6 +9,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.82](https://github.com/Willow7737/omnia-protocol/compare/v0.1.81...v0.1.82) (2026-07-11)
+
+
+### Features
+
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([f9b350a](https://github.com/Willow7737/omnia-protocol/commit/f9b350ac2ce4f0b624ee078a0a99b9b398117155))
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([934aed7](https://github.com/Willow7737/omnia-protocol/commit/934aed7e49c4485fd4d60e7b5c7e8a7efb93ebfe))
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([#278](https://github.com/Willow7737/omnia-protocol/issues/278)) ([14a90d9](https://github.com/Willow7737/omnia-protocol/commit/14a90d9090cc0a523d158296b066288eee57f879))
+* **node:** add wallet challenge/signature auth endpoints ([395bf02](https://github.com/Willow7737/omnia-protocol/commit/395bf022158059db111ff4e71f283569143fcd8b))
+* **node:** POST /api/v1/auth/register — register the authenticated caller's DID ([#271](https://github.com/Willow7737/omnia-protocol/issues/271)) ([b2bb717](https://github.com/Willow7737/omnia-protocol/commit/b2bb717ab5ecb43dc013cf507feb6a6582c5ea73))
+* **node:** POST /api/v1/auth/register — register the authenticated caller's DID ([#271](https://github.com/Willow7737/omnia-protocol/issues/271)) ([8b22332](https://github.com/Willow7737/omnia-protocol/commit/8b223327e7ba036be2310fb4dcd5f4dfe69fe5a0))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([446bcba](https://github.com/Willow7737/omnia-protocol/commit/446bcbaf307086a628b16a4860875613391fc8d5))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([3947df2](https://github.com/Willow7737/omnia-protocol/commit/3947df27eac1da4c7bfb2edff0f3fc7ef4f3320f))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([e3debb0](https://github.com/Willow7737/omnia-protocol/commit/e3debb0c1b3a17d3a15daa2546129b4efab4530f))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([#277](https://github.com/Willow7737/omnia-protocol/issues/277)) ([7ba2c2a](https://github.com/Willow7737/omnia-protocol/commit/7ba2c2a70ae4dfa28acc322657edb4cbbe0a4724))
+
+
+### Performance
+
+* **network:** integrate idle gossip components (AUDIT-14, ADR-025 Stage 1) ([#276](https://github.com/Willow7737/omnia-protocol/issues/276)) ([2ffdfec](https://github.com/Willow7737/omnia-protocol/commit/2ffdfecfb2ef3612ef9dcfa6b3637ac22b23324e))
+
+
+### Refactoring
+
+* **node:** derive wallet DID with SHA-256 for cross-client parity ([45a62fe](https://github.com/Willow7737/omnia-protocol/commit/45a62feec94556b8e02662f752de87978e5387df))
+* **node:** derive wallet DID with SHA-256 for cross-client parity ([e1892ac](https://github.com/Willow7737/omnia-protocol/commit/e1892ac3518e26d127089d304b2572a3ef9d168e))
+
+
+### Documentation
+
+* **adr:** ADR-025 two-lane consensus + catch adr-index up to 025 ([ba3940c](https://github.com/Willow7737/omnia-protocol/commit/ba3940c61a42d9f5aa62193f594dbbd673ba51f3))
+* **adr:** ADR-025 Two-Lane Consensus + catch adr-index up to 025 ([e94e25b](https://github.com/Willow7737/omnia-protocol/commit/e94e25bcc9c1357ac87b5fbd663108542bce5cf2))
+* **bench:** record 2026-07-09 local reference run (v0.1.76+/dev) ([1e36a7b](https://github.com/Willow7737/omnia-protocol/commit/1e36a7b2d4cf48cb9f05a7b3be9a6b212bce79b9))
+* reflect live testnet + shipped wallet ecosystem ([7b21ec5](https://github.com/Willow7737/omnia-protocol/commit/7b21ec50a3d732d887fe70dfdaa711e781e5e92f))
+* reflect live testnet + shipped wallet; record fresh benchmark run ([66338d9](https://github.com/Willow7737/omnia-protocol/commit/66338d9989a372b62628330b34f6a14da2b8e0ea))
+
 ## [0.1.81](https://github.com/Willow7737/omnia-protocol/compare/v0.1.80...v0.1.81) (2026-07-03)
 
 
