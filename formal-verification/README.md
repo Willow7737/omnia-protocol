@@ -2,8 +2,8 @@
 
 This directory contains TLA+ specifications that model the Omnia consensus protocol and its CRDT convergence properties, verifying safety and liveness through exhaustive state-space exploration using the TLC model checker.
 
-**Version:** v0.1.68
-**Last Updated:** 2026-03-05
+**Version:** v0.1.76
+**Last Updated:** 2026-07-12
 
 ## Protocol Model
 
@@ -207,6 +207,74 @@ The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence propertie
 
 **Note:** The `OmniaCRDT.cfg` model checker configuration file exists and configures TLC with `Nodes = {n1, n2, n3}`, `MaxVal = 3`, `Elements = {e1, e2}`, and `MaxTags = 3`, verifying invariants `TypeOK_GCounter`, `TypeOK_OrSet`, `TypeOK_LWW`, `GCounterConvergence`, `LWWConvergence`, and properties `GCounterCommutative`, `GCounterIdempotent`, `GCounterFinalConvergence`.
 
+## Two-Lane Extension (ADR-025 Stage 4)
+
+`OmniaTwoLane.tla` extends verification to the cross-lane safety property
+introduced by [ADR-025](../docs/adr/ADR-025-two-lane-consensus.md): Lane 0
+(consensusless UBC fast path, `substrate/src/lane0.rs`) and Lane 1 (the DAG
+commit rule modeled above) share one substrate, and a Lane 1-committed
+validator-set change must not be able to retroactively invalidate a Lane 0
+certificate that already reached finality under the prior set — "Lane 1
+commits act as epoch fences for Lane 0 certificate validity" (ADR-025,
+Consequences).
+
+Rather than re-modeling Lane 1's fame/commit machinery a second time, the
+new module **composes** with `OmniaConsensus.tla`: a Lane 1-committed
+validator-set-change event is abstracted as `RotateEpoch`, a single atomic
+action applied identically to every node. That abstraction is sound
+precisely because `Agreement` (above) already guarantees every honest node
+computes the same committed order — see the module's header comment for
+the full reduction argument.
+
+### What it models
+
+- **Lane 0 certificates as a G-Set CRDT**: `acks[node][event]` accumulates
+  monotonically via `AckEvent` (self-ack) and `GossipMerge` (union merge —
+  commutative, associative, idempotent), mirroring `CertificateStore::add_ack`.
+- **`RotateEpoch`**: mirrors `CertificateStore::rotate_validators` exactly —
+  already-finalized certificates are untouched; pending certificates are
+  re-evaluated against the new active set, dropping acks from validators no
+  longer members (and immediately finalizing if the retained acks already
+  meet quorum under the new set).
+- **`FinalizeIfQuorum`**: a node finalizes once its locally accumulated acks
+  for an event reach a supermajority of the *current* active set.
+
+### Properties verified (by construction; TLC run pending — see below)
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `TypeOK` | Invariant | Well-typedness of all state variables |
+| `PendingAcksAreCurrentMembers` | Invariant | Every ack counted toward a **pending** certificate belongs to the currently active validator set — a rotation can never let a stale ack from a since-removed validator sneak a certificate over quorum |
+| `EpochFenceMonotone` | Temporal (safety) | `finalized[n]` never shrinks under any action, including `RotateEpoch` — the exact "epoch fence" claim: once decided, a Lane 0 certificate's finality is permanent regardless of how many validator-set rotations follow |
+
+Both properties were checked by manual inductive proof against the action
+definitions while writing the spec (documented inline in
+`OmniaTwoLane.tla`), following the same reasoning style as this file's
+`Agreement`/`NoEquivocation` write-ups. **TLC has not yet been run against
+this module in the environment this was authored in** (no local
+`tla2tools.jar` available) — run it with the same CLI recipe as
+`OmniaConsensus.tla` above, substituting `OmniaTwoLane.tla`/`OmniaTwoLane.cfg`,
+before relying on this as a completed verification pass.
+
+### Known limitations (in addition to the shared ones below)
+
+- **Equal-weight validators**: stake is abstracted to one unit per
+  validator (count-based supermajority), matching how `OmniaConsensus.tla`
+  already abstracts its own BFT quorum. The real `ValidatorSet` in
+  `lane0.rs` is heterogeneously stake-weighted; the rotation algorithm
+  (retain-then-recompute) is identical either way, so this does not change
+  which property is being tested.
+- **`RotateEpoch` is global, not per-node**: justified by composition with
+  `Agreement` (see above) rather than modeled from scratch — this module
+  does not re-verify that all nodes agree on *when* a rotation happens,
+  only that *given* they do, Lane 0 finality stays sound and monotone.
+- **Two-step finalize-after-rotate**: the real `rotate_validators` performs
+  the retain-and-immediately-finalize check atomically in one function
+  call; the spec models this as two separate actions (`RotateEpoch` then
+  `FinalizeIfQuorum`). This is a strictly weaker synchrony assumption than
+  the real code provides, so it cannot mask a bug the implementation
+  doesn't have.
+
 ## Known Limitations
 
 | Limitation                  | Details                                                                                                                        |
@@ -253,6 +321,8 @@ The model exceeds available memory. Remediation:
 | `OmniaConsensus.cfg`          | 10    | TLC model checker configuration for consensus                                                                                                                        |
 | `OmniaCRDT.tla`               | 213   | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister)                                                                                     |
 | `OmniaCRDT.cfg`               | 23    | TLC model checker configuration for CRDT verification                                                                                                                |
+| `OmniaTwoLane.tla`            | —     | ADR-025 Stage 4: Lane 0 G-Set certificate CRDT + epoch-fenced validator rotation, composed with `OmniaConsensus.tla`'s `Agreement`                                    |
+| `OmniaTwoLane.cfg`            | —     | TLC model checker configuration for the two-lane extension                                                                                                            |
 | `consensus/CONSENSUS_SPEC.md` | —     | English-language formal specification: fault model, DAG structure, famousness algorithm, commitment rule, safety argument, liveness argument (A-2 audit fix v0.1.68) |
 | `README.md`                   | —     | This documentation                                                                                                                                                   |
 
@@ -264,3 +334,4 @@ The chaos testing framework (`omnia-chaos-tests`) provides executable validation
 - **Liveness** (`ChaosNetwork::check_liveness()`) verifies at least some events are committed — corresponds to the TLA+ `Liveness` property
 - **Slashing** (`ChaosNetwork::is_node_slashed()`) verifies equivocation detection — corresponds to the TLA+ `NoEquivocation` invariant
 - **Network partitions** (`ChaosNetwork::partition()` / `heal()`) test scenarios not modeled in TLA+
+- **Lane 0 epoch fencing** (`substrate/src/lane0.rs`, `CertificateStore::rotate_validators` tests) provides executable validation of `OmniaTwoLane.tla`'s `PendingAcksAreCurrentMembers` and `EpochFenceMonotone` — see `test_rotate_validators_preserves_finalized_monotone` and `test_rotate_validators_drops_nonmember_acks`
