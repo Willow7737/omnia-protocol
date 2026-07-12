@@ -85,6 +85,15 @@ macro_rules! impl_shard {
             pub fn state(&self) -> &$state {
                 &self.state
             }
+
+            /// Get a mutable reference to the internal state.
+            ///
+            /// Lets a holder of the registered shard (e.g. the router)
+            /// expose the shard's state as the single source of truth for
+            /// API reads/writes, rather than keeping a divergent copy.
+            pub fn state_mut(&mut self) -> &mut $state {
+                &mut self.state
+            }
         }
 
         impl Default for $name {
@@ -121,6 +130,14 @@ macro_rules! impl_shard {
                     $variant(inner) => <$validator>::validate(&self.state, inner),
                     _ => Err($crate::shard::ShardError::TypeMismatch),
                 }
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
     };

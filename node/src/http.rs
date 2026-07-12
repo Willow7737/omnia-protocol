@@ -222,7 +222,6 @@ mod tests {
     use crate::state::NodeMetrics;
     use axum::body::Body;
     use axum::http::{Request, StatusCode as HttpStatus};
-    use omnia_economics::EconomicsState;
     use omnia_shards::ShardRouter;
     use omnia_substrate::Substrate;
     use std::path::PathBuf;
@@ -258,7 +257,10 @@ mod tests {
 
         let fee_schedule = omnia_shards::FeeSchedule::standard();
         let quota = omnia_economics::QuotaSystem::default_system();
-        let shard_router = ShardRouter::new(fee_schedule, quota);
+        let mut shard_router = ShardRouter::new(fee_schedule, quota);
+        // Register an economics shard so economics-backed handlers have a
+        // single-source state to read/write (see `with_economics`).
+        shard_router.register(Box::new(omnia_shards::EconomicsShard::new()));
 
         let event_store: indexmap::IndexMap<String, StoredEvent> = (0..event_count)
             .map(|i| {
@@ -284,7 +286,6 @@ mod tests {
             substrate: Arc::new(RwLock::new(substrate)),
             slashing: Arc::new(Mutex::new(slashing_engine)),
             shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
-            economics: Arc::new(Mutex::new(EconomicsState::new())),
             event_store: Arc::new(RwLock::new(event_store)),
             transfer_history: Arc::new(RwLock::new(Vec::new())),
             challenges: crate::api::wallet_auth::new_challenge_store(),

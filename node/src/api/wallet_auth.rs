@@ -53,6 +53,7 @@ use omnia_substrate::crypto::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 use crate::api::auth::create_token;
+use crate::api::economics::with_economics;
 use crate::state::AppState;
 
 /// Lifetime of an issued challenge nonce, in milliseconds (5 minutes).
@@ -301,13 +302,12 @@ pub async fn login(
     // Signature is valid — derive the DID and ensure it is registered so the
     // wallet has a UBC quota/balance to display and spend.
     let did = did_from_public_key(&pubkey_bytes);
-    {
-        let mut economics = state.economics.lock().await;
-        if !economics.quota.is_registered(&did) {
-            economics.quota.register_did(&did);
+    with_economics(&state, |econ| {
+        if !econ.quota.is_registered(&did) {
+            econ.quota.register_did(&did);
             tracing::info!(did = %did, "Registered new wallet DID via challenge/signature login");
         }
-    }
+    })?;
 
     // Issue the JWT.
     let token = create_token(&did, TOKEN_TTL_SECS)
@@ -353,18 +353,23 @@ pub async fn register(
 ) -> (StatusCode, Json<Value>) {
     let did = caller.caller_id;
 
-    let mut economics = state.economics.lock().await;
-    let newly_registered = if economics.quota.is_registered(&did) {
-        false
-    } else {
-        economics.quota.register_did(&did);
-        tracing::info!(did = %did, "Registered DID via /auth/register");
-        true
+    let outcome = with_economics(&state, |econ| {
+        let newly_registered = if econ.quota.is_registered(&did) {
+            false
+        } else {
+            econ.quota.register_did(&did);
+            tracing::info!(did = %did, "Registered DID via /auth/register");
+            true
+        };
+        let balance = econ.balance_of(&did).unwrap_or(0);
+        let quota = econ.quota.quota_of(&did).unwrap_or(0);
+        let epoch = econ.current_epoch();
+        (newly_registered, balance, quota, epoch)
+    });
+    let (newly_registered, balance, quota, epoch) = match outcome {
+        Ok(v) => v,
+        Err(e) => return e,
     };
-
-    let balance = economics.balance_of(&did).unwrap_or(0);
-    let quota = economics.quota.quota_of(&did).unwrap_or(0);
-    let epoch = economics.current_epoch();
 
     (
         StatusCode::OK,

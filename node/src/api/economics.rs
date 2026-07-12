@@ -52,6 +52,35 @@ fn encode_transfer_payload(p: &TransferEventPayload) -> Vec<u8> {
     bytes
 }
 
+/// Run `f` against the single-source economics state, returning its result.
+///
+/// The economics state is owned by the registered economics shard inside
+/// the shared shard router (`AppState.shard_router`), which is the SAME
+/// `Arc<Mutex<ShardRouter>>` the substrate's shard processor mutates on the
+/// event/consensus path. Reading and writing through here therefore keeps
+/// the API and the event path on one store — no divergent second copy
+/// (the C4 audit finding).
+///
+/// The router guard is `std::sync` and `f` is synchronous, so the guard is
+/// always dropped before the caller can `.await` (the compiler enforces
+/// this — a held `std` guard would make the handler future `!Send`).
+pub(crate) fn with_economics<R>(
+    state: &AppState,
+    f: impl FnOnce(&mut omnia_economics::EconomicsState) -> R,
+) -> Result<R, (StatusCode, Json<Value>)> {
+    let mut router = state
+        .shard_router
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let econ = router.economics_mut().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "economics shard not registered"})),
+        )
+    })?;
+    Ok(f(econ))
+}
+
 /// Request body for a UBC transfer (spend) operation.
 ///
 /// Note: UBC tokens are **soulbound** — they cannot be transferred
@@ -88,11 +117,14 @@ pub async fn get_balance(
     State(state): State<AppState>,
     Path(did): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let economics = state.economics.lock().await;
-
-    let balance = economics.balance_of(&did);
-    let quota = economics.quota.quota_of(&did);
-    let is_registered = economics.quota.is_registered(&did);
+    let (balance, quota, is_registered, current_epoch) = with_economics(&state, |econ| {
+        (
+            econ.balance_of(&did),
+            econ.quota.quota_of(&did),
+            econ.quota.is_registered(&did),
+            econ.current_epoch(),
+        )
+    })?;
 
     if !is_registered {
         return Err((
@@ -108,7 +140,7 @@ pub async fn get_balance(
         "did": did,
         "balance": balance.unwrap_or(0),
         "monthly_quota": quota.unwrap_or(0),
-        "current_epoch": economics.current_epoch(),
+        "current_epoch": current_epoch,
         "is_registered": is_registered,
     })))
 }
@@ -168,136 +200,116 @@ pub async fn transfer_ubc(
         ));
     }
 
-    let mut economics = state.economics.lock().await;
-
-    // Ensure the sender (authenticated caller) is registered
-    if !economics.quota.is_registered(&from_did) {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({
-                "error": format!("Sender DID not registered: {}", from_did),
-            })),
-        ));
-    }
-
-    // Ensure the recipient is registered
-    if !economics.quota.is_registered(&body.to_did) {
-        return Err((
-            StatusCode::NOT_FOUND,
-            Json(json!({
-                "error": format!("Recipient DID not registered: {}", body.to_did),
-            })),
-        ));
-    }
-
-    // Perform the spend operation (UBC is soulbound — no actual transfer)
-    let result = economics.quota.spend(&from_did, body.amount);
-
-    match result {
-        Ok(()) => {
-            let new_balance = economics.balance_of(&from_did).unwrap_or(0);
-            let now_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-
-            // Derive a stable transfer ID: BLAKE3 of (from_did, to_did, amount, timestamp).
-            // Using BLAKE3 (rather than a UUID) keeps IDs deterministic and
-            // auditable — anyone with the same inputs can recompute the ID.
-            let id_input = format!("{from_did}|{}|{}|{now_ms}", body.to_did, body.amount);
-            let id = blake3::hash(id_input.as_bytes()).to_hex().to_string();
-
-            // Release the economics lock BEFORE taking the substrate write
-            // lock (event submission) or the history lock, to keep a single
-            // consistent lock order across endpoints.
-            drop(economics);
-
-            // Record the transfer on-chain as a signed causal-graph event:
-            // provenance + Lane 0 fast-path finality + gossip propagation.
-            // The authoritative balance change already happened above; if
-            // the provenance event fails to submit, the transfer still
-            // succeeded — we just record event_id: None and log it.
-            let payload = encode_transfer_payload(&TransferEventPayload {
-                from_did: from_did.clone(),
-                to_did: body.to_did.clone(),
-                amount: body.amount,
-                transfer_id: id.clone(),
-                timestamp: now_ms,
-            });
-            let event_id = match build_sign_submit_event(&state, payload).await {
-                Ok(submitted) => match submitted.submit_result {
-                    Ok(()) => Some(submitted.event_id_hex),
-                    Err(e) => {
-                        tracing::warn!(
-                            transfer_id = %id,
-                            error = %e,
-                            "Transfer succeeded but provenance event was not accepted by the substrate"
-                        );
-                        None
-                    }
-                },
-                Err((_status, body)) => {
-                    tracing::warn!(
-                        transfer_id = %id,
-                        error = %body.0,
-                        "Transfer succeeded but provenance event could not be built"
-                    );
-                    None
-                }
-            };
-
-            let record = TransferRecord {
-                id: id.clone(),
-                from_did: from_did.clone(),
-                to_did: body.to_did.clone(),
-                amount: body.amount,
-                timestamp: now_ms,
-                status: "completed".to_string(),
-                new_balance,
-                event_id: event_id.clone(),
-            };
-            crate::state::record_transfer(&state.transfer_history, record).await;
-
-            tracing::info!(
-                from_did = %from_did,
-                to_did = %body.to_did,
-                amount = body.amount,
-                new_balance = new_balance,
-                transfer_id = %id,
-                event_id = ?event_id,
-                "UBC spend operation completed"
-            );
-            Ok((
-                StatusCode::OK,
-                Json(json!({
-                    "status": "completed",
-                    "id": id,
-                    "from_did": from_did,
-                    "to_did": body.to_did,
-                    "amount": body.amount,
-                    "new_balance": new_balance,
-                    "event_id": event_id,
-                    "note": "UBC is soulbound — tokens are spent (consumed), not transferred to the recipient",
-                })),
-            ))
+    // Registration checks + the authoritative spend happen under the
+    // shared economics lock (single source of truth). The guard is dropped
+    // when the closure returns, before any `.await` below.
+    let new_balance = with_economics(&state, |econ| {
+        if !econ.quota.is_registered(&from_did) {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("Sender DID not registered: {from_did}") })),
+            ));
         }
-        Err(e) => {
-            tracing::warn!(
-                from_did = %from_did,
-                amount = body.amount,
-                error = %e,
-                "UBC spend operation failed"
-            );
-            Err((
+        if !econ.quota.is_registered(&body.to_did) {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("Recipient DID not registered: {}", body.to_did) })),
+            ));
+        }
+        // Perform the spend (UBC is soulbound — no actual transfer).
+        econ.quota.spend(&from_did, body.amount).map_err(|e| {
+            tracing::warn!(from_did = %from_did, amount = body.amount, error = %e, "UBC spend operation failed");
+            (
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "error": format!("Transfer failed: {e}"),
                     "from_did": from_did,
                     "amount": body.amount,
                 })),
-            ))
+            )
+        })?;
+        Ok(econ.balance_of(&from_did).unwrap_or(0))
+    })??;
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    // Derive a stable transfer ID: BLAKE3 of (from_did, to_did, amount, timestamp).
+    // Using BLAKE3 (rather than a UUID) keeps IDs deterministic and
+    // auditable — anyone with the same inputs can recompute the ID.
+    let id_input = format!("{from_did}|{}|{}|{now_ms}", body.to_did, body.amount);
+    let id = blake3::hash(id_input.as_bytes()).to_hex().to_string();
+
+    // Record the transfer on-chain as a signed causal-graph event:
+    // provenance + Lane 0 fast-path finality + gossip propagation. The
+    // authoritative balance change already happened above; if the
+    // provenance event fails to submit, the transfer still succeeded — we
+    // just record event_id: None and log it.
+    let payload = encode_transfer_payload(&TransferEventPayload {
+        from_did: from_did.clone(),
+        to_did: body.to_did.clone(),
+        amount: body.amount,
+        transfer_id: id.clone(),
+        timestamp: now_ms,
+    });
+    let event_id = match build_sign_submit_event(&state, payload).await {
+        Ok(submitted) => match submitted.submit_result {
+            Ok(()) => Some(submitted.event_id_hex),
+            Err(e) => {
+                tracing::warn!(
+                    transfer_id = %id,
+                    error = %e,
+                    "Transfer succeeded but provenance event was not accepted by the substrate"
+                );
+                None
+            }
+        },
+        Err((_status, body)) => {
+            tracing::warn!(
+                transfer_id = %id,
+                error = %body.0,
+                "Transfer succeeded but provenance event could not be built"
+            );
+            None
         }
-    }
+    };
+
+    let record = TransferRecord {
+        id: id.clone(),
+        from_did: from_did.clone(),
+        to_did: body.to_did.clone(),
+        amount: body.amount,
+        timestamp: now_ms,
+        status: "completed".to_string(),
+        new_balance,
+        event_id: event_id.clone(),
+    };
+    crate::state::record_transfer(&state.transfer_history, record).await;
+
+    tracing::info!(
+        from_did = %from_did,
+        to_did = %body.to_did,
+        amount = body.amount,
+        new_balance = new_balance,
+        transfer_id = %id,
+        event_id = ?event_id,
+        "UBC spend operation completed"
+    );
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "status": "completed",
+            "id": id,
+            "from_did": from_did,
+            "to_did": body.to_did,
+            "amount": body.amount,
+            "new_balance": new_balance,
+            "event_id": event_id,
+            "note": "UBC is soulbound — tokens are spent (consumed), not transferred to the recipient",
+        })),
+    ))
 }
 
 /// Query parameters for `GET /api/v1/economics/transfers`.

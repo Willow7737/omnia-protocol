@@ -16,6 +16,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 
 use crate::api::auth::CallerIdentity;
+use crate::api::economics::with_economics;
 use crate::state::AppState;
 
 /// Errors that can occur when parsing API request parameters.
@@ -74,48 +75,48 @@ pub async fn create_proposal(
     State(state): State<AppState>,
     Json(body): Json<CreateProposalRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
-    let mut economics = state.economics.lock().await;
-    let current_epoch = economics.current_epoch();
+    with_economics(&state, |econ| {
+        let current_epoch = econ.current_epoch();
+        let result = econ.governance.create_proposal(
+            body.id.clone(),
+            body.description.clone(),
+            body.expires_at_epoch,
+            current_epoch,
+        );
 
-    let result = economics.governance.create_proposal(
-        body.id.clone(),
-        body.description.clone(),
-        body.expires_at_epoch,
-        current_epoch,
-    );
-
-    match result {
-        Ok(()) => {
-            tracing::info!(
-                proposal_id = %body.id,
-                expires_at_epoch = body.expires_at_epoch,
-                "Governance proposal created"
-            );
-            Ok((
-                StatusCode::CREATED,
-                Json(json!({
-                    "id": body.id,
-                    "status": "created",
-                    "created_at_epoch": current_epoch,
-                    "expires_at_epoch": body.expires_at_epoch,
-                })),
-            ))
+        match result {
+            Ok(()) => {
+                tracing::info!(
+                    proposal_id = %body.id,
+                    expires_at_epoch = body.expires_at_epoch,
+                    "Governance proposal created"
+                );
+                Ok((
+                    StatusCode::CREATED,
+                    Json(json!({
+                        "id": body.id,
+                        "status": "created",
+                        "created_at_epoch": current_epoch,
+                        "expires_at_epoch": body.expires_at_epoch,
+                    })),
+                ))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    proposal_id = %body.id,
+                    error = %e,
+                    "Failed to create governance proposal"
+                );
+                Err((
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "error": format!("Failed to create proposal: {e}"),
+                        "proposal_id": body.id,
+                    })),
+                ))
+            }
         }
-        Err(e) => {
-            tracing::warn!(
-                proposal_id = %body.id,
-                error = %e,
-                "Failed to create governance proposal"
-            );
-            Err((
-                StatusCode::CONFLICT,
-                Json(json!({
-                    "error": format!("Failed to create proposal: {e}"),
-                    "proposal_id": body.id,
-                })),
-            ))
-        }
-    }
+    })?
 }
 
 /// Handler for `POST /api/v1/governance/vote`.
@@ -150,63 +151,64 @@ pub async fn cast_vote(
     let choice = parse_vote_choice(&body.choice)
         .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e.to_string()}))))?;
 
-    let mut economics = state.economics.lock().await;
-    let current_epoch = economics.current_epoch();
+    with_economics(&state, |econ| {
+        let current_epoch = econ.current_epoch();
 
-    // Reject votes from voters with no registered stake
-    if !economics.governance.voting_weights.contains_key(&voter_did) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": "Voter has no registered stake. Register stake before voting."
-            })),
-        ));
-    }
-
-    let effective_weight = economics.governance.effective_weight(&voter_did, current_epoch);
-
-    let result = economics
-        .governance
-        .vote(&voter_did, &body.proposal_id, choice, current_epoch);
-
-    match result {
-        Ok(()) => {
-            tracing::info!(
-                did = %voter_did,
-                proposal_id = %body.proposal_id,
-                choice = %body.choice,
-                weight = effective_weight,
-                "Vote cast on governance proposal"
-            );
-            Ok((
-                StatusCode::OK,
-                Json(json!({
-                    "status": "recorded",
-                    "proposal_id": body.proposal_id,
-                    "did": voter_did,
-                    "choice": body.choice,
-                    "effective_weight": effective_weight,
-                    "epoch": current_epoch,
-                })),
-            ))
-        }
-        Err(e) => {
-            tracing::warn!(
-                did = %voter_did,
-                proposal_id = %body.proposal_id,
-                error = %e,
-                "Failed to cast vote"
-            );
-            Err((
+        // Reject votes from voters with no registered stake
+        if !econ.governance.voting_weights.contains_key(&voter_did) {
+            return Err((
                 StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "error": format!("Failed to cast vote: {e}"),
-                    "proposal_id": body.proposal_id,
-                    "did": voter_did,
+                Json(serde_json::json!({
+                    "error": "Voter has no registered stake. Register stake before voting."
                 })),
-            ))
+            ));
         }
-    }
+
+        let effective_weight = econ.governance.effective_weight(&voter_did, current_epoch);
+
+        let result = econ
+            .governance
+            .vote(&voter_did, &body.proposal_id, choice, current_epoch);
+
+        match result {
+            Ok(()) => {
+                tracing::info!(
+                    did = %voter_did,
+                    proposal_id = %body.proposal_id,
+                    choice = %body.choice,
+                    weight = effective_weight,
+                    "Vote cast on governance proposal"
+                );
+                Ok((
+                    StatusCode::OK,
+                    Json(json!({
+                        "status": "recorded",
+                        "proposal_id": body.proposal_id,
+                        "did": voter_did,
+                        "choice": body.choice,
+                        "effective_weight": effective_weight,
+                        "epoch": current_epoch,
+                    })),
+                ))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    did = %voter_did,
+                    proposal_id = %body.proposal_id,
+                    error = %e,
+                    "Failed to cast vote"
+                );
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "error": format!("Failed to cast vote: {e}"),
+                        "proposal_id": body.proposal_id,
+                        "did": voter_did,
+                    })),
+                ))
+            }
+        }
+    })?
 }
 
 /// Handler for `GET /api/v1/governance/proposals`.
@@ -223,34 +225,34 @@ pub async fn cast_vote(
     )
 )]
 pub async fn list_proposals(State(state): State<AppState>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let economics = state.economics.lock().await;
-    // Clone the proposals to avoid holding the lock while serializing —
-    // also lets us add a derived `status` field per proposal without
-    // mutating the underlying governance state.
-    let proposals: Vec<Value> = economics
-        .governance
-        .proposals
-        .values()
-        .map(|p| {
-            let status = if p.execution_time.is_some() {
-                "passed"
-            } else if p.is_expired(economics.current_epoch()) {
-                "expired"
-            } else {
-                "voting"
-            };
-            let base = serde_json::to_value(p).unwrap_or_else(|_| json!({}));
-            let mut obj = base.as_object().cloned().unwrap_or_default();
-            obj.insert("status".to_string(), json!(status));
-            // Compute participation totals for convenience
-            let total = p
-                .votes_for
-                .saturating_add(p.votes_against)
-                .saturating_add(p.votes_abstain);
-            obj.insert("total_participation".to_string(), json!(total));
-            Value::Object(obj)
-        })
-        .collect();
+    // Build the proposal list under the shared economics lock — a derived
+    // `status` field is added per proposal without mutating state.
+    let proposals: Vec<Value> = with_economics(&state, |econ| {
+        let current_epoch = econ.current_epoch();
+        econ.governance
+            .proposals
+            .values()
+            .map(|p| {
+                let status = if p.execution_time.is_some() {
+                    "passed"
+                } else if p.is_expired(current_epoch) {
+                    "expired"
+                } else {
+                    "voting"
+                };
+                let base = serde_json::to_value(p).unwrap_or_else(|_| json!({}));
+                let mut obj = base.as_object().cloned().unwrap_or_default();
+                obj.insert("status".to_string(), json!(status));
+                // Compute participation totals for convenience
+                let total = p
+                    .votes_for
+                    .saturating_add(p.votes_against)
+                    .saturating_add(p.votes_abstain);
+                obj.insert("total_participation".to_string(), json!(total));
+                Value::Object(obj)
+            })
+            .collect()
+    })?;
     Ok(Json(json!({
         "proposals": proposals,
         "count": proposals.len(),
