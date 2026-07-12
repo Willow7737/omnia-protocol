@@ -28,7 +28,15 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
     let node_id_hex = hex::encode(&state.config.node_id_bytes()[..4]);
     let uptime = state.started_at.elapsed().as_secs();
     let peer_count = state.peers.read().await.len();
-    let event_count = state.event_store.read().await.len();
+    // Issue #260: the in-memory event store resets on restart; the
+    // consensus engine's committed count is restored from the persistent
+    // consensus store. Report the max of both so finalized_height
+    // survives restarts.
+    let event_count = {
+        let store_len = state.event_store.read().await.len() as u64;
+        let committed = state.substrate.read().await.committed_count();
+        store_len.max(committed)
+    };
 
     let shard_count = {
         // Handle poisoned mutex gracefully instead of panicking.

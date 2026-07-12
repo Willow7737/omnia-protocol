@@ -3,7 +3,7 @@
 //! Refactored from std::sync::Mutex to tokio::sync::RwLock to prevent deadlocks
 //! in async contexts. Integrates with the real OmniaNetwork for P2P communication.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -29,8 +29,22 @@ const MAX_EVENTS_PER_GOSSIP: usize = 100;
 const MAX_PENDING_EVENTS: usize = 100_000;
 const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 
+/// Default interval between gossip heartbeats. One third of the partition
+/// threshold, so a healthy connection can lose two consecutive heartbeats
+/// before the peer is considered silent.
+const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = DEFAULT_PARTITION_THRESHOLD_MS / 3;
+
 /// Constant topic name for Omnia events gossip. Avoids per-call allocation.
 const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
+
+/// Topic for gossip keepalive heartbeats (issue #259).
+///
+/// Nothing in the protocol generates background traffic, so on an idle
+/// network every peer eventually exceeds `partition_threshold_ms` of
+/// silence and the mesh dissolves. Heartbeats on this topic keep
+/// `last_seen` fresh on healthy connections. Receivers update peer
+/// liveness and discard the payload — it never reaches consensus.
+pub const HEARTBEAT_TOPIC: &str = "omnia_heartbeat";
 
 /// Maximum buffered auxiliary-topic messages (non-event topics such as
 /// Lane 0 ack batches). When full, the oldest message is dropped —
@@ -80,6 +94,12 @@ pub struct GossipConfig {
     /// partitioned. Default: 30000 ms.
     #[serde(default = "default_partition_threshold")]
     pub partition_threshold_ms: u64,
+    /// Interval in milliseconds between keepalive heartbeats on
+    /// [`HEARTBEAT_TOPIC`]. Must be well below `partition_threshold_ms`
+    /// or idle peers will still be evicted. `0` disables heartbeats.
+    /// Default: 10000 ms (a third of the partition threshold).
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval_ms: u64,
     /// Maximum events per peer per second (refill rate).
     #[serde(default = "default_max_events_per_second")]
     pub max_events_per_second: u32,
@@ -90,6 +110,10 @@ pub struct GossipConfig {
 
 fn default_partition_threshold() -> u64 {
     DEFAULT_PARTITION_THRESHOLD_MS
+}
+
+fn default_heartbeat_interval() -> u64 {
+    DEFAULT_HEARTBEAT_INTERVAL_MS
 }
 
 fn default_max_events_per_second() -> u32 {
@@ -112,6 +136,7 @@ impl Default for GossipConfig {
             seed: 0,
             bootstrap_peers: Vec::new(),
             partition_threshold_ms: DEFAULT_PARTITION_THRESHOLD_MS,
+            heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
             max_events_per_second: 100,
             burst_capacity: 200,
         }
@@ -225,6 +250,13 @@ pub struct GossipProtocol {
     seen_filter: GossipBloomFilter,
     /// Tracks when each peer was last heard from (for partition detection).
     last_seen: HashMap<PeerId, Instant>,
+    /// Peers with a live transport connection (PeerConnected received,
+    /// no PeerDisconnected yet). Used as the liveness fallback for
+    /// partition detection: a transport-connected peer is never treated
+    /// as silent, even if it hasn't sent a message recently (issue #259).
+    connected_peers: HashSet<PeerId>,
+    /// When this node last published a keepalive heartbeat.
+    last_heartbeat: Instant,
     /// Whether a partition is currently detected (to avoid duplicate events).
     partition_active: bool,
     /// Per-peer rate limiter (token bucket).
@@ -260,6 +292,8 @@ impl GossipProtocol {
             running: false,
             seen_filter: GossipBloomFilter::new(MAX_SEEN_EVENTS, SEEN_FILTER_FP_RATE),
             last_seen: HashMap::new(),
+            connected_peers: HashSet::new(),
+            last_heartbeat: Instant::now(),
             partition_active: false,
             rate_limiter,
         }
@@ -479,6 +513,11 @@ impl GossipProtocol {
     ///
     /// Returns `true` if more than 1/3 of known peers have been silent
     /// for longer than the configured `partition_threshold_ms`.
+    ///
+    /// A peer with a live transport connection is never counted as
+    /// silent, regardless of message recency: on an idle network no
+    /// messages flow, but the QUIC connection state still proves the
+    /// peer is reachable (issue #259).
     pub fn detect_partition(&self) -> bool {
         if self.last_seen.is_empty() {
             return false;
@@ -487,8 +526,8 @@ impl GossipProtocol {
         let threshold = std::time::Duration::from_millis(self.config.partition_threshold_ms);
         let silent_count = self
             .last_seen
-            .values()
-            .filter(|&&last| now.duration_since(last) > threshold)
+            .iter()
+            .filter(|&(peer, &last)| !self.connected_peers.contains(peer) && now.duration_since(last) > threshold)
             .count();
         let total = self.last_seen.len();
         // More than 1/3 silent => partition
@@ -498,10 +537,10 @@ impl GossipProtocol {
     /// Return the number of peers we have observed recently enough to
     /// consider them "connected" for `/readyz` and node-info purposes.
     ///
-    /// A peer is considered connected if it has been heard from within
-    /// the partition-detection threshold. This includes peers that sent
-    /// us gossip messages or that the network layer reported as
-    /// PeerConnected.
+    /// A peer is considered connected if it has a live transport
+    /// connection, or has been heard from within the partition-detection
+    /// threshold. This includes peers that sent us gossip messages or
+    /// that the network layer reported as PeerConnected.
     pub fn connected_peer_count(&self) -> usize {
         if self.last_seen.is_empty() {
             return 0;
@@ -509,8 +548,8 @@ impl GossipProtocol {
         let now = Instant::now();
         let threshold = std::time::Duration::from_millis(self.config.partition_threshold_ms);
         self.last_seen
-            .values()
-            .filter(|&&last| now.duration_since(last) <= threshold)
+            .iter()
+            .filter(|&(peer, &last)| self.connected_peers.contains(peer) || now.duration_since(last) <= threshold)
             .count()
     }
 
@@ -703,6 +742,11 @@ impl GossipProtocol {
                 }
                 DrainedEvent::Aux { topic, data, source } => {
                     self.last_seen.insert(source, Instant::now());
+                    // Keepalive heartbeats only refresh peer liveness —
+                    // never buffer them for the substrate layer (#259).
+                    if topic == HEARTBEAT_TOPIC {
+                        continue;
+                    }
                     // Bounded buffer: drop the oldest message when full.
                     if self.aux_messages.len() >= MAX_AUX_MESSAGES {
                         self.aux_messages.pop_front();
@@ -712,11 +756,15 @@ impl GossipProtocol {
                 DrainedEvent::PeerConnected(peer_id) => {
                     info!("Peer connected: {:?}", peer_id);
                     self.last_seen.insert(peer_id, Instant::now());
+                    self.connected_peers.insert(peer_id);
                 }
                 DrainedEvent::PeerDisconnected(peer_id) => {
                     info!("Peer disconnected: {:?}", peer_id);
                     // Don't remove from last_seen — partition detection
                     // needs to know about recently-disconnected peers.
+                    // Do drop the transport-liveness exemption: a
+                    // disconnected peer must be eligible for eviction.
+                    self.connected_peers.remove(&peer_id);
                 }
             }
         }
@@ -775,6 +823,41 @@ impl GossipProtocol {
             self.stats.bytes_sent += bytes_len as u64;
         }
         Ok(())
+    }
+
+    /// Publish a keepalive heartbeat on [`HEARTBEAT_TOPIC`] if one is due.
+    ///
+    /// Call this from the periodic consensus loop. It is a no-op when:
+    /// - heartbeats are disabled (`heartbeat_interval_ms == 0`),
+    /// - no network is wired,
+    /// - no transport-connected peers exist (publishing to an empty
+    ///   mesh only produces "insufficient peers" warnings), or
+    /// - the last heartbeat was sent less than `heartbeat_interval_ms` ago.
+    ///
+    /// The payload is `node_id ‖ unix_millis` — the timestamp makes each
+    /// heartbeat unique so gossipsub's message-ID dedup never suppresses
+    /// consecutive keepalives (issue #259).
+    pub async fn maybe_send_heartbeat(&mut self) {
+        if self.config.heartbeat_interval_ms == 0 || self.network_cmd_tx.is_none() || self.connected_peers.is_empty() {
+            return;
+        }
+        let interval = std::time::Duration::from_millis(self.config.heartbeat_interval_ms);
+        if self.last_heartbeat.elapsed() < interval {
+            return;
+        }
+        self.last_heartbeat = Instant::now();
+
+        let unix_millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let mut payload = Vec::with_capacity(40);
+        payload.extend_from_slice(&self.node_id);
+        payload.extend_from_slice(&unix_millis.to_le_bytes());
+
+        if let Err(e) = self.publish_raw(HEARTBEAT_TOPIC, payload).await {
+            tracing::debug!("Heartbeat publish failed: {e}");
+        }
     }
 
     /// Classify an incoming event's gossip priority.
@@ -1181,6 +1264,176 @@ mod tests {
         let _detected = GossipEvent::PartitionDetected;
         let _healed = GossipEvent::PartitionHealed;
         assert_ne!(GossipEvent::PartitionDetected, GossipEvent::PartitionHealed);
+    }
+
+    // ── Issue #259: keepalive heartbeats + transport liveness ──────────
+
+    #[test]
+    fn test_gossip_config_heartbeat_interval_default() {
+        let config = GossipConfig::default();
+        assert_eq!(
+            config.heartbeat_interval_ms, 10_000,
+            "heartbeat interval must default to a third of the partition threshold"
+        );
+    }
+
+    #[test]
+    fn test_transport_connected_peer_never_silent() {
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut protocol = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                partition_threshold_ms: 100,
+                ..Default::default()
+            },
+            graph,
+        );
+
+        // All peers silent past the threshold — but transport-connected.
+        let long_ago = Instant::now() - std::time::Duration::from_millis(500);
+        let peers: Vec<PeerId> = (0..3).map(|_| PeerId::random()).collect();
+        for p in &peers {
+            protocol.last_seen.insert(*p, long_ago);
+            protocol.connected_peers.insert(*p);
+        }
+        assert!(
+            !protocol.detect_partition(),
+            "transport-connected peers must never count as silent"
+        );
+        assert_eq!(protocol.connected_peer_count(), 3);
+
+        // Connections drop → the same silence now means eviction.
+        for p in &peers {
+            protocol.connected_peers.remove(p);
+        }
+        assert!(protocol.detect_partition());
+        assert_eq!(protocol.connected_peer_count(), 0);
+    }
+
+    /// An incoming heartbeat must refresh the sender's liveness without
+    /// leaking into the aux-message buffer (it is not consensus data).
+    #[tokio::test]
+    async fn test_heartbeat_refreshes_liveness_and_is_not_buffered() {
+        use tokio::sync::mpsc;
+
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                partition_threshold_ms: 100,
+                ..Default::default()
+            },
+            graph,
+        );
+
+        let (tx, rx) = mpsc::channel(10);
+        gossip.network_rx = Some(rx);
+
+        // A known peer, silent long enough to trip partition detection.
+        let peer = PeerId::random();
+        gossip
+            .last_seen
+            .insert(peer, Instant::now() - std::time::Duration::from_millis(500));
+        assert!(gossip.detect_partition());
+
+        // The peer's heartbeat arrives.
+        let mut payload = Vec::with_capacity(40);
+        payload.extend_from_slice(&node(2));
+        payload.extend_from_slice(&0u64.to_le_bytes());
+        tx.send(NetworkEvent::GossipReceived {
+            topic: HEARTBEAT_TOPIC.to_string(),
+            data: payload,
+            propagation_source: peer,
+        })
+        .await
+        .expect("send should succeed");
+        drop(tx);
+
+        gossip.process_pending_events().await.expect("process should succeed");
+
+        assert!(!gossip.detect_partition(), "heartbeat must refresh last_seen");
+        assert_eq!(gossip.connected_peer_count(), 1);
+        assert!(
+            gossip.take_aux_messages().is_empty(),
+            "heartbeats must not be buffered as aux messages"
+        );
+    }
+
+    /// A due heartbeat publishes `node_id ‖ unix_millis` on the
+    /// heartbeat topic through the network command channel.
+    #[tokio::test]
+    async fn test_maybe_send_heartbeat_publishes_when_due() {
+        use tokio::sync::mpsc;
+
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                heartbeat_interval_ms: 1,
+                ..Default::default()
+            },
+            graph,
+        );
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+        gossip.connected_peers.insert(PeerId::random());
+
+        // Let the 1 ms interval elapse so a heartbeat is due.
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        gossip.maybe_send_heartbeat().await;
+
+        match cmd_rx.try_recv() {
+            Ok(NetworkCommand::Publish { topic, data }) => {
+                assert_eq!(topic, HEARTBEAT_TOPIC);
+                assert_eq!(data.len(), 40, "payload = node_id (32) + unix millis (8)");
+                assert_eq!(&data[..32], &node(1)[..]);
+            }
+            other => panic!("expected heartbeat Publish command, got {other:?}"),
+        }
+    }
+
+    /// Heartbeats are suppressed with no connected peers (publishing to
+    /// an empty mesh only produces warnings) and when disabled via
+    /// `heartbeat_interval_ms == 0`.
+    #[tokio::test]
+    async fn test_maybe_send_heartbeat_gating() {
+        use tokio::sync::mpsc;
+
+        // No connected peers → no heartbeat.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                heartbeat_interval_ms: 1,
+                ..Default::default()
+            },
+            graph,
+        );
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        gossip.maybe_send_heartbeat().await;
+        assert!(cmd_rx.try_recv().is_err(), "no heartbeat without connected peers");
+
+        // Disabled (interval 0) → no heartbeat even with connected peers.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(
+            node(1),
+            GossipConfig {
+                heartbeat_interval_ms: 0,
+                ..Default::default()
+            },
+            graph,
+        );
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+        gossip.connected_peers.insert(PeerId::random());
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        gossip.maybe_send_heartbeat().await;
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "heartbeat_interval_ms = 0 must disable heartbeats"
+        );
     }
 
     // ── AUDIT-14: idle component integration tests ─────────────────────
