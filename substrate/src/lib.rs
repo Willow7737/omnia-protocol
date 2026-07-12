@@ -830,6 +830,16 @@ impl Substrate {
         self.consensus.current_round()
     }
 
+    /// Total number of events the consensus engine has committed.
+    ///
+    /// Unlike the HTTP layer's in-memory event store, this counter is
+    /// restored from the persistent consensus store on restart, so it
+    /// survives process restarts (issue #260). `/readyz` and
+    /// `/api/v1/node/info` use it to report `finalized_height`.
+    pub fn committed_count(&self) -> u64 {
+        self.consensus.committed_count()
+    }
+
     /// Get a reference to the mempool.
     pub fn mempool(&self) -> &Mempool {
         &self.mempool
@@ -896,6 +906,11 @@ impl Substrate {
                     }
                 }
                 aux_messages = gossip.take_aux_messages();
+                // Keepalive (issue #259): on an idle network nothing else
+                // generates traffic, so without heartbeats every peer
+                // eventually exceeds the partition threshold and the mesh
+                // dissolves. No-op unless a heartbeat is due.
+                gossip.maybe_send_heartbeat().await;
             }
             self.unprocessed_events.extend(newly_inserted.iter().copied());
 
