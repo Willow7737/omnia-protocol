@@ -140,16 +140,6 @@ fn build_test_app_state(port: u16) -> AppState {
     let substrate = Substrate::new(substrate_config);
     let slashing = substrate.slashing.clone();
 
-    let fee_schedule = FeeSchedule::standard();
-    let quota = omnia_economics::QuotaSystem::default_system();
-    let mut shard_router = ShardRouter::new(fee_schedule, quota);
-    shard_router.register(Box::new(FinancialShard::new()));
-    shard_router.register(Box::new(ComputationalShard::new()));
-    shard_router.register(Box::new(PhysicalShard::new()));
-    shard_router.register(Box::new(BiologicalShard::new()));
-    shard_router.register(Box::new(IdentityShard::new()));
-    shard_router.register(Box::new(EconomicsShard::new()));
-
     // Generate the node keypair once and reuse it for both the economics
     // admin_keys and the AppState.keypair field.
     let node_keypair = omnia_substrate::crypto::generate_keypair();
@@ -159,6 +149,20 @@ fn build_test_app_state(port: u16) -> AppState {
     // as an admin key so tests can mint UBC. In production, the operator
     // would configure admin keys via OMNIA_AUTHORIZED_CALLERS.
     economics.add_admin_key(node_keypair.verifying_key().to_bytes());
+
+    let fee_schedule = FeeSchedule::standard();
+    let quota = omnia_economics::QuotaSystem::default_system();
+    let mut shard_router = ShardRouter::new(fee_schedule, quota);
+    shard_router.register(Box::new(FinancialShard::new()));
+    shard_router.register(Box::new(ComputationalShard::new()));
+    shard_router.register(Box::new(PhysicalShard::new()));
+    shard_router.register(Box::new(BiologicalShard::new()));
+    shard_router.register(Box::new(IdentityShard::new()));
+    // Single source of truth: the economics state (with admin key) lives in
+    // the router's economics shard — the API reads/writes it via the shared
+    // router lock (with_economics), no separate AppState.economics copy.
+    shard_router.register(Box::new(EconomicsShard::new_with_state(economics)));
+
     let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
     let config = NodeConfig {
@@ -184,7 +188,6 @@ fn build_test_app_state(port: u16) -> AppState {
         substrate: Arc::new(RwLock::new(substrate)),
         slashing: Arc::new(Mutex::new(slashing)),
         shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
-        economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         transfer_history: Arc::new(RwLock::new(Vec::new())),
         challenges: omnia_node::api::wallet_auth::new_challenge_store(),
@@ -219,8 +222,13 @@ where
 
     let app_state = build_test_app_state(port);
     {
-        let mut econ = app_state.economics.lock().await;
-        pre_register(&mut econ);
+        // Pre-register DIDs directly in the single-source economics state
+        // (the router's economics shard) that the handlers read/write.
+        let mut router = app_state.shard_router.lock().unwrap_or_else(|e| e.into_inner());
+        let econ = router
+            .economics_mut()
+            .expect("economics shard registered in test fixture");
+        pre_register(econ);
     }
 
     let app = http::build_http_router().with_state(app_state);
@@ -1434,6 +1442,59 @@ async fn test_transfer_success_returns_200() {
     assert!(
         body["new_balance"].as_u64().unwrap() >= 9_500,
         "New balance should reflect the spent amount"
+    );
+}
+
+// ---- economics: transfer emits an on-chain provenance event ----
+
+#[tokio::test]
+async fn test_transfer_emits_provenance_event() {
+    let server = setup_server_with_economics(|econ| {
+        register_and_mint(econ, REGULAR_CALLER, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(REGULAR_CALLER);
+    let body = json!({
+        "from_did": REGULAR_CALLER,
+        "to_did": "did:test:recipient",
+        "amount": 250,
+    });
+
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: Value = resp.json().await.unwrap();
+
+    // Every transfer is now recorded as a signed causal-graph event.
+    let event_id = body["event_id"].as_str();
+    assert!(
+        event_id.is_some() && event_id.unwrap().len() == 64,
+        "transfer response must carry a 32-byte hex provenance event_id, got {:?}",
+        body["event_id"]
+    );
+
+    // The transfer listing carries the same event_id.
+    let list: Value = client
+        .get(format!("{}/api/v1/economics/transfers", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let recorded = list["transfers"][0]["event_id"].as_str();
+    assert_eq!(
+        recorded, event_id,
+        "listed transfer must link the same provenance event"
     );
 }
 

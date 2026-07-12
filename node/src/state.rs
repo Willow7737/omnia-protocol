@@ -27,7 +27,6 @@ use indexmap::IndexMap;
 use prometheus::{Histogram, IntCounter, IntGauge};
 use tokio::sync::{Mutex, RwLock};
 
-use omnia_economics::EconomicsState;
 use omnia_shards::ShardRouter;
 
 #[cfg(feature = "zk")]
@@ -72,6 +71,11 @@ pub struct TransferRecord {
     pub status: String,
     /// Resulting balance of the sender after the spend.
     pub new_balance: u64,
+    /// Hex-encoded ID of the causal-graph event that records this transfer
+    /// on-chain (provenance + Lane 0 finality). `None` if the provenance
+    /// event could not be submitted (the balance change still succeeded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
 }
 
 /// Append a transfer record to the bounded history log.
@@ -345,9 +349,14 @@ pub struct AppState {
     /// - `ShardRouter` operations are CPU-only (no I/O), so the lock
     ///   is held for only a few microseconds, making `std::sync::Mutex`
     ///   both safe and more efficient than its tokio counterpart.
+    ///
+    /// The economics state (UBC balances, governance, quotas) is the
+    /// registered economics shard's state inside this router — the single
+    /// source of truth shared with the substrate's event/consensus path.
+    /// The API reaches it through the `with_economics` helper in
+    /// `api::economics`; there is no separate `AppState.economics` copy
+    /// anymore (the C4 divergence is gone).
     pub shard_router: Arc<std::sync::Mutex<ShardRouter>>,
-    /// Economics state — UBC token balances, governance, and quota tracking.
-    pub economics: Arc<Mutex<EconomicsState>>,
     /// In-memory event store for API retrieval.
     ///
     /// Uses `IndexMap` for deterministic insertion-order eviction

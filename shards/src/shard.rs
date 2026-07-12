@@ -134,4 +134,15 @@ pub trait Shard: Send + Sync {
     ///
     /// Used to check whether an operation would succeed before committing it.
     fn validate(&self, op: &ShardOp) -> Result<(), ShardError>;
+
+    /// Upcast to `&mut dyn Any` for downcasting to a concrete shard type.
+    ///
+    /// Lets the router expose typed access to a specific shard's state
+    /// (e.g. the economics shard's `EconomicsState`) without holding a
+    /// second copy — the shard registered in the router is the single
+    /// source of truth. See [`ShardRouter::economics_mut`](crate::ShardRouter::economics_mut).
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+
+    /// Upcast to `&dyn Any` for read-only downcasting to a concrete type.
+    fn as_any(&self) -> &dyn std::any::Any;
 }

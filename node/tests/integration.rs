@@ -92,9 +92,9 @@ async fn start_test_server() -> (
     shard_router.register(Box::new(PhysicalShard::new()));
     shard_router.register(Box::new(BiologicalShard::new()));
     shard_router.register(Box::new(IdentityShard::new()));
-    shard_router.register(Box::new(EconomicsShard::new()));
-
-    let economics = EconomicsState::new();
+    // Single source of truth: economics state lives in the router's
+    // economics shard; the API reaches it via the shared router lock.
+    shard_router.register(Box::new(EconomicsShard::new_with_state(EconomicsState::new())));
 
     #[cfg(feature = "metrics")]
     let metrics = NodeMetrics::new().expect("Failed to create metrics");
@@ -122,7 +122,6 @@ async fn start_test_server() -> (
         substrate: Arc::new(RwLock::new(substrate)),
         slashing: Arc::new(Mutex::new(slashing)),
         shard_router: Arc::new(std::sync::Mutex::new(shard_router)),
-        economics: Arc::new(Mutex::new(economics)),
         event_store: Arc::new(RwLock::new(indexmap::IndexMap::new())),
         transfer_history: Arc::new(RwLock::new(Vec::new())),
         challenges: omnia_node::api::wallet_auth::new_challenge_store(),

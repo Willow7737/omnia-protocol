@@ -320,10 +320,18 @@ impl ShardRouter {
     ///
     /// * `event` — The event whose payload contains the shard operation.
     ///
+    /// Not every event carries a shard operation. The substrate DAG also
+    /// carries events whose payloads are opaque to the shard layer — raw
+    /// API event submissions and transfer-provenance receipts, for
+    /// example. Such events are **skipped** (returned `Ok`) rather than
+    /// rejected: a payload that does not deserialize as a [`ShardPayload`]
+    /// is simply "not for the shards", not an error to log on every
+    /// committed non-shard event.
+    ///
     /// # Errors
     ///
-    /// - [`ShardError::ValidationFailed`] — payload deserialization failed,
-    ///   payload exceeds `MAX_PAYLOAD_SIZE`, or replay detected (nonce too low).
+    /// - [`ShardError::ValidationFailed`] — payload exceeds
+    ///   `MAX_PAYLOAD_SIZE`, or replay detected (nonce too low).
     /// - [`ShardError::InsufficientFee`] — the caller lacks sufficient UBC quota.
     /// - [`ShardError::UnknownShard`] — the target shard is not registered.
     ///
@@ -347,8 +355,13 @@ impl ShardRouter {
             )));
         }
 
-        let payload = ShardPayload::from_bytes(&event.payload)
-            .map_err(|e| ShardError::ValidationFailed(format!("Invalid payload: {e}")))?;
+        // A payload that isn't a ShardPayload is a non-shard event (raw API
+        // submission, transfer receipt, …) — skip it cleanly rather than
+        // erroring on every committed non-shard event.
+        let payload = match ShardPayload::from_bytes(&event.payload) {
+            Ok(payload) => payload,
+            Err(_) => return Ok(()),
+        };
 
         // Replay protection — check nonce
         let creator = event.creator_pubkey;
@@ -462,6 +475,36 @@ impl ShardRouter {
     /// The count of shards currently registered with the router.
     pub fn shard_count(&self) -> usize {
         self.shards.len()
+    }
+
+    /// Borrow the registered economics shard's [`omnia_economics::EconomicsState`], the
+    /// single source of truth for UBC balances, quotas, and governance.
+    ///
+    /// Both the consensus/event path (this router, via the substrate's
+    /// shard processor) and the HTTP API share one `Arc<Mutex<ShardRouter>>`,
+    /// so this accessor lets the API read/write the very same economics
+    /// state the event path mutates — eliminating the divergent second
+    /// copy the C4 audit flagged.
+    ///
+    /// Returns `None` if no economics shard is registered.
+    pub fn economics(&self) -> Option<&omnia_economics::EconomicsState> {
+        self.shards
+            .get(&ShardId::economics())?
+            .as_any()
+            .downcast_ref::<crate::EconomicsShard>()
+            .map(|s| s.state())
+    }
+
+    /// Mutably borrow the registered economics shard's [`omnia_economics::EconomicsState`].
+    ///
+    /// See [`economics`](Self::economics). Returns `None` if no economics
+    /// shard is registered.
+    pub fn economics_mut(&mut self) -> Option<&mut omnia_economics::EconomicsState> {
+        self.shards
+            .get_mut(&ShardId::economics())?
+            .as_any_mut()
+            .downcast_mut::<crate::EconomicsShard>()
+            .map(|s| s.state_mut())
     }
 
     /// Convert a creator public key to a DID string.

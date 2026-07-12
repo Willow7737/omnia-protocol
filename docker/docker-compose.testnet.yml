@@ -36,12 +36,18 @@ services:
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
+      # Persistent validator keypair (raw 32-byte Ed25519 secret) so this
+      # node's pubkey is fixed and known ahead of time — see
+      # scripts/setup-validators.sh, which generates the keys and the
+      # matching OMNIA_LANE0_VALIDATORS set.
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
     ports:
       - "9090:8080/tcp"
     networks:
       - omnia-testnet
     volumes:
       - bootstrap-data:/app/data
+      - ../ops/testnet-keys/node0:/keys:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
@@ -67,12 +73,14 @@ services:
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
     ports:
       - "9091:8080/tcp"
     networks:
       - omnia-testnet
     volumes:
       - node1-data:/app/data
+      - ../ops/testnet-keys/node1:/keys:ro
     depends_on:
       omnia-bootstrap:
         condition: service_healthy
@@ -95,12 +103,14 @@ services:
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
     ports:
       - "9092:8080/tcp"
     networks:
       - omnia-testnet
     volumes:
       - node2-data:/app/data
+      - ../ops/testnet-keys/node2:/keys:ro
     depends_on:
       omnia-bootstrap:
         condition: service_healthy
