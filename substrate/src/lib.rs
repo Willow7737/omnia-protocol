@@ -961,6 +961,80 @@ impl Substrate {
                 }
             }
         }
+
+        // 5. Apply Lane 1-committed validator-set changes (ADR-025
+        // Stage 4 trigger). Runs strictly on COMMITTED events — commit
+        // order is agreed by the DAG commit rule, so every honest node
+        // applies the same rotations at the same logical point (the
+        // epoch fence).
+        self.apply_committed_vset_changes(&committed).await;
+    }
+
+    /// Scan committed events for Lane 1 validator-set changes and apply
+    /// them to Lane 0 (see [`lane0::ValidatorSetChange`]).
+    ///
+    /// Authorization (v1): the committed event's creator public key must
+    /// be a member of the currently active Lane 0 validator set —
+    /// existing validators govern their own succession. Unauthorized or
+    /// malformed changes are logged and skipped; they never abort the
+    /// consensus round. No-op while Lane 0 is disabled.
+    async fn apply_committed_vset_changes(&mut self, committed: &[EventId]) {
+        if self.lane0_validators.is_none() || committed.is_empty() {
+            return;
+        }
+
+        // Collect decoded changes first: applying a rotation needs
+        // `&mut self` while the graph read guard borrows `self`.
+        let mut changes: Vec<(EventId, [u8; 32], lane0::ValidatorSetChange)> = Vec::new();
+        {
+            let graph = self.graph.read().await;
+            for event_id in committed {
+                let Ok(event) = graph.get_checked(event_id) else {
+                    continue;
+                };
+                match lane0::decode_vset_change(&event.payload) {
+                    Ok(Some(change)) => changes.push((*event_id, event.creator_pubkey(), change)),
+                    Ok(None) => {}
+                    Err(e) => {
+                        tracing::warn!(
+                            event = %hex::encode(&event_id[..4]),
+                            "Malformed validator-set change skipped: {e}"
+                        );
+                    }
+                }
+            }
+        }
+
+        for (event_id, creator_pubkey, change) in changes {
+            let authorized = self
+                .lane0_validators
+                .as_ref()
+                .is_some_and(|set| set.contains(&creator_pubkey));
+            if !authorized {
+                tracing::warn!(
+                    event = %hex::encode(&event_id[..4]),
+                    creator = %hex::encode(&creator_pubkey[..4]),
+                    "Validator-set change REJECTED: creator is not a current Lane 0 validator"
+                );
+                continue;
+            }
+            match lane0::ValidatorSet::new(change.entries) {
+                Ok(new_set) => {
+                    let newly_final = self.rotate_lane0_validators(new_set);
+                    tracing::info!(
+                        event = %hex::encode(&event_id[..4]),
+                        newly_final = newly_final.len(),
+                        "Validator-set change applied from Lane 1 commit"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        event = %hex::encode(&event_id[..4]),
+                        "Validator-set change with invalid set skipped: {e}"
+                    );
+                }
+            }
+        }
     }
 
     /// Start with network and run main loop
@@ -1479,6 +1553,114 @@ mod tests {
         let stats = substrate.stats().await;
         assert_eq!(stats.graph.total_events, 0);
         assert!(!stats.running);
+    }
+
+    /// End-to-end Lane 1 trigger: a committed event carrying a
+    /// validator-set change, signed by a current validator, rotates the
+    /// set; the same change signed by an outsider is rejected.
+    #[tokio::test]
+    async fn test_committed_vset_change_applies_with_authorization() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+
+        // Lane 0 active with validator A only.
+        let key_a = generate_keypair();
+        let initial = lane0::ValidatorSet::new([(key_a.verifying_key().to_bytes(), 1)]).expect("valid set");
+        substrate.init_lane0(initial);
+
+        // The change: replace the set with validator B.
+        let key_b = generate_keypair();
+        let change = lane0::ValidatorSetChange {
+            entries: vec![(key_b.verifying_key().to_bytes(), 1)],
+        };
+        let payload = lane0::encode_vset_change(&change).expect("encodable");
+
+        // These tests exercise apply_committed_vset_changes in isolation
+        // — events are inserted into the graph directly (as if committed)
+        // rather than run through submit_event, because the consensus
+        // engine would flag two same-signer genesis events as
+        // equivocation, which is orthogonal to what's under test.
+        let insert = |substrate: &mut Substrate, event: Event| {
+            let graph = Arc::clone(&substrate.graph);
+            async move {
+                graph.write().await.insert(event).expect("insert");
+            }
+        };
+
+        // Outsider C commits the change first — must be rejected.
+        let key_c = generate_keypair();
+        let mut outsider_event = Event::genesis(test_node(2), payload.clone()).expect("valid event");
+        outsider_event.sign_with_keypair(&key_c).expect("signing");
+        let outsider_id = outsider_event.id;
+        insert(&mut substrate, outsider_event).await;
+        substrate.apply_committed_vset_changes(&[outsider_id]).await;
+        assert_eq!(
+            substrate.lane0_epoch(),
+            Some(0),
+            "a non-validator's set change must be rejected"
+        );
+
+        // Current validator A commits the same change — must apply.
+        let mut event = Event::genesis(test_node(3), payload).expect("valid event");
+        event.sign_with_keypair(&key_a).expect("signing");
+        let event_id = event.id;
+        insert(&mut substrate, event).await;
+        substrate.apply_committed_vset_changes(&[event_id]).await;
+        assert_eq!(substrate.lane0_epoch(), Some(1), "validator-signed change must rotate");
+
+        // And the NEW set governs the next change: A is no longer a
+        // member, so a further change signed by A is now rejected.
+        let change_back = lane0::ValidatorSetChange {
+            entries: vec![(key_a.verifying_key().to_bytes(), 1)],
+        };
+        let payload_back = lane0::encode_vset_change(&change_back).expect("encodable");
+        let mut stale_event = Event::genesis(test_node(4), payload_back).expect("valid event");
+        stale_event.sign_with_keypair(&key_a).expect("signing");
+        let stale_id = stale_event.id;
+        insert(&mut substrate, stale_event).await;
+        substrate.apply_committed_vset_changes(&[stale_id]).await;
+        assert_eq!(
+            substrate.lane0_epoch(),
+            Some(1),
+            "an ex-validator must not be able to rotate the set back"
+        );
+    }
+
+    /// Non-vset payloads and malformed changes never rotate; disabled
+    /// Lane 0 ignores everything.
+    #[tokio::test]
+    async fn test_committed_vset_change_ignores_noise() {
+        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_CONSENSUS_SEED");
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+
+        let key_a = generate_keypair();
+        let initial = lane0::ValidatorSet::new([(key_a.verifying_key().to_bytes(), 1)]).expect("valid set");
+        substrate.init_lane0(initial);
+
+        // Direct graph insertion — see the note in
+        // test_committed_vset_change_applies_with_authorization.
+        // Distinct signers avoid consensus-side equivocation flags.
+
+        // Ordinary payload: ignored.
+        let mut plain = Event::genesis(test_node(2), vec![1, 2, 3]).expect("valid event");
+        plain.sign_with_keypair(&key_a).expect("signing");
+        let plain_id = plain.id;
+        substrate.graph.write().await.insert(plain).expect("insert");
+
+        // Tagged but malformed: skipped with a warning.
+        let mut malformed_payload = lane0::VSET_PAYLOAD_TAG.to_vec();
+        malformed_payload.extend([0xFF, 0xFF, 0xFF]);
+        let mut malformed = Event::genesis(test_node(3), malformed_payload).expect("valid event");
+        malformed.sign_with_keypair(&generate_keypair()).expect("signing");
+        let malformed_id = malformed.id;
+        substrate.graph.write().await.insert(malformed).expect("insert");
+
+        substrate.apply_committed_vset_changes(&[plain_id, malformed_id]).await;
+        assert_eq!(substrate.lane0_epoch(), Some(0));
     }
 
     #[test]
