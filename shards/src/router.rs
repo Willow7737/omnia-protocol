@@ -477,7 +477,7 @@ impl ShardRouter {
         self.shards.len()
     }
 
-    /// Borrow the registered economics shard's [`EconomicsState`], the
+    /// Borrow the registered economics shard's [`omnia_economics::EconomicsState`], the
     /// single source of truth for UBC balances, quotas, and governance.
     ///
     /// Both the consensus/event path (this router, via the substrate's
@@ -495,7 +495,7 @@ impl ShardRouter {
             .map(|s| s.state())
     }
 
-    /// Mutably borrow the registered economics shard's [`EconomicsState`].
+    /// Mutably borrow the registered economics shard's [`omnia_economics::EconomicsState`].
     ///
     /// See [`economics`](Self::economics). Returns `None` if no economics
     /// shard is registered.
