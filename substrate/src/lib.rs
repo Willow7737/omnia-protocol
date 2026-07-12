@@ -1099,6 +1099,52 @@ impl Substrate {
         self.lane0_validators.as_ref().map(|_| self.lane0_store.stats())
     }
 
+    /// Number of Lane 0 validator-set rotations applied so far (0 =
+    /// original set, never rotated), or `None` when Lane 0 is disabled.
+    pub fn lane0_epoch(&self) -> Option<u64> {
+        self.lane0_validators.as_ref().map(|_| self.lane0_store.epoch())
+    }
+
+    /// Rotate the Lane 0 validator set (ADR-025 Stage 4: Lane 1 commits as
+    /// epoch fences for Lane 0 certificate validity).
+    ///
+    /// # Caller obligation
+    ///
+    /// This method must be invoked identically — same `new_validators`,
+    /// same logical point in the causal graph — by every honest node.
+    /// The only source of that agreement is a **Lane 1 (DAG-consensus
+    /// committed) event**: because the commit rule guarantees all honest
+    /// nodes compute the same committed order (the `Agreement` property
+    /// in `formal-verification/OmniaConsensus.tla`), a validator-set
+    /// change carried by a committed event and applied here at commit
+    /// time is applied identically everywhere. Calling this from
+    /// anything other than committed-event processing (e.g. from a
+    /// not-yet-finalized event, or from operator input) breaks that
+    /// guarantee and can fork Lane 0 finality across nodes.
+    ///
+    /// See [`lane0::CertificateStore::rotate_validators`] for the
+    /// monotonicity guarantee: certificates already final under the old
+    /// set stay final; pending certificates are re-evaluated against the
+    /// new set and may finalize immediately.
+    ///
+    /// No-op (returns an empty `Vec`) if Lane 0 was never enabled via
+    /// [`Self::init_lane0`] — a rotation with nothing to rotate.
+    pub fn rotate_lane0_validators(&mut self, new_validators: lane0::ValidatorSet) -> Vec<EventId> {
+        if self.lane0_validators.is_none() {
+            return Vec::new();
+        }
+        let newly_final = self.lane0_store.rotate_validators(&new_validators);
+        tracing::info!(
+            epoch = self.lane0_store.epoch(),
+            validators = new_validators.len(),
+            total_stake = new_validators.total_stake(),
+            newly_final = newly_final.len(),
+            "Lane 0 validator set rotated"
+        );
+        self.lane0_validators = Some(new_validators);
+        newly_final
+    }
+
     /// Sign Lane 0 acks for freshly inserted events, fold them into the
     /// local certificate store, and queue them for broadcast.
     ///
@@ -1433,6 +1479,49 @@ mod tests {
         let stats = substrate.stats().await;
         assert_eq!(stats.graph.total_events, 0);
         assert!(!stats.running);
+    }
+
+    #[test]
+    fn test_rotate_lane0_validators_noop_when_disabled() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+        assert_eq!(substrate.lane0_epoch(), None);
+
+        let key = generate_keypair();
+        let set = lane0::ValidatorSet::new([(key.verifying_key().to_bytes(), 1)]).expect("valid set");
+        let newly_final = substrate.rotate_lane0_validators(set);
+
+        assert!(newly_final.is_empty());
+        assert_eq!(
+            substrate.lane0_epoch(),
+            None,
+            "rotation must stay a no-op until Lane 0 is enabled via init_lane0"
+        );
+    }
+
+    #[test]
+    fn test_rotate_lane0_validators_delegates_and_tracks_epoch() {
+        let config = SubstrateConfig::new(test_node(1));
+        let mut substrate = Substrate::new(config);
+
+        let key1 = generate_keypair();
+        let initial = lane0::ValidatorSet::new([(key1.verifying_key().to_bytes(), 1)]).expect("valid set");
+        substrate.init_lane0(initial);
+        assert_eq!(substrate.lane0_epoch(), Some(0));
+
+        let key2 = generate_keypair();
+        let rotated = lane0::ValidatorSet::new([(key2.verifying_key().to_bytes(), 1)]).expect("valid set");
+        substrate.rotate_lane0_validators(rotated);
+
+        assert_eq!(
+            substrate.lane0_epoch(),
+            Some(1),
+            "epoch must advance on every rotation, even with no pending certificates"
+        );
+        assert!(
+            substrate.lane0_stats().is_some(),
+            "Lane 0 must remain enabled after rotation"
+        );
     }
 
     #[test]
