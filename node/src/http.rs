@@ -140,7 +140,14 @@ pub async fn readiness_handler(State(state): State<AppState>) -> Response {
     let min_peers = state.config.readiness_min_peers;
     let peers = state.peers.read().await.len();
     let is_syncing = state.is_syncing.load(Ordering::Relaxed);
-    let finalized_height = state.event_store.read().await.len();
+    // Issue #260: the in-memory event store starts empty on every boot,
+    // so a restarted node would report finalized_height 0 (not_ready /
+    // no_finalization) forever on a quiet network. The consensus engine's
+    // committed count is restored from the persistent consensus store on
+    // restart, so take the max of both signals.
+    let event_store_len = state.event_store.read().await.len() as u64;
+    let consensus_committed = state.substrate.read().await.committed_count();
+    let finalized_height = event_store_len.max(consensus_committed);
 
     // Determine readiness: need peers, not syncing, and recent finalization
     let has_peers = peers >= min_peers;
@@ -398,6 +405,60 @@ mod tests {
         assert_eq!(body["status"], "ready");
         assert_eq!(body["peers"], 1);
         assert_eq!(body["finalized_height"], 1);
+    }
+
+    /// Issue #260 regression: a restarted node has an empty in-memory
+    /// event store, but its persistent consensus store still knows how
+    /// many events were committed. `/readyz` must report the restored
+    /// height instead of `no_finalization` forever.
+    #[tokio::test]
+    async fn test_readiness_survives_restart_via_consensus_store() {
+        use omnia_substrate::{ConsensusStore, PersistedConsensusState, RedbConsensusStore};
+
+        let db_path = std::env::temp_dir().join(format!("omnia-readyz-260-{}.redb", std::process::id()));
+        let _ = std::fs::remove_file(&db_path);
+
+        // "Previous run": persist a consensus state with 4 committed events.
+        {
+            let store = RedbConsensusStore::open(&db_path).unwrap();
+            store
+                .save_state(&PersistedConsensusState {
+                    current_round: 6,
+                    round_seed: [0u8; 32],
+                    committed_events: 4,
+                    last_finalized_round: 4,
+                    active_validators: vec![],
+                    equivocation_tracking: std::collections::HashMap::new(),
+                    first_event_for_sequence: std::collections::HashMap::new(),
+                    version: 2,
+                })
+                .unwrap();
+        }
+
+        // "Restart": fresh AppState with an EMPTY HTTP event store, whose
+        // substrate restores the committed count from the redb store.
+        let mut state = make_test_state(vec![make_peer("peer1")], false, 0);
+        let mut substrate_config =
+            omnia_substrate::SubstrateConfig::try_new(state.config.node_id_bytes()).expect("valid substrate config");
+        substrate_config.consensus_data_dir = Some(db_path.clone());
+        state.substrate = Arc::new(RwLock::new(Substrate::new(substrate_config)));
+
+        let app = build_http_router().with_state(state);
+        let response = app
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        let _ = std::fs::remove_file(&db_path);
+
+        assert_eq!(response.status(), HttpStatus::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["status"], "ready");
+        assert_eq!(
+            body["finalized_height"], 4,
+            "finalized_height must come from the restored consensus state"
+        );
     }
 
     #[tokio::test]

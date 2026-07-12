@@ -641,6 +641,11 @@ async fn spawn_background_tasks(
                     if let Err(e) = network.subscribe(omnia_substrate::lane0::LANE0_ACKS_TOPIC) {
                         tracing::warn!(error = %e, "Failed to subscribe to Lane 0 acks topic");
                     }
+                    // Keepalive heartbeats (issue #259): keep the idle mesh
+                    // alive so partition detection doesn't evict quiet peers.
+                    if let Err(e) = network.subscribe(omnia_network::gossip::HEARTBEAT_TOPIC) {
+                        tracing::warn!(error = %e, "Failed to subscribe to heartbeat topic");
+                    }
 
                     // Wire the network into the substrate's gossip protocol.
                     // This takes ownership of the network, spawns network.run_with_commands()
