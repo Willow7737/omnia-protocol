@@ -23,3 +23,9 @@ scripts/__pycache__/
 
 # Per-deployment secrets for docker compose (never commit)
 docker/.env
+
+# Generated validator keypairs for the local testnet (secrets — never commit)
+ops/testnet-keys/
+
+# Local benchmark reports
+bench-results/
