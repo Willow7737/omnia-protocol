@@ -67,6 +67,13 @@ pub const TOKEN_TTL_SECS: u64 = 86_400;
 /// The client must sign the byte string `"omnia-auth:" + nonce_hex`.
 pub const AUTH_MESSAGE_PREFIX: &str = "omnia-auth:";
 
+/// Domain-separation prefix for wallet-signed transfer authorizations
+/// (spend authorization Step 2 — self-sovereign transfers).
+///
+/// Distinct from [`AUTH_MESSAGE_PREFIX`] so a login signature can never be
+/// replayed as a spend authorization or vice versa.
+pub const TRANSFER_MESSAGE_PREFIX: &str = "omnia-transfer-v1";
+
 /// Length of the Ed25519 public key, in bytes.
 const PUBKEY_LEN: usize = 32;
 
@@ -112,8 +119,60 @@ pub fn did_from_public_key(public_key_bytes: &[u8]) -> String {
     format!("did:omnia:{}", &hex_digest[..32])
 }
 
+/// Build the canonical byte string a wallet signs to authorize a transfer.
+///
+/// Newline-delimited with a fixed field count:
+///
+/// ```text
+/// omnia-transfer-v1\n<nonce_hex>\n<from_did>\n<to_did>\n<amount_decimal>
+/// ```
+///
+/// Newlines make the encoding unambiguous (DIDs contain `:` so a
+/// colon-delimited format could collide across field boundaries); the
+/// transfer handler rejects DIDs containing control characters before
+/// verification. This rule is duplicated verbatim in wallet clients.
+pub fn transfer_message(nonce: &str, from_did: &str, to_did: &str, amount: u64) -> String {
+    format!("{TRANSFER_MESSAGE_PREFIX}\n{nonce}\n{from_did}\n{to_did}\n{amount}")
+}
+
+/// Look up and consume a challenge nonce (single-use).
+///
+/// Shared by login and wallet-signed transfers: removes the nonce under
+/// the store lock (so two concurrent requests cannot both consume it),
+/// then checks expiry and that it was issued to `public_key_hex`
+/// (lower-case hex). Returns an HTTP error tuple suitable for returning
+/// straight from a handler.
+pub async fn consume_challenge(
+    state: &AppState,
+    nonce: &str,
+    public_key_hex: &str,
+) -> Result<(), (StatusCode, Json<Value>)> {
+    let entry = {
+        let mut store = state.challenges.lock().await;
+        match store.remove(nonce) {
+            Some(e) => e,
+            None => {
+                return Err(err(
+                    StatusCode::UNAUTHORIZED,
+                    "unknown or already-used nonce — request a new challenge",
+                ))
+            }
+        }
+    };
+    if entry.expires_at_ms <= now_ms() {
+        return Err(err(StatusCode::UNAUTHORIZED, "challenge expired — request a new one"));
+    }
+    if entry.public_key != public_key_hex {
+        return Err(err(
+            StatusCode::UNAUTHORIZED,
+            "nonce was issued to a different public key",
+        ));
+    }
+    Ok(())
+}
+
 /// Decode a hex string into a fixed-size byte array of length `N`.
-fn decode_hex_fixed<const N: usize>(hex_str: &str) -> Result<[u8; N], String> {
+pub(crate) fn decode_hex_fixed<const N: usize>(hex_str: &str) -> Result<[u8; N], String> {
     let bytes = hex::decode(hex_str.trim()).map_err(|e| format!("invalid hex: {e}"))?;
     <[u8; N]>::try_from(bytes.as_slice()).map_err(|_| format!("expected {N} bytes, got {} ", hex_str.len() / 2))
 }
@@ -265,33 +324,9 @@ pub async fn login(
     let signature = Signature::from_bytes(&sig_bytes);
 
     let public_key = hex::encode(pubkey_bytes);
-    let now = now_ms();
 
-    // Look up and consume the nonce (single-use). Holding the lock across the
-    // remove ensures two concurrent logins cannot both consume it.
-    let entry = {
-        let mut store = state.challenges.lock().await;
-        match store.remove(&body.nonce) {
-            Some(e) => e,
-            None => {
-                return Err(err(
-                    StatusCode::UNAUTHORIZED,
-                    "unknown or already-used nonce — request a new challenge",
-                ))
-            }
-        }
-    };
-
-    // The nonce must belong to this public key and still be valid.
-    if entry.expires_at_ms <= now {
-        return Err(err(StatusCode::UNAUTHORIZED, "challenge expired — request a new one"));
-    }
-    if entry.public_key != public_key {
-        return Err(err(
-            StatusCode::UNAUTHORIZED,
-            "nonce was issued to a different public key",
-        ));
-    }
+    // Look up and consume the nonce (single-use, bound to this key).
+    consume_challenge(&state, &body.nonce, &public_key).await?;
 
     // Verify the signature over the domain-separated challenge message.
     let message = format!("{AUTH_MESSAGE_PREFIX}{}", body.nonce);

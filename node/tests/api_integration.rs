@@ -1498,6 +1498,220 @@ async fn test_transfer_emits_provenance_event() {
     );
 }
 
+// ---- economics: wallet-signed (self-sovereign) transfer, Step 2 ----
+
+#[tokio::test]
+async fn test_transfer_wallet_signed_end_to_end_with_replay_rejection() {
+    use omnia_substrate::crypto::{Signer, SigningKey};
+    use rand::RngCore;
+
+    // The wallet's own keypair; its DID is derived from the public key.
+    let mut seed = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut seed);
+    let sk = SigningKey::from_bytes(&seed);
+    let public_key_hex = hex::encode(sk.verifying_key().to_bytes());
+    let wallet_did = omnia_node::api::wallet_auth::did_from_public_key(&sk.verifying_key().to_bytes());
+
+    let wallet_did_for_setup = wallet_did.clone();
+    let server = setup_server_with_economics(move |econ| {
+        register_and_mint(econ, &wallet_did_for_setup, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&wallet_did);
+
+    // 1. Obtain a single-use nonce bound to the wallet's public key.
+    let challenge: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": public_key_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let nonce = challenge["nonce"].as_str().unwrap().to_string();
+    assert_eq!(challenge["did"].as_str().unwrap(), wallet_did);
+
+    // 2. Sign the canonical transfer message with the wallet key.
+    let to_did = "did:test:recipient";
+    let amount = 500u64;
+    let message = omnia_node::api::wallet_auth::transfer_message(&nonce, &wallet_did, to_did, amount);
+    let signature_hex = hex::encode(sk.sign(message.as_bytes()).to_bytes());
+
+    // 3. Submit the wallet-signed transfer.
+    let body = json!({
+        "from_did": wallet_did,
+        "to_did": to_did,
+        "amount": amount,
+        "authorization": {
+            "public_key": public_key_hex,
+            "nonce": nonce,
+            "signature": signature_hex,
+        }
+    });
+    let resp = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "wallet-signed transfer should succeed");
+    let resp_body: Value = resp.json().await.unwrap();
+    assert_eq!(resp_body["provenance"].as_str().unwrap(), "wallet_signed");
+    // Registration grants a base quota on top of the minted 10_000, so
+    // assert the spend relative to that floor (as the v1 test does).
+    let balance_after_spend = resp_body["new_balance"].as_u64().unwrap();
+    assert!(
+        balance_after_spend >= 9_500,
+        "new balance should reflect the 500 spend, got {balance_after_spend}"
+    );
+
+    // 4. Replay the SAME authorization — the nonce is consumed, so the
+    //    spend must be rejected and the balance untouched.
+    let replay = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(replay.status(), 401, "replayed authorization must be rejected");
+
+    // 5. The listing shows the provenance.
+    let list: Value = client
+        .get(format!("{}/api/v1/economics/transfers", server.base_url))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["transfers"][0]["provenance"].as_str().unwrap(), "wallet_signed");
+}
+
+#[tokio::test]
+async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
+    use omnia_substrate::crypto::{Signer, SigningKey};
+    use rand::RngCore;
+
+    let mut seed = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut seed);
+    let sk = SigningKey::from_bytes(&seed);
+    let public_key_hex = hex::encode(sk.verifying_key().to_bytes());
+    let wallet_did = omnia_node::api::wallet_auth::did_from_public_key(&sk.verifying_key().to_bytes());
+
+    let wallet_did_for_setup = wallet_did.clone();
+    let server = setup_server_with_economics(move |econ| {
+        register_and_mint(econ, &wallet_did_for_setup, 10_000);
+        register_and_mint(econ, "did:test:recipient", 100);
+    })
+    .await;
+    let client = reqwest::Client::new();
+
+    // Balance before any attack attempts — must be identical afterwards.
+    let balance_before: Value = client
+        .get(format!("{}/api/v1/economics/balance/{wallet_did}", server.base_url))
+        .bearer_auth(make_valid_token(&wallet_did))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let balance_before = balance_before["balance"].as_u64().unwrap();
+
+    // (a) A JWT for a DIFFERENT identity than the signing key → 403,
+    //     even with a perfectly valid signature and fresh nonce.
+    let challenge: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": public_key_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let nonce = challenge["nonce"].as_str().unwrap().to_string();
+    // The message signs the ATTACKER's spend from their own DID — but the
+    // JWT belongs to REGULAR_CALLER, whose funds would be spent.
+    let message = omnia_node::api::wallet_auth::transfer_message(&nonce, &wallet_did, "did:test:recipient", 500);
+    let signature_hex = hex::encode(sk.sign(message.as_bytes()).to_bytes());
+    let mismatched = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(make_valid_token(REGULAR_CALLER))
+        .json(&json!({
+            "from_did": REGULAR_CALLER,
+            "to_did": "did:test:recipient",
+            "amount": 500,
+            "authorization": {
+                "public_key": public_key_hex,
+                "nonce": nonce,
+                "signature": signature_hex,
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        mismatched.status(),
+        403,
+        "authorization key not matching the JWT identity must be rejected"
+    );
+
+    // (b) A corrupted signature with a fresh nonce → 401, no spend.
+    let challenge: Value = client
+        .post(format!("{}/api/v1/auth/challenge", server.base_url))
+        .json(&json!({ "public_key": public_key_hex }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let nonce = challenge["nonce"].as_str().unwrap().to_string();
+    let message = omnia_node::api::wallet_auth::transfer_message(&nonce, &wallet_did, "did:test:recipient", 500);
+    let mut sig = sk.sign(message.as_bytes()).to_bytes();
+    sig[0] ^= 0xFF;
+    let bad_sig = client
+        .post(format!("{}/api/v1/economics/transfer", server.base_url))
+        .bearer_auth(make_valid_token(&wallet_did))
+        .json(&json!({
+            "from_did": wallet_did,
+            "to_did": "did:test:recipient",
+            "amount": 500,
+            "authorization": {
+                "public_key": public_key_hex,
+                "nonce": nonce,
+                "signature": hex::encode(sig),
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_sig.status(), 401, "corrupted signature must be rejected");
+
+    // Balance is untouched by all rejected attempts.
+    let balance_after: Value = client
+        .get(format!("{}/api/v1/economics/balance/{wallet_did}", server.base_url))
+        .bearer_auth(make_valid_token(&wallet_did))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        balance_after["balance"].as_u64().unwrap(),
+        balance_before,
+        "rejected authorization attempts must never move funds"
+    );
+}
+
 // ---- economics: transfer 400 self-transfer ----
 
 #[tokio::test]
