@@ -68,6 +68,20 @@ pub const LANE0_WIRE_VERSION: u8 = 1;
 /// Maximum acks accepted in a single gossip message (DoS bound).
 pub const MAX_ACKS_PER_MESSAGE: usize = 1024;
 
+/// Payload tag marking an event as a Lane 1 validator-set change
+/// (ADR-025 Stage 4 follow-up: the rotation trigger).
+///
+/// An event whose payload starts with this tag carries a postcard-encoded
+/// [`ValidatorSetChange`]. When such an event is **committed by Lane 1's
+/// DAG consensus** (never merely gossiped or submitted), the node applies
+/// the change via `Substrate::rotate_lane0_validators` — the commit is
+/// the epoch fence.
+pub const VSET_PAYLOAD_TAG: &[u8] = b"OMNIA_VSET_V1";
+
+/// Maximum entries accepted in a validator-set change (DoS bound —
+/// matches no realistic validator-set size while keeping decode cheap).
+pub const MAX_VSET_ENTRIES: usize = 1024;
+
 /// Maximum in-flight (not yet final) certificates tracked.
 pub const MAX_TRACKED_EVENTS: usize = 100_000;
 
@@ -172,6 +186,61 @@ pub fn decode_ack_batch(data: &[u8]) -> Result<Vec<SignedAck>, Lane0Error> {
         Some((v, _)) => Err(Lane0Error::Codec(format!("unknown lane0 wire version: {v}"))),
         None => Err(Lane0Error::Codec("empty lane0 message".to_string())),
     }
+}
+
+/// A Lane 1 validator-set-change operation: the complete replacement set.
+///
+/// Carried in an event payload tagged with [`VSET_PAYLOAD_TAG`]. The set
+/// is a full replacement (not a delta) so the operation is idempotent
+/// and self-contained — applying the same committed change twice, or
+/// applying it on a node that missed earlier changes, converges to the
+/// same active set.
+///
+/// # Authorization (v1)
+///
+/// A change is applied only if the committed event's `creator_pubkey` is
+/// a member of the **currently active** Lane 0 validator set — existing
+/// validators govern their own succession (proof-of-authority style).
+/// Routing through a quadratic-voting governance proposal instead is the
+/// planned upgrade once proposal execution carries typed actions; the
+/// commit-time application point stays identical either way.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorSetChange {
+    /// The new validator set as `(ed25519_pubkey, stake)` pairs.
+    pub entries: Vec<([u8; 32], u64)>,
+}
+
+/// Encode a validator-set change for an event payload:
+/// `VSET_PAYLOAD_TAG ++ postcard(ValidatorSetChange)`.
+pub fn encode_vset_change(change: &ValidatorSetChange) -> Result<Vec<u8>, Lane0Error> {
+    if change.entries.len() > MAX_VSET_ENTRIES {
+        return Err(Lane0Error::Codec(format!(
+            "validator-set change too large: {} entries (max {MAX_VSET_ENTRIES})",
+            change.entries.len()
+        )));
+    }
+    let mut bytes = VSET_PAYLOAD_TAG.to_vec();
+    bytes.extend(postcard::to_allocvec(change).map_err(|e| Lane0Error::Codec(e.to_string()))?);
+    Ok(bytes)
+}
+
+/// Decode a validator-set change from an event payload, if the payload
+/// carries the [`VSET_PAYLOAD_TAG`]. Returns `Ok(None)` for payloads of
+/// other kinds (not an error — most events are not set changes), `Err`
+/// for a tagged payload that fails to decode or exceeds
+/// [`MAX_VSET_ENTRIES`].
+pub fn decode_vset_change(payload: &[u8]) -> Result<Option<ValidatorSetChange>, Lane0Error> {
+    let Some(body) = payload.strip_prefix(VSET_PAYLOAD_TAG) else {
+        return Ok(None);
+    };
+    let change: ValidatorSetChange = postcard::from_bytes(body).map_err(|e| Lane0Error::Codec(e.to_string()))?;
+    if change.entries.len() > MAX_VSET_ENTRIES {
+        return Err(Lane0Error::Codec(format!(
+            "validator-set change too large: {} entries (max {MAX_VSET_ENTRIES})",
+            change.entries.len()
+        )));
+    }
+    Ok(Some(change))
 }
 
 /// The static Lane 0 validator set: Ed25519 public key → stake weight.
@@ -714,6 +783,46 @@ mod tests {
             store.add_ack(SignedAck::sign(eid(1), &key), &set).unwrap(),
             AckOutcome::NewlyFinal
         );
+    }
+
+    // ── Stage 4 trigger: validator-set-change payload codec ─────────────
+
+    #[test]
+    fn test_vset_change_roundtrip() {
+        let change = ValidatorSetChange {
+            entries: vec![([1u8; 32], 5), ([2u8; 32], 3)],
+        };
+        let bytes = encode_vset_change(&change).unwrap();
+        assert!(bytes.starts_with(VSET_PAYLOAD_TAG));
+        let decoded = decode_vset_change(&bytes).unwrap().unwrap();
+        assert_eq!(decoded, change);
+    }
+
+    #[test]
+    fn test_vset_change_ignores_other_payloads() {
+        // Non-tagged payloads are Ok(None) — not an error.
+        assert_eq!(decode_vset_change(b"").unwrap(), None);
+        assert_eq!(decode_vset_change(b"hello omnia").unwrap(), None);
+        assert_eq!(decode_vset_change(b"OMNIA_XFER_V1rest").unwrap(), None);
+    }
+
+    #[test]
+    fn test_vset_change_rejects_garbage_and_oversize() {
+        // Tagged but undecodable body.
+        let mut garbage = VSET_PAYLOAD_TAG.to_vec();
+        garbage.extend([0xFF, 0xFF, 0xFF, 0xFF]);
+        assert!(decode_vset_change(&garbage).is_err());
+
+        // Oversize set rejected at encode time…
+        let big = ValidatorSetChange {
+            entries: (0..=MAX_VSET_ENTRIES).map(|i| ([(i % 251) as u8; 32], 1)).collect(),
+        };
+        assert!(encode_vset_change(&big).is_err());
+        // …and at decode time (defense in depth against a hand-crafted
+        // payload that skips the encoder).
+        let mut hand_crafted = VSET_PAYLOAD_TAG.to_vec();
+        hand_crafted.extend(postcard::to_allocvec(&big).unwrap());
+        assert!(decode_vset_change(&hand_crafted).is_err());
     }
 
     // ── Stage 4: epoch-fenced validator rotation ────────────────────────
