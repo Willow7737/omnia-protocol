@@ -1,5 +1,5 @@
 --------------------------- MODULE OmniaConsensus ---------------------------
-EXTENDS Naturals, Sequences, FiniteSets
+EXTENDS Naturals, Sequences, FiniteSets, TLC
 
 CONSTANTS Nodes,          \* Set of node identifiers
           ByzantineNodes, \* Subset of Nodes that behave as Byzantine
@@ -9,6 +9,14 @@ ASSUME ByzantineNodes \subseteq Nodes
 ASSUME Cardinality(ByzantineNodes) * 3 + 1 <= Cardinality(Nodes)
 
 Honest == Nodes \ ByzantineNodes
+
+\* Symmetry reduction for TLC (safety checking only): honest nodes are
+\* fully interchangeable — every action and invariant treats them
+\* uniformly — so states differing only by a permutation of Honest are
+\* equivalent. Sound for INVARIANTS; do NOT combine with liveness
+\* checking (symmetry is unsound under fairness — use
+\* OmniaConsensusLiveness.cfg without symmetry for that).
+Symmetry == Permutations(Honest)
 
 \* Hash values — small finite set for model checking.
 \* Honest nodes use hash=1; Byzantine equivocation uses hash=1 and hash=2.
@@ -30,7 +38,9 @@ EventState == [status: ConsensusState]
 \* Quorum size: strictly more than 2/3 of all nodes.
 \* For N=4, Quorum = 4*2/3 + 1 = 3. This is the standard BFT
 \* threshold: up to f Byzantine nodes are tolerated where N = 3f+1.
-Quorum == Cardinality(Nodes) * 2 \div 3 + 1
+\* NOTE: `*` and `\div` have equal precedence in TLA+, so the grouping
+\* must be explicit — SANY rejects the unparenthesized form outright.
+Quorum == (Cardinality(Nodes) * 2) \div 3 + 1
 
 \* Per-node state: maps EventId -> EventState.
 VARIABLES events,        \* events[node][event_id] = EventState
@@ -124,12 +134,15 @@ CommitEvent(n, eid) == /\ EventExists(n, eid)
                         /\ events' = [events EXCEPT ![n] = [events[n] EXCEPT ![eid] = [status |-> "committed"]]]
                         /\ UNCHANGED <<current_seq, famous_events>>
 
-\* Next-state relation
-Next == \E nc \in Nodes: CreateEvent(nc)
-     \/ \E ne \in ByzantineNodes: Equivocate(ne)
-     \/ \E n1 \in Nodes, n2 \in Nodes: Gossip(n1, n2)
-     \/ \E eid \in EventId: DecideFamous(eid)
-     \/ \E na \in Nodes, eid \in EventId: CommitEvent(na, eid)
+\* Next-state relation. Each existential disjunct is parenthesized:
+\* without the parentheses an `\E` body extends to the end of the
+\* expression, so the later disjuncts would nest inside it and the
+\* final one would (illegally) re-bind `eid`.
+Next == (\E nc \in Nodes: CreateEvent(nc))
+     \/ (\E ne \in ByzantineNodes: Equivocate(ne))
+     \/ (\E n1 \in Nodes, n2 \in Nodes: Gossip(n1, n2))
+     \/ (\E eid \in EventId: DecideFamous(eid))
+     \/ (\E na \in Nodes, eid \in EventId: CommitEvent(na, eid))
 
 vars == <<events, current_seq, famous_events>>
 
@@ -138,11 +151,14 @@ Spec == Init /\ [][Next]_vars
 \* Fairness assumptions: weak fairness on honest actions and
 \* on the DecideFamous/CommitEvent pipeline. These ensure that
 \* if an action is continuously enabled, it will eventually fire.
+\* Each quantified conjunct is parenthesized: without the parentheses a
+\* `\A` body extends to the end of the expression, so the later
+\* conjuncts would (illegally) re-bind `n`/`eid` inside its scope.
 FairSpec == Spec
-             /\ \A n \in Honest: WF_vars(CreateEvent(n))
-             /\ \A n1 \in Nodes, n2 \in Nodes: WF_vars(Gossip(n1, n2))
-             /\ \A eid \in EventId: WF_vars(DecideFamous(eid))
-             /\ \A n \in Honest, eid \in EventId: WF_vars(CommitEvent(n, eid))
+             /\ (\A n \in Honest: WF_vars(CreateEvent(n)))
+             /\ (\A n1 \in Nodes, n2 \in Nodes: WF_vars(Gossip(n1, n2)))
+             /\ (\A eid \in EventId: WF_vars(DecideFamous(eid)))
+             /\ (\A n \in Honest, eid \in EventId: WF_vars(CommitEvent(n, eid)))
 
 \* SAFETY: Agreement — all honest nodes that commit an event at
 \* the same (creator, sequence) agree on its hash.

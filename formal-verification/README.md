@@ -163,19 +163,48 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 
 ## TLC Results
 
-**Configuration tested:** `Nodes = {n1, n2, n3, n4}`, `ByzantineNodes = {n1}`, `MaxSeq = 1`
+**Configuration:** `Nodes = {n1, n2, n3, n4}`, `ByzantineNodes = {n1}`, `MaxSeq = 1`
 
-| Property       | Status   | Notes                                               |
-| -------------- | -------- | --------------------------------------------------- |
-| TypeOK         | ✅ Holds | Well-typedness invariant verified                   |
-| Agreement      | ✅ Holds | Restored by quorum + fame requirement               |
-| NoEquivocation | ✅ Holds | Equivocation is confined to Byzantine creators      |
-| Validity       | ✅ Holds | Committed events were proposed by some node         |
-| Liveness       | ✅ Holds | Honest events eventually committed (under fairness) |
+> **Provenance note.** Earlier revisions of this table reported all five
+> properties as verified. Those runs predated the CI gate and were made
+> against a spec whose `FairSpec` and `Next` mis-parsed (unparenthesized
+> `\E` bodies nest, so later disjuncts sat *inside* earlier quantifiers
+> and the final one illegally re-bound `eid`) — TLC was exploring a
+> different transition relation than the one written. The gate caught
+> both parse bugs on its first run. The authoritative status is what the
+> `TLA+ Model Check` workflow reports:
+
+| Property       | Checked by                                                | Notes                                                                                             |
+| -------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| TypeOK         | PR gate: simulation (200k traces); weekly/dispatch: exhaustive | The correctly-parsed transition relation is too large for exhaustive BFS in a PR budget — two 30-minute runs were cancelled mid-BFS even with symmetry reduction |
+| Agreement      | PR gate: simulation; weekly/dispatch: exhaustive           | Quorum + fame requirement (B1 fix)                                                                 |
+| NoEquivocation | PR gate: simulation; weekly/dispatch: exhaustive           | Equivocation confined to Byzantine creators                                                        |
+| Validity       | PR gate: simulation; weekly/dispatch: exhaustive           | Committed events were proposed by some node                                                        |
+| Liveness       | Manual (`OmniaConsensusLiveness.cfg`)                      | TLC liveness = cycle detection over the full state graph — exceeds any CI budget; symmetry unsound under fairness, so the manual config runs without it |
+
+The PR-gate simulation mode is probabilistic, not a proof — but it is
+exactly the class of check that catches shallow trace bugs (the
+`OmniaTwoLane` counterexample the gate found sat at depth 9), and it
+keeps the gate's wall-time bounded by construction. The exhaustive
+safety run happens in the `tlc-exhaustive` job (weekly schedule +
+`workflow_dispatch`) with a 6-hour budget. `OmniaTwoLane` is exhaustive
+in the PR gate itself — its bounded model completes in seconds.
 
 ## CRDT Convergence Verification (B5)
 
 The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence properties of three CRDT types used in the Omnia substrate:
+
+> **Status caveat (2026-07-13):** the first run of the `TLA+ Model Check`
+> CI gate revealed that `OmniaCRDT.tla` was never actually TLC-runnable
+> as committed — its `.cfg` lacks a `SPECIFICATION`/`INIT`/`NEXT` (and
+> uses `#` comments, which TLC's config parser rejects), and the module
+> defines no unified behavior spec. The property definitions below
+> describe *intent*; treat them as unverified until the module is
+> repaired and re-added to the CI matrix (tracked as follow-up). The
+> same gate also caught two latent parse/scoping errors in
+> `OmniaConsensus.tla` (`*`/`\div` precedence, quantifier scoping in
+> `FairSpec`) — both fixed, so the historical "TLC Results" table above
+> reflects runs of the *fixed* spec via CI from now on.
 
 ### GCounter: Grow-only Counter
 
@@ -239,7 +268,7 @@ the full reduction argument.
 - **`FinalizeIfQuorum`**: a node finalizes once its locally accumulated acks
   for an event reach a supermajority of the *current* active set.
 
-### Properties verified (by construction; TLC run pending — see below)
+### Properties checked
 
 | Property | Type | Meaning |
 | --- | --- | --- |
@@ -247,14 +276,30 @@ the full reduction argument.
 | `PendingAcksAreCurrentMembers` | Invariant | Every ack counted toward a **pending** certificate belongs to the currently active validator set — a rotation can never let a stale ack from a since-removed validator sneak a certificate over quorum |
 | `EpochFenceMonotone` | Temporal (safety) | `finalized[n]` never shrinks under any action, including `RotateEpoch` — the exact "epoch fence" claim: once decided, a Lane 0 certificate's finality is permanent regardless of how many validator-set rotations follow |
 
-Both properties were checked by manual inductive proof against the action
-definitions while writing the spec (documented inline in
+Both properties were first checked by manual inductive proof against the
+action definitions while writing the spec (documented inline in
 `OmniaTwoLane.tla`), following the same reasoning style as this file's
-`Agreement`/`NoEquivocation` write-ups. **TLC has not yet been run against
-this module in the environment this was authored in** (no local
-`tla2tools.jar` available) — run it with the same CLI recipe as
-`OmniaConsensus.tla` above, substituting `OmniaTwoLane.tla`/`OmniaTwoLane.cfg`,
-before relying on this as a completed verification pass.
+`Agreement`/`NoEquivocation` write-ups. **The authoritative TLC runs
+happen in CI**: the `TLA+ Model Check` workflow
+(`.github/workflows/tla-model-check.yml`) exhaustively model-checks the
+specs whenever a spec or model configuration changes (and on manual
+dispatch) — a green run of that workflow is the verification evidence.
+The model bounds and the rationale for them are documented in
+`OmniaTwoLane.cfg`. To run locally, use the CLI recipe above with
+`-deadlock` (bounded models exhaust — terminal states are expected, not
+errors), substituting `OmniaTwoLane.tla`/`OmniaTwoLane.cfg`.
+
+**The gate earned its keep on its very first run**: TLC found a real
+counterexample in the initial version of this spec — a node that
+finalized before a rotation keeps its frozen pre-rotation ack set, and
+an unfiltered `GossipMerge` copied those stale acks into a peer's
+still-pending certificate, violating `PendingAcksAreCurrentMembers`.
+The *implementation* was never affected (`CertificateStore::add_ack`
+rejects acks from outside the current set at receipt time); the model
+had simply omitted that membership filter and was more permissive than
+the code it models. `GossipMerge` now carries the `\cap active` filter
+with the counterexample documented at the action, and the spec
+model-checks clean in seconds.
 
 ### Known limitations (in addition to the shared ones below)
 
@@ -318,7 +363,8 @@ The model exceeds available memory. Remediation:
 | File                          | Lines | Description                                                                                                                                                          |
 | ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `OmniaConsensus.tla`          | 191   | TLA+ specification of the consensus protocol (with B1 fix), including CreateEvent, Equivocate, Gossip, DecideFamous, and CommitEvent actions                         |
-| `OmniaConsensus.cfg`          | 10    | TLC model checker configuration for consensus                                                                                                                        |
+| `OmniaConsensus.cfg`          | 10    | TLC configuration for CI: safety invariants with symmetry reduction                                                                                                  |
+| `OmniaConsensusLiveness.cfg`  | —     | TLC configuration for MANUAL runs: `Liveness` under `FairSpec` (too expensive for CI; symmetry unsound under fairness)                                                |
 | `OmniaCRDT.tla`               | 213   | TLA+ specification of CRDT convergence properties (GCounter, OrSet, LWWRegister)                                                                                     |
 | `OmniaCRDT.cfg`               | 23    | TLC model checker configuration for CRDT verification                                                                                                                |
 | `OmniaTwoLane.tla`            | —     | ADR-025 Stage 4: Lane 0 G-Set certificate CRDT + epoch-fenced validator rotation, composed with `OmniaConsensus.tla`'s `Agreement`                                    |
