@@ -192,7 +192,22 @@ in the PR gate itself — its bounded model completes in seconds.
 
 ## CRDT Convergence Verification (B5)
 
-The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence properties of three CRDT types used in the Omnia substrate:
+> **Rewritten for TLC-runnability.** The original revision of this module
+> was never actually checkable: it declared seven unrelated variables with
+> no unified `Init`/`Next`/`Spec`, used non-TLA+ syntax (`(elem, tag)`
+> pair literals, a `\cross` operator), and quantified several properties
+> over unbounded `Nat`. The CI gate exposed this on its first run. The
+> module now has two tiers: the **semilattice lemmas** (merge
+> commutativity, associativity, idempotence for all three CRDTs) are
+> named `ASSUME` statements TLC proves over bounded domains at startup —
+> it refuses to run if any is false — and a **two-replica state machine**
+> checks the dynamic claims as invariants under exhaustive exploration:
+> `TombstoneExclusion` (a removed tag never resurfaces through any merge
+> sequence) and `Converged` (two replicas that are both fixed points of
+> the mutual merge are equal — strong eventual consistency in invariant
+> form).
+
+The `OmniaCRDT.tla` spec covers the convergence properties of three CRDT types used in the Omnia substrate:
 
 > **Status caveat (2026-07-13):** the first run of the `TLA+ Model Check`
 > CI gate revealed that `OmniaCRDT.tla` was never actually TLC-runnable
@@ -234,7 +249,7 @@ The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence propertie
   - Idempotence: `LWWMerge(val, ts, val, ts) = <<val, ts>>`
   - Convergence: Values converge regardless of merge order
 
-**Note:** The `OmniaCRDT.cfg` model checker configuration file exists and configures TLC with `Nodes = {n1, n2, n3}`, `MaxVal = 3`, `Elements = {e1, e2}`, and `MaxTags = 3`, verifying invariants `TypeOK_GCounter`, `TypeOK_OrSet`, `TypeOK_LWW`, `GCounterConvergence`, `LWWConvergence`, and properties `GCounterCommutative`, `GCounterIdempotent`, `GCounterFinalConvergence`.
+**Note:** `OmniaCRDT.cfg` configures TLC with `Nodes = {n1, n2, n3}`, `MaxVal = 2`, `Elements = {e1, e2}`, `MaxTags = 2`, `MaxTs = 3`, checking invariants `TypeOK`, `TombstoneExclusion`, and `Converged` over the two-replica machine; the semilattice lemmas are startup `ASSUME`s and need no config entries. It runs exhaustively in the PR gate alongside `OmniaTwoLane`.
 
 ## Two-Lane Extension (ADR-025 Stage 4)
 
