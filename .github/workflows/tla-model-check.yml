@@ -1,0 +1,69 @@
+name: TLA+ Model Check
+
+# Exhaustively model-checks the TLA+ specifications with TLC.
+#
+# Runs whenever a spec or its model configuration changes, plus on
+# manual dispatch. The sandboxed development environments used to write
+# the specs cannot always fetch tla2tools.jar (proxy-restricted), so CI
+# is the authoritative place where "the spec holds" is actually
+# established — treat a green run here as the verification evidence the
+# formal-verification README refers to.
+#
+# TLC notes:
+# - `-deadlock` disables deadlock reporting: these are bounded models
+#   whose exhaustion states (everything acked/committed, rotation budget
+#   spent) are expected terminal states, not errors.
+# - `-workers auto` uses all runner cores.
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'formal-verification/**'
+      - '.github/workflows/tla-model-check.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'formal-verification/**'
+      - '.github/workflows/tla-model-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TLA_TOOLS_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+
+jobs:
+  tlc:
+    name: TLC (${{ matrix.spec }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        spec: [OmniaConsensus, OmniaCRDT, OmniaTwoLane]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Fetch TLA+ tools
+        run: |
+          curl -sSL --retry 4 --retry-delay 5 -o /tmp/tla2tools.jar "$TLA_TOOLS_URL"
+          # Sanity check: a real jar, not an error page.
+          file /tmp/tla2tools.jar | grep -qi 'archive\|zip\|java' \
+            || { echo "downloaded file is not a jar"; file /tmp/tla2tools.jar; exit 1; }
+
+      - name: Model check ${{ matrix.spec }}
+        working-directory: formal-verification
+        run: |
+          java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
+            -workers auto \
+            -deadlock \
+            -config ${{ matrix.spec }}.cfg \
+            ${{ matrix.spec }}.tla

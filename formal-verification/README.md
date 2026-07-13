@@ -239,7 +239,7 @@ the full reduction argument.
 - **`FinalizeIfQuorum`**: a node finalizes once its locally accumulated acks
   for an event reach a supermajority of the *current* active set.
 
-### Properties verified (by construction; TLC run pending — see below)
+### Properties checked
 
 | Property | Type | Meaning |
 | --- | --- | --- |
@@ -247,14 +247,18 @@ the full reduction argument.
 | `PendingAcksAreCurrentMembers` | Invariant | Every ack counted toward a **pending** certificate belongs to the currently active validator set — a rotation can never let a stale ack from a since-removed validator sneak a certificate over quorum |
 | `EpochFenceMonotone` | Temporal (safety) | `finalized[n]` never shrinks under any action, including `RotateEpoch` — the exact "epoch fence" claim: once decided, a Lane 0 certificate's finality is permanent regardless of how many validator-set rotations follow |
 
-Both properties were checked by manual inductive proof against the action
-definitions while writing the spec (documented inline in
+Both properties were first checked by manual inductive proof against the
+action definitions while writing the spec (documented inline in
 `OmniaTwoLane.tla`), following the same reasoning style as this file's
-`Agreement`/`NoEquivocation` write-ups. **TLC has not yet been run against
-this module in the environment this was authored in** (no local
-`tla2tools.jar` available) — run it with the same CLI recipe as
-`OmniaConsensus.tla` above, substituting `OmniaTwoLane.tla`/`OmniaTwoLane.cfg`,
-before relying on this as a completed verification pass.
+`Agreement`/`NoEquivocation` write-ups. **The authoritative TLC runs
+happen in CI**: the `TLA+ Model Check` workflow
+(`.github/workflows/tla-model-check.yml`) exhaustively model-checks
+every spec in this directory whenever a spec or model configuration
+changes (and on manual dispatch) — a green run of that workflow is the
+verification evidence. The model bounds and the rationale for them are
+documented in `OmniaTwoLane.cfg`. To run locally, use the CLI recipe
+above with `-deadlock` (bounded models exhaust — terminal states are
+expected, not errors), substituting `OmniaTwoLane.tla`/`OmniaTwoLane.cfg`.
 
 ### Known limitations (in addition to the shared ones below)
 
