@@ -72,9 +72,15 @@ jobs:
           - spec: OmniaTwoLane
             tlc_args: ''
           - spec: OmniaConsensus
-            # Simulation smoke: 200k random traces, depth 50, checking
-            # the same safety invariants as the exhaustive run.
-            tlc_args: '-simulate num=200000 -depth 50'
+            # Simulation smoke: random traces against the same safety
+            # invariants as the exhaustive run. Trace count is small
+            # because the invariants are expensive per state (Agreement
+            # and NoEquivocation quantify over Nodes^2 x EventId^2, ~4k
+            # combinations each) — 200k traces blew the 30-minute budget.
+            # The primary PR-gate value is the parse/semantic check plus
+            # shallow-violation detection; the exhaustive BFS runs in the
+            # tlc-exhaustive job (weekly + dispatch).
+            tlc_args: '-simulate num=1000 -depth 40'
     steps:
       - uses: actions/checkout@v4
 
