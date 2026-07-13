@@ -213,8 +213,8 @@ Every stage is tracked here so nothing falls through.
 | **1** | Integrate idle gossip components (AUDIT-14): bloom dedup, priority queue, compact wire v2 | ✅ Done | PR #276 |
 | **2** | Real 3-node testnet + honest multi-node baselines                        | 🔄 Tooling ready — awaiting multi-host run | `scripts/testnet-bench.sh`, [testnet-benchmark runbook](../operations/testnet-benchmark.md); node metrics wired |
 | **3** | Lane 0: consensusless UBC fast path (quorum acks, G-Set certificate CRDTs); absorbs AUDIT-15 | 🔄 v1 shipped — static validator set (`OMNIA_LANE0_VALIDATORS`); dynamic set arrives with Lane 1 | `substrate/src/lane0.rs`; `lane0_final` in event API; `lane0` stats in node info |
-| **4** | Lane 1: DAG-native commit rule + TLA+ spec extension                     | 🌑 Not started | — |
-| **5** | Consensus arena: adversarial property-based CI gate                      | 🌑 Not started | — |
+| **4** | Lane 1: DAG-native commit rule + TLA+ spec extension                     | ✅ Done — epoch-fenced rotation + Lane 1-committed trigger (v1 authorization: current validators govern succession; quadratic-voting proposal execution is the planned upgrade) | `substrate/src/lane0.rs` (`rotate_validators`, `ValidatorSetChange`); `Substrate::apply_committed_vset_changes`; `formal-verification/OmniaTwoLane.tla` |
+| **5** | Consensus arena: adversarial property-based CI gate                      | 🔄 Lane 0 arena shipped (withholding, reorder, duplication, forgery, rotation schedules); Lane 1 arena remains `omnia-chaos-tests`; cross-lane attack scenarios pending governance-triggered rotation | `substrate/tests/lane0_arena.rs` (runs in the standard CI Test jobs) |
 
 ---
 

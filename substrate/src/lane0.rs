@@ -21,14 +21,20 @@
 //!    event is Lane 0-final. Finality is monotone — once final, always
 //!    final.
 //!
-//! # Validator set (v1: static)
+//! # Validator set (v1: operator-configured boot set; v2: epoch-fenced rotation)
+//!
+//! The validator set starts operator-configured via `OMNIA_LANE0_VALIDATORS`
+//! — a comma-separated list of `hex64_ed25519_pubkey:stake` entries. When
+//! the variable is unset or empty, Lane 0 is **disabled** and this module
+//! is inert (no acks signed, published, or accepted).
 //!
 //! ADR-025 routes validator-set *changes* through Lane 1 (they are
-//! contested, shared-state operations). Until Lane 1 lands, the validator
-//! set is operator-configured via `OMNIA_LANE0_VALIDATORS` — a
-//! comma-separated list of `hex64_ed25519_pubkey:stake` entries. When the
-//! variable is unset or empty, Lane 0 is **disabled** and this module is
-//! inert (no acks signed, published, or accepted).
+//! contested, shared-state operations): the set is contested, so its
+//! definition of truth cannot be a Lane 0 decision. [`CertificateStore::rotate_validators`]
+//! is the epoch-fencing primitive that lets a Lane-1-committed validator-set
+//! change safely replace the active set — see that method's docs for the
+//! monotonicity guarantee (a certificate finalized under one epoch's set
+//! stays final forever, regardless of later rotations).
 //!
 //! # Bounded memory
 //!
@@ -61,6 +67,20 @@ pub const LANE0_WIRE_VERSION: u8 = 1;
 
 /// Maximum acks accepted in a single gossip message (DoS bound).
 pub const MAX_ACKS_PER_MESSAGE: usize = 1024;
+
+/// Payload tag marking an event as a Lane 1 validator-set change
+/// (ADR-025 Stage 4 follow-up: the rotation trigger).
+///
+/// An event whose payload starts with this tag carries a postcard-encoded
+/// [`ValidatorSetChange`]. When such an event is **committed by Lane 1's
+/// DAG consensus** (never merely gossiped or submitted), the node applies
+/// the change via `Substrate::rotate_lane0_validators` — the commit is
+/// the epoch fence.
+pub const VSET_PAYLOAD_TAG: &[u8] = b"OMNIA_VSET_V1";
+
+/// Maximum entries accepted in a validator-set change (DoS bound —
+/// matches no realistic validator-set size while keeping decode cheap).
+pub const MAX_VSET_ENTRIES: usize = 1024;
 
 /// Maximum in-flight (not yet final) certificates tracked.
 pub const MAX_TRACKED_EVENTS: usize = 100_000;
@@ -166,6 +186,61 @@ pub fn decode_ack_batch(data: &[u8]) -> Result<Vec<SignedAck>, Lane0Error> {
         Some((v, _)) => Err(Lane0Error::Codec(format!("unknown lane0 wire version: {v}"))),
         None => Err(Lane0Error::Codec("empty lane0 message".to_string())),
     }
+}
+
+/// A Lane 1 validator-set-change operation: the complete replacement set.
+///
+/// Carried in an event payload tagged with [`VSET_PAYLOAD_TAG`]. The set
+/// is a full replacement (not a delta) so the operation is idempotent
+/// and self-contained — applying the same committed change twice, or
+/// applying it on a node that missed earlier changes, converges to the
+/// same active set.
+///
+/// # Authorization (v1)
+///
+/// A change is applied only if the committed event's `creator_pubkey` is
+/// a member of the **currently active** Lane 0 validator set — existing
+/// validators govern their own succession (proof-of-authority style).
+/// Routing through a quadratic-voting governance proposal instead is the
+/// planned upgrade once proposal execution carries typed actions; the
+/// commit-time application point stays identical either way.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorSetChange {
+    /// The new validator set as `(ed25519_pubkey, stake)` pairs.
+    pub entries: Vec<([u8; 32], u64)>,
+}
+
+/// Encode a validator-set change for an event payload:
+/// `VSET_PAYLOAD_TAG ++ postcard(ValidatorSetChange)`.
+pub fn encode_vset_change(change: &ValidatorSetChange) -> Result<Vec<u8>, Lane0Error> {
+    if change.entries.len() > MAX_VSET_ENTRIES {
+        return Err(Lane0Error::Codec(format!(
+            "validator-set change too large: {} entries (max {MAX_VSET_ENTRIES})",
+            change.entries.len()
+        )));
+    }
+    let mut bytes = VSET_PAYLOAD_TAG.to_vec();
+    bytes.extend(postcard::to_allocvec(change).map_err(|e| Lane0Error::Codec(e.to_string()))?);
+    Ok(bytes)
+}
+
+/// Decode a validator-set change from an event payload, if the payload
+/// carries the [`VSET_PAYLOAD_TAG`]. Returns `Ok(None)` for payloads of
+/// other kinds (not an error — most events are not set changes), `Err`
+/// for a tagged payload that fails to decode or exceeds
+/// [`MAX_VSET_ENTRIES`].
+pub fn decode_vset_change(payload: &[u8]) -> Result<Option<ValidatorSetChange>, Lane0Error> {
+    let Some(body) = payload.strip_prefix(VSET_PAYLOAD_TAG) else {
+        return Ok(None);
+    };
+    let change: ValidatorSetChange = postcard::from_bytes(body).map_err(|e| Lane0Error::Codec(e.to_string()))?;
+    if change.entries.len() > MAX_VSET_ENTRIES {
+        return Err(Lane0Error::Codec(format!(
+            "validator-set change too large: {} entries (max {MAX_VSET_ENTRIES})",
+            change.entries.len()
+        )));
+    }
+    Ok(Some(change))
 }
 
 /// The static Lane 0 validator set: Ed25519 public key → stake weight.
@@ -316,6 +391,8 @@ pub struct CertificateStore {
     acks_rejected: u64,
     /// Total events finalized through Lane 0.
     events_finalized: u64,
+    /// Number of validator-set rotations applied (see [`Self::rotate_validators`]).
+    epoch: u64,
 }
 
 impl CertificateStore {
@@ -381,6 +458,94 @@ impl CertificateStore {
         } else {
             Ok(AckOutcome::Recorded)
         }
+    }
+
+    /// Apply a validator-set rotation (ADR-025 Stage 4 epoch fence).
+    ///
+    /// MUST be called identically, at the identical logical point in the
+    /// causal graph, by every honest node — i.e., driven by a Lane 1
+    /// (DAG-consensus-committed) validator-set-change event. Because
+    /// commit order is agreed by the DAG commit rule, every honest node
+    /// applies the same rotation with the same `new_validators` at the
+    /// same point, so the outcome is deterministic and independent of
+    /// gossip/ack delivery order.
+    ///
+    /// # Monotonicity
+    ///
+    /// Already-finalized certificates are **never** re-evaluated:
+    /// finality is permanent regardless of how many rotations follow, so
+    /// a Lane 0 certificate stays valid forever once decided, even after
+    /// the validator set that decided it has since changed.
+    ///
+    /// Pending (not-yet-final) certificates are re-evaluated against
+    /// `new_validators`:
+    /// - Acks from validators that are not members of the new set are
+    ///   dropped — their stake no longer counts toward quorum.
+    /// - Acks from validators that remain members keep their ack, now
+    ///   weighted by the **new** set's stake for that validator.
+    /// - If the recomputed stake now meets `new_validators.is_quorum(..)`,
+    ///   the certificate is immediately finalized. This is deterministic,
+    ///   so every honest node reaches the same conclusion for the same
+    ///   rotation.
+    ///
+    /// Returns the event IDs that became newly final as a direct result
+    /// of the rotation (empty in the common case), in ascending order.
+    pub fn rotate_validators(&mut self, new_validators: &ValidatorSet) -> Vec<EventId> {
+        self.epoch += 1;
+        let mut newly_final = Vec::new();
+
+        // Deterministic evaluation order: HashMap iteration order is not
+        // itself relevant to the outcome (each certificate is evaluated
+        // independently), but the returned Vec's order should be stable
+        // for callers that broadcast finality.
+        let mut event_ids: Vec<EventId> = self.pending.keys().copied().collect();
+        event_ids.sort();
+
+        for event_id in event_ids {
+            let Some(cert) = self.pending.get_mut(&event_id) else {
+                continue;
+            };
+            let mut acked_stake: u64 = 0;
+            cert.acks.retain(|pubkey, _| match new_validators.stake_of(pubkey) {
+                Some(stake) => {
+                    acked_stake = acked_stake.saturating_add(stake);
+                    true
+                }
+                None => false,
+            });
+            cert.acked_stake = acked_stake;
+
+            if new_validators.is_quorum(acked_stake) {
+                self.pending.remove(&event_id);
+                self.finalized.insert(event_id);
+                self.finalized_order.push_back(event_id);
+                self.events_finalized += 1;
+                newly_final.push(event_id);
+            }
+        }
+
+        if !newly_final.is_empty() {
+            // One-pass cleanup of pending_order rather than a retain per
+            // finalized event — avoids O(n^2) when a single rotation
+            // finalizes many certificates at once.
+            let finalized_now: HashSet<EventId> = newly_final.iter().copied().collect();
+            self.pending_order.retain(|id| !finalized_now.contains(id));
+        }
+
+        while self.finalized.len() > MAX_FINALIZED_EVENTS {
+            if let Some(evicted) = self.finalized_order.pop_front() {
+                self.finalized.remove(&evicted);
+            } else {
+                break;
+            }
+        }
+
+        newly_final
+    }
+
+    /// Number of validator-set rotations applied so far (0 = original set).
+    pub fn epoch(&self) -> u64 {
+        self.epoch
     }
 
     /// Whether an event has reached Lane 0 finality.
@@ -618,5 +783,148 @@ mod tests {
             store.add_ack(SignedAck::sign(eid(1), &key), &set).unwrap(),
             AckOutcome::NewlyFinal
         );
+    }
+
+    // ── Stage 4 trigger: validator-set-change payload codec ─────────────
+
+    #[test]
+    fn test_vset_change_roundtrip() {
+        let change = ValidatorSetChange {
+            entries: vec![([1u8; 32], 5), ([2u8; 32], 3)],
+        };
+        let bytes = encode_vset_change(&change).unwrap();
+        assert!(bytes.starts_with(VSET_PAYLOAD_TAG));
+        let decoded = decode_vset_change(&bytes).unwrap().unwrap();
+        assert_eq!(decoded, change);
+    }
+
+    #[test]
+    fn test_vset_change_ignores_other_payloads() {
+        // Non-tagged payloads are Ok(None) — not an error.
+        assert_eq!(decode_vset_change(b"").unwrap(), None);
+        assert_eq!(decode_vset_change(b"hello omnia").unwrap(), None);
+        assert_eq!(decode_vset_change(b"OMNIA_XFER_V1rest").unwrap(), None);
+    }
+
+    #[test]
+    fn test_vset_change_rejects_garbage_and_oversize() {
+        // Tagged but undecodable body.
+        let mut garbage = VSET_PAYLOAD_TAG.to_vec();
+        garbage.extend([0xFF, 0xFF, 0xFF, 0xFF]);
+        assert!(decode_vset_change(&garbage).is_err());
+
+        // Oversize set rejected at encode time…
+        let big = ValidatorSetChange {
+            entries: (0..=MAX_VSET_ENTRIES).map(|i| ([(i % 251) as u8; 32], 1)).collect(),
+        };
+        assert!(encode_vset_change(&big).is_err());
+        // …and at decode time (defense in depth against a hand-crafted
+        // payload that skips the encoder).
+        let mut hand_crafted = VSET_PAYLOAD_TAG.to_vec();
+        hand_crafted.extend(postcard::to_allocvec(&big).unwrap());
+        assert!(decode_vset_change(&hand_crafted).is_err());
+    }
+
+    // ── Stage 4: epoch-fenced validator rotation ────────────────────────
+
+    #[test]
+    fn test_rotate_validators_preserves_finalized_monotone() {
+        // An event finalized under the old set must stay final forever,
+        // even when the new set shares no members with the old one.
+        let (keys, old_set) = three_validators();
+        let mut store = CertificateStore::new();
+        let id = eid(1);
+        for k in &keys {
+            let _ = store.add_ack(SignedAck::sign(id, k), &old_set);
+        }
+        assert!(store.is_final(&id));
+
+        let (_new_keys, new_set) = three_validators(); // disjoint validator set
+        let newly_final = store.rotate_validators(&new_set);
+
+        assert!(newly_final.is_empty(), "already-final events are not re-announced");
+        assert!(store.is_final(&id), "finality must survive a validator-set rotation");
+        assert_eq!(store.epoch(), 1);
+    }
+
+    #[test]
+    fn test_rotate_validators_drops_nonmember_acks() {
+        // A pending cert with 2/3 acks under the old set: rotating to a
+        // set that excludes one acker must drop that ack's stake.
+        let (keys, old_set) = three_validators();
+        let mut store = CertificateStore::new();
+        let id = eid(1);
+        store.add_ack(SignedAck::sign(id, &keys[0]), &old_set).unwrap();
+        store.add_ack(SignedAck::sign(id, &keys[1]), &old_set).unwrap();
+        assert_eq!(store.certificate(&id).unwrap().acked_stake(), 2);
+        assert!(!store.is_final(&id));
+
+        // New set: only keys[0] carries over, plus two new validators.
+        let extra: Vec<NodeKeypair> = (0..2).map(|_| generate_keypair()).collect();
+        let new_set = ValidatorSet::new(
+            std::iter::once((keys[0].verifying_key().to_bytes(), 1))
+                .chain(extra.iter().map(|k| (k.verifying_key().to_bytes(), 1))),
+        )
+        .unwrap();
+
+        let newly_final = store.rotate_validators(&new_set);
+        assert!(newly_final.is_empty());
+        assert!(!store.is_final(&id));
+        // Only keys[0]'s ack survives; keys[1]'s stake is dropped.
+        assert_eq!(store.certificate(&id).unwrap().acked_stake(), 1);
+        assert_eq!(store.certificate(&id).unwrap().ack_count(), 1);
+    }
+
+    #[test]
+    fn test_rotate_validators_can_immediately_finalize() {
+        // A pending cert with acks that don't reach quorum under the old
+        // (larger) set can cross quorum immediately upon rotating to a
+        // smaller set where the surviving acks are now a supermajority.
+        let (keys, old_set) = three_validators(); // quorum = 3 of 3
+        let mut store = CertificateStore::new();
+        let id = eid(1);
+        // Only 1 of 3 acked under the old set — nowhere near quorum.
+        store.add_ack(SignedAck::sign(id, &keys[0]), &old_set).unwrap();
+        assert!(!store.is_final(&id));
+
+        // New set: just the one validator that already acked.
+        let new_set = ValidatorSet::new([(keys[0].verifying_key().to_bytes(), 1)]).unwrap();
+        let newly_final = store.rotate_validators(&new_set);
+
+        assert_eq!(newly_final, vec![id]);
+        assert!(store.is_final(&id));
+    }
+
+    #[test]
+    fn test_rotate_validators_deterministic_ascending_order() {
+        // When a rotation finalizes multiple certificates at once, the
+        // returned Vec must be in ascending EventId order so callers get
+        // a stable, reproducible result.
+        let key = generate_keypair();
+        let old_set = ValidatorSet::new([(key.verifying_key().to_bytes(), 1), ([0xFF; 32], 1)]).unwrap();
+        let mut store = CertificateStore::new();
+
+        let ids = [eid(3), eid(1), eid(2)];
+        for id in ids {
+            store.add_ack(SignedAck::sign(id, &key), &old_set).unwrap();
+        }
+
+        // New set: just this one validator — every pending cert now has
+        // a lone quorum-crossing ack.
+        let new_set = ValidatorSet::new([(key.verifying_key().to_bytes(), 1)]).unwrap();
+        let newly_final = store.rotate_validators(&new_set);
+
+        assert_eq!(newly_final, vec![eid(1), eid(2), eid(3)]);
+    }
+
+    #[test]
+    fn test_rotate_validators_epoch_increments_even_with_no_pending() {
+        let (_keys, set) = three_validators();
+        let mut store = CertificateStore::new();
+        assert_eq!(store.epoch(), 0);
+        store.rotate_validators(&set);
+        assert_eq!(store.epoch(), 1);
+        store.rotate_validators(&set);
+        assert_eq!(store.epoch(), 2);
     }
 }

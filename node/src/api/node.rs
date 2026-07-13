@@ -61,11 +61,15 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
         .map(|k| hex::encode(k.verifying_key().to_bytes()));
     let lane0 = {
         let substrate = state.substrate.read().await;
+        let epoch = substrate.lane0_epoch();
         substrate.lane0_stats().map(|(accepted, rejected, finalized)| {
             json!({
                 "acks_accepted": accepted,
                 "acks_rejected": rejected,
                 "events_finalized": finalized,
+                // Number of validator-set rotations applied (ADR-025
+                // Stage 4). 0 = original operator-configured set.
+                "epoch": epoch,
             })
         })
     };

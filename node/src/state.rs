@@ -76,6 +76,18 @@ pub struct TransferRecord {
     /// event could not be submitted (the balance change still succeeded).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_id: Option<String>,
+    /// Who authorized the spend: `"wallet_signed"` (the key owner's own
+    /// Ed25519 signature over the transfer was verified — self-sovereign,
+    /// spend-authorization Step 2) or `"node_attested"` (JWT-only
+    /// authorization, the original flow).
+    #[serde(default = "default_provenance")]
+    pub provenance: String,
+}
+
+/// Serde default for [`TransferRecord::provenance`] — records written
+/// before the field existed were all JWT-only authorized.
+fn default_provenance() -> String {
+    "node_attested".to_string()
 }
 
 /// Append a transfer record to the bounded history log.
