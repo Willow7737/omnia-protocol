@@ -1,6 +1,6 @@
 name: TLA+ Model Check
 
-# Exhaustively model-checks the TLA+ specifications with TLC.
+# Model-checks the TLA+ specifications with TLC.
 #
 # Runs whenever a spec or its model configuration changes, plus on
 # manual dispatch. The sandboxed development environments used to write
@@ -9,11 +9,28 @@ name: TLA+ Model Check
 # established — treat a green run here as the verification evidence the
 # formal-verification README refers to.
 #
+# Two tiers, sized by what a PR gate can afford:
+#
+# - `tlc` (PR gate): OmniaTwoLane is checked EXHAUSTIVELY — its bounded
+#   model completes in seconds. OmniaConsensus runs in SIMULATION mode
+#   (200k random traces against the same safety invariants): its
+#   correctly-parsed transition relation is too large for exhaustive
+#   BFS inside a PR budget (two 30-minute runs were cancelled mid-BFS,
+#   even with symmetry reduction). Simulation is probabilistic but
+#   catches shallow violations well — the class the gate has actually
+#   found (the OmniaTwoLane counterexample sat at depth 9).
+# - `tlc-exhaustive` (weekly + manual dispatch): the exhaustive
+#   OmniaConsensus safety run with a 6-hour budget, off the PR
+#   critical path.
+#
 # TLC notes:
 # - `-deadlock` disables deadlock reporting: these are bounded models
-#   whose exhaustion states (everything acked/committed, rotation budget
-#   spent) are expected terminal states, not errors.
+#   whose exhaustion states (everything acked/committed) are expected
+#   terminal states, not errors.
 # - `-workers auto` uses all runner cores.
+# - Liveness checking (OmniaConsensusLiveness.cfg) is manual-only: TLC
+#   liveness does cycle detection over the complete state graph and
+#   symmetry is unsound under fairness — see formal-verification/README.
 
 on:
   push:
@@ -26,6 +43,9 @@ on:
     paths:
       - 'formal-verification/**'
       - '.github/workflows/tla-model-check.yml'
+  schedule:
+    # Weekly exhaustive OmniaConsensus run (Mondays 03:17 UTC).
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -37,6 +57,7 @@ env:
 jobs:
   tlc:
     name: TLC (${{ matrix.spec }})
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -47,7 +68,13 @@ jobs:
         # SPECIFICATION/INIT/NEXT and the module defines no unified
         # behavior spec). Repairing it is tracked as follow-up work —
         # add it back here once it model-checks.
-        spec: [OmniaConsensus, OmniaTwoLane]
+        include:
+          - spec: OmniaTwoLane
+            tlc_args: ''
+          - spec: OmniaConsensus
+            # Simulation smoke: 200k random traces, depth 50, checking
+            # the same safety invariants as the exhaustive run.
+            tlc_args: '-simulate num=200000 -depth 50'
     steps:
       - uses: actions/checkout@v4
 
@@ -70,5 +97,35 @@ jobs:
           java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
             -workers auto \
             -deadlock \
+            ${{ matrix.tlc_args }} \
             -config ${{ matrix.spec }}.cfg \
             ${{ matrix.spec }}.tla
+
+  tlc-exhaustive:
+    name: TLC exhaustive (OmniaConsensus)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Fetch TLA+ tools
+        run: |
+          curl -sSL --retry 4 --retry-delay 5 -o /tmp/tla2tools.jar "$TLA_TOOLS_URL"
+          file /tmp/tla2tools.jar | grep -qi 'archive\|zip\|java' \
+            || { echo "downloaded file is not a jar"; file /tmp/tla2tools.jar; exit 1; }
+
+      - name: Exhaustive safety check
+        working-directory: formal-verification
+        run: |
+          java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
+            -workers auto \
+            -deadlock \
+            -config OmniaConsensus.cfg \
+            OmniaConsensus.tla

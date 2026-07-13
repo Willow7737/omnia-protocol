@@ -174,13 +174,21 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 > both parse bugs on its first run. The authoritative status is what the
 > `TLA+ Model Check` workflow reports:
 
-| Property       | Checked by                                     | Notes                                                                                             |
-| -------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| TypeOK         | CI (`OmniaConsensus.cfg`)                      | Safety BFS with symmetry reduction over the interchangeable honest nodes                          |
-| Agreement      | CI (`OmniaConsensus.cfg`)                      | Quorum + fame requirement (B1 fix)                                                                 |
-| NoEquivocation | CI (`OmniaConsensus.cfg`)                      | Equivocation confined to Byzantine creators                                                        |
-| Validity       | CI (`OmniaConsensus.cfg`)                      | Committed events were proposed by some node                                                        |
-| Liveness       | Manual (`OmniaConsensusLiveness.cfg`)          | TLC liveness = cycle detection over the full state graph — exceeds the CI budget; symmetry unsound under fairness, so the manual config runs without it |
+| Property       | Checked by                                                | Notes                                                                                             |
+| -------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| TypeOK         | PR gate: simulation (200k traces); weekly/dispatch: exhaustive | The correctly-parsed transition relation is too large for exhaustive BFS in a PR budget — two 30-minute runs were cancelled mid-BFS even with symmetry reduction |
+| Agreement      | PR gate: simulation; weekly/dispatch: exhaustive           | Quorum + fame requirement (B1 fix)                                                                 |
+| NoEquivocation | PR gate: simulation; weekly/dispatch: exhaustive           | Equivocation confined to Byzantine creators                                                        |
+| Validity       | PR gate: simulation; weekly/dispatch: exhaustive           | Committed events were proposed by some node                                                        |
+| Liveness       | Manual (`OmniaConsensusLiveness.cfg`)                      | TLC liveness = cycle detection over the full state graph — exceeds any CI budget; symmetry unsound under fairness, so the manual config runs without it |
+
+The PR-gate simulation mode is probabilistic, not a proof — but it is
+exactly the class of check that catches shallow trace bugs (the
+`OmniaTwoLane` counterexample the gate found sat at depth 9), and it
+keeps the gate's wall-time bounded by construction. The exhaustive
+safety run happens in the `tlc-exhaustive` job (weekly schedule +
+`workflow_dispatch`) with a 6-hour budget. `OmniaTwoLane` is exhaustive
+in the PR gate itself — its bounded model completes in seconds.
 
 ## CRDT Convergence Verification (B5)
 
