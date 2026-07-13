@@ -63,13 +63,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # OmniaCRDT is intentionally absent: the first run of this gate
-        # revealed it was never TLC-runnable (its .cfg has no
-        # SPECIFICATION/INIT/NEXT and the module defines no unified
-        # behavior spec). Repairing it is tracked as follow-up work —
-        # add it back here once it model-checks.
         include:
           - spec: OmniaTwoLane
+            tlc_args: ''
+          - spec: OmniaCRDT
+            # Rewritten to be TLC-runnable (the original had no unified
+            # Init/Next/Spec and non-TLA+ syntax): semilattice lemmas as
+            # startup ASSUMEs + a two-replica convergence state machine.
             tlc_args: ''
           - spec: OmniaConsensus
             # Simulation smoke: random traces against the same safety
