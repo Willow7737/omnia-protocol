@@ -1,5 +1,5 @@
 --------------------------- MODULE OmniaConsensus ---------------------------
-EXTENDS Naturals, Sequences, FiniteSets
+EXTENDS Naturals, Sequences, FiniteSets, TLC
 
 CONSTANTS Nodes,          \* Set of node identifiers
           ByzantineNodes, \* Subset of Nodes that behave as Byzantine
@@ -9,6 +9,14 @@ ASSUME ByzantineNodes \subseteq Nodes
 ASSUME Cardinality(ByzantineNodes) * 3 + 1 <= Cardinality(Nodes)
 
 Honest == Nodes \ ByzantineNodes
+
+\* Symmetry reduction for TLC (safety checking only): honest nodes are
+\* fully interchangeable — every action and invariant treats them
+\* uniformly — so states differing only by a permutation of Honest are
+\* equivalent. Sound for INVARIANTS; do NOT combine with liveness
+\* checking (symmetry is unsound under fairness — use
+\* OmniaConsensusLiveness.cfg without symmetry for that).
+Symmetry == Permutations(Honest)
 
 \* Hash values — small finite set for model checking.
 \* Honest nodes use hash=1; Byzantine equivocation uses hash=1 and hash=2.
