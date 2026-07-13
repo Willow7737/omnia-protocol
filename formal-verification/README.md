@@ -177,6 +177,18 @@ Basic well-typedness invariant ensuring all state variables remain within their 
 
 The `OmniaCRDT.tla` spec (213 lines) formally verifies the convergence properties of three CRDT types used in the Omnia substrate:
 
+> **Status caveat (2026-07-13):** the first run of the `TLA+ Model Check`
+> CI gate revealed that `OmniaCRDT.tla` was never actually TLC-runnable
+> as committed — its `.cfg` lacks a `SPECIFICATION`/`INIT`/`NEXT` (and
+> uses `#` comments, which TLC's config parser rejects), and the module
+> defines no unified behavior spec. The property definitions below
+> describe *intent*; treat them as unverified until the module is
+> repaired and re-added to the CI matrix (tracked as follow-up). The
+> same gate also caught two latent parse/scoping errors in
+> `OmniaConsensus.tla` (`*`/`\div` precedence, quantifier scoping in
+> `FairSpec`) — both fixed, so the historical "TLC Results" table above
+> reflects runs of the *fixed* spec via CI from now on.
+
 ### GCounter: Grow-only Counter
 
 - **State:** Function from Nodes to Nat

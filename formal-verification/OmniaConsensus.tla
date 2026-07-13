@@ -30,7 +30,9 @@ EventState == [status: ConsensusState]
 \* Quorum size: strictly more than 2/3 of all nodes.
 \* For N=4, Quorum = 4*2/3 + 1 = 3. This is the standard BFT
 \* threshold: up to f Byzantine nodes are tolerated where N = 3f+1.
-Quorum == Cardinality(Nodes) * 2 \div 3 + 1
+\* NOTE: `*` and `\div` have equal precedence in TLA+, so the grouping
+\* must be explicit — SANY rejects the unparenthesized form outright.
+Quorum == (Cardinality(Nodes) * 2) \div 3 + 1
 
 \* Per-node state: maps EventId -> EventState.
 VARIABLES events,        \* events[node][event_id] = EventState
@@ -138,11 +140,14 @@ Spec == Init /\ [][Next]_vars
 \* Fairness assumptions: weak fairness on honest actions and
 \* on the DecideFamous/CommitEvent pipeline. These ensure that
 \* if an action is continuously enabled, it will eventually fire.
+\* Each quantified conjunct is parenthesized: without the parentheses a
+\* `\A` body extends to the end of the expression, so the later
+\* conjuncts would (illegally) re-bind `n`/`eid` inside its scope.
 FairSpec == Spec
-             /\ \A n \in Honest: WF_vars(CreateEvent(n))
-             /\ \A n1 \in Nodes, n2 \in Nodes: WF_vars(Gossip(n1, n2))
-             /\ \A eid \in EventId: WF_vars(DecideFamous(eid))
-             /\ \A n \in Honest, eid \in EventId: WF_vars(CommitEvent(n, eid))
+             /\ (\A n \in Honest: WF_vars(CreateEvent(n)))
+             /\ (\A n1 \in Nodes, n2 \in Nodes: WF_vars(Gossip(n1, n2)))
+             /\ (\A eid \in EventId: WF_vars(DecideFamous(eid)))
+             /\ (\A n \in Honest, eid \in EventId: WF_vars(CommitEvent(n, eid)))
 
 \* SAFETY: Agreement — all honest nodes that commit an event at
 \* the same (creator, sequence) agree on its hash.

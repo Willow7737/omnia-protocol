@@ -153,10 +153,13 @@ Spec == Init /\ [][Next]_vars
 \* State-space bound for TLC (mirrors OmniaConsensus.tla's MaxSeq role).
 StateConstraint == epoch <= MaxEpoch
 
+\* Each quantified conjunct is parenthesized: without the parentheses a
+\* `\A` body extends to the end of the expression, so the later
+\* conjuncts would (illegally) re-bind `n`/`eid` inside its scope.
 FairSpec == Spec
-            /\ \A n \in Nodes, eid \in EventId: WF_vars(AckEvent(n, eid))
-            /\ \A n1 \in Nodes, n2 \in Nodes, eid \in EventId: WF_vars(GossipMerge(n1, n2, eid))
-            /\ \A n \in Nodes, eid \in EventId: WF_vars(FinalizeIfQuorum(n, eid))
+            /\ (\A n \in Nodes, eid \in EventId: WF_vars(AckEvent(n, eid)))
+            /\ (\A n1 \in Nodes, n2 \in Nodes, eid \in EventId: WF_vars(GossipMerge(n1, n2, eid)))
+            /\ (\A n \in Nodes, eid \in EventId: WF_vars(FinalizeIfQuorum(n, eid)))
 
 (***************************************************************************)
 (* SAFETY (headline property): every ack counted toward a PENDING          *)
