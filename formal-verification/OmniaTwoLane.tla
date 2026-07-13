@@ -91,10 +91,22 @@ AckEvent(n, eid) ==
 (* associative, idempotent, so delivery order and duplication are          *)
 (* harmless (mirrors `CertificateStore::add_ack`'s duplicate-is-a-no-op    *)
 (* behavior and the CRDT convergence proofs in `OmniaCRDT.tla`).           *)
+(*                                                                         *)
+(* The `\cap active` filter models `add_ack`'s membership check: an ack    *)
+(* from a public key outside the CURRENT validator set is rejected at      *)
+(* receipt time (`Lane0Error::UnknownValidator` in lane0.rs), so gossip    *)
+(* can never re-introduce a since-removed validator's stale ack into a     *)
+(* pending certificate. TLC found the counterexample that mandates this    *)
+(* filter on the first CI run of this spec: a node that finalized before   *)
+(* a rotation keeps its (frozen) pre-rotation ack set, and an unfiltered   *)
+(* merge would copy those stale acks into a peer's still-pending           *)
+(* certificate — violating `PendingAcksAreCurrentMembers`. The             *)
+(* implementation was never affected; the unfiltered model was simply      *)
+(* more permissive than the code it models.                                *)
 (***************************************************************************)
 GossipMerge(n1, n2, eid) ==
     /\ n1 # n2
-    /\ acks' = [acks EXCEPT ![n2][eid] = @ \cup acks[n1][eid]]
+    /\ acks' = [acks EXCEPT ![n2][eid] = @ \cup (acks[n1][eid] \cap active)]
     /\ UNCHANGED <<finalized, active, epoch>>
 
 (***************************************************************************)

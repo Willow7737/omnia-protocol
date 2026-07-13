@@ -126,12 +126,15 @@ CommitEvent(n, eid) == /\ EventExists(n, eid)
                         /\ events' = [events EXCEPT ![n] = [events[n] EXCEPT ![eid] = [status |-> "committed"]]]
                         /\ UNCHANGED <<current_seq, famous_events>>
 
-\* Next-state relation
-Next == \E nc \in Nodes: CreateEvent(nc)
-     \/ \E ne \in ByzantineNodes: Equivocate(ne)
-     \/ \E n1 \in Nodes, n2 \in Nodes: Gossip(n1, n2)
-     \/ \E eid \in EventId: DecideFamous(eid)
-     \/ \E na \in Nodes, eid \in EventId: CommitEvent(na, eid)
+\* Next-state relation. Each existential disjunct is parenthesized:
+\* without the parentheses an `\E` body extends to the end of the
+\* expression, so the later disjuncts would nest inside it and the
+\* final one would (illegally) re-bind `eid`.
+Next == (\E nc \in Nodes: CreateEvent(nc))
+     \/ (\E ne \in ByzantineNodes: Equivocate(ne))
+     \/ (\E n1 \in Nodes, n2 \in Nodes: Gossip(n1, n2))
+     \/ (\E eid \in EventId: DecideFamous(eid))
+     \/ (\E na \in Nodes, eid \in EventId: CommitEvent(na, eid))
 
 vars == <<events, current_seq, famous_events>>
 
