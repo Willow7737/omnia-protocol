@@ -133,7 +133,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 
 - More than `f` Byzantine validators (BFT assumption violated).
 - Network partition lasting longer than `MAX_EVENT_AGE_MS` (events age out before GST).
-- Per-creator buffer overflow (creator spams > 256 out-of-order events — addressed by H-4 fix, PLANNED/not yet implemented).
+- Per-creator buffer overflow (creator spams > 256 out-of-order events) and creator-map flooding (attacker mints many NodeIds) — both bounded by the H-4 fix (per-creator cap + LRU creator-map cap), so these degrade liveness for the offending peer(s) only, never node memory.
 
 ---
 
@@ -145,7 +145,7 @@ The `commit_delay_rounds` parameter provides safety margin against reorgs in cas
 - **Timestamp drift**: `MAX_TIMESTAMP_DRIFT_MS = 120_000` and `MAX_EVENT_AGE_MS = 31_536_000_000` (1 year).
 - **Nonce enforcement**: Per-creator strictly-increasing nonces with gap limit (`NONCE_GAP_LIMIT`).
 - **Fee burning (C-6 fix)**: Fees deducted before shard dispatch and NOT refunded on failure — anti-spam by cost.
-- **Per-creator buffer cap (H-4 fix)**: LRU-bounded creator map prevents unbounded memory growth from attacker-registered NodeIds. **PLANNED (not yet implemented)** — the LRU buffer described here is part of the H-4 design but has not yet landed in `omnia-consensus`. See the H-4 entry in the relevant phase summary for current status.
+- **Per-creator buffer cap (H-4 fix)**: the out-of-order `SequenceBuffer` is bounded on three axes — `MAX_SEQUENCE_BUFFER_PER_CREATOR = 256` events per creator, `MAX_SEQUENCE_GAP = 512` on the allowed sequence gap, and `MAX_BUFFERED_CREATORS = 1024` on the number of distinct creators. The creator bound is LRU: a new creator that would exceed it evicts the least-recently-buffered creator's buffer, so attacker-minted NodeIds cannot grow the map without bound. Worst-case buffer memory is `MAX_BUFFERED_CREATORS × MAX_SEQUENCE_BUFFER_PER_CREATOR` events. Eviction is safe because buffered events are a pure liveness optimization — evicted out-of-order events are re-requested via gossip/fast-sync. **Implemented** in `omnia-consensus/src/causal_graph.rs` (`SequenceBuffer::evict_lru_creator`; tests `test_h4_creator_map_is_bounded_and_evicts_lru`, `test_h4_lru_bookkeeping_survives_per_creator_overflow_and_drain`).
 
 ---
 
