@@ -409,23 +409,23 @@ node's identity changes across restarts. Persisting it requires:
 **Dependency:** Also blocks C-5 (asymmetric JWT derives its key from the
 node keypair).
 
-### H-4 — LRU creator buffer (Phase 1, deferred)
+### H-4 — LRU creator buffer ✅ RESOLVED
 
-**Reason:** The strategy recommends replacing
-`HashMap<NodeId, PerCreatorBuffer>` with `LruCache<NodeId, PerCreatorBuffer>`
-in `omnia-consensus/src/causal_graph.rs`. However, the actual struct
-`SequenceBuffer` uses `HashMap<NodeId, BTreeMap<u64, Event>>` (line 73)
-without an LRU bound. The fix requires:
+**Fix (landed post-ADR-025):** rather than pull in the `lru` crate and
+fight its `get_mut`/peek semantics against `drain_consecutive`, the
+`SequenceBuffer` keeps its `HashMap<NodeId, BTreeMap<u64, Event>>` and adds
+a lightweight LRU alongside it: a `last_seen: HashMap<NodeId, u64>` recency
+map plus a monotonic `tick`. A new creator that would exceed
+`MAX_BUFFERED_CREATORS = 1024` evicts the minimum-recency creator
+(`evict_lru_creator`); `buffer_event` bumps recency, and
+`drain_consecutive` removes the `last_seen` entry in lockstep when a
+creator's buffer empties. The eviction-vs-`drain_consecutive` interaction
+the original note flagged as risky is handled by keeping the two maps
+strictly in lockstep (asserted in the tests). Worst-case buffer memory is
+now `MAX_BUFFERED_CREATORS × MAX_SEQUENCE_BUFFER_PER_CREATOR` events.
 
-- Adding `lru = "0.12"` dependency to `omnia-consensus/Cargo.toml`.
-- Refactoring `SequenceBuffer` to use `LruCache`.
-- Adding a `MAX_BUFFERED_CREATORS` constant.
-- Updating all `buffers.entry(...)` call sites.
-- Adding a regression test that eviction fires at capacity.
-
-**Risk:** The eviction semantics interact with `drain_consecutive()` which
-expects `get_mut` access. Getting the LRU semantics right (peek vs. get,
-LRU update on access) without compile feedback is risky.
+**Tests:** `test_h4_creator_map_is_bounded_and_evicts_lru`,
+`test_h4_lru_bookkeeping_survives_per_creator_overflow_and_drain`.
 
 ### A-1, A-3, A-4, A-5 — Other architectural items (deferred)
 

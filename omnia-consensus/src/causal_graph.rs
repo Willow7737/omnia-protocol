@@ -51,6 +51,24 @@ const MAX_SEQUENCE_BUFFER_PER_CREATOR: usize = 256;
 /// is so large that the intermediate events would never arrive).
 const MAX_SEQUENCE_GAP: u64 = 512;
 
+/// Maximum number of distinct creators tracked in the out-of-order buffer
+/// (H-4 fix).
+///
+/// [`MAX_SEQUENCE_BUFFER_PER_CREATOR`] bounds each creator's buffer, but a
+/// creator is just a public-key-derived `NodeId` — an attacker can mint
+/// arbitrarily many keypairs and buffer one out-of-order event under each,
+/// growing the *number* of creator entries without bound even though every
+/// individual buffer stays small. This caps the creator map: when a new
+/// creator would exceed the cap, the least-recently-buffered creator's
+/// entire buffer is evicted. Eviction is safe because buffered events are a
+/// pure liveness optimization — an evicted creator's out-of-order events are
+/// simply re-requested via gossip/fast-sync when their predecessor arrives,
+/// exactly as if they had hit the gap limit.
+///
+/// Worst-case memory is therefore bounded by
+/// `MAX_BUFFERED_CREATORS * MAX_SEQUENCE_BUFFER_PER_CREATOR` events.
+const MAX_BUFFERED_CREATORS: usize = 1024;
+
 /// A buffer for out-of-order events, keyed by (creator, sequence).
 ///
 /// When an event arrives with `sequence > expected_next`, it is stored here
@@ -60,33 +78,61 @@ const MAX_SEQUENCE_GAP: u64 = 512;
 ///
 /// # Security
 ///
-/// The buffer is bounded by [`MAX_SEQUENCE_BUFFER_PER_CREATOR`] per creator
-/// and [`MAX_SEQUENCE_GAP`] on the allowed sequence gap. Events that exceed
-/// these bounds are rejected with [`CausalGraphError::SequenceBufferOverflow`]
-/// or [`CausalGraphError::SequenceGapTooLarge`], ensuring that the O(1) cycle
-/// detection invariant is enforced without creating an unbounded DoS surface.
+/// The buffer is bounded on three axes: [`MAX_SEQUENCE_BUFFER_PER_CREATOR`]
+/// per creator, [`MAX_SEQUENCE_GAP`] on the allowed sequence gap, and
+/// [`MAX_BUFFERED_CREATORS`] on the number of distinct creators (H-4).
+/// Per-creator and gap overflows reject the offending event with
+/// [`CausalGraphError::SequenceBufferOverflow`] or
+/// [`CausalGraphError::SequenceGapTooLarge`]; a creator-count overflow
+/// instead evicts the least-recently-used creator's buffer (see
+/// [`MAX_BUFFERED_CREATORS`]). Together these enforce the O(1) cycle
+/// detection invariant with a hard memory bound and no unbounded DoS
+/// surface.
 #[derive(Debug, Default)]
 struct SequenceBuffer {
     /// Per-creator buffers: creator → (sequence → event).
     /// Each inner map is a BTreeMap so we can drain consecutive entries
     /// efficiently when the expected sequence arrives.
     buffers: HashMap<NodeId, std::collections::BTreeMap<u64, Event>>,
+    /// LRU recency for the H-4 creator-count bound: creator → the monotonic
+    /// tick at which it was last buffered into. Kept in lockstep with
+    /// `buffers` — an entry exists here iff it exists in `buffers`.
+    last_seen: HashMap<NodeId, u64>,
+    /// Monotonic counter driving `last_seen`; bumped on every buffered event.
+    tick: u64,
 }
 
 impl SequenceBuffer {
     fn new() -> Self {
         Self {
             buffers: HashMap::new(),
+            last_seen: HashMap::new(),
+            tick: 0,
+        }
+    }
+
+    /// Evict the least-recently-buffered creator's entire buffer (H-4).
+    ///
+    /// Called only when a *new* creator would exceed [`MAX_BUFFERED_CREATORS`].
+    /// The scan is O(tracked creators) but runs only on the overflow (attack)
+    /// path, never on the steady-state insert path.
+    fn evict_lru_creator(&mut self) {
+        if let Some((&victim, _)) = self.last_seen.iter().min_by_key(|(_, &t)| t) {
+            self.buffers.remove(&victim);
+            self.last_seen.remove(&victim);
         }
     }
 
     /// Buffer an out-of-order event for later insertion.
     ///
-    /// Returns `Err` if the buffer is full or the gap is too large.
+    /// Returns `Err` if the per-creator buffer is full or the gap is too
+    /// large. When a previously-unseen creator would push the number of
+    /// tracked creators past [`MAX_BUFFERED_CREATORS`], the least-recently
+    /// used creator is evicted first (H-4) — this never rejects the incoming
+    /// event, it only reclaims a stale peer's slot.
     fn buffer_event(&mut self, event: &Event, expected_next: u64) -> Result<(), CausalGraphError> {
-        let creator_buf = self.buffers.entry(event.creator).or_default();
-
-        // Check gap size
+        // Check gap size first — it needs no per-creator state, so a rejected
+        // event never causes an eviction.
         let gap = event.sequence.saturating_sub(expected_next);
         if gap > MAX_SEQUENCE_GAP {
             return Err(CausalGraphError::SequenceGapTooLarge {
@@ -97,12 +143,26 @@ impl SequenceBuffer {
             });
         }
 
-        // Check buffer capacity
+        // H-4: bound the number of distinct creators. If this event opens a
+        // new creator buffer and we are at capacity, evict the LRU creator.
+        let is_new_creator = !self.buffers.contains_key(&event.creator);
+        if is_new_creator && self.buffers.len() >= MAX_BUFFERED_CREATORS {
+            self.evict_lru_creator();
+        }
+
+        let creator_buf = self.buffers.entry(event.creator).or_default();
+
+        // Check per-creator buffer capacity. A brand-new creator's buffer is
+        // empty (len 0 < cap), so this only ever rejects events for a creator
+        // that already has a full buffer — no phantom empty entry can be left
+        // behind by `or_default` above.
         if creator_buf.len() >= MAX_SEQUENCE_BUFFER_PER_CREATOR && !creator_buf.contains_key(&event.sequence) {
             return Err(CausalGraphError::SequenceBufferOverflow { creator: event.creator });
         }
 
         creator_buf.insert(event.sequence, event.clone());
+        self.tick += 1;
+        self.last_seen.insert(event.creator, self.tick);
         Ok(())
     }
 
@@ -122,9 +182,10 @@ impl SequenceBuffer {
             next += 1;
         }
 
-        // Clean up empty buffers
+        // Clean up empty buffers (and their LRU entry, kept in lockstep).
         if creator_buf.is_empty() {
             self.buffers.remove(creator);
+            self.last_seen.remove(creator);
         }
 
         result
@@ -138,6 +199,11 @@ impl SequenceBuffer {
     /// Number of buffered events for a specific creator.
     fn buffered_count(&self, creator: &NodeId) -> usize {
         self.buffers.get(creator).map(|b| b.len()).unwrap_or(0)
+    }
+
+    /// Number of distinct creators currently tracked (H-4 bound target).
+    fn tracked_creators(&self) -> usize {
+        self.buffers.len()
     }
 }
 
@@ -706,6 +772,12 @@ impl CausalGraph {
     /// Get the total number of buffered events across all creators.
     pub fn total_buffered_events(&self) -> usize {
         self.seq_buffer.total_buffered()
+    }
+
+    /// Number of distinct creators currently tracked in the out-of-order
+    /// buffer. Bounded by `MAX_BUFFERED_CREATORS` (H-4).
+    pub fn buffered_creator_count(&self) -> usize {
+        self.seq_buffer.tracked_creators()
     }
 
     /// Check if `ancestor` is an ancestor of `descendant`.
@@ -2400,6 +2472,92 @@ mod tests {
         e_big.sign_with_keypair(&kp).expect("signing");
         let result = graph.insert(e_big);
         assert!(matches!(result, Err(CausalGraphError::SequenceGapTooLarge { .. })));
+    }
+
+    // ── H-4: the creator map itself is bounded (LRU) ────────────────────
+
+    /// Build a distinct NodeId for a creator index.
+    fn creator_node(i: usize) -> NodeId {
+        let mut id = [0u8; 32];
+        id[..8].copy_from_slice(&(i as u64).to_le_bytes());
+        id
+    }
+
+    /// A minimal out-of-order event for `creator` at `seq`. `buffer_event`
+    /// only reads `creator`/`sequence` and clones, so it need not be signed.
+    fn ooo_event(creator: NodeId, seq: u64) -> Event {
+        Event::new(
+            creator,
+            seq,
+            VectorClock::with_node(creator, seq + 1),
+            None,
+            None,
+            vec![],
+        )
+        .expect("valid event")
+    }
+
+    #[test]
+    fn test_h4_creator_map_is_bounded_and_evicts_lru() {
+        let mut buf = SequenceBuffer::new();
+
+        // Fill exactly to the creator cap (each buffers a single seq-5 event,
+        // gap 5 from expected_next 0 — well under MAX_SEQUENCE_GAP).
+        for i in 0..MAX_BUFFERED_CREATORS {
+            buf.buffer_event(&ooo_event(creator_node(i), 5), 0).unwrap();
+        }
+        assert_eq!(buf.tracked_creators(), MAX_BUFFERED_CREATORS);
+
+        // Re-touch creator 0 so it is no longer the least-recently-used.
+        buf.buffer_event(&ooo_event(creator_node(0), 6), 0).unwrap();
+
+        // A brand-new creator must evict the LRU — which is now creator 1,
+        // not the freshly-touched creator 0. The map stays at the cap.
+        let newcomer = creator_node(MAX_BUFFERED_CREATORS + 1);
+        buf.buffer_event(&ooo_event(newcomer, 5), 0).unwrap();
+
+        assert_eq!(
+            buf.tracked_creators(),
+            MAX_BUFFERED_CREATORS,
+            "creator map must stay bounded"
+        );
+        assert_eq!(buf.buffered_count(&creator_node(1)), 0, "LRU creator evicted");
+        assert_eq!(
+            buf.buffered_count(&creator_node(0)),
+            2,
+            "recently-touched creator retained"
+        );
+        assert_eq!(buf.buffered_count(&newcomer), 1, "incoming event is always buffered");
+        // The LRU bookkeeping stays in lockstep with the buffers.
+        assert_eq!(buf.last_seen.len(), buf.buffers.len());
+    }
+
+    #[test]
+    fn test_h4_lru_bookkeeping_survives_per_creator_overflow_and_drain() {
+        let mut buf = SequenceBuffer::new();
+        let creator = creator_node(1);
+
+        // Fill one creator's per-creator buffer to capacity (gaps 1..=256
+        // from expected_next 0 exceed MAX_SEQUENCE_GAP for the high end, so
+        // buffer from a moving expected_next to stay within the gap bound).
+        for seq in 1..=(MAX_SEQUENCE_BUFFER_PER_CREATOR as u64) {
+            buf.buffer_event(&ooo_event(creator, seq), seq.saturating_sub(1))
+                .unwrap();
+        }
+        assert_eq!(buf.tracked_creators(), 1);
+        assert_eq!(buf.buffered_count(&creator), MAX_SEQUENCE_BUFFER_PER_CREATOR);
+
+        // One more distinct sequence overflows the per-creator cap → reject,
+        // without inflating the creator count or desyncing the LRU map.
+        let overflow = buf.buffer_event(&ooo_event(creator, MAX_SEQUENCE_BUFFER_PER_CREATOR as u64 + 1), 0);
+        assert!(matches!(overflow, Err(CausalGraphError::SequenceBufferOverflow { .. })));
+        assert_eq!(buf.tracked_creators(), 1);
+        assert_eq!(buf.last_seen.len(), buf.buffers.len());
+
+        // Draining the creator empty removes both its buffer and LRU entry.
+        buf.drain_consecutive(&creator, 1);
+        assert_eq!(buf.tracked_creators(), 0);
+        assert!(buf.last_seen.is_empty(), "LRU map must not leak drained creators");
     }
 
     #[test]
