@@ -1495,11 +1495,22 @@ mod tests {
         node
     }
 
-    #[test]
-    fn test_substrate_creation() {
+    /// Build a `SubstrateConfig` for tests under `SEED_TEST_LOCK` with
+    /// `OMNIA_CONSENSUS_SEED` cleared. `SubstrateConfig::new` reads that
+    /// env var at construction and panics on a malformed value, so any
+    /// test that constructs a config must serialize against the seed-parse
+    /// tests (which set deliberately invalid seeds). Routing every
+    /// construction through this helper closes that race — do not call the
+    /// panicking `SubstrateConfig::new` directly from a test.
+    fn test_config(id: u8) -> SubstrateConfig {
         let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        SubstrateConfig::new(test_node(id))
+    }
+
+    #[test]
+    fn test_substrate_creation() {
+        let config = test_config(1);
         let substrate = Substrate::new(config);
 
         assert!(!substrate.running);
@@ -1510,9 +1521,7 @@ mod tests {
     #[cfg(feature = "network")]
     #[tokio::test]
     async fn test_substrate_start_stop() {
-        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
 
         substrate.init_gossip();
@@ -1528,9 +1537,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_event() {
-        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
 
@@ -1545,9 +1552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_substrate_stats() {
-        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let substrate = Substrate::new(config);
 
         let stats = substrate.stats().await;
@@ -1560,9 +1565,7 @@ mod tests {
     /// set; the same change signed by an outsider is rejected.
     #[tokio::test]
     async fn test_committed_vset_change_applies_with_authorization() {
-        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
 
         // Lane 0 active with validator A only.
@@ -1632,9 +1635,7 @@ mod tests {
     /// Lane 0 ignores everything.
     #[tokio::test]
     async fn test_committed_vset_change_ignores_noise() {
-        let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
 
         let key_a = generate_keypair();
@@ -1665,7 +1666,7 @@ mod tests {
 
     #[test]
     fn test_rotate_lane0_validators_noop_when_disabled() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         assert_eq!(substrate.lane0_epoch(), None);
 
@@ -1683,7 +1684,7 @@ mod tests {
 
     #[test]
     fn test_rotate_lane0_validators_delegates_and_tracks_epoch() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
 
         let key1 = generate_keypair();
@@ -1854,7 +1855,7 @@ mod tests {
 
     #[test]
     fn test_substrate_config_defaults() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         assert_eq!(config.node_id, test_node(1));
         assert_eq!(config.total_nodes, 4); // default
         assert_eq!(config.slash_threshold, DEFAULT_SLASH_THRESHOLD);
@@ -1868,7 +1869,7 @@ mod tests {
 
     #[test]
     fn test_mempool_accessors() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         assert_eq!(substrate.mempool().len(), 0);
 
@@ -1882,7 +1883,7 @@ mod tests {
 
     #[test]
     fn test_add_validator() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         assert!(substrate.validator_candidates.is_empty());
 
@@ -1912,14 +1913,14 @@ mod tests {
             count: Arc::clone(&count),
         };
 
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
         assert!(substrate.shard_processor.is_some());
     }
 
     #[test]
     fn test_with_validator_candidates() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let keypair = generate_keypair();
         let mut candidates = HashMap::new();
         candidates.insert(test_node(2), (keypair, 10_000u64));
@@ -1930,7 +1931,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_finalized_and_finalized_events() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
 
@@ -1952,7 +1953,7 @@ mod tests {
 
     #[test]
     fn test_consensus_stats() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let substrate = Substrate::new(config);
         let stats = substrate.consensus_stats();
         // Fresh substrate: round 0, no committed events
@@ -1961,7 +1962,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_consensus_empty() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         // No events submitted — process_consensus should return empty
         let committed = substrate.process_consensus().await;
@@ -1970,7 +1971,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_consensus_round_empty() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         // Should not panic with empty state
         substrate.process_consensus_round().await;
@@ -1978,7 +1979,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_event_processors_no_processor() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         // No shard processor attached — should be a no-op
         substrate.process_event_processors().await;
@@ -2004,7 +2005,7 @@ mod tests {
             count: Arc::clone(&count),
         };
 
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config).with_shard_processor(Box::new(processor));
 
         // Submit an event with non-empty payload so the processor sees it
@@ -2043,7 +2044,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_submit_invalid_event_returns_error() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
 
         // Unsigned event should fail validation
@@ -2055,7 +2056,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stats_after_submit() {
-        let config = SubstrateConfig::new(test_node(1));
+        let config = test_config(1);
         let mut substrate = Substrate::new(config);
         let keypair = generate_keypair();
 
