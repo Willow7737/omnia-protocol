@@ -407,6 +407,10 @@ pub struct OmniaBehaviour {
     pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
     /// Kademlia DHT for wide-area peer discovery
     pub kademlia: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>,
+    /// Identify — exchanges listen addresses and supported protocols so
+    /// Kademlia can populate its routing table (without it Kademlia has no
+    /// known peers and DHT discovery never bootstraps).
+    pub identify: libp2p::identify::Behaviour,
     /// AutoNAT for NAT type detection
     pub autonat: libp2p::autonat::Behaviour,
     /// Relay client for NAT traversal
@@ -553,6 +557,13 @@ impl OmniaNetwork {
                     }
                 }
 
+                // Identify: advertise our protocols/addresses and learn peers'
+                // so Kademlia can route. Uses the same libp2p keypair.
+                let identify = libp2p::identify::Behaviour::new(
+                    libp2p::identify::Config::new("/omnia/id/1.0.0".to_string(), key.public())
+                        .with_agent_version(format!("omnia-node/{}", env!("CARGO_PKG_VERSION"))),
+                );
+
                 // AutoNAT for NAT detection
                 let autonat = libp2p::autonat::Behaviour::new(local_pid, autonat_config);
 
@@ -564,6 +575,7 @@ impl OmniaNetwork {
                     mdns,
                     req_res,
                     kademlia,
+                    identify,
                     autonat,
                     relay_client,
                     dcutr,
@@ -772,6 +784,22 @@ impl OmniaNetwork {
                     }
                     _ => {}
                 }
+            }
+            // Identify event handling — feed a peer's advertised listen
+            // addresses into Kademlia's routing table. Without this the
+            // routing table stays empty (`bootstrap()` → NoKnownPeers) and
+            // peers never discover each other beyond the initial dial, so the
+            // gossip mesh cannot grow past a star around the bootstrap.
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Identify(libp2p::identify::Event::Received {
+                peer_id,
+                info,
+                ..
+            })) => {
+                for addr in info.listen_addrs {
+                    self.swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
+                    self.known_peers.insert(peer_id, addr);
+                }
+                tracing::debug!(peer = %peer_id, "Identify: added peer addresses to Kademlia");
             }
             // AutoNAT event handling — log NAT status changes
             SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(libp2p::autonat::Event::StatusChanged { old, new })) => {
