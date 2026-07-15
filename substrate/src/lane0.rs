@@ -280,11 +280,16 @@ impl ValidatorSet {
     /// disabled), `Err` for a malformed one — a typo must fail loudly
     /// rather than silently disable finality.
     pub fn parse(spec: &str) -> Result<Option<Self>, Lane0Error> {
-        // Surfaced in every parse error so a malformed OMNIA_LANE0_VALIDATORS
-        // is diagnosable at a glance rather than via a cryptic hex error.
-        const FORMAT_HINT: &str = "expected a comma-separated list of \
-             `<64-hex-pubkey>:<stake>` entries (generate them with \
-             scripts/setup-validators.sh)";
+        // The expected shape, appended to every parse error so a malformed
+        // OMNIA_LANE0_VALIDATORS is diagnosable at a glance rather than via a
+        // cryptic hex error. Plain ASCII (no em-dash) keeps line widths — and
+        // therefore rustfmt wrapping — deterministic across toolchains.
+        const FORMAT_HINT: &str = "expected `<64-hex-pubkey>:<stake>` entries \
+             (generate them with scripts/setup-validators.sh)";
+        // Build an InvalidConfig error with the format hint appended. Keeping
+        // this a short helper lets every call site stay well under the width
+        // limit, so no error string needs multi-line wrapping.
+        let cfg_err = |msg: String| Lane0Error::InvalidConfig(format!("{msg}; {FORMAT_HINT}"));
 
         let spec = spec.trim();
         if spec.is_empty() {
@@ -293,35 +298,34 @@ impl ValidatorSet {
         let mut entries = Vec::new();
         for part in spec.split(',') {
             let part = part.trim();
-            let (pk_hex, stake_str) = part.split_once(':').ok_or_else(|| {
-                Lane0Error::InvalidConfig(format!("missing ':' in '{part}' — {FORMAT_HINT}"))
-            })?;
+            let (pk_hex, stake_str) = part
+                .split_once(':')
+                .ok_or_else(|| cfg_err(format!("missing ':' in '{part}'")))?;
             let pk_hex = pk_hex.trim();
             // A JWT (header.payload.signature) is the classic paste mistake
-            // here — the benchmark script mints one, and a stray redirect can
+            // here: the benchmark script mints one, and a stray redirect can
             // land it in the env var. Name it directly instead of emitting a
-            // baffling "Invalid character '.'"/"'y'" hex error.
+            // baffling "Invalid character '.'/'y'" hex error.
             if pk_hex.contains('.') {
-                return Err(Lane0Error::InvalidConfig(format!(
-                    "'{pk_hex}' looks like a JWT, not an Ed25519 public key — {FORMAT_HINT}"
+                return Err(cfg_err(format!(
+                    "'{pk_hex}' looks like a JWT, not an Ed25519 public key"
                 )));
             }
             if pk_hex.len() != 64 {
-                return Err(Lane0Error::InvalidConfig(format!(
-                    "pubkey must be 64 hex chars (32 bytes), got {} in '{part}' — {FORMAT_HINT}",
-                    pk_hex.len()
+                let n = pk_hex.len();
+                return Err(cfg_err(format!(
+                    "pubkey must be 64 hex chars (32 bytes), got {n} in '{part}'"
                 )));
             }
-            let pk_bytes = hex::decode(pk_hex).map_err(|e| {
-                Lane0Error::InvalidConfig(format!("bad pubkey hex in '{part}': {e} — {FORMAT_HINT}"))
-            })?;
+            let pk_bytes = hex::decode(pk_hex).map_err(|e| cfg_err(format!("bad pubkey hex in '{part}': {e}")))?;
             let pubkey: [u8; 32] = pk_bytes
                 .as_slice()
                 .try_into()
-                .map_err(|_| Lane0Error::InvalidConfig(format!("pubkey must be 32 bytes in '{part}'")))?;
-            let stake: u64 = stake_str.trim().parse().map_err(|e| {
-                Lane0Error::InvalidConfig(format!("bad stake in '{part}': {e} — {FORMAT_HINT}"))
-            })?;
+                .map_err(|_| cfg_err(format!("pubkey must be 32 bytes in '{part}'")))?;
+            let stake: u64 = stake_str
+                .trim()
+                .parse()
+                .map_err(|e| cfg_err(format!("bad stake in '{part}': {e}")))?;
             entries.push((pubkey, stake));
         }
         Ok(Some(Self::new(entries)?))
