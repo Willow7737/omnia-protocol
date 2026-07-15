@@ -514,6 +514,13 @@ impl OmniaNetwork {
         let mut swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_quic()
+            // Wrap the transport in a DNS resolver so `/dns4/…` and
+            // `/dnsaddr/…` bootstrap multiaddrs resolve. Without this, the
+            // stock docker-compose testnet (whose peers dial the bootstrap by
+            // service name, e.g. `/dns4/omnia-bootstrap/udp/4001/quic-v1`)
+            // can never connect — the dial fails to resolve the hostname, so
+            // no gossip mesh forms and Kademlia reports `NoKnownPeers`.
+            .with_dns()?
             .with_relay_client(libp2p::noise::Config::new, libp2p::yamux::Config::default)?
             .with_behaviour(move |key, relay_client| {
                 let local_pid = PeerId::from(key.public());
