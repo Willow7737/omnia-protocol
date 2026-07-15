@@ -9,6 +9,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.83](https://github.com/Willow7737/omnia-protocol/compare/v0.1.82...v0.1.83) (2026-07-15)
+
+
+### Features
+
+* **consensus:** epoch-fenced Lane 0 validator rotation (ADR-025 Stage 4) ([#290](https://github.com/Willow7737/omnia-protocol/issues/290)) ([1c3d40d](https://github.com/Willow7737/omnia-protocol/commit/1c3d40d130d414aed75420f2b56fbd25cffcb9f4))
+* **consensus:** Lane 1-committed validator-set-change trigger (ADR-025) ([6731b93](https://github.com/Willow7737/omnia-protocol/commit/6731b9335fc34926fc4dd83ca1b2ce970d957d19))
+* **consensus:** Lane 1-committed validator-set-change trigger (ADR-025) ([71e4b14](https://github.com/Willow7737/omnia-protocol/commit/71e4b1441df1201c5786bb6b7ce6d2698dd14cf2))
+* **economics:** transfers become on-chain events (ADR-025 Lane 0, Step 1a) ([f150b34](https://github.com/Willow7737/omnia-protocol/commit/f150b34cc94382db0b86d4c7730b8d3deda9a34c))
+* **economics:** transfers become on-chain events (ADR-025 Lane 0, Step 1a) ([feb91e5](https://github.com/Willow7737/omnia-protocol/commit/feb91e59fe3531c63ec9c3880f637913043a92fc))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([3316c41](https://github.com/Willow7737/omnia-protocol/commit/3316c41931876e733bda34d465e797b27d143269))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([a17f3b4](https://github.com/Willow7737/omnia-protocol/commit/a17f3b48bb3d83ba41fb39bf031f0ecd3f561ec7))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([bfd50a3](https://github.com/Willow7737/omnia-protocol/commit/bfd50a3e29f6c7428deaace1c70214e2f69d98de))
+
+
+### Bug Fixes
+
+* **consensus:** bound the out-of-order buffer's creator map (H-4) ([ca2748e](https://github.com/Willow7737/omnia-protocol/commit/ca2748ef29d79d1c736e44ddacd3379572ff930b))
+* **consensus:** bound the out-of-order buffer's creator map (H-4) ([d137244](https://github.com/Willow7737/omnia-protocol/commit/d13724481144d5a4b787755dbd0f14ffe5332428))
+* restart-safe finalized_height + gossip keepalive ([#287](https://github.com/Willow7737/omnia-protocol/issues/287)) ([388a7e9](https://github.com/Willow7737/omnia-protocol/commit/388a7e909d475465de5bf97abbb2049231b64479))
+* restart-safe finalized_height + gossip keepalive ([#287](https://github.com/Willow7737/omnia-protocol/issues/287)) ([eccc69b](https://github.com/Willow7737/omnia-protocol/commit/eccc69b292068b8e6ffbbb3a5f3e367e7ee8b388))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([7dc0e51](https://github.com/Willow7737/omnia-protocol/commit/7dc0e51aa1fdaf709ab3a1e6e8d5cd16b0deb8e0))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([2e23131](https://github.com/Willow7737/omnia-protocol/commit/2e23131cabf184d3060e1b3861518e9f492d536d))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([51823c3](https://github.com/Willow7737/omnia-protocol/commit/51823c35d0beb003eb8ac5ec9bb6afc5da9dda9f))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([#296](https://github.com/Willow7737/omnia-protocol/issues/296)) ([1e2641e](https://github.com/Willow7737/omnia-protocol/commit/1e2641e30c7d0d1727caedb8252002889319ac55))
+
+
+### Refactoring
+
+* **economics:** single source of truth (Step 1b, resolves C4) ([3803ac4](https://github.com/Willow7737/omnia-protocol/commit/3803ac4e24d4a29265e220912db135e5eaf9c618))
+* **economics:** single source of truth (Step 1b, resolves C4) ([b328e2c](https://github.com/Willow7737/omnia-protocol/commit/b328e2c41ee5c0941fcd6563054501a1b076368b))
+
+
+### Documentation
+
+* **shards:** fix broken intra-doc links to EconomicsState ([c3b9983](https://github.com/Willow7737/omnia-protocol/commit/c3b9983bcc0bf5ebac83285582f369ae429ae442))
+
+
+### Tests
+
+* **consensus:** Lane 0 adversarial arena — property-based CI gate (ADR-025 Stage 5) ([8ae5f33](https://github.com/Willow7737/omnia-protocol/commit/8ae5f33fc691f28c9e7f2c5dc91224c19c4677f4))
+* **consensus:** Lane 0 adversarial arena — property-based CI gate (ADR-025 Stage 5) ([7aab14a](https://github.com/Willow7737/omnia-protocol/commit/7aab14a391e52e4cef53e44d29c118575a2d2e4d))
+* **substrate:** fix OMNIA_CONSENSUS_SEED test-isolation race in config construction ([#300](https://github.com/Willow7737/omnia-protocol/issues/300)) ([87cd3b8](https://github.com/Willow7737/omnia-protocol/commit/87cd3b8f282fe656213cc1308bf0c240925522fe))
+* **substrate:** route config construction through locked test_config helper ([537d89e](https://github.com/Willow7737/omnia-protocol/commit/537d89eec912e62b0b0153af823c568ef5a11d7b))
+* **substrate:** route config construction through locked test_config helper ([3e5ab42](https://github.com/Willow7737/omnia-protocol/commit/3e5ab42b75b7d76ffa652580c62a419fc167d852))
+
+
+### CI
+
+* TLC model-check gate for the TLA+ specs ([#295](https://github.com/Willow7737/omnia-protocol/issues/295)) ([ba0f908](https://github.com/Willow7737/omnia-protocol/commit/ba0f9082340517e1d1f2c9344338f35767293786))
+
 ## [0.1.82](https://github.com/Willow7737/omnia-protocol/compare/v0.1.81...v0.1.82) (2026-07-11)
 
 
