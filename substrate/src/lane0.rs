@@ -280,6 +280,12 @@ impl ValidatorSet {
     /// disabled), `Err` for a malformed one — a typo must fail loudly
     /// rather than silently disable finality.
     pub fn parse(spec: &str) -> Result<Option<Self>, Lane0Error> {
+        // Surfaced in every parse error so a malformed OMNIA_LANE0_VALIDATORS
+        // is diagnosable at a glance rather than via a cryptic hex error.
+        const FORMAT_HINT: &str = "expected a comma-separated list of \
+             `<64-hex-pubkey>:<stake>` entries (generate them with \
+             scripts/setup-validators.sh)";
+
         let spec = spec.trim();
         if spec.is_empty() {
             return Ok(None);
@@ -287,19 +293,35 @@ impl ValidatorSet {
         let mut entries = Vec::new();
         for part in spec.split(',') {
             let part = part.trim();
-            let (pk_hex, stake_str) = part
-                .split_once(':')
-                .ok_or_else(|| Lane0Error::InvalidConfig(format!("missing ':' in '{part}'")))?;
-            let pk_bytes = hex::decode(pk_hex.trim())
-                .map_err(|e| Lane0Error::InvalidConfig(format!("bad pubkey hex in '{part}': {e}")))?;
+            let (pk_hex, stake_str) = part.split_once(':').ok_or_else(|| {
+                Lane0Error::InvalidConfig(format!("missing ':' in '{part}' — {FORMAT_HINT}"))
+            })?;
+            let pk_hex = pk_hex.trim();
+            // A JWT (header.payload.signature) is the classic paste mistake
+            // here — the benchmark script mints one, and a stray redirect can
+            // land it in the env var. Name it directly instead of emitting a
+            // baffling "Invalid character '.'"/"'y'" hex error.
+            if pk_hex.contains('.') {
+                return Err(Lane0Error::InvalidConfig(format!(
+                    "'{pk_hex}' looks like a JWT, not an Ed25519 public key — {FORMAT_HINT}"
+                )));
+            }
+            if pk_hex.len() != 64 {
+                return Err(Lane0Error::InvalidConfig(format!(
+                    "pubkey must be 64 hex chars (32 bytes), got {} in '{part}' — {FORMAT_HINT}",
+                    pk_hex.len()
+                )));
+            }
+            let pk_bytes = hex::decode(pk_hex).map_err(|e| {
+                Lane0Error::InvalidConfig(format!("bad pubkey hex in '{part}': {e} — {FORMAT_HINT}"))
+            })?;
             let pubkey: [u8; 32] = pk_bytes
                 .as_slice()
                 .try_into()
                 .map_err(|_| Lane0Error::InvalidConfig(format!("pubkey must be 32 bytes in '{part}'")))?;
-            let stake: u64 = stake_str
-                .trim()
-                .parse()
-                .map_err(|e| Lane0Error::InvalidConfig(format!("bad stake in '{part}': {e}")))?;
+            let stake: u64 = stake_str.trim().parse().map_err(|e| {
+                Lane0Error::InvalidConfig(format!("bad stake in '{part}': {e} — {FORMAT_HINT}"))
+            })?;
             entries.push((pubkey, stake));
         }
         Ok(Some(Self::new(entries)?))
@@ -645,8 +667,24 @@ mod tests {
         // Malformed specs fail loudly.
         assert!(ValidatorSet::parse("nothex:1").is_err());
         assert!(ValidatorSet::parse(&format!("{pk_hex}:0")).is_err());
-        assert!(ValidatorSet::parse(&format!("{pk_hex}")).is_err());
+        assert!(ValidatorSet::parse(&pk_hex).is_err()); // missing ':<stake>'
         assert!(ValidatorSet::parse(&format!("{pk_hex}:abc")).is_err());
+
+        // A pasted JWT (the classic env-var mistake) fails with a targeted
+        // hint naming the JWT, not a cryptic hex error.
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.Wi4edhVq1tTAqS6MeC0";
+        let err = ValidatorSet::parse(&format!("{jwt}:1")).unwrap_err();
+        assert!(
+            err.to_string().contains("looks like a JWT"),
+            "JWT paste should be named explicitly, got: {err}"
+        );
+
+        // A wrong-length pubkey names the 64-hex-char expectation.
+        let short = ValidatorSet::parse("abcd:1").unwrap_err();
+        assert!(
+            short.to_string().contains("64 hex chars"),
+            "short pubkey should cite the 64-hex requirement, got: {short}"
+        );
     }
 
     #[test]
