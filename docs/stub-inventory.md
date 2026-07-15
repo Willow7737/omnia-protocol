@@ -155,11 +155,11 @@ The following items were identified during the v0.1.68 audit cycle but explicitl
 - **What's missing**: Module rename to reflect the actual (non-spec-compliant V1) construction; ECVRF V2 lives in `omnia-crypto/src/vrf.rs`
 - **Phase**: Deferred from v0.1.68 audit
 
-### LRU creator buffer (H-4 deferred) — **ANTI-SPAM** ⚠️
+### LRU creator buffer (H-4) — **ANTI-SPAM** ✅
 
-- **Status**: Deferred — bounded creator map for anti-spam
-- **What's missing**: Bounded LRU map limiting per-creator event backlog to prevent unbounded memory growth under adversarial load
-- **Phase**: Deferred from v0.1.68 audit
+- **File**: `omnia-consensus/src/causal_graph.rs` (`SequenceBuffer`)
+- **Status**: ✅ Implemented — the out-of-order buffer's creator map is bounded by `MAX_BUFFERED_CREATORS = 1024` with LRU eviction, on top of the existing `MAX_SEQUENCE_BUFFER_PER_CREATOR = 256` and `MAX_SEQUENCE_GAP = 512` bounds. Attacker-minted NodeIds can no longer grow the map without bound; worst-case buffer memory is `1024 × 256` events.
+- **Phase**: Deferred from v0.1.68 audit; landed post-ADR-025.
 
 ### Chaos test safety checker (H-11 deferred) — **AUTOMATION** ⚠️
 
@@ -179,6 +179,6 @@ The following items were identified during the v0.1.68 audit cycle but explicitl
 | Pipeline workers (C-8)              | —     | ⚠️ DEFERRED  | `node/src/pipeline.rs`              | v0.1.68 audit |
 | Asymmetric JWT (C-5)                | —     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
 | VRF rename (C-7)                    | 1     | ⚠️ DEFERRED  | `substrate/src/vrf.rs`              | v0.1.68 audit |
-| LRU creator buffer (H-4)            | 1     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
+| LRU creator buffer (H-4)            | 1     | ✅ DONE      | `omnia-consensus/src/causal_graph.rs` | v0.1.68 audit |
 | Chaos test safety checker (H-11)    | —     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
 | Substrate write lock scope (H-3)    | 1     | ⚠️ DEFERRED  | `substrate/src/consensus.rs`        | v0.1.68 audit |
