@@ -176,6 +176,44 @@ misinterpretation (comparing two different circuits).
 | iai-self-hosted | IAI gate, 1% threshold | 30 min |
 | zk-self-hosted | ZK multi-sample, 5% threshold | 60 min |
 
+## Live Multi-Node Testnet (ADR-025 Stage 2)
+
+First **real-network** (not simulated) propagation measurement, captured
+with `scripts/testnet-bench.sh` on 2026-07-17.
+
+**Topology:** 5 nodes (1 bootstrap + 4 workers), Docker Compose
+(`docker/docker-compose.yml`) on a single Hetzner host (16 GB,
+Ubuntu 26.04), QUIC transport over the compose bridge network, gossipsub
+mesh. Rate limit `OMNIA_RATE_LIMIT_RPS=1000` (HTTP);
+gossip per-peer limit at defaults (burst 200, 100 ev/s refill).
+Report: `bench-results/testnet-bench-20260717-094054.json`.
+
+| Metric | Value |
+|--------|-------|
+| Events submitted (to bootstrap) | 1,000 (16-way concurrency) |
+| HTTP submit rate | 460.8 ev/s (includes HTTP + JSON + node-side signing) |
+| Propagation | **100% on all 5 nodes** |
+| Convergence (submit node) | 4.25 s |
+| Convergence (4 peers) | 10.40–10.44 s |
+| Peer RSS during run | 33–42 MB |
+
+The ~10.4 s peer convergence matches the gossip backpressure model
+exactly: a 200-event burst is admitted immediately, the remaining 800
+drain at the 100 ev/s per-peer refill (≈8 s) — see the rate-limit
+deferral note in `omnia-network/src/gossip.rs`.
+
+This measurement follows four stacked networking fixes, each masked by
+the previous one (propagation was 0% before them): `/dns4` bootstrap
+addresses did not resolve (no DNS transport); no identify behaviour, so
+Kademlia never populated; the gossipsub mesh-deliveries penalty
+graylisted every quiet peer ~30 s after boot, collapsing the mesh; and
+the per-peer gossip rate limiter permanently dropped over-burst events
+instead of deferring them (capping propagation at 20%).
+
+> Methodology: numbers include HTTP/JSON overhead and are NOT comparable
+> to the in-process hot-path numbers above. Single-host containers mean
+> near-zero RTT; a geo-distributed run will be slower.
+
 ## Historical Baselines
 
 ### v0.1.48 (2026-05-23)

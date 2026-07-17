@@ -261,7 +261,24 @@ pub struct GossipProtocol {
     partition_active: bool,
     /// Per-peer rate limiter (token bucket).
     rate_limiter: RateLimiter,
+    /// Events that exceeded a peer's rate limit, held for retry on the next
+    /// processing round instead of being dropped. Bounded by
+    /// [`MAX_RATE_DEFERRED`]; beyond that events are dropped as before.
+    ///
+    /// Rationale: gossipsub delivers a message to a mesh peer exactly once —
+    /// an event dropped here is *permanently lost* to this node (no
+    /// redelivery), which turned the rate limiter into a data-loss mechanism
+    /// for honest bursts (e.g. a 1000-event burst from one peer capped at
+    /// `burst_capacity` inserted, the rest gone). Deferring converts the
+    /// limiter into backpressure: the burst drains at the refill rate over
+    /// subsequent rounds while memory stays bounded.
+    rate_deferred: VecDeque<(Box<Event>, PeerId)>,
 }
+
+/// Maximum events held for rate-limit retry (DoS bound for the internal
+/// `GossipProtocol::rate_deferred` queue). Oversized payloads are rejected
+/// before deferral, so worst-case memory is bounded by well-formed events.
+pub const MAX_RATE_DEFERRED: usize = 4096;
 
 impl GossipProtocol {
     /// Create a new gossip protocol instance
@@ -296,6 +313,7 @@ impl GossipProtocol {
             last_heartbeat: Instant::now(),
             partition_active: false,
             rate_limiter,
+            rate_deferred: VecDeque::new(),
         }
     }
 
@@ -664,25 +682,26 @@ impl GossipProtocol {
             self.network_rx = None;
         }
 
-        // Phase 2: Process drained events (validation, dedup, partition tracking)
-        for evt in drained {
+        // Phase 2: Process events — rate-limit-deferred retries from earlier
+        // rounds first (their tokens may have refilled; FIFO keeps ordering
+        // fair), then the freshly drained batch.
+        let mut work: Vec<DrainedEvent> = self
+            .rate_deferred
+            .drain(..)
+            .map(|(event, source)| DrainedEvent::Gossip { event, source })
+            .collect();
+        work.extend(drained);
+        for evt in work {
             match evt {
                 DrainedEvent::Gossip { event, source } => {
                     // Update last_seen for partition detection
                     self.last_seen.insert(source, Instant::now());
 
-                    // Rate limit check: hash PeerId bytes with domain separation
-                    let peer_id_bytes = blake3_hash_domain(b"omnia-nonce", &source.to_bytes());
-                    if !self.rate_limiter.allow(&peer_id_bytes) {
-                        warn!(peer = ?source, "Rate limiting peer — dropping event");
-                        self.stats.events_rejected += 1;
-                        continue;
-                    }
-
-                    // Defense-in-depth: reject oversized payloads BEFORE
-                    // any expensive crypto validation. The Event::validate()
-                    // also checks this, but the gossip layer enforces it
-                    // early to avoid wasted CPU on signature verification.
+                    // Defense-in-depth: reject oversized payloads BEFORE the
+                    // rate limiter (so junk never occupies deferred slots)
+                    // and before any expensive crypto validation.
+                    // Event::validate() also checks this, but the gossip
+                    // layer enforces it early to avoid wasted CPU.
                     if event.payload.len() > MAX_PAYLOAD_SIZE {
                         warn!(
                             size = event.payload.len(),
@@ -690,6 +709,25 @@ impl GossipProtocol {
                             "Gossip event rejected: payload exceeds MAX_PAYLOAD_SIZE"
                         );
                         self.stats.events_rejected += 1;
+                        continue;
+                    }
+
+                    // Rate limit check: hash PeerId bytes with domain
+                    // separation. Over-limit events are DEFERRED to the next
+                    // processing round (token bucket refills at
+                    // `max_events_per_second`), not dropped: gossipsub never
+                    // redelivers, so a drop here would lose the event on this
+                    // node permanently. Only when the bounded deferral queue
+                    // is itself full does the old drop behaviour kick in.
+                    let peer_id_bytes = blake3_hash_domain(b"omnia-nonce", &source.to_bytes());
+                    if !self.rate_limiter.allow(&peer_id_bytes) {
+                        if self.rate_deferred.len() < MAX_RATE_DEFERRED {
+                            tracing::debug!(peer = ?source, "Rate limiting peer — deferring event to next round");
+                            self.rate_deferred.push_back((event, source));
+                        } else {
+                            warn!(peer = ?source, "Rate limiting peer — deferral queue full, dropping event");
+                            self.stats.events_rejected += 1;
+                        }
                         continue;
                     }
 
@@ -1119,6 +1157,62 @@ mod tests {
 
         let g = gossip.graph().read().await;
         assert!(g.contains(&event_id));
+    }
+
+    #[tokio::test]
+    async fn test_rate_limited_events_deferred_not_dropped() {
+        use tokio::sync::mpsc;
+
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            // Tiny burst so 5 events from one peer overflow immediately. The
+            // refill must be much slower than the drain loop (1 token per
+            // 100ms vs ~µs per event) or tokens regenerate mid-drain and the
+            // limiter never trips; the sleeps below then span whole refills.
+            burst_capacity: 2,
+            max_events_per_second: 10,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+
+        let (tx, rx) = mpsc::channel(10);
+        gossip.network_rx = Some(rx);
+
+        let peer = PeerId::random();
+        for i in 0..5u8 {
+            let keypair = generate_keypair();
+            let mut event = Event::genesis(node(10 + i), vec![i]).expect("valid genesis event");
+            event.sign_with_keypair(&keypair).expect("signing");
+            tx.send(NetworkEvent::GossipReceived {
+                topic: "omnia_events".to_string(),
+                data: event.to_bytes().expect("serialize"),
+                propagation_source: peer,
+            })
+            .await
+            .expect("send should succeed");
+        }
+        drop(tx);
+
+        // Round 1: burst of 2 admitted, 3 deferred — and crucially NOT
+        // counted as rejected (they are not lost).
+        let inserted = gossip.process_pending_events().await.expect("process");
+        assert_eq!(inserted.len(), 2, "burst capacity admitted");
+        assert_eq!(gossip.rate_deferred.len(), 3, "overflow deferred, not dropped");
+        assert_eq!(gossip.stats().events_rejected, 0);
+
+        // Round 2 (after refill; tokens cap at burst_capacity=2).
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let inserted = gossip.process_pending_events().await.expect("process");
+        assert_eq!(inserted.len(), 2, "deferred events retried after refill");
+        assert_eq!(gossip.rate_deferred.len(), 1);
+
+        // Round 3: the last one lands. Nothing was ever lost.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let inserted = gossip.process_pending_events().await.expect("process");
+        assert_eq!(inserted.len(), 1, "final deferred event delivered");
+        assert!(gossip.rate_deferred.is_empty());
+        assert_eq!(gossip.stats().events_rejected, 0, "no event was dropped");
+        assert_eq!(gossip.graph().read().await.len(), 5, "all 5 events inserted");
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────
