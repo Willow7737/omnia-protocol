@@ -216,9 +216,22 @@ during the ~12 s submit window ≈ 5,300). Three workers converged at
 2,703 events (54.1%) — and **stayed there**, because events dropped at
 the gossip layer are never re-requested (no anti-entropy repair yet;
 tracked in issue #315). Practical guidance with default config:
-keep single-peer bursts ≤ 4,000 events, or raise
-`max_events_per_second`/`burst_capacity` in the gossip config for
-higher-throughput deployments.
+for full propagation in under 30 s, keep single-source bursts in the
+**2,000–3,000 event** range; the hard drop threshold sits near 4,500–5,000
+(one node in run C crossed it). For more, raise
+`max_events_per_second`/`burst_capacity` in the gossip config — or use
+the worker-mesh topology (now the compose default), which spreads
+ingest across multiple peers and multiplies the effective per-node rate
+limit.
+
+> Note on `finalized_total = 0`: these runs measured **DAG replication**,
+> not finality. All benchmark events are signed by the submit node (a
+> single creator), so Lane 1 rounds cannot advance (fame voting needs
+> events from ≥ 2f+1 distinct creators), and Lane 0 was disabled. To
+> measure real finality, enable the Lane 0 validator overlay
+> (`docker/docker-compose.lane0.yml` + `NODES=5
+> ./scripts/setup-validators.sh`) — quorum-acked events then feed
+> `omnia_node_events_finalized_total`.
 
 This measurement follows four stacked networking fixes, each masked by
 the previous one (propagation was 0% before them): `/dns4` bootstrap
