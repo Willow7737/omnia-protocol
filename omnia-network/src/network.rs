@@ -20,9 +20,11 @@
 //!
 //! # GossipSub Peer Scoring (H-5)
 //!
-//! Custom peer scoring tuned for Omnia's threat model, with heavy penalties
-//! for invalid messages and mesh delivery failures. See
-//! [`configure_gossipsub_scoring()`] and [`PeerScoreTracker`].
+//! Custom peer scoring tuned for Omnia's threat model: a heavy penalty for
+//! invalid messages plus rewards for first-delivery and time-in-mesh. The
+//! mesh-message-deliveries deficit penalty is intentionally disabled (it
+//! collapses low-traffic meshes — see [`configure_gossipsub_scoring()`]).
+//! See also [`PeerScoreTracker`].
 
 // The libp2p NetworkBehaviour derive macro generates an event enum without
 // doc comments on its variants, which triggers missing_docs. Allow it here
@@ -246,13 +248,31 @@ pub fn configure_gossipsub_scoring() -> (PeerScoreParams, PeerScoreThresholds) {
         first_message_deliveries_weight: 1.0,
         first_message_deliveries_decay: 0.99,
         first_message_deliveries_cap: 100.0,
-        mesh_message_deliveries_weight: -50.0,
+        // Mesh-message-deliveries penalty DISABLED (weight 0).
+        //
+        // This penalty assumes every mesh peer delivers at least
+        // `mesh_message_deliveries_threshold` messages per window. On a low-
+        // or bursty-traffic topic no honest peer meets that bar, so once the
+        // 30s activation elapses every mesh peer is scored
+        // `weight * deficit^2` (with the old -50 weight and a full deficit of
+        // 10 that is -5000), driven far below `graylist_threshold` (-100), and
+        // pruned across all topics — collapsing the mesh ~30s after it forms
+        // and never recovering. libp2p documents this parameter as only safe
+        // with reliable, high message rates; Omnia's event/heartbeat topics
+        // are neither, so it is left off. Anti-spam is retained via the
+        // invalid-message penalty below and per-event signature validation.
+        //
+        // libp2p skips validation of the companion fields when the weight is
+        // 0, so the remaining values here are inert.
+        mesh_message_deliveries_weight: 0.0,
         mesh_message_deliveries_decay: 0.99,
         mesh_message_deliveries_threshold: 10.0,
         mesh_message_deliveries_cap: 100.0,
         mesh_message_deliveries_window: std::time::Duration::from_millis(100),
         mesh_message_deliveries_activation: std::time::Duration::from_secs(30),
-        mesh_failure_penalty_weight: -50.0,
+        // Mesh-failure penalty also disabled: it is derived from the same
+        // deliveries tracking and would likewise punish quiet honest peers.
+        mesh_failure_penalty_weight: 0.0,
         mesh_failure_penalty_decay: 0.99,
         invalid_message_deliveries_weight: -150.0,
         invalid_message_deliveries_decay: 0.999,
