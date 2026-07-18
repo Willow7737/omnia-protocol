@@ -20,9 +20,11 @@
 //!
 //! # GossipSub Peer Scoring (H-5)
 //!
-//! Custom peer scoring tuned for Omnia's threat model, with heavy penalties
-//! for invalid messages and mesh delivery failures. See
-//! [`configure_gossipsub_scoring()`] and [`PeerScoreTracker`].
+//! Custom peer scoring tuned for Omnia's threat model: a heavy penalty for
+//! invalid messages plus rewards for first-delivery and time-in-mesh. The
+//! mesh-message-deliveries deficit penalty is intentionally disabled (it
+//! collapses low-traffic meshes — see [`configure_gossipsub_scoring()`]).
+//! See also [`PeerScoreTracker`].
 
 // The libp2p NetworkBehaviour derive macro generates an event enum without
 // doc comments on its variants, which triggers missing_docs. Allow it here
@@ -246,13 +248,31 @@ pub fn configure_gossipsub_scoring() -> (PeerScoreParams, PeerScoreThresholds) {
         first_message_deliveries_weight: 1.0,
         first_message_deliveries_decay: 0.99,
         first_message_deliveries_cap: 100.0,
-        mesh_message_deliveries_weight: -50.0,
+        // Mesh-message-deliveries penalty DISABLED (weight 0).
+        //
+        // This penalty assumes every mesh peer delivers at least
+        // `mesh_message_deliveries_threshold` messages per window. On a low-
+        // or bursty-traffic topic no honest peer meets that bar, so once the
+        // 30s activation elapses every mesh peer is scored
+        // `weight * deficit^2` (with the old -50 weight and a full deficit of
+        // 10 that is -5000), driven far below `graylist_threshold` (-100), and
+        // pruned across all topics — collapsing the mesh ~30s after it forms
+        // and never recovering. libp2p documents this parameter as only safe
+        // with reliable, high message rates; Omnia's event/heartbeat topics
+        // are neither, so it is left off. Anti-spam is retained via the
+        // invalid-message penalty below and per-event signature validation.
+        //
+        // libp2p skips validation of the companion fields when the weight is
+        // 0, so the remaining values here are inert.
+        mesh_message_deliveries_weight: 0.0,
         mesh_message_deliveries_decay: 0.99,
         mesh_message_deliveries_threshold: 10.0,
         mesh_message_deliveries_cap: 100.0,
         mesh_message_deliveries_window: std::time::Duration::from_millis(100),
         mesh_message_deliveries_activation: std::time::Duration::from_secs(30),
-        mesh_failure_penalty_weight: -50.0,
+        // Mesh-failure penalty also disabled: it is derived from the same
+        // deliveries tracking and would likewise punish quiet honest peers.
+        mesh_failure_penalty_weight: 0.0,
         mesh_failure_penalty_decay: 0.99,
         invalid_message_deliveries_weight: -150.0,
         invalid_message_deliveries_decay: 0.999,
@@ -407,6 +427,10 @@ pub struct OmniaBehaviour {
     pub req_res: libp2p::request_response::cbor::Behaviour<Vec<u8>, Vec<u8>>,
     /// Kademlia DHT for wide-area peer discovery
     pub kademlia: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>,
+    /// Identify — exchanges listen addresses and supported protocols so
+    /// Kademlia can populate its routing table (without it Kademlia has no
+    /// known peers and DHT discovery never bootstraps).
+    pub identify: libp2p::identify::Behaviour,
     /// AutoNAT for NAT type detection
     pub autonat: libp2p::autonat::Behaviour,
     /// Relay client for NAT traversal
@@ -514,6 +538,13 @@ impl OmniaNetwork {
         let mut swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_quic()
+            // Wrap the transport in a DNS resolver so `/dns4/…` and
+            // `/dnsaddr/…` bootstrap multiaddrs resolve. Without this, the
+            // stock docker-compose testnet (whose peers dial the bootstrap by
+            // service name, e.g. `/dns4/omnia-bootstrap/udp/4001/quic-v1`)
+            // can never connect — the dial fails to resolve the hostname, so
+            // no gossip mesh forms and Kademlia reports `NoKnownPeers`.
+            .with_dns()?
             .with_relay_client(libp2p::noise::Config::new, libp2p::yamux::Config::default)?
             .with_behaviour(move |key, relay_client| {
                 let local_pid = PeerId::from(key.public());
@@ -546,6 +577,13 @@ impl OmniaNetwork {
                     }
                 }
 
+                // Identify: advertise our protocols/addresses and learn peers'
+                // so Kademlia can route. Uses the same libp2p keypair.
+                let identify = libp2p::identify::Behaviour::new(
+                    libp2p::identify::Config::new("/omnia/id/1.0.0".to_string(), key.public())
+                        .with_agent_version(format!("omnia-node/{}", env!("CARGO_PKG_VERSION"))),
+                );
+
                 // AutoNAT for NAT detection
                 let autonat = libp2p::autonat::Behaviour::new(local_pid, autonat_config);
 
@@ -557,6 +595,7 @@ impl OmniaNetwork {
                     mdns,
                     req_res,
                     kademlia,
+                    identify,
                     autonat,
                     relay_client,
                     dcutr,
@@ -765,6 +804,22 @@ impl OmniaNetwork {
                     }
                     _ => {}
                 }
+            }
+            // Identify event handling — feed a peer's advertised listen
+            // addresses into Kademlia's routing table. Without this the
+            // routing table stays empty (`bootstrap()` → NoKnownPeers) and
+            // peers never discover each other beyond the initial dial, so the
+            // gossip mesh cannot grow past a star around the bootstrap.
+            SwarmEvent::Behaviour(OmniaBehaviourEvent::Identify(libp2p::identify::Event::Received {
+                peer_id,
+                info,
+                ..
+            })) => {
+                for addr in info.listen_addrs {
+                    self.swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
+                    self.known_peers.insert(peer_id, addr);
+                }
+                tracing::debug!(peer = %peer_id, "Identify: added peer addresses to Kademlia");
             }
             // AutoNAT event handling — log NAT status changes
             SwarmEvent::Behaviour(OmniaBehaviourEvent::Autonat(libp2p::autonat::Event::StatusChanged { old, new })) => {

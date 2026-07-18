@@ -11,7 +11,7 @@ rust-version = { workspace = true }
 [dependencies]
 omnia-primitives = { path = "../omnia-primitives" }
 omnia-consensus = { path = "../omnia-consensus" }
-libp2p = { version = "0.56", optional = true, features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
+libp2p = { version = "0.56", optional = true, features = ["quic", "kad", "gossipsub", "mdns", "identify", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
 tokio = { version = "1.35", features = ["sync", "rt", "time"], optional = true }
 snap = "1"
 tracing = "0.1"
@@ -30,7 +30,7 @@ snapshot = []
 
 [dev-dependencies]
 omnia-crypto = { path = "../omnia-crypto" }
-libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
+libp2p = { version = "0.56", features = ["quic", "kad", "gossipsub", "mdns", "identify", "noise", "yamux", "tcp", "dns", "macros", "request-response", "cbor", "tokio", "autonat", "relay", "dcutr"] }
 tokio = { version = "1.35", features = ["macros", "rt", "time", "rt-multi-thread"] }
 tokio-test = "0.4"
 tempfile = "3"

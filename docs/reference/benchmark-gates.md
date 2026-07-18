@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-09
+> Last Updated: 2026-07-18
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -175,6 +175,120 @@ misinterpretation (comparing two different circuits).
 | criterion-self-hosted | N=10 multi-sample, 5% threshold | 90 min |
 | iai-self-hosted | IAI gate, 1% threshold | 30 min |
 | zk-self-hosted | ZK multi-sample, 5% threshold | 60 min |
+
+## Live Multi-Node Testnet (ADR-025 Stage 2)
+
+First **real-network** (not simulated) propagation measurements, captured
+with `scripts/testnet-bench.sh` on 2026-07-17 against stock `dev`.
+
+**Topology:** 5 nodes (1 bootstrap + 4 workers), Docker Compose
+(`docker/docker-compose.yml`) on a single Hetzner host (16 GB,
+Ubuntu 26.04), QUIC transport over the compose bridge network. Workers
+connect to the bootstrap (star); gossipsub floods through the hub. Rate
+limit `OMNIA_RATE_LIMIT_RPS=1000` (HTTP); gossip per-peer limit at
+defaults (burst 200, 100 ev/s refill, deferral queue 4096).
+Reports: `bench-results/testnet-bench-20260717-16*.json`.
+
+### Load matrix
+
+| Run | Events | Conc. | Submit rate | Propagation | Peer convergence |
+|-----|--------|-------|-------------|-------------|------------------|
+| A1 | 1,000 | 16 | 465.1 ev/s | 100% ×5 | 10.38–10.43 s |
+| A2 | 1,000 | 16 | 485.4 ev/s | 100% ×5 | 10.28–10.32 s |
+| A3 | 1,000 | 16 | 497.5 ev/s | 100% ×5 | 10.23–10.28 s |
+| B | 2,000 | 32 | 449.4 ev/s | 100% ×5 | 20.99–21.04 s |
+| C | 5,000 | 32 | 431.4 ev/s | 100% ×4, **54.1% ×1** | 50.60–50.64 s |
+
+**Standard load (A, n=3):** submit **482.7 ± 16 ev/s**; peers converge in
+**10.3 ± 0.1 s**; submit node in ~4.2 s. Peer RSS 33–42 MB (1k), 62–73 MB
+(5k).
+
+**Scaling (A→B):** peer convergence is linear in burst size, matching the
+gossip backpressure model exactly — a 200-event burst is admitted
+immediately, the remainder drains at the 100 ev/s per-peer refill
+(1,000 ev → ~10 s; 2,000 ev → ~21 s). See the rate-limit deferral note in
+`omnia-network/src/gossip.rs`.
+
+**Capacity ceiling (C):** a single-source burst of 5,000 events sits at
+the edge of per-peer capacity (burst 200 + deferral queue 4,096 + refill
+during the ~12 s submit window ≈ 5,300). Three workers converged at
+100% in ~50.6 s; one worker's deferral queue overflowed and it capped at
+2,703 events (54.1%) — and **stayed there**, because events dropped at
+the gossip layer are never re-requested (no anti-entropy repair yet;
+tracked in issue #315). Practical guidance with default config:
+for full propagation in under 30 s, keep single-source bursts in the
+**2,000–3,000 event** range; the hard drop threshold sits near 4,500–5,000
+(one node in run C crossed it). For more, raise
+`max_events_per_second`/`burst_capacity` in the gossip config — or use
+the worker-mesh topology (now the compose default), which spreads
+ingest across multiple peers and multiplies the effective per-node rate
+limit.
+
+> Note on `finalized_total = 0`: these runs measured **DAG replication**,
+> not finality. All benchmark events are signed by the submit node (a
+> single creator), so Lane 1 rounds cannot advance (fame voting needs
+> events from ≥ 2f+1 distinct creators), and Lane 0 was disabled. To
+> measure real finality, enable the Lane 0 validator overlay
+> (`docker/docker-compose.lane0.yml` + `NODES=5
+> ./scripts/setup-validators.sh`) — quorum-acked events then feed
+> `omnia_node_events_finalized_total`.
+
+This measurement follows four stacked networking fixes, each masked by
+the previous one (propagation was 0% before them): `/dns4` bootstrap
+addresses did not resolve (no DNS transport); no identify behaviour, so
+Kademlia never populated; the gossipsub mesh-deliveries penalty
+graylisted every quiet peer ~30 s after boot, collapsing the mesh; and
+the per-peer gossip rate limiter permanently dropped over-burst events
+instead of deferring them (capping propagation at 20%).
+
+### 2026-07-18 — worker mesh + out-of-window deferral + Lane 0 finality
+
+Two follow-up runs on the mesh topology (same host/stack, 2,000 events,
+32-way concurrency), after the out-of-window deferral fix. The first
+mesh run WITHOUT that fix lost ~half of every worker's events to
+`SequenceGapTooLarge` hard-rejects — multi-path delivery reorders a
+single creator's burst across per-peer rate-limit buckets, and events
+leapfrogged past the 512-sequence window were permanently dropped. With
+the fix (out-of-window events defer and retry), the mesh is strictly
+better than the star:
+
+| Run | Topology | Propagation | Peer convergence | finalized_total |
+|-----|----------|-------------|------------------|-----------------|
+| star (07-17 B) | star | 100% ×5 | 21.0 s | 0 (Lane 0 off) |
+| mesh, no fix | mesh | **50–53% ×4, stalled** | — | 0 |
+| mesh + deferral fix | mesh | 100% ×5 | **14.8–16.9 s** | 0 (Lane 0 off) |
+| mesh + fix + Lane 0 | mesh (partial, post-restart) | 100% ×5 | 6.9–17.1 s | **2000/1922/1922/2000/2000** |
+
+The last row is the first measurement of **real consensus finality on a
+live network**: all 5 nodes ran as Lane 0 validators
+(`docker-compose.lane0.yml` + `setup-validators.sh`), every event
+collected a ≥4-of-5 quorum of signed acks, and
+`omnia_node_events_finalized_total` reached 2,000 on three nodes at
+snapshot time (the two 1,922 readings are sampling lag — certificates
+are grow-only CRDTs folded once per 1 s round; they reach 2,000 moments
+later and can never decrease).
+
+**5,000-event stress re-run (mesh + Lane 0, 2026-07-18):** 100%
+propagation on all 5 nodes AND `finalized_total = 5000` on every node —
+full quorum finality at 5k scale. Convergence: ingress 14.0 s, peers
+38.5–44.6 s; RSS 65–74 MB. The same burst on the star topology (run C,
+07-17) permanently lost 46% of one node's events. Report:
+`testnet-bench-20260718-110251.json`.
+
+Since these runs, gossip **anti-entropy repair** (issue #315, PR #320)
+has merged: nodes exchange frontier digests every 10 s and re-request
+missing events, so bounded-queue losses now self-heal instead of
+stalling a node permanently.
+
+Operational note: validator keys mounted into the containers must be
+readable by uid 1000 (the container user) — `setup-validators.sh` now
+chowns them when run as root. An unreadable key silently degrades to an
+ephemeral identity (`this_node_is_validator=false`) and finality stays
+at zero while propagation looks healthy.
+
+> Methodology: numbers include HTTP/JSON overhead and are NOT comparable
+> to the in-process hot-path numbers above. Single-host containers mean
+> near-zero RTT; a geo-distributed run will be slower.
 
 ## Historical Baselines
 

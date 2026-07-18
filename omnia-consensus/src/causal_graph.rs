@@ -111,6 +111,15 @@ impl SequenceBuffer {
         }
     }
 
+    /// Whether buffering `sequence` for `creator` would be rejected with
+    /// [`CausalGraphError::SequenceBufferOverflow`] (per-creator buffer at
+    /// capacity and the sequence not already buffered).
+    fn would_overflow(&self, creator: &NodeId, sequence: u64) -> bool {
+        self.buffers
+            .get(creator)
+            .is_some_and(|buf| buf.len() >= MAX_SEQUENCE_BUFFER_PER_CREATOR && !buf.contains_key(&sequence))
+    }
+
     /// Evict the least-recently-buffered creator's entire buffer (H-4).
     ///
     /// Called only when a *new* creator would exceed [`MAX_BUFFERED_CREATORS`].
@@ -778,6 +787,30 @@ impl CausalGraph {
     /// buffer. Bounded by `MAX_BUFFERED_CREATORS` (H-4).
     pub fn buffered_creator_count(&self) -> usize {
         self.seq_buffer.tracked_creators()
+    }
+
+    /// Whether inserting `event` right now would be rejected by the
+    /// out-of-order bounds — either the sequence gap cap
+    /// ([`CausalGraphError::SequenceGapTooLarge`]) or a full per-creator
+    /// buffer ([`CausalGraphError::SequenceBufferOverflow`]).
+    ///
+    /// Multi-path gossip delivery reorders events, so an event can arrive
+    /// far ahead of its creator's chain head while its predecessors are
+    /// still in flight. Both rejections are *permanent* from the graph's
+    /// perspective; callers that can retry later (e.g. the gossip layer's
+    /// deferral queue) should use this pre-check to hold such events back
+    /// instead of losing them to a hard reject.
+    pub fn insert_would_reject_out_of_order(&self, event: &Event) -> bool {
+        let has_existing = self.node_sequences.contains_key(&event.creator);
+        let last_known = self.node_sequences.get(&event.creator).copied().unwrap_or(0);
+        let expected_next = if has_existing { last_known + 1 } else { 0 };
+        if event.sequence <= expected_next {
+            return false;
+        }
+        if event.sequence - expected_next > MAX_SEQUENCE_GAP {
+            return true;
+        }
+        self.seq_buffer.would_overflow(&event.creator, event.sequence)
     }
 
     /// Check if `ancestor` is an ancestor of `descendant`.

@@ -280,6 +280,17 @@ impl ValidatorSet {
     /// disabled), `Err` for a malformed one — a typo must fail loudly
     /// rather than silently disable finality.
     pub fn parse(spec: &str) -> Result<Option<Self>, Lane0Error> {
+        // The expected shape, appended to every parse error so a malformed
+        // OMNIA_LANE0_VALIDATORS is diagnosable at a glance rather than via a
+        // cryptic hex error. Plain ASCII (no em-dash) keeps line widths — and
+        // therefore rustfmt wrapping — deterministic across toolchains.
+        const FORMAT_HINT: &str = "expected `<64-hex-pubkey>:<stake>` entries \
+             (generate them with scripts/setup-validators.sh)";
+        // Build an InvalidConfig error with the format hint appended. Keeping
+        // this a short helper lets every call site stay well under the width
+        // limit, so no error string needs multi-line wrapping.
+        let cfg_err = |msg: String| Lane0Error::InvalidConfig(format!("{msg}; {FORMAT_HINT}"));
+
         let spec = spec.trim();
         if spec.is_empty() {
             return Ok(None);
@@ -289,17 +300,32 @@ impl ValidatorSet {
             let part = part.trim();
             let (pk_hex, stake_str) = part
                 .split_once(':')
-                .ok_or_else(|| Lane0Error::InvalidConfig(format!("missing ':' in '{part}'")))?;
-            let pk_bytes = hex::decode(pk_hex.trim())
-                .map_err(|e| Lane0Error::InvalidConfig(format!("bad pubkey hex in '{part}': {e}")))?;
+                .ok_or_else(|| cfg_err(format!("missing ':' in '{part}'")))?;
+            let pk_hex = pk_hex.trim();
+            // A JWT (header.payload.signature) is the classic paste mistake
+            // here: the benchmark script mints one, and a stray redirect can
+            // land it in the env var. Name it directly instead of emitting a
+            // baffling "Invalid character '.'/'y'" hex error.
+            if pk_hex.contains('.') {
+                return Err(cfg_err(format!(
+                    "'{pk_hex}' looks like a JWT, not an Ed25519 public key"
+                )));
+            }
+            if pk_hex.len() != 64 {
+                let n = pk_hex.len();
+                return Err(cfg_err(format!(
+                    "pubkey must be 64 hex chars (32 bytes), got {n} in '{part}'"
+                )));
+            }
+            let pk_bytes = hex::decode(pk_hex).map_err(|e| cfg_err(format!("bad pubkey hex in '{part}': {e}")))?;
             let pubkey: [u8; 32] = pk_bytes
                 .as_slice()
                 .try_into()
-                .map_err(|_| Lane0Error::InvalidConfig(format!("pubkey must be 32 bytes in '{part}'")))?;
+                .map_err(|_| cfg_err(format!("pubkey must be 32 bytes in '{part}'")))?;
             let stake: u64 = stake_str
                 .trim()
                 .parse()
-                .map_err(|e| Lane0Error::InvalidConfig(format!("bad stake in '{part}': {e}")))?;
+                .map_err(|e| cfg_err(format!("bad stake in '{part}': {e}")))?;
             entries.push((pubkey, stake));
         }
         Ok(Some(Self::new(entries)?))
@@ -645,8 +671,24 @@ mod tests {
         // Malformed specs fail loudly.
         assert!(ValidatorSet::parse("nothex:1").is_err());
         assert!(ValidatorSet::parse(&format!("{pk_hex}:0")).is_err());
-        assert!(ValidatorSet::parse(&format!("{pk_hex}")).is_err());
+        assert!(ValidatorSet::parse(&pk_hex).is_err()); // missing ':<stake>'
         assert!(ValidatorSet::parse(&format!("{pk_hex}:abc")).is_err());
+
+        // A pasted JWT (the classic env-var mistake) fails with a targeted
+        // hint naming the JWT, not a cryptic hex error.
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.Wi4edhVq1tTAqS6MeC0";
+        let err = ValidatorSet::parse(&format!("{jwt}:1")).unwrap_err();
+        assert!(
+            err.to_string().contains("looks like a JWT"),
+            "JWT paste should be named explicitly, got: {err}"
+        );
+
+        // A wrong-length pubkey names the 64-hex-char expectation.
+        let short = ValidatorSet::parse("abcd:1").unwrap_err();
+        assert!(
+            short.to_string().contains("64 hex chars"),
+            "short pubkey should cite the 64-hex requirement, got: {short}"
+        );
     }
 
     #[test]

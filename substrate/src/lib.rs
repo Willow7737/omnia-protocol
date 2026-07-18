@@ -911,6 +911,10 @@ impl Substrate {
                 // eventually exceeds the partition threshold and the mesh
                 // dissolves. No-op unless a heartbeat is due.
                 gossip.maybe_send_heartbeat().await;
+                // Anti-entropy (issue #315): periodically advertise our DAG
+                // frontier so peers that lost events to bounded-queue drops
+                // can request and recover them.
+                gossip.maybe_send_sync_digest().await;
             }
             self.unprocessed_events.extend(newly_inserted.iter().copied());
 

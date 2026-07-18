@@ -47,7 +47,7 @@ The Omnia stack is no longer only a codebase — it is **running in production (
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (single node, v0.1.76+, protocol `/omnia/4.0.0`) |
+| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (5-node meshed validator network, v0.1.76+, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -64,6 +64,19 @@ curl https://78.47.43.136.sslip.io/api/v1/node/info
 ```
 
 The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
+
+**July 2026 network milestones** (measured live, not simulated — see
+[benchmark-gates.md](docs/reference/benchmark-gates.md)):
+
+- **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
+  100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
+- **Real BFT finality (ADR-025 Lane 0)** — every event collects a
+  quorum of signed validator acks: 5,000/5,000 events finalized across
+  all 5 validators in the latest stress run.
+- **Self-healing anti-entropy** — nodes exchange frontier digests and
+  automatically repair any events lost to bounded-queue drops.
+- Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
+  `OmniaCRDT`) model-checked in CI on every PR.
 
 ---
 

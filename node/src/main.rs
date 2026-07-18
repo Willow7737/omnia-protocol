@@ -490,6 +490,8 @@ async fn spawn_background_tasks(
         let mut last_dag_total: u64 = 0;
         #[cfg(feature = "metrics")]
         let mut last_committed: u64 = 0;
+        #[cfg(feature = "metrics")]
+        let mut last_lane0_finalized: u64 = 0;
 
         loop {
             tokio::select! {
@@ -520,6 +522,22 @@ async fn spawn_background_tasks(
                             node_metrics.events_finalized.inc_by(delta);
                             node_metrics.consensus_tps.inc_by(delta);
                             last_committed = stats.committed;
+                        }
+                        // Lane 0 fast-path finality (ADR-025): quorum-acked
+                        // events are just as final as Lane 1 commits, so they
+                        // feed the same finalized counter. Without this, a
+                        // single-writer workload (e.g. the testnet benchmark
+                        // submitting through one node) reports zero finality
+                        // even with Lane 0 fully operational — Lane 1 rounds
+                        // can only advance with events from 2f+1 distinct
+                        // creators.
+                        if let Some((_, _, lane0_finalized)) = substrate.lane0_stats() {
+                            if lane0_finalized > last_lane0_finalized {
+                                let delta = lane0_finalized - last_lane0_finalized;
+                                node_metrics.events_finalized.inc_by(delta);
+                                node_metrics.consensus_tps.inc_by(delta);
+                                last_lane0_finalized = lane0_finalized;
+                            }
                         }
                         node_metrics.consensus_round.set(substrate.current_round() as i64);
                         node_metrics.sample_memory_rss();
@@ -645,6 +663,11 @@ async fn spawn_background_tasks(
                     // alive so partition detection doesn't evict quiet peers.
                     if let Err(e) = network.subscribe(omnia_network::gossip::HEARTBEAT_TOPIC) {
                         tracing::warn!(error = %e, "Failed to subscribe to heartbeat topic");
+                    }
+                    // Anti-entropy repair (issue #315): digests, event
+                    // requests, and repair batches ride this topic.
+                    if let Err(e) = network.subscribe(omnia_network::gossip::SYNC_TOPIC) {
+                        tracing::warn!(error = %e, "Failed to subscribe to sync topic");
                     }
 
                     // Wire the network into the substrate's gossip protocol.
