@@ -82,6 +82,17 @@ done
 # Keys are secrets — never commit them.
 chmod -R go-rwx "$KEYS_DIR" 2>/dev/null || true
 
+# The docker images run the node as uid 1000 (user `omnia`). When this
+# script runs as root (typical on a server), root-owned go-rwx keys are
+# unreadable inside the containers — the node then silently falls back to
+# an ephemeral keypair, logs `this_node_is_validator=false`, every Lane 0
+# ack is rejected as "unknown validator", and finality never happens.
+# Hand the keys to the container uid so the mounted OMNIA_NODE_KEY_FILE
+# actually loads.
+if [[ "$(id -u)" == "0" ]]; then
+  chown -R 1000:1000 "$KEYS_DIR" 2>/dev/null || true
+fi
+
 VALIDATORS="$(IFS=,; echo "${ENTRIES[*]}")"
 
 # ── 3. Write docker/.env (preserve existing, update our keys) ───────────────

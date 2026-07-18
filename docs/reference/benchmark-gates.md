@@ -241,6 +241,39 @@ graylisted every quiet peer ~30 s after boot, collapsing the mesh; and
 the per-peer gossip rate limiter permanently dropped over-burst events
 instead of deferring them (capping propagation at 20%).
 
+### 2026-07-18 — worker mesh + out-of-window deferral + Lane 0 finality
+
+Two follow-up runs on the mesh topology (same host/stack, 2,000 events,
+32-way concurrency), after the out-of-window deferral fix. The first
+mesh run WITHOUT that fix lost ~half of every worker's events to
+`SequenceGapTooLarge` hard-rejects — multi-path delivery reorders a
+single creator's burst across per-peer rate-limit buckets, and events
+leapfrogged past the 512-sequence window were permanently dropped. With
+the fix (out-of-window events defer and retry), the mesh is strictly
+better than the star:
+
+| Run | Topology | Propagation | Peer convergence | finalized_total |
+|-----|----------|-------------|------------------|-----------------|
+| star (07-17 B) | star | 100% ×5 | 21.0 s | 0 (Lane 0 off) |
+| mesh, no fix | mesh | **50–53% ×4, stalled** | — | 0 |
+| mesh + deferral fix | mesh | 100% ×5 | **14.8–16.9 s** | 0 (Lane 0 off) |
+| mesh + fix + Lane 0 | mesh (partial, post-restart) | 100% ×5 | 6.9–17.1 s | **2000/1922/1922/2000/2000** |
+
+The last row is the first measurement of **real consensus finality on a
+live network**: all 5 nodes ran as Lane 0 validators
+(`docker-compose.lane0.yml` + `setup-validators.sh`), every event
+collected a ≥4-of-5 quorum of signed acks, and
+`omnia_node_events_finalized_total` reached 2,000 on three nodes at
+snapshot time (the two 1,922 readings are sampling lag — certificates
+are grow-only CRDTs folded once per 1 s round; they reach 2,000 moments
+later and can never decrease).
+
+Operational note: validator keys mounted into the containers must be
+readable by uid 1000 (the container user) — `setup-validators.sh` now
+chowns them when run as root. An unreadable key silently degrades to an
+ephemeral identity (`this_node_is_validator=false`) and finality stays
+at zero while propagation looks healthy.
+
 > Methodology: numbers include HTTP/JSON overhead and are NOT comparable
 > to the in-process hot-path numbers above. Single-host containers mean
 > near-zero RTT; a geo-distributed run will be slower.
