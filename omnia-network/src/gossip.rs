@@ -46,6 +46,20 @@ const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
 /// liveness and discard the payload — it never reaches consensus.
 pub const HEARTBEAT_TOPIC: &str = "omnia_heartbeat";
 
+/// Gossipsub topic for anti-entropy sync (digests, event requests, and
+/// repair batches). See [`GossipProtocol::maybe_send_sync_digest`].
+pub const SYNC_TOPIC: &str = "omnia_sync";
+
+/// Wire-format version byte for [`SYNC_TOPIC`] messages.
+pub const SYNC_WIRE_VERSION: u8 = 1;
+
+/// Maximum events served in one anti-entropy repair batch (DoS bound;
+/// also the cap applied to incoming batches).
+pub const SYNC_BATCH_LIMIT: usize = 256;
+
+/// Maximum accepted size of a serialized sync message (DoS bound).
+pub const MAX_SYNC_MESSAGE_BYTES: usize = 512 * 1024;
+
 /// Maximum buffered auxiliary-topic messages (non-event topics such as
 /// Lane 0 ack batches). When full, the oldest message is dropped —
 /// auxiliary protocols must tolerate loss (Lane 0 certificates are
@@ -106,6 +120,14 @@ pub struct GossipConfig {
     /// Burst capacity (max tokens) per peer.
     #[serde(default = "default_burst_capacity")]
     pub burst_capacity: u32,
+    /// Interval in milliseconds between anti-entropy sync digests on
+    /// [`SYNC_TOPIC`] (issue #315). Peers whose frontier lags a received
+    /// digest request the missing events and the digest sender serves
+    /// them, so events lost at any layer (rate-limit drops, deferral
+    /// overflow, delivery gaps) are eventually repaired. `0` disables
+    /// anti-entropy. Default: 10000 ms.
+    #[serde(default = "default_sync_interval")]
+    pub sync_interval_ms: u64,
 }
 
 fn default_partition_threshold() -> u64 {
@@ -124,6 +146,10 @@ fn default_burst_capacity() -> u32 {
     200
 }
 
+fn default_sync_interval() -> u64 {
+    10_000
+}
+
 impl Default for GossipConfig {
     fn default() -> Self {
         Self {
@@ -139,6 +165,7 @@ impl Default for GossipConfig {
             heartbeat_interval_ms: DEFAULT_HEARTBEAT_INTERVAL_MS,
             max_events_per_second: 100,
             burst_capacity: 200,
+            sync_interval_ms: default_sync_interval(),
         }
     }
 }
@@ -281,6 +308,12 @@ pub struct GossipProtocol {
     /// limiter into backpressure: the burst drains at the refill rate over
     /// subsequent rounds while memory stays bounded.
     rate_deferred: VecDeque<(Box<Event>, PeerId)>,
+    /// When this node last published an anti-entropy digest on [`SYNC_TOPIC`].
+    last_sync_digest: Instant,
+    /// When this node last sent an anti-entropy event request (rate gate).
+    last_sync_request: Instant,
+    /// When this node last served an anti-entropy repair batch (rate gate).
+    last_sync_response: Instant,
 }
 
 /// Maximum events held for rate-limit retry (DoS bound for the internal
@@ -303,6 +336,9 @@ impl GossipProtocol {
             max_normal: config.max_pending,
             max_low: per_level,
         };
+        let backdated = Instant::now()
+            .checked_sub(std::time::Duration::from_millis(config.sync_interval_ms))
+            .unwrap_or_else(Instant::now);
         Self {
             node_id,
             config,
@@ -322,6 +358,11 @@ impl GossipProtocol {
             partition_active: false,
             rate_limiter,
             rate_deferred: VecDeque::new(),
+            // Backdate the sync clocks so the first digest/request/response
+            // after startup is not gated behind a full interval.
+            last_sync_digest: backdated,
+            last_sync_request: backdated,
+            last_sync_response: backdated,
         }
     }
 
@@ -823,6 +864,13 @@ impl GossipProtocol {
                     if topic == HEARTBEAT_TOPIC {
                         continue;
                     }
+                    // Anti-entropy sync messages are handled entirely inside
+                    // the gossip layer (issue #315) — never forwarded to the
+                    // substrate aux queue.
+                    if topic == SYNC_TOPIC {
+                        self.handle_sync_message(data, source).await;
+                        continue;
+                    }
                     // Bounded buffer: drop the oldest message when full.
                     if self.aux_messages.len() >= MAX_AUX_MESSAGES {
                         self.aux_messages.pop_front();
@@ -952,6 +1000,180 @@ impl GossipProtocol {
 
         if let Err(e) = self.publish_raw(HEARTBEAT_TOPIC, payload).await {
             tracing::debug!("Heartbeat publish failed: {e}");
+        }
+    }
+
+    /// Publish an anti-entropy digest on [`SYNC_TOPIC`] if one is due
+    /// (issue #315).
+    ///
+    /// The digest carries this node's DAG frontier. A peer whose own
+    /// frontier is ahead for any creator will be asked (via
+    /// [`GossipMessage::Request`]) for the missing events, which it serves
+    /// as a bounded [`GossipMessage::Events`] batch. Repaired events
+    /// re-enter through the deferral queue, so they pass the FULL normal
+    /// admission pipeline (rate limit, size, signature validation,
+    /// sequence-window check, dedup) — anti-entropy adds no new trust
+    /// surface. This is the recovery path for events lost to bounded-queue
+    /// drops: without it such losses are permanent, because gossipsub
+    /// delivers each message at most once.
+    pub async fn maybe_send_sync_digest(&mut self) {
+        let interval = self.config.sync_interval_ms;
+        if interval == 0
+            || self.network_cmd_tx.is_none()
+            || self.connected_peers.is_empty()
+            || self.last_sync_digest.elapsed().as_millis() < u128::from(interval)
+        {
+            return;
+        }
+        self.last_sync_digest = Instant::now();
+
+        let (frontier, event_count) = {
+            let graph = self.graph.read().await;
+            (graph.frontier().clone(), graph.len())
+        };
+        let digest = GossipMessage::Digest(GossipDigest {
+            node_id: self.node_id,
+            frontier,
+            event_count,
+            recent_events: Vec::new(),
+        });
+        self.publish_sync_message(&digest).await;
+    }
+
+    /// Serialize and publish a sync message on [`SYNC_TOPIC`].
+    async fn publish_sync_message(&mut self, msg: &GossipMessage) {
+        let bytes = match postcard::to_allocvec(msg) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("Failed to serialize sync message: {e}");
+                return;
+            }
+        };
+        let mut payload = vec![SYNC_WIRE_VERSION];
+        payload.extend(bytes);
+        if let Err(e) = self.publish_raw(SYNC_TOPIC, payload).await {
+            tracing::debug!("Sync publish failed: {e}");
+        }
+    }
+
+    /// Handle one message received on [`SYNC_TOPIC`].
+    async fn handle_sync_message(&mut self, data: Vec<u8>, source: PeerId) {
+        if self.config.sync_interval_ms == 0 || data.len() > MAX_SYNC_MESSAGE_BYTES {
+            return;
+        }
+        let msg: GossipMessage = match data.split_first() {
+            Some((&SYNC_WIRE_VERSION, rest)) => match postcard::from_bytes(rest) {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::debug!("Undecodable sync message: {e}");
+                    return;
+                }
+            },
+            _ => return,
+        };
+        let interval = u128::from(self.config.sync_interval_ms);
+
+        match msg {
+            GossipMessage::Digest(digest) => {
+                if digest.node_id == self.node_id {
+                    return;
+                }
+                // Are we missing anything the digest sender has? Compare
+                // frontiers per creator; any entry where theirs is ahead
+                // means events exist that we never received.
+                let our_frontier = self.graph.read().await.frontier().clone();
+                let behind = digest
+                    .frontier
+                    .nodes()
+                    .any(|n| digest.frontier.get(n) > our_frontier.get(n));
+                if !behind {
+                    return;
+                }
+                // Rate-gate outgoing requests to one per sync interval.
+                if self.last_sync_request.elapsed().as_millis() < interval {
+                    return;
+                }
+                self.last_sync_request = Instant::now();
+                tracing::info!(peer = ?source, "Anti-entropy: frontier behind peer digest — requesting missing events");
+                let request = GossipMessage::Request(EventRequest {
+                    known_events: Vec::new(),
+                    limit: SYNC_BATCH_LIMIT,
+                    since: our_frontier,
+                });
+                self.publish_sync_message(&request).await;
+            }
+            GossipMessage::Request(request) => {
+                // Rate-gate served batches to one per sync interval.
+                if self.last_sync_response.elapsed().as_millis() < interval {
+                    return;
+                }
+                let limit = request.limit.min(SYNC_BATCH_LIMIT);
+                let (missing, tip_clock, has_more) = {
+                    let graph = self.graph.read().await;
+                    let tip = graph.frontier().clone();
+                    let mut missing: Vec<Event> = Vec::new();
+                    let mut truncated = false;
+                    // Per-creator: the requester's clock entry n means it
+                    // holds sequences 0..n-1 (clock convention: own entry =
+                    // sequence + 1), so serve sequences >= n.
+                    let creators: Vec<NodeId> = tip.nodes().copied().collect();
+                    'outer: for creator in creators {
+                        let since = request.since.get(&creator);
+                        if tip.get(&creator) <= since {
+                            continue;
+                        }
+                        let mut events: Vec<&Event> = graph
+                            .by_creator(&creator)
+                            .into_iter()
+                            .filter(|e| e.sequence + 1 > since)
+                            .collect();
+                        events.sort_by_key(|e| e.sequence);
+                        for ev in events {
+                            if missing.len() >= limit {
+                                truncated = true;
+                                break 'outer;
+                            }
+                            missing.push(ev.clone());
+                        }
+                    }
+                    (missing, tip, truncated)
+                };
+                if missing.is_empty() {
+                    return;
+                }
+                self.last_sync_response = Instant::now();
+                tracing::info!(
+                    peer = ?source,
+                    events = missing.len(),
+                    "Anti-entropy: serving repair batch"
+                );
+                let batch = GossipMessage::Events(EventBatch {
+                    events: missing,
+                    has_more,
+                    tip_clock,
+                });
+                self.publish_sync_message(&batch).await;
+            }
+            GossipMessage::Events(batch) => {
+                // Repaired events re-enter through the deferral queue and
+                // are re-processed by the normal admission pipeline next
+                // round — full validation, no shortcuts.
+                let mut queued = 0usize;
+                for event in batch.events.into_iter().take(SYNC_BATCH_LIMIT) {
+                    if self.rate_deferred.len() >= MAX_RATE_DEFERRED {
+                        break;
+                    }
+                    self.rate_deferred.push_back((Box::new(event), source));
+                    queued += 1;
+                }
+                if queued > 0 {
+                    self.stats.syncs_completed += 1;
+                    self.stats.total_events_in_syncs += queued as u64;
+                    self.stats.total_syncs += 1;
+                    tracing::info!(events = queued, "Anti-entropy: queued repair batch for admission");
+                }
+            }
+            GossipMessage::Ack(_) => {}
         }
     }
 
@@ -1345,6 +1567,167 @@ mod tests {
         // window and inserts. Nothing was lost to the reorder.
         gossip.process_pending_events().await.expect("process");
         assert_eq!(gossip.graph().read().await.len(), 600, "no event was lost to reorder");
+        assert!(gossip.rate_deferred.is_empty());
+        assert_eq!(gossip.stats().events_rejected, 0);
+    }
+
+    // ── Anti-entropy sync tests (issue #315) ───────────────────────────
+
+    /// Decode helper for sync-topic publishes.
+    fn decode_sync(data: &[u8]) -> GossipMessage {
+        assert_eq!(data[0], SYNC_WIRE_VERSION);
+        postcard::from_bytes(&data[1..]).expect("decodable sync message")
+    }
+
+    /// Build a signed chain of `n` events from one creator.
+    ///
+    /// The creator ID must be derived from the signing key exactly as
+    /// `sign_with_keypair` derives it (it rewrites `event.creator`), so
+    /// the vector clocks built here stay keyed consistently with the
+    /// creator the graph indexes under.
+    fn signed_chain(n: u64) -> (NodeId, Vec<Event>) {
+        let keypair = generate_keypair();
+        let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
+        let mut chain: Vec<Event> = Vec::new();
+        for seq in 0..n {
+            let mut ev = if seq == 0 {
+                Event::genesis(creator, vec![1]).expect("genesis")
+            } else {
+                Event::new(
+                    creator,
+                    seq,
+                    VectorClock::with_node(creator, seq + 1),
+                    Some(chain[(seq - 1) as usize].id),
+                    None,
+                    vec![1],
+                )
+                .expect("valid event")
+            };
+            ev.sign_with_keypair(&keypair).expect("signing");
+            chain.push(ev);
+        }
+        (creator, chain)
+    }
+
+    /// Wrap a sync message in the wire format used on SYNC_TOPIC.
+    fn sync_wire(msg: &GossipMessage) -> Vec<u8> {
+        let mut payload = vec![SYNC_WIRE_VERSION];
+        payload.extend(postcard::to_allocvec(msg).expect("serialize"));
+        payload
+    }
+
+    #[tokio::test]
+    async fn test_sync_digest_behind_triggers_request() {
+        use tokio::sync::mpsc;
+
+        // Empty local graph; a peer digest advertises a frontier we lack.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            sync_interval_ms: 1,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+
+        let digest = GossipMessage::Digest(GossipDigest {
+            node_id: node(9),
+            frontier: VectorClock::with_node(node(9), 5),
+            event_count: 5,
+            recent_events: Vec::new(),
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        gossip.handle_sync_message(sync_wire(&digest), PeerId::random()).await;
+
+        match cmd_rx.try_recv() {
+            Ok(NetworkCommand::Publish { topic, data }) => {
+                assert_eq!(topic, SYNC_TOPIC);
+                match decode_sync(&data) {
+                    GossipMessage::Request(req) => {
+                        assert_eq!(req.limit, SYNC_BATCH_LIMIT);
+                        assert_eq!(req.since.get(&node(9)), 0, "empty local frontier");
+                    }
+                    other => panic!("expected Request, got {other:?}"),
+                }
+            }
+            other => panic!("expected sync Publish, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sync_request_served_with_missing_events() {
+        use tokio::sync::mpsc;
+
+        // Local graph holds a 5-event chain; a request with an empty
+        // frontier should be served all of it.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let (creator, chain) = signed_chain(5);
+        {
+            let mut g = graph.write().await;
+            for ev in &chain {
+                g.insert(ev.clone()).expect("insert");
+            }
+        }
+        let config = GossipConfig {
+            sync_interval_ms: 1,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+
+        assert_eq!(gossip.graph().read().await.by_creator(&creator).len(), 5);
+        let request = GossipMessage::Request(EventRequest {
+            known_events: Vec::new(),
+            limit: SYNC_BATCH_LIMIT,
+            since: VectorClock::new(),
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        gossip.handle_sync_message(sync_wire(&request), PeerId::random()).await;
+
+        match cmd_rx.try_recv() {
+            Ok(NetworkCommand::Publish { topic, data }) => {
+                assert_eq!(topic, SYNC_TOPIC);
+                match decode_sync(&data) {
+                    GossipMessage::Events(batch) => {
+                        assert_eq!(batch.events.len(), 5, "all missing events served");
+                        assert!(!batch.has_more);
+                        let seqs: Vec<u64> = batch.events.iter().map(|e| e.sequence).collect();
+                        assert_eq!(seqs, vec![0, 1, 2, 3, 4], "deterministic order");
+                    }
+                    other => panic!("expected Events, got {other:?}"),
+                }
+            }
+            other => panic!("expected sync Publish, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sync_repair_batch_inserted_via_admission_pipeline() {
+        // A repair batch enters the deferral queue and is admitted through
+        // the normal pipeline on the next processing round.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            sync_interval_ms: 1,
+            burst_capacity: 100_000,
+            max_events_per_second: 100_000,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+
+        let (creator, chain) = signed_chain(4);
+        let batch = GossipMessage::Events(EventBatch {
+            events: chain,
+            has_more: false,
+            tip_clock: VectorClock::with_node(creator, 4),
+        });
+        gossip.handle_sync_message(sync_wire(&batch), PeerId::random()).await;
+        assert_eq!(gossip.rate_deferred.len(), 4, "repair batch queued for admission");
+        assert_eq!(gossip.stats().total_events_in_syncs, 4);
+
+        // Next round: the deferred repair events pass the full pipeline.
+        gossip.process_pending_events().await.expect("process");
+        assert_eq!(gossip.graph().read().await.len(), 4, "repaired events inserted");
         assert!(gossip.rate_deferred.is_empty());
         assert_eq!(gossip.stats().events_rejected, 0);
     }
