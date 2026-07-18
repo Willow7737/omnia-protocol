@@ -293,15 +293,35 @@ response gate and batch size were both global/small. `finalized_total`
 being identical across nodes is correct — the finality CRDT tracks the
 ≥4-of-5-quorum floor, which cannot exceed propagation.
 
-**Repair-throughput fix (PR pending):** the serve-side rate gate is now
-**per requesting peer** (each behind node is answered once per interval
-instead of one node globally), the batch size cap is **1,024 events**
-(byte-budgeted to 1 MiB so large-payload events truncate cleanly), and
-the receive cap is **2 MiB** (previously 512 KiB could not even carry one
-maximum-payload event). Combined this raises repair throughput by roughly
-an order of magnitude, so a 10k-scale deficit heals in a handful of
-intervals rather than dribbling out. Regression tests cover per-peer
+**Repair-throughput fix (PR #325, merged):** the serve-side rate gate is
+now **per requesting peer** (each behind node is answered once per
+interval instead of one node globally), the batch size cap is **1,024
+events** (byte-budgeted to 1 MiB so large-payload events truncate
+cleanly), and the receive cap is **2 MiB** (previously 512 KiB could not
+even carry one maximum-payload event). Regression tests cover per-peer
 gating and byte-budget truncation (`omnia-network/src/gossip.rs`).
+
+**10k re-run on #325 exposed the real bottleneck — a deferral-queue
+deadlock:** with the throughput fix live, the four workers still wedged at
+**59.1–65.1%** for the full 600 s window. Node logs showed repair *active*
+(42 requests, 69 batches served) yet every batch queued exactly
+`events=66` of 1,024, alongside **2,666 "deferral queue full — dropping"**
+warnings. Root cause: the bounded `rate_deferred` queue (cap 4,096) was
+FIFO with drop-on-full and no notion of distance-to-frontier. A burst —
+amplified by mesh fan-out re-delivering the same events from four peers
+*before* the dedup check — saturated it with far-future, out-of-window
+events that cannot be admitted until the gap below them fills. Repair
+batches carrying the low-sequence gap-fillers were then starved of slots,
+so the frontier never advanced: a hard priority-inversion deadlock, not
+slow convergence.
+
+**Deferral-queue priority fix:** `defer_event()` now keeps the
+queue biased toward the events nearest each creator's frontier — when
+full, a lower-sequence event *displaces* the highest-sequence queued entry
+instead of being dropped; a farther-future event is dropped instead. This
+guarantees repair gap-fillers always get a slot, so the frontier always
+advances and the deficit drains. Regression test
+`test_defer_event_evicts_farthest_from_frontier` locks the invariant.
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
