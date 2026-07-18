@@ -55,10 +55,34 @@ pub const SYNC_WIRE_VERSION: u8 = 1;
 
 /// Maximum events served in one anti-entropy repair batch (DoS bound;
 /// also the cap applied to incoming batches).
-pub const SYNC_BATCH_LIMIT: usize = 256;
+///
+/// Sized so a node that has fallen well behind (e.g. a 10k-event burst
+/// stress test) drains its deficit in a handful of sync rounds rather
+/// than dribbling out 256 events per interval per peer. Byte size is
+/// additionally bounded by [`SYNC_BATCH_MAX_BYTES`], so a batch of large
+/// events truncates by bytes before hitting this count.
+pub const SYNC_BATCH_LIMIT: usize = 1024;
+
+/// Soft byte budget for the events carried in a single repair batch.
+/// The serving loop stops adding events once this is reached (always
+/// serving at least one event, so a lone max-payload event still gets
+/// repaired). Kept comfortably under [`MAX_SYNC_MESSAGE_BYTES`] to leave
+/// room for the batch envelope and postcard framing.
+pub const SYNC_BATCH_MAX_BYTES: usize = 1024 * 1024;
+
+/// Fixed per-event overhead (creator, signature, parents, vector clock,
+/// framing) added to each event's payload length when accumulating the
+/// [`SYNC_BATCH_MAX_BYTES`] budget. A generous estimate — the goal is a
+/// cheap upper bound that keeps the serialized batch under the receive
+/// cap without serializing each event to measure it.
+const SYNC_EVENT_OVERHEAD: usize = 256;
 
 /// Maximum accepted size of a serialized sync message (DoS bound).
-pub const MAX_SYNC_MESSAGE_BYTES: usize = 512 * 1024;
+///
+/// Must exceed [`omnia_primitives::MAX_PAYLOAD_SIZE`] (1 MiB) so that a
+/// single maximum-payload event can always be carried in a repair batch;
+/// a smaller cap silently made large events unrepairable via anti-entropy.
+pub const MAX_SYNC_MESSAGE_BYTES: usize = 2 * 1024 * 1024;
 
 /// Maximum buffered auxiliary-topic messages (non-event topics such as
 /// Lane 0 ack batches). When full, the oldest message is dropped —
@@ -312,9 +336,27 @@ pub struct GossipProtocol {
     last_sync_digest: Instant,
     /// When this node last sent an anti-entropy event request (rate gate).
     last_sync_request: Instant,
-    /// When this node last served an anti-entropy repair batch (rate gate).
-    last_sync_response: Instant,
+    /// When this node last served an anti-entropy repair batch to a given
+    /// peer (per-peer rate gate).
+    ///
+    /// A single global timer let one requester monopolize the interval:
+    /// with N peers behind, only one received a repair batch per
+    /// `sync_interval_ms`, so a large deficit took N times longer to heal.
+    /// Gating per source lets the server answer every requesting peer once
+    /// per interval. Bounded by [`MAX_SYNC_RESPONSE_PEERS`] with stale-entry
+    /// pruning so a churning network cannot grow it without limit.
+    last_sync_response: HashMap<PeerId, Instant>,
 }
+
+/// Cap on the per-peer [`GossipProtocol::last_sync_response`] map. When
+/// exceeded, entries older than [`STALE_SYNC_RESPONSE_INTERVALS`] sync
+/// intervals are pruned. Peers request at most once per interval, so this
+/// bounds memory at a few dozen bytes per recently-served peer.
+const MAX_SYNC_RESPONSE_PEERS: usize = 4096;
+
+/// A `last_sync_response` entry older than this many sync intervals is
+/// eligible for pruning (the peer has not requested repair in a long while).
+const STALE_SYNC_RESPONSE_INTERVALS: u32 = 10;
 
 /// Maximum events held for rate-limit retry (DoS bound for the internal
 /// `GossipProtocol::rate_deferred` queue). Oversized payloads are rejected
@@ -358,11 +400,13 @@ impl GossipProtocol {
             partition_active: false,
             rate_limiter,
             rate_deferred: VecDeque::new(),
-            // Backdate the sync clocks so the first digest/request/response
-            // after startup is not gated behind a full interval.
+            // Backdate the sync clocks so the first digest/request after
+            // startup is not gated behind a full interval.
             last_sync_digest: backdated,
             last_sync_request: backdated,
-            last_sync_response: backdated,
+            // Empty per-peer map: absence means "never served this peer",
+            // so the first request from any peer is answered immediately.
+            last_sync_response: HashMap::new(),
         }
     }
 
@@ -1056,6 +1100,21 @@ impl GossipProtocol {
         }
     }
 
+    /// Record that a repair batch was just served to `source`, pruning the
+    /// per-peer response map if it has grown past [`MAX_SYNC_RESPONSE_PEERS`].
+    fn record_sync_response(&mut self, source: PeerId) {
+        let now = Instant::now();
+        if self.last_sync_response.len() >= MAX_SYNC_RESPONSE_PEERS && !self.last_sync_response.contains_key(&source) {
+            let stale = self
+                .config
+                .sync_interval_ms
+                .saturating_mul(u64::from(STALE_SYNC_RESPONSE_INTERVALS));
+            self.last_sync_response
+                .retain(|_, t| (t.elapsed().as_millis() as u64) < stale);
+        }
+        self.last_sync_response.insert(source, now);
+    }
+
     /// Handle one message received on [`SYNC_TOPIC`].
     async fn handle_sync_message(&mut self, data: Vec<u8>, source: PeerId) {
         if self.config.sync_interval_ms == 0 || data.len() > MAX_SYNC_MESSAGE_BYTES {
@@ -1103,15 +1162,20 @@ impl GossipProtocol {
                 self.publish_sync_message(&request).await;
             }
             GossipMessage::Request(request) => {
-                // Rate-gate served batches to one per sync interval.
-                if self.last_sync_response.elapsed().as_millis() < interval {
-                    return;
+                // Rate-gate served batches to one per sync interval *per
+                // requesting peer*, so one requester can't monopolize the
+                // interval and starve the others.
+                if let Some(last) = self.last_sync_response.get(&source) {
+                    if last.elapsed().as_millis() < interval {
+                        return;
+                    }
                 }
                 let limit = request.limit.min(SYNC_BATCH_LIMIT);
                 let (missing, tip_clock, has_more) = {
                     let graph = self.graph.read().await;
                     let tip = graph.frontier().clone();
                     let mut missing: Vec<Event> = Vec::new();
+                    let mut bytes_used = 0usize;
                     let mut truncated = false;
                     // Per-creator: the requester's clock entry n means it
                     // holds sequences 0..n-1 (clock convention: own entry =
@@ -1133,6 +1197,15 @@ impl GossipProtocol {
                                 truncated = true;
                                 break 'outer;
                             }
+                            // Byte budget: keep the serialized batch under
+                            // the receive cap. Always include at least one
+                            // event so a lone large event is still repaired.
+                            let est = ev.payload.len() + SYNC_EVENT_OVERHEAD;
+                            if !missing.is_empty() && bytes_used + est > SYNC_BATCH_MAX_BYTES {
+                                truncated = true;
+                                break 'outer;
+                            }
+                            bytes_used += est;
                             missing.push(ev.clone());
                         }
                     }
@@ -1141,7 +1214,7 @@ impl GossipProtocol {
                 if missing.is_empty() {
                     return;
                 }
-                self.last_sync_response = Instant::now();
+                self.record_sync_response(source);
                 tracing::info!(
                     peer = ?source,
                     events = missing.len(),
@@ -1730,6 +1803,128 @@ mod tests {
         assert_eq!(gossip.graph().read().await.len(), 4, "repaired events inserted");
         assert!(gossip.rate_deferred.is_empty());
         assert_eq!(gossip.stats().events_rejected, 0);
+    }
+
+    #[tokio::test]
+    async fn test_sync_response_gated_per_peer_not_globally() {
+        use tokio::sync::mpsc;
+
+        // Local graph holds a chain; two distinct peers each request repair
+        // within the same (long) sync interval. Both must be served — the
+        // old single global response timer would have answered only the
+        // first and starved the second until the next interval.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let (_creator, chain) = signed_chain(5);
+        {
+            let mut g = graph.write().await;
+            for ev in &chain {
+                g.insert(ev.clone()).expect("insert");
+            }
+        }
+        let config = GossipConfig {
+            sync_interval_ms: 60_000,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(8);
+        gossip.network_cmd_tx = Some(cmd_tx);
+
+        let request = GossipMessage::Request(EventRequest {
+            known_events: Vec::new(),
+            limit: SYNC_BATCH_LIMIT,
+            since: VectorClock::new(),
+        });
+        let peer_a = PeerId::random();
+        let peer_b = PeerId::random();
+        gossip.handle_sync_message(sync_wire(&request), peer_a).await;
+        gossip.handle_sync_message(sync_wire(&request), peer_b).await;
+
+        let mut served = 0;
+        while let Ok(NetworkCommand::Publish { topic, data }) = cmd_rx.try_recv() {
+            assert_eq!(topic, SYNC_TOPIC);
+            if let GossipMessage::Events(batch) = decode_sync(&data) {
+                assert_eq!(batch.events.len(), 5);
+                served += 1;
+            }
+        }
+        assert_eq!(served, 2, "both distinct peers served within one interval");
+
+        // A second request from peer_a inside the interval is now gated.
+        gossip.handle_sync_message(sync_wire(&request), peer_a).await;
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "same peer re-request gated within the interval"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sync_response_truncates_by_byte_budget() {
+        use tokio::sync::mpsc;
+
+        // A chain of large-payload events must truncate the repair batch on
+        // the byte budget well before the 1024-event count cap, keeping the
+        // serialized message under MAX_SYNC_MESSAGE_BYTES.
+        let payload_bytes = 300 * 1024; // 300 KiB per event
+        let keypair = generate_keypair();
+        let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        {
+            let mut g = graph.write().await;
+            let mut prev: Option<EventId> = None;
+            for seq in 0..8u64 {
+                let mut ev = if seq == 0 {
+                    Event::genesis(creator, vec![7u8; payload_bytes]).expect("genesis")
+                } else {
+                    Event::new(
+                        creator,
+                        seq,
+                        VectorClock::with_node(creator, seq + 1),
+                        prev,
+                        None,
+                        vec![7u8; payload_bytes],
+                    )
+                    .expect("valid event")
+                };
+                ev.sign_with_keypair(&keypair).expect("signing");
+                prev = Some(ev.id);
+                g.insert(ev).expect("insert");
+            }
+        }
+        let config = GossipConfig {
+            sync_interval_ms: 1,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(4);
+        gossip.network_cmd_tx = Some(cmd_tx);
+
+        let request = GossipMessage::Request(EventRequest {
+            known_events: Vec::new(),
+            limit: SYNC_BATCH_LIMIT,
+            since: VectorClock::new(),
+        });
+        gossip.handle_sync_message(sync_wire(&request), PeerId::random()).await;
+
+        match cmd_rx.try_recv() {
+            Ok(NetworkCommand::Publish { topic, data }) => {
+                assert_eq!(topic, SYNC_TOPIC);
+                assert!(
+                    data.len() <= MAX_SYNC_MESSAGE_BYTES,
+                    "serialized batch stays under the receive cap: {} bytes",
+                    data.len()
+                );
+                match decode_sync(&data) {
+                    GossipMessage::Events(batch) => {
+                        // 300 KiB * 4 = 1.2 MiB > 1 MiB budget; the 4th event
+                        // tips over, so exactly 3 fit.
+                        assert_eq!(batch.events.len(), 3, "truncated on byte budget");
+                        assert!(batch.has_more, "more events remain after truncation");
+                    }
+                    other => panic!("expected Events, got {other:?}"),
+                }
+            }
+            other => panic!("expected sync Publish, got {other:?}"),
+        }
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────

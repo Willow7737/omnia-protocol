@@ -280,6 +280,29 @@ has merged: nodes exchange frontier digests every 10 s and re-request
 missing events, so bounded-queue losses now self-heal instead of
 stalling a node permanently.
 
+**10,000-event stress re-run (mesh + Lane 0, 2026-07-18):** ingress
+accepted 10,000/10,000 in 26.3 s; anti-entropy repair was provably alive
+(digest/request/serve/queue logs on every node, 0 sequence-gap rejects,
+16 deferral-full events all recovered) and no event was permanently
+lost — but propagation converged too slowly for the run window, with the
+four non-source nodes parked at **62.9–66.0%** and `finalized_total`
+pinned at 6,379 on all five nodes (the quorum/propagation floor, not a
+finality bug). Root cause: repair funnelled through the one node holding
+the full tail at a single 256-event batch per 10 s interval, because the
+response gate and batch size were both global/small. `finalized_total`
+being identical across nodes is correct — the finality CRDT tracks the
+≥4-of-5-quorum floor, which cannot exceed propagation.
+
+**Repair-throughput fix (PR pending):** the serve-side rate gate is now
+**per requesting peer** (each behind node is answered once per interval
+instead of one node globally), the batch size cap is **1,024 events**
+(byte-budgeted to 1 MiB so large-payload events truncate cleanly), and
+the receive cap is **2 MiB** (previously 512 KiB could not even carry one
+maximum-payload event). Combined this raises repair throughput by roughly
+an order of magnitude, so a 10k-scale deficit heals in a handful of
+intervals rather than dribbling out. Regression tests cover per-peer
+gating and byte-budget truncation (`omnia-network/src/gossip.rs`).
+
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
 chowns them when run as root. An unreadable key silently degrades to an
