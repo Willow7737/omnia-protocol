@@ -685,6 +685,58 @@ impl GossipProtocol {
         }
     }
 
+    /// Defer an event for retry on a later processing round, keeping the
+    /// bounded queue biased toward the events closest to their creator's
+    /// frontier (lowest sequence).
+    ///
+    /// When the queue has room the event is simply appended. When it is
+    /// full, the incoming event *displaces* the highest-sequence queued
+    /// event — but only if it is itself closer to the frontier (strictly
+    /// lower sequence); otherwise it is dropped as the farthest.
+    ///
+    /// Rationale: with plain FIFO drop-on-full, a burst (amplified by mesh
+    /// fan-out re-delivering the same events from several peers) saturates
+    /// the queue with *far-future, out-of-window* events. Those cannot be
+    /// admitted until the gap below them is filled, so they never leave the
+    /// queue — and the near-frontier gap-fillers that anti-entropy repair
+    /// serves get dropped for lack of a slot. The frontier then never
+    /// advances and propagation deadlocks (observed live: a 10k burst wedged
+    /// at ~60% with repair batches able to queue only ~66 of 1024 events).
+    /// Evicting the highest-sequence event guarantees the queue always
+    /// retains the most-admissible events, so the frontier can always move;
+    /// the evicted far-future events are re-served by repair (or re-gossiped)
+    /// once the gap below them closes.
+    ///
+    /// Returns `true` if the event is now queued (possibly via eviction),
+    /// `false` if it was dropped as the farthest-from-frontier.
+    fn defer_event(&mut self, event: Box<Event>, source: PeerId) -> bool {
+        if self.rate_deferred.len() < MAX_RATE_DEFERRED {
+            self.rate_deferred.push_back((event, source));
+            return true;
+        }
+        // Queue full: locate the highest-sequence entry (the least likely to
+        // become admissible soon) and displace it if this event is closer to
+        // the frontier. Linear scan is fine — it runs only while saturated
+        // and the queue is a few thousand entries of integer comparisons.
+        let mut max_idx = 0usize;
+        let mut max_seq = 0u64;
+        for (i, (ev, _)) in self.rate_deferred.iter().enumerate() {
+            if ev.sequence >= max_seq {
+                max_seq = ev.sequence;
+                max_idx = i;
+            }
+        }
+        if event.sequence < max_seq {
+            // swap_remove_back is O(1); deferral order does not matter for
+            // correctness (every entry is retried each round regardless).
+            self.rate_deferred.swap_remove_back(max_idx);
+            self.rate_deferred.push_back((event, source));
+            true
+        } else {
+            false
+        }
+    }
+
     /// Process pending events: first drain network_rx into the pending queue,
     /// then insert all pending events into the graph.
     ///
@@ -814,9 +866,8 @@ impl GossipProtocol {
                     // is itself full does the old drop behaviour kick in.
                     let peer_id_bytes = blake3_hash_domain(b"omnia-nonce", &source.to_bytes());
                     if !self.rate_limiter.allow(&peer_id_bytes) {
-                        if self.rate_deferred.len() < MAX_RATE_DEFERRED {
+                        if self.defer_event(event, source) {
                             tracing::debug!(peer = ?source, "Rate limiting peer — deferring event to next round");
-                            self.rate_deferred.push_back((event, source));
                         } else {
                             warn!(peer = ?source, "Rate limiting peer — deferral queue full, dropping event");
                             self.stats.events_rejected += 1;
@@ -854,17 +905,11 @@ impl GossipProtocol {
                     // succeeds. (Observed live: a 2,000-event mesh benchmark
                     // lost ~half its events to gap rejects without this.)
                     if self.graph.read().await.insert_would_reject_out_of_order(&event) {
-                        if self.rate_deferred.len() < MAX_RATE_DEFERRED {
-                            tracing::debug!(
-                                seq = event.sequence,
-                                "Event ahead of creator chain — deferring to next round"
-                            );
-                            self.rate_deferred.push_back((event, source));
+                        let seq = event.sequence;
+                        if self.defer_event(event, source) {
+                            tracing::debug!(seq, "Event ahead of creator chain — deferring to next round");
                         } else {
-                            warn!(
-                                seq = event.sequence,
-                                "Deferral queue full — dropping out-of-window event"
-                            );
+                            warn!(seq, "Deferral queue full — dropping out-of-window event");
                             self.stats.events_rejected += 1;
                         }
                         continue;
@@ -1233,11 +1278,12 @@ impl GossipProtocol {
                 // round — full validation, no shortcuts.
                 let mut queued = 0usize;
                 for event in batch.events.into_iter().take(SYNC_BATCH_LIMIT) {
-                    if self.rate_deferred.len() >= MAX_RATE_DEFERRED {
-                        break;
+                    // Repaired events are the gap-fillers closest to the
+                    // frontier; defer_event evicts far-future entries so they
+                    // are never starved by a saturated queue.
+                    if self.defer_event(Box::new(event), source) {
+                        queued += 1;
                     }
-                    self.rate_deferred.push_back((Box::new(event), source));
-                    queued += 1;
                 }
                 if queued > 0 {
                     self.stats.syncs_completed += 1;
@@ -1925,6 +1971,58 @@ mod tests {
             }
             other => panic!("expected sync Publish, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_defer_event_evicts_farthest_from_frontier() {
+        // The deferral queue must stay biased toward near-frontier events:
+        // when full, a low-sequence event displaces the highest-sequence
+        // one, and a far-future event is dropped rather than evicting a
+        // useful entry. This is the anti-deadlock invariant — repair
+        // gap-fillers must never be starved by a queue full of un-admittable
+        // far-future events.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let mut gossip = GossipProtocol::new(node(1), GossipConfig::default(), graph);
+        let creator = node(9);
+        let peer = PeerId::random();
+        let make = |seq: u64| {
+            Box::new(
+                Event::new(
+                    creator,
+                    seq,
+                    VectorClock::with_node(creator, seq + 1),
+                    None,
+                    None,
+                    vec![1],
+                )
+                .expect("event"),
+            )
+        };
+
+        // Saturate with far-future (high-sequence) out-of-window events.
+        for i in 0..MAX_RATE_DEFERRED as u64 {
+            assert!(gossip.defer_event(make(10_000 + i), peer));
+        }
+        assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED);
+
+        // A near-frontier event is admitted by displacing a far-future one.
+        assert!(
+            gossip.defer_event(make(5), peer),
+            "low-sequence event queued via eviction"
+        );
+        assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED, "queue stays bounded");
+        assert!(
+            gossip.rate_deferred.iter().any(|(e, _)| e.sequence == 5),
+            "near-frontier gap-filler retained"
+        );
+
+        // A farther-future event than anything queued is dropped, not swapped in.
+        assert!(
+            !gossip.defer_event(make(99_999), peer),
+            "farthest-from-frontier event dropped"
+        );
+        assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED);
+        assert!(!gossip.rate_deferred.iter().any(|(e, _)| e.sequence == 99_999));
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────
