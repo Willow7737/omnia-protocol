@@ -267,9 +267,11 @@ pub struct GossipProtocol {
     partition_active: bool,
     /// Per-peer rate limiter (token bucket).
     rate_limiter: RateLimiter,
-    /// Events that exceeded a peer's rate limit, held for retry on the next
-    /// processing round instead of being dropped. Bounded by
-    /// [`MAX_RATE_DEFERRED`]; beyond that events are dropped as before.
+    /// Events held for retry on the next processing round instead of being
+    /// dropped: those that exceeded a peer's rate limit, and those that
+    /// arrived too far ahead of their creator's chain head to be insertable
+    /// yet (multi-path delivery reorder). Bounded by [`MAX_RATE_DEFERRED`];
+    /// beyond that events are dropped as before.
     ///
     /// Rationale: gossipsub delivers a message to a mesh peer exactly once —
     /// an event dropped here is *permanently lost* to this node (no
@@ -750,6 +752,36 @@ impl GossipProtocol {
                             self.stats.messages_rejected_invalid_sig += 1;
                         }
                         self.stats.events_rejected += 1;
+                        continue;
+                    }
+
+                    // Out-of-window deferral: multi-path (mesh) delivery
+                    // reorders events across per-peer rate-limit buckets, so
+                    // an event can arrive far ahead of its creator's chain
+                    // head while its predecessors are still deferred or in
+                    // flight. Inserting it now would hit the causal graph's
+                    // hard out-of-order bounds (SequenceGapTooLarge /
+                    // SequenceBufferOverflow) and be PERMANENTLY lost —
+                    // gossipsub never redelivers, and there is no
+                    // anti-entropy repair yet (issue #315). Defer it for
+                    // retry alongside rate-limited events: by later rounds
+                    // the lagging chain segment has landed and the insert
+                    // succeeds. (Observed live: a 2,000-event mesh benchmark
+                    // lost ~half its events to gap rejects without this.)
+                    if self.graph.read().await.insert_would_reject_out_of_order(&event) {
+                        if self.rate_deferred.len() < MAX_RATE_DEFERRED {
+                            tracing::debug!(
+                                seq = event.sequence,
+                                "Event ahead of creator chain — deferring to next round"
+                            );
+                            self.rate_deferred.push_back((event, source));
+                        } else {
+                            warn!(
+                                seq = event.sequence,
+                                "Deferral queue full — dropping out-of-window event"
+                            );
+                            self.stats.events_rejected += 1;
+                        }
                         continue;
                     }
 
@@ -1238,6 +1270,83 @@ mod tests {
         assert!(gossip.rate_deferred.is_empty());
         assert_eq!(gossip.stats().events_rejected, 0, "no event was dropped");
         assert_eq!(gossip.graph().read().await.len(), 5, "all 5 events inserted");
+    }
+
+    #[tokio::test]
+    async fn test_out_of_window_events_deferred_not_dropped() {
+        use tokio::sync::mpsc;
+
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            // Rate limiting neutralized — this test isolates the
+            // sequence-window deferral path.
+            burst_capacity: 100_000,
+            max_events_per_second: 100_000,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+
+        let (tx, rx) = mpsc::channel(1024);
+        gossip.network_rx = Some(rx);
+
+        // A single creator's chain of 600 events (> MAX_SEQUENCE_GAP = 512),
+        // signed and self-parent-linked.
+        let keypair = generate_keypair();
+        let creator = node(42);
+        let mut chain: Vec<Event> = Vec::new();
+        for seq in 0..600u64 {
+            let mut ev = if seq == 0 {
+                Event::genesis(creator, vec![1]).expect("genesis")
+            } else {
+                let parent_id = chain[(seq - 1) as usize].id;
+                Event::new(
+                    creator,
+                    seq,
+                    VectorClock::with_node(creator, seq + 1),
+                    Some(parent_id),
+                    None,
+                    vec![1],
+                )
+                .expect("valid event")
+            };
+            ev.sign_with_keypair(&keypair).expect("signing");
+            chain.push(ev);
+        }
+
+        // Simulate multi-path reorder: the chain HEAD (seq 599, gap 599 from
+        // an empty graph) arrives first, then the rest in order.
+        let peer = PeerId::random();
+        let send = |ev: &Event| NetworkEvent::GossipReceived {
+            topic: "omnia_events".to_string(),
+            data: ev.to_bytes().expect("serialize"),
+            propagation_source: peer,
+        };
+        tx.send(send(&chain[599])).await.expect("send");
+        for ev in chain.iter().take(599) {
+            tx.send(send(ev)).await.expect("send");
+        }
+        drop(tx);
+
+        // Round 1: the window check runs against the graph as it stood at
+        // the start of the round (inserts land at the end), so everything
+        // beyond gap 512 from an empty chain is DEFERRED, never
+        // hard-rejected: seqs 0..=512 insert, seqs 513..599 (87 events,
+        // including the reordered head) wait.
+        gossip.process_pending_events().await.expect("process");
+        assert_eq!(gossip.graph().read().await.len(), 513);
+        assert_eq!(
+            gossip.rate_deferred.len(),
+            87,
+            "out-of-window tail deferred, not dropped"
+        );
+        assert_eq!(gossip.stats().events_rejected, 0);
+
+        // Round 2: the chain head advanced to 512, the whole tail is now in
+        // window and inserts. Nothing was lost to the reorder.
+        gossip.process_pending_events().await.expect("process");
+        assert_eq!(gossip.graph().read().await.len(), 600, "no event was lost to reorder");
+        assert!(gossip.rate_deferred.is_empty());
+        assert_eq!(gossip.stats().events_rejected, 0);
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────
