@@ -664,6 +664,11 @@ async fn spawn_background_tasks(
                     if let Err(e) = network.subscribe(omnia_network::gossip::HEARTBEAT_TOPIC) {
                         tracing::warn!(error = %e, "Failed to subscribe to heartbeat topic");
                     }
+                    // Anti-entropy repair (issue #315): digests, event
+                    // requests, and repair batches ride this topic.
+                    if let Err(e) = network.subscribe(omnia_network::gossip::SYNC_TOPIC) {
+                        tracing::warn!(error = %e, "Failed to subscribe to sync topic");
+                    }
 
                     // Wire the network into the substrate's gossip protocol.
                     // This takes ownership of the network, spawns network.run_with_commands()
