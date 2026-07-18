@@ -1,0 +1,54 @@
+# Omnia Protocol — Lane 0 validator overlay for the 5-node testnet
+#
+# Enables ADR-025 Lane 0 (consensusless quorum-ack finality) on the stock
+# docker-compose.yml stack by giving every node a persistent validator
+# keypair whose public key is in the shared OMNIA_LANE0_VALIDATORS set.
+#
+# Setup (once):
+#   NODES=5 ./scripts/setup-validators.sh
+#     — generates ops/testnet-keys/node{0..4}/ and writes
+#       OMNIA_LANE0_VALIDATORS (+ a fresh OMNIA_JWT_SECRET if absent)
+#       into docker/.env, which compose reads automatically.
+#
+# Run:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.lane0.yml up -d --build
+#
+# Verify Lane 0 is live (each node reports a lane0 epoch, not null):
+#   for p in 9090 9091 9092 9093 9094; do
+#     curl -s http://localhost:$p/api/v1/node/info | jq '{node_id, lane0}'
+#   done
+#
+# With Lane 0 enabled, `omnia_node_events_finalized_total` counts
+# quorum-acked events, so scripts/testnet-bench.sh measures real finality
+# instead of DAG replication only.
+
+services:
+  omnia-bootstrap:
+    environment:
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - ../ops/testnet-keys/node0:/keys:ro
+
+  omnia-node-1:
+    environment:
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - ../ops/testnet-keys/node1:/keys:ro
+
+  omnia-node-2:
+    environment:
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - ../ops/testnet-keys/node2:/keys:ro
+
+  omnia-node-3:
+    environment:
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - ../ops/testnet-keys/node3:/keys:ro
+
+  omnia-node-4:
+    environment:
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - ../ops/testnet-keys/node4:/keys:ro

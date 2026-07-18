@@ -95,9 +95,31 @@ These become the **pre-Lane-0 baseline** that ADR-025 Stage 3 must beat.
 - **prop % = 0 on non-target nodes** — the nodes never meshed: verify
   bootstrap addresses and that UDP/QUIC ports are reachable between hosts.
 - **429s during submission** — raise `OMNIA_RATE_LIMIT_RPS` (see above).
-- **finalized_total stays 0** — expected on topologies without a validator
-  quorum; finality metrics become meaningful once the validator set is
-  established (Stage 2+ with staked validators).
+- **finalized_total stays 0** — expected without Lane 0: all benchmark
+  events are signed by the submit node (one creator), so Lane 1 rounds
+  cannot advance (fame voting needs ≥ 2f+1 distinct creators). To measure
+  real finality, enable the Lane 0 validator overlay:
+
+  ```
+  NODES=5 ./scripts/setup-validators.sh
+  docker compose -f docker/docker-compose.yml \
+                 -f docker/docker-compose.lane0.yml up -d --build
+  ```
+
+  Quorum-acked events then feed `omnia_node_events_finalized_total`, and
+  the bench's `finalized_total` column reports Lane 0 finality.
+
+## Topology
+
+The stock `docker-compose.yml` forms a **worker mesh**: node-K dials the
+bootstrap plus workers 1..K-1 (all dial targets are compose service
+names, resolved by the DNS transport). This removes the bootstrap as the
+sole distributor and — because the gossip receive rate limit is
+per-peer — multiplies each node's effective ingest rate by its peer
+count. Watch for the `Rate-limit deferral queue` log lines (and the
+`rate_deferred_depth` / `rate_deferred_high_water` gossip stats) during
+heavy bursts: a high-water near the 4,096 cap means events are about to
+be dropped (issue #315 tracks recovery for that case).
 
 ---
 

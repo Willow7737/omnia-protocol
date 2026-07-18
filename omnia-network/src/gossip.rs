@@ -160,6 +160,12 @@ pub struct GossipStats {
     pub events_rejected: u64,
     /// Number of events rejected specifically due to invalid signatures.
     pub messages_rejected_invalid_sig: u64,
+    /// Current depth of the rate-limit deferral queue (events awaiting
+    /// token-bucket refill; see `MAX_RATE_DEFERRED`).
+    pub rate_deferred_depth: u64,
+    /// High-water mark of the rate-limit deferral queue since startup —
+    /// how close a burst has come to the drop threshold.
+    pub rate_deferred_high_water: u64,
     /// Number of syncs completed
     pub syncs_completed: u64,
     /// Total number of events received across all completed sync operations.
@@ -829,6 +835,25 @@ impl GossipProtocol {
                     }
                 }
             }
+        }
+
+        // Deferral-queue observability: track depth so burst headroom is
+        // visible (a high-water near MAX_RATE_DEFERRED means events are
+        // about to be dropped — see the capacity-ceiling note in
+        // docs/reference/benchmark-gates.md).
+        let depth = self.rate_deferred.len() as u64;
+        self.stats.rate_deferred_depth = depth;
+        if depth > self.stats.rate_deferred_high_water {
+            self.stats.rate_deferred_high_water = depth;
+            if depth as usize * 2 >= MAX_RATE_DEFERRED {
+                warn!(
+                    depth,
+                    cap = MAX_RATE_DEFERRED,
+                    "Rate-limit deferral queue above half capacity — nearing drop threshold"
+                );
+            }
+        } else if depth > 0 {
+            tracing::debug!(depth, "Rate-limit deferral queue draining");
         }
 
         Ok(inserted_ids)
