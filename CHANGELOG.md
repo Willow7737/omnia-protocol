@@ -9,6 +9,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.84](https://github.com/Willow7737/omnia-protocol/compare/v0.1.83...v0.1.84) (2026-07-18)
+
+
+### Features
+
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([d0cd2f5](https://github.com/Willow7737/omnia-protocol/commit/d0cd2f59ccf19ea3224e670f0cc4e84ae813686d))
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([4cce4d4](https://github.com/Willow7737/omnia-protocol/commit/4cce4d49b3157ed5a329b9a497eda6dda2e829a4))
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([#320](https://github.com/Willow7737/omnia-protocol/issues/320)) ([66a05f5](https://github.com/Willow7737/omnia-protocol/commit/66a05f5551af65d7c472507e968d64436a423225))
+* **lane0:** diagnosable OMNIA_LANE0_VALIDATORS parse errors ([2b8f9ff](https://github.com/Willow7737/omnia-protocol/commit/2b8f9ff4343e192ae9655ec13f44a5e195bc2e76))
+* **lane0:** diagnosable OMNIA_LANE0_VALIDATORS parse errors ([#302](https://github.com/Willow7737/omnia-protocol/issues/302)) ([8a6af15](https://github.com/Willow7737/omnia-protocol/commit/8a6af1539ed3a101aae0a58be3881e432096e950))
+* **testnet:** worker mesh topology, Lane 0 finality metric, deferral observability ([869f6dc](https://github.com/Willow7737/omnia-protocol/commit/869f6dc17b7e2456008dbf8c4e997b8e97a71c3a))
+* **testnet:** worker mesh topology, Lane 0 finality metric, deferral observability ([a648777](https://github.com/Willow7737/omnia-protocol/commit/a6487775fb12434c3bd28e920f4c23410f8e9241))
+
+
+### Bug Fixes
+
+* **gossip:** defer out-of-window events instead of losing them to gap rejects ([2207e69](https://github.com/Willow7737/omnia-protocol/commit/2207e69afd3c6b58cbdfc2b0a847cad8c6a721be))
+* **gossip:** defer out-of-window events instead of losing them to gap rejects ([e1da764](https://github.com/Willow7737/omnia-protocol/commit/e1da76488421189dff33b7d3a4c61f2422971ed2))
+* **lane0:** stable rustfmt formatting for validator parse errors ([9cfd4b4](https://github.com/Willow7737/omnia-protocol/commit/9cfd4b4ef58224eead4b471a3017ae27f5b7418a))
+* **lane0:** stable rustfmt formatting for validator parse errors ([3d0f115](https://github.com/Willow7737/omnia-protocol/commit/3d0f115a1fc05360edc0fa90898b93bc5c8d5260))
+* **network:** add identify so Kademlia populates and peers discover each other ([8a005b3](https://github.com/Willow7737/omnia-protocol/commit/8a005b3f0d4355e758e4417e3529293f9401c64a))
+* **network:** add identify so Kademlia populates and peers discover each other ([7d15ac2](https://github.com/Willow7737/omnia-protocol/commit/7d15ac2463ce3f424d836ca743f09cb53860146d))
+* **network:** gossipsub mesh scoring + rate-limit deferral — 100% testnet propagation ([#314](https://github.com/Willow7737/omnia-protocol/issues/314)) ([968f7a6](https://github.com/Willow7737/omnia-protocol/commit/968f7a6ddc3a1cae76d711b361c4b0a0968fe766))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([86db207](https://github.com/Willow7737/omnia-protocol/commit/86db20712650f383d8449daf07880ee748dd76ed))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([88845dd](https://github.com/Willow7737/omnia-protocol/commit/88845dd363d0f07cb00913087b92e4f92465b06d))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([#303](https://github.com/Willow7737/omnia-protocol/issues/303)) ([8f6b0fe](https://github.com/Willow7737/omnia-protocol/commit/8f6b0feb3f5cb9310f6449278de27ca874daffe8))
+
+
+### Documentation
+
+* **benchmarks:** record full Stage 2 multi-node load matrix ([d6331af](https://github.com/Willow7737/omnia-protocol/commit/d6331afaf79eb7e905d6f00ca78279e4564b1a5b))
+* **benchmarks:** record full Stage 2 multi-node load matrix ([323de5a](https://github.com/Willow7737/omnia-protocol/commit/323de5ab3dbc2f96c79fbc6cf006ab0e48de1044))
+* refresh all status-bearing markdown for the live meshed testnet ([b279f15](https://github.com/Willow7737/omnia-protocol/commit/b279f152a737eeb8a4f575525a2384bfa9cfd19d))
+* refresh all status-bearing markdown for the live meshed testnet ([05ceb8c](https://github.com/Willow7737/omnia-protocol/commit/05ceb8c4f840941221c4a950213adc55315b4fd6))
+* refresh all status-bearing markdown for the live meshed testnet ([#321](https://github.com/Willow7737/omnia-protocol/issues/321)) ([b870de8](https://github.com/Willow7737/omnia-protocol/commit/b870de83382b0526c402de397dbd06c37eef690a))
+
 ## [0.1.83](https://github.com/Willow7737/omnia-protocol/compare/v0.1.82...v0.1.83) (2026-07-15)
 
 
