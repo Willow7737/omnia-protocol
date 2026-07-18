@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: 2026-06-20 (v0.1.68 audit cycle)
+> Last updated: 2026-07-18 (post-ADR-025 rollout; live 5-node testnet with measured Lane 0 finality)
 
 ---
 

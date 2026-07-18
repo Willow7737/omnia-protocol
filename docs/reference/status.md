@@ -2,9 +2,16 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-07-09
+> 📅 Last Updated: 2026-07-18
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
+
+> **2026-07-18:** ADR-025 Two-Lane Consensus is fully rolled out and
+> measured on the live 5-node testnet: 100% gossip propagation on a real
+> QUIC/gossipsub mesh (5,000-event bursts, zero loss), Lane 0 quorum
+> finality live (5,000/5,000 events finalized across 5 validators), and
+> gossip anti-entropy repair merged (#320) so bounded-queue drops
+> self-heal. Numbers + methodology: [benchmark-gates.md](./benchmark-gates.md).
 
 ## 1. Core Protocol (The Substrate)
 

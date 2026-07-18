@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-17
+> Last Updated: 2026-07-18
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -267,6 +267,18 @@ collected a ≥4-of-5 quorum of signed acks, and
 snapshot time (the two 1,922 readings are sampling lag — certificates
 are grow-only CRDTs folded once per 1 s round; they reach 2,000 moments
 later and can never decrease).
+
+**5,000-event stress re-run (mesh + Lane 0, 2026-07-18):** 100%
+propagation on all 5 nodes AND `finalized_total = 5000` on every node —
+full quorum finality at 5k scale. Convergence: ingress 14.0 s, peers
+38.5–44.6 s; RSS 65–74 MB. The same burst on the star topology (run C,
+07-17) permanently lost 46% of one node's events. Report:
+`testnet-bench-20260718-110251.json`.
+
+Since these runs, gossip **anti-entropy repair** (issue #315, PR #320)
+has merged: nodes exchange frontier digests every 10 s and re-request
+missing events, so bounded-queue losses now self-heal instead of
+stalling a node permanently.
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
