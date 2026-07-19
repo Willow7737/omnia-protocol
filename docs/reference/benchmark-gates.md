@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-18
+> Last Updated: 2026-07-19
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -344,6 +344,20 @@ live gossip is still rate-limited as before. Regression test
 locks it. This is the third and final layer of the repair path: #325 makes
 repair *serve* enough, #327 makes the queue *retain* the right events, and
 this makes the receiver *admit* them without throttling.
+
+**2026-07-19 12:03 UTC re-run — result NOT yet attributable to #328:** a
+3-node star run (Lane 0 restored: `finalized_total = 5,392` = propagation
+floor on all nodes, correct CRDT behavior) reproduced the pre-#328 wedge
+*exactly* — both workers at 5,392/53.9%, zero movement over 600 s. However
+the Docker build for that run was **fully cache-hit** (`cargo build`
+CACHED, 0.7 s total), meaning the compiled source predates the #328 merge
+— the run is believed to have exercised a **stale binary** and is not
+evidence against the fix. Verification protocol before the next recorded
+number: `grep -c solicited omnia-network/src/gossip.rs` must print a
+non-zero count in the checkout, and the images must be rebuilt with
+`--no-cache`. Until a 10k run converges on a binary provably containing
+#328, the **verified capacity claim remains 5,000-event bursts** (100%
+propagation + full Lane 0 finality).
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
