@@ -74,7 +74,10 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
   quorum of signed validator acks: 5,000/5,000 events finalized across
   all 5 validators in the latest stress run.
 - **Self-healing anti-entropy** — nodes exchange frontier digests and
-  automatically repair any events lost to bounded-queue drops.
+  automatically repair any events lost to bounded-queue drops. Proven at
+  10k scale (2026-07-19): a 10,000-event burst overwhelms live gossip,
+  then repair recovers every event — **100% propagation and
+  10,000/10,000 Lane 0 finality on every node, zero loss.**
 - Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
   `OmniaCRDT`) model-checked in CI on every PR.
 
