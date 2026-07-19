@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-07-19
 
 ## Phase 0: The Seed ✅ Complete
 
@@ -79,7 +79,7 @@ _Goal: Proof of Concept_
 
 ## Phase 5: Testnet Launch & Validation ✅ Complete
 
-- ✅ C-1: Real performance benchmarking (~12,000 ops/s (v0.1.68); ~12,000 ops/s (v0.1.68) (v0.1.48 historical) synchronous single-node; 13.6× improvement over initial tokio-based measurements)
+- ✅ C-1: Real performance benchmarking (~12,000 ops/s (v0.1.68 baseline; ~7,190 ops/s v0.1.48 historical) synchronous single-node; 13.6× improvement over initial tokio-based measurements)
 - ✅ H-1: Multi-node BFT testnet validation
 - ✅ H-2: VRF migration to ECVRF per RFC 9381
 - ✅ H-3: Genesis tooling — network bootstrap procedure
@@ -158,7 +158,7 @@ Investigated and debunked '27x superlinear scaling' — actual scaling is sub-li
 
 | Milestone        | Target  | Blockers                                  |
 | ---------------- | ------- | ----------------------------------------- |
-| Public Testnet   | Q2 2026 | External audit                            |
+| Public Testnet   | ✅ Live (July 2026, multi-node) | — (geo-distributed rollout + external audit next) |
 | Mainnet          | Q4 2026 | Audit findings, Sybil resistance, GC      |
 | Hardened Mainnet | Q1 2027 | Multi-party ceremony, formal verification |
 

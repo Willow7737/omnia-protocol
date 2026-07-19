@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-07-18
+> 📅 Last Updated: 2026-07-19
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -12,6 +12,21 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 > finality live (5,000/5,000 events finalized across 5 validators), and
 > gossip anti-entropy repair merged (#320) so bounded-queue drops
 > self-heal. Numbers + methodology: [benchmark-gates.md](./benchmark-gates.md).
+>
+> **2026-07-19:** 10,000-event stress testing exposed and fixed FIVE
+> stacked bottlenecks in the burst-recovery path (PRs #325, #327, #328,
+> #330: per-peer repair serving, frontier-priority deferral eviction,
+> rate-limiter bypass for solicited repair, and — the root cause masking
+> them all — gossipsub's unconfigured 64 KiB transmit cap silently
+> dropping every repair batch). Verified same day on a provably fresh
+> binary: **10,000-event bursts now reach 100% propagation AND
+> 10,000/10,000 Lane 0 quorum finality on every node — zero loss,
+> self-healed entirely by anti-entropy repair.** The `has_more` fast
+> drain (PR #332) then collapsed the repair tail ~12–16×, and the
+> headline run landed same day: **10k burst on the full 5-node
+> validator mesh — 100% propagation + full quorum finality on all five
+> nodes, median convergence under a minute.** Numbers + full diagnosis
+> arc: [benchmark-gates.md](./benchmark-gates.md).
 
 ## 1. Core Protocol (The Substrate)
 
@@ -142,8 +157,8 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-P4.1** | Bitcoin Settlement Adapter                  | P1       | 🔄 Stub        |
 | **REQ-P4.2** | Solana Settlement Adapter                   | P1       | 🔄 Stub        |
 | **REQ-P4.3** | Celestia Settlement Adapter                 | P1       | 🔄 Stub        |
-| **REQ-P4.4** | Validator Network (multi-node)              | P0       | 🌑 Not Started |
-| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🔄 Live (single node) |
+| **REQ-P4.4** | Validator Network (multi-node)              | P0       | ✅ Completed — live multi-node Lane 0 validator network (quorum-signed finality measured; see [benchmark-gates.md](./benchmark-gates.md)) |
+| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🔄 Live (multi-node, single host; geo-distributed rollout planned) |
 | **REQ-P4.6** | Dynamic Fee Mechanism (EIP-1559-style)      | P1       | 📋 Planned     |
 | **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2       | ✅ Completed   |
 | **REQ-P4.8** | VRF Spec Compliance (ADR-012)               | P2       | 📋 Deferred    |
@@ -197,7 +212,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 ## 16. Live Testnet & Wallet Ecosystem (July 2026)
 
-The protocol is now **running in public** with a full client ecosystem. Node: `https://78.47.43.136.sslip.io` (single node, v0.1.76+, protocol `/omnia/4.0.0`).
+The protocol is now **running in public** with a full client ecosystem. Node: `https://78.47.43.136.sslip.io` (public entry point to a multi-node Lane 0 validator testnet on one host, v0.1.76+, protocol `/omnia/4.0.0`).
 
 | ID          | Requirement                                                        | Priority | Status       |
 | :---------- | :----------------------------------------------------------------- | :------- | :----------- |
@@ -206,7 +221,7 @@ The protocol is now **running in public** with a full client ecosystem. Node: `h
 | **REQ-W.3** | SHA-256 DID derivation shared with clients (pinned test vector)    | P0       | ✅ Completed |
 | **REQ-W.4** | Mobile wallet v1 ([Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)): balance, send, history, governance | P1 | ✅ Completed |
 | **REQ-W.5** | Dual-mode auth (self-custody + Supabase via `mint-node-jwt`)       | P1       | ✅ Completed |
-| **REQ-W.6** | Public single-node testnet deployment                              | P0       | ✅ Completed |
+| **REQ-W.6** | Public testnet deployment (now multi-node; see REQ-P4.4/P4.5)      | P0       | ✅ Completed |
 
 ---
 
@@ -218,7 +233,7 @@ Every stage is tracked here so nothing falls through.
 | Stage | Scope                                                                    | Status | Evidence |
 | :---- | :----------------------------------------------------------------------- | :----- | :------- |
 | **1** | Integrate idle gossip components (AUDIT-14): bloom dedup, priority queue, compact wire v2 | ✅ Done | PR #276 |
-| **2** | Real 3-node testnet + honest multi-node baselines                        | 🔄 Tooling ready — awaiting multi-host run | `scripts/testnet-bench.sh`, [testnet-benchmark runbook](../operations/testnet-benchmark.md); node metrics wired |
+| **2** | Real multi-node testnet + honest multi-node baselines                    | ✅ Done — 3–5-node QUIC/gossipsub testnet measured (100% propagation + full Lane 0 finality at 2k/5k bursts; 10k burst-recovery hardening in progress, see [benchmark-gates.md](./benchmark-gates.md)); geo-distributed multi-host run still open | `scripts/testnet-bench.sh`, [testnet-benchmark runbook](../operations/testnet-benchmark.md); node metrics wired |
 | **3** | Lane 0: consensusless UBC fast path (quorum acks, G-Set certificate CRDTs); absorbs AUDIT-15 | 🔄 v1 shipped — static validator set (`OMNIA_LANE0_VALIDATORS`); dynamic set arrives with Lane 1 | `substrate/src/lane0.rs`; `lane0_final` in event API; `lane0` stats in node info |
 | **4** | Lane 1: DAG-native commit rule + TLA+ spec extension                     | ✅ Done — epoch-fenced rotation + Lane 1-committed trigger (v1 authorization: current validators govern succession; quadratic-voting proposal execution is the planned upgrade) | `substrate/src/lane0.rs` (`rotate_validators`, `ValidatorSetChange`); `Substrate::apply_committed_vset_changes`; `formal-verification/OmniaTwoLane.tla` |
 | **5** | Consensus arena: adversarial property-based CI gate                      | 🔄 Lane 0 arena shipped (withholding, reorder, duplication, forgery, rotation schedules); Lane 1 arena remains `omnia-chaos-tests`; cross-lane attack scenarios pending governance-triggered rotation | `substrate/tests/lane0_arena.rs` (runs in the standard CI Test jobs) |

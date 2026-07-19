@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-18
+> Last Updated: 2026-07-19
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -279,6 +279,177 @@ Since these runs, gossip **anti-entropy repair** (issue #315, PR #320)
 has merged: nodes exchange frontier digests every 10 s and re-request
 missing events, so bounded-queue losses now self-heal instead of
 stalling a node permanently.
+
+**10,000-event stress re-run (mesh + Lane 0, 2026-07-18):** ingress
+accepted 10,000/10,000 in 26.3 s; anti-entropy repair was provably alive
+(digest/request/serve/queue logs on every node, 0 sequence-gap rejects,
+16 deferral-full events all recovered) and no event was permanently
+lost — but propagation converged too slowly for the run window, with the
+four non-source nodes parked at **62.9–66.0%** and `finalized_total`
+pinned at 6,379 on all five nodes (the quorum/propagation floor, not a
+finality bug). Root cause: repair funnelled through the one node holding
+the full tail at a single 256-event batch per 10 s interval, because the
+response gate and batch size were both global/small. `finalized_total`
+being identical across nodes is correct — the finality CRDT tracks the
+≥4-of-5-quorum floor, which cannot exceed propagation.
+
+**Repair-throughput fix (PR #325, merged):** the serve-side rate gate is
+now **per requesting peer** (each behind node is answered once per
+interval instead of one node globally), the batch size cap is **1,024
+events** (byte-budgeted to 1 MiB so large-payload events truncate
+cleanly), and the receive cap is **2 MiB** (previously 512 KiB could not
+even carry one maximum-payload event). Regression tests cover per-peer
+gating and byte-budget truncation (`omnia-network/src/gossip.rs`).
+
+**10k re-run on #325 exposed the real bottleneck — a deferral-queue
+deadlock:** with the throughput fix live, the four workers still wedged at
+**59.1–65.1%** for the full 600 s window. Node logs showed repair *active*
+(42 requests, 69 batches served) yet every batch queued exactly
+`events=66` of 1,024, alongside **2,666 "deferral queue full — dropping"**
+warnings. Root cause: the bounded `rate_deferred` queue (cap 4,096) was
+FIFO with drop-on-full and no notion of distance-to-frontier. A burst —
+amplified by mesh fan-out re-delivering the same events from four peers
+*before* the dedup check — saturated it with far-future, out-of-window
+events that cannot be admitted until the gap below them fills. Repair
+batches carrying the low-sequence gap-fillers were then starved of slots,
+so the frontier never advanced: a hard priority-inversion deadlock, not
+slow convergence.
+
+**Deferral-queue priority fix (PR #327):** `defer_event()` now keeps the
+queue biased toward the events nearest each creator's frontier — when
+full, a lower-sequence event *displaces* the highest-sequence queued entry
+instead of being dropped; a farther-future event is dropped instead. This
+guarantees repair gap-fillers always get a slot, so the frontier always
+advances and the deficit drains. Regression test
+`test_defer_event_evicts_farthest_from_frontier` locks the invariant.
+
+**#327 still wedged at ~54% — the rate limiter was throttling repair:**
+the priority fix kept the right events in the queue, but a fresh 10k run
+still pinned both workers at **53.9%** (exactly the per-peer gossip
+rate-limiter admission budget: 2 peers x (200 burst + 100/s x ~24 s burst)
+≈ 5,200). Repair was active (23 requests, 12 batches served) yet the
+frontier never advanced, because solicited repair events were metered
+through the *same* per-peer token bucket as unsolicited gossip — and the
+initial burst had already drained that bucket, so the near-frontier
+gap-fillers repair served could never win a token.
+
+**Rate-limiter bypass for solicited repair:** anti-entropy repair events
+now carry a `solicited` flag through the deferral queue and **bypass the
+per-peer rate limiter** on admission (they were explicitly requested, so
+they are not a DoS vector — and still pass full signature validation,
+out-of-window deferral, and the bounded, evicting queue; the producer is
+bounded by `SYNC_BATCH_LIMIT` + `MAX_SYNC_MESSAGE_BYTES`). Unsolicited
+live gossip is still rate-limited as before. Regression test
+`test_solicited_repair_bypasses_rate_limiter` (with an unsolicited control)
+locks it. This is the third and final layer of the repair path: #325 makes
+repair *serve* enough, #327 makes the queue *retain* the right events, and
+this makes the receiver *admit* them without throttling.
+
+**2026-07-19 12:03 UTC re-run — result NOT yet attributable to #328:** a
+3-node star run (Lane 0 restored: `finalized_total = 5,392` = propagation
+floor on all nodes, correct CRDT behavior) reproduced the pre-#328 wedge
+*exactly* — both workers at 5,392/53.9%, zero movement over 600 s. However
+the Docker build for that run was **fully cache-hit** (`cargo build`
+CACHED, 0.7 s total), meaning the compiled source predates the #328 merge
+— the run is believed to have exercised a **stale binary** and is not
+evidence against the fix. Verification protocol before the next recorded
+number: `grep -c solicited omnia-network/src/gossip.rs` must print a
+non-zero count in the checkout, and the images must be rebuilt with
+`--no-cache`. Until a 10k run converges on a binary provably containing
+#328, the **verified capacity claim remains 5,000-event bursts** (100%
+propagation + full Lane 0 finality).
+
+**2026-07-19 13:13 UTC verified re-run — real root cause found:** the
+verification protocol was executed (checkout at the #328 merge commit,
+`solicited` count 25, genuine 186 s `--no-cache` recompile) and the wedge
+reproduced **identically**: both workers at exactly 5,392, zero movement
+over 600 s. With all three repair-path fixes provably in the binary, that
+exactness pointed away from timing entirely: `10,000 − 5,392 = 4,608 =
+MAX_RATE_DEFERRED (4,096) + MAX_SEQUENCE_GAP (512)` — queue/window
+geometry with **no repair delivery at all**. Inspection found the true
+root cause one layer down, in the transport: **gossipsub was running with
+its default 64 KiB `max_transmit_size`** (never configured). Repair
+batches from the tail-holding node serialize well past 64 KiB, so every
+`publish` failed with `MessageTooLarge` — logged only on the *serving*
+node as a generic warning nobody grepped — and no repair batch was ever
+delivered. The only repair that ever worked was small inter-worker deltas
+(the observed `events=66` batches ≈ 46 KB, just under the cap), which is
+why 5-node-mesh workers equalized with each other (~63–66%) but never
+recovered the tail, and identical-frontier star workers froze
+permanently. **Fix:** `max_transmit_size` raised to
+`MAX_SYNC_MESSAGE_BYTES` (2 MiB, matching the receive-side bound) via a
+shared `build_gossipsub_config()`; sync publish failures escalated from
+debug to warn plus a loud oversize guard. Regression test
+`test_gossipsub_transmit_size_carries_repair_batches` pins the cap to the
+receive bound. The four earlier repair-path fixes (#320, #325, #327,
+#328) remain necessary — they were all masked by this delivery failure.
+
+**2026-07-19 13:56 UTC — 10,000-event burst CONVERGED (new verified
+milestone):** with #330 deployed under the full verification protocol
+(checkout at the #330 merge, `max_transmit_size` present, genuine 182 s
+`--no-cache` recompile), the 3-node star run reached **100% propagation
+AND `finalized_total = 10,000` on every node** — zero loss, full Lane 0
+quorum finality, self-healed entirely by anti-entropy repair:
+
+| node | dag Δ | prop % | converged (s) | finalized_total | RSS |
+|------|------:|-------:|--------------:|----------------:|----:|
+| 9090 (ingress) | 10,000 | 100.0 | 24.5 | 10,000 | 94 MB |
+| 9091 | 10,000 | 100.0 | 604.1 | 10,000 | 91 MB |
+| 9092 | 10,000 | 100.0 | 604.2 | 10,000 | 90 MB |
+
+Ingress: 10,000/10,000 accepted in 22.5 s (445 ev/s submit). Report:
+`testnet-bench-20260719-135620.json`.
+
+**Reading:** a 10k single-source burst is now *lossless* — everything the
+live gossip path drops under overload is recovered by repair and reaches
+quorum finality. The honest caveat is the **tail-repair pace**: the
+~4,600-event deficit drained in ~580 s (~8 ev/s per worker), consistent
+with one byte-budgeted repair batch per 10 s digest interval. Known
+tuning levers, in order of leverage: (1) let a behind node issue a
+follow-up request immediately when a batch arrives with `has_more` set,
+instead of waiting for the next digest; (2) shorten `sync_interval_ms`
+for repair-active peers; (3) raise `SYNC_BATCH_MAX_BYTES` toward the
+2 MiB transmit cap. None are required for correctness.
+
+**2026-07-19 14:38–14:51 UTC — `has_more` fast drain measured (PR #332),
+then the 5-node headline run:** with the fast drain deployed (repair
+batches chain one-per-round via `has_more` continuations; the server
+fast-serves any peer whose frontier advanced), the same 10k burst's
+repair tail collapsed **~12–16×**:
+
+- 3-node-measured run (14:38): workers converged at **36.4 s / 52.6 s**
+  (vs 604 s pre-drain) — tail-repair pace up from ~8 ev/s to ~500+ ev/s.
+- **5-node full-mesh headline run (14:51,
+  `testnet-bench-20260719-145059.json`)** — all five nodes measured,
+  every node `peers=4`, Lane 0 on all five:
+
+| node | dag Δ | prop % | converged (s) | finalized_total | RSS |
+|------|------:|-------:|--------------:|----------------:|----:|
+| 9090 (ingress) | 10,000 | 100.0 | 29.9 | 10,000 | 135 MB |
+| 9091 | 10,000 | 100.0 | 138.0 | 10,000 | 134 MB |
+| 9092 | 10,000 | 100.0 | 54.5 | 10,000 | 141 MB |
+| 9093 | 10,000 | 100.0 | 56.6 | 10,000 | 152 MB |
+| 9094 | 10,000 | 100.0 | 302.1 | 10,000 | 139 MB |
+
+Ingress: 10,000/10,000 accepted in 27.8 s (359 ev/s submit).
+`finalized_total = 10,000` independently confirmed on all five nodes
+after the run — **zero loss, full ≥4-of-5 quorum finality at 10k on the
+real 5-node QUIC/gossipsub validator mesh.**
+
+**Reading:** median convergence is now sub-minute; the spread (two
+stragglers at 138 s and 302 s) reflects repair contention — several
+behind nodes chasing overlapping deficits through the per-peer serve
+gates. Remaining (optional) tuning headroom: widen per-interval serve
+capacity when many peers are behind, and let caught-up workers serve
+more of the tail to each other. Correctness is not at stake — every
+straggler converges and finalizes.
+
+**Verified capacity (2026-07-19): 10,000-event bursts — 100% propagation
++ 10,000/10,000 Lane 0 quorum finality on the full 5-node validator
+mesh (single host); median node convergence < 60 s, worst-case straggler
+~5 min. 5,000-event bursts converge within ~45 s. Sustained-rate
+guidance unchanged (~2,000–3,000 ev/s burst comfort zone; larger bursts
+converge losslessly with a repair tail).**
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now

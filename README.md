@@ -47,7 +47,7 @@ The Omnia stack is no longer only a codebase — it is **running in production (
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (5-node meshed validator network, v0.1.76+, protocol `/omnia/4.0.0`) |
+| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (multi-node Lane 0 validator mesh, v0.1.76+, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -71,10 +71,14 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
   100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
 - **Real BFT finality (ADR-025 Lane 0)** — every event collects a
-  quorum of signed validator acks: 5,000/5,000 events finalized across
-  all 5 validators in the latest stress run.
-- **Self-healing anti-entropy** — nodes exchange frontier digests and
-  automatically repair any events lost to bounded-queue drops.
+  quorum of signed validator acks: **10,000/10,000 events finalized
+  across all 5 validators** in the latest stress run (2026-07-19).
+- **Self-healing anti-entropy with fast drain** — nodes exchange
+  frontier digests and repair any events lost to bounded-queue drops,
+  chaining repair batches while behind. Proven at 10k scale on the full
+  5-node mesh: a 10,000-event burst overwhelms live gossip, then repair
+  recovers every event — **100% propagation + full quorum finality on
+  all five nodes, zero loss, median convergence under a minute.**
 - Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
   `OmniaCRDT`) model-checked in CI on every PR.
 
@@ -388,7 +392,7 @@ _Goal: Performance Validation_
 - ✅ Event submission now uses node's persistent keypair (not ephemeral)
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
-- ✅ Public testnet node **live** (single node at `78.47.43.136.sslip.io`; multi-node rollout planned)
+- ✅ Public testnet **live** (multi-node Lane 0 validator network at `78.47.43.136.sslip.io`; geo-distributed rollout planned)
 
 #### v0.1.69 Critical Security Hardening
 
@@ -415,7 +419,7 @@ _Goal: Performance Validation_
 
 _Goal: Real users on a real node_
 
-- ✅ Public testnet node deployed (`https://78.47.43.136.sslip.io`, Docker, single node)
+- ✅ Public testnet deployed (`https://78.47.43.136.sslip.io`, Docker, multi-node Lane 0 validator network)
 - ✅ Wallet challenge/signature auth — `POST /api/v1/auth/challenge` + `/auth/login` (Ed25519, single-use TTL nonces, domain-separated messages, `verify_strict`, auto DID registration)
 - ✅ `POST /api/v1/auth/register` — idempotent DID registration for externally-minted JWTs (DID taken from the verified JWT `sub`, never the request body)
 - ✅ SHA-256 DID derivation shared with clients (`did:omnia:` + `sha256(pubkey)[..32]`, cross-repo pinned test vector)
@@ -426,7 +430,7 @@ _Goal: Real users on a real node_
 
 | Phase                     | Goal                                            | Status       |
 | ------------------------- | ----------------------------------------------- | ------------ |
-| Phase 6: Public Testnet   | Multi-node testnet, external audit              | 🔄 In progress (single node live) |
+| Phase 6: Public Testnet   | Multi-node testnet, external audit              | 🔄 In progress (multi-node live; audit pending) |
 | Phase 7: Mainnet          | Sybil resistance, GC, formal verification       | 📋 Planned   |
 | Phase 8: Decentralization | Hardware mesh, production PoUW                  | 📋 Long-term |
 | Phase 9: Universality     | Relativistic consensus, physical-digital fusion | 📋 Long-term |
