@@ -411,12 +411,45 @@ instead of waiting for the next digest; (2) shorten `sync_interval_ms`
 for repair-active peers; (3) raise `SYNC_BATCH_MAX_BYTES` toward the
 2 MiB transmit cap. None are required for correctness.
 
+**2026-07-19 14:38–14:51 UTC — `has_more` fast drain measured (PR #332),
+then the 5-node headline run:** with the fast drain deployed (repair
+batches chain one-per-round via `has_more` continuations; the server
+fast-serves any peer whose frontier advanced), the same 10k burst's
+repair tail collapsed **~12–16×**:
+
+- 3-node-measured run (14:38): workers converged at **36.4 s / 52.6 s**
+  (vs 604 s pre-drain) — tail-repair pace up from ~8 ev/s to ~500+ ev/s.
+- **5-node full-mesh headline run (14:51,
+  `testnet-bench-20260719-145059.json`)** — all five nodes measured,
+  every node `peers=4`, Lane 0 on all five:
+
+| node | dag Δ | prop % | converged (s) | finalized_total | RSS |
+|------|------:|-------:|--------------:|----------------:|----:|
+| 9090 (ingress) | 10,000 | 100.0 | 29.9 | 10,000 | 135 MB |
+| 9091 | 10,000 | 100.0 | 138.0 | 10,000 | 134 MB |
+| 9092 | 10,000 | 100.0 | 54.5 | 10,000 | 141 MB |
+| 9093 | 10,000 | 100.0 | 56.6 | 10,000 | 152 MB |
+| 9094 | 10,000 | 100.0 | 302.1 | 10,000 | 139 MB |
+
+Ingress: 10,000/10,000 accepted in 27.8 s (359 ev/s submit).
+`finalized_total = 10,000` independently confirmed on all five nodes
+after the run — **zero loss, full ≥4-of-5 quorum finality at 10k on the
+real 5-node QUIC/gossipsub validator mesh.**
+
+**Reading:** median convergence is now sub-minute; the spread (two
+stragglers at 138 s and 302 s) reflects repair contention — several
+behind nodes chasing overlapping deficits through the per-peer serve
+gates. Remaining (optional) tuning headroom: widen per-interval serve
+capacity when many peers are behind, and let caught-up workers serve
+more of the tail to each other. Correctness is not at stake — every
+straggler converges and finalizes.
+
 **Verified capacity (2026-07-19): 10,000-event bursts — 100% propagation
-+ 10,000/10,000 Lane 0 finality (3-node star, single host); 5,000-event
-bursts converge within ~45 s (5-node mesh). Sustained-rate guidance
-unchanged (~2,000–3,000 ev/s burst comfort zone for sub-minute
-convergence; larger bursts converge losslessly but ride the repair
-tail).**
++ 10,000/10,000 Lane 0 quorum finality on the full 5-node validator
+mesh (single host); median node convergence < 60 s, worst-case straggler
+~5 min. 5,000-event bursts converge within ~45 s. Sustained-rate
+guidance unchanged (~2,000–3,000 ev/s burst comfort zone; larger bursts
+converge losslessly with a repair tail).**
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now

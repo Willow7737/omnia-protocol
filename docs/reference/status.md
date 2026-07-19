@@ -21,9 +21,12 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 > dropping every repair batch). Verified same day on a provably fresh
 > binary: **10,000-event bursts now reach 100% propagation AND
 > 10,000/10,000 Lane 0 quorum finality on every node — zero loss,
-> self-healed entirely by anti-entropy repair** (tail repair is
-> deliberate-paced, ~10 min; tuning levers documented). Numbers +
-> full diagnosis arc: [benchmark-gates.md](./benchmark-gates.md).
+> self-healed entirely by anti-entropy repair.** The `has_more` fast
+> drain (PR #332) then collapsed the repair tail ~12–16×, and the
+> headline run landed same day: **10k burst on the full 5-node
+> validator mesh — 100% propagation + full quorum finality on all five
+> nodes, median convergence under a minute.** Numbers + full diagnosis
+> arc: [benchmark-gates.md](./benchmark-gates.md).
 
 ## 1. Core Protocol (The Substrate)
 
