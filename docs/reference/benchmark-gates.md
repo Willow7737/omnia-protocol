@@ -315,13 +315,35 @@ batches carrying the low-sequence gap-fillers were then starved of slots,
 so the frontier never advanced: a hard priority-inversion deadlock, not
 slow convergence.
 
-**Deferral-queue priority fix:** `defer_event()` now keeps the
+**Deferral-queue priority fix (PR #327):** `defer_event()` now keeps the
 queue biased toward the events nearest each creator's frontier — when
 full, a lower-sequence event *displaces* the highest-sequence queued entry
 instead of being dropped; a farther-future event is dropped instead. This
 guarantees repair gap-fillers always get a slot, so the frontier always
 advances and the deficit drains. Regression test
 `test_defer_event_evicts_farthest_from_frontier` locks the invariant.
+
+**#327 still wedged at ~54% — the rate limiter was throttling repair:**
+the priority fix kept the right events in the queue, but a fresh 10k run
+still pinned both workers at **53.9%** (exactly the per-peer gossip
+rate-limiter admission budget: 2 peers x (200 burst + 100/s x ~24 s burst)
+≈ 5,200). Repair was active (23 requests, 12 batches served) yet the
+frontier never advanced, because solicited repair events were metered
+through the *same* per-peer token bucket as unsolicited gossip — and the
+initial burst had already drained that bucket, so the near-frontier
+gap-fillers repair served could never win a token.
+
+**Rate-limiter bypass for solicited repair:** anti-entropy repair events
+now carry a `solicited` flag through the deferral queue and **bypass the
+per-peer rate limiter** on admission (they were explicitly requested, so
+they are not a DoS vector — and still pass full signature validation,
+out-of-window deferral, and the bounded, evicting queue; the producer is
+bounded by `SYNC_BATCH_LIMIT` + `MAX_SYNC_MESSAGE_BYTES`). Unsolicited
+live gossip is still rate-limited as before. Regression test
+`test_solicited_repair_bypasses_rate_limiter` (with an unsolicited control)
+locks it. This is the third and final layer of the repair path: #325 makes
+repair *serve* enough, #327 makes the queue *retain* the right events, and
+this makes the receiver *admit* them without throttling.
 
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
