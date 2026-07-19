@@ -71,13 +71,14 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
   100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
 - **Real BFT finality (ADR-025 Lane 0)** — every event collects a
-  quorum of signed validator acks: 5,000/5,000 events finalized across
-  all 5 validators in the latest stress run.
-- **Self-healing anti-entropy** — nodes exchange frontier digests and
-  automatically repair any events lost to bounded-queue drops. Proven at
-  10k scale (2026-07-19): a 10,000-event burst overwhelms live gossip,
-  then repair recovers every event — **100% propagation and
-  10,000/10,000 Lane 0 finality on every node, zero loss.**
+  quorum of signed validator acks: **10,000/10,000 events finalized
+  across all 5 validators** in the latest stress run (2026-07-19).
+- **Self-healing anti-entropy with fast drain** — nodes exchange
+  frontier digests and repair any events lost to bounded-queue drops,
+  chaining repair batches while behind. Proven at 10k scale on the full
+  5-node mesh: a 10,000-event burst overwhelms live gossip, then repair
+  recovers every event — **100% propagation + full quorum finality on
+  all five nodes, zero loss, median convergence under a minute.**
 - Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
   `OmniaCRDT`) model-checked in CI on every PR.
 
