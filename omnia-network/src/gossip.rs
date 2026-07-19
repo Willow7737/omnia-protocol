@@ -1174,8 +1174,21 @@ impl GossipProtocol {
         };
         let mut payload = vec![SYNC_WIRE_VERSION];
         payload.extend(bytes);
+        // Guard against building a message the transport (or a receiving
+        // peer) will reject. SYNC_BATCH_MAX_BYTES keeps batches well under
+        // this in practice; hitting it indicates a sizing bug, so it must be
+        // loud — an oversized sync message that vanishes silently is exactly
+        // how the 64 KiB transmit-cap wedge stayed invisible.
+        if payload.len() > MAX_SYNC_MESSAGE_BYTES {
+            warn!(
+                size = payload.len(),
+                max = MAX_SYNC_MESSAGE_BYTES,
+                "Sync message exceeds MAX_SYNC_MESSAGE_BYTES — not publishing"
+            );
+            return;
+        }
         if let Err(e) = self.publish_raw(SYNC_TOPIC, payload).await {
-            tracing::debug!("Sync publish failed: {e}");
+            warn!("Sync publish failed: {e}");
         }
     }
 

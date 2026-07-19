@@ -359,6 +359,31 @@ non-zero count in the checkout, and the images must be rebuilt with
 #328, the **verified capacity claim remains 5,000-event bursts** (100%
 propagation + full Lane 0 finality).
 
+**2026-07-19 13:13 UTC verified re-run — real root cause found:** the
+verification protocol was executed (checkout at the #328 merge commit,
+`solicited` count 25, genuine 186 s `--no-cache` recompile) and the wedge
+reproduced **identically**: both workers at exactly 5,392, zero movement
+over 600 s. With all three repair-path fixes provably in the binary, that
+exactness pointed away from timing entirely: `10,000 − 5,392 = 4,608 =
+MAX_RATE_DEFERRED (4,096) + MAX_SEQUENCE_GAP (512)` — queue/window
+geometry with **no repair delivery at all**. Inspection found the true
+root cause one layer down, in the transport: **gossipsub was running with
+its default 64 KiB `max_transmit_size`** (never configured). Repair
+batches from the tail-holding node serialize well past 64 KiB, so every
+`publish` failed with `MessageTooLarge` — logged only on the *serving*
+node as a generic warning nobody grepped — and no repair batch was ever
+delivered. The only repair that ever worked was small inter-worker deltas
+(the observed `events=66` batches ≈ 46 KB, just under the cap), which is
+why 5-node-mesh workers equalized with each other (~63–66%) but never
+recovered the tail, and identical-frontier star workers froze
+permanently. **Fix:** `max_transmit_size` raised to
+`MAX_SYNC_MESSAGE_BYTES` (2 MiB, matching the receive-side bound) via a
+shared `build_gossipsub_config()`; sync publish failures escalated from
+debug to warn plus a loud oversize guard. Regression test
+`test_gossipsub_transmit_size_carries_repair_batches` pins the cap to the
+receive bound. The four earlier repair-path fixes (#320, #325, #327,
+#328) remain necessary — they were all masked by this delivery failure.
+
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
 chowns them when run as root. An unreadable key silently degrades to an
