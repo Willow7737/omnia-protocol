@@ -1,0 +1,57 @@
+# Publishes the repo's wiki/ directory to the GitHub wiki
+# (github.com/<repo>/wiki) whenever it changes on dev or main.
+#
+# Why sync from the repo instead of editing the wiki directly:
+#   - wiki pages go through normal PR review like everything else
+#   - the wiki can never silently drift from the repo state
+#   - history lives in one place
+#
+# One-time prerequisite: the wiki git repo only exists after the wiki has
+# been initialized once — if this job fails with "repository not found",
+# open the repo's Wiki tab in the GitHub UI, create any page (it will be
+# overwritten by the next sync), and re-run the workflow.
+#
+# If GITHUB_TOKEN is not accepted for the wiki push (rare org policies),
+# add a classic PAT with `repo` scope as the WIKI_TOKEN secret — the job
+# prefers it automatically when present.
+
+name: Sync Wiki
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "wiki/**"
+      - ".github/workflows/wiki-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish wiki/ to the wiki repository
+        env:
+          PUSH_TOKEN: ${{ secrets.WIKI_TOKEN != '' && secrets.WIKI_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" /tmp/wiki
+          rsync -a --delete --exclude .git wiki/ /tmp/wiki/
+          cd /tmp/wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date."
+            exit 0
+          fi
+          git commit -m "Sync wiki from ${GITHUB_REPOSITORY}@${GITHUB_SHA::9}"
+          git push

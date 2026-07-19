@@ -1,0 +1,1 @@
+📚 Canonical docs live in [`docs/`](https://github.com/Willow7737/omnia-protocol/tree/main/docs) · This wiki is version-controlled in [`wiki/`](https://github.com/Willow7737/omnia-protocol/tree/main/wiki) and auto-published — edit via pull request, not the wiki UI · Omnia Protocol is CC0 public domain
