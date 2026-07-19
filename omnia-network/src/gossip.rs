@@ -331,7 +331,16 @@ pub struct GossipProtocol {
     /// `burst_capacity` inserted, the rest gone). Deferring converts the
     /// limiter into backpressure: the burst drains at the refill rate over
     /// subsequent rounds while memory stays bounded.
-    rate_deferred: VecDeque<(Box<Event>, PeerId)>,
+    ///
+    /// The trailing `bool` is the *solicited* flag: `true` for events that
+    /// arrived via an anti-entropy repair batch (we explicitly requested
+    /// them). Solicited events bypass the per-peer rate limiter on retry —
+    /// metering repair through the same token bucket as unsolicited gossip
+    /// let a burst that drained the bucket wedge propagation, because the
+    /// near-frontier gap-fillers repair served could never win a token
+    /// (observed live: a 10k burst stuck at ~54%, the rate-limiter admission
+    /// budget, with repair active but unable to advance the frontier).
+    rate_deferred: VecDeque<(Box<Event>, PeerId, bool)>,
     /// When this node last published an anti-entropy digest on [`SYNC_TOPIC`].
     last_sync_digest: Instant,
     /// When this node last sent an anti-entropy event request (rate gate).
@@ -707,11 +716,14 @@ impl GossipProtocol {
     /// the evicted far-future events are re-served by repair (or re-gossiped)
     /// once the gap below them closes.
     ///
+    /// `solicited` marks events that arrived via an anti-entropy repair
+    /// batch, so they retain rate-limiter-bypass status across re-deferral.
+    ///
     /// Returns `true` if the event is now queued (possibly via eviction),
     /// `false` if it was dropped as the farthest-from-frontier.
-    fn defer_event(&mut self, event: Box<Event>, source: PeerId) -> bool {
+    fn defer_event(&mut self, event: Box<Event>, source: PeerId, solicited: bool) -> bool {
         if self.rate_deferred.len() < MAX_RATE_DEFERRED {
-            self.rate_deferred.push_back((event, source));
+            self.rate_deferred.push_back((event, source, solicited));
             return true;
         }
         // Queue full: locate the highest-sequence entry (the least likely to
@@ -720,7 +732,7 @@ impl GossipProtocol {
         // and the queue is a few thousand entries of integer comparisons.
         let mut max_idx = 0usize;
         let mut max_seq = 0u64;
-        for (i, (ev, _)) in self.rate_deferred.iter().enumerate() {
+        for (i, (ev, _, _)) in self.rate_deferred.iter().enumerate() {
             if ev.sequence >= max_seq {
                 max_seq = ev.sequence;
                 max_idx = i;
@@ -730,7 +742,7 @@ impl GossipProtocol {
             // swap_remove_back is O(1); deferral order does not matter for
             // correctness (every entry is retried each round regardless).
             self.rate_deferred.swap_remove_back(max_idx);
-            self.rate_deferred.push_back((event, source));
+            self.rate_deferred.push_back((event, source, solicited));
             true
         } else {
             false
@@ -753,6 +765,8 @@ impl GossipProtocol {
             Gossip {
                 event: Box<Event>,
                 source: PeerId,
+                /// True for anti-entropy repair events (rate-limiter bypass).
+                solicited: bool,
             },
             Aux {
                 topic: String,
@@ -799,6 +813,8 @@ impl GossipProtocol {
                                 drained.push(DrainedEvent::Gossip {
                                     event: Box::new(event),
                                     source: propagation_source,
+                                    // Live gossip is unsolicited — rate-limited.
+                                    solicited: false,
                                 });
                             }
                             Err(e) => {
@@ -833,12 +849,20 @@ impl GossipProtocol {
         let mut work: Vec<DrainedEvent> = self
             .rate_deferred
             .drain(..)
-            .map(|(event, source)| DrainedEvent::Gossip { event, source })
+            .map(|(event, source, solicited)| DrainedEvent::Gossip {
+                event,
+                source,
+                solicited,
+            })
             .collect();
         work.extend(drained);
         for evt in work {
             match evt {
-                DrainedEvent::Gossip { event, source } => {
+                DrainedEvent::Gossip {
+                    event,
+                    source,
+                    solicited,
+                } => {
                     // Update last_seen for partition detection
                     self.last_seen.insert(source, Instant::now());
 
@@ -864,9 +888,19 @@ impl GossipProtocol {
                     // redelivers, so a drop here would lose the event on this
                     // node permanently. Only when the bounded deferral queue
                     // is itself full does the old drop behaviour kick in.
+                    // Solicited anti-entropy repair events bypass the rate
+                    // limiter: the node explicitly requested them, so they are
+                    // not a DoS vector, and metering them through the same
+                    // per-peer token bucket as unsolicited gossip let a burst
+                    // that drained the bucket permanently starve the
+                    // near-frontier gap-fillers repair serves. They still pass
+                    // full signature validation and out-of-window deferral
+                    // below, and the repair-batch producer is bounded by
+                    // SYNC_BATCH_LIMIT + MAX_SYNC_MESSAGE_BYTES and the
+                    // bounded, evicting deferral queue.
                     let peer_id_bytes = blake3_hash_domain(b"omnia-nonce", &source.to_bytes());
-                    if !self.rate_limiter.allow(&peer_id_bytes) {
-                        if self.defer_event(event, source) {
+                    if !solicited && !self.rate_limiter.allow(&peer_id_bytes) {
+                        if self.defer_event(event, source, false) {
                             tracing::debug!(peer = ?source, "Rate limiting peer — deferring event to next round");
                         } else {
                             warn!(peer = ?source, "Rate limiting peer — deferral queue full, dropping event");
@@ -906,7 +940,7 @@ impl GossipProtocol {
                     // lost ~half its events to gap rejects without this.)
                     if self.graph.read().await.insert_would_reject_out_of_order(&event) {
                         let seq = event.sequence;
-                        if self.defer_event(event, source) {
+                        if self.defer_event(event, source, solicited) {
                             tracing::debug!(seq, "Event ahead of creator chain — deferring to next round");
                         } else {
                             warn!(seq, "Deferral queue full — dropping out-of-window event");
@@ -1280,8 +1314,11 @@ impl GossipProtocol {
                 for event in batch.events.into_iter().take(SYNC_BATCH_LIMIT) {
                     // Repaired events are the gap-fillers closest to the
                     // frontier; defer_event evicts far-future entries so they
-                    // are never starved by a saturated queue.
-                    if self.defer_event(Box::new(event), source) {
+                    // are never starved by a saturated queue. Marked solicited
+                    // so they bypass the per-peer rate limiter on admission —
+                    // we requested them, so they must not be throttled behind
+                    // a token bucket the initial burst already drained.
+                    if self.defer_event(Box::new(event), source, true) {
                         queued += 1;
                     }
                 }
@@ -2001,28 +2038,72 @@ mod tests {
 
         // Saturate with far-future (high-sequence) out-of-window events.
         for i in 0..MAX_RATE_DEFERRED as u64 {
-            assert!(gossip.defer_event(make(10_000 + i), peer));
+            assert!(gossip.defer_event(make(10_000 + i), peer, false));
         }
         assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED);
 
         // A near-frontier event is admitted by displacing a far-future one.
         assert!(
-            gossip.defer_event(make(5), peer),
+            gossip.defer_event(make(5), peer, true),
             "low-sequence event queued via eviction"
         );
         assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED, "queue stays bounded");
         assert!(
-            gossip.rate_deferred.iter().any(|(e, _)| e.sequence == 5),
+            gossip.rate_deferred.iter().any(|(e, _, _)| e.sequence == 5),
             "near-frontier gap-filler retained"
         );
 
         // A farther-future event than anything queued is dropped, not swapped in.
         assert!(
-            !gossip.defer_event(make(99_999), peer),
+            !gossip.defer_event(make(99_999), peer, false),
             "farthest-from-frontier event dropped"
         );
         assert_eq!(gossip.rate_deferred.len(), MAX_RATE_DEFERRED);
-        assert!(!gossip.rate_deferred.iter().any(|(e, _)| e.sequence == 99_999));
+        assert!(!gossip.rate_deferred.iter().any(|(e, _, _)| e.sequence == 99_999));
+    }
+
+    #[tokio::test]
+    async fn test_solicited_repair_bypasses_rate_limiter() {
+        // Under a deny-all rate limiter, an unsolicited event stays deferred
+        // (backpressure), but a solicited anti-entropy repair event is still
+        // admitted — repair must not be throttled behind a token bucket the
+        // initial burst already drained (the ~54% wedge root cause).
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            sync_interval_ms: 1,
+            burst_capacity: 0,
+            max_events_per_second: 0,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let peer = PeerId::random();
+
+        // Solicited path: deliver a valid genesis event via a repair batch.
+        let (creator, chain) = signed_chain(1);
+        let batch = GossipMessage::Events(EventBatch {
+            events: chain.clone(),
+            has_more: false,
+            tip_clock: VectorClock::with_node(creator, 1),
+        });
+        gossip.handle_sync_message(sync_wire(&batch), peer).await;
+        assert_eq!(gossip.rate_deferred.len(), 1, "repair event queued");
+        gossip.process_pending_events().await.expect("process");
+        assert!(
+            gossip.graph().read().await.contains(&chain[0].id),
+            "solicited repair event bypassed the deny-all rate limiter and inserted"
+        );
+        assert!(gossip.rate_deferred.is_empty(), "solicited event not re-deferred");
+
+        // Control: an unsolicited event under the same limiter is NOT admitted;
+        // it re-defers (backpressure), proving the bypass is solicited-only.
+        let (_creator2, chain2) = signed_chain(1);
+        gossip.defer_event(Box::new(chain2[0].clone()), peer, false);
+        gossip.process_pending_events().await.expect("process");
+        assert!(
+            !gossip.graph().read().await.contains(&chain2[0].id),
+            "unsolicited event blocked by the rate limiter"
+        );
+        assert_eq!(gossip.rate_deferred.len(), 1, "unsolicited event re-deferred, not lost");
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────
