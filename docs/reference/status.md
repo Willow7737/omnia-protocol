@@ -13,13 +13,17 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 > gossip anti-entropy repair merged (#320) so bounded-queue drops
 > self-heal. Numbers + methodology: [benchmark-gates.md](./benchmark-gates.md).
 >
-> **2026-07-19:** 10,000-event stress testing exposed and fixed three
-> stacked bottlenecks in the burst-recovery path (PRs #325, #327, #328:
-> per-peer repair serving, frontier-priority deferral eviction, and
-> rate-limiter bypass for solicited repair). Verified capacity remains
-> **5,000-event bursts with 100% propagation + full Lane 0 finality**;
-> the 10k convergence re-run on the fixed binary is in progress and
-> tracked in [benchmark-gates.md](./benchmark-gates.md).
+> **2026-07-19:** 10,000-event stress testing exposed and fixed FIVE
+> stacked bottlenecks in the burst-recovery path (PRs #325, #327, #328,
+> #330: per-peer repair serving, frontier-priority deferral eviction,
+> rate-limiter bypass for solicited repair, and — the root cause masking
+> them all — gossipsub's unconfigured 64 KiB transmit cap silently
+> dropping every repair batch). Verified same day on a provably fresh
+> binary: **10,000-event bursts now reach 100% propagation AND
+> 10,000/10,000 Lane 0 quorum finality on every node — zero loss,
+> self-healed entirely by anti-entropy repair** (tail repair is
+> deliberate-paced, ~10 min; tuning levers documented). Numbers +
+> full diagnosis arc: [benchmark-gates.md](./benchmark-gates.md).
 
 ## 1. Core Protocol (The Substrate)
 

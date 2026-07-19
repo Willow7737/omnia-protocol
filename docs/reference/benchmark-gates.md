@@ -384,6 +384,40 @@ debug to warn plus a loud oversize guard. Regression test
 receive bound. The four earlier repair-path fixes (#320, #325, #327,
 #328) remain necessary — they were all masked by this delivery failure.
 
+**2026-07-19 13:56 UTC — 10,000-event burst CONVERGED (new verified
+milestone):** with #330 deployed under the full verification protocol
+(checkout at the #330 merge, `max_transmit_size` present, genuine 182 s
+`--no-cache` recompile), the 3-node star run reached **100% propagation
+AND `finalized_total = 10,000` on every node** — zero loss, full Lane 0
+quorum finality, self-healed entirely by anti-entropy repair:
+
+| node | dag Δ | prop % | converged (s) | finalized_total | RSS |
+|------|------:|-------:|--------------:|----------------:|----:|
+| 9090 (ingress) | 10,000 | 100.0 | 24.5 | 10,000 | 94 MB |
+| 9091 | 10,000 | 100.0 | 604.1 | 10,000 | 91 MB |
+| 9092 | 10,000 | 100.0 | 604.2 | 10,000 | 90 MB |
+
+Ingress: 10,000/10,000 accepted in 22.5 s (445 ev/s submit). Report:
+`testnet-bench-20260719-135620.json`.
+
+**Reading:** a 10k single-source burst is now *lossless* — everything the
+live gossip path drops under overload is recovered by repair and reaches
+quorum finality. The honest caveat is the **tail-repair pace**: the
+~4,600-event deficit drained in ~580 s (~8 ev/s per worker), consistent
+with one byte-budgeted repair batch per 10 s digest interval. Known
+tuning levers, in order of leverage: (1) let a behind node issue a
+follow-up request immediately when a batch arrives with `has_more` set,
+instead of waiting for the next digest; (2) shorten `sync_interval_ms`
+for repair-active peers; (3) raise `SYNC_BATCH_MAX_BYTES` toward the
+2 MiB transmit cap. None are required for correctness.
+
+**Verified capacity (2026-07-19): 10,000-event bursts — 100% propagation
++ 10,000/10,000 Lane 0 finality (3-node star, single host); 5,000-event
+bursts converge within ~45 s (5-node mesh). Sustained-rate guidance
+unchanged (~2,000–3,000 ev/s burst comfort zone for sub-minute
+convergence; larger bursts converge losslessly but ride the repair
+tail).**
+
 Operational note: validator keys mounted into the containers must be
 readable by uid 1000 (the container user) — `setup-validators.sh` now
 chowns them when run as root. An unreadable key silently degrades to an
