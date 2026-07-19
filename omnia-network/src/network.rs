@@ -233,6 +233,30 @@ impl Default for PeerScoreTracker {
 // ---------------------------------------------------------------------------
 
 /// Configure GossipSub peer scoring for Omnia's threat model.
+/// Build the gossipsub configuration shared by every Omnia node.
+///
+/// The transmit cap is raised above the libp2p default of 64 KiB: anti-entropy
+/// repair batches (up to `SYNC_BATCH_LIMIT` events, byte-budgeted to
+/// `SYNC_BATCH_MAX_BYTES`) and maximum-payload events both exceed 64 KiB, and
+/// with the default cap their publish fails with `MessageTooLarge` — so the
+/// repair path silently never delivered. Observed live as a permanent
+/// propagation wedge: workers frozen at ~54% after a 10k burst while
+/// "serving repair batch" logs looked healthy on the serving node (the
+/// failure surfaced only as a `Publish failed` warning in the server's own
+/// logs). The cap matches the receive-side bound
+/// [`crate::gossip::MAX_SYNC_MESSAGE_BYTES`], so anything a peer will accept
+/// can actually be sent.
+pub fn build_gossipsub_config() -> Result<gossipsub::Config, gossipsub::ConfigBuilderError> {
+    gossipsub::ConfigBuilder::default()
+        .validation_mode(ValidationMode::Strict)
+        .max_transmit_size(crate::gossip::MAX_SYNC_MESSAGE_BYTES)
+        .message_id_fn(|msg: &gossipsub::Message| {
+            let hash = blake3_hash_domain(b"omnia-commitment", &msg.data);
+            gossipsub::MessageId::from(hash.to_vec())
+        })
+        .build()
+}
+
 ///
 /// Returns `(PeerScoreParams, PeerScoreThresholds)` tuned for:
 /// - Heavy penalty for invalid messages (-150 per invalid delivery)
@@ -510,13 +534,7 @@ impl OmniaNetwork {
         let local_peer_id = PeerId::from(local_key.public());
 
         // ── GossipSub config ─────────────────────────────────────────
-        let gossipsub_config = gossipsub::ConfigBuilder::default()
-            .validation_mode(ValidationMode::Strict)
-            .message_id_fn(|msg: &gossipsub::Message| {
-                let hash = blake3_hash_domain(b"omnia-commitment", &msg.data);
-                gossipsub::MessageId::from(hash.to_vec())
-            })
-            .build()?;
+        let gossipsub_config = build_gossipsub_config()?;
 
         // ── Kademlia DHT config (H-4) ────────────────────────────────
         let stream_protocol = StreamProtocol::try_from_owned(config.dht_protocol.clone())
@@ -1136,5 +1154,23 @@ mod tests {
         // Multiaddr without /p2p suffix
         let addr_no_p2p: Multiaddr = "/ip4/1.2.3.4/udp/4001/quic-v1".parse().expect("valid multiaddr");
         assert!(extract_peer_id_from_multiaddr(&addr_no_p2p).is_none());
+    }
+
+    #[test]
+    fn test_gossipsub_transmit_size_carries_repair_batches() {
+        // The transmit cap must cover everything the receive side accepts —
+        // with the libp2p default (64 KiB), anti-entropy repair batches
+        // failed to publish (MessageTooLarge) and the repair path silently
+        // never delivered, wedging propagation after large bursts.
+        let config = build_gossipsub_config().expect("config builds");
+        assert_eq!(
+            config.max_transmit_size(),
+            crate::gossip::MAX_SYNC_MESSAGE_BYTES,
+            "transmit cap must match the sync receive cap"
+        );
+        assert!(
+            config.max_transmit_size() > crate::gossip::SYNC_BATCH_MAX_BYTES,
+            "a full byte-budgeted repair batch must fit in one message"
+        );
     }
 }
