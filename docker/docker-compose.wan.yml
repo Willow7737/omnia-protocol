@@ -1,0 +1,61 @@
+# Omnia Protocol — Single WAN Node (geo-distributed testnet member)
+#
+# Runs ONE node on a VPS that joins a geo-distributed testnet by dialing a
+# remote bootstrap node over the public internet. Used by
+# docs/operations/geo-testnet.md — read that runbook first.
+#
+# Uses host networking deliberately: the node binds the host's UDP 4001
+# (QUIC) and TCP 9090 (HTTP API + metrics) directly, so libp2p sees the
+# real host addresses and there is no Docker NAT between peers — inbound
+# QUIC dials and identify/observed-address exchange just work.
+#
+# Required environment (put them in docker/.env on this host — the runbook
+# copies it from the key-generating host so the validator set matches):
+#   OMNIA_JWT_SECRET        same secret on every node
+#   OMNIA_LANE0_VALIDATORS  identical comma list on every node
+#   OMNIA_RATE_LIMIT_RPS    e.g. 1000 for benchmarks
+#   OMNIA_NODE_ID           unique small integer per node (1, 2, 3, …)
+#   OMNIA_BOOTSTRAP_NODES   /ip4/<bootstrap-public-ip>/udp/4001/quic-v1
+#                           (empty on the bootstrap node itself)
+#   OMNIA_KEY_DIR           host path to this node's key dir, e.g.
+#                           ../ops/testnet-keys/node1
+#
+# Bring up:
+#   docker compose -f docker/docker-compose.wan.yml up -d --build
+#
+# Verify:
+#   curl -s http://localhost:9090/api/v1/node/info | python3 -m json.tool
+
+services:
+  omnia-node:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: omnia-node
+    network_mode: host
+    environment:
+      - RUST_LOG=info
+      - OMNIA_NODE_ID=${OMNIA_NODE_ID:?set a unique node id in docker/.env}
+      - OMNIA_BOOTSTRAP_NODES=${OMNIA_BOOTSTRAP_NODES:-}
+      - OMNIA_LISTEN_ADDR=/ip4/0.0.0.0/udp/4001/quic-v1
+      - OMNIA_HTTP_PORT=9090
+      - OMNIA_DATA_DIR=/app/data
+      - OMNIA_TOTAL_NODES=${OMNIA_TOTAL_NODES:-3}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?copy docker/.env from the key host}
+      - OMNIA_AUTHORIZED_CALLERS=admin-caller
+      - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-1000}
+      - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:?copy docker/.env from the key host}
+      - OMNIA_NODE_KEY_FILE=/keys/validator_key.bin
+    volumes:
+      - wan-node-data:/app/data
+      - ${OMNIA_KEY_DIR:?set OMNIA_KEY_DIR in docker/.env}:/keys:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  wan-node-data:
