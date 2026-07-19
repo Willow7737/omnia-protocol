@@ -346,15 +346,29 @@ pub struct GossipProtocol {
     /// When this node last sent an anti-entropy event request (rate gate).
     last_sync_request: Instant,
     /// When this node last served an anti-entropy repair batch to a given
-    /// peer (per-peer rate gate).
+    /// peer, plus the requester's frontier total at that serve (per-peer
+    /// rate gate with progress-aware fast drain).
     ///
     /// A single global timer let one requester monopolize the interval:
     /// with N peers behind, only one received a repair batch per
     /// `sync_interval_ms`, so a large deficit took N times longer to heal.
     /// Gating per source lets the server answer every requesting peer once
-    /// per interval. Bounded by [`MAX_SYNC_RESPONSE_PEERS`] with stale-entry
-    /// pruning so a churning network cannot grow it without limit.
-    last_sync_response: HashMap<PeerId, Instant>,
+    /// per interval. The stored frontier total additionally lets a
+    /// *progressing* peer be served again immediately: a follow-up request
+    /// whose `since` frontier is strictly ahead of the last served one
+    /// proves the previous batch was admitted, so it is a genuine `has_more`
+    /// continuation, not a replay — throttling it to the interval made a
+    /// 10k-burst tail drain at one batch per 10 s (~10 minutes). Bounded by
+    /// [`MAX_SYNC_RESPONSE_PEERS`] with stale-entry pruning so a churning
+    /// network cannot grow it without limit.
+    last_sync_response: HashMap<PeerId, (Instant, u64)>,
+    /// Set when an anti-entropy repair batch arrived with `has_more`: after
+    /// the current processing round admits the batch, send a follow-up
+    /// request immediately (with the advanced frontier) instead of waiting
+    /// for the next peer digest. This chains batch-per-round while behind,
+    /// collapsing tail-repair time from one batch per `sync_interval_ms`
+    /// to one batch per processing round.
+    sync_continuation: bool,
 }
 
 /// Cap on the per-peer [`GossipProtocol::last_sync_response`] map. When
@@ -416,6 +430,7 @@ impl GossipProtocol {
             // Empty per-peer map: absence means "never served this peer",
             // so the first request from any peer is answered immediately.
             last_sync_response: HashMap::new(),
+            sync_continuation: false,
         }
     }
 
@@ -1059,6 +1074,28 @@ impl GossipProtocol {
             tracing::debug!(depth, "Rate-limit deferral queue draining");
         }
 
+        // Fast drain: a repair batch this round carried has_more, and its
+        // events have now been admitted (frontier advanced). Chain the next
+        // request immediately with the fresh frontier — the serving peer's
+        // progress-aware gate recognizes the advanced frontier and answers
+        // without waiting for the interval. Bypasses the local digest-driven
+        // request gate deliberately; `last_sync_request` is still stamped so
+        // digest-triggered requests stay paced.
+        if self.sync_continuation && self.network_cmd_tx.is_some() {
+            self.sync_continuation = false;
+            let frontier = self.graph.read().await.frontier().clone();
+            self.last_sync_request = Instant::now();
+            tracing::info!("Anti-entropy: has_more continuation — requesting next repair batch now");
+            let request = GossipMessage::Request(EventRequest {
+                known_events: Vec::new(),
+                limit: SYNC_BATCH_LIMIT,
+                since: frontier,
+            });
+            self.publish_sync_message(&request).await;
+        } else {
+            self.sync_continuation = false;
+        }
+
         Ok(inserted_ids)
     }
 
@@ -1194,7 +1231,7 @@ impl GossipProtocol {
 
     /// Record that a repair batch was just served to `source`, pruning the
     /// per-peer response map if it has grown past [`MAX_SYNC_RESPONSE_PEERS`].
-    fn record_sync_response(&mut self, source: PeerId) {
+    fn record_sync_response(&mut self, source: PeerId, since_total: u64) {
         let now = Instant::now();
         if self.last_sync_response.len() >= MAX_SYNC_RESPONSE_PEERS && !self.last_sync_response.contains_key(&source) {
             let stale = self
@@ -1202,9 +1239,9 @@ impl GossipProtocol {
                 .sync_interval_ms
                 .saturating_mul(u64::from(STALE_SYNC_RESPONSE_INTERVALS));
             self.last_sync_response
-                .retain(|_, t| (t.elapsed().as_millis() as u64) < stale);
+                .retain(|_, (t, _)| (t.elapsed().as_millis() as u64) < stale);
         }
-        self.last_sync_response.insert(source, now);
+        self.last_sync_response.insert(source, (now, since_total));
     }
 
     /// Handle one message received on [`SYNC_TOPIC`].
@@ -1256,9 +1293,21 @@ impl GossipProtocol {
             GossipMessage::Request(request) => {
                 // Rate-gate served batches to one per sync interval *per
                 // requesting peer*, so one requester can't monopolize the
-                // interval and starve the others.
-                if let Some(last) = self.last_sync_response.get(&source) {
-                    if last.elapsed().as_millis() < interval {
+                // interval and starve the others — EXCEPT when the requester
+                // has provably progressed: a `since` frontier strictly ahead
+                // of the one we last served proves the previous batch was
+                // admitted, so this is a genuine has_more continuation and
+                // is served immediately (fast drain). A stalled or replayed
+                // frontier still waits out the interval, so the gate's DoS
+                // property is preserved: a peer can never extract more than
+                // one batch per interval without advancing.
+                let since_total: u64 = request
+                    .since
+                    .nodes()
+                    .fold(0u64, |acc, n| acc.saturating_add(request.since.get(n)));
+                if let Some((last, last_total)) = self.last_sync_response.get(&source) {
+                    let progressed = since_total > *last_total;
+                    if !progressed && last.elapsed().as_millis() < interval {
                         return;
                     }
                 }
@@ -1306,7 +1355,7 @@ impl GossipProtocol {
                 if missing.is_empty() {
                     return;
                 }
-                self.record_sync_response(source);
+                self.record_sync_response(source, since_total);
                 tracing::info!(
                     peer = ?source,
                     events = missing.len(),
@@ -1339,7 +1388,18 @@ impl GossipProtocol {
                     self.stats.syncs_completed += 1;
                     self.stats.total_events_in_syncs += queued as u64;
                     self.stats.total_syncs += 1;
-                    tracing::info!(events = queued, "Anti-entropy: queued repair batch for admission");
+                    tracing::info!(
+                        events = queued,
+                        has_more = batch.has_more,
+                        "Anti-entropy: queued repair batch for admission"
+                    );
+                    // Fast drain: the server has more we're missing. After
+                    // this round admits the batch, request the next one
+                    // immediately with the advanced frontier instead of
+                    // waiting up to sync_interval_ms for the next digest.
+                    if batch.has_more {
+                        self.sync_continuation = true;
+                    }
                 }
             }
             GossipMessage::Ack(_) => {}
@@ -2117,6 +2177,106 @@ mod tests {
             "unsolicited event blocked by the rate limiter"
         );
         assert_eq!(gossip.rate_deferred.len(), 1, "unsolicited event re-deferred, not lost");
+    }
+
+    #[tokio::test]
+    async fn test_sync_has_more_batch_triggers_immediate_continuation() {
+        use tokio::sync::mpsc;
+
+        // A repair batch flagged has_more must chain a follow-up request in
+        // the same processing round (with the post-admission frontier), not
+        // wait up to sync_interval_ms for the next digest — that pacing made
+        // a 10k tail drain take ~10 minutes.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            sync_interval_ms: 60_000,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(8);
+        gossip.network_cmd_tx = Some(cmd_tx);
+
+        let (creator, chain) = signed_chain(3);
+        let batch = GossipMessage::Events(EventBatch {
+            events: chain,
+            has_more: true,
+            tip_clock: VectorClock::with_node(creator, 3),
+        });
+        gossip.handle_sync_message(sync_wire(&batch), PeerId::random()).await;
+        gossip.process_pending_events().await.expect("process");
+        assert_eq!(gossip.graph().read().await.len(), 3, "batch admitted");
+
+        let mut continuation = None;
+        while let Ok(NetworkCommand::Publish { topic, data }) = cmd_rx.try_recv() {
+            assert_eq!(topic, SYNC_TOPIC);
+            if let GossipMessage::Request(req) = decode_sync(&data) {
+                continuation = Some(req);
+            }
+        }
+        let req = continuation.expect("continuation request sent despite long sync interval");
+        assert_eq!(
+            req.since.get(&creator),
+            3,
+            "continuation carries the post-admission frontier"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sync_server_fast_serves_progressing_peer() {
+        use tokio::sync::mpsc;
+
+        // A peer whose `since` frontier advanced past the last served one is
+        // answered immediately (has_more continuation); a peer re-sending
+        // the same frontier stays gated to one batch per interval.
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let (creator, chain) = signed_chain(6);
+        {
+            let mut g = graph.write().await;
+            for ev in &chain {
+                g.insert(ev.clone()).expect("insert");
+            }
+        }
+        let config = GossipConfig {
+            sync_interval_ms: 60_000,
+            ..Default::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(8);
+        gossip.network_cmd_tx = Some(cmd_tx);
+        let peer = PeerId::random();
+
+        let request = |since: VectorClock| {
+            sync_wire(&GossipMessage::Request(EventRequest {
+                known_events: Vec::new(),
+                limit: SYNC_BATCH_LIMIT,
+                since,
+            }))
+        };
+        let served = |rx: &mut mpsc::Receiver<NetworkCommand>| -> Option<usize> {
+            match rx.try_recv() {
+                Ok(NetworkCommand::Publish { data, .. }) => match decode_sync(&data) {
+                    GossipMessage::Events(b) => Some(b.events.len()),
+                    _ => None,
+                },
+                _ => None,
+            }
+        };
+
+        // First request: empty frontier, served everything.
+        gossip.handle_sync_message(request(VectorClock::new()), peer).await;
+        assert_eq!(served(&mut cmd_rx), Some(6), "first request served");
+
+        // Progressed frontier (entry 3 > 0): served immediately in-interval.
+        gossip
+            .handle_sync_message(request(VectorClock::with_node(creator, 3)), peer)
+            .await;
+        assert_eq!(served(&mut cmd_rx), Some(3), "progressing peer fast-served");
+
+        // Same frontier again (no progress): gated for the interval.
+        gossip
+            .handle_sync_message(request(VectorClock::with_node(creator, 3)), peer)
+            .await;
+        assert!(served(&mut cmd_rx).is_none(), "stalled frontier stays gated");
     }
 
     // ── Task 3.2: Bootstrap Peer Tests ─────────────────────────────────

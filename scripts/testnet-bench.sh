@@ -116,6 +116,22 @@ echo "🚀 Submitting $EVENTS events to $TARGET (concurrency $CONCURRENCY)..."
 RESULTS_TMP=$(mktemp)
 trap 'rm -f "$RESULTS_TMP"' EXIT
 
+# Live submission progress: one updating line so a long submit never looks
+# stuck. Runs in the background while xargs fires requests; killed after.
+SUB_START=$(date +%s)
+(
+  while :; do
+    n=$(wc -l < "$RESULTS_TMP" 2>/dev/null || echo 0)
+    pct=$(( EVENTS > 0 ? n * 100 / EVENTS : 0 ))
+    filled=$(( pct * 24 / 100 )); (( filled > 24 )) && filled=24
+    bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' $(( 24 - filled )) '' | tr ' ' '-')
+    printf '\r\033[K  🚀 [%s] %d/%d (%d%%)  %ds elapsed' \
+      "$bar" "$n" "$EVENTS" "$pct" $(( $(date +%s) - SUB_START ))
+    sleep 1
+  done
+) &
+SUB_PROG_PID=$!
+
 START_NS=$(date +%s%N)
 seq 1 "$EVENTS" | xargs -P "$CONCURRENCY" -I {} sh -c '
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
@@ -126,6 +142,9 @@ seq 1 "$EVENTS" | xargs -P "$CONCURRENCY" -I {} sh -c '
   echo "$code"
 ' >> "$RESULTS_TMP"
 END_NS=$(date +%s%N)
+kill "$SUB_PROG_PID" 2>/dev/null || true
+wait "$SUB_PROG_PID" 2>/dev/null || true
+printf '\r\033[K'
 
 OK_COUNT=$(grep -c "^2" "$RESULTS_TMP" || true)
 THROTTLED=$(grep -c "^429$" "$RESULTS_TMP" || true)
@@ -148,25 +167,47 @@ fi
 echo ""
 echo "⏳ Waiting for propagation (timeout ${TIMEOUT}s)..."
 declare -A CONVERGED_AT
-DEADLINE=$(( $(date +%s) + TIMEOUT ))
+WAIT_START=$(date +%s)
+DEADLINE=$(( WAIT_START + TIMEOUT ))
 while :; do
   now=$(date +%s)
   all_done=1
+  min_pct=100
+  status=""
   for url in "${NODE_URLS[@]}"; do
-    [[ -n "${CONVERGED_AT[$url]:-}" ]] && continue
+    port="${url##*:}"
+    if [[ -n "${CONVERGED_AT[$url]:-}" ]]; then
+      status+="  ${port}:100%"
+      continue
+    fi
     delta=$(( $(dag_total "$url") - BASELINE[$url] ))
     if (( delta >= OK_COUNT )); then
       CONVERGED_AT[$url]=$(awk -v s="$START_NS" -v e="$(date +%s%N)" 'BEGIN{printf "%.2f", (e-s)/1e9}')
+      printf '\r\033[K'
       echo "  ✅ $url converged (+$delta) at ${CONVERGED_AT[$url]}s"
+      status+="  ${port}:100%"
     else
       all_done=0
+      pct=$(( OK_COUNT > 0 ? delta * 100 / OK_COUNT : 0 ))
+      status+="  ${port}:${pct}%"
+      (( pct < min_pct )) && min_pct=$pct
     fi
   done
-  (( all_done )) && break
+  if (( all_done )); then
+    printf '\r\033[K'
+    break
+  fi
   if (( now >= DEADLINE )); then
+    printf '\r\033[K'
     echo "  ⚠️  Timeout — reporting partial propagation."
     break
   fi
+  # Live status line: elapsed timer, slowest-node progress bar, per-node %.
+  # Redrawn in place so a slow repair tail is visibly moving, never "stuck".
+  elapsed=$(( now - WAIT_START ))
+  filled=$(( min_pct * 24 / 100 )); (( filled > 24 )) && filled=24
+  bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' $(( 24 - filled )) '' | tr ' ' '-')
+  printf '\r\033[K  ⏱  %4ds/%ds  [%s]%s' "$elapsed" "$TIMEOUT" "$bar" "$status"
   sleep 2
 done
 
