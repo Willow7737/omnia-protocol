@@ -419,13 +419,24 @@ impl ShardRouter {
 
         // Only persist nonce and insert into in-memory map if operation succeeded
         if result.is_ok() {
-            self.last_nonces.insert(creator, payload.nonce);
-            // NEW-M7 fix: on save_incremental failure, halt the node instead
-            // of logging a warning. The previous code silently diverged — the
-            // in-memory nonce map had the new nonce but the persistent store
-            // didn't. On restart, the stale persisted nonce allowed replay of
-            // all post-failure events. Now we fail-closed: the node halts so
-            // the operator can fix the disk issue before more events are
+            // AUDIT-2026-07 C8 (#346): persist FIRST, acknowledge in memory
+            // only after persistence succeeds. The previous order inserted
+            // into `last_nonces` and then persisted — on save failure the
+            // node halted (NEW-M7 fail-closed), but memory had acknowledged
+            // a nonce that disk never recorded, so the memory/disk states
+            // straddling the halt disagreed. With persist-first, at every
+            // instant the durable store is at least as advanced as the
+            // in-memory map, so a restart can never resurrect a nonce
+            // acknowledgment that was not durable.
+            //
+            // Remaining (documented) gap: the shard-state mutation above
+            // still precedes nonce durability; closing that fully requires
+            // one transaction covering shard-state snapshot + nonce
+            // (tracked in #346).
+            //
+            // NEW-M7 fix retained: on save_incremental failure, halt the
+            // node instead of logging a warning — fail-closed, so the
+            // operator fixes the disk issue before more events are
             // processed.
             if let Err(e) = self.nonce_store.save_incremental(&creator, payload.nonce) {
                 tracing::error!(
@@ -445,6 +456,7 @@ impl ShardRouter {
                     e
                 );
             }
+            self.last_nonces.insert(creator, payload.nonce);
         }
 
         result
@@ -631,5 +643,17 @@ impl omnia_substrate::EventProcessor for MutexShardRouter {
             .lock()
             .map_err(|e| omnia_substrate::EventProcessorError::Internal(format!("ShardRouter mutex poisoned: {e}")))?;
         guard.process_event(event)
+    }
+}
+
+impl ShardRouter {
+    /// Read the in-memory acknowledged nonce for a creator.
+    ///
+    /// Hidden from docs: exists for the C8 (#346) persist-ordering
+    /// regression tests, which must observe that a failed nonce persist
+    /// never acknowledges in memory. Read-only; not a public API.
+    #[doc(hidden)]
+    pub fn last_acknowledged_nonce(&self, creator: &[u8; 32]) -> Option<u64> {
+        self.last_nonces.get(creator).copied()
     }
 }
