@@ -79,6 +79,11 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
   5-node mesh: a 10,000-event burst overwhelms live gossip, then repair
   recovers every event — **100% propagation + full quorum finality on
   all five nodes, zero loss, median convergence under a minute.**
+- **Proven on the real internet (2026-07-20)** — a 3-region WAN
+  validator network (Nuremberg / Ashburn / Singapore, RTTs up to
+  ~218 ms) sustained the same test: **100% propagation + full quorum
+  finality at 1k/5k/10k bursts, zero loss.** No more single-host
+  asterisk.
 - Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
   `OmniaCRDT`) model-checked in CI on every PR.
 

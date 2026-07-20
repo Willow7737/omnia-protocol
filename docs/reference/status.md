@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-07-19
+> 📅 Last Updated: 2026-07-20
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -27,6 +27,13 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 > validator mesh — 100% propagation + full quorum finality on all five
 > nodes, median convergence under a minute.** Numbers + full diagnosis
 > arc: [benchmark-gates.md](./benchmark-gates.md).
+>
+> **2026-07-20:** the **geo-distributed WAN run is done** — 3 Lane 0
+> validators across Nuremberg / Ashburn / Singapore (RTTs 99/160/218 ms):
+> **100% propagation + full quorum finality at 1k, 5k, and 10k bursts,
+> zero loss.** The single-host asterisk on Omnia's network numbers is
+> gone. Topology, RTT matrix, and per-rung results:
+> [benchmark-gates.md](./benchmark-gates.md).
 
 ## 1. Core Protocol (The Substrate)
 
@@ -158,7 +165,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 | **REQ-P4.2** | Solana Settlement Adapter                   | P1       | 🔄 Stub        |
 | **REQ-P4.3** | Celestia Settlement Adapter                 | P1       | 🔄 Stub        |
 | **REQ-P4.4** | Validator Network (multi-node)              | P0       | ✅ Completed — live multi-node Lane 0 validator network (quorum-signed finality measured; see [benchmark-gates.md](./benchmark-gates.md)) |
-| **REQ-P4.5** | Public Testnet Launch                       | P0       | 🔄 Live (multi-node, single host; geo-distributed rollout planned) |
+| **REQ-P4.5** | Public Testnet Launch                       | P0       | ✅ Completed — live multi-node network, measured geo-distributed across 3 regions (2026-07-20) |
 | **REQ-P4.6** | Dynamic Fee Mechanism (EIP-1559-style)      | P1       | 📋 Planned     |
 | **REQ-P4.7** | Documentation Sprint (Dashboard, ADRs, FAQ) | P2       | ✅ Completed   |
 | **REQ-P4.8** | VRF Spec Compliance (ADR-012)               | P2       | 📋 Deferred    |

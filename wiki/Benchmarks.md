@@ -9,10 +9,11 @@ single-sample fast gates). The canonical, always-current record is
 
 ## Live-network results (July 2026, real QUIC/gossipsub mesh)
 
-The headline: **a 10,000-event single-source burst on the full 5-node
-validator mesh reached 100% propagation AND 10,000/10,000 Lane 0 BFT
-finality on every node — zero loss** (2026-07-19, single host; the
-geo-distributed re-run is the next milestone).
+The headline: **a 10,000-event burst reaches 100% propagation AND full
+Lane 0 BFT finality on every node — zero loss — both on a 5-node
+single-host mesh (2026-07-19) and on a real 3-region WAN validator
+network (2026-07-20): Nuremberg / Ashburn / Singapore, RTTs up to
+~218 ms.**
 
 | Burst | Topology | Propagation | Finality | Convergence |
 |---|---|---|---|---|
@@ -20,6 +21,9 @@ geo-distributed re-run is the next milestone).
 | 2,000 | 5-node mesh + Lane 0 | 100% ×5 | 2,000/2,000 | ~7–17 s |
 | 5,000 | 5-node mesh + Lane 0 | 100% ×5 | 5,000/5,000 | ~40–45 s |
 | **10,000** | **5-node mesh + Lane 0** | **100% ×5** | **10,000/10,000** | **median < 60 s** (stragglers to ~5 min) |
+| 1,000 | **3-region WAN** (99–218 ms RTT) | 100% ×3 | full quorum | < 8 s |
+| 5,000 | 3-region WAN | 100% ×3 | full quorum | 12 s–4.6 min |
+| **10,000** | **3-region WAN** | **100% ×3** | **full quorum** | **2 of 3 nodes < 40 s** (straggler ~4.8 min) |
 
 The 10k result is the interesting one: the burst deliberately overwhelms
 live gossip, and **anti-entropy repair recovers everything** — nodes
@@ -56,9 +60,10 @@ The docs are strict about never mixing the two.
 
 ## Honest caveats (we keep them attached)
 
-- All multi-node numbers so far are **single-host** (near-zero RTT). The
-  geo-distributed run across EU/US/Asia is the next recorded milestone —
-  runbook: [`docs/operations/geo-testnet.md`](https://github.com/Willow7737/omnia-protocol/blob/main/docs/operations/geo-testnet.md).
+- The WAN repair tail stretches with RTT: the straggling node on large
+  bursts pays repair-chain round-trips over the worst path (B↔C,
+  ~218 ms). Median convergence stays fast; the documented next lever is
+  directed (unicast) repair serving.
 - Large-burst convergence has a repair tail (stragglers up to ~5 min at
   10k); the comfort zone for sub-minute convergence is ~2,000–3,000 events
   per burst. Tail-tuning levers are documented.

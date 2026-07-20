@@ -18,13 +18,14 @@ gatekeeping.
 
 Working and measured, today: the full consensus substrate; a live
 multi-node validator testnet with real BFT finality (10,000/10,000 events
-finalized across 5 validators in stress testing); anti-entropy
-self-healing; a shipped mobile wallet, web dashboard, and website; ZK
-proof generation with an Ethereum settlement adapter; TLA+ specs
-model-checked in CI.
+finalized across 5 validators in stress testing); a **geo-distributed
+3-region WAN run** (EU/US/Asia, RTTs to ~218 ms) with 100% propagation
+and full finality at 10k bursts; anti-entropy self-healing; a shipped
+mobile wallet, web dashboard, and website; ZK proof generation with an
+Ethereum settlement adapter; TLA+ specs model-checked in CI.
 
-Explicitly not done yet: geo-distributed deployment (runbook ready, run
-pending), external security audit, Bitcoin/Solana/Celestia adapters
+Explicitly not done yet: a permanently-running geo network (the WAN run
+was a measured campaign), external security audit, Bitcoin/Solana/Celestia adapters
 (stubs), proof-of-useful-work, conviction voting/delegation. The
 requirement-level truth lives in
 [`docs/reference/status.md`](https://github.com/Willow7737/omnia-protocol/blob/main/docs/reference/status.md)
@@ -36,8 +37,9 @@ and the [stub inventory](https://github.com/Willow7737/omnia-protocol/blob/main/
 Two different questions with two different answers, never mixed:
 **~12,000 ops/s** consensus hot path (single node, in-process, CI-gated),
 and on the **real network**, 10k-event bursts reach 100% propagation with
-full BFT finality on a 5-node mesh (median node convergence under a
-minute). Details and caveats: [Benchmarks](Benchmarks).
+full BFT finality — on a 5-node mesh (median convergence under a minute)
+and across a 3-region WAN with RTTs up to ~218 ms. Details and caveats:
+[Benchmarks](Benchmarks).
 
 ### Is it quantum-resistant?
 
