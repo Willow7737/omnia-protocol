@@ -1129,9 +1129,13 @@ async fn localhost_three_node_consensus() -> Result<(), Box<dyn std::error::Erro
     node_b.drain_and_process().await;
     node_c.drain_and_process().await;
 
-    // Attempt finality convergence with a shorter timeout
+    // Attempt finality convergence. The window is generous for slow CI
+    // runners, because failing to converge must FAIL the test — the old
+    // fallback asserted `total_events > 0`, which is always true (each
+    // node holds its own genesis), so this test silently passed on total
+    // consensus failure (AUDIT-2026-07 C12, issue #350).
     let mut nodes = [node_a, node_b, node_c];
-    let convergence = wait_for_finality_convergence(&mut nodes, Duration::from_secs(8)).await;
+    let convergence = wait_for_finality_convergence(&mut nodes, Duration::from_secs(30)).await;
     let [node_a, node_b, node_c] = nodes;
 
     let committed_a = node_a.committed_set();
@@ -1159,20 +1163,53 @@ async fn localhost_three_node_consensus() -> Result<(), Box<dyn std::error::Erro
             );
         }
         Err(msg) => {
-            // Partial or no convergence — this can happen in CI due to
-            // slow networking. Log a warning but don't fail the build.
-            eprintln!(
-                "[warn] CI localhost test: full convergence not achieved: {}. \
-                 A committed={}, B committed={}, C committed={}",
-                msg,
+            // Slow-tail tolerance: full identical-set convergence may lag
+            // on a loaded CI runner, but consensus must have made REAL
+            // cross-node progress within the window. Two hard assertions:
+            //
+            // 1. Propagation: every node's graph holds at least one event
+            //    authored by another node (distinguishes a dead mesh from
+            //    slow finality in the failure message).
+            // 2. Consensus: the intersection of all three committed sets
+            //    is non-empty — at least one event reached finality on
+            //    every node.
+            for (name, node) in [("A", &node_a), ("B", &node_b), ("C", &node_c)] {
+                let foreign = node
+                    .graph
+                    .event_ids()
+                    .iter()
+                    .filter_map(|id| node.graph.get(id))
+                    .filter(|e| e.creator != node.node_id)
+                    .count();
+                assert!(
+                    foreign > 0,
+                    "node {name} received no events from peers — mesh/propagation failure \
+                     (convergence error: {msg})"
+                );
+            }
+
+            let intersection: HashSet<EventId> = committed_a
+                .intersection(&committed_b)
+                .filter(|id| committed_c.contains(*id))
+                .copied()
+                .collect();
+            assert!(
+                !intersection.is_empty(),
+                "consensus made zero cross-node progress: no event is committed on all \
+                 three nodes (A={}, B={}, C={}; convergence error: {msg})",
                 committed_a.len(),
                 committed_b.len(),
                 committed_c.len()
             );
 
-            // Still verify that at least some events are in graphs
-            let total_events = node_a.graph.len() + node_b.graph.len() + node_c.graph.len();
-            assert!(total_events > 0, "At least some events should be in the graphs");
+            eprintln!(
+                "[pass-partial] CI localhost test: full convergence lagged ({msg}), but {} \
+                 event(s) committed on all three nodes (A={}, B={}, C={})",
+                intersection.len(),
+                committed_a.len(),
+                committed_b.len(),
+                committed_c.len()
+            );
         }
     }
 
