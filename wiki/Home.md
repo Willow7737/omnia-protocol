@@ -24,6 +24,7 @@ ZK-rollup proofs.
 | What | Result |
 |---|---|
 | 10,000-event burst, 5-node validator mesh | **100% propagation + 10,000/10,000 BFT-finalized on every node — zero loss** |
+| 10,000-event burst, **3-region WAN** (EU/US/Asia, ≤218 ms RTT) | **100% propagation + full BFT finality on every node — zero loss** |
 | Consensus hot path (single node) | ~12,000 ops/s, ~25 µs finality p50 |
 | Burst self-healing | Anti-entropy repair recovers everything live gossip drops under overload |
 | Formal verification | TLA+ models (`OmniaTwoLane`, `OmniaConsensus`, `OmniaCRDT`) model-checked in CI on every PR |
