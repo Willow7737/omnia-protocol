@@ -30,8 +30,9 @@ pub mod slashing;
 pub mod slashing_undo;
 pub mod thread_pool;
 pub mod vector_clock_index;
-/// VRF-keyed stake-weighted leader election with backup failover
-/// (AUDIT-2026-07 C1, #339).
+// VRF-keyed stake-weighted leader election with backup failover
+// (AUDIT-2026-07 C1, #339). Module docs live in vrf_election.rs (`//!`);
+// keeping them there avoids a rustdoc intra-doc-link merge quirk.
 pub mod vrf_election;
 
 #[cfg(feature = "persistent-storage")]

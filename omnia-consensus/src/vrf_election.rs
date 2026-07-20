@@ -23,7 +23,7 @@
 //!    step in immediately (zero-timeout failover) rather than waiting out
 //!    a round timeout.
 //!
-//! The [`ecvrf`](omnia_crypto::ecvrf) primitive underpins the verifiable
+//! The `omnia_crypto::ecvrf` primitive underpins the verifiable
 //! per-validator ticket path ([`ticket_priority`] / [`verify_ticket`]):
 //! a validator proves its own claim to a slot with a VRF proof anyone can
 //! check. Broadcasting those tickets so nodes agree on a *secret* single
@@ -131,7 +131,7 @@ pub fn ticket_alpha(beacon: &[u8; 32], round: u64) -> [u8; 32] {
 
 /// Derive a stake-weighted priority key from a VRF output.
 ///
-/// This is the verifiable analogue of [`priority_key`]: the `beta` is an
+/// This is the verifiable analogue of the internal `priority_key`: the `beta` is an
 /// EC-VRF output only the ticket holder could produce, so the resulting
 /// priority is unforgeable and unpredictable, yet checkable by anyone via
 /// [`verify_ticket`].
