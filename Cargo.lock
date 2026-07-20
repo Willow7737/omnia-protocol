@@ -4812,6 +4812,7 @@ dependencies = [
  "bip39",
  "blake3",
  "blst",
+ "curve25519-dalek",
  "ed25519-dalek",
  "getrandom 0.2.17",
  "hex",
