@@ -211,3 +211,62 @@ fn test_nonce_persistence_across_router_restart() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// AUDIT-2026-07 C8 (#346): persist-before-acknowledge ordering
+// ---------------------------------------------------------------------------
+
+/// A nonce store whose incremental save always fails — simulating a disk
+/// fault at the persistence boundary.
+struct FailingNonceStore;
+
+impl NonceStore for FailingNonceStore {
+    fn load(&self) -> Result<std::collections::HashMap<[u8; 32], u64>, omnia_shards::NonceStoreError> {
+        Ok(std::collections::HashMap::new())
+    }
+    fn save(&self, _: &std::collections::HashMap<[u8; 32], u64>) -> Result<(), omnia_shards::NonceStoreError> {
+        Err(omnia_shards::NonceStoreError::Redb("simulated disk fault".into()))
+    }
+    fn save_incremental(&self, _: &[u8; 32], _: u64) -> Result<(), omnia_shards::NonceStoreError> {
+        Err(omnia_shards::NonceStoreError::Redb("simulated disk fault".into()))
+    }
+}
+
+/// When nonce persistence fails, the node halts (fail-closed, NEW-M7) —
+/// and the in-memory map must NOT have acknowledged the nonce first.
+/// The pre-fix order inserted into memory before persisting, so the
+/// process that panicked had already acknowledged a nonce that disk
+/// never recorded.
+#[test]
+fn test_failed_nonce_persist_never_acknowledges_in_memory() {
+    use omnia_shards::FeeSchedule;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    let mut router = ShardRouter::with_nonce_store(
+        FeeSchedule::zero(),
+        omnia_economics::QuotaSystem::default_system(),
+        Arc::new(FailingNonceStore),
+    );
+    router.register(Box::new(FinancialShard::new()));
+
+    let keypair = generate_keypair();
+    let creator = keypair.verifying_key().to_bytes();
+
+    let payload = ShardPayload {
+        shard_id: ShardId::financial(),
+        operation: ShardOp::Financial(FinancialOp::BalanceQuery { account: creator }),
+        nonce: 1,
+    };
+    let event = create_test_event_with_keypair(test_node(1), payload.to_bytes().unwrap(), &keypair);
+
+    // The route must panic (fail-closed on persistence failure)…
+    let outcome = catch_unwind(AssertUnwindSafe(|| router.route_event(&event)));
+    assert!(outcome.is_err(), "persistence failure must halt (fail-closed)");
+
+    // …and memory must NOT have acknowledged the nonce before the halt.
+    assert_eq!(
+        router.last_acknowledged_nonce(&creator),
+        None,
+        "in-memory nonce must not be acknowledged when persistence failed"
+    );
+}
