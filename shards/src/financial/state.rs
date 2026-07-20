@@ -177,7 +177,13 @@ impl FinancialState {
                 let from = event.creator_pubkey;
                 let vc = &event.vector_clock;
 
-                // Validate first (read-only checks)
+                // Validate EVERYTHING before any mutation (AUDIT-2026-07
+                // C5, issue #343). The previous path decremented the
+                // sender and then propagated a recipient-overflow error,
+                // leaving the sender debited with the recipient
+                // uncredited — permanent fund loss and a broken
+                // total-supply invariant, trivially triggerable by
+                // parking a recipient balance near u64::MAX.
                 let from_balance = self
                     .balances
                     .get(&from)
@@ -187,11 +193,27 @@ impl FinancialState {
                     return Err(ShardError::ValidationFailed("Insufficient balance".into()));
                 }
 
-                // Now apply mutations using entry API
+                if from == *to {
+                    // Self-transfer nets to zero. Handled explicitly
+                    // because the recipient-headroom check below would
+                    // spuriously reject it near u64::MAX, and the
+                    // debit/credit pair on one account is pointless.
+                    // Only the causal context is recorded.
+                    let bal = self.balances.entry(from).or_default();
+                    bal.last_update.merge(vc);
+                    return Ok(());
+                }
+
+                if self.balance_of(to).checked_add(*amount).is_none() {
+                    return Err(ShardError::ValidationFailed("Recipient balance would overflow".into()));
+                }
+
+                // All checks passed — the mutations below cannot fail.
+                // (The `?`s stay as defense-in-depth; they are
+                // unreachable by construction.)
                 let from_balance = self.balances.entry(from).or_default();
                 from_balance.decrement(*amount, vc)?;
 
-                // Credit the recipient
                 let to_balance = self.balances.entry(*to).or_default();
                 to_balance.increment(*amount, vc)?;
 

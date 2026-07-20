@@ -127,14 +127,14 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --target ${{ matrix.target }} -p omnia-node --no-default-features --features full
 
-      - name: Verify binary size ≤ 16 MB (Linux x86_64 only)
+      - name: Verify binary size ≤ 17 MB (Linux x86_64 only)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           SIZE=$(stat --format="%s" target/${{ matrix.target }}/release/omnia-node)
-          MAX=$((16 * 1024 * 1024))
+          MAX=$((17 * 1024 * 1024))  # re-baselined 2026-07-20 for release overflow-checks (#343)
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 / 1024 )) MB)"
           if [ "$SIZE" -gt "$MAX" ]; then
-            echo "::error::Release binary exceeds 16 MB limit ($SIZE > $MAX)"
+            echo "::error::Release binary exceeds 17 MB limit ($SIZE > $MAX)"
             exit 1
           fi
           echo "::notice::Release binary size check passed"

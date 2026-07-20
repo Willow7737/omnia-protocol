@@ -218,13 +218,18 @@ jobs:
       - name: Build release binary (production profile)
         run: cargo build -p omnia-node --release --no-default-features --features full
         timeout-minutes: 20
-      - name: Verify binary size ≤ 16 MB
+      - name: Verify binary size ≤ 17 MB
         run: |
           SIZE=$(stat --format="%s" target/release/omnia-node)
-          MAX=$((16 * 1024 * 1024))  # 16,777,216 bytes
+          # 17 MiB. Re-baselined from 16 MiB on 2026-07-20: enabling
+          # overflow-checks in the release profile (AUDIT-2026-07 C5,
+          # #343) grew the binary ~24 KB past the old limit — a
+          # deliberate safety feature, not accidental bloat. The gate
+          # still catches accidental regressions with ~1 MB headroom.
+          MAX=$((17 * 1024 * 1024))  # 17,825,792 bytes
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 / 1024 )) MB)"
           if [ "$SIZE" -gt "$MAX" ]; then
-            echo "::error::Binary size $SIZE exceeds 16 MB limit ($MAX bytes)"
+            echo "::error::Binary size $SIZE exceeds 17 MB limit ($MAX bytes)"
             exit 1
           fi
           echo "::notice::Binary size check passed: $SIZE bytes ≤ $MAX bytes"
