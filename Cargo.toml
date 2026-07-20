@@ -43,6 +43,9 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 debug = false
+# Mandatory for a financial system: silent wrap-around in release mode
+# turns arithmetic bugs into fund-loss bugs (AUDIT-2026-07 C5, #343).
+overflow-checks = true
 
 # Bench profile inherits release but keeps debug info for profiling
 [profile.bench]
