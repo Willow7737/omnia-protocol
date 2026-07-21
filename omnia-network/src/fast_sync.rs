@@ -61,6 +61,17 @@ pub enum SyncError {
         /// Actual BLAKE3 hash computed from the snapshot data.
         actual: String,
     },
+    /// The deserialized snapshot's `state_root` does not match the
+    /// supermajority-attested checkpoint `state_root` (AUDIT-2026-07 C10,
+    /// #348). A single peer cannot substitute a snapshot whose embedded
+    /// state disagrees with what ≥2/3 of peers attested to.
+    #[error("snapshot state_root mismatch: attested {attested}, snapshot {actual}")]
+    StateRootMismatch {
+        /// The `state_root` the supermajority of peers agreed on.
+        attested: String,
+        /// The `state_root` embedded in the downloaded snapshot.
+        actual: String,
+    },
     /// Insufficient peer agreement on the latest checkpoint.
     #[error("insufficient peer agreement: {agreeing}/{total}")]
     InsufficientAgreement {
@@ -199,6 +210,14 @@ pub enum SyncResponse {
 ///
 /// Uses supermajority agreement: the checkpoint with the highest round
 /// that is agreed upon by at least 2/3 of the responding peers.
+///
+/// AUDIT-2026-07 C10 (#348): the agreement key includes `snapshot_hash`
+/// alongside `(round, state_root)`. Previously only `(round, state_root)`
+/// was agreed, so a peer could attest to an agreed `(round, state_root)`
+/// while advertising a *divergent* `snapshot_hash` and then serve arbitrary
+/// bytes for it. Binding `snapshot_hash` into the supermajority key means
+/// ≥2/3 of peers must have vouched for the exact snapshot we then download
+/// and hash-verify — restoring the BFT trust model.
 pub fn select_target_checkpoint(
     checkpoints: &[SyncCheckpoint],
     total_peers: usize,
@@ -207,10 +226,15 @@ pub fn select_target_checkpoint(
         return Err(SyncError::NoPeersAvailable);
     }
 
-    // Group by (round, state_root) to find agreement
-    let mut agreement_map: HashMap<(u64, [u8; 32]), Vec<&SyncCheckpoint>> = HashMap::new();
+    // Group by (round, state_root, snapshot_hash) to find agreement. A peer
+    // must agree on the round, the state root, AND the exact snapshot bytes
+    // (by hash) for its vote to count toward the same group.
+    //
+    // AUDIT-2026-07 C10 (#348): the key is `(round, state_root, snapshot_hash)`.
+    type AgreementKey = (u64, [u8; 32], [u8; 32]);
+    let mut agreement_map: HashMap<AgreementKey, Vec<&SyncCheckpoint>> = HashMap::new();
     for cp in checkpoints {
-        let key = (cp.round, cp.state_root);
+        let key = (cp.round, cp.state_root, cp.snapshot_hash);
         agreement_map.entry(key).or_default().push(cp);
     }
 
@@ -218,7 +242,7 @@ pub fn select_target_checkpoint(
     let supermajority = (2 * total_peers).div_ceil(3);
     let mut best: Option<SyncCheckpoint> = None;
 
-    for ((round, _), cps) in &agreement_map {
+    for ((round, _, _), cps) in &agreement_map {
         if cps.len() >= supermajority && (*round > best.as_ref().map(|b| b.round).unwrap_or(0)) {
             best = Some((*cps[0]).clone());
         }
@@ -353,6 +377,21 @@ impl FastSyncManager {
         // Step 5: Deserialize snapshot
         let snapshot: SyncSnapshot = postcard::from_bytes(&snapshot_data)
             .map_err(|e| SyncError::Consensus(format!("Snapshot deserialization failed: {e}")))?;
+
+        // Step 5b (AUDIT-2026-07 C10, #348): bind the snapshot's contents to
+        // the supermajority attestation. The bytes already hash-verified
+        // against `target.snapshot_hash` (step 4), and `snapshot_hash` is now
+        // part of the supermajority-agreement key, but we additionally assert
+        // the deserialized `state_root` equals the attested `state_root`.
+        // Without this, a snapshot whose bytes are internally consistent but
+        // whose embedded state disagrees with the ≥2/3-attested `state_root`
+        // would be silently accepted — the exact "trust one peer" gap.
+        if snapshot.state_root != target.state_root {
+            return Err(SyncError::StateRootMismatch {
+                attested: hex::encode(target.state_root),
+                actual: hex::encode(snapshot.state_root),
+            });
+        }
 
         // C-11 fix (audit v0.1.68): Apply the snapshot to local state.
         //
@@ -802,6 +841,88 @@ mod tests {
         let result = select_target_checkpoint(&checkpoints, 7);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().round, 200);
+    }
+
+    // ── AUDIT-2026-07 C10 (#348): snapshot attestation binding ───────
+
+    /// The supermajority key includes `snapshot_hash`: peers that agree on
+    /// `(round, state_root)` but advertise *different* snapshot hashes do
+    /// not form a single agreement group. Under the pre-fix key of just
+    /// `(round, state_root)` all five below would have grouped together and
+    /// a target would have been selected; now they split 3/2 and neither
+    /// reaches the 4-of-5 supermajority.
+    #[test]
+    fn test_select_target_key_includes_snapshot_hash() {
+        let make_cp = |snapshot_hash: [u8; 32]| SyncCheckpoint {
+            round: 200,
+            state_root: [1u8; 32],
+            snapshot_hash,
+            event_count: 20_000,
+            timestamp: 0,
+            peer_id: None,
+        };
+
+        // Same (round, state_root) for all five, but a 3/2 split on the
+        // snapshot hash they vouch for.
+        let checkpoints: Vec<SyncCheckpoint> = (0..3)
+            .map(|_| make_cp([7u8; 32]))
+            .chain((0..2).map(|_| make_cp([8u8; 32])))
+            .collect();
+
+        let result = select_target_checkpoint(&checkpoints, 5);
+        assert!(
+            matches!(result, Err(SyncError::InsufficientAgreement { .. })),
+            "no snapshot-hash group reaches supermajority, got {result:?}"
+        );
+
+        // Sanity: when the same three peers also agree on the snapshot hash,
+        // a target is selected (3 of 3 peers → supermajority).
+        let agreeing: Vec<SyncCheckpoint> = (0..3).map(|_| make_cp([7u8; 32])).collect();
+        assert!(select_target_checkpoint(&agreeing, 3).is_ok());
+    }
+
+    /// A downloaded snapshot whose bytes hash-verify against the attested
+    /// `snapshot_hash` but whose embedded `state_root` disagrees with the
+    /// supermajority-attested `state_root` is rejected — the "trust one
+    /// peer" gap. Here the checkpoint attests `state_root = [9; 32]` while
+    /// the snapshot the peer serves carries `state_root = [1; 32]`.
+    #[tokio::test]
+    async fn test_fast_sync_rejects_state_root_mismatch() {
+        let peer_id = test_node(11);
+
+        let snapshot = SyncSnapshot {
+            round: 500,
+            state_root: [1u8; 32], // snapshot's own claim
+            causal_graph_data: vec![0xAA],
+            consensus_data: vec![0xBB],
+            event_count: 50_000,
+        };
+        let snapshot_data = postcard::to_allocvec(&snapshot).unwrap();
+        let snapshot_hash = blake3_hash_domain(b"OMNIA-FAST-SYNC-V1", &snapshot_data);
+
+        // The checkpoint attests a DIFFERENT state_root than the snapshot,
+        // while still carrying the (honest) hash of the served bytes so the
+        // integrity check in step 4 passes and we reach the step 5b assert.
+        let checkpoint = SyncCheckpoint {
+            round: 500,
+            state_root: [9u8; 32], // attested — differs from snapshot
+            snapshot_hash,
+            event_count: 50_000,
+            timestamp: 0,
+            peer_id: Some(peer_id),
+        };
+
+        let network = MockSyncNetwork::new()
+            .with_peer(peer_id)
+            .with_checkpoint(checkpoint)
+            .with_snapshot(snapshot_data);
+        let manager = FastSyncManager::with_network(test_node(1), true, Arc::new(network));
+
+        let result = manager.sync_to_latest().await;
+        assert!(
+            matches!(result, Err(SyncError::StateRootMismatch { .. })),
+            "expected StateRootMismatch, got {result:?}"
+        );
     }
 
     // ── New tests for H-3: Fast-Sync P2P Automation ──────────────────
