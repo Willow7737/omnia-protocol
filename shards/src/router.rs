@@ -54,6 +54,14 @@ pub struct ShardRouter {
     quota: QuotaSystem,
     /// Persistent nonce store — survives restarts for replay protection.
     nonce_store: Arc<dyn NonceStore>,
+    /// AUDIT-2026-07 C4 (#342): registered validator-set attestation key
+    /// per source shard. A cross-shard message is authorized only if its
+    /// attestation verifies against the key registered here for its
+    /// `source_shard`. Populated by node-operator/genesis config via
+    /// [`register_shard_attestation_key`](Self::register_shard_attestation_key)
+    /// — deliberately not reachable from consensus payloads, so no network
+    /// participant can register a key for a shard they do not control.
+    shard_attestation_keys: HashMap<ShardId, [u8; 32]>,
 }
 
 impl ShardRouter {
@@ -69,6 +77,7 @@ impl ShardRouter {
             fee_schedule,
             quota,
             nonce_store: Arc::new(InMemoryNonceStore::new()),
+            shard_attestation_keys: HashMap::new(),
         }
     }
 
@@ -84,6 +93,7 @@ impl ShardRouter {
             fee_schedule: FeeSchedule::zero(),
             quota: QuotaSystem::default_system(),
             nonce_store: Arc::new(InMemoryNonceStore::new()),
+            shard_attestation_keys: HashMap::new(),
         }
     }
 
@@ -131,6 +141,7 @@ impl ShardRouter {
             fee_schedule,
             quota,
             nonce_store,
+            shard_attestation_keys: HashMap::new(),
         }
     }
 
@@ -154,6 +165,7 @@ impl ShardRouter {
             fee_schedule,
             quota,
             nonce_store,
+            shard_attestation_keys: HashMap::new(),
         })
     }
 
@@ -166,6 +178,25 @@ impl ShardRouter {
     pub fn register(&mut self, shard: Box<dyn Shard>) {
         let id = shard.shard_id();
         self.shards.insert(id, shard);
+    }
+
+    /// Register the validator-set attestation key for a source shard
+    /// (AUDIT-2026-07 C4, #342).
+    ///
+    /// Cross-shard messages claiming to originate from `shard_id` are
+    /// authorized only if their attestation verifies against `pubkey`.
+    /// This is a node-operator/genesis action; it must be driven from
+    /// trusted configuration or startup code, never from a consensus
+    /// payload — otherwise a network participant could register a key for
+    /// a shard they do not control and forge that shard's messages.
+    /// Re-registering overwrites the previous key (key rotation).
+    pub fn register_shard_attestation_key(&mut self, shard_id: ShardId, pubkey: [u8; 32]) {
+        self.shard_attestation_keys.insert(shard_id, pubkey);
+    }
+
+    /// The registered attestation key for a source shard, if any.
+    pub fn shard_attestation_key(&self, shard_id: &ShardId) -> Option<&[u8; 32]> {
+        self.shard_attestation_keys.get(shard_id)
     }
 
     /// Route an event to the appropriate shard based on the payload.
@@ -213,44 +244,47 @@ impl ShardRouter {
 
     /// Route a cross-shard message to its target shard.
     fn route_cross_shard(&mut self, event: &Event, msg: &CrossShardMessage) -> Result<(), ShardError> {
-        // NEW-C1 fix: the previous F-13 fix checked signature PRESENCE
-        // (is_none()) but never called verify_source_signature(). Any
-        // Some(random_bytes) passed. Now we:
-        //   1. Reject if source_signature is None (all builds, not just
-        //      production — there is no legitimate reason to accept
-        //      unsigned cross-shard messages in any build)
-        //   2. Verify the signature against the event creator's public key
+        // AUDIT-2026-07 C4 (#342): AUTHORIZATION, not just authentication.
         //
-        // The event creator's pubkey is the node that originated the
-        // cross-shard message. In a multi-node setup, a per-shard signing
-        // key registry would be more correct, but for now the event
-        // creator's key is the right authority to check.
+        // The old code verified `source_signature` against
+        // `event.creator_pubkey` — the creator of the CARRYING event, who
+        // can be any authenticated user. So any user could forge a message
+        // "from" any source shard by signing it with their own key. The
+        // causal_proof was likewise attacker-set and only checked against
+        // the attacker's own event.
         //
-        // Tests that need to send unsigned cross-shard messages should
-        // sign them with a test keypair and embed the signature.
-        if msg.source_signature.is_none() {
+        // Now the message must carry an attestation by the SOURCE SHARD's
+        // registered validator-set key, verified against the key this
+        // router has registered for `msg.source_shard`. A user who does
+        // not hold that key cannot forge a message from that shard.
+        //
+        //   1. The source shard must have a registered attestation key. An
+        //      unregistered source shard cannot originate cross-shard
+        //      messages (fail closed).
+        //   2. The attestation must verify against that registered key over
+        //      the message's state-transition commitment.
+        let source_key = self.shard_attestation_keys.get(&msg.source_shard).ok_or_else(|| {
             tracing::error!(
                 source_shard = ?msg.source_shard,
                 target_shard = ?msg.target_shard,
-                "cross-shard message rejected — no source_signature"
+                "cross-shard message rejected — source shard has no registered attestation key"
             );
-            return Err(ShardError::ValidationFailed(
-                "cross-shard message missing source_signature".into(),
-            ));
-        }
+            ShardError::ValidationFailed(format!(
+                "cross-shard message rejected: source shard {:?} has no registered attestation key",
+                msg.source_shard
+            ))
+        })?;
 
-        // NEW-C1 fix: actually verify the signature, not just check presence.
-        // The event creator's public key is the authority that should have
-        // signed the cross-shard message.
-        if !msg.verify_source_signature(&event.creator_pubkey) {
+        if !msg.verify_attestation(source_key) {
             tracing::error!(
                 source_shard = ?msg.source_shard,
                 target_shard = ?msg.target_shard,
-                creator = ?&event.creator_pubkey[..4],
-                "cross-shard message rejected — source_signature verification failed"
+                "cross-shard message rejected — attestation does not verify against the registered source-shard key"
             );
             return Err(ShardError::ValidationFailed(
-                "cross-shard message source_signature verification failed".into(),
+                "cross-shard message rejected: attestation does not verify against the \
+                 registered source-shard validator-set key"
+                    .into(),
             ));
         }
 

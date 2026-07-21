@@ -197,6 +197,9 @@ fn test_cross_shard_fee_deduction() {
     let mut router = ShardRouter::new(schedule, quota);
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
+    // C4 (#342): register the SOURCE shard's validator-set attestation key.
+    // The message must be attested by this key, not the event creator's.
+    router.register_shard_attestation_key(ShardId::identity(), keypair.verifying_key().to_bytes());
 
     let mut msg = CrossShardMessage::new(
         ShardId::identity(),
@@ -209,20 +212,14 @@ fn test_cross_shard_fee_deduction() {
             ),
         }))
         .expect("serialization should work"),
+        [0u8; 32],
+        [0u8; 32],
         // causal_proof must be non-empty AND happened-before the event's vc.
-        // The test event's vc is VectorClock::with_node(creator, 1), so we
-        // use vc with count 0 at the same node — empty entry doesn't qualify,
-        // so we use a different node with count 1, then merge — but the
-        // simplest valid proof is just a non-zero count strictly less than
-        // the event's. Use the creator with count 0... actually is_empty()
-        // returns true for {node: 0}. Use a separate node with count 1
-        // and a target vc that has count >= 1 for that node.
         VectorClock::with_node(test_node(2), 1),
     );
 
-    // NEW-C1 fix: sign the cross-shard message with the event creator's
-    // keypair. The router now requires a valid source_signature.
-    msg.sign(&keypair);
+    // C4 (#342): attest with the SOURCE shard's registered validator-set key.
+    msg.attest(&keypair);
 
     // The default test event uses VectorClock::with_node(creator, 1) which
     // doesn't include test_node(2). For happened_before to return true,
@@ -263,18 +260,21 @@ fn test_cross_shard_insufficient_balance() {
     let mut router = ShardRouter::new(schedule, quota);
     router.register(Box::new(FinancialShard::new()));
     router.register(Box::new(IdentityShard::new()));
+    router.register_shard_attestation_key(ShardId::financial(), keypair.verifying_key().to_bytes());
 
     let mut msg = CrossShardMessage::new(
         ShardId::financial(),
         ShardId::identity(),
         vec![1, 2, 3],
+        [0u8; 32],
+        [0u8; 32],
         // Provide a valid causal_proof so the test exercises the fee path
         // rather than the (now-enforced) causality check.
         VectorClock::with_node(test_node(2), 1),
     );
 
-    // NEW-C1 fix: sign the cross-shard message.
-    msg.sign(&keypair);
+    // C4 (#342): attest with the source shard's registered validator-set key.
+    msg.attest(&keypair);
 
     let payload = ShardPayload {
         shard_id: ShardId::financial(),
