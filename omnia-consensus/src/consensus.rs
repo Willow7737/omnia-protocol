@@ -981,6 +981,53 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         candidates.iter().map(|(id, (_, stake))| (*id, *stake)).collect()
     }
 
+    /// Whether `node` is the **primary** VRF-elected leader for `round`
+    /// (AUDIT-2026-07 H3, #353). Ignores slashing/failover — use
+    /// [`is_active_leader_for_round`](Self::is_active_leader_for_round) to
+    /// gate proposing.
+    pub fn is_leader_for_round(
+        &self,
+        node: &NodeId,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+    ) -> bool {
+        self.compute_leader(candidates, round)
+            .map(|leader| &leader == node)
+            .unwrap_or(false)
+    }
+
+    /// The **active** leader for `round`: the highest-ranked member of the
+    /// leader schedule (primary + `backup_depth` backups) that is not
+    /// slashed (AUDIT-2026-07 H3, #353). This provides zero-timeout failover
+    /// — if the primary is slashed, the first healthy backup is entitled to
+    /// propose. Every honest node computes the identical schedule, so exactly
+    /// one node is the active leader. Returns `None` only if the schedule is
+    /// empty (no candidates) or every scheduled member is slashed.
+    pub fn active_leader_for_round(
+        &self,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+        backup_depth: usize,
+    ) -> Option<NodeId> {
+        self.compute_leader_schedule(candidates, round, backup_depth)
+            .into_iter()
+            .find(|node| !self.is_slashed(node))
+    }
+
+    /// Whether `node` is the active leader for `round` and therefore entitled
+    /// to propose (AUDIT-2026-07 H3, #353). The propose path **must** gate on
+    /// this so that "leader-based consensus" is enforced rather than
+    /// decorative — a non-leader that proposes out of turn is refused.
+    pub fn is_active_leader_for_round(
+        &self,
+        node: &NodeId,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+        backup_depth: usize,
+    ) -> bool {
+        self.active_leader_for_round(candidates, round, backup_depth).as_ref() == Some(node)
+    }
+
     /// Evolve the leader-election beacon by folding the committed DAG
     /// frontier into it (AUDIT-2026-07 C1, #339).
     ///
@@ -1594,6 +1641,85 @@ mod tests {
         assert_eq!(supermajority(7), 5);
         assert_eq!(supermajority(10), 7);
         assert_eq!(supermajority(100), 67);
+    }
+
+    // ── AUDIT-2026-07 H3 (#353): leader enforcement on the propose path ──
+
+    fn leader_test_candidates(n: u8) -> HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)> {
+        let mut candidates = HashMap::new();
+        for i in 1..=n {
+            candidates.insert(node(i), (omnia_crypto::generate_keypair(), 100u64));
+        }
+        candidates
+    }
+
+    #[test]
+    fn test_exactly_one_primary_leader_per_round() {
+        let mut config = test_config();
+        config.total_nodes = 5;
+        config.round_seed = [7u8; 32];
+        let engine = ConsensusEngine::new(config, SlashingEngine::new_in_memory(1, 1000));
+        let candidates = leader_test_candidates(5);
+        let round = 1;
+
+        let leader = engine.compute_leader(&candidates, round).unwrap();
+        let flagged: Vec<&NodeId> = candidates
+            .keys()
+            .filter(|n| engine.is_leader_for_round(n, &candidates, round))
+            .collect();
+        assert_eq!(flagged.len(), 1, "exactly one node is the primary leader");
+        assert_eq!(*flagged[0], leader);
+    }
+
+    #[test]
+    fn test_only_active_leader_may_propose() {
+        let mut config = test_config();
+        config.total_nodes = 5;
+        config.round_seed = [9u8; 32];
+        let engine = ConsensusEngine::new(config, SlashingEngine::new_in_memory(1, 1000));
+        let candidates = leader_test_candidates(5);
+        let round = 2;
+
+        let leader = engine.compute_leader(&candidates, round).unwrap();
+        // With no one slashed, the active leader is the primary.
+        assert_eq!(engine.active_leader_for_round(&candidates, round, 4), Some(leader));
+        assert!(engine.is_active_leader_for_round(&leader, &candidates, round, 4));
+        // Every non-leader is refused proposing rights.
+        for n in candidates.keys().filter(|n| **n != leader) {
+            assert!(
+                !engine.is_active_leader_for_round(n, &candidates, round, 4),
+                "a non-leader must not be entitled to propose"
+            );
+        }
+    }
+
+    #[test]
+    fn test_active_leader_fails_over_when_primary_slashed() {
+        let mut config = test_config();
+        config.total_nodes = 5;
+        config.round_seed = [11u8; 32];
+        let round = 3;
+        let candidates = leader_test_candidates(5);
+
+        // Probe the schedule with an unslashed engine.
+        let probe = ConsensusEngine::new(config.clone(), SlashingEngine::new_in_memory(1, 1000));
+        let schedule = probe.compute_leader_schedule(&candidates, round, 4);
+        let primary = schedule[0];
+        let expected_backup = schedule[1];
+
+        // Slash the primary, then build the real engine with that backend.
+        let mut slashing = SlashingEngine::new_in_memory(1, 1000);
+        slashing.record_offense(primary, SlashOffense::Equivocation);
+        let engine = ConsensusEngine::new(config, slashing);
+        assert!(engine.is_slashed(&primary));
+
+        // Proposing rights fail over to the first healthy backup.
+        assert_eq!(
+            engine.active_leader_for_round(&candidates, round, 4),
+            Some(expected_backup)
+        );
+        assert!(!engine.is_active_leader_for_round(&primary, &candidates, round, 4));
+        assert!(engine.is_active_leader_for_round(&expected_backup, &candidates, round, 4));
     }
 
     #[test]
