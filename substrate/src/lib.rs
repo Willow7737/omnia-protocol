@@ -465,6 +465,13 @@ pub struct SubstrateConfig {
     /// survives restarts, avoiding the need to replay all events
     /// from genesis after a crash.
     pub consensus_data_dir: Option<PathBuf>,
+    /// Directory for persistent Lane 0 finality state (redb).
+    ///
+    /// AUDIT-2026-07 C7 (#345): if `None`, the Lane 0 certificate store is
+    /// in-memory only and a restart loses every finalized event ID, the
+    /// epoch counter, and the current validator set — violating "once
+    /// final, always final". Production nodes running Lane 0 MUST set this.
+    pub lane0_data_dir: Option<PathBuf>,
     /// Enable fast sync on startup (downloads snapshot from peers).
     ///
     /// When `true`, a late-joining node will attempt to download a
@@ -563,6 +570,7 @@ impl SubstrateConfig {
             mempool_size: 10_000,
             max_block_events: 500,
             consensus_data_dir: None,
+            lane0_data_dir: None,
             fast_sync: false,
         }
     }
@@ -722,6 +730,40 @@ impl Substrate {
             None => ConsensusEngine::new(config.consensus.clone(), slashing.clone()),
         };
 
+        // AUDIT-2026-07 C7 (#345): build the Lane 0 certificate store,
+        // restoring persisted finality (finalized set, epoch, validator
+        // set) when a data dir is configured. Without persistence a restart
+        // silently loses finality — production Lane 0 nodes must set
+        // `lane0_data_dir`.
+        let (lane0_store, lane0_restored_validators) = match &config.lane0_data_dir {
+            Some(dir) => match lane0::RedbLane0Store::open(dir) {
+                Ok(store) => match lane0::CertificateStore::with_store(Arc::new(store)) {
+                    Ok(cert_store) => {
+                        tracing::info!(path = %dir.display(), "Lane 0: using persistent redb store");
+                        let restored = cert_store.restored_validators().cloned();
+                        (cert_store, restored)
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, path = %dir.display(),
+                            "FAILED to restore Lane 0 state. Refusing to silently start fresh — \
+                             that would violate 'once final, always final' across the restart.");
+                        panic!(
+                            "Lane 0 state restoration failed at {}: {e}. Remove the DB to start fresh.",
+                            dir.display()
+                        );
+                    }
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, path = %dir.display(), "FAILED to open Lane 0 store");
+                    panic!(
+                        "Lane 0 store open failed at {}: {e}. Fix permissions or remove the file.",
+                        dir.display()
+                    );
+                }
+            },
+            None => (lane0::CertificateStore::new(), None),
+        };
+
         let graph = Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
         let mempool_size = config.mempool_size;
         let max_block_events = config.max_block_events;
@@ -740,8 +782,11 @@ impl Substrate {
             max_block_events,
             validator_candidates: HashMap::new(),
             consensus_store,
-            lane0_validators: None,
-            lane0_store: lane0::CertificateStore::new(),
+            // AUDIT-2026-07 C7 (#345): resume with the validator set the
+            // store persisted, so a node restarting mid-rotation cannot
+            // accept acks from a superseded set.
+            lane0_validators: lane0_restored_validators,
+            lane0_store,
             lane0_outbox: Vec::new(),
         }
     }
@@ -1182,6 +1227,10 @@ impl Substrate {
             total_stake = validators.total_stake(),
             "Lane 0 enabled (static validator set)"
         );
+        // AUDIT-2026-07 C7 (#345): persist the boot validator set so a
+        // restart resumes with it (and the correct epoch) even before any
+        // rotation.
+        self.lane0_store.set_validators(&validators);
         self.lane0_validators = Some(validators);
     }
 
