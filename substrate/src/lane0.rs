@@ -400,8 +400,132 @@ pub enum AckOutcome {
     Duplicate,
 }
 
-/// Bounded store of in-flight certificates and finalized event IDs.
+// ─── Lane 0 persistence (AUDIT-2026-07 C7, #345) ──────────────────────────
+
+/// The durable subset of Lane 0 state that must survive a restart.
+///
+/// AUDIT-2026-07 C7 (#345): the [`CertificateStore`] kept `finalized`,
+/// `epoch`, and the counters in memory only, so a restart lost every
+/// finalized event ID and the epoch counter — violating Lane 0's "once
+/// final, always final" property (a previously-final event could be
+/// re-acked or reported "not final"), and a node restarting mid-rotation
+/// could accept acks from validators no longer in the set. Pending (not
+/// yet final) certificates are intentionally **not** persisted — re-acking
+/// is safe, so dropping them costs only a little liveness, never safety.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Lane0PersistentState {
+    /// Number of validator-set rotations applied (the epoch fence).
+    pub epoch: u64,
+    /// Total events finalized through Lane 0 (monotone counter).
+    pub events_finalized: u64,
+    /// Finalized event IDs, in finalization order (oldest first).
+    pub finalized: Vec<EventId>,
+    /// The current validator set as `(pubkey, stake)` pairs, so a restart
+    /// resumes with the correct epoch's set and cannot accept acks from a
+    /// superseded one. `None` before Lane 0 is enabled.
+    pub validators: Option<Vec<([u8; 32], u64)>>,
+}
+
+/// Errors from the Lane 0 persistence backend.
+#[derive(Debug, thiserror::Error)]
+pub enum Lane0StoreError {
+    /// redb / I/O failure.
+    #[error("lane0 store error: {0}")]
+    Backend(String),
+    /// (De)serialization failure.
+    #[error("lane0 store codec error: {0}")]
+    Codec(String),
+}
+
+/// Persistence backend for the durable Lane 0 state.
+pub trait Lane0Store: Send + Sync + std::fmt::Debug {
+    /// Load the persisted state, or the default (empty) state if none.
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError>;
+    /// Persist the given state, replacing any previous snapshot.
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError>;
+}
+
+const LANE0_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("lane0_state");
+const LANE0_STATE_KEY: &str = "state";
+
+/// redb-backed persistent Lane 0 store.
+#[derive(Debug)]
+pub struct RedbLane0Store {
+    db: redb::Database,
+}
+
+impl RedbLane0Store {
+    /// Open (creating if needed) a redb database at `path` for Lane 0 state.
+    pub fn open(path: &std::path::Path) -> Result<Self, Lane0StoreError> {
+        let db = redb::Database::create(path).map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        Ok(Self { db })
+    }
+}
+
+impl Lane0Store for RedbLane0Store {
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError> {
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        let table = match read.open_table(LANE0_TABLE) {
+            Ok(t) => t,
+            // Table absent → nothing persisted yet.
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(Lane0PersistentState::default()),
+            Err(e) => return Err(Lane0StoreError::Backend(e.to_string())),
+        };
+        match table
+            .get(LANE0_STATE_KEY)
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?
+        {
+            Some(bytes) => postcard::from_bytes(bytes.value()).map_err(|e| Lane0StoreError::Codec(e.to_string())),
+            None => Ok(Lane0PersistentState::default()),
+        }
+    }
+
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError> {
+        let bytes = postcard::to_allocvec(state).map_err(|e| Lane0StoreError::Codec(e.to_string()))?;
+        let write = self
+            .db
+            .begin_write()
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        {
+            let mut table = write
+                .open_table(LANE0_TABLE)
+                .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+            table
+                .insert(LANE0_STATE_KEY, bytes.as_slice())
+                .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        }
+        write.commit().map_err(|e| Lane0StoreError::Backend(e.to_string()))
+    }
+}
+
+/// In-memory Lane 0 store for tests and non-persistent nodes.
 #[derive(Debug, Default)]
+pub struct InMemoryLane0Store {
+    state: std::sync::Mutex<Lane0PersistentState>,
+}
+
+impl InMemoryLane0Store {
+    /// Create an empty in-memory store.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Lane0Store for InMemoryLane0Store {
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError> {
+        Ok(self.state.lock().unwrap_or_else(|p| p.into_inner()).clone())
+    }
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError> {
+        *self.state.lock().unwrap_or_else(|p| p.into_inner()) = state.clone();
+        Ok(())
+    }
+}
+
+/// Bounded store of in-flight certificates and finalized event IDs.
+#[derive(Default, Debug)]
 pub struct CertificateStore {
     /// In-flight certificates (not yet final).
     pending: HashMap<EventId, FinalityCertificate>,
@@ -419,12 +543,96 @@ pub struct CertificateStore {
     events_finalized: u64,
     /// Number of validator-set rotations applied (see [`Self::rotate_validators`]).
     epoch: u64,
+    /// AUDIT-2026-07 C7 (#345): the current validator set, kept so it can
+    /// be persisted (and restored on restart) alongside the epoch fence.
+    current_validators: Option<ValidatorSet>,
+    /// AUDIT-2026-07 C7 (#345): optional durable backend. When `Some`,
+    /// `finalized`, `epoch`, the counters, and the validator set survive a
+    /// restart. When `None` the store is in-memory only (tests / disabled).
+    store: Option<std::sync::Arc<dyn Lane0Store>>,
 }
 
 impl CertificateStore {
-    /// Create an empty store.
+    /// Create an empty, in-memory-only store.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a store backed by `store`, restoring any persisted finalized
+    /// set, epoch, counters, and validator set (AUDIT-2026-07 C7, #345).
+    pub fn with_store(store: std::sync::Arc<dyn Lane0Store>) -> Result<Self, Lane0StoreError> {
+        let persisted = store.load()?;
+        let validators = match &persisted.validators {
+            Some(entries) => match ValidatorSet::new(entries.iter().copied()) {
+                Ok(set) => Some(set),
+                Err(e) => {
+                    tracing::error!(error = %e, "persisted Lane 0 validator set is invalid — ignoring");
+                    None
+                }
+            },
+            None => None,
+        };
+        let finalized_order: VecDeque<EventId> = persisted.finalized.iter().copied().collect();
+        let finalized: HashSet<EventId> = persisted.finalized.into_iter().collect();
+        tracing::info!(
+            finalized = finalized.len(),
+            epoch = persisted.epoch,
+            events_finalized = persisted.events_finalized,
+            has_validators = validators.is_some(),
+            "Restored Lane 0 state from persistent store"
+        );
+        Ok(Self {
+            pending: HashMap::new(),
+            pending_order: VecDeque::new(),
+            finalized,
+            finalized_order,
+            acks_accepted: 0,
+            acks_rejected: 0,
+            events_finalized: persisted.events_finalized,
+            epoch: persisted.epoch,
+            current_validators: validators,
+            store: Some(store),
+        })
+    }
+
+    /// The validator set restored from persistence, if Lane 0 was enabled
+    /// before the restart. Callers use this to re-arm their in-memory
+    /// validator handle after `with_store`.
+    pub fn restored_validators(&self) -> Option<&ValidatorSet> {
+        self.current_validators.as_ref()
+    }
+
+    /// Record (and persist) the current validator set — the boot set on
+    /// enable, and the new set after each rotation.
+    pub fn set_validators(&mut self, validators: &ValidatorSet) {
+        self.current_validators = Some(validators.clone());
+        self.persist();
+    }
+
+    /// Snapshot the durable subset of state.
+    fn persistent_state(&self) -> Lane0PersistentState {
+        Lane0PersistentState {
+            epoch: self.epoch,
+            events_finalized: self.events_finalized,
+            finalized: self.finalized_order.iter().copied().collect(),
+            validators: self
+                .current_validators
+                .as_ref()
+                .map(|set| set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+        }
+    }
+
+    /// Persist the durable subset if a backend is configured. A persist
+    /// failure is logged loudly but does not unwind the in-memory update —
+    /// losing durability is a monitoring/ops concern, and returning an
+    /// error from the hot ack path would be worse (it would drop live
+    /// finality). Operators must alert on this log line.
+    fn persist(&self) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save(&self.persistent_state()) {
+                tracing::error!(error = %e, "FAILED to persist Lane 0 state — finality durability at risk");
+            }
+        }
     }
 
     /// Verify and fold one ack into the store.
@@ -480,6 +688,9 @@ impl CertificateStore {
                     break;
                 }
             }
+            // AUDIT-2026-07 C7 (#345): persist as soon as an event becomes
+            // final, so a restart can never report it "not final".
+            self.persist();
             Ok(AckOutcome::NewlyFinal)
         } else {
             Ok(AckOutcome::Recorded)
@@ -518,6 +729,7 @@ impl CertificateStore {
     /// of the rotation (empty in the common case), in ascending order.
     pub fn rotate_validators(&mut self, new_validators: &ValidatorSet) -> Vec<EventId> {
         self.epoch += 1;
+        self.current_validators = Some(new_validators.clone());
         let mut newly_final = Vec::new();
 
         // Deterministic evaluation order: HashMap iteration order is not
@@ -565,6 +777,11 @@ impl CertificateStore {
                 break;
             }
         }
+
+        // AUDIT-2026-07 C7 (#345): persist the new epoch, validator set, and
+        // any newly-finalized events atomically, so a node restarting
+        // mid-rotation resumes with the correct set and finality.
+        self.persist();
 
         newly_final
     }
@@ -968,5 +1185,141 @@ mod tests {
         assert_eq!(store.epoch(), 1);
         store.rotate_validators(&set);
         assert_eq!(store.epoch(), 2);
+    }
+
+    // ---- AUDIT-2026-07 C7 (#345): persistence regression tests ----
+
+    /// The core C7 property: an event finalized before a restart is still
+    /// final after the store is dropped and rebuilt from the same backend.
+    ///
+    /// Red-check: an in-memory-only `CertificateStore::new()` cannot survive
+    /// a restart (its state lives only in RAM); this test exercises the
+    /// durable path and asserts finality, epoch, counters, and the validator
+    /// set all come back.
+    #[test]
+    fn test_finality_survives_restart() {
+        let (keys, set) = three_validators();
+        let backing = std::sync::Arc::new(InMemoryLane0Store::new());
+        let id = eid(1);
+
+        {
+            let mut store = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+            // Record the boot validator set so a restart knows the epoch's set.
+            store.set_validators(&set);
+            store.add_ack(SignedAck::sign(id, &keys[0]), &set).unwrap();
+            store.add_ack(SignedAck::sign(id, &keys[1]), &set).unwrap();
+            assert_eq!(
+                store.add_ack(SignedAck::sign(id, &keys[2]), &set).unwrap(),
+                AckOutcome::NewlyFinal
+            );
+            assert!(store.is_final(&id));
+            // store is dropped here — simulating a node shutdown.
+        }
+
+        // "Restart": a brand-new store rebuilt from the same durable backend.
+        let restored = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+        assert!(
+            restored.is_final(&id),
+            "finalized event must remain final across restart"
+        );
+        assert_eq!(restored.epoch(), 0);
+        assert_eq!(restored.stats().2, 1, "events_finalized counter must persist");
+        let restored_set = restored.restored_validators().expect("validator set must be restored");
+        assert_eq!(restored_set.len(), set.len());
+        assert_eq!(restored_set.total_stake(), set.total_stake());
+    }
+
+    /// A rotation's new epoch and validator set survive a restart, and after
+    /// the restart the store rejects acks from the superseded set — the
+    /// mid-rotation safety property C7 protects.
+    #[test]
+    fn test_restart_preserves_epoch_and_rejects_superseded_validators() {
+        let (old_keys, old_set) = three_validators();
+        let (new_keys, new_set) = three_validators();
+        let backing = std::sync::Arc::new(InMemoryLane0Store::new());
+
+        {
+            let mut store = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+            store.set_validators(&old_set);
+            store.rotate_validators(&new_set);
+            assert_eq!(store.epoch(), 1);
+        }
+
+        let mut restored = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+        assert_eq!(restored.epoch(), 1, "epoch fence must persist across restart");
+        // Clone the restored set so we can borrow `restored` mutably below.
+        let restored_set = restored
+            .restored_validators()
+            .expect("new validator set restored")
+            .clone();
+        assert_eq!(restored_set.total_stake(), new_set.total_stake());
+
+        // An ack from a validator only in the superseded set is rejected when
+        // replayed against the restored (new) set — a node restarting
+        // mid-rotation cannot be tricked into counting stale stake.
+        let outsider_ack = SignedAck::sign(eid(9), &old_keys[0]);
+        assert!(matches!(
+            restored.add_ack(outsider_ack, &restored_set),
+            Err(Lane0Error::UnknownValidator)
+        ));
+
+        // A validator in the restored set is accepted.
+        let member_ack = SignedAck::sign(eid(9), &new_keys[0]);
+        assert!(restored.add_ack(member_ack, &restored_set).is_ok());
+    }
+
+    /// The redb backend round-trips a persisted state to disk and back.
+    #[test]
+    fn test_redb_store_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lane0.redb");
+
+        let (_keys, set) = three_validators();
+        {
+            let store = RedbLane0Store::open(&path).unwrap();
+            let state = Lane0PersistentState {
+                epoch: 4,
+                events_finalized: 2,
+                finalized: vec![eid(1), eid(2)],
+                validators: Some(set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+            };
+            store.save(&state).unwrap();
+        }
+
+        // Reopen from the same path — a fresh process would do exactly this.
+        let store = RedbLane0Store::open(&path).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.epoch, 4);
+        assert_eq!(loaded.events_finalized, 2);
+        assert_eq!(loaded.finalized, vec![eid(1), eid(2)]);
+        assert_eq!(loaded.validators.unwrap().len(), set.len());
+    }
+
+    /// Opening a redb store at a path with no prior state yields the empty
+    /// default rather than erroring — first boot of a persistent node.
+    #[test]
+    fn test_redb_store_empty_on_first_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fresh.redb");
+        let store = RedbLane0Store::open(&path).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.epoch, 0);
+        assert_eq!(loaded.events_finalized, 0);
+        assert!(loaded.finalized.is_empty());
+        assert!(loaded.validators.is_none());
+    }
+
+    /// A store with no backend (`new()`) persists to nothing and never
+    /// panics on the persist path — the in-memory / Lane-0-disabled case.
+    #[test]
+    fn test_new_store_persist_is_noop() {
+        let (keys, set) = three_validators();
+        let mut store = CertificateStore::new();
+        store.set_validators(&set); // exercises persist() with store == None
+        let id = eid(1);
+        store.add_ack(SignedAck::sign(id, &keys[0]), &set).unwrap();
+        store.add_ack(SignedAck::sign(id, &keys[1]), &set).unwrap();
+        store.add_ack(SignedAck::sign(id, &keys[2]), &set).unwrap();
+        assert!(store.is_final(&id));
     }
 }
