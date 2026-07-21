@@ -948,7 +948,54 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
         round_number: u64,
     ) -> Result<NodeId, omnia_crypto::DeterministicHashError> {
-        omnia_crypto::select_leader(candidates, &self.config.round_seed, round_number)
+        // AUDIT-2026-07 C1 (#339): select via the VRF-keyed, stake-weighted
+        // schedule driven by the unpredictable beacon (`round_seed` is the
+        // beacon, evolved by folding the committed DAG frontier — see
+        // `advance_beacon_from_committed`), instead of the old public
+        // `BLAKE3(seed || round) % stake` which let anyone pre-compute all
+        // future leaders.
+        crate::vrf_election::primary_leader(&Self::stake_view(candidates), &self.config.round_seed, round_number)
+            .ok_or(omnia_crypto::DeterministicHashError::NoCandidates(round_number))
+    }
+
+    /// Ordered leader schedule for a round: the primary leader followed by
+    /// ranked backups, for zero-timeout failover when the primary is
+    /// slashed or silent. Deterministic across all nodes given the beacon.
+    pub fn compute_leader_schedule(
+        &self,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round_number: u64,
+        count: usize,
+    ) -> Vec<NodeId> {
+        crate::vrf_election::leader_schedule(
+            &Self::stake_view(candidates),
+            &self.config.round_seed,
+            round_number,
+            count,
+        )
+    }
+
+    /// Project the `(keypair, stake)` candidate map down to the
+    /// `NodeId -> stake` view the election module consumes.
+    fn stake_view(candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>) -> HashMap<NodeId, u64> {
+        candidates.iter().map(|(id, (_, stake))| (*id, *stake)).collect()
+    }
+
+    /// Evolve the leader-election beacon by folding the committed DAG
+    /// frontier into it (AUDIT-2026-07 C1, #339).
+    ///
+    /// Called on the commit path with the event IDs committed this round.
+    /// Because committed IDs depend on user signatures that do not exist
+    /// until the events are created, no observer can compute the beacon —
+    /// and therefore future leaders — beyond the committed frontier. Every
+    /// honest node folds the identical committed set, so the beacon stays
+    /// deterministic network-wide with no extra messages.
+    pub fn advance_beacon_from_committed(&mut self, committed: &[EventId]) {
+        if committed.is_empty() {
+            return;
+        }
+        let new_seed = crate::vrf_election::fold_commitment(&self.config.round_seed, committed);
+        self.config.round_seed = new_seed;
     }
 
     /// Update the round seed with a new deterministic output.

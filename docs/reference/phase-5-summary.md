@@ -50,7 +50,18 @@ This update captures real benchmark numbers, fixes critical bugs in the ECVRF pr
 - **`substrate/tests/network_integration.rs`** (new): Docker Compose integration test placeholder (requires running network)
 - **`.github/workflows/multi-node-test.yml`**: Weekly CI workflow for multi-node BFT testing
 
-### H-2: VRF Migration to ECVRF per RFC 9381 ✅
+### H-2: VRF Migration to ECVRF per RFC 9381 ⚠️ SUPERSEDED — see ADR-026 / #339
+
+> **Correction (2026-07-20):** the Phase 5 "V2 ECVRF" described below is
+> **not a VRF**. Its `gamma = BLAKE3(sk || H)` performs no elliptic-curve
+> operations, so it satisfies none of a VRF's algebraic uniqueness
+> guarantees — it is a signature-plus-hash construction with the same
+> weakness the section claims to fix. Leader selection also used a *public*
+> `BLAKE3(seed || round)` that made leaders predictable in advance
+> (AUDIT-2026-07 C1). Both are replaced by a real Edwards25519 EC-VRF
+> (`omnia-crypto::ecvrf`, `Gamma = x·H` with a Schnorr proof) and an
+> unpredictable beacon under **ADR-026**. The text below is retained for
+> historical accuracy only.
 
 **Problem**: Current VRF is not standard — Ed25519 signature + BLAKE3 derivation does not meet the cryptographic definition of a VRF. The original ECVRF implementation had a broken prove/verify round-trip because BLAKE3-based "EC operations" cannot satisfy the algebraic identities needed for verification.
 

@@ -31,6 +31,10 @@ pub mod threshold;
 
 pub mod vrf;
 
+/// Real Edwards25519 EC-VRF (AUDIT-2026-07 C1, #339) — replaces the
+/// predictable hash-based leader selection in `vrf`.
+pub mod ecvrf;
+
 // Re-export commonly used types at crate root
 pub use crypto::{generate_keypair, NodeKeypair, NodePublicKey, Signature, SignatureError, Signer, Verifier};
 pub use crypto_schemes::{CryptoProfile, HashScheme, SchemeVersion, SignatureScheme, VrfScheme, ZkScheme};
@@ -61,3 +65,5 @@ pub use vrf::{
     deterministic_compute, deterministic_verify, ecdsa_prove, ecdsa_verify, select_leader, select_leader_v2,
     DeterministicHashError, DeterministicOutput, EcdsaProofOutput, HashVersion,
 };
+
+pub use ecvrf::{VrfError, VrfProof};

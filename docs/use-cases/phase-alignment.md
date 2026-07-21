@@ -141,12 +141,20 @@ Phase 4 delivered real Ethereum settlement via Alloy, wired gradual slashing per
 
 **Status**: ✅ Complete
 
-Phase 5 captured real benchmark data (~12,000 ops/s (v0.1.68 baseline; ~7,190 ops/s v0.1.48 historical) synchronous single-node; a 13.6× improvement over initial tokio-based measurements), validated multi-node BFT consensus, migrated VRF to ECVRF per RFC 9381, added genesis tooling, and prepared the external audit package.
+Phase 5 captured real benchmark data (~12,000 ops/s (v0.1.68 baseline; ~7,190 ops/s v0.1.48 historical) synchronous single-node; a 13.6× improvement over initial tokio-based measurements), validated multi-node BFT consensus, reworked the VRF construction, added genesis tooling, and prepared the external audit package.
+
+> **Correction (2026-07-20, AUDIT-2026-07 C1 / #339):** the Phase 5 "VRF"
+> (both V1 and the V2 "ECVRF") was a **hash construction, not a VRF** — it
+> performed no elliptic-curve operations and provided no VRF uniqueness
+> guarantee. Leader selection was additionally a *public* function of a
+> known seed, so leaders were predictable in advance. This is replaced by a
+> real Edwards25519 EC-VRF plus an unpredictable beacon under ADR-026; see
+> that ADR for the accurate description and RFC 9381 scope note.
 
 ### What Changed for Users
 
 - **All Users**: Aspirational throughput claims have been replaced with honest measured data: ~12,000 ops/s (v0.1.68 baseline; ~7,190 ops/s v0.1.48 historical) synchronous single-node (a 13.6× improvement over the initial tokio-based measurement). This transparency allows realistic planning.
-- **Operators**: Genesis tooling enables network bootstrapping with a validated initial validator set. VRF leader selection now uses a standard ECVRF construction.
+- **Operators**: Genesis tooling enables network bootstrapping with a validated initial validator set. (Leader selection was reworked again under ADR-026 to a real EC-VRF + unpredictable beacon after AUDIT-2026-07 C1 found the Phase 5 construction was neither a VRF nor unpredictable.)
 - **Developers**: Poseidon dual-hash foundation enables future migration to Filecoin/Neptune reference parameters. Bug bounty program is active ($100–$50,000).
 - **Architects**: External audit package assembled. Side-channel audit for ZK and binding crates completed.
 
@@ -156,7 +164,7 @@ Phase 5 captured real benchmark data (~12,000 ops/s (v0.1.68 baseline; ~7,190 op
 | ---------------------- | -------------- | --------------------------------------------------------------------------- |
 | Real benchmarks        | ✅             | ~12,000 ops/s (v0.1.68 baseline; ~7,190 ops/s v0.1.48 historical) sync single-node (13.6× improvement over initial measurements) |
 | Multi-node BFT         | ✅             | 4-node test validated                                                       |
-| ECVRF (RFC 9381)       | ✅             | V2 with Fiat-Shamir + Ed25519                                               |
+| VRF construction       | ⚠️ Superseded  | Phase 5 V1/V2 were hash constructions, not VRFs — replaced by a real EC-VRF (ADR-026, #339) |
 | Genesis tooling        | ✅             | GenesisConfig, ValidatorInfo, TOML templates                                |
 | Poseidon dual-hash     | ✅             | Custom + Reference, LazyLock-based                                          |
 | Bug bounty program     | ✅             | $100–$50,000, 90-day embargo                                                |

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Index and summaries of all Architecture Decision Records (ADRs)
-> 📅 Last Updated: 2026-07-10
+> 📅 Last Updated: 2026-07-20
 
 > **Note:** ADR-004 is intentionally reserved/skipped.
 
@@ -20,10 +20,10 @@
 | ADR-009 | Poseidon Parameter Justification   | ✅ Adopted | Cauchy MDS + BLAKE3-derived round constants                                                     |
 | ADR-010 | Encrypted Keystore Design          | ✅ Adopted | AES-256-GCM + HKDF-SHA256 for key storage                                                       |
 | ADR-011 | Gradual Slashing Model             | ✅ Adopted | 3-tier: Warning → Jail → Ejection                                                               |
-| ADR-012 | VRF Construction Choice            | ✅ Adopted | V1 (legacy Ed25519+BLAKE3) + V2 (ECVRF per RFC 9381)                                            |
+| ADR-012 | VRF Construction Choice            | ⚠️ Superseded by ADR-026 | V1/V2 were **hash constructions, not VRFs** (no EC operations); replaced by a real EC-VRF |
 | ADR-013 | DKG Protocol Selection             | ✅ Adopted | Feldman VSS-based DKG                                                                           |
 | ADR-014 | Poseidon Parameter Migration       | ✅ Adopted | Dual-hash transition: Custom → Reference (Filecoin/Neptune)                                     |
-| ADR-015 | Leader Selection in Consensus Loop | ✅ Adopted | VRF-based, stake-weighted leader selection                                                      |
+| ADR-015 | Leader Selection in Consensus Loop | ⚠️ Superseded by ADR-026 | Was a **public** `BLAKE3(seed‖round) mod stake` (predictable — AUDIT C1); now EC-VRF + beacon |
 | ADR-016 | Kademlia DHT Configuration         | ✅ Adopted | `/omnia/kad/1.0.0`, AutoNAT/Relay/DCutr                                                         |
 | ADR-017 | GossipSub Peer Scoring Thresholds  | ✅ Adopted | Graylist at -100, 1-min decay                                                                   |
 | ADR-018 | Consensus State Persistence        | ✅ Adopted | `RedbConsensusStore`, `load_or_new`                                                             |
@@ -34,6 +34,7 @@
 | ADR-023 | Second Audit Remediation           | 🔄 Proposed | Verification + fixes for findings F-1 through F-27                                              |
 | ADR-024 | Third-Pass Audit Remediation       | 🔄 Proposed | Verification + fixes for findings NEW-C1 through NEW-L2                                         |
 | ADR-025 | Two-Lane Consensus                 | 🔄 Proposed | Lane 0 consensusless UBC fast path + Lane 1 DAG-native commit rule; ZK demoted to checkpointing |
+| ADR-026 | Next-Generation Consensus          | 🔄 Proposed | Real EC-VRF leader election + unpredictable beacon + backup failover (Phase 1); DAG dissemination, adaptive committees, pipelined finality (Phases 2–4). Supersedes ADR-012/ADR-015 |
 
 ## Source Files
 

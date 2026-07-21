@@ -926,19 +926,44 @@ impl Substrate {
             self.lane0_flush_outbox().await;
         }
 
-        // 2. Check if we are the leader for this round
+        // 2. Check if we are the leader for this round.
+        //
+        // AUDIT-2026-07 C1 (#339): leader selection now uses the
+        // VRF-keyed, stake-weighted schedule driven by the unpredictable
+        // beacon. We take an ordered schedule (primary + backups) so that
+        // if the primary is slashed, a backup can step in immediately
+        // rather than waiting out a round timeout (zero-timeout failover).
+        // We propose if we are the highest-ranked non-slashed validator in
+        // the schedule — every node computes the identical schedule, so
+        // this stays single-leader.
         let current_round = self.consensus.current_round();
         if !self.validator_candidates.is_empty() {
-            if let Ok(leader) = self.consensus.compute_leader(&self.validator_candidates, current_round) {
-                if leader == self.config.node_id {
-                    // We are the leader — produce a block proposal
-                    self.propose_block(current_round).await;
-                }
+            const LEADER_SCHEDULE_DEPTH: usize = 4;
+            let schedule = self.consensus.compute_leader_schedule(
+                &self.validator_candidates,
+                current_round,
+                LEADER_SCHEDULE_DEPTH,
+            );
+            let active_leader = schedule.iter().find(|node| !self.consensus.is_slashed(node));
+            if active_leader == Some(&self.config.node_id) {
+                // We are the active leader (primary, or the first
+                // non-slashed backup) — produce a block proposal.
+                self.propose_block(current_round).await;
             }
         }
 
         // 3. Run consensus — returns newly committed event IDs
         let committed = self.process_consensus().await;
+
+        // 3b. AUDIT-2026-07 C1 (#339): fold the committed DAG frontier into
+        // the leader-election beacon. This is what makes future leaders
+        // unpredictable — committed IDs depend on user signatures that do
+        // not exist until the events are created, and every node folds the
+        // identical committed set, so the beacon evolves deterministically
+        // without any extra network traffic.
+        if !committed.is_empty() {
+            self.consensus.advance_beacon_from_committed(&committed);
+        }
 
         // 4. Process committed events through shard processor
         if let Some(ref mut processor) = self.shard_processor {
