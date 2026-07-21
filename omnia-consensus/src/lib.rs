@@ -59,7 +59,10 @@ pub use slashing::{
     SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
-pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
+pub use slashing_undo::{
+    GovernanceAuthority, GovernanceSignature, SlashingUndoError, SlashingUndoManager, SlashingUndoRecord,
+    SlashingUndoRequest,
+};
 pub use thread_pool::{ValidationPool, ValidationResult, ValidationTask};
 pub use vector_clock_index::{VectorClockIndex, VectorClockIndexStats};
 

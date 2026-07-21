@@ -273,6 +273,43 @@ pub struct SlashingState {
     pub typed_offense_history: HashMap<NodeId, Vec<SlashOffense>>,
     /// Currently jailed validators.
     pub jail_registry: HashMap<NodeId, JailState>,
+    /// AUDIT-2026-07 C6 (#344): rate-limit state for governance undo —
+    /// last round an undo was applied per validator. Persisted here (not
+    /// in the undo manager's memory) so a restart cannot reset the rate
+    /// limit and allow the one-undo-per-interval cap to be bypassed.
+    #[serde(default)]
+    pub last_undo_round: HashMap<NodeId, u64>,
+    /// AUDIT-2026-07 C6 (#344): permanent audit log of applied governance
+    /// undos, persisted in the same store/transaction as the slash-point
+    /// changes so it cannot diverge from them across a restart.
+    #[serde(default)]
+    pub undo_audit_log: Vec<SlashingUndoRecord>,
+}
+
+/// A permanent audit record of a slashing undo that was applied
+/// (AUDIT-2026-07 C6, #344).
+///
+/// Lives here (rather than in `slashing_undo`) so it can be a field of
+/// [`SlashingState`] and persisted atomically with the slash-point change.
+/// Re-exported from `slashing_undo` for backward compatibility.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlashingUndoRecord {
+    /// The validator whose slash was reversed.
+    pub validator_id: NodeId,
+    /// The governance proposal hash that authorized the undo.
+    pub proposal_hash: [u8; 32],
+    /// Slash points before the undo.
+    pub points_before: u64,
+    /// Slash points after the undo.
+    pub points_after: u64,
+    /// The round at which the original slash was recorded.
+    pub slashed_round: u64,
+    /// The round at which the undo was applied.
+    pub undo_round: u64,
+    /// Timestamp of the undo (unix epoch seconds).
+    pub timestamp: u64,
+    /// The reason for the undo.
+    pub reason: String,
 }
 
 impl Default for SlashingState {
@@ -285,6 +322,8 @@ impl Default for SlashingState {
             offense_history: HashMap::new(),
             typed_offense_history: HashMap::new(),
             jail_registry: HashMap::new(),
+            last_undo_round: HashMap::new(),
+            undo_audit_log: Vec::new(),
         }
     }
 }
@@ -845,6 +884,8 @@ impl SlashingEngine {
             offense_history: HashMap::new(),
             typed_offense_history: HashMap::new(),
             jail_registry: HashMap::new(),
+            last_undo_round: HashMap::new(),
+            undo_audit_log: Vec::new(),
         };
         Self {
             state: Arc::new(RwLock::new(state)),
@@ -932,6 +973,8 @@ impl SlashingEngine {
                     offense_history: HashMap::new(),
                     typed_offense_history: HashMap::new(),
                     jail_registry: HashMap::new(),
+                    last_undo_round: HashMap::new(),
+                    undo_audit_log: Vec::new(),
                 }
             }
         };
@@ -1451,6 +1494,101 @@ impl SlashingEngine {
                 Err(SlashingStoreError::UndoNoOffenseHistory(prefix))
             }
         }
+    }
+
+    /// The round at which the last governance undo was applied for `node`
+    /// (AUDIT-2026-07 C6, #344) — read from persisted state, so it survives
+    /// restarts.
+    pub fn last_undo_round(&self, node: &NodeId) -> Option<u64> {
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "last_undo_round — lock poisoned");
+            std::process::abort()
+        });
+        state.last_undo_round.get(node).copied()
+    }
+
+    /// The full persisted governance-undo audit log (AUDIT-2026-07 C6, #344).
+    pub fn undo_audit_log(&self) -> Vec<SlashingUndoRecord> {
+        let state = self.state.read().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "undo_audit_log — lock poisoned");
+            std::process::abort()
+        });
+        state.undo_audit_log.clone()
+    }
+
+    /// Apply a governance undo atomically: decrement the last offense's
+    /// points, record the audit entry, and stamp the rate-limit round —
+    /// all in a single state mutation persisted in one store transaction
+    /// (AUDIT-2026-07 C6, #344).
+    ///
+    /// Authorization is the caller's responsibility
+    /// ([`SlashingUndoManager::apply_undo`](crate::slashing_undo::SlashingUndoManager::apply_undo)
+    /// verifies a governance multi-signature before calling this). This
+    /// method only enforces atomic persistence.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_undo(
+        &mut self,
+        node: &NodeId,
+        current_round: u64,
+        slashed_round: u64,
+        undo_round: u64,
+        proposal_hash: [u8; 32],
+        reason: String,
+    ) -> Result<SlashingUndoRecord, SlashingStoreError> {
+        let mut state = self.state.write().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "record_undo — lock poisoned");
+            std::process::abort()
+        });
+        let snapshot = state.clone();
+
+        let entries = match state.offense_history.get_mut(node) {
+            Some(entries) if !entries.is_empty() => entries,
+            _ => {
+                let mut prefix = [0u8; 4];
+                prefix.copy_from_slice(&node[..4]);
+                return Err(SlashingStoreError::UndoNoOffenseHistory(prefix));
+            }
+        };
+        let last_offense_points = entries.pop().expect("entries is non-empty per guard above");
+        if let Some(typed_history) = state.typed_offense_history.get_mut(node) {
+            typed_history.pop();
+        }
+        let points_before = state.slash_points.get(node).copied().unwrap_or(0);
+        let points_after = points_before.saturating_sub(last_offense_points);
+        state.slash_points.insert(*node, points_after);
+
+        let record = SlashingUndoRecord {
+            validator_id: *node,
+            proposal_hash,
+            points_before,
+            points_after,
+            slashed_round,
+            undo_round,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            reason,
+        };
+
+        // Rate-limit round and audit entry are updated in the SAME state
+        // object, then persisted in ONE store write below — so a crash
+        // can never leave the point decrement durable while the rate-limit
+        // stamp is lost (which is exactly what let the limit be bypassed).
+        state.last_undo_round.insert(*node, current_round);
+        state.undo_audit_log.push(record.clone());
+
+        drop(state);
+        if let Err(e) = self.persist_state() {
+            tracing::error!(error = %e, "Failed to persist slashing state after record_undo — rolling back");
+            let mut state = self.state.write().unwrap_or_else(|e| {
+                tracing::error!(error = %e, "record_undo rollback — lock poisoned");
+                std::process::abort()
+            });
+            *state = snapshot;
+            return Err(e);
+        }
+        Ok(record)
     }
 
     /// Export the current slashing state as a [`SlashingState`] snapshot.
