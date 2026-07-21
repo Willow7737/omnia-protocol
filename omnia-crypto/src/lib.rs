@@ -53,8 +53,9 @@ pub use bls::{
 
 #[cfg(feature = "bls")]
 pub use threshold::{
-    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult, FeldmanVssSession, KeyShare,
-    PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError, ThresholdKeyManager, ThresholdSignature,
+    AeadCiphertext, DkgError, DkgPhase, DkgResult, DkgSharePackage, DkgVerificationResult, FeldmanVssSession,
+    GroupThresholdSignature, KeyShare, PartialSignature, ScalarBytes, ThresholdConfig, ThresholdError,
+    ThresholdKeyManager, ThresholdSignature,
 };
 
 #[cfg(all(feature = "bls", feature = "deprecated-dkg"))]
