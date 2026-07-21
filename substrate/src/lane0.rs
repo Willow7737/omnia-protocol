@@ -1120,7 +1120,10 @@ mod tests {
         // CRDT property: any delivery order reaches the same final state.
         let (keys, set) = three_validators();
         let id = eid(1);
-        let acks: Vec<SignedAck> = keys.iter().map(|k| SignedAck::sign(id, UNBOUND_STATE_ROOT, k)).collect();
+        let acks: Vec<SignedAck> = keys
+            .iter()
+            .map(|k| SignedAck::sign(id, UNBOUND_STATE_ROOT, k))
+            .collect();
 
         for order in [[0, 1, 2], [2, 0, 1], [1, 2, 0]] {
             let mut store = CertificateStore::new();
