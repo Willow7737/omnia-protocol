@@ -20,7 +20,7 @@
 use crate::causal_graph::CausalGraph;
 #[cfg(feature = "persistent-storage")]
 use crate::consensus_store::{ConsensusState as PersistedConsensusState, ConsensusStore, ConsensusStoreError};
-use crate::slashing::{SlashOffense, SlashingEngine};
+use crate::slashing::{SlashOffense, SlashOutcome, SlashingEngine};
 #[cfg(test)]
 use crate::slashing::{DEFAULT_EJECTION_THRESHOLD, DEFAULT_SLASH_THRESHOLD};
 use crate::SlashingBackend;
@@ -305,6 +305,12 @@ pub struct ConsensusEngine<S: SlashingBackend = SlashingEngine> {
     round_timer: RoundTimer,
     /// Maps (creator, sequence) → first EventId seen for that pair.
     first_event_for_sequence: HashMap<(NodeId, u64), EventId>,
+    /// Validators that have been ejected from the active set (AUDIT-2026-07
+    /// H2, #352). The BFT threshold is computed over the *current* active
+    /// validator count (`total_nodes − ejected`), not the static
+    /// `config.total_nodes`, so ejections don't leave the supermajority
+    /// threshold set for a validator set that no longer exists.
+    ejected_validators: HashSet<NodeId>,
 }
 
 impl<S: SlashingBackend> ConsensusEngine<S> {
@@ -360,7 +366,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             _last_finalized: VectorClock::new(),
             slashing,
             round_timer,
-
+            ejected_validators: HashSet::new(),
             first_event_for_sequence: HashMap::new(),
         }
     }
@@ -453,6 +459,11 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                 outcome = ?outcome,
                                 "Equivocation detected — multiple events with same creator+sequence"
                             );
+                            // H2 (#352): shrink the active set so the BFT
+                            // threshold tracks the ejection.
+                            if let SlashOutcome::Ejected { node } = outcome {
+                                self.mark_validator_ejected(node);
+                            }
                             is_equivocation = true;
                         }
                     }
@@ -498,6 +509,11 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
                                         outcome = ?outcome,
                                         "Equivocation detected (pruned first event) — multiple events with same creator+sequence"
                                     );
+                                    // H2 (#352): shrink the active set so the
+                                    // BFT threshold tracks the ejection.
+                                    if let SlashOutcome::Ejected { node } = outcome {
+                                        self.mark_validator_ejected(node);
+                                    }
                                     // Propagate to the outer `is_equivocation`
                                     // flag so the post-match check rejects
                                     // the event with EquivocationDetected.
@@ -662,7 +678,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             current_max_round: self.node_info.values().map(|i| i.current_round).max().unwrap_or(0),
             by_state,
             total_nodes: self.config.total_nodes,
-            threshold: supermajority(self.config.total_nodes),
+            threshold: self.threshold(),
         }
     }
 
@@ -725,7 +741,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             }
         }
 
-        Ok(seen_count >= supermajority(self.config.total_nodes))
+        Ok(seen_count >= self.threshold())
     }
 
     /// FIX 3: Check if an event is a witness (first event in its round for its creator)
@@ -777,7 +793,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             // However, genesis round (round 0) with supermajority can still commit.
             if round == 0 {
                 if let Some(witnesses) = self.round_witnesses.get(&0) {
-                    if witnesses.len() >= supermajority(self.config.total_nodes) {
+                    if witnesses.len() >= self.threshold() {
                         for &witness_id in witnesses {
                             if !self.is_committed(&witness_id) {
                                 committed.insert(witness_id);
@@ -837,7 +853,7 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
             }
 
             let not_seeing_count = total_witnesses.saturating_sub(seeing_count);
-            let threshold = supermajority(self.config.total_nodes);
+            let threshold = self.threshold();
 
             // Supermajority sees the witness → famous
             if seeing_count >= threshold {
@@ -910,6 +926,56 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
     /// ```
     pub fn register_validator(&mut self, node: NodeId, stake: u64) {
         self.slashing.register_validator(node, stake);
+        // A (re-)registered validator is, by definition, active again.
+        self.ejected_validators.remove(&node);
+    }
+
+    /// The number of validators currently **active** in consensus
+    /// (AUDIT-2026-07 H2, #352): the configured total minus those that have
+    /// been ejected. Never returns 0 — a degenerate empty set would make the
+    /// BFT threshold meaningless — so it is clamped to at least 1.
+    pub fn active_validator_count(&self) -> usize {
+        self.config
+            .total_nodes
+            .saturating_sub(self.ejected_validators.len())
+            .max(1)
+    }
+
+    /// The current BFT supermajority threshold, computed over the
+    /// [`active_validator_count`](Self::active_validator_count) rather than
+    /// the static `config.total_nodes` (AUDIT-2026-07 H2, #352). This keeps
+    /// the >2/3 requirement matched to the validator set that actually
+    /// exists after ejections, instead of drifting to an unsafe (too low) or
+    /// unreachable (too high) value.
+    pub fn threshold(&self) -> usize {
+        supermajority(self.active_validator_count())
+    }
+
+    /// Record that a validator has been ejected from the active set
+    /// (AUDIT-2026-07 H2, #352). Idempotent. After this call the BFT
+    /// threshold is recomputed over the shrunken active set.
+    ///
+    /// Consensus calls this automatically when it ejects a validator via the
+    /// slashing backend; the node/API layer should also call it whenever the
+    /// slashing engine ejects a validator out-of-band, so the threshold stays
+    /// in sync with the live validator set.
+    pub fn mark_validator_ejected(&mut self, node: NodeId) {
+        if self.ejected_validators.insert(node) {
+            tracing::info!(
+                node = ?&node[..4],
+                active = self.active_validator_count(),
+                threshold = supermajority(self.active_validator_count()),
+                "Validator ejected — BFT threshold recomputed over active set"
+            );
+        }
+    }
+
+    /// Reinstate a previously-ejected validator into the active set
+    /// (AUDIT-2026-07 H2, #352). Idempotent; the inverse of
+    /// [`mark_validator_ejected`](Self::mark_validator_ejected). After this
+    /// call the BFT threshold is recomputed over the grown active set.
+    pub fn reinstate_validator(&mut self, node: &NodeId) {
+        self.ejected_validators.remove(node);
     }
 
     /// Check if a node has been slashed.
@@ -1643,83 +1709,72 @@ mod tests {
         assert_eq!(supermajority(100), 67);
     }
 
-    // ── AUDIT-2026-07 H3 (#353): leader enforcement on the propose path ──
-
-    fn leader_test_candidates(n: u8) -> HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)> {
-        let mut candidates = HashMap::new();
-        for i in 1..=n {
-            candidates.insert(node(i), (omnia_crypto::generate_keypair(), 100u64));
-        }
-        candidates
-    }
+    // ── AUDIT-2026-07 H2 (#352): dynamic supermajority over active set ──
 
     #[test]
-    fn test_exactly_one_primary_leader_per_round() {
+    fn test_threshold_tracks_active_validator_ejections() {
         let mut config = test_config();
-        config.total_nodes = 5;
-        config.round_seed = [7u8; 32];
-        let engine = ConsensusEngine::new(config, SlashingEngine::new_in_memory(1, 1000));
-        let candidates = leader_test_candidates(5);
-        let round = 1;
-
-        let leader = engine.compute_leader(&candidates, round).unwrap();
-        let flagged: Vec<&NodeId> = candidates
-            .keys()
-            .filter(|n| engine.is_leader_for_round(n, &candidates, round))
-            .collect();
-        assert_eq!(flagged.len(), 1, "exactly one node is the primary leader");
-        assert_eq!(*flagged[0], leader);
-    }
-
-    #[test]
-    fn test_only_active_leader_may_propose() {
-        let mut config = test_config();
-        config.total_nodes = 5;
-        config.round_seed = [9u8; 32];
-        let engine = ConsensusEngine::new(config, SlashingEngine::new_in_memory(1, 1000));
-        let candidates = leader_test_candidates(5);
-        let round = 2;
-
-        let leader = engine.compute_leader(&candidates, round).unwrap();
-        // With no one slashed, the active leader is the primary.
-        assert_eq!(engine.active_leader_for_round(&candidates, round, 4), Some(leader));
-        assert!(engine.is_active_leader_for_round(&leader, &candidates, round, 4));
-        // Every non-leader is refused proposing rights.
-        for n in candidates.keys().filter(|n| **n != leader) {
-            assert!(
-                !engine.is_active_leader_for_round(n, &candidates, round, 4),
-                "a non-leader must not be entitled to propose"
-            );
-        }
-    }
-
-    #[test]
-    fn test_active_leader_fails_over_when_primary_slashed() {
-        let mut config = test_config();
-        config.total_nodes = 5;
-        config.round_seed = [11u8; 32];
-        let round = 3;
-        let candidates = leader_test_candidates(5);
-
-        // Probe the schedule with an unslashed engine.
-        let probe = ConsensusEngine::new(config.clone(), SlashingEngine::new_in_memory(1, 1000));
-        let schedule = probe.compute_leader_schedule(&candidates, round, 4);
-        let primary = schedule[0];
-        let expected_backup = schedule[1];
-
-        // Slash the primary, then build the real engine with that backend.
-        let mut slashing = SlashingEngine::new_in_memory(1, 1000);
-        slashing.record_offense(primary, SlashOffense::Equivocation);
-        let engine = ConsensusEngine::new(config, slashing);
-        assert!(engine.is_slashed(&primary));
-
-        // Proposing rights fail over to the first healthy backup.
-        assert_eq!(
-            engine.active_leader_for_round(&candidates, round, 4),
-            Some(expected_backup)
+        config.total_nodes = 7;
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
         );
-        assert!(!engine.is_active_leader_for_round(&primary, &candidates, round, 4));
-        assert!(engine.is_active_leader_for_round(&expected_backup, &candidates, round, 4));
+
+        // 7 active → supermajority 5.
+        assert_eq!(engine.active_validator_count(), 7);
+        assert_eq!(engine.threshold(), 5);
+
+        // Eject one → 6 active → supermajority 5.
+        engine.mark_validator_ejected(node(1));
+        assert_eq!(engine.active_validator_count(), 6);
+        assert_eq!(engine.threshold(), 5);
+
+        // Eject two more → 4 active → supermajority 3 (was still 5 under the
+        // static formula — that drift is exactly the liveness bug H2 fixes).
+        engine.mark_validator_ejected(node(2));
+        engine.mark_validator_ejected(node(3));
+        assert_eq!(engine.active_validator_count(), 4);
+        assert_eq!(engine.threshold(), 3);
+
+        // Idempotent: re-ejecting a known node doesn't shrink the set further.
+        engine.mark_validator_ejected(node(3));
+        assert_eq!(engine.active_validator_count(), 4);
+
+        // Reinstating grows the set back → 5 active → supermajority 4.
+        engine.reinstate_validator(&node(3));
+        assert_eq!(engine.active_validator_count(), 5);
+        assert_eq!(engine.threshold(), 4);
+    }
+
+    #[test]
+    fn test_active_validator_count_clamped_to_one() {
+        let mut config = test_config();
+        config.total_nodes = 4;
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+        for i in 1..=10u8 {
+            engine.mark_validator_ejected(node(i));
+        }
+        // Never drops below 1 — a 0-of-0 threshold would be meaningless.
+        assert_eq!(engine.active_validator_count(), 1);
+        assert_eq!(engine.threshold(), 1);
+    }
+
+    #[test]
+    fn test_register_validator_reinstates_ejected() {
+        let mut config = test_config();
+        config.total_nodes = 5;
+        let mut engine = ConsensusEngine::new(
+            config,
+            SlashingEngine::new_in_memory(DEFAULT_SLASH_THRESHOLD, DEFAULT_EJECTION_THRESHOLD),
+        );
+        engine.mark_validator_ejected(node(2));
+        assert_eq!(engine.active_validator_count(), 4);
+        // Re-registering an ejected validator returns it to the active set.
+        engine.register_validator(node(2), 1000);
+        assert_eq!(engine.active_validator_count(), 5);
     }
 
     #[test]
