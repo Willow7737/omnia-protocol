@@ -44,6 +44,15 @@ const PROJECT_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 /// Relative path to the 5-node Docker Compose file from the project root.
 const COMPOSE_FILE: &str = "docker/docker-compose.yml";
 
+/// Strong JWT secret injected into the compose environment for the e2e run.
+///
+/// The compose files now require `OMNIA_JWT_SECRET` (`${...:?}`) and the node
+/// rejects known-weak / too-short secrets at startup (AUDIT-2026-07 C11,
+/// #349), so the test must deploy like a real operator would — with a
+/// strong, explicitly-set secret. This is a throwaway 64-hex value used only
+/// by the ephemeral test stack.
+const TEST_COMPOSE_JWT_SECRET: &str = "e2e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7";
+
 /// Host ports mapped to each of the 5 nodes.
 /// Bootstrap = 9090, node-1 = 9091, …, node-4 = 9094.
 const NODE_PORTS: &[u16] = &[9090, 9091, 9092, 9093, 9094];
@@ -96,6 +105,7 @@ impl ComposeGuard {
                 "--timeout",
                 "30",
             ])
+            .env("OMNIA_JWT_SECRET", TEST_COMPOSE_JWT_SECRET)
             .current_dir(&self.project_root)
             .status()
             .expect("failed to run docker compose down");
@@ -130,6 +140,7 @@ fn compose_up(project_root: &PathBuf) {
     eprintln!("[docker-e2e] Starting Docker Compose stack (this may take a while on first run)…");
     let output = Command::new("docker")
         .args(["compose", "-f", COMPOSE_FILE, "up", "-d", "--build", "--wait"])
+        .env("OMNIA_JWT_SECRET", TEST_COMPOSE_JWT_SECRET)
         .current_dir(project_root)
         .output()
         .expect("failed to run docker compose up");
@@ -446,11 +457,10 @@ async fn test_docker_compose_5node_e2e() {
         "Register operation should be processed"
     );
 
-    // Mint UBC to the DID (requires OMNIA_AUTHORIZED_CALLERS to include
-    // the anonymous caller; in the Docker setup without OMNIA_JWT_SECRET,
-    // auth is skipped so the caller is "__anonymous__". Since OMNIA_AUTHORIZED_CALLERS
-    // is not set, mint may fail with 403. We test that the shard operation
-    // endpoint is reachable and functioning — a 403 means auth is working.
+    // Mint UBC to the DID (a privileged shard op). OMNIA_AUTHORIZED_CALLERS
+    // is not configured in this stack, so the caller is not privileged and
+    // mint may fail with 403. We test that the shard operation endpoint is
+    // reachable and functioning — a 403 means authorization is being enforced.
     let mut mint_params = serde_json::Map::new();
     mint_params.insert("did".to_string(), json!(test_did));
     mint_params.insert("amount".to_string(), json!(1000));

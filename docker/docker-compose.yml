@@ -13,7 +13,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set OMNIA_JWT_SECRET (see docker/.env.example)}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
@@ -51,7 +51,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set OMNIA_JWT_SECRET (see docker/.env.example)}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
@@ -79,7 +79,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set OMNIA_JWT_SECRET (see docker/.env.example)}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
@@ -109,7 +109,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set OMNIA_JWT_SECRET (see docker/.env.example)}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
@@ -141,7 +141,7 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=5
       - OMNIA_CORS_ORIGINS=*
-      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:-omnia-testnet-jwt-secret-CHANGE-ME}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set OMNIA_JWT_SECRET (see docker/.env.example)}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:-}
