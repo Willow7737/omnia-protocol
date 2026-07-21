@@ -1316,7 +1316,12 @@ impl Substrate {
         }
         let keypair = keypair.clone();
         for event_id in event_ids {
-            let ack = lane0::SignedAck::sign(*event_id, &keypair);
+            // AUDIT-2026-07 H4 (#354): acks commit to the shard state root
+            // after applying the event. Per-shard state roots do not exist
+            // yet (#365), so we sign with UNBOUND_STATE_ROOT for now — the
+            // binding + per-root quorum machinery is in place and activates
+            // automatically once #365 supplies a real post-apply root here.
+            let ack = lane0::SignedAck::sign(*event_id, lane0::UNBOUND_STATE_ROOT, &keypair);
             // Fold our own ack locally first (a single-validator set
             // self-finalizes here), then queue for broadcast.
             if let Ok(lane0::AckOutcome::NewlyFinal) = self.lane0_store.add_ack(ack.clone(), validators) {
