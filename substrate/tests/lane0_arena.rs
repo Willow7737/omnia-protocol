@@ -27,7 +27,7 @@
 use std::sync::OnceLock;
 
 use omnia_substrate::crypto::{generate_keypair, NodeKeypair};
-use omnia_substrate::lane0::{AckOutcome, CertificateStore, Lane0Error, SignedAck, ValidatorSet};
+use omnia_substrate::lane0::{AckOutcome, CertificateStore, Lane0Error, SignedAck, ValidatorSet, UNBOUND_STATE_ROOT};
 use proptest::prelude::*;
 
 /// Deterministic event id from a small integer.
@@ -95,7 +95,7 @@ proptest! {
 
         let delivered: Vec<usize> = schedule.iter().map(|i| i % validator_count).collect();
         for &i in &delivered {
-            let _ = store.add_ack(SignedAck::sign(id, &keys[i]), &set);
+            let _ = store.add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[i]), &set);
         }
 
         prop_assert_eq!(
@@ -127,7 +127,7 @@ proptest! {
         // Node A: in-order delivery.
         let mut node_a = CertificateStore::new();
         for &(v, e) in &deliveries {
-            let _ = node_a.add_ack(SignedAck::sign(eid(e), &keys[v]), &set);
+            let _ = node_a.add_ack(SignedAck::sign(eid(e), UNBOUND_STATE_ROOT, &keys[v]), &set);
         }
 
         // Node B: deterministically shuffled (seeded Fisher-Yates via
@@ -142,8 +142,8 @@ proptest! {
         }
         let mut node_b = CertificateStore::new();
         for &(v, e) in &shuffled {
-            let _ = node_b.add_ack(SignedAck::sign(eid(e), &keys[v]), &set);
-            let _ = node_b.add_ack(SignedAck::sign(eid(e), &keys[v]), &set); // duplicate
+            let _ = node_b.add_ack(SignedAck::sign(eid(e), UNBOUND_STATE_ROOT, &keys[v]), &set);
+            let _ = node_b.add_ack(SignedAck::sign(eid(e), UNBOUND_STATE_ROOT, &keys[v]), &set); // duplicate
         }
 
         for e in 0..event_count as u8 {
@@ -185,7 +185,7 @@ proptest! {
             .map(|&(v, e)| (v % old_count, (e % 3) as u8))
             .collect();
         for &(v, e) in &deliveries {
-            let _ = store.add_ack(SignedAck::sign(eid(e), &old_keys[v]), &old_set);
+            let _ = store.add_ack(SignedAck::sign(eid(e), UNBOUND_STATE_ROOT, &old_keys[v]), &old_set);
         }
 
         let final_before: Vec<bool> = (0..3u8).map(|e| store.is_final(&eid(e))).collect();
@@ -234,7 +234,7 @@ proptest! {
         // unless validator_count == 1, in which case skip honest acks).
         let honest_delivered = if validator_count > 1 { honest_acks.min(1) } else { 0 };
         for k in keys.iter().take(honest_delivered) {
-            let _ = store.add_ack(SignedAck::sign(id, k), &set);
+            let _ = store.add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, k), &set);
         }
 
         // Pool tail is disjoint from the set (which uses pool[0..validator_count]).
@@ -242,11 +242,11 @@ proptest! {
         for i in 0..attack_count {
             if i % 2 == 0 {
                 // Outsider: valid signature, not in the set.
-                let ack = SignedAck::sign(id, &outsider);
+                let ack = SignedAck::sign(id, UNBOUND_STATE_ROOT, &outsider);
                 prop_assert!(matches!(store.add_ack(ack, &set), Err(Lane0Error::UnknownValidator)));
             } else {
                 // Forgery: in-set pubkey, corrupted signature.
-                let mut forged = SignedAck::sign(id, &keys[i % validator_count]);
+                let mut forged = SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[i % validator_count]);
                 forged.signature[i % 64] ^= 0xFF;
                 prop_assert!(matches!(store.add_ack(forged, &set), Err(Lane0Error::InvalidSignature)));
             }
@@ -270,7 +270,7 @@ proptest! {
         let (keys, set) = make_validators(0, validator_count);
         let mut store = CertificateStore::new();
         let id = eid(1);
-        let ack = SignedAck::sign(id, &keys[0]);
+        let ack = SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]);
 
         prop_assert_eq!(store.add_ack(ack.clone(), &set).unwrap(), AckOutcome::Recorded);
         for _ in 0..replays {
