@@ -511,13 +511,18 @@ pub async fn list_transfers(State(state): State<AppState>, Query(query): Query<L
         .map(|r| {
             let mut v = serde_json::to_value(r).unwrap_or_else(|_| json!({}));
             if lane0_enabled {
-                let is_final = r
-                    .event_id
-                    .as_deref()
-                    .and_then(crate::api::events::decode_event_id)
-                    .map(|id| substrate.lane0_is_final(&id))
-                    .unwrap_or(false);
-                v["lane0_final"] = json!(is_final);
+                // AUDIT-2026-07 H5 (#355): report the full finality lifecycle
+                // so consumers never mistake a reversible Lane 0
+                // preconfirmation for canonical/final state.
+                let id = r.event_id.as_deref().and_then(crate::api::events::decode_event_id);
+                let state = id
+                    .map(|id| substrate.finality_state(&id))
+                    .unwrap_or(omnia_substrate::FinalityState::Pending);
+                v["finality_state"] = json!(state.as_str());
+                // Back-compat field: true once Lane 0 has preconfirmed (or
+                // stronger). Prefer `finality_state` — `lane0_final` does NOT
+                // imply canonical finality.
+                v["lane0_final"] = json!(id.map(|id| substrate.lane0_is_final(&id)).unwrap_or(false));
             }
             v
         })
