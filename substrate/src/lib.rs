@@ -175,6 +175,12 @@ pub const TARGET_TPS: u32 = 10_000;
 /// Target latency for finality (milliseconds)
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
+/// Depth of the VRF leader schedule (primary + backups) consulted when
+/// deciding who may propose a round (AUDIT-2026-07 H3, #353). If the primary
+/// and the first few backups are all slashed/silent, the round falls through
+/// to the normal timeout path.
+const LEADER_SCHEDULE_DEPTH: usize = 4;
+
 /// Parse the consensus seed from the `OMNIA_CONSENSUS_SEED` environment variable.
 ///
 /// Accepts a hex-encoded 64-character (32-byte) seed for cryptographic strength.
@@ -983,16 +989,17 @@ impl Substrate {
         // this stays single-leader.
         let current_round = self.consensus.current_round();
         if !self.validator_candidates.is_empty() {
-            const LEADER_SCHEDULE_DEPTH: usize = 4;
-            let schedule = self.consensus.compute_leader_schedule(
+            // AUDIT-2026-07 H3 (#353): only the round's active leader may
+            // propose. `is_active_leader_for_round` computes the VRF-keyed
+            // schedule and skips slashed members (zero-timeout backup
+            // failover), so leader-based consensus is enforced rather than
+            // decorative. `propose_block` re-checks this as a defensive guard.
+            if self.consensus.is_active_leader_for_round(
+                &self.config.node_id,
                 &self.validator_candidates,
                 current_round,
                 LEADER_SCHEDULE_DEPTH,
-            );
-            let active_leader = schedule.iter().find(|node| !self.consensus.is_slashed(node));
-            if active_leader == Some(&self.config.node_id) {
-                // We are the active leader (primary, or the first
-                // non-slashed backup) — produce a block proposal.
+            ) {
                 self.propose_block(current_round).await;
             }
         }
@@ -1462,6 +1469,23 @@ impl Substrate {
     /// FIND-CRIT-001 FIX: This method is now async to avoid `blocking_write()`
     /// inside an async context, which can deadlock the Tokio runtime.
     async fn propose_block(&mut self, round: u64) -> Vec<EventId> {
+        // AUDIT-2026-07 H3 (#353): defensive re-check — refuse to propose
+        // unless this node is the active leader for the round, so a proposal
+        // can never be produced out of turn even if a caller forgets the
+        // gate. No-op when no validator set is configured (leaderless / test
+        // mode), preserving existing behaviour.
+        if !self.validator_candidates.is_empty()
+            && !self.consensus.is_active_leader_for_round(
+                &self.config.node_id,
+                &self.validator_candidates,
+                round,
+                LEADER_SCHEDULE_DEPTH,
+            )
+        {
+            tracing::warn!(round, "propose_block called by a non-leader — refusing to propose");
+            return Vec::new();
+        }
+
         let pending = self.mempool.drain_up_to(self.max_block_events);
         if pending.is_empty() {
             return Vec::new();

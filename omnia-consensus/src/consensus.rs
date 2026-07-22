@@ -1047,6 +1047,53 @@ impl<S: SlashingBackend> ConsensusEngine<S> {
         candidates.iter().map(|(id, (_, stake))| (*id, *stake)).collect()
     }
 
+    /// Whether `node` is the **primary** VRF-elected leader for `round`
+    /// (AUDIT-2026-07 H3, #353). Ignores slashing/failover — use
+    /// [`is_active_leader_for_round`](Self::is_active_leader_for_round) to
+    /// gate proposing.
+    pub fn is_leader_for_round(
+        &self,
+        node: &NodeId,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+    ) -> bool {
+        self.compute_leader(candidates, round)
+            .map(|leader| &leader == node)
+            .unwrap_or(false)
+    }
+
+    /// The **active** leader for `round`: the highest-ranked member of the
+    /// leader schedule (primary + `backup_depth` backups) that is not
+    /// slashed (AUDIT-2026-07 H3, #353). This provides zero-timeout failover
+    /// — if the primary is slashed, the first healthy backup is entitled to
+    /// propose. Every honest node computes the identical schedule, so exactly
+    /// one node is the active leader. Returns `None` only if the schedule is
+    /// empty (no candidates) or every scheduled member is slashed.
+    pub fn active_leader_for_round(
+        &self,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+        backup_depth: usize,
+    ) -> Option<NodeId> {
+        self.compute_leader_schedule(candidates, round, backup_depth)
+            .into_iter()
+            .find(|node| !self.is_slashed(node))
+    }
+
+    /// Whether `node` is the active leader for `round` and therefore entitled
+    /// to propose (AUDIT-2026-07 H3, #353). The propose path **must** gate on
+    /// this so that "leader-based consensus" is enforced rather than
+    /// decorative — a non-leader that proposes out of turn is refused.
+    pub fn is_active_leader_for_round(
+        &self,
+        node: &NodeId,
+        candidates: &HashMap<NodeId, (omnia_crypto::NodeKeypair, u64)>,
+        round: u64,
+        backup_depth: usize,
+    ) -> bool {
+        self.active_leader_for_round(candidates, round, backup_depth).as_ref() == Some(node)
+    }
+
     /// Evolve the leader-election beacon by folding the committed DAG
     /// frontier into it (AUDIT-2026-07 C1, #339).
     ///
