@@ -18,8 +18,16 @@
 //!    public key: merging is idempotent, commutative, and associative, so
 //!    duplicate or reordered gossip deliveries are harmless.
 //! 3. When the acked stake exceeds 2/3 of the configured total stake, the
-//!    event is Lane 0-final. Finality is monotone — once final, always
-//!    final.
+//!    event is Lane 0-**preconfirmed**. Lane 0 preconfirmation is monotone
+//!    within Lane 0 (once preconfirmed it is never un-preconfirmed), but it
+//!    is **not** canonical finality: it is a fast, reversible
+//!    preconfirmation (AUDIT-2026-07 H5, #355). The canonical order is
+//!    decided by Lane 1 (DAG BFT consensus); if Lane 1 rejects a
+//!    Lane-0-preconfirmed event the two lanes have *diverged*. Consumers
+//!    read the full lifecycle via `Substrate::finality_state`
+//!    (Preconfirmed → Canonical → Final, or Diverged) and must not treat a
+//!    preconfirmation as final. Safe-by-construction for well-formed
+//!    single-writer UBC transfers, which Lane 1 does not reject.
 //!
 //! # Validator set (v1: operator-configured boot set; v2: epoch-fenced rotation)
 //!

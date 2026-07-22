@@ -319,7 +319,7 @@ pub enum ConsensusSeedError {
 /// specific error type that callers may want to match on directly.
 pub type ConsensusSeedResult<T> = std::result::Result<T, ConsensusSeedError>;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -635,6 +635,71 @@ pub struct Substrate {
     /// Own Lane 0 acks awaiting broadcast (flushed each consensus round
     /// and on local submission).
     lane0_outbox: Vec<lane0::SignedAck>,
+    /// AUDIT-2026-07 H5 (#355): events that Lane 0 preconfirmed but Lane 1
+    /// (the canonical DAG consensus) subsequently rejected — a fast-path
+    /// divergence. Tracked so the divergence is observable and the event's
+    /// [`FinalityState`] reports `Diverged` instead of a stale
+    /// preconfirmation.
+    lane0_diverged: HashSet<EventId>,
+    /// AUDIT-2026-07 H5 (#355): events whose canonical state has been
+    /// anchored to the settlement layer (L1). Reaching this set advances an
+    /// event's [`FinalityState`] from `Canonical` to `Final`.
+    settled_events: HashSet<EventId>,
+}
+
+/// Transaction / event finality lifecycle (AUDIT-2026-07 H5, #355).
+///
+/// Omnia has two lanes with different guarantees, and consumers **must**
+/// distinguish them rather than treat Lane 0 as canonical finality:
+///
+/// - [`Preconfirmed`](FinalityState::Preconfirmed) — Lane 0 gave a fast,
+///   stake-signed preconfirmation. It is **reversible**: if Lane 1 later
+///   rejects the event the state becomes [`Diverged`](FinalityState::Diverged).
+///   Safe-by-construction for well-formed single-writer UBC transfers, but a
+///   consumer that acts on it accepts reversal risk.
+/// - [`Canonical`](FinalityState::Canonical) — Lane 1 (DAG BFT consensus)
+///   committed the event into the agreed causal order. Irreversible under the
+///   BFT threat model.
+/// - [`Final`](FinalityState::Final) — canonical **and** anchored to the
+///   settlement layer (L1). The strongest guarantee.
+/// - [`Diverged`](FinalityState::Diverged) — Lane 0 preconfirmed but Lane 1
+///   rejected the event. The fast-path guarantee was violated; anything done
+///   on the preconfirmation must be rolled back.
+///
+/// APIs and SDKs expose this state directly; they never advertise a Lane 0
+/// preconfirmation as "final".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinalityState {
+    /// Neither lane has decided the event yet.
+    Pending,
+    /// Lane 0 stake-quorum preconfirmation — fast but reversible.
+    Preconfirmed,
+    /// Lane 1 (BFT consensus) committed the event into the canonical order.
+    Canonical,
+    /// Canonical and anchored to the settlement layer (L1).
+    Final,
+    /// Lane 0 preconfirmed the event but Lane 1 rejected it.
+    Diverged,
+}
+
+impl FinalityState {
+    /// The wire/string name of this state (matches the serde representation).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FinalityState::Pending => "pending",
+            FinalityState::Preconfirmed => "preconfirmed",
+            FinalityState::Canonical => "canonical",
+            FinalityState::Final => "final",
+            FinalityState::Diverged => "diverged",
+        }
+    }
+
+    /// Whether this state is safe to treat as irreversible (`Canonical` or
+    /// `Final`). `Preconfirmed` is **not** — it can still diverge.
+    pub fn is_irreversible(&self) -> bool {
+        matches!(self, FinalityState::Canonical | FinalityState::Final)
+    }
 }
 
 impl Substrate {
@@ -794,6 +859,8 @@ impl Substrate {
             lane0_validators: lane0_restored_validators,
             lane0_store,
             lane0_outbox: Vec::new(),
+            lane0_diverged: HashSet::new(),
+            settled_events: HashSet::new(),
         }
     }
 
@@ -1248,8 +1315,75 @@ impl Substrate {
 
     /// Whether an event has reached Lane 0 finality (stake-weighted
     /// quorum of validator acks). Always `false` when Lane 0 is disabled.
+    ///
+    /// Note (AUDIT-2026-07 H5, #355): Lane 0 finality is a **reversible
+    /// preconfirmation**, not canonical finality. Prefer
+    /// [`finality_state`](Self::finality_state), which reports the full
+    /// lifecycle and never conflates a preconfirmation with canonical/final.
     pub fn lane0_is_final(&self, event_id: &EventId) -> bool {
         self.lane0_store.is_final(event_id)
+    }
+
+    /// Resolve an event's finality lifecycle state (AUDIT-2026-07 H5, #355).
+    ///
+    /// Combines the Lane 0 preconfirmation, the Lane 1 canonical commit, the
+    /// settlement-layer anchor, and any recorded divergence into a single
+    /// [`FinalityState`] so callers (and the public API) can distinguish a
+    /// reversible fast-path preconfirmation from canonical/final state.
+    pub fn finality_state(&self, event_id: &EventId) -> FinalityState {
+        if self.lane0_diverged.contains(event_id) {
+            return FinalityState::Diverged;
+        }
+        if self.is_finalized(event_id) {
+            // Lane 1 committed the event into the canonical order.
+            if self.settled_events.contains(event_id) {
+                return FinalityState::Final;
+            }
+            return FinalityState::Canonical;
+        }
+        if self.lane0_store.is_final(event_id) {
+            return FinalityState::Preconfirmed;
+        }
+        FinalityState::Pending
+    }
+
+    /// Record that Lane 1 (canonical DAG consensus) **rejected** an event
+    /// (AUDIT-2026-07 H5, #355). If Lane 0 had already preconfirmed it, this
+    /// is a fast-path divergence: it is recorded (so
+    /// [`finality_state`](Self::finality_state) reports `Diverged`) and
+    /// logged loudly for operators/consumers to reconcile. Returns `true`
+    /// when a *new* divergence was recorded.
+    ///
+    /// A rejection of an event Lane 0 never preconfirmed is normal (an
+    /// invalid event) and is ignored here.
+    pub fn reconcile_lane1_rejection(&mut self, event_id: EventId) -> bool {
+        if !self.lane0_store.is_final(&event_id) {
+            return false;
+        }
+        let newly = self.lane0_diverged.insert(event_id);
+        if newly {
+            tracing::error!(
+                event = %hex::encode(&event_id[..4]),
+                "LANE 0/LANE 1 DIVERGENCE — Lane 1 rejected an event Lane 0 preconfirmed; \
+                 consumers relying on the preconfirmation must roll back"
+            );
+        }
+        newly
+    }
+
+    /// Mark an event's canonical state as anchored to the settlement layer
+    /// (L1), advancing it from `Canonical` to `Final` (AUDIT-2026-07 H5,
+    /// #355). Called by the settlement adapter when a batch containing the
+    /// event is confirmed on L1.
+    pub fn mark_settled(&mut self, event_id: EventId) {
+        self.settled_events.insert(event_id);
+    }
+
+    /// Number of Lane 0/Lane 1 divergences observed so far (AUDIT-2026-07
+    /// H5, #355). A non-zero value means the fast path was contradicted by
+    /// canonical consensus and should be alerted on.
+    pub fn lane0_divergence_count(&self) -> usize {
+        self.lane0_diverged.len()
     }
 
     /// Lane 0 counters `(acks_accepted, acks_rejected, events_finalized)`,
@@ -1998,6 +2132,67 @@ mod tests {
         substrate.add_validator(test_node(2), keypair, 10_000);
         assert_eq!(substrate.validator_candidates.len(), 1);
         assert!(substrate.validator_candidates.contains_key(&test_node(2)));
+    }
+
+    // ── AUDIT-2026-07 H5 (#355): finality lifecycle + divergence ──────
+
+    #[test]
+    fn test_finality_state_helpers() {
+        assert!(FinalityState::Canonical.is_irreversible());
+        assert!(FinalityState::Final.is_irreversible());
+        assert!(!FinalityState::Preconfirmed.is_irreversible());
+        assert!(!FinalityState::Diverged.is_irreversible());
+        assert!(!FinalityState::Pending.is_irreversible());
+        assert_eq!(FinalityState::Preconfirmed.as_str(), "preconfirmed");
+        assert_eq!(FinalityState::Diverged.as_str(), "diverged");
+    }
+
+    #[test]
+    fn test_finality_state_pending_for_unknown_event() {
+        let substrate = Substrate::new(test_config(1));
+        assert_eq!(substrate.finality_state(&[9u8; 32]), FinalityState::Pending);
+    }
+
+    #[test]
+    fn test_finality_preconfirmed_then_diverged() {
+        let mut substrate = Substrate::new(test_config(1));
+
+        // Preconfirm an event on Lane 0 via a single-validator quorum.
+        let kp = generate_keypair();
+        let vset = lane0::ValidatorSet::new([(kp.verifying_key().to_bytes(), 1u64)]).unwrap();
+        let ev: EventId = [7u8; 32];
+        let ack = lane0::SignedAck::sign(ev, lane0::UNBOUND_STATE_ROOT, &kp);
+        substrate.lane0_store.add_ack(ack, &vset).unwrap();
+
+        assert!(substrate.lane0_is_final(&ev));
+        assert_eq!(
+            substrate.finality_state(&ev),
+            FinalityState::Preconfirmed,
+            "a Lane 0 quorum is a reversible preconfirmation, not canonical finality"
+        );
+
+        // Lane 1 rejects it → the fast path diverged.
+        assert!(
+            substrate.reconcile_lane1_rejection(ev),
+            "first rejection records a divergence"
+        );
+        assert_eq!(substrate.finality_state(&ev), FinalityState::Diverged);
+        assert_eq!(substrate.lane0_divergence_count(), 1);
+
+        // Idempotent: re-reporting the same rejection is not a new divergence.
+        assert!(!substrate.reconcile_lane1_rejection(ev));
+        assert_eq!(substrate.lane0_divergence_count(), 1);
+    }
+
+    #[test]
+    fn test_reconcile_ignores_rejection_of_non_preconfirmed_event() {
+        let mut substrate = Substrate::new(test_config(1));
+        let ev: EventId = [3u8; 32];
+        // Lane 1 rejecting an event Lane 0 never preconfirmed is normal, not
+        // a divergence.
+        assert!(!substrate.reconcile_lane1_rejection(ev));
+        assert_eq!(substrate.lane0_divergence_count(), 0);
+        assert_eq!(substrate.finality_state(&ev), FinalityState::Pending);
     }
 
     #[test]
