@@ -43,11 +43,12 @@
 
 ## 🟢 Live Right Now
 
-The Omnia stack is no longer only a codebase — it is **running in production (testnet)** with a full client ecosystem:
+The Omnia stack is no longer only a codebase — a public testnet node is
+serving traffic, with a full client ecosystem built against it:
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (multi-node Lane 0 validator mesh, v0.1.76+, protocol `/omnia/4.0.0`) |
+| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **single node, 0 peers** (v0.1.76, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -61,11 +62,33 @@ Try it:
 
 ```bash
 curl https://78.47.43.136.sslip.io/api/v1/node/info
+curl https://78.47.43.136.sslip.io/readyz
 ```
 
 The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
 
-**July 2026 network milestones** (measured live, not simulated — see
+### ⚠️ What "live" means today — read this before quoting the numbers
+
+The public endpoint is **one node with no peers**. It answers the REST
+API and the wallet's auth/UBC loop works against it, but it reports
+itself **not ready** for consensus, and it is finalizing nothing:
+
+```jsonc
+// GET /readyz
+{ "status": "not_ready", "reason": "no_peers", "peers": 0, "is_syncing": false }
+// GET /api/v1/node/info  → finalized_height: 0, lane0.events_finalized: 0
+```
+
+**There is no standing validator network.** The multi-node results
+below are real measurements from stress runs on a 5-node mesh that was
+brought up for the runs and is not currently running. They are
+reproducible from `docker/` — they are not a description of what the
+public endpoint is doing right now. Recruiting independent validator
+operators is the open problem; see
+[docs/operations/validator-setup.md](docs/operations/validator-setup.md).
+
+**July 2026 network milestones** — measured on a real 5-node mesh, not
+simulated, during stress runs on the dates given (see
 [benchmark-gates.md](docs/reference/benchmark-gates.md)):
 
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
@@ -122,7 +145,7 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
 
 ## 🔬 What Is Omnia?
 
-Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamental set of rules that any computer can follow to participate in a shared, unchangeable record of truth. It uses **causal graph consensus** (DAG + vector clocks + CRDTs) instead of sequential blockchains to achieve parallel transaction processing. The protocol is **settlement-agnostic** — it can settle on Ethereum, Bitcoin, Solana, or any L1 with data availability and proof verification.
+Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamental set of rules that any computer can follow to participate in a shared, unchangeable record of truth. It uses **causal graph consensus** (DAG + vector clocks + CRDTs) instead of sequential blockchains to achieve parallel transaction processing. The protocol is **settlement-agnostic** by design — the `SettlementAdapter` trait admits any L1 with data availability and proof verification. **Ethereum is the only adapter with a real, working implementation** (Alloy, `ethereum-live` feature); Bitcoin, Solana, and Cosmos are trait-conforming stubs and Celestia is unverified plumbing.
 
 ### The Problem We Solve
 
@@ -225,7 +248,9 @@ cargo bench --no-run
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- Celestia adapter with RPC integration (`celestia` feature)
+- ⚠️ **PARTIAL**: Celestia adapter — HTTP plumbing behind the `celestia` feature, never
+  exercised against a real Celestia node and not instantiated anywhere
+  (see [stub inventory](docs/stub-inventory.md))
 - ⚠️ **STUB**: Bitcoin, Solana, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
 - L2 operator with batch builder (TOCTOU race condition fixed)
 - ZK circuit (arkworks R1CS + Groth16 on BN254)
@@ -392,7 +417,10 @@ _Goal: Performance Validation_
 - ✅ Event submission now uses node's persistent keypair (not ephemeral)
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
-- ✅ Public testnet **live** (multi-node Lane 0 validator network at `78.47.43.136.sslip.io`; geo-distributed rollout planned)
+- ✅ Public testnet endpoint **live** (single node at `78.47.43.136.sslip.io`, 0 peers)
+- 🔄 **Standing validator network — not yet.** Lane 0 finality is proven in
+  5-node stress runs, but no independent operators are running nodes.
+  This is the current critical-path blocker, not a code gap.
 
 #### v0.1.69 Critical Security Hardening
 
@@ -419,7 +447,8 @@ _Goal: Performance Validation_
 
 _Goal: Real users on a real node_
 
-- ✅ Public testnet deployed (`https://78.47.43.136.sslip.io`, Docker, multi-node Lane 0 validator network)
+- ✅ Public testnet node deployed (`https://78.47.43.136.sslip.io`, Docker); Lane 0
+  multi-node finality validated in stress runs, not continuously running
 - ✅ Wallet challenge/signature auth — `POST /api/v1/auth/challenge` + `/auth/login` (Ed25519, single-use TTL nonces, domain-separated messages, `verify_strict`, auto DID registration)
 - ✅ `POST /api/v1/auth/register` — idempotent DID registration for externally-minted JWTs (DID taken from the verified JWT `sub`, never the request body)
 - ✅ SHA-256 DID derivation shared with clients (`did:omnia:` + `sha256(pubkey)[..32]`, cross-repo pinned test vector)
