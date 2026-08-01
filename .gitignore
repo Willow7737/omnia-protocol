@@ -29,3 +29,6 @@ ops/testnet-keys/
 
 # Local benchmark reports
 bench-results/
+
+# Grafana Cloud API token for Prometheus remote_write (never commit)
+docker/monitoring/grafana-cloud-token
