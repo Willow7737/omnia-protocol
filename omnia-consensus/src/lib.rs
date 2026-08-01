@@ -30,6 +30,10 @@ pub mod slashing;
 pub mod slashing_undo;
 pub mod thread_pool;
 pub mod vector_clock_index;
+// VRF-keyed stake-weighted leader election with backup failover
+// (AUDIT-2026-07 C1, #339). Module docs live in vrf_election.rs (`//!`);
+// keeping them there avoids a rustdoc intra-doc-link merge quirk.
+pub mod vrf_election;
 
 #[cfg(feature = "persistent-storage")]
 pub mod consensus_store;
@@ -55,7 +59,10 @@ pub use slashing::{
     SlashingEventType, SlashingState, SlashingStore, SlashingStoreError, DEFAULT_EJECTION_THRESHOLD,
     DEFAULT_SLASH_THRESHOLD,
 };
-pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
+pub use slashing_undo::{
+    GovernanceAuthority, GovernanceSignature, SlashingUndoError, SlashingUndoManager, SlashingUndoRecord,
+    SlashingUndoRequest,
+};
 pub use thread_pool::{ValidationPool, ValidationResult, ValidationTask};
 pub use vector_clock_index::{VectorClockIndex, VectorClockIndexStats};
 

@@ -387,6 +387,19 @@ pub struct CausalGraph {
     pruned_order: VecDeque<EventId>,
     /// Per-event finalized round (set when `finalize_event` is called).
     finalized_rounds: HashMap<EventId, u64>,
+    /// Rolling commitment over **all finalized events**, in finalization
+    /// order (AUDIT-2026-07 H1, #351).
+    ///
+    /// Each time an event is finalized for the first time, its content hash
+    /// is folded in as `root = BLAKE3(domain || root || content_hash)`.
+    /// Because this is an incremental accumulator maintained at finality —
+    /// never recomputed from the live event set — it is **invariant under
+    /// pruning**: an archive node and a node that has pruned old events
+    /// agree on the same value. This is the commitment intended for L1
+    /// anchoring / cross-node convergence, unlike [`Self::state_root`] (a
+    /// Merkle tree over only the *live* events, which changes when events
+    /// are pruned and is retained for inclusion proofs).
+    finalized_state_root: [u8; 32],
     /// Buffer for out-of-order events. When an event arrives with a
     /// sequence number that is ahead of the expected next sequence for
     /// its creator, it is held here until the predecessor arrives.
@@ -411,6 +424,7 @@ impl CausalGraph {
             pruned_events: HashMap::new(),
             pruned_order: VecDeque::new(),
             finalized_rounds: HashMap::new(),
+            finalized_state_root: [0u8; 32],
             seq_buffer: SequenceBuffer::new(),
         }
     }
@@ -1101,19 +1115,30 @@ impl CausalGraph {
         if self.pruned_events.contains_key(event_id) {
             return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
         }
-        if let Some(event) = self.events.get_mut(event_id) {
-            if event.status != EventStatus::Finalized {
-                event.status = EventStatus::Finalized;
-                self.finalized_count += 1;
+        // Capture the content hash only on the first finalization, then drop
+        // the borrow on `self.events` before folding the accumulator.
+        let newly_finalized = match self.events.get_mut(event_id) {
+            Some(event) => {
+                if event.status != EventStatus::Finalized {
+                    event.status = EventStatus::Finalized;
+                    Some(event.content_hash())
+                } else {
+                    None
+                }
             }
-            self.finalized_rounds.insert(*event_id, round);
-            Ok(())
-        } else {
-            Err(CausalGraphError::InvalidEvent(format!(
-                "event not found: {}",
-                hex::encode(&event_id[..8])
-            )))
+            None => {
+                return Err(CausalGraphError::InvalidEvent(format!(
+                    "event not found: {}",
+                    hex::encode(&event_id[..8])
+                )))
+            }
+        };
+        if let Some(content_hash) = newly_finalized {
+            self.finalized_count += 1;
+            self.fold_finalized_event(&content_hash);
         }
+        self.finalized_rounds.insert(*event_id, round);
+        Ok(())
     }
 
     /// Mark an event as finalized (without tracking the round).
@@ -1124,18 +1149,61 @@ impl CausalGraph {
         if self.pruned_events.contains_key(event_id) {
             return Err(CausalGraphError::EventPruned(hex::encode(&event_id[..8])));
         }
-        if let Some(event) = self.events.get_mut(event_id) {
-            if event.status != EventStatus::Finalized {
-                event.status = EventStatus::Finalized;
-                self.finalized_count += 1;
+        let newly_finalized = match self.events.get_mut(event_id) {
+            Some(event) => {
+                if event.status != EventStatus::Finalized {
+                    event.status = EventStatus::Finalized;
+                    Some(event.content_hash())
+                } else {
+                    None
+                }
             }
-            Ok(())
-        } else {
-            Err(CausalGraphError::InvalidEvent(format!(
-                "event not found: {}",
-                hex::encode(&event_id[..8])
-            )))
+            None => {
+                return Err(CausalGraphError::InvalidEvent(format!(
+                    "event not found: {}",
+                    hex::encode(&event_id[..8])
+                )))
+            }
+        };
+        if let Some(content_hash) = newly_finalized {
+            self.finalized_count += 1;
+            self.fold_finalized_event(&content_hash);
         }
+        Ok(())
+    }
+
+    /// Domain separator for the finalized-state-root accumulator.
+    const FINALIZED_STATE_ROOT_DOMAIN: &'static [u8] = b"omnia-finalized-state-root";
+
+    /// Fold one newly-finalized event's content hash into the pruning-invariant
+    /// [`finalized_state_root`](Self::finalized_state_root) accumulator
+    /// (AUDIT-2026-07 H1, #351).
+    ///
+    /// `root ← BLAKE3(domain || root || content_hash)`. Called exactly once
+    /// per event, at first finalization, so the running value is a
+    /// deterministic function of the finalized set **in consensus-agreed
+    /// finalization order** — the same assumption every hash-chained state
+    /// commitment relies on. Not affected by pruning, since folding happens
+    /// at finality and is never recomputed from the (shrinking) live set.
+    fn fold_finalized_event(&mut self, content_hash: &[u8; 32]) {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(Self::FINALIZED_STATE_ROOT_DOMAIN);
+        hasher.update(&self.finalized_state_root);
+        hasher.update(content_hash);
+        self.finalized_state_root = *hasher.finalize().as_bytes();
+    }
+
+    /// The pruning-invariant commitment over all finalized events, in
+    /// finalization order (AUDIT-2026-07 H1, #351).
+    ///
+    /// Unlike [`state_root`](Self::state_root) — a Merkle tree over the
+    /// *live* event set that changes when events are pruned — this rolling
+    /// accumulator is maintained incrementally at finality and is identical
+    /// on an archive node and a node that has pruned old finalized events.
+    /// This is the value intended for L1 anchoring and cross-node
+    /// convergence checks. Returns all-zero before the first finalization.
+    pub fn finalized_state_root(&self) -> [u8; 32] {
+        self.finalized_state_root
     }
 
     /// Get all finalized events in topological order
@@ -1532,6 +1600,11 @@ pub struct GraphSnapshot {
     pub node_sequences: HashMap<NodeId, u64>,
     /// Number of finalized events
     pub finalized_count: usize,
+    /// Pruning-invariant rolling commitment over all finalized events
+    /// (AUDIT-2026-07 H1, #351). `#[serde(default)]` so snapshots written
+    /// before this field existed still deserialize (as all-zero).
+    #[serde(default)]
+    pub finalized_state_root: [u8; 32],
 }
 
 impl From<&CausalGraph> for GraphSnapshot {
@@ -1546,6 +1619,7 @@ impl From<&CausalGraph> for GraphSnapshot {
             by_creator: graph.by_creator.clone(),
             node_sequences: graph.node_sequences.clone(),
             finalized_count: graph.finalized_count,
+            finalized_state_root: graph.finalized_state_root,
         }
     }
 }
@@ -2130,6 +2204,134 @@ mod tests {
         assert!(graph.is_pruned(&e1_id));
         assert!(graph.contains(&e2_id));
         assert!(!graph.is_pruned(&e2_id));
+    }
+
+    // ── AUDIT-2026-07 H1 (#351): pruning-invariant finalized state root ──
+
+    /// Build two finalized events (e1 then e2) in a fresh graph. Returns the
+    /// graph and the two IDs.
+    fn graph_with_two_finalized() -> (CausalGraph, EventId, EventId) {
+        let mut graph = CausalGraph::new();
+        let (kp, n1) = make_keypair_and_node(1);
+
+        let mut e1 = Event::genesis(n1, vec![1]).expect("valid genesis event");
+        e1.sign_with_keypair(&kp).expect("signing");
+        let e1_id = e1.id;
+        graph.insert(e1).unwrap();
+
+        let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![2]).expect("valid event");
+        e2.sign_with_keypair(&kp).expect("signing");
+        let e2_id = e2.id;
+        graph.insert(e2).unwrap();
+
+        graph.finalize_event_with_round(&e1_id, 1).unwrap();
+        graph.finalize_event_with_round(&e2_id, 5).unwrap();
+        (graph, e1_id, e2_id)
+    }
+
+    /// The core H1 property: pruning a finalized event does NOT change the
+    /// finalized state root, even though it *does* change the live Merkle
+    /// `state_root()`. An archive node and a pruning node therefore agree.
+    #[test]
+    fn test_finalized_state_root_invariant_under_pruning() {
+        let (mut graph, e1_id, _e2_id) = graph_with_two_finalized();
+
+        let committed_before = graph.finalized_state_root();
+        let live_root_before = graph.state_root();
+        assert_ne!(
+            committed_before, [0u8; 32],
+            "finalizing events must move the accumulator"
+        );
+
+        // Prune e1 (finalized at round 1; cutoff = 5 - 3 = 2).
+        let pruned = graph.prune_finalized(5, 3).unwrap();
+        assert_eq!(pruned, 1);
+        assert!(graph.is_pruned(&e1_id));
+
+        // The pruning-invariant commitment is unchanged...
+        assert_eq!(
+            graph.finalized_state_root(),
+            committed_before,
+            "finalized_state_root must be invariant under pruning"
+        );
+        // ...while the live Merkle root DID change (it dropped a leaf) — this
+        // is exactly the divergence the accumulator exists to avoid.
+        assert_ne!(
+            graph.state_root(),
+            live_root_before,
+            "live state_root is expected to change when events are pruned"
+        );
+    }
+
+    /// A node that prunes and a node that keeps the full archive compute the
+    /// same finalized state root, given the same finalized events in the same
+    /// order. The two events are built ONCE and cloned into both graphs so
+    /// they are byte-identical (keypairs are random per generation).
+    #[test]
+    fn test_finalized_state_root_agrees_across_pruning_and_archive() {
+        let (kp, n1) = make_keypair_and_node(1);
+        let mut e1 = Event::genesis(n1, vec![1]).expect("valid genesis event");
+        e1.sign_with_keypair(&kp).expect("signing");
+        let e1_id = e1.id;
+        let mut e2 = Event::new(n1, 1, VectorClock::with_node(n1, 2), Some(e1_id), None, vec![2]).expect("valid event");
+        e2.sign_with_keypair(&kp).expect("signing");
+        let e2_id = e2.id;
+
+        let mut build = || {
+            let mut g = CausalGraph::new();
+            g.insert(e1.clone()).unwrap();
+            g.insert(e2.clone()).unwrap();
+            g.finalize_event_with_round(&e1_id, 1).unwrap();
+            g.finalize_event_with_round(&e2_id, 5).unwrap();
+            g
+        };
+        let mut pruning_node = build();
+        let archive_node = build();
+
+        // Same events, same finalization order → same accumulator to start.
+        assert_eq!(pruning_node.finalized_state_root(), archive_node.finalized_state_root());
+
+        // The pruning node drops old finalized events; the archive keeps all.
+        pruning_node.prune_finalized(5, 3).unwrap();
+
+        assert_eq!(
+            pruning_node.finalized_state_root(),
+            archive_node.finalized_state_root(),
+            "pruning and archive nodes must agree on the finalized commitment"
+        );
+    }
+
+    /// Re-finalizing an already-finalized event is a no-op for the
+    /// accumulator (each event is folded exactly once).
+    #[test]
+    fn test_finalized_state_root_folds_each_event_once() {
+        let mut graph = CausalGraph::new();
+        assert_eq!(graph.finalized_state_root(), [0u8; 32]);
+
+        let (kp, n1) = make_keypair_and_node(1);
+        let mut e = Event::genesis(n1, vec![7]).expect("valid genesis event");
+        e.sign_with_keypair(&kp).expect("signing");
+        let e_id = e.id;
+        graph.insert(e).unwrap();
+
+        graph.finalize_event_with_round(&e_id, 1).unwrap();
+        let after_first = graph.finalized_state_root();
+        assert_ne!(after_first, [0u8; 32]);
+
+        // Idempotent re-finalization (different round, legacy path) must not
+        // fold the event a second time.
+        graph.finalize_event_with_round(&e_id, 9).unwrap();
+        graph.finalize_event(&e_id).unwrap();
+        assert_eq!(graph.finalized_state_root(), after_first);
+    }
+
+    /// The accumulator survives a `GraphSnapshot` round-trip.
+    #[test]
+    fn test_finalized_state_root_persisted_in_snapshot() {
+        let (graph, _e1, _e2) = graph_with_two_finalized();
+        let snapshot = GraphSnapshot::from(&graph);
+        assert_eq!(snapshot.finalized_state_root, graph.finalized_state_root());
+        assert_ne!(snapshot.finalized_state_root, [0u8; 32]);
     }
 
     /// Test that get_checked distinguishes pruned vs non-existent events.

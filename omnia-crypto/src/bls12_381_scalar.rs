@@ -642,6 +642,109 @@ pub fn reconstruct_secret(shares: &[(usize, Scalar)]) -> Option<Scalar> {
     Some(secret)
 }
 
+/// Compute the Lagrange basis coefficient `L_i(0)` for the participant at
+/// `index` over the set of participating `indices` (AUDIT-2026-07 C2, #340).
+///
+/// ```text
+/// L_i(0) = product_{j != i} ( x_j / (x_j - x_i) )
+/// ```
+///
+/// This is the weight applied to participant `i`'s partial signature when
+/// combining a threshold BLS signature, so that the combination equals the
+/// group secret's signature: `sum_i L_i(0) * s_i = f(0)`.
+///
+/// Returns `None` if `index` is not in `indices`, if `indices` contains
+/// duplicates, or if any index is zero (indices are 1-based x-coordinates).
+pub fn lagrange_coefficient(index: usize, indices: &[usize]) -> Option<Scalar> {
+    if index == 0 || !indices.contains(&index) {
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    for &x in indices {
+        if x == 0 || !seen.insert(x) {
+            return None;
+        }
+    }
+
+    let xi = Scalar::from_u64(index as u64);
+    let mut li = Scalar::one();
+    for &xj_idx in indices {
+        if xj_idx == index {
+            continue;
+        }
+        let xj = Scalar::from_u64(xj_idx as u64);
+        let denom = xj.sub(&xi);
+        let denom_inv = denom.invert()?; // None only if xj == xi (dup, already excluded)
+        li = li.multiply(&xj.multiply(&denom_inv));
+    }
+    Some(li)
+}
+
+/// Compute `sum_i (coeff_i * P_i)` over compressed G1 points
+/// (AUDIT-2026-07 C2, #340).
+///
+/// Used to Lagrange-combine threshold BLS partial signatures (G1 points)
+/// into a single group signature. Returns `None` if the term list is empty
+/// or any point fails to decompress.
+pub fn lagrange_combine_g1(terms: &[(Scalar, [u8; G1_COMPRESSED_SIZE])]) -> Option<[u8; G1_COMPRESSED_SIZE]> {
+    if terms.is_empty() {
+        return None;
+    }
+
+    let mut acc = blst_p1::default(); // identity (point at infinity)
+
+    for (coeff, point_bytes) in terms {
+        // Decompress the G1 point.
+        let affine = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1_affine>::uninit();
+            if blst_p1_uncompress(pt.as_mut_ptr(), point_bytes.as_ptr()) != BLST_ERROR::BLST_SUCCESS {
+                return None;
+            }
+            pt.assume_init()
+        };
+        let proj = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_from_affine(pt.as_mut_ptr(), &affine);
+            pt.assume_init()
+        };
+
+        // term = coeff * P_i (256-bit scalar multiplication).
+        let coeff_bytes = coeff.to_bytes();
+        let term = unsafe {
+            let mut pt = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_mult(pt.as_mut_ptr(), &proj, coeff_bytes.as_ptr(), 256);
+            pt.assume_init()
+        };
+
+        // acc += term
+        acc = unsafe {
+            let mut sum = std::mem::MaybeUninit::<blst_p1>::uninit();
+            blst_p1_add_or_double(sum.as_mut_ptr(), &acc, &term);
+            sum.assume_init()
+        };
+    }
+
+    let out = unsafe {
+        let mut bytes = [0u8; G1_COMPRESSED_SIZE];
+        blst_p1_compress(bytes.as_mut_ptr(), &acc);
+        bytes
+    };
+    Some(out)
+}
+
+/// Evaluate the polynomial with the given `coefficients` (constant term
+/// first) at point `x` in the scalar field: `f(x) = sum_k c_k * x^k`
+/// (AUDIT-2026-07 C2, #340). Used by the threshold trusted dealer to
+/// produce Shamir shares `f(i)`.
+pub fn poly_eval(coefficients: &[Scalar], x: &Scalar) -> Scalar {
+    // Horner's method.
+    let mut acc = Scalar::zero();
+    for c in coefficients.iter().rev() {
+        acc = acc.multiply(x).add(c);
+    }
+    acc
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -952,5 +1055,60 @@ mod tests {
         // Reconstruct from first 3 shares (threshold = 3)
         let reconstructed = reconstruct_secret(&shares[..3]).expect("reconstruction should succeed");
         assert_eq!(reconstructed, secret, "reconstructed secret must match original");
+    }
+
+    // ─── C2 (#340) helpers: Lagrange + poly_eval ───────────────────────────
+
+    #[test]
+    fn poly_eval_matches_manual() {
+        // f(x) = 3 + 2x + x^2 ; f(2) = 3 + 4 + 4 = 11
+        let coeffs = [Scalar::from_u64(3), Scalar::from_u64(2), Scalar::from_u64(1)];
+        assert_eq!(poly_eval(&coeffs, &Scalar::from_u64(2)), Scalar::from_u64(11));
+        // f(0) = constant term
+        assert_eq!(poly_eval(&coeffs, &Scalar::zero()), Scalar::from_u64(3));
+    }
+
+    #[test]
+    fn lagrange_coefficients_reconstruct_constant_term() {
+        // With a degree-2 polynomial and shares at x=1,2,3, the Lagrange
+        // weights applied to f(1),f(2),f(3) must recover f(0).
+        let coeffs = [Scalar::from_u64(7), Scalar::from_u64(5), Scalar::from_u64(9)];
+        let indices = [1usize, 2, 3];
+        let mut acc = Scalar::zero();
+        for &i in &indices {
+            let li = lagrange_coefficient(i, &indices).unwrap();
+            let fi = poly_eval(&coeffs, &Scalar::from_u64(i as u64));
+            acc = acc.add(&li.multiply(&fi));
+        }
+        assert_eq!(acc, coeffs[0], "Σ L_i(0)·f(i) must equal f(0)");
+    }
+
+    #[test]
+    fn lagrange_coefficient_rejects_bad_index_sets() {
+        assert!(lagrange_coefficient(0, &[0, 1]).is_none()); // zero index
+        assert!(lagrange_coefficient(4, &[1, 2, 3]).is_none()); // index not present
+        assert!(lagrange_coefficient(1, &[1, 1, 2]).is_none()); // duplicate index
+    }
+
+    #[test]
+    fn lagrange_combine_g1_matches_scalar_reconstruction_in_the_exponent() {
+        // Combining coeff_i · (s_i · G1) must equal (Σ coeff_i s_i) · G1.
+        let coeffs = [Scalar::from_u64(7), Scalar::from_u64(5), Scalar::from_u64(9)];
+        let indices = [1usize, 2, 3];
+        let mut expected_scalar = Scalar::zero();
+        let mut terms = Vec::new();
+        for &i in &indices {
+            let li = lagrange_coefficient(i, &indices).unwrap();
+            let fi = poly_eval(&coeffs, &Scalar::from_u64(i as u64));
+            expected_scalar = expected_scalar.add(&li.multiply(&fi));
+            terms.push((li, scalar_to_g1_public_key(&fi)));
+        }
+        let combined = lagrange_combine_g1(&terms).expect("combination");
+        assert_eq!(
+            combined,
+            scalar_to_g1_public_key(&expected_scalar),
+            "Σ coeff_i·(f(i)·G1) must equal (Σ coeff_i·f(i))·G1 = f(0)·G1"
+        );
+        assert_eq!(expected_scalar, coeffs[0]);
     }
 }

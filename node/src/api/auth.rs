@@ -181,6 +181,89 @@ pub struct CallerIdentity {
 /// lifetime but can be reset in tests via \[`reset_jwt_secret_for_test`\].
 static JWT_SECRET: StdMutex<Option<Option<String>>> = StdMutex::new(None);
 
+/// Minimum acceptable length (in bytes) for `OMNIA_JWT_SECRET`.
+///
+/// HMAC-SHA256 keys shorter than this offer too little entropy to resist
+/// offline brute force. 32 bytes matches the digest width and is the
+/// value `openssl rand -hex 32` / `-base64 32` produce.
+pub const MIN_JWT_SECRET_LEN: usize = 32;
+
+/// Publicly-known or trivially-guessable JWT secrets the node refuses to
+/// boot with (compared case-insensitively, after trimming). The compose
+/// files historically defaulted to `omnia-testnet-jwt-secret-CHANGE-ME`,
+/// so any operator who didn't override it shipped a forgeable secret
+/// (AUDIT-2026-07 C11, #349). Substrings `change-me` / `changeme` are also
+/// rejected separately, so variants of the placeholder are caught too.
+const WEAK_JWT_SECRETS: &[&str] = &[
+    "omnia-testnet-jwt-secret-change-me",
+    "secret",
+    "jwt-secret",
+    "jwtsecret",
+    "password",
+    "changeme",
+    "change-me",
+    "test",
+    "test-secret",
+    "testsecret",
+    "insecure",
+    "default",
+    "admin",
+];
+
+/// The configured `OMNIA_JWT_SECRET` is unsafe to run with.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum WeakJwtSecretError {
+    /// The secret is set but empty (or all whitespace).
+    #[error("OMNIA_JWT_SECRET is empty — set a strong secret, e.g. `openssl rand -hex 32`")]
+    Empty,
+    /// The secret is a publicly-known placeholder or a trivially weak value.
+    #[error(
+        "OMNIA_JWT_SECRET is a publicly-known or trivially weak value — refusing to start. \
+         Generate a strong, unique secret, e.g. `openssl rand -hex 32`"
+    )]
+    KnownWeak,
+    /// The secret is shorter than [`MIN_JWT_SECRET_LEN`] bytes.
+    #[error(
+        "OMNIA_JWT_SECRET is too short ({0} bytes); require at least 32 bytes of entropy. \
+         Generate one with `openssl rand -hex 32`"
+    )]
+    TooShort(usize),
+}
+
+/// Validate the strength of the configured `OMNIA_JWT_SECRET` at startup
+/// (AUDIT-2026-07 C11, #349).
+///
+/// Returns `Ok(())` when the variable is **unset** — that is a distinct,
+/// separately-handled condition (the auth middleware then rejects every
+/// authenticated request; it is never an auth *bypass*). When the variable
+/// is set, the value must not be empty, must not be a known-weak/placeholder
+/// secret, and must be at least [`MIN_JWT_SECRET_LEN`] bytes. Callers should
+/// treat an `Err` as fatal and refuse to start.
+pub fn validate_jwt_secret_strength() -> Result<(), WeakJwtSecretError> {
+    match std::env::var("OMNIA_JWT_SECRET") {
+        Err(_) => Ok(()),
+        Ok(secret) => check_jwt_secret_strength(&secret),
+    }
+}
+
+/// Pure strength check for a candidate secret — factored out of
+/// [`validate_jwt_secret_strength`] so it is unit-testable without touching
+/// process environment variables.
+fn check_jwt_secret_strength(secret: &str) -> Result<(), WeakJwtSecretError> {
+    let trimmed = secret.trim();
+    if trimmed.is_empty() {
+        return Err(WeakJwtSecretError::Empty);
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains("change-me") || lower.contains("changeme") || WEAK_JWT_SECRETS.contains(&lower.as_str()) {
+        return Err(WeakJwtSecretError::KnownWeak);
+    }
+    if trimmed.len() < MIN_JWT_SECRET_LEN {
+        return Err(WeakJwtSecretError::TooShort(trimmed.len()));
+    }
+    Ok(())
+}
+
 /// Initialise the JWT secret cache. Called once at application startup.
 ///
 /// This must be invoked before any request hits the auth middleware so
@@ -788,5 +871,74 @@ mod tests {
     fn test_default_cors_layer() {
         let _layer = default_cors_layer();
         // If this compiles and doesn't panic, the CORS layer is valid.
+    }
+
+    // ---- AUDIT-2026-07 C11 (#349): weak JWT secret denylist ----
+
+    #[test]
+    fn test_check_jwt_secret_rejects_compose_default() {
+        // The exact publicly-known compose default must be rejected.
+        assert_eq!(
+            check_jwt_secret_strength("omnia-testnet-jwt-secret-CHANGE-ME"),
+            Err(WeakJwtSecretError::KnownWeak)
+        );
+    }
+
+    #[test]
+    fn test_check_jwt_secret_rejects_changeme_variants_case_insensitive() {
+        for weak in [
+            "CHANGE-ME",
+            "changeme",
+            "please-CHANGEME-now-xxxxxxxxxxxxxxxxxxxx",
+            "my-change-me-secret-value-still-weak-yy",
+            "  Secret  ",
+            "PASSWORD",
+            "admin",
+        ] {
+            assert_eq!(
+                check_jwt_secret_strength(weak),
+                Err(WeakJwtSecretError::KnownWeak),
+                "expected {weak:?} to be rejected as known-weak"
+            );
+        }
+    }
+
+    #[test]
+    fn test_check_jwt_secret_rejects_empty() {
+        assert_eq!(check_jwt_secret_strength(""), Err(WeakJwtSecretError::Empty));
+        assert_eq!(check_jwt_secret_strength("   "), Err(WeakJwtSecretError::Empty));
+    }
+
+    #[test]
+    fn test_check_jwt_secret_rejects_short() {
+        // 31 bytes: one under the floor, and not otherwise weak.
+        let short = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d"; // 31 chars
+        assert_eq!(short.len(), 31);
+        assert_eq!(check_jwt_secret_strength(short), Err(WeakJwtSecretError::TooShort(31)));
+    }
+
+    #[test]
+    fn test_check_jwt_secret_accepts_strong() {
+        // A long random hex secret as `openssl rand -hex 32` would produce.
+        let strong = "9f8c1e2d3a4b5c6d7e8f90a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3";
+        assert!(strong.len() >= MIN_JWT_SECRET_LEN);
+        assert_eq!(check_jwt_secret_strength(strong), Ok(()));
+    }
+
+    #[test]
+    fn test_validate_jwt_secret_strength_ok_when_unset() {
+        // Unset is not a weak-secret error (handled separately by the
+        // middleware, which rejects authenticated requests).
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("OMNIA_JWT_SECRET");
+        assert_eq!(validate_jwt_secret_strength(), Ok(()));
+    }
+
+    #[test]
+    fn test_validate_jwt_secret_strength_rejects_env_default() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("OMNIA_JWT_SECRET", "omnia-testnet-jwt-secret-CHANGE-ME");
+        assert_eq!(validate_jwt_secret_strength(), Err(WeakJwtSecretError::KnownWeak));
+        std::env::remove_var("OMNIA_JWT_SECRET");
     }
 }

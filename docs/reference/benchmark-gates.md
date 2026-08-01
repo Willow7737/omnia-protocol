@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-19
+> Last Updated: 2026-07-20
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -457,9 +457,68 @@ chowns them when run as root. An unreadable key silently degrades to an
 ephemeral identity (`this_node_is_validator=false`) and finality stays
 at zero while propagation looks healthy.
 
+## Geo-Distributed WAN Results (2026-07-20) — first numbers without the single-host asterisk
+
+Executed per [docs/operations/geo-testnet.md](../operations/geo-testnet.md):
+three Hetzner CPX21 nodes, all Lane 0 validators, real internet paths.
+
+**Topology + measured RTT matrix:**
+
+| Node | Region | Role |
+|------|--------|------|
+| A | Nuremberg, EU (`nbg1`) | bootstrap + validator + ingress + bench host |
+| B | Ashburn, US-East (`ash`) | validator |
+| C | Singapore (`sin`) | validator |
+
+| Path | RTT min/avg/max (ms) |
+|------|----------------------|
+| A↔B | 98.7 / **98.8** / 99.1 |
+| A↔C | 159.3 / **160.3** / 163.8 |
+| B↔C | 217.6 / **217.9** / 218.8 |
+
+**Benchmark ladder — 100% propagation on every node at every rung:**
+
+| Rung | Events / conc. | Convergence A / B / C (s) | Finality | Peak RSS | Report |
+|------|---------------|---------------------------|----------|----------|--------|
+| 1 | 1,000 / 16 | 4.6 / 7.4 / 7.7 | full (all nodes) | 64 MB | `testnet-bench-20260720-020307.json` |
+| 2 | 5,000 / 64 | 12.4 / 91.9 / 273.1 | full (all nodes) | 110 MB | `testnet-bench-20260720-020803.json` |
+| 3 | **10,000 / 64** | **29.4 / 289.1 / 37.6** | **full (all nodes)** | 145 MB | `testnet-bench-20260720-021319.json` |
+
+(`finalized_total` is a cumulative counter — the nodes ran all three rungs
+without restart, so the reported 6,000 after rung 2 and 16,000 after rung 3
+equal the exact sum of all events submitted, identical on every node:
+**every event of every rung reached full quorum finality.**)
+
+**Reading:**
+
+- **The mesh holds on the real internet.** Steady-state gossip at WAN RTT
+  is barely distinguishable from single-host: the 1k rung converged
+  everywhere in under 8 s.
+- **Burst self-healing works across 99–218 ms paths.** The 5k and 10k
+  rungs overwhelm live gossip by design; anti-entropy repair recovered
+  every event and Lane 0 finalized all of it, with zero loss, on every
+  rung.
+- **The straggler alternates with path geometry**, exactly as the
+  contention model predicts: on 5k it was C (273 s), on 10k it was B
+  (289 s) — whichever node ends up chasing the tail over the worst path
+  (B↔C, 218 ms) pays repair-chain round-trips at real RTT while the
+  other laggard shares bandwidth. Median convergence stayed excellent
+  (10k: two of three nodes < 40 s). The known lever remains the
+  directed-repair fairness change (serve the lowest-frontier requester
+  first / unicast repair); correctness is not at stake.
+- **Resources are a non-issue:** peak 145 MB RSS on the ingress node at
+  10k — CPX21 (~€8/mo) has multiples of headroom.
+
+**Verified capacity (2026-07-20): 10,000-event bursts reach 100%
+propagation + full Lane 0 quorum finality on a 3-region WAN validator
+network (EU / US-East / Asia, RTTs up to ~218 ms) — zero loss; fast
+nodes converge in < 40 s, worst-case straggler ~5 min. This supersedes
+the single-host asterisk on all earlier multi-node results.**
+
 > Methodology: numbers include HTTP/JSON overhead and are NOT comparable
-> to the in-process hot-path numbers above. Single-host containers mean
-> near-zero RTT; a geo-distributed run will be slower.
+> to the in-process hot-path numbers above. Convergence is measured from
+> the bench host's single clock (polling all nodes over HTTP), so
+> cross-region clock skew does not affect the numbers.
 
 ## Historical Baselines
 

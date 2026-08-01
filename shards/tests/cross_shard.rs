@@ -154,6 +154,8 @@ fn test_cross_shard_message_causality() {
         ShardId::financial(),
         ShardId::identity(),
         vec![1, 2, 3],
+        [0u8; 32],
+        [0u8; 32],
         source_vc.clone(),
     );
 

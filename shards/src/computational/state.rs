@@ -113,114 +113,37 @@ impl ComputationalState {
                 // -----------------------------------------------------------------------
                 #[cfg(feature = "real_verification")]
                 {
-                    use ark_bn254::Bn254;
-                    use ark_groth16::Groth16;
-                    use ark_serialize::CanonicalDeserialize;
-                    use ark_snark::SNARK;
-
-                    // Layout of proof_bytes:
-                    //   [0..4)         : verifying key length (u32 LE)
-                    //   [4..4+vk_len)  : serialized VerifyingKey
-                    //   [4+vk_len..]   : serialized Proof
-                    //
-                    // If the proof bytes are too short to contain a valid header,
-                    // fall through to the default (placeholder) path.
-                    if proof_bytes.len() > 8 {
-                        let vk_len = u32::from_le_bytes(proof_bytes[0..4].try_into().unwrap_or([0u8; 4])) as usize;
-
-                        if proof_bytes.len() > 4 + vk_len + 1 {
-                            let vk_bytes = &proof_bytes[4..4 + vk_len];
-                            let proof_slice = &proof_bytes[4 + vk_len..];
-
-                            let vk = match ark_groth16::VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes) {
-                                Ok(vk) => vk,
-                                Err(e) => {
-                                    tracing::warn!(
-                                        task = ?&task_id[..4],
-                                        error = %e,
-                                        "Real ZK verification: failed to deserialize verifying key, rejecting"
-                                    );
-                                    task.status = TaskStatus::Failed;
-                                    task.last_update.merge(vc);
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: invalid verifying key: {e}"
-                                    )));
-                                }
-                            };
-
-                            let proof = match ark_groth16::Proof::<Bn254>::deserialize_uncompressed(proof_slice) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    tracing::warn!(
-                                        task = ?&task_id[..4],
-                                        error = %e,
-                                        "Real ZK verification: failed to deserialize proof, rejecting"
-                                    );
-                                    task.status = TaskStatus::Failed;
-                                    task.last_update.merge(vc);
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: invalid proof: {e}"
-                                    )));
-                                }
-                            };
-
-                            // Derive public inputs from the task specification.
-                            // In a full implementation, these would be computed from the task
-                            // parameters (task spec hash, input commitment, output commitment).
-                            // For now, we use an empty public input list which verifies that
-                            // the proof is valid for a circuit with no public inputs.
-                            let public_inputs: Vec<ark_bn254::Fr> = vec![];
-
-                            if public_inputs.is_empty() {
-                                tracing::error!(
-                                    task = ?&task_id[..4],
-                                    "ZK proof verification rejected: empty public inputs — proof binds to no statement"
-                                );
-                                task.status = TaskStatus::Failed;
-                                task.last_update.merge(vc);
-                                return Err(ShardError::ValidationFailed(
-                                    "ZK proof verification failed: empty public inputs are not accepted".into(),
-                                ));
-                            }
-
-                            match Groth16::<Bn254>::verify(&vk, &public_inputs, &proof) {
-                                Ok(true) => {
-                                    tracing::info!(
-                                        task = ?&task_id[..4],
-                                        "Real ZK verification: proof verified successfully"
-                                    );
-                                    task.status = TaskStatus::Verified;
-                                    task.last_update.merge(vc);
-                                    return Ok(());
-                                }
-                                Ok(false) => {
-                                    tracing::warn!(
-                                        task = ?&task_id[..4],
-                                        "Real ZK verification: proof is invalid"
-                                    );
-                                    task.status = TaskStatus::Failed;
-                                    task.last_update.merge(vc);
-                                    return Err(ShardError::ValidationFailed(
-                                        "ZK proof verification failed: proof is invalid".into(),
-                                    ));
-                                }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        task = ?&task_id[..4],
-                                        error = %e,
-                                        "Real ZK verification: verification error"
-                                    );
-                                    task.status = TaskStatus::Failed;
-                                    task.last_update.merge(vc);
-                                    return Err(ShardError::ValidationFailed(format!(
-                                        "ZK proof verification failed: {e}"
-                                    )));
-                                }
-                            }
+                    // AUDIT-2026-07 C9 (#347): the verifying key comes from
+                    // the node's VK registry, never from the caller. The
+                    // submission is `[32-byte circuit ID || proof]`; an
+                    // unregistered circuit ID is rejected outright. The
+                    // single public input binds the proof to this exact
+                    // task (task_id + spec), so a proof for one task
+                    // cannot be replayed against another. This also
+                    // replaces the previous hardcoded-empty public-input
+                    // list, which rejected every submission.
+                    let public_inputs = vec![crate::zk::groth16::computational_public_input(task_id, &task.spec)];
+                    match crate::zk::groth16::verify_with_registry(proof_bytes, &public_inputs, "computational task") {
+                        Ok(()) => {
+                            tracing::info!(
+                                task = ?&task_id[..4],
+                                "Real ZK verification: proof verified successfully"
+                            );
+                            task.status = TaskStatus::Verified;
+                            task.last_update.merge(vc);
+                            Ok(())
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                task = ?&task_id[..4],
+                                error = %e,
+                                "Real ZK verification: proof rejected"
+                            );
+                            task.status = TaskStatus::Failed;
+                            task.last_update.merge(vc);
+                            Err(e)
                         }
                     }
-                    // If proof bytes don't match the expected layout, fall through
-                    // to the default placeholder verification below.
                 }
 
                 // When real_verification is disabled, always reject
@@ -230,17 +153,6 @@ impl ComputationalState {
                     task.last_update.merge(vc);
                     Err(ShardError::ValidationFailed(
                         "ZK proof verification requires 'real_verification' feature to be enabled".into(),
-                    ))
-                }
-
-                // When real_verification is enabled but proof didn't match expected layout
-                #[cfg(feature = "real_verification")]
-                {
-                    task.status = TaskStatus::Failed;
-                    task.last_update.merge(vc);
-                    Err(ShardError::ValidationFailed(
-                        "ZK proof verification failed: proof does not match expected layout for real verification"
-                            .into(),
                     ))
                 }
             }
@@ -310,8 +222,8 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification") || msg.contains("expected layout"),
-                    "expected real_verification or layout error, got: {msg}"
+                    msg.contains("real_verification") || msg.contains("too short"),
+                    "expected real_verification or too-short-submission error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),
@@ -350,8 +262,8 @@ mod tests {
         match result.unwrap_err() {
             ShardError::ValidationFailed(msg) => {
                 assert!(
-                    msg.contains("real_verification") || msg.contains("expected layout"),
-                    "expected real_verification or layout error, got: {msg}"
+                    msg.contains("real_verification") || msg.contains("too short"),
+                    "expected real_verification or too-short-submission error, got: {msg}"
                 );
             }
             other => panic!("expected ValidationFailed, got {other:?}"),

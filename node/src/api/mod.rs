@@ -16,6 +16,7 @@ pub mod ceremony;
 pub mod economics;
 pub mod errors;
 pub mod events;
+pub mod financial;
 pub mod governance;
 pub mod node;
 pub mod shards;
@@ -50,6 +51,8 @@ use crate::state::AppState;
         crate::api::economics::get_balance,
         crate::api::economics::transfer_ubc,
         crate::api::economics::list_transfers,
+        crate::api::financial::get_balance,
+        crate::api::financial::transfer,
         crate::api::node::node_info,
         crate::api::node::node_peers,
         crate::api::node::list_validators,
@@ -65,6 +68,7 @@ use crate::state::AppState;
         crate::api::governance::CreateProposalRequest,
         crate::api::governance::CastVoteRequest,
         crate::api::economics::TransferRequest,
+        crate::api::financial::FinancialTransferRequest,
         crate::api::node::PeerInfo,
         crate::api::errors::ErrorCode,
         crate::api::errors::ErrorResponse,
@@ -95,6 +99,8 @@ pub struct ApiDoc;
 /// | GET    | `/api/v1/economics/balance/:did`          | `economics::get_balance` | JWT  |
 /// | POST   | `/api/v1/economics/transfer`              | `economics::transfer_ubc` | JWT |
 /// | GET    | `/api/v1/economics/transfers`             | `economics::list_transfers` | JWT |
+/// | GET    | `/api/v1/financial/balance/:pubkey`       | `financial::get_balance` | JWT |
+/// | POST   | `/api/v1/financial/transfer`              | `financial::transfer`  | JWT   |
 /// | GET    | `/api/v1/errors`                          | `errors::error_codes`  | Public |
 /// | POST   | `/api/v1/auth/challenge`                  | `wallet_auth::request_challenge` | Public |
 /// | POST   | `/api/v1/auth/login`                      | `wallet_auth::login`   | Public |
@@ -160,6 +166,10 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/economics/balance/:did", get(economics::get_balance))
         .route("/economics/transfer", post(economics::transfer_ubc))
         .route("/economics/transfers", get(economics::list_transfers))
+        // Financial — the transferable-asset ledger, distinct from UBC:
+        // these transfers credit the recipient and conserve total supply.
+        .route("/financial/balance/:pubkey", get(financial::get_balance))
+        .route("/financial/transfer", post(financial::transfer))
         // Ceremony write operations
         .route("/ceremony/contribute", post(ceremony::ceremony_contribute))
         .route("/ceremony/finalize", post(ceremony::ceremony_finalize))

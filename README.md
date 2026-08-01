@@ -43,11 +43,12 @@
 
 ## 🟢 Live Right Now
 
-The Omnia stack is no longer only a codebase — it is **running in production (testnet)** with a full client ecosystem:
+The Omnia stack is no longer only a codebase — a public testnet node is
+serving traffic, with a full client ecosystem built against it:
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live (multi-node Lane 0 validator mesh, v0.1.76+, protocol `/omnia/4.0.0`) |
+| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **3-node geo-distributed mesh**, 2 peers each (v0.1.76, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -61,12 +62,59 @@ Try it:
 
 ```bash
 curl https://78.47.43.136.sslip.io/api/v1/node/info
+curl https://78.47.43.136.sslip.io/readyz
 ```
 
 The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
 
-**July 2026 network milestones** (measured live, not simulated — see
-[benchmark-gates.md](docs/reference/benchmark-gates.md)):
+### 🌍 The standing network (as of 2026-08-01)
+
+A **3-node geo-distributed validator mesh** is running continuously —
+this is a standing network, not a mesh brought up for a benchmark:
+
+| Node | Region | Role | Peers |
+| :--- | :----- | :--- | :---- |
+| **A** `78.47.43.136` | eu-central (Nuremberg) | bootstrap + validator + public ingress | 2 |
+| **B** `178.156.163.211` | us-east (Ashburn) | validator | 2 |
+| **C** `5.223.85.30` | ap-southeast (Singapore) | validator | 2 |
+
+All three on v0.1.76, stake 1 each. Measured RTTs **A↔B 98.9 ms**,
+**A↔C 159.8 ms** — matching the 2026-07-20 benchmark baseline exactly,
+so the WAN figures in [benchmark-gates.md](docs/reference/benchmark-gates.md)
+describe this network rather than a lab.
+
+Only node A exposes HTTP publicly; B and C are validators without public
+ingress, so they are reachable over the P2P mesh but not over the REST
+API. Lane 0 is doing real work on it:
+
+```jsonc
+// GET /api/v1/node/info  (node A)
+{ "peers": 2, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
+```
+
+**One honest caveat.** `/readyz` still reports `not_ready`, but the reason
+has changed from `no_peers` to `no_finalization`:
+
+```jsonc
+{ "status": "not_ready", "reason": "no_finalization", "peers": 2, "is_syncing": false }
+```
+
+Readiness requires `finalized_height > 0`, which counts **Lane 1**
+(canonical DAG consensus) commits — and Lane 1 has committed nothing
+because the network is quiet, not because anything is broken. Lane 0
+fast-path finality is working (9 events finalized, 27 acks accepted,
+zero rejected). Submit traffic and Lane 1 follows.
+
+**Utilization:** the node process uses ~30 MB RSS on a 16 GB host, with
+load average flat at 0.00 over 31 days and 4.7 MB of chain data. Even at
+the documented 10k-burst peak (145 MB RSS) that is ~1% of available
+memory. The fleet is heavily over-provisioned; the smallest instances
+available would carry this network comfortably.
+
+**July 2026 throughput milestones** — measured on a real 5-node mesh, not
+simulated, during stress runs on the dates given. These are load results
+from a mesh sized for the benchmark; the standing network above is the
+3-node one (see [benchmark-gates.md](docs/reference/benchmark-gates.md)):
 
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
   100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
@@ -79,6 +127,11 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
   5-node mesh: a 10,000-event burst overwhelms live gossip, then repair
   recovers every event — **100% propagation + full quorum finality on
   all five nodes, zero loss, median convergence under a minute.**
+- **Proven on the real internet (2026-07-20)** — a 3-region WAN
+  validator network (Nuremberg / Ashburn / Singapore, RTTs up to
+  ~218 ms) sustained the same test: **100% propagation + full quorum
+  finality at 1k/5k/10k bursts, zero loss.** No more single-host
+  asterisk.
 - Formally specified: TLA+ models (`OmniaTwoLane`, `OmniaConsensus`,
   `OmniaCRDT`) model-checked in CI on every PR.
 
@@ -122,7 +175,7 @@ The full loop — create wallet → challenge/login → registered DID with a 1,
 
 ## 🔬 What Is Omnia?
 
-Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamental set of rules that any computer can follow to participate in a shared, unchangeable record of truth. It uses **causal graph consensus** (DAG + vector clocks + CRDTs) instead of sequential blockchains to achieve parallel transaction processing. The protocol is **settlement-agnostic** — it can settle on Ethereum, Bitcoin, Solana, or any L1 with data availability and proof verification.
+Omnia is not a company, a coin, or an app. It is a **protocol** — a fundamental set of rules that any computer can follow to participate in a shared, unchangeable record of truth. It uses **causal graph consensus** (DAG + vector clocks + CRDTs) instead of sequential blockchains to achieve parallel transaction processing. The protocol is **settlement-agnostic** by design — the `SettlementAdapter` trait admits any L1 with data availability and proof verification. **Ethereum is the only adapter with a real, working implementation** (Alloy, `ethereum-live` feature); Bitcoin, Solana, and Cosmos are trait-conforming stubs and Celestia is unverified plumbing.
 
 ### The Problem We Solve
 
@@ -194,6 +247,19 @@ cargo bench --no-run
 - Fee enforcement via FeeSchedule + QuotaSystem integration
 - Security: Per-creator nonce replay protection (`last_nonces` in ShardRouter)
 - FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
+- **Two distinct economies, both reachable over the API:**
+  - **UBC** (`/api/v1/economics/*`) — soulbound monthly compute rights.
+    Non-transferable by design: a "send" spends the sender's quota and
+    credits nobody. This is what stops participation rights from being
+    accumulated and concentrated.
+  - **Financial ledger** (`/api/v1/financial/*`) — the transferable
+    asset. `POST /financial/transfer` debits the sender and credits the
+    recipient, conserving total supply. Authorized by the account
+    holder's own Ed25519 signature over a domain-tagged message
+    (`FinancialOp::SignedTransfer`), re-verified by every node that
+    applies the event — so a relaying node can decline to forward a
+    transfer but cannot forge or alter one. Accounts are addressed by
+    public key, since a `did:omnia:` is a one-way hash of it.
 
 ### Layer 3: Binding Layer ✅
 
@@ -225,7 +291,9 @@ cargo bench --no-run
 - Settlement-agnostic architecture (`SettlementAdapter` + `SettlementLayer` traits)
 - Ethereum adapter with Solidity contract (OmniaRollup.sol) — live mode via `ethereum-live` feature
 - FFI settlement adapter for production C-library integration (`settlement-ffi` feature)
-- Celestia adapter with RPC integration (`celestia` feature)
+- ⚠️ **PARTIAL**: Celestia adapter — HTTP plumbing behind the `celestia` feature, never
+  exercised against a real Celestia node and not instantiated anywhere
+  (see [stub inventory](docs/stub-inventory.md))
 - ⚠️ **STUB**: Bitcoin, Solana, Cosmos settlement adapters (see [stub inventory](docs/stub-inventory.md))
 - L2 operator with batch builder (TOCTOU race condition fixed)
 - ZK circuit (arkworks R1CS + Groth16 on BN254)
@@ -262,7 +330,7 @@ cargo bench --no-run
 | Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
 | Mobile wallet              | ✅ **Shipped (v1)**     | [`Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) — dual-mode auth, live against the testnet node |
-| Validator network          | 🌑 Not started          | Single-node operator currently                       |
+| Validator network          | ✅ **Running** (3 nodes) | Geo-distributed EU/US/Asia mesh — but all three run by the same operator, so not yet trust-distributed |
 | Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
 | Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
 | Production ZK hash gadget  | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
@@ -392,7 +460,14 @@ _Goal: Performance Validation_
 - ✅ Event submission now uses node's persistent keypair (not ephemeral)
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
-- ✅ Public testnet **live** (multi-node Lane 0 validator network at `78.47.43.136.sslip.io`; geo-distributed rollout planned)
+- ✅ Public testnet endpoint **live** (single node at `78.47.43.136.sslip.io`, 0 peers)
+- ✅ **Standing validator network — live.** A 3-node geo-distributed mesh
+  (EU / US-East / Asia) runs continuously with 2 peers each and Lane 0
+  finalizing events. Measured RTTs match the benchmark baseline exactly.
+- 🔄 **Independent operators — not yet.** All three nodes are run by the
+  same operator, so the network is geo-distributed but not yet
+  trust-distributed. Third-party validators are the remaining step; see
+  [validator-setup.md](docs/operations/validator-setup.md).
 
 #### v0.1.69 Critical Security Hardening
 
@@ -419,7 +494,8 @@ _Goal: Performance Validation_
 
 _Goal: Real users on a real node_
 
-- ✅ Public testnet deployed (`https://78.47.43.136.sslip.io`, Docker, multi-node Lane 0 validator network)
+- ✅ Public testnet node deployed (`https://78.47.43.136.sslip.io`, Docker); Lane 0
+  multi-node finality validated in stress runs, not continuously running
 - ✅ Wallet challenge/signature auth — `POST /api/v1/auth/challenge` + `/auth/login` (Ed25519, single-use TTL nonces, domain-separated messages, `verify_strict`, auto DID registration)
 - ✅ `POST /api/v1/auth/register` — idempotent DID registration for externally-minted JWTs (DID taken from the verified JWT `sub`, never the request body)
 - ✅ SHA-256 DID derivation shared with clients (`did:omnia:` + `sha256(pubkey)[..32]`, cross-repo pinned test vector)

@@ -182,6 +182,39 @@ pub fn verify_proof(vk: &VerifyingKey, public_inputs: &[ark_bn254::Fr], proof: &
     Groth16::<Bn254>::verify(vk, public_inputs, proof).map_err(|e| ProverError::VerificationFailed(e.to_string()))
 }
 
+/// Convert an arkworks Groth16 proof into the EVM calldata layout used by
+/// `OmniaRollup.submitBatch` (AUDIT-2026-07 C3, #341).
+///
+/// Field elements are 32-byte big-endian words. The G2 point follows the
+/// contract's documented layout `[[x.c0, x.c1], [y.c0, y.c1]]`
+/// (c0 = real part), matching arkworks' `Fq2` representation.
+pub fn proof_to_evm(proof: &Proof) -> crate::settlement::EvmProof {
+    use ark_ff::{BigInteger, PrimeField};
+
+    fn fq_to_word(fq: &ark_bn254::Fq) -> [u8; 32] {
+        let bytes = fq.into_bigint().to_bytes_be();
+        let mut word = [0u8; 32];
+        let len = bytes.len().min(32);
+        word[32 - len..].copy_from_slice(&bytes[..len]);
+        word
+    }
+
+    crate::settlement::EvmProof {
+        a: [fq_to_word(&proof.a.x), fq_to_word(&proof.a.y)],
+        b: [
+            [fq_to_word(&proof.b.x.c0), fq_to_word(&proof.b.x.c1)],
+            [fq_to_word(&proof.b.y.c0), fq_to_word(&proof.b.y.c1)],
+        ],
+        c: [fq_to_word(&proof.c.x), fq_to_word(&proof.c.y)],
+    }
+}
+
+/// Convert circuit public inputs (`Fr` elements) into 32-byte big-endian
+/// EVM words for `submitBatch`'s `uint256[] publicInputs`.
+pub fn public_inputs_to_evm(inputs: &[ark_bn254::Fr]) -> Vec<[u8; 32]> {
+    inputs.iter().map(crate::merkle::fr_to_hash).collect()
+}
+
 /// Serialize a Groth16 proof to bytes.
 ///
 /// Uses canonical serialization from `ark_serialize`.

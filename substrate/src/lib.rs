@@ -175,6 +175,12 @@ pub const TARGET_TPS: u32 = 10_000;
 /// Target latency for finality (milliseconds)
 pub const TARGET_FINALITY_MS: u64 = 5_000;
 
+/// Depth of the VRF leader schedule (primary + backups) consulted when
+/// deciding who may propose a round (AUDIT-2026-07 H3, #353). If the primary
+/// and the first few backups are all slashed/silent, the round falls through
+/// to the normal timeout path.
+const LEADER_SCHEDULE_DEPTH: usize = 4;
+
 /// Parse the consensus seed from the `OMNIA_CONSENSUS_SEED` environment variable.
 ///
 /// Accepts a hex-encoded 64-character (32-byte) seed for cryptographic strength.
@@ -313,7 +319,7 @@ pub enum ConsensusSeedError {
 /// specific error type that callers may want to match on directly.
 pub type ConsensusSeedResult<T> = std::result::Result<T, ConsensusSeedError>;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -465,6 +471,13 @@ pub struct SubstrateConfig {
     /// survives restarts, avoiding the need to replay all events
     /// from genesis after a crash.
     pub consensus_data_dir: Option<PathBuf>,
+    /// Directory for persistent Lane 0 finality state (redb).
+    ///
+    /// AUDIT-2026-07 C7 (#345): if `None`, the Lane 0 certificate store is
+    /// in-memory only and a restart loses every finalized event ID, the
+    /// epoch counter, and the current validator set — violating "once
+    /// final, always final". Production nodes running Lane 0 MUST set this.
+    pub lane0_data_dir: Option<PathBuf>,
     /// Enable fast sync on startup (downloads snapshot from peers).
     ///
     /// When `true`, a late-joining node will attempt to download a
@@ -563,6 +576,7 @@ impl SubstrateConfig {
             mempool_size: 10_000,
             max_block_events: 500,
             consensus_data_dir: None,
+            lane0_data_dir: None,
             fast_sync: false,
         }
     }
@@ -621,6 +635,71 @@ pub struct Substrate {
     /// Own Lane 0 acks awaiting broadcast (flushed each consensus round
     /// and on local submission).
     lane0_outbox: Vec<lane0::SignedAck>,
+    /// AUDIT-2026-07 H5 (#355): events that Lane 0 preconfirmed but Lane 1
+    /// (the canonical DAG consensus) subsequently rejected — a fast-path
+    /// divergence. Tracked so the divergence is observable and the event's
+    /// [`FinalityState`] reports `Diverged` instead of a stale
+    /// preconfirmation.
+    lane0_diverged: HashSet<EventId>,
+    /// AUDIT-2026-07 H5 (#355): events whose canonical state has been
+    /// anchored to the settlement layer (L1). Reaching this set advances an
+    /// event's [`FinalityState`] from `Canonical` to `Final`.
+    settled_events: HashSet<EventId>,
+}
+
+/// Transaction / event finality lifecycle (AUDIT-2026-07 H5, #355).
+///
+/// Omnia has two lanes with different guarantees, and consumers **must**
+/// distinguish them rather than treat Lane 0 as canonical finality:
+///
+/// - [`Preconfirmed`](FinalityState::Preconfirmed) — Lane 0 gave a fast,
+///   stake-signed preconfirmation. It is **reversible**: if Lane 1 later
+///   rejects the event the state becomes [`Diverged`](FinalityState::Diverged).
+///   Safe-by-construction for well-formed single-writer UBC transfers, but a
+///   consumer that acts on it accepts reversal risk.
+/// - [`Canonical`](FinalityState::Canonical) — Lane 1 (DAG BFT consensus)
+///   committed the event into the agreed causal order. Irreversible under the
+///   BFT threat model.
+/// - [`Final`](FinalityState::Final) — canonical **and** anchored to the
+///   settlement layer (L1). The strongest guarantee.
+/// - [`Diverged`](FinalityState::Diverged) — Lane 0 preconfirmed but Lane 1
+///   rejected the event. The fast-path guarantee was violated; anything done
+///   on the preconfirmation must be rolled back.
+///
+/// APIs and SDKs expose this state directly; they never advertise a Lane 0
+/// preconfirmation as "final".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FinalityState {
+    /// Neither lane has decided the event yet.
+    Pending,
+    /// Lane 0 stake-quorum preconfirmation — fast but reversible.
+    Preconfirmed,
+    /// Lane 1 (BFT consensus) committed the event into the canonical order.
+    Canonical,
+    /// Canonical and anchored to the settlement layer (L1).
+    Final,
+    /// Lane 0 preconfirmed the event but Lane 1 rejected it.
+    Diverged,
+}
+
+impl FinalityState {
+    /// The wire/string name of this state (matches the serde representation).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FinalityState::Pending => "pending",
+            FinalityState::Preconfirmed => "preconfirmed",
+            FinalityState::Canonical => "canonical",
+            FinalityState::Final => "final",
+            FinalityState::Diverged => "diverged",
+        }
+    }
+
+    /// Whether this state is safe to treat as irreversible (`Canonical` or
+    /// `Final`). `Preconfirmed` is **not** — it can still diverge.
+    pub fn is_irreversible(&self) -> bool {
+        matches!(self, FinalityState::Canonical | FinalityState::Final)
+    }
 }
 
 impl Substrate {
@@ -722,6 +801,40 @@ impl Substrate {
             None => ConsensusEngine::new(config.consensus.clone(), slashing.clone()),
         };
 
+        // AUDIT-2026-07 C7 (#345): build the Lane 0 certificate store,
+        // restoring persisted finality (finalized set, epoch, validator
+        // set) when a data dir is configured. Without persistence a restart
+        // silently loses finality — production Lane 0 nodes must set
+        // `lane0_data_dir`.
+        let (lane0_store, lane0_restored_validators) = match &config.lane0_data_dir {
+            Some(dir) => match lane0::RedbLane0Store::open(dir) {
+                Ok(store) => match lane0::CertificateStore::with_store(Arc::new(store)) {
+                    Ok(cert_store) => {
+                        tracing::info!(path = %dir.display(), "Lane 0: using persistent redb store");
+                        let restored = cert_store.restored_validators().cloned();
+                        (cert_store, restored)
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, path = %dir.display(),
+                            "FAILED to restore Lane 0 state. Refusing to silently start fresh — \
+                             that would violate 'once final, always final' across the restart.");
+                        panic!(
+                            "Lane 0 state restoration failed at {}: {e}. Remove the DB to start fresh.",
+                            dir.display()
+                        );
+                    }
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, path = %dir.display(), "FAILED to open Lane 0 store");
+                    panic!(
+                        "Lane 0 store open failed at {}: {e}. Fix permissions or remove the file.",
+                        dir.display()
+                    );
+                }
+            },
+            None => (lane0::CertificateStore::new(), None),
+        };
+
         let graph = Arc::new(tokio::sync::RwLock::new(CausalGraph::new()));
         let mempool_size = config.mempool_size;
         let max_block_events = config.max_block_events;
@@ -740,9 +853,14 @@ impl Substrate {
             max_block_events,
             validator_candidates: HashMap::new(),
             consensus_store,
-            lane0_validators: None,
-            lane0_store: lane0::CertificateStore::new(),
+            // AUDIT-2026-07 C7 (#345): resume with the validator set the
+            // store persisted, so a node restarting mid-rotation cannot
+            // accept acks from a superseded set.
+            lane0_validators: lane0_restored_validators,
+            lane0_store,
             lane0_outbox: Vec::new(),
+            lane0_diverged: HashSet::new(),
+            settled_events: HashSet::new(),
         }
     }
 
@@ -926,19 +1044,45 @@ impl Substrate {
             self.lane0_flush_outbox().await;
         }
 
-        // 2. Check if we are the leader for this round
+        // 2. Check if we are the leader for this round.
+        //
+        // AUDIT-2026-07 C1 (#339): leader selection now uses the
+        // VRF-keyed, stake-weighted schedule driven by the unpredictable
+        // beacon. We take an ordered schedule (primary + backups) so that
+        // if the primary is slashed, a backup can step in immediately
+        // rather than waiting out a round timeout (zero-timeout failover).
+        // We propose if we are the highest-ranked non-slashed validator in
+        // the schedule — every node computes the identical schedule, so
+        // this stays single-leader.
         let current_round = self.consensus.current_round();
         if !self.validator_candidates.is_empty() {
-            if let Ok(leader) = self.consensus.compute_leader(&self.validator_candidates, current_round) {
-                if leader == self.config.node_id {
-                    // We are the leader — produce a block proposal
-                    self.propose_block(current_round).await;
-                }
+            // AUDIT-2026-07 H3 (#353): only the round's active leader may
+            // propose. `is_active_leader_for_round` computes the VRF-keyed
+            // schedule and skips slashed members (zero-timeout backup
+            // failover), so leader-based consensus is enforced rather than
+            // decorative. `propose_block` re-checks this as a defensive guard.
+            if self.consensus.is_active_leader_for_round(
+                &self.config.node_id,
+                &self.validator_candidates,
+                current_round,
+                LEADER_SCHEDULE_DEPTH,
+            ) {
+                self.propose_block(current_round).await;
             }
         }
 
         // 3. Run consensus — returns newly committed event IDs
         let committed = self.process_consensus().await;
+
+        // 3b. AUDIT-2026-07 C1 (#339): fold the committed DAG frontier into
+        // the leader-election beacon. This is what makes future leaders
+        // unpredictable — committed IDs depend on user signatures that do
+        // not exist until the events are created, and every node folds the
+        // identical committed set, so the beacon evolves deterministically
+        // without any extra network traffic.
+        if !committed.is_empty() {
+            self.consensus.advance_beacon_from_committed(&committed);
+        }
 
         // 4. Process committed events through shard processor
         if let Some(ref mut processor) = self.shard_processor {
@@ -1157,6 +1301,10 @@ impl Substrate {
             total_stake = validators.total_stake(),
             "Lane 0 enabled (static validator set)"
         );
+        // AUDIT-2026-07 C7 (#345): persist the boot validator set so a
+        // restart resumes with it (and the correct epoch) even before any
+        // rotation.
+        self.lane0_store.set_validators(&validators);
         self.lane0_validators = Some(validators);
     }
 
@@ -1167,8 +1315,75 @@ impl Substrate {
 
     /// Whether an event has reached Lane 0 finality (stake-weighted
     /// quorum of validator acks). Always `false` when Lane 0 is disabled.
+    ///
+    /// Note (AUDIT-2026-07 H5, #355): Lane 0 finality is a **reversible
+    /// preconfirmation**, not canonical finality. Prefer
+    /// [`finality_state`](Self::finality_state), which reports the full
+    /// lifecycle and never conflates a preconfirmation with canonical/final.
     pub fn lane0_is_final(&self, event_id: &EventId) -> bool {
         self.lane0_store.is_final(event_id)
+    }
+
+    /// Resolve an event's finality lifecycle state (AUDIT-2026-07 H5, #355).
+    ///
+    /// Combines the Lane 0 preconfirmation, the Lane 1 canonical commit, the
+    /// settlement-layer anchor, and any recorded divergence into a single
+    /// [`FinalityState`] so callers (and the public API) can distinguish a
+    /// reversible fast-path preconfirmation from canonical/final state.
+    pub fn finality_state(&self, event_id: &EventId) -> FinalityState {
+        if self.lane0_diverged.contains(event_id) {
+            return FinalityState::Diverged;
+        }
+        if self.is_finalized(event_id) {
+            // Lane 1 committed the event into the canonical order.
+            if self.settled_events.contains(event_id) {
+                return FinalityState::Final;
+            }
+            return FinalityState::Canonical;
+        }
+        if self.lane0_store.is_final(event_id) {
+            return FinalityState::Preconfirmed;
+        }
+        FinalityState::Pending
+    }
+
+    /// Record that Lane 1 (canonical DAG consensus) **rejected** an event
+    /// (AUDIT-2026-07 H5, #355). If Lane 0 had already preconfirmed it, this
+    /// is a fast-path divergence: it is recorded (so
+    /// [`finality_state`](Self::finality_state) reports `Diverged`) and
+    /// logged loudly for operators/consumers to reconcile. Returns `true`
+    /// when a *new* divergence was recorded.
+    ///
+    /// A rejection of an event Lane 0 never preconfirmed is normal (an
+    /// invalid event) and is ignored here.
+    pub fn reconcile_lane1_rejection(&mut self, event_id: EventId) -> bool {
+        if !self.lane0_store.is_final(&event_id) {
+            return false;
+        }
+        let newly = self.lane0_diverged.insert(event_id);
+        if newly {
+            tracing::error!(
+                event = %hex::encode(&event_id[..4]),
+                "LANE 0/LANE 1 DIVERGENCE — Lane 1 rejected an event Lane 0 preconfirmed; \
+                 consumers relying on the preconfirmation must roll back"
+            );
+        }
+        newly
+    }
+
+    /// Mark an event's canonical state as anchored to the settlement layer
+    /// (L1), advancing it from `Canonical` to `Final` (AUDIT-2026-07 H5,
+    /// #355). Called by the settlement adapter when a batch containing the
+    /// event is confirmed on L1.
+    pub fn mark_settled(&mut self, event_id: EventId) {
+        self.settled_events.insert(event_id);
+    }
+
+    /// Number of Lane 0/Lane 1 divergences observed so far (AUDIT-2026-07
+    /// H5, #355). A non-zero value means the fast path was contradicted by
+    /// canonical consensus and should be alerted on.
+    pub fn lane0_divergence_count(&self) -> usize {
+        self.lane0_diverged.len()
     }
 
     /// Lane 0 counters `(acks_accepted, acks_rejected, events_finalized)`,
@@ -1242,7 +1457,12 @@ impl Substrate {
         }
         let keypair = keypair.clone();
         for event_id in event_ids {
-            let ack = lane0::SignedAck::sign(*event_id, &keypair);
+            // AUDIT-2026-07 H4 (#354): acks commit to the shard state root
+            // after applying the event. Per-shard state roots do not exist
+            // yet (#365), so we sign with UNBOUND_STATE_ROOT for now — the
+            // binding + per-root quorum machinery is in place and activates
+            // automatically once #365 supplies a real post-apply root here.
+            let ack = lane0::SignedAck::sign(*event_id, lane0::UNBOUND_STATE_ROOT, &keypair);
             // Fold our own ack locally first (a single-validator set
             // self-finalizes here), then queue for broadcast.
             if let Ok(lane0::AckOutcome::NewlyFinal) = self.lane0_store.add_ack(ack.clone(), validators) {
@@ -1388,6 +1608,23 @@ impl Substrate {
     /// FIND-CRIT-001 FIX: This method is now async to avoid `blocking_write()`
     /// inside an async context, which can deadlock the Tokio runtime.
     async fn propose_block(&mut self, round: u64) -> Vec<EventId> {
+        // AUDIT-2026-07 H3 (#353): defensive re-check — refuse to propose
+        // unless this node is the active leader for the round, so a proposal
+        // can never be produced out of turn even if a caller forgets the
+        // gate. No-op when no validator set is configured (leaderless / test
+        // mode), preserving existing behaviour.
+        if !self.validator_candidates.is_empty()
+            && !self.consensus.is_active_leader_for_round(
+                &self.config.node_id,
+                &self.validator_candidates,
+                round,
+                LEADER_SCHEDULE_DEPTH,
+            )
+        {
+            tracing::warn!(round, "propose_block called by a non-leader — refusing to propose");
+            return Vec::new();
+        }
+
         let pending = self.mempool.drain_up_to(self.max_block_events);
         if pending.is_empty() {
             return Vec::new();
@@ -1895,6 +2132,67 @@ mod tests {
         substrate.add_validator(test_node(2), keypair, 10_000);
         assert_eq!(substrate.validator_candidates.len(), 1);
         assert!(substrate.validator_candidates.contains_key(&test_node(2)));
+    }
+
+    // ── AUDIT-2026-07 H5 (#355): finality lifecycle + divergence ──────
+
+    #[test]
+    fn test_finality_state_helpers() {
+        assert!(FinalityState::Canonical.is_irreversible());
+        assert!(FinalityState::Final.is_irreversible());
+        assert!(!FinalityState::Preconfirmed.is_irreversible());
+        assert!(!FinalityState::Diverged.is_irreversible());
+        assert!(!FinalityState::Pending.is_irreversible());
+        assert_eq!(FinalityState::Preconfirmed.as_str(), "preconfirmed");
+        assert_eq!(FinalityState::Diverged.as_str(), "diverged");
+    }
+
+    #[test]
+    fn test_finality_state_pending_for_unknown_event() {
+        let substrate = Substrate::new(test_config(1));
+        assert_eq!(substrate.finality_state(&[9u8; 32]), FinalityState::Pending);
+    }
+
+    #[test]
+    fn test_finality_preconfirmed_then_diverged() {
+        let mut substrate = Substrate::new(test_config(1));
+
+        // Preconfirm an event on Lane 0 via a single-validator quorum.
+        let kp = generate_keypair();
+        let vset = lane0::ValidatorSet::new([(kp.verifying_key().to_bytes(), 1u64)]).unwrap();
+        let ev: EventId = [7u8; 32];
+        let ack = lane0::SignedAck::sign(ev, lane0::UNBOUND_STATE_ROOT, &kp);
+        substrate.lane0_store.add_ack(ack, &vset).unwrap();
+
+        assert!(substrate.lane0_is_final(&ev));
+        assert_eq!(
+            substrate.finality_state(&ev),
+            FinalityState::Preconfirmed,
+            "a Lane 0 quorum is a reversible preconfirmation, not canonical finality"
+        );
+
+        // Lane 1 rejects it → the fast path diverged.
+        assert!(
+            substrate.reconcile_lane1_rejection(ev),
+            "first rejection records a divergence"
+        );
+        assert_eq!(substrate.finality_state(&ev), FinalityState::Diverged);
+        assert_eq!(substrate.lane0_divergence_count(), 1);
+
+        // Idempotent: re-reporting the same rejection is not a new divergence.
+        assert!(!substrate.reconcile_lane1_rejection(ev));
+        assert_eq!(substrate.lane0_divergence_count(), 1);
+    }
+
+    #[test]
+    fn test_reconcile_ignores_rejection_of_non_preconfirmed_event() {
+        let mut substrate = Substrate::new(test_config(1));
+        let ev: EventId = [3u8; 32];
+        // Lane 1 rejecting an event Lane 0 never preconfirmed is normal, not
+        // a divergence.
+        assert!(!substrate.reconcile_lane1_rejection(ev));
+        assert_eq!(substrate.lane0_divergence_count(), 0);
+        assert_eq!(substrate.finality_state(&ev), FinalityState::Pending);
     }
 
     #[test]

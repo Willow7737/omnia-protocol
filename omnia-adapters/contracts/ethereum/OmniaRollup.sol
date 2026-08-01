@@ -167,6 +167,11 @@ contract OmniaRollup {
     // -----------------------------------------------------------------------
 
     event StateUpdated(bytes32 indexed oldRoot, bytes32 indexed newRoot, uint256 batchIndex);
+    /// @notice Binds the keccak hash of the posted batch calldata to the
+    ///         SNARK-proven Poseidon event commitment for the same batch,
+    ///         so off-chain verifiers can associate data availability with
+    ///         the proof (AUDIT-2026-07 C3, #341).
+    event BatchDataBound(bytes32 indexed dataHash, bytes32 indexed eventCommitment, uint256 batchIndex);
     event Deposited(address indexed sender, bytes32 indexed l2Did, uint256 amount);
     event WithdrawalRequested(address indexed recipient, bytes32 indexed l2Did, uint256 amount);
     event WithdrawalFinalized(address indexed recipient, uint256 amount);
@@ -247,9 +252,18 @@ contract OmniaRollup {
             require(uint256(stateRoot) == _publicInputs[0], "Old root mismatch");
             // Bind: new state root must match the proposed root
             require(uint256(_newStateRoot) == _publicInputs[1], "New root mismatch");
-            // Bind batch data to event commitment
-            bytes32 dataCommitment = keccak256(_batchData);
-            require(uint256(dataCommitment) == _publicInputs[2], "Batch data commitment mismatch");
+            // AUDIT-2026-07 C3 (#341): _publicInputs[2] is the POSEIDON
+            // Merkle event commitment, and it is already bound by the SNARK
+            // verification below — the previous check here required
+            // keccak256(_batchData) == _publicInputs[2], equating a keccak
+            // hash with a Poseidon root. Finding such a preimage is
+            // infeasible, so every 3-input submission reverted and the
+            // settlement path was non-functional. The contract cannot
+            // recompute Poseidon affordably on-chain; instead, data
+            // availability is bound by emitting the keccak of the posted
+            // calldata alongside the proven event commitment (see
+            // BatchDataBound below) so off-chain verifiers can associate
+            // the two.
         } else if (_publicInputs.length == 1) {
             // RollupCircuit: single public input is the new state root.
             // Contract still binds old root against its own state.
@@ -264,6 +278,9 @@ contract OmniaRollup {
         require(verifyProof(_proofA, _proofB, _proofC, _publicInputs), "Invalid proof");
         bytes32 oldRoot = stateRoot;
         stateRoot = _newStateRoot;
+        if (_publicInputs.length >= 3) {
+            emit BatchDataBound(keccak256(_batchData), bytes32(_publicInputs[2]), batchIndex);
+        }
         emit StateUpdated(oldRoot, _newStateRoot, batchIndex++);
     }
 

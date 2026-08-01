@@ -62,6 +62,26 @@ pub use ethereum::EthereumSettlementAdapter;
 // SettlementAdapter trait (hybrid architecture core)
 // ---------------------------------------------------------------------------
 
+/// A Groth16 proof in EVM calldata layout (AUDIT-2026-07 C3, #341):
+/// 32-byte big-endian words matching `OmniaRollup.submitBatch`'s
+/// `uint256[2] a`, `uint256[2][2] b`, `uint256[2] c` parameters. The G2
+/// component layout is `[[x.c0, x.c1], [y.c0, y.c1]]` (c0 = real part),
+/// as documented on the contract.
+///
+/// Feature-neutral by design (plain bytes, no arkworks types) so the
+/// settlement trait can carry it regardless of which prover features are
+/// enabled. Produced by `prover::proof_to_evm` under the `arkworks`
+/// feature.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvmProof {
+    /// G1 point A: [x, y].
+    pub a: [[u8; 32]; 2],
+    /// G2 point B: [[x.c0, x.c1], [y.c0, y.c1]].
+    pub b: [[[u8; 32]; 2]; 2],
+    /// G1 point C: [x, y].
+    pub c: [[u8; 32]; 2],
+}
+
 /// A pluggable settlement adapter for the hybrid architecture.
 ///
 /// This is the core trait that the Omnia Protocol depends on for
@@ -99,6 +119,28 @@ pub trait SettlementAdapter: Send + Sync {
     ///
     /// Returns a transaction hash identifying the submission.
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError>;
+
+    /// Submit a batch with its Groth16 proof and public inputs
+    /// (AUDIT-2026-07 C3, #341) — the real settlement path for contracts
+    /// that verify proofs on-chain (`OmniaRollup.submitBatch`).
+    ///
+    /// `public_inputs` are 32-byte big-endian words; for the
+    /// `ExpandedRollupCircuit` they are
+    /// `[old_state_root, new_state_root, event_commitment]`.
+    ///
+    /// The default implementation fails closed for adapters whose
+    /// settlement layer has no proof-verifying entry point.
+    async fn submit_batch_with_proof(
+        &self,
+        _new_root: [u8; 32],
+        _proof: &EvmProof,
+        _public_inputs: &[[u8; 32]],
+        _batch_data: &[u8],
+    ) -> Result<TxHash, SettlementError> {
+        Err(SettlementError::ContractError(
+            "this settlement adapter does not support proof-carrying batch submission".to_string(),
+        ))
+    }
 
     /// Fetch a finality proof for a previously submitted transaction.
     ///

@@ -453,3 +453,82 @@ fn test_transfer_to_self() {
     // No double-counting: the balance entry for A should exist exactly once
     assert_eq!(state.balances.len(), 1, "A should have exactly one balance entry");
 }
+
+// ---------------------------------------------------------------------------
+// AUDIT-2026-07 C5 (#343): transfer atomicity on recipient overflow
+// ---------------------------------------------------------------------------
+
+/// A transfer into a recipient whose balance would overflow must fail
+/// WITHOUT debiting the sender. The pre-fix code decremented the sender,
+/// then propagated the recipient's overflow error — permanent fund loss
+/// and a broken total-supply invariant.
+#[test]
+fn test_transfer_recipient_overflow_is_atomic() {
+    use omnia_shards::FinancialAccountBalance as AccountBalance;
+
+    let kp_a = generate_keypair();
+    let a = account_id(&kp_a);
+    let node_a = test_node(1);
+    let attacker_sink = [0xEEu8; 32];
+
+    let mut state = state_with_mint_authority(&kp_a);
+
+    // Sender holds 100.
+    let event0 = make_signed_event(&kp_a, 0, node_a);
+    state
+        .apply(&FinancialOp::Mint { to: a, amount: 100 }, &event0)
+        .expect("mint");
+
+    // Recipient parked at u64::MAX (staged directly: represents a balance
+    // reached through any path — the atomicity of apply() is what's under
+    // test, not how the balance got there).
+    state
+        .balances
+        .insert(attacker_sink, AccountBalance::with_balance(u64::MAX));
+
+    let supply_before = state.total_supply;
+    let sender_before = state.balance_of(&a);
+
+    let event1 = make_signed_event(&kp_a, 1, node_a);
+    let result = state.apply(
+        &FinancialOp::Transfer {
+            to: attacker_sink,
+            amount: 100,
+        },
+        &event1,
+    );
+
+    assert!(result.is_err(), "overflowing transfer must be rejected");
+    assert_eq!(
+        state.balance_of(&a),
+        sender_before,
+        "sender must NOT be debited when the transfer fails"
+    );
+    assert_eq!(
+        state.balance_of(&attacker_sink),
+        u64::MAX,
+        "recipient balance unchanged"
+    );
+    assert_eq!(state.total_supply, supply_before, "supply invariant preserved");
+}
+
+/// Self-transfer must succeed as a net-zero operation, including at
+/// balances near u64::MAX where a naive recipient-headroom pre-check
+/// would spuriously reject it.
+#[test]
+fn test_self_transfer_is_net_zero_even_near_max() {
+    use omnia_shards::FinancialAccountBalance as AccountBalance;
+
+    let kp_a = generate_keypair();
+    let a = account_id(&kp_a);
+    let node_a = test_node(1);
+
+    let mut state = state_with_mint_authority(&kp_a);
+    state.balances.insert(a, AccountBalance::with_balance(u64::MAX - 5));
+
+    let event0 = make_signed_event(&kp_a, 0, node_a);
+    state
+        .apply(&FinancialOp::Transfer { to: a, amount: 1_000 }, &event0)
+        .expect("self-transfer is net zero and must succeed");
+    assert_eq!(state.balance_of(&a), u64::MAX - 5, "balance unchanged by self-transfer");
+}

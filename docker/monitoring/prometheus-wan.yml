@@ -1,0 +1,71 @@
+# Prometheus scrape config for the geo-distributed WAN testnet.
+#
+# The other configs in this directory target Docker bridge hostnames on
+# port 8080 (`omnia-node-1:8080`), which only exist in the single-host
+# multi-node stacks. WAN members run `docker-compose.wan.yml` with host
+# networking, one container named `omnia-node` per host, HTTP + metrics on
+# port 9090 — so those configs silently scrape nothing here.
+#
+# Run this from host A (the bench/ingress host), which is the only host
+# permitted through B's and C's firewalls on port 9090.
+#
+# Fill in the remote_write block to ship metrics to Grafana Cloud. That
+# matters for more than convenience: alerts evaluated in the cloud still
+# fire when host A itself goes down, whereas a Grafana running on A cannot
+# tell you that A is unreachable.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    network: omnia-wan-testnet
+
+scrape_configs:
+  - job_name: 'omnia-wan'
+    metrics_path: /metrics
+    static_configs:
+      # Host A — reached via the Docker host gateway (see extra_hosts in
+      # docker-compose.monitoring.yml). Not `localhost`: that would resolve
+      # inside the Prometheus container.
+      - targets: ['host.docker.internal:9090']
+        labels:
+          node: 'A'
+          region: 'nbg1-eu-central'
+          role: 'bootstrap-validator-ingress'
+      - targets: ['178.156.163.211:9090']
+        labels:
+          node: 'B'
+          region: 'ash-us-east'
+          role: 'validator'
+      - targets: ['5.223.85.30:9090']
+        labels:
+          node: 'C'
+          region: 'sin-ap-southeast'
+          role: 'validator'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# ---------------------------------------------------------------------------
+# Grafana Cloud remote_write
+# ---------------------------------------------------------------------------
+# Get these from grafana.com -> your stack -> Prometheus -> "Send Metrics":
+#   url      -> the "Remote Write Endpoint"
+#   username -> the numeric "Username / Instance ID"
+#   token    -> an API token with the MetricsPublisher role
+#
+# The token is read from a file so it never lands in git. Create it on host A:
+#
+#   printf '%s' '<your-token>' > docker/monitoring/grafana-cloud-token
+#   chmod 600 docker/monitoring/grafana-cloud-token
+#
+# (docker/monitoring/grafana-cloud-token is gitignored.)
+#
+# Uncomment and fill in the two values below once the token file exists.
+#
+# remote_write:
+#   - url: https://prometheus-prod-XX-prod-YY-ZZZZ.grafana.net/api/prom/push
+#     basic_auth:
+#       username: '000000'
+#       password_file: /etc/prometheus/grafana-cloud-token

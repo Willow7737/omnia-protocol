@@ -18,8 +18,16 @@
 //!    public key: merging is idempotent, commutative, and associative, so
 //!    duplicate or reordered gossip deliveries are harmless.
 //! 3. When the acked stake exceeds 2/3 of the configured total stake, the
-//!    event is Lane 0-final. Finality is monotone — once final, always
-//!    final.
+//!    event is Lane 0-**preconfirmed**. Lane 0 preconfirmation is monotone
+//!    within Lane 0 (once preconfirmed it is never un-preconfirmed), but it
+//!    is **not** canonical finality: it is a fast, reversible
+//!    preconfirmation (AUDIT-2026-07 H5, #355). The canonical order is
+//!    decided by Lane 1 (DAG BFT consensus); if Lane 1 rejects a
+//!    Lane-0-preconfirmed event the two lanes have *diverged*. Consumers
+//!    read the full lifecycle via `Substrate::finality_state`
+//!    (Preconfirmed → Canonical → Final, or Diverged) and must not treat a
+//!    preconfirmation as final. Safe-by-construction for well-formed
+//!    single-writer UBC transfers, which Lane 1 does not reject.
 //!
 //! # Validator set (v1: operator-configured boot set; v2: epoch-fenced rotation)
 //!
@@ -63,7 +71,7 @@ pub const LANE0_ACK_DOMAIN: &[u8] = b"omnia-lane0-ack";
 pub const LANE0_ACKS_TOPIC: &str = "omnia_lane0_acks";
 
 /// Wire-format version byte for serialized ack batches.
-pub const LANE0_WIRE_VERSION: u8 = 1;
+pub const LANE0_WIRE_VERSION: u8 = 2;
 
 /// Maximum acks accepted in a single gossip message (DoS bound).
 pub const MAX_ACKS_PER_MESSAGE: usize = 1024;
@@ -105,15 +113,33 @@ pub enum Lane0Error {
     InvalidConfig(String),
 }
 
+/// Sentinel `state_root` meaning "not bound to a post-apply state"
+/// (AUDIT-2026-07 H4, #354). Used until per-shard state roots (#365) exist:
+/// an all-zero root is treated as unbound and does not partition the quorum,
+/// preserving today's behaviour. A non-zero root is a genuine commitment to
+/// the shard state after applying the event, and only acks that agree on the
+/// same root combine toward finality.
+pub const UNBOUND_STATE_ROOT: [u8; 32] = [0u8; 32];
+
 /// A validator's signed acknowledgment that an event validated cleanly
 /// and was inserted into its causal graph.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedAck {
     /// The acknowledged event.
     pub event_id: EventId,
+    /// The shard state root the acking validator computed **after applying
+    /// this event** (AUDIT-2026-07 H4, #354). Binding the ack to the
+    /// post-apply state means a lazy validator cannot ack without doing the
+    /// validation/application work: an ack that commits to the wrong root
+    /// lands in a different quorum bucket than honest validators and never
+    /// contributes to their finality. [`UNBOUND_STATE_ROOT`] until per-shard
+    /// state roots (#365) are available.
+    #[serde(default)]
+    pub state_root: [u8; 32],
     /// Ed25519 public key of the acking validator.
     pub validator_pubkey: [u8; 32],
-    /// Ed25519 signature over `blake3_hash_domain(LANE0_ACK_DOMAIN, event_id)`.
+    /// Ed25519 signature over
+    /// `blake3_hash_domain(LANE0_ACK_DOMAIN, event_id ++ state_root)`.
     #[serde(with = "serde_sig64")]
     pub signature: [u8; 64],
 }
@@ -136,18 +162,33 @@ mod serde_sig64 {
 }
 
 impl SignedAck {
-    /// Sign an acknowledgment for `event_id` with the validator's keypair.
-    pub fn sign(event_id: EventId, keypair: &NodeKeypair) -> Self {
-        let digest = blake3_hash_domain(LANE0_ACK_DOMAIN, &event_id);
+    /// The domain-separated digest an ack signs: binds both the event ID and
+    /// the post-apply `state_root` (AUDIT-2026-07 H4, #354).
+    fn ack_digest(event_id: &EventId, state_root: &[u8; 32]) -> [u8; 32] {
+        let mut preimage = [0u8; 64];
+        preimage[..32].copy_from_slice(event_id);
+        preimage[32..].copy_from_slice(state_root);
+        blake3_hash_domain(LANE0_ACK_DOMAIN, &preimage)
+    }
+
+    /// Sign an acknowledgment binding `event_id` to the shard `state_root`
+    /// the validator computed after applying the event. Pass
+    /// [`UNBOUND_STATE_ROOT`] when a per-shard state root is not yet
+    /// available (#365).
+    pub fn sign(event_id: EventId, state_root: [u8; 32], keypair: &NodeKeypair) -> Self {
+        let digest = Self::ack_digest(&event_id, &state_root);
         let signature = keypair.sign(&digest).to_bytes();
         Self {
             event_id,
+            state_root,
             validator_pubkey: keypair.verifying_key().to_bytes(),
             signature,
         }
     }
 
-    /// Verify the ack's signature against its claimed public key.
+    /// Verify the ack's signature against its claimed public key. The
+    /// signature covers both the event ID and the committed `state_root`, so
+    /// tampering with either invalidates it.
     pub fn verify(&self) -> bool {
         let Ok(pubkey) = NodePublicKey::from_bytes(&self.validator_pubkey) else {
             return false;
@@ -155,7 +196,7 @@ impl SignedAck {
         let Ok(signature) = ed25519_dalek::Signature::from_slice(&self.signature) else {
             return false;
         };
-        let digest = blake3_hash_domain(LANE0_ACK_DOMAIN, &self.event_id);
+        let digest = Self::ack_digest(&self.event_id, &self.state_root);
         pubkey.verify(&digest, &signature).is_ok()
     }
 }
@@ -370,6 +411,12 @@ impl ValidatorSet {
 pub struct FinalityCertificate {
     acks: BTreeMap<[u8; 32], SignedAck>,
     acked_stake: u64,
+    /// Stake committed per state root (AUDIT-2026-07 H4, #354). Finality
+    /// requires a *single* root's bucket to reach quorum, so acks that
+    /// disagree on the post-apply state root never combine. All
+    /// [`UNBOUND_STATE_ROOT`] acks share one bucket, giving the legacy
+    /// event-id-only behaviour until per-shard roots (#365) populate it.
+    stake_by_root: BTreeMap<[u8; 32], u64>,
 }
 
 impl FinalityCertificate {
@@ -378,9 +425,20 @@ impl FinalityCertificate {
         self.acks.values()
     }
 
-    /// Total stake represented by the collected acks.
+    /// Total stake represented by the collected acks (across all roots).
     pub fn acked_stake(&self) -> u64 {
         self.acked_stake
+    }
+
+    /// Stake committed to a specific post-apply state root.
+    pub fn stake_for_root(&self, root: &[u8; 32]) -> u64 {
+        self.stake_by_root.get(root).copied().unwrap_or(0)
+    }
+
+    /// The state root with the most committed stake, and that stake — the
+    /// bucket that decides finality.
+    pub fn leading_root(&self) -> Option<([u8; 32], u64)> {
+        self.stake_by_root.iter().max_by_key(|(_, &s)| s).map(|(r, &s)| (*r, s))
     }
 
     /// Number of distinct validators that have acked.
@@ -400,8 +458,132 @@ pub enum AckOutcome {
     Duplicate,
 }
 
-/// Bounded store of in-flight certificates and finalized event IDs.
+// ─── Lane 0 persistence (AUDIT-2026-07 C7, #345) ──────────────────────────
+
+/// The durable subset of Lane 0 state that must survive a restart.
+///
+/// AUDIT-2026-07 C7 (#345): the [`CertificateStore`] kept `finalized`,
+/// `epoch`, and the counters in memory only, so a restart lost every
+/// finalized event ID and the epoch counter — violating Lane 0's "once
+/// final, always final" property (a previously-final event could be
+/// re-acked or reported "not final"), and a node restarting mid-rotation
+/// could accept acks from validators no longer in the set. Pending (not
+/// yet final) certificates are intentionally **not** persisted — re-acking
+/// is safe, so dropping them costs only a little liveness, never safety.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Lane0PersistentState {
+    /// Number of validator-set rotations applied (the epoch fence).
+    pub epoch: u64,
+    /// Total events finalized through Lane 0 (monotone counter).
+    pub events_finalized: u64,
+    /// Finalized event IDs, in finalization order (oldest first).
+    pub finalized: Vec<EventId>,
+    /// The current validator set as `(pubkey, stake)` pairs, so a restart
+    /// resumes with the correct epoch's set and cannot accept acks from a
+    /// superseded one. `None` before Lane 0 is enabled.
+    pub validators: Option<Vec<([u8; 32], u64)>>,
+}
+
+/// Errors from the Lane 0 persistence backend.
+#[derive(Debug, thiserror::Error)]
+pub enum Lane0StoreError {
+    /// redb / I/O failure.
+    #[error("lane0 store error: {0}")]
+    Backend(String),
+    /// (De)serialization failure.
+    #[error("lane0 store codec error: {0}")]
+    Codec(String),
+}
+
+/// Persistence backend for the durable Lane 0 state.
+pub trait Lane0Store: Send + Sync + std::fmt::Debug {
+    /// Load the persisted state, or the default (empty) state if none.
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError>;
+    /// Persist the given state, replacing any previous snapshot.
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError>;
+}
+
+const LANE0_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("lane0_state");
+const LANE0_STATE_KEY: &str = "state";
+
+/// redb-backed persistent Lane 0 store.
+#[derive(Debug)]
+pub struct RedbLane0Store {
+    db: redb::Database,
+}
+
+impl RedbLane0Store {
+    /// Open (creating if needed) a redb database at `path` for Lane 0 state.
+    pub fn open(path: &std::path::Path) -> Result<Self, Lane0StoreError> {
+        let db = redb::Database::create(path).map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        Ok(Self { db })
+    }
+}
+
+impl Lane0Store for RedbLane0Store {
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError> {
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        let table = match read.open_table(LANE0_TABLE) {
+            Ok(t) => t,
+            // Table absent → nothing persisted yet.
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(Lane0PersistentState::default()),
+            Err(e) => return Err(Lane0StoreError::Backend(e.to_string())),
+        };
+        match table
+            .get(LANE0_STATE_KEY)
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?
+        {
+            Some(bytes) => postcard::from_bytes(bytes.value()).map_err(|e| Lane0StoreError::Codec(e.to_string())),
+            None => Ok(Lane0PersistentState::default()),
+        }
+    }
+
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError> {
+        let bytes = postcard::to_allocvec(state).map_err(|e| Lane0StoreError::Codec(e.to_string()))?;
+        let write = self
+            .db
+            .begin_write()
+            .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        {
+            let mut table = write
+                .open_table(LANE0_TABLE)
+                .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+            table
+                .insert(LANE0_STATE_KEY, bytes.as_slice())
+                .map_err(|e| Lane0StoreError::Backend(e.to_string()))?;
+        }
+        write.commit().map_err(|e| Lane0StoreError::Backend(e.to_string()))
+    }
+}
+
+/// In-memory Lane 0 store for tests and non-persistent nodes.
 #[derive(Debug, Default)]
+pub struct InMemoryLane0Store {
+    state: std::sync::Mutex<Lane0PersistentState>,
+}
+
+impl InMemoryLane0Store {
+    /// Create an empty in-memory store.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Lane0Store for InMemoryLane0Store {
+    fn load(&self) -> Result<Lane0PersistentState, Lane0StoreError> {
+        Ok(self.state.lock().unwrap_or_else(|p| p.into_inner()).clone())
+    }
+    fn save(&self, state: &Lane0PersistentState) -> Result<(), Lane0StoreError> {
+        *self.state.lock().unwrap_or_else(|p| p.into_inner()) = state.clone();
+        Ok(())
+    }
+}
+
+/// Bounded store of in-flight certificates and finalized event IDs.
+#[derive(Default, Debug)]
 pub struct CertificateStore {
     /// In-flight certificates (not yet final).
     pending: HashMap<EventId, FinalityCertificate>,
@@ -419,12 +601,96 @@ pub struct CertificateStore {
     events_finalized: u64,
     /// Number of validator-set rotations applied (see [`Self::rotate_validators`]).
     epoch: u64,
+    /// AUDIT-2026-07 C7 (#345): the current validator set, kept so it can
+    /// be persisted (and restored on restart) alongside the epoch fence.
+    current_validators: Option<ValidatorSet>,
+    /// AUDIT-2026-07 C7 (#345): optional durable backend. When `Some`,
+    /// `finalized`, `epoch`, the counters, and the validator set survive a
+    /// restart. When `None` the store is in-memory only (tests / disabled).
+    store: Option<std::sync::Arc<dyn Lane0Store>>,
 }
 
 impl CertificateStore {
-    /// Create an empty store.
+    /// Create an empty, in-memory-only store.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a store backed by `store`, restoring any persisted finalized
+    /// set, epoch, counters, and validator set (AUDIT-2026-07 C7, #345).
+    pub fn with_store(store: std::sync::Arc<dyn Lane0Store>) -> Result<Self, Lane0StoreError> {
+        let persisted = store.load()?;
+        let validators = match &persisted.validators {
+            Some(entries) => match ValidatorSet::new(entries.iter().copied()) {
+                Ok(set) => Some(set),
+                Err(e) => {
+                    tracing::error!(error = %e, "persisted Lane 0 validator set is invalid — ignoring");
+                    None
+                }
+            },
+            None => None,
+        };
+        let finalized_order: VecDeque<EventId> = persisted.finalized.iter().copied().collect();
+        let finalized: HashSet<EventId> = persisted.finalized.into_iter().collect();
+        tracing::info!(
+            finalized = finalized.len(),
+            epoch = persisted.epoch,
+            events_finalized = persisted.events_finalized,
+            has_validators = validators.is_some(),
+            "Restored Lane 0 state from persistent store"
+        );
+        Ok(Self {
+            pending: HashMap::new(),
+            pending_order: VecDeque::new(),
+            finalized,
+            finalized_order,
+            acks_accepted: 0,
+            acks_rejected: 0,
+            events_finalized: persisted.events_finalized,
+            epoch: persisted.epoch,
+            current_validators: validators,
+            store: Some(store),
+        })
+    }
+
+    /// The validator set restored from persistence, if Lane 0 was enabled
+    /// before the restart. Callers use this to re-arm their in-memory
+    /// validator handle after `with_store`.
+    pub fn restored_validators(&self) -> Option<&ValidatorSet> {
+        self.current_validators.as_ref()
+    }
+
+    /// Record (and persist) the current validator set — the boot set on
+    /// enable, and the new set after each rotation.
+    pub fn set_validators(&mut self, validators: &ValidatorSet) {
+        self.current_validators = Some(validators.clone());
+        self.persist();
+    }
+
+    /// Snapshot the durable subset of state.
+    fn persistent_state(&self) -> Lane0PersistentState {
+        Lane0PersistentState {
+            epoch: self.epoch,
+            events_finalized: self.events_finalized,
+            finalized: self.finalized_order.iter().copied().collect(),
+            validators: self
+                .current_validators
+                .as_ref()
+                .map(|set| set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+        }
+    }
+
+    /// Persist the durable subset if a backend is configured. A persist
+    /// failure is logged loudly but does not unwind the in-memory update —
+    /// losing durability is a monitoring/ops concern, and returning an
+    /// error from the hot ack path would be worse (it would drop live
+    /// finality). Operators must alert on this log line.
+    fn persist(&self) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.save(&self.persistent_state()) {
+                tracing::error!(error = %e, "FAILED to persist Lane 0 state — finality durability at risk");
+            }
+        }
     }
 
     /// Verify and fold one ack into the store.
@@ -451,7 +717,13 @@ impl CertificateStore {
             return Ok(AckOutcome::Duplicate);
         }
         let event_id = ack.event_id;
+        let ack_root = ack.state_root;
         cert.acked_stake = cert.acked_stake.saturating_add(stake);
+        // AUDIT-2026-07 H4 (#354): accumulate stake in the bucket for this
+        // ack's committed state root, so finality requires agreement on the
+        // post-apply state — not merely on the event ID.
+        let root_bucket = cert.stake_by_root.entry(ack_root).or_insert(0);
+        *root_bucket = root_bucket.saturating_add(stake);
         cert.acks.insert(ack.validator_pubkey, ack);
         self.acks_accepted += 1;
 
@@ -467,7 +739,13 @@ impl CertificateStore {
             }
         }
 
-        let acked = self.pending.get(&event_id).map(|c| c.acked_stake).unwrap_or(0);
+        // Finality is decided per state root: only stake that agrees on the
+        // same post-apply root counts toward this event's quorum.
+        let acked = self
+            .pending
+            .get(&event_id)
+            .map(|c| c.stake_for_root(&ack_root))
+            .unwrap_or(0);
         if validators.is_quorum(acked) {
             self.pending.remove(&event_id);
             self.finalized.insert(event_id);
@@ -480,6 +758,9 @@ impl CertificateStore {
                     break;
                 }
             }
+            // AUDIT-2026-07 C7 (#345): persist as soon as an event becomes
+            // final, so a restart can never report it "not final".
+            self.persist();
             Ok(AckOutcome::NewlyFinal)
         } else {
             Ok(AckOutcome::Recorded)
@@ -518,6 +799,7 @@ impl CertificateStore {
     /// of the rotation (empty in the common case), in ascending order.
     pub fn rotate_validators(&mut self, new_validators: &ValidatorSet) -> Vec<EventId> {
         self.epoch += 1;
+        self.current_validators = Some(new_validators.clone());
         let mut newly_final = Vec::new();
 
         // Deterministic evaluation order: HashMap iteration order is not
@@ -532,16 +814,24 @@ impl CertificateStore {
                 continue;
             };
             let mut acked_stake: u64 = 0;
-            cert.acks.retain(|pubkey, _| match new_validators.stake_of(pubkey) {
+            // AUDIT-2026-07 H4 (#354): re-weight per state root under the new
+            // set, so finality after a rotation still requires agreement on
+            // the post-apply state, not just the event ID.
+            let mut stake_by_root: BTreeMap<[u8; 32], u64> = BTreeMap::new();
+            cert.acks.retain(|pubkey, ack| match new_validators.stake_of(pubkey) {
                 Some(stake) => {
                     acked_stake = acked_stake.saturating_add(stake);
+                    let bucket = stake_by_root.entry(ack.state_root).or_insert(0);
+                    *bucket = bucket.saturating_add(stake);
                     true
                 }
                 None => false,
             });
             cert.acked_stake = acked_stake;
+            cert.stake_by_root = stake_by_root;
 
-            if new_validators.is_quorum(acked_stake) {
+            let leading_stake = cert.leading_root().map(|(_, s)| s).unwrap_or(0);
+            if new_validators.is_quorum(leading_stake) {
                 self.pending.remove(&event_id);
                 self.finalized.insert(event_id);
                 self.finalized_order.push_back(event_id);
@@ -565,6 +855,11 @@ impl CertificateStore {
                 break;
             }
         }
+
+        // AUDIT-2026-07 C7 (#345): persist the new epoch, validator set, and
+        // any newly-finalized events atomically, so a node restarting
+        // mid-rotation resumes with the correct set and finality.
+        self.persist();
 
         newly_final
     }
@@ -611,14 +906,14 @@ mod tests {
     #[test]
     fn test_ack_sign_verify_roundtrip() {
         let key = generate_keypair();
-        let ack = SignedAck::sign(eid(1), &key);
+        let ack = SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &key);
         assert!(ack.verify());
     }
 
     #[test]
     fn test_ack_verify_rejects_tamper() {
         let key = generate_keypair();
-        let mut ack = SignedAck::sign(eid(1), &key);
+        let mut ack = SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &key);
         ack.event_id = eid(2); // signature no longer matches
         assert!(!ack.verify());
     }
@@ -632,6 +927,7 @@ mod tests {
         let event_style_sig = key.sign(&id).to_bytes();
         let forged = SignedAck {
             event_id: id,
+            state_root: UNBOUND_STATE_ROOT,
             validator_pubkey: key.verifying_key().to_bytes(),
             signature: event_style_sig,
         };
@@ -641,7 +937,10 @@ mod tests {
     #[test]
     fn test_ack_batch_wire_roundtrip() {
         let key = generate_keypair();
-        let acks = vec![SignedAck::sign(eid(1), &key), SignedAck::sign(eid(2), &key)];
+        let acks = vec![
+            SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &key),
+            SignedAck::sign(eid(2), UNBOUND_STATE_ROOT, &key),
+        ];
         let bytes = encode_ack_batch(&acks).unwrap();
         assert_eq!(bytes[0], LANE0_WIRE_VERSION);
         let decoded = decode_ack_batch(&bytes).unwrap();
@@ -724,24 +1023,90 @@ mod tests {
         let id = eid(1);
 
         assert_eq!(
-            store.add_ack(SignedAck::sign(id, &keys[0]), &set).unwrap(),
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &set)
+                .unwrap(),
             AckOutcome::Recorded
         );
         assert!(!store.is_final(&id));
         assert_eq!(store.certificate(&id).unwrap().ack_count(), 1);
 
         assert_eq!(
-            store.add_ack(SignedAck::sign(id, &keys[1]), &set).unwrap(),
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[1]), &set)
+                .unwrap(),
             AckOutcome::Recorded
         );
         assert!(!store.is_final(&id));
 
         assert_eq!(
-            store.add_ack(SignedAck::sign(id, &keys[2]), &set).unwrap(),
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[2]), &set)
+                .unwrap(),
             AckOutcome::NewlyFinal
         );
         assert!(store.is_final(&id));
         assert_eq!(store.stats(), (3, 0, 1));
+    }
+
+    // ── AUDIT-2026-07 H4 (#354): acks bind the post-apply state root ──
+
+    fn root(n: u8) -> [u8; 32] {
+        let mut r = [0u8; 32];
+        r[0] = n;
+        r
+    }
+
+    #[test]
+    fn test_ack_binds_state_root_in_signature() {
+        let key = generate_keypair();
+        let ack = SignedAck::sign(eid(1), root(9), &key);
+        assert!(ack.verify());
+        // Tampering with the committed state root invalidates the signature —
+        // an ack cannot be re-pointed at a different post-apply state.
+        let mut tampered = ack.clone();
+        tampered.state_root = root(8);
+        assert!(!tampered.verify());
+    }
+
+    #[test]
+    fn test_disagreeing_state_roots_never_reach_quorum() {
+        // three_validators: stake 1 each, quorum needs all three.
+        let (keys, set) = three_validators();
+        let mut store = CertificateStore::new();
+        let id = eid(1);
+
+        // Each validator commits to a DIFFERENT post-apply root — the "lazy
+        // acker guessed wrong" case. No single root bucket reaches quorum.
+        store.add_ack(SignedAck::sign(id, root(1), &keys[0]), &set).unwrap();
+        store.add_ack(SignedAck::sign(id, root(2), &keys[1]), &set).unwrap();
+        let outcome = store.add_ack(SignedAck::sign(id, root(3), &keys[2]), &set).unwrap();
+
+        assert_eq!(outcome, AckOutcome::Recorded);
+        assert!(
+            !store.is_final(&id),
+            "acks that disagree on the post-apply state root must not finalize"
+        );
+    }
+
+    #[test]
+    fn test_agreeing_state_root_reaches_quorum() {
+        let (keys, set) = three_validators();
+        let mut store = CertificateStore::new();
+        let id = eid(1);
+        let r = root(7);
+
+        store.add_ack(SignedAck::sign(id, r, &keys[0]), &set).unwrap();
+        store.add_ack(SignedAck::sign(id, r, &keys[1]), &set).unwrap();
+        let outcome = store.add_ack(SignedAck::sign(id, r, &keys[2]), &set).unwrap();
+
+        assert_eq!(
+            outcome,
+            AckOutcome::NewlyFinal,
+            "unanimous agreement on a root finalizes"
+        );
+        assert!(store.is_final(&id));
+        assert_eq!(store.certificate(&id).map(|c| c.stake_for_root(&r)), None); // moved to finalized
     }
 
     #[test]
@@ -749,7 +1114,7 @@ mod tests {
         let (keys, set) = three_validators();
         let mut store = CertificateStore::new();
         let id = eid(1);
-        let ack = SignedAck::sign(id, &keys[0]);
+        let ack = SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]);
 
         assert_eq!(store.add_ack(ack.clone(), &set).unwrap(), AckOutcome::Recorded);
         // Same ack again: duplicate, stake not double-counted.
@@ -763,7 +1128,10 @@ mod tests {
         // CRDT property: any delivery order reaches the same final state.
         let (keys, set) = three_validators();
         let id = eid(1);
-        let acks: Vec<SignedAck> = keys.iter().map(|k| SignedAck::sign(id, k)).collect();
+        let acks: Vec<SignedAck> = keys
+            .iter()
+            .map(|k| SignedAck::sign(id, UNBOUND_STATE_ROOT, k))
+            .collect();
 
         for order in [[0, 1, 2], [2, 0, 1], [1, 2, 0]] {
             let mut store = CertificateStore::new();
@@ -783,7 +1151,7 @@ mod tests {
         let mut store = CertificateStore::new();
 
         // Valid signature, but not in the validator set.
-        let outsider_ack = SignedAck::sign(eid(1), &outsider);
+        let outsider_ack = SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &outsider);
         assert!(matches!(
             store.add_ack(outsider_ack, &set),
             Err(Lane0Error::UnknownValidator)
@@ -791,7 +1159,7 @@ mod tests {
 
         // In-set pubkey with a forged signature.
         let (keys, set) = three_validators();
-        let mut forged = SignedAck::sign(eid(1), &keys[0]);
+        let mut forged = SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &keys[0]);
         forged.signature[0] ^= 0xFF;
         assert!(matches!(store.add_ack(forged, &set), Err(Lane0Error::InvalidSignature)));
         // Both the outsider ack and the forgery were counted as rejected.
@@ -804,12 +1172,14 @@ mod tests {
         let mut store = CertificateStore::new();
         let id = eid(1);
         for k in &keys {
-            let _ = store.add_ack(SignedAck::sign(id, k), &set);
+            let _ = store.add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, k), &set);
         }
         assert!(store.is_final(&id));
         // A late duplicate does not un-finalize or corrupt anything.
         assert_eq!(
-            store.add_ack(SignedAck::sign(id, &keys[0]), &set).unwrap(),
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &set)
+                .unwrap(),
             AckOutcome::Duplicate
         );
         assert!(store.is_final(&id));
@@ -822,7 +1192,9 @@ mod tests {
         let set = ValidatorSet::new([(key.verifying_key().to_bytes(), 1)]).unwrap();
         let mut store = CertificateStore::new();
         assert_eq!(
-            store.add_ack(SignedAck::sign(eid(1), &key), &set).unwrap(),
+            store
+                .add_ack(SignedAck::sign(eid(1), UNBOUND_STATE_ROOT, &key), &set)
+                .unwrap(),
             AckOutcome::NewlyFinal
         );
     }
@@ -877,7 +1249,7 @@ mod tests {
         let mut store = CertificateStore::new();
         let id = eid(1);
         for k in &keys {
-            let _ = store.add_ack(SignedAck::sign(id, k), &old_set);
+            let _ = store.add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, k), &old_set);
         }
         assert!(store.is_final(&id));
 
@@ -896,8 +1268,12 @@ mod tests {
         let (keys, old_set) = three_validators();
         let mut store = CertificateStore::new();
         let id = eid(1);
-        store.add_ack(SignedAck::sign(id, &keys[0]), &old_set).unwrap();
-        store.add_ack(SignedAck::sign(id, &keys[1]), &old_set).unwrap();
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &old_set)
+            .unwrap();
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[1]), &old_set)
+            .unwrap();
         assert_eq!(store.certificate(&id).unwrap().acked_stake(), 2);
         assert!(!store.is_final(&id));
 
@@ -926,7 +1302,9 @@ mod tests {
         let mut store = CertificateStore::new();
         let id = eid(1);
         // Only 1 of 3 acked under the old set — nowhere near quorum.
-        store.add_ack(SignedAck::sign(id, &keys[0]), &old_set).unwrap();
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &old_set)
+            .unwrap();
         assert!(!store.is_final(&id));
 
         // New set: just the one validator that already acked.
@@ -948,7 +1326,9 @@ mod tests {
 
         let ids = [eid(3), eid(1), eid(2)];
         for id in ids {
-            store.add_ack(SignedAck::sign(id, &key), &old_set).unwrap();
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &key), &old_set)
+                .unwrap();
         }
 
         // New set: just this one validator — every pending cert now has
@@ -968,5 +1348,153 @@ mod tests {
         assert_eq!(store.epoch(), 1);
         store.rotate_validators(&set);
         assert_eq!(store.epoch(), 2);
+    }
+
+    // ---- AUDIT-2026-07 C7 (#345): persistence regression tests ----
+
+    /// The core C7 property: an event finalized before a restart is still
+    /// final after the store is dropped and rebuilt from the same backend.
+    ///
+    /// Red-check: an in-memory-only `CertificateStore::new()` cannot survive
+    /// a restart (its state lives only in RAM); this test exercises the
+    /// durable path and asserts finality, epoch, counters, and the validator
+    /// set all come back.
+    #[test]
+    fn test_finality_survives_restart() {
+        let (keys, set) = three_validators();
+        let backing = std::sync::Arc::new(InMemoryLane0Store::new());
+        let id = eid(1);
+
+        {
+            let mut store = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+            // Record the boot validator set so a restart knows the epoch's set.
+            store.set_validators(&set);
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &set)
+                .unwrap();
+            store
+                .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[1]), &set)
+                .unwrap();
+            assert_eq!(
+                store
+                    .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[2]), &set)
+                    .unwrap(),
+                AckOutcome::NewlyFinal
+            );
+            assert!(store.is_final(&id));
+            // store is dropped here — simulating a node shutdown.
+        }
+
+        // "Restart": a brand-new store rebuilt from the same durable backend.
+        let restored = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+        assert!(
+            restored.is_final(&id),
+            "finalized event must remain final across restart"
+        );
+        assert_eq!(restored.epoch(), 0);
+        assert_eq!(restored.stats().2, 1, "events_finalized counter must persist");
+        let restored_set = restored.restored_validators().expect("validator set must be restored");
+        assert_eq!(restored_set.len(), set.len());
+        assert_eq!(restored_set.total_stake(), set.total_stake());
+    }
+
+    /// A rotation's new epoch and validator set survive a restart, and after
+    /// the restart the store rejects acks from the superseded set — the
+    /// mid-rotation safety property C7 protects.
+    #[test]
+    fn test_restart_preserves_epoch_and_rejects_superseded_validators() {
+        let (old_keys, old_set) = three_validators();
+        let (new_keys, new_set) = three_validators();
+        let backing = std::sync::Arc::new(InMemoryLane0Store::new());
+
+        {
+            let mut store = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+            store.set_validators(&old_set);
+            store.rotate_validators(&new_set);
+            assert_eq!(store.epoch(), 1);
+        }
+
+        let mut restored = CertificateStore::with_store(backing.clone() as std::sync::Arc<dyn Lane0Store>).unwrap();
+        assert_eq!(restored.epoch(), 1, "epoch fence must persist across restart");
+        // Clone the restored set so we can borrow `restored` mutably below.
+        let restored_set = restored
+            .restored_validators()
+            .expect("new validator set restored")
+            .clone();
+        assert_eq!(restored_set.total_stake(), new_set.total_stake());
+
+        // An ack from a validator only in the superseded set is rejected when
+        // replayed against the restored (new) set — a node restarting
+        // mid-rotation cannot be tricked into counting stale stake.
+        let outsider_ack = SignedAck::sign(eid(9), UNBOUND_STATE_ROOT, &old_keys[0]);
+        assert!(matches!(
+            restored.add_ack(outsider_ack, &restored_set),
+            Err(Lane0Error::UnknownValidator)
+        ));
+
+        // A validator in the restored set is accepted.
+        let member_ack = SignedAck::sign(eid(9), UNBOUND_STATE_ROOT, &new_keys[0]);
+        assert!(restored.add_ack(member_ack, &restored_set).is_ok());
+    }
+
+    /// The redb backend round-trips a persisted state to disk and back.
+    #[test]
+    fn test_redb_store_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lane0.redb");
+
+        let (_keys, set) = three_validators();
+        {
+            let store = RedbLane0Store::open(&path).unwrap();
+            let state = Lane0PersistentState {
+                epoch: 4,
+                events_finalized: 2,
+                finalized: vec![eid(1), eid(2)],
+                validators: Some(set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+            };
+            store.save(&state).unwrap();
+        }
+
+        // Reopen from the same path — a fresh process would do exactly this.
+        let store = RedbLane0Store::open(&path).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.epoch, 4);
+        assert_eq!(loaded.events_finalized, 2);
+        assert_eq!(loaded.finalized, vec![eid(1), eid(2)]);
+        assert_eq!(loaded.validators.unwrap().len(), set.len());
+    }
+
+    /// Opening a redb store at a path with no prior state yields the empty
+    /// default rather than erroring — first boot of a persistent node.
+    #[test]
+    fn test_redb_store_empty_on_first_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fresh.redb");
+        let store = RedbLane0Store::open(&path).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.epoch, 0);
+        assert_eq!(loaded.events_finalized, 0);
+        assert!(loaded.finalized.is_empty());
+        assert!(loaded.validators.is_none());
+    }
+
+    /// A store with no backend (`new()`) persists to nothing and never
+    /// panics on the persist path — the in-memory / Lane-0-disabled case.
+    #[test]
+    fn test_new_store_persist_is_noop() {
+        let (keys, set) = three_validators();
+        let mut store = CertificateStore::new();
+        store.set_validators(&set); // exercises persist() with store == None
+        let id = eid(1);
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[0]), &set)
+            .unwrap();
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[1]), &set)
+            .unwrap();
+        store
+            .add_ack(SignedAck::sign(id, UNBOUND_STATE_ROOT, &keys[2]), &set)
+            .unwrap();
+        assert!(store.is_final(&id));
     }
 }
