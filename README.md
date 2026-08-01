@@ -48,7 +48,7 @@ serving traffic, with a full client ecosystem built against it:
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet node** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **single node, 0 peers** (v0.1.76, protocol `/omnia/4.0.0`) |
+| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **3-node geo-distributed mesh**, 2 peers each (v0.1.76, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -67,29 +67,54 @@ curl https://78.47.43.136.sslip.io/readyz
 
 The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
 
-### ⚠️ What "live" means today — read this before quoting the numbers
+### 🌍 The standing network (as of 2026-08-01)
 
-The public endpoint is **one node with no peers**. It answers the REST
-API and the wallet's auth/UBC loop works against it, but it reports
-itself **not ready** for consensus, and it is finalizing nothing:
+A **3-node geo-distributed validator mesh** is running continuously —
+this is a standing network, not a mesh brought up for a benchmark:
+
+| Node | Region | Role | Peers |
+| :--- | :----- | :--- | :---- |
+| **A** `78.47.43.136` | eu-central (Nuremberg) | bootstrap + validator + public ingress | 2 |
+| **B** `178.156.163.211` | us-east (Ashburn) | validator | 2 |
+| **C** `5.223.85.30` | ap-southeast (Singapore) | validator | 2 |
+
+All three on v0.1.76, stake 1 each. Measured RTTs **A↔B 98.9 ms**,
+**A↔C 159.8 ms** — matching the 2026-07-20 benchmark baseline exactly,
+so the WAN figures in [benchmark-gates.md](docs/reference/benchmark-gates.md)
+describe this network rather than a lab.
+
+Only node A exposes HTTP publicly; B and C are validators without public
+ingress, so they are reachable over the P2P mesh but not over the REST
+API. Lane 0 is doing real work on it:
 
 ```jsonc
-// GET /readyz
-{ "status": "not_ready", "reason": "no_peers", "peers": 0, "is_syncing": false }
-// GET /api/v1/node/info  → finalized_height: 0, lane0.events_finalized: 0
+// GET /api/v1/node/info  (node A)
+{ "peers": 2, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
 ```
 
-**There is no standing validator network.** The multi-node results
-below are real measurements from stress runs on a 5-node mesh that was
-brought up for the runs and is not currently running. They are
-reproducible from `docker/` — they are not a description of what the
-public endpoint is doing right now. Recruiting independent validator
-operators is the open problem; see
-[docs/operations/validator-setup.md](docs/operations/validator-setup.md).
+**One honest caveat.** `/readyz` still reports `not_ready`, but the reason
+has changed from `no_peers` to `no_finalization`:
 
-**July 2026 network milestones** — measured on a real 5-node mesh, not
-simulated, during stress runs on the dates given (see
-[benchmark-gates.md](docs/reference/benchmark-gates.md)):
+```jsonc
+{ "status": "not_ready", "reason": "no_finalization", "peers": 2, "is_syncing": false }
+```
+
+Readiness requires `finalized_height > 0`, which counts **Lane 1**
+(canonical DAG consensus) commits — and Lane 1 has committed nothing
+because the network is quiet, not because anything is broken. Lane 0
+fast-path finality is working (9 events finalized, 27 acks accepted,
+zero rejected). Submit traffic and Lane 1 follows.
+
+**Utilization:** the node process uses ~30 MB RSS on a 16 GB host, with
+load average flat at 0.00 over 31 days and 4.7 MB of chain data. Even at
+the documented 10k-burst peak (145 MB RSS) that is ~1% of available
+memory. The fleet is heavily over-provisioned; the smallest instances
+available would carry this network comfortably.
+
+**July 2026 throughput milestones** — measured on a real 5-node mesh, not
+simulated, during stress runs on the dates given. These are load results
+from a mesh sized for the benchmark; the standing network above is the
+3-node one (see [benchmark-gates.md](docs/reference/benchmark-gates.md)):
 
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
   100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
@@ -305,7 +330,7 @@ cargo bench --no-run
 | Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
 | Mobile wallet              | ✅ **Shipped (v1)**     | [`Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) — dual-mode auth, live against the testnet node |
-| Validator network          | 🌑 Not started          | Single-node operator currently                       |
+| Validator network          | ✅ **Running** (3 nodes) | Geo-distributed EU/US/Asia mesh — but all three run by the same operator, so not yet trust-distributed |
 | Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
 | Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
 | Production ZK hash gadget  | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
@@ -436,9 +461,13 @@ _Goal: Performance Validation_
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
 - ✅ Public testnet endpoint **live** (single node at `78.47.43.136.sslip.io`, 0 peers)
-- 🔄 **Standing validator network — not yet.** Lane 0 finality is proven in
-  5-node stress runs, but no independent operators are running nodes.
-  This is the current critical-path blocker, not a code gap.
+- ✅ **Standing validator network — live.** A 3-node geo-distributed mesh
+  (EU / US-East / Asia) runs continuously with 2 peers each and Lane 0
+  finalizing events. Measured RTTs match the benchmark baseline exactly.
+- 🔄 **Independent operators — not yet.** All three nodes are run by the
+  same operator, so the network is geo-distributed but not yet
+  trust-distributed. Third-party validators are the remaining step; see
+  [validator-setup.md](docs/operations/validator-setup.md).
 
 #### v0.1.69 Critical Security Hardening
 

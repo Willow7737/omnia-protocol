@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: 2026-07-18 (post-ADR-025 rollout; live 5-node testnet with measured Lane 0 finality)
+> Last updated: 2026-08-01 (standing 3-node geo-distributed validator mesh; financial ledger + mint authority config)
 
 ---
 
@@ -88,11 +88,18 @@ This document catalogs all stub, placeholder, and partial implementations in the
 - **What shipped**: Flutter wallet with dual-mode auth (on-device Ed25519 challenge/signature login **or** Google/GitHub/email via Supabase + `mint-node-jwt` edge function), UBC balance/send/history with per-transaction detail, governance voting, QR-based transfers, address book, biometric app lock, team news feed, in-app notifications — verified end-to-end against the live testnet node
 - **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`)
 
-### Validator Network — **NOT STARTED** 🌑
+### Validator Network — **RUNNING** (3 nodes) ✅⚠️
 
-- **Status**: No code exists; single-node operator for Phase 0
-- **What's planned**: Multi-validator coordination, staking pool management, auto-scaling validator set
-- **Phase**: Planned for Phase 1
+- **Status**: A standing 3-node geo-distributed mesh (EU-central / US-east /
+  AP-southeast) runs continuously on v0.1.76, 2 peers each, stake 1 each,
+  with Lane 0 finalizing events.
+- **⚠️ Not yet trust-distributed**: all three nodes are operated by the same
+  party. BFT's security argument assumes *independent* operators, so the
+  network is currently fault-tolerant against machine and region failure but
+  not against operator compromise. Third-party validators are the open item.
+- **What's still planned**: staking pool management, auto-scaling validator
+  set, validator onboarding flow
+- **Phase**: Phase 1
 
 ### Conviction Voting — **NOT STARTED** 🌑
 
@@ -130,7 +137,7 @@ This document catalogs all stub, placeholder, and partial implementations in the
 | Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
 | Cosmos Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
 | Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅ SHIPPED (v1, July 2026) | Dual-mode auth, live vs. testnet node | Done |
-| Validator Network    | —     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
+| Validator Network    | —     | ✅⚠️ RUNNING (3 nodes, one operator) | —                                           | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 
