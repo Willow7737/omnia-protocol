@@ -53,6 +53,21 @@ pub struct NodeConfig {
     pub consensus_data_dir: Option<PathBuf>,
     /// Protocol version to advertise on the network.
     pub protocol_version: String,
+    /// Hex-encoded Ed25519 public key authorized to mint on the financial
+    /// shard, or `None` to disable minting entirely.
+    ///
+    /// **This is a network-wide genesis parameter, not a per-node one.**
+    /// `FinancialState::apply` accepts a `Mint` only when the event's
+    /// creator matches the configured authority, so every node must be
+    /// configured with the *same* key. If node A used its own key and node
+    /// B used its own, a mint created by A would be accepted by A and
+    /// rejected by B — the two would disagree about total supply and every
+    /// balance derived from it.
+    ///
+    /// Unset means minting is disabled. That is the safe default: a node
+    /// that silently substitutes its own key would diverge from its peers
+    /// the first time anyone minted.
+    pub mint_authority: Option<[u8; 32]>,
     /// Minimum number of peers required for readiness (default: 1).
     pub readiness_min_peers: usize,
     /// Maximum age of last finalization in rounds for readiness (default: 600).
@@ -105,6 +120,10 @@ pub struct NodeConfigFile {
     pub nonce_data_dir: Option<String>,
     /// Directory for persistent consensus state (redb). If None, consensus state is in-memory only.
     pub consensus_data_dir: Option<String>,
+    /// Hex-encoded Ed25519 public key allowed to mint (64 hex characters).
+    ///
+    /// Must be identical on every node — see [`NodeConfig::mint_authority`].
+    pub mint_authority: Option<String>,
     /// Minimum number of peers required for readiness (default: 1).
     pub readiness_min_peers: Option<usize>,
     /// Maximum age of last finalization in rounds for readiness (default: 600).
@@ -282,6 +301,22 @@ impl NodeConfig {
             .and_then(|fc| fc.consensus_data_dir.clone())
             .map(PathBuf::from);
 
+        // CLI/env wins over the config file, matching every other field.
+        // A malformed key is refused rather than silently ignored: quietly
+        // falling back to "minting disabled" would look identical to a
+        // correct no-mint deployment, and the operator would only find out
+        // when a mint they expected to work was rejected.
+        let mint_authority = args
+            .mint_authority
+            .clone()
+            .or_else(|| file_config.as_ref().and_then(|fc| fc.mint_authority.clone()))
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| parse_mint_authority(s.as_str()))
+            .transpose()
+            .unwrap_or_else(|e| {
+                panic!("Invalid mint_authority: {e}. Expected 64 hex characters (an Ed25519 public key).")
+            });
+
         let readiness_min_peers = file_config.as_ref().and_then(|fc| fc.readiness_min_peers).unwrap_or(1);
 
         let readiness_max_finalization_age = file_config
@@ -303,10 +338,35 @@ impl NodeConfig {
             nonce_data_dir,
             consensus_data_dir,
             protocol_version,
+            mint_authority,
             readiness_min_peers,
             readiness_max_finalization_age,
         }
     }
+}
+
+/// Parse a hex-encoded Ed25519 public key into a mint authority.
+///
+/// Rejects input that is not hex, not 32 bytes, or does not decompress to
+/// a point on the curve. Catching those at startup matters because the
+/// alternative is a node that boots happily and then rejects every mint
+/// at runtime — a much harder failure to trace back to a typo.
+///
+/// This is not a full weak-key check: `VerifyingKey::from_bytes`
+/// decompresses but does not reject small-order or non-canonical
+/// encodings (all-zero and all-`ff` both parse). Those are caught where
+/// it counts — `verify_strict` on the signature path refuses them — so a
+/// weak key configured here yields a mint authority that can never
+/// successfully authorize anything, rather than one that can be forged.
+fn parse_mint_authority(value: &str) -> Result<[u8; 32], String> {
+    let trimmed = value.trim().trim_start_matches("0x");
+    let bytes = hex::decode(trimmed).map_err(|e| format!("not valid hex: {e}"))?;
+    let key: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| format!("expected 32 bytes, got {} hex characters", trimmed.len()))?;
+    omnia_substrate::crypto::VerifyingKey::from_bytes(&key)
+        .map_err(|e| format!("not a valid Ed25519 public key: {e}"))?;
+    Ok(key)
 }
 
 /// CLI argument definitions using clap derive.
@@ -355,6 +415,15 @@ pub struct CliArgs {
     pub config: Option<String>,
 
     /// Protocol version to advertise on the network.
+    /// Hex-encoded Ed25519 public key authorized to mint on the financial
+    /// shard (64 hex characters). Omit to disable minting.
+    ///
+    /// Must be IDENTICAL on every node in the network — it is a genesis
+    /// parameter, not a per-node identity. Nodes configured with different
+    /// authorities will disagree about which mints are valid.
+    #[arg(long, env = "OMNIA_MINT_AUTHORITY")]
+    pub mint_authority: Option<String>,
+
     #[arg(long, env = "OMNIA_PROTOCOL_VERSION", default_value = "4.0.0")]
     pub protocol_version: String,
 
@@ -585,6 +654,7 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
@@ -607,6 +677,7 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
@@ -631,6 +702,7 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
@@ -655,6 +727,7 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
@@ -679,6 +752,7 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
@@ -701,9 +775,81 @@ mod tests {
             nonce_data_dir: None,
             consensus_data_dir: None,
             protocol_version: "4.0.0".to_string(),
+            mint_authority: None,
             readiness_min_peers: 1,
             readiness_max_finalization_age: 600,
         };
         assert_eq!(config.slashing_dir(), PathBuf::from("/custom/slashing"));
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod mint_authority_tests {
+    use super::*;
+
+    /// A real Ed25519 public key (seed [3u8; 32]) — the same one the
+    /// wallet's cross-language vectors use.
+    const VALID_KEY: &str = "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1";
+
+    #[test]
+    fn parses_a_valid_key() {
+        let parsed = parse_mint_authority(VALID_KEY).expect("valid key should parse");
+        assert_eq!(hex::encode(parsed), VALID_KEY);
+    }
+
+    #[test]
+    fn accepts_a_0x_prefix_and_surrounding_whitespace() {
+        // Operators paste keys from all sorts of places.
+        assert!(parse_mint_authority(&format!("  0x{VALID_KEY}  ")).is_ok());
+    }
+
+    #[test]
+    fn rejects_malformed_input() {
+        // Not hex at all.
+        assert!(parse_mint_authority("not-a-key").is_err());
+        // Right alphabet, wrong length — a truncated paste.
+        assert!(parse_mint_authority("ed4928c6").is_err());
+        // 64 hex chars that do not decompress to a point on the curve.
+        // Accepting this would start the node happily and then reject
+        // every mint at runtime, which is far harder to diagnose than
+        // failing at boot.
+        let mut off_curve = [0u8; 32];
+        off_curve[0] = 0x02;
+        assert!(
+            parse_mint_authority(&hex::encode(off_curve)).is_err(),
+            "an off-curve key must be refused at startup"
+        );
+    }
+
+    /// Documents a real limit rather than pretending it away: decompression
+    /// accepts some degenerate encodings. They are harmless here because
+    /// `verify_strict` on the signature path refuses them, so the result is
+    /// an authority that can never authorize anything — not a forgeable one.
+    #[test]
+    fn does_not_claim_to_be_a_weak_key_check() {
+        assert!(parse_mint_authority(&"ff".repeat(32)).is_ok());
+        assert!(parse_mint_authority(&"00".repeat(32)).is_ok());
+    }
+
+    #[test]
+    fn config_file_round_trips_the_key() {
+        let toml = format!(
+            r#"
+            node_id = 1
+            mint_authority = "{VALID_KEY}"
+        "#
+        );
+        let parsed = NodeConfigFile::from_toml(&toml).expect("parse TOML");
+        assert_eq!(parsed.mint_authority.as_deref(), Some(VALID_KEY));
+    }
+
+    #[test]
+    fn config_file_without_a_key_leaves_minting_disabled() {
+        // Absence must stay absence. A node that quietly substitutes its
+        // own key here would diverge from peers the first time anyone
+        // minted, so "unset" has to survive the round trip.
+        let parsed = NodeConfigFile::from_toml("node_id = 1").expect("parse TOML");
+        assert!(parsed.mint_authority.is_none());
     }
 }

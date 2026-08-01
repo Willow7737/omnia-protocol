@@ -179,6 +179,7 @@ fn build_test_app_state(port: u16) -> AppState {
         nonce_data_dir: None,
         consensus_data_dir: None,
         protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
+        mint_authority: None,
         readiness_min_peers: 1,
         readiness_max_finalization_age: 600,
     };

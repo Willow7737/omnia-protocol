@@ -276,7 +276,12 @@ async fn main() -> Result<()> {
     let economics = EconomicsState::new();
     tracing::info!("Economics state initialized (10% decay, 1000 UBC/month)");
 
-    let shard_router = create_shard_router(Some(config.nonce_dir().as_path()), economics, node_pubkey_bytes)?;
+    let shard_router = create_shard_router(
+        Some(config.nonce_dir().as_path()),
+        economics,
+        node_pubkey_bytes,
+        config.mint_authority,
+    )?;
     tracing::info!(shard_count = 6, "Shard router initialized with all shard types");
 
     // B1: Wrap ShardRouter in Arc<std::sync::Mutex> so it can be shared between
@@ -749,6 +754,7 @@ fn create_shard_router(
     nonce_data_dir: Option<&std::path::Path>,
     economics_state: omnia_economics::EconomicsState,
     node_pubkey: [u8; 32],
+    mint_authority: Option<[u8; 32]>,
 ) -> Result<ShardRouter> {
     let fee_schedule = FeeSchedule::standard();
     let quota = omnia_economics::QuotaSystem::default_system();
@@ -773,12 +779,52 @@ fn create_shard_router(
         }
     };
 
-    // Register all six domain shards
-    // H10 fix: use the node's public key as the Financial shard's mint
-    // authority. Previously `FinancialShard::new()` left mint_authority
-    // as None, which meant no UBC could ever be minted through the
-    // Financial shard — effectively making it read-only at runtime.
-    router.register(Box::new(FinancialShard::with_mint_authority(node_pubkey)));
+    // Register all six domain shards.
+    //
+    // The financial shard's mint authority comes from configuration, not
+    // from this node's identity.
+    //
+    // H10 originally set it to `node_pubkey` so that minting was possible
+    // at all (`FinancialShard::new()` leaves it `None`, which disables
+    // minting). That was harmless while a single node existed, but it does
+    // not survive a real mesh: `FinancialState::apply` accepts a `Mint`
+    // only when the event creator matches the configured authority, so
+    // three nodes each holding their own key would each accept only their
+    // own mints and reject their peers'. They would disagree about total
+    // supply and every balance derived from it — a state divergence that
+    // consensus cannot repair, because both sides are behaving "correctly"
+    // per their own config.
+    //
+    // The authority is therefore a network-wide genesis parameter. When it
+    // is unset we fail closed and disable minting rather than substituting
+    // this node's key, because a silent substitution produces exactly the
+    // divergence above and looks fine until someone mints.
+    let financial_shard = match mint_authority {
+        Some(authority) => {
+            if authority == node_pubkey {
+                tracing::info!(
+                    authority = %hex::encode(authority),
+                    "Financial shard mint authority is this node's own key — \
+                     ensure every peer is configured with the SAME key, not their own"
+                );
+            } else {
+                tracing::info!(
+                    authority = %hex::encode(authority),
+                    "Financial shard mint authority configured"
+                );
+            }
+            FinancialShard::with_mint_authority(authority)
+        }
+        None => {
+            tracing::warn!(
+                "No mint_authority configured (--mint-authority / OMNIA_MINT_AUTHORITY) — \
+                 minting on the financial shard is DISABLED. Transfers still work; \
+                 accounts simply start at zero until an authority is set network-wide."
+            );
+            FinancialShard::new()
+        }
+    };
+    router.register(Box::new(financial_shard));
     router.register(Box::new(ComputationalShard::new()));
     router.register(Box::new(PhysicalShard::new()));
     router.register(Box::new(BiologicalShard::new()));

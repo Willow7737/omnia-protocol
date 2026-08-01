@@ -165,7 +165,57 @@ omnia-node --node-id 1 --http-port 8080
 - `OMNIA_JWT_SECRET` — HMAC secret for JWT validation (required; API returns 401 if not set)
 - `OMNIA_AUTHORIZED_CALLERS` — Comma-separated list of authorized caller IDs
 - `OMNIA_RATE_LIMIT_RPS` — Maximum requests per second per IP
+- `OMNIA_MINT_AUTHORITY` — Financial-shard mint authority (see below)
 - Privileged operations (mint, advance_epoch) require admin JWT
+
+---
+
+## Mint authority (financial shard)
+
+The financial shard — the **transferable** ledger, not soulbound UBC —
+accepts a `Mint` only when the event creator matches a configured
+authority. Set it with `--mint-authority` or `OMNIA_MINT_AUTHORITY`, as a
+64-character hex Ed25519 public key:
+
+```sh
+export OMNIA_MINT_AUTHORITY="ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+```
+
+or in the TOML config:
+
+```toml
+mint_authority = "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+```
+
+> ⚠️ **This is a genesis parameter, not a per-node identity. Every node in
+> the network must be configured with the SAME key.**
+>
+> `FinancialState::apply` checks the mint against *its own* configured
+> authority. If node A holds its own key and node B holds its own, a mint
+> created by A is accepted by A and **rejected by B**. The two then
+> disagree about total supply and every balance derived from it — a state
+> divergence consensus cannot repair, because each node is behaving
+> correctly according to its own configuration.
+>
+> Decide the authority once, before launch, and roll it to every node.
+
+**Unset means minting is disabled**, and that is the deliberate default.
+A node that quietly substituted its own key would produce exactly the
+divergence above, and it would look healthy right up until someone minted.
+Transfers work fine with minting disabled — accounts simply start at zero
+until an authority is configured network-wide.
+
+The node logs its choice at startup, so `grep` the boot log to confirm all
+three nodes agree:
+
+```
+INFO Financial shard mint authority configured  authority=ed4928c6…
+WARN No mint_authority configured … minting on the financial shard is DISABLED
+```
+
+A malformed key fails at startup rather than being ignored — the
+alternative is a node that boots cleanly and then rejects every mint,
+which is far harder to trace back to a typo.
 
 ---
 
