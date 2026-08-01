@@ -2441,3 +2441,67 @@ async fn financial_transfer_rejects_amount_tampering() {
         .unwrap();
     assert_eq!(balance["balance"], 1_000);
 }
+
+/// The wallet's exact wire payload, accepted by the live HTTP endpoint.
+///
+/// The two implementations of the transfer authorization — Dart in the
+/// wallet, Rust in the shard — agree only if their bytes agree. The
+/// wallet's `test/financial_transfer_test.dart` asserts that the Dart
+/// signer produces exactly the hex below for this key, recipient, amount
+/// and nonce. This test feeds those same literals through the real HTTP
+/// handler, so together the two pin the whole path: what the wallet signs
+/// is what the node accepts.
+///
+/// If either side's encoding drifts, one of the two tests fails here
+/// rather than in production as an unexplained rejected payment.
+#[tokio::test]
+async fn financial_transfer_accepts_the_wallets_exact_payload() {
+    // Seed [3u8; 32] — the wallet derives this same public key from it.
+    const WALLET_PUBKEY: &str = "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1";
+    // Recipient [5u8; 32].
+    const RECIPIENT: &str = "0505050505050505050505050505050505050505050505050505050505050505";
+    // Produced by the Dart wallet for (WALLET_PUBKEY -> RECIPIENT, 250, 7).
+    const WALLET_SIGNATURE: &str = concat!(
+        "52fa8d6cb50440b776dbf6d65a6ed1fb589ae07505804248e437f814290812b8",
+        "6b8f9203c047c004e291dd27a5669a863ed4e51e6399bf03a5e8c79efd76cd05",
+    );
+
+    let wallet_pk: [u8; 32] = hex::decode(WALLET_PUBKEY)
+        .expect("valid hex")
+        .try_into()
+        .expect("32 bytes");
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(wallet_pk, omnia_shards::FinancialAccountBalance::with_balance(1_000));
+        fin.total_supply = 1_000;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&did_for(&wallet_pk));
+
+    let resp = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&json!({
+            "from": WALLET_PUBKEY,
+            "to": RECIPIENT,
+            "amount": 250,
+            "nonce": 7,
+            "signature": WALLET_SIGNATURE,
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        resp.status(),
+        200,
+        "the node must accept the exact payload the wallet produces"
+    );
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["sender_balance"], 750);
+    assert_eq!(body["recipient_balance"], 250);
+    assert_eq!(body["authorization"], "wallet_signed");
+}
