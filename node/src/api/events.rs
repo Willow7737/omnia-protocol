@@ -246,6 +246,13 @@ pub(crate) struct SubmittedEvent {
     /// `Ok` if the substrate accepted the event; `Err(reason)` otherwise.
     /// The event ID is returned regardless, for diagnostics/linking.
     pub submit_result: std::result::Result<(), String>,
+    /// Vector clock the event was built with.
+    ///
+    /// The event itself is moved into the substrate on submission, but
+    /// shard state needs its causal context to record which clock a
+    /// mutation happened under. Cloning the clock is cheaper than cloning
+    /// the event, whose payload can be large.
+    pub vector_clock: omnia_substrate::VectorClock,
 }
 
 /// Build a node-signed event carrying `payload_bytes`, extending this
@@ -269,7 +276,7 @@ pub(crate) async fn build_sign_submit_event(
     })?;
     let creator = blake3_hash_domain(b"omnia-creator", &keypair.verifying_key().to_bytes());
 
-    let (submit_result, event_id_hex) = {
+    let (submit_result, event_id_hex, vector_clock) = {
         let mut substrate = state.substrate.write().await;
         let mut event = {
             let graph = substrate.graph().await;
@@ -311,13 +318,15 @@ pub(crate) async fn build_sign_submit_event(
             )
         })?;
         let event_id_hex = hex::encode(event.id);
+        let vector_clock = event.vector_clock.clone();
         let result = substrate.submit_event(event).await.map_err(|e| e.to_string());
-        (result, event_id_hex)
+        (result, event_id_hex, vector_clock)
     };
 
     Ok(SubmittedEvent {
         event_id_hex,
         submit_result,
+        vector_clock,
     })
 }
 

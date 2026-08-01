@@ -253,6 +253,52 @@ where
     }
 }
 
+/// Like [`setup_server_with_economics`] but exposes the **financial**
+/// shard state, so a test can pre-fund transferable balances.
+async fn setup_server_with_financial<F>(pre_fund: F) -> TestServer
+where
+    F: FnOnce(&mut omnia_shards::FinancialState),
+{
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+    std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().unwrap().port();
+
+    let app_state = build_test_app_state(port);
+    {
+        let mut router = app_state.shard_router.lock().unwrap_or_else(|e| e.into_inner());
+        let fin = router
+            .financial_mut()
+            .expect("financial shard registered in test fixture");
+        pre_fund(fin);
+    }
+
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    let env_guard = EnvGuard {
+        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+    };
+
+    TestServer {
+        base_url: format!("http://127.0.0.1:{port}"),
+        _handle: handle,
+        _env_guard: env_guard,
+        _lock: lock,
+    }
+}
+
 /// Start a test HTTP server on a random port.
 ///
 /// Reads `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, and
@@ -2046,4 +2092,352 @@ async fn test_wallet_login_bad_signature_rejected() {
         .await
         .unwrap();
     assert_eq!(resp.status(), 401, "signature over wrong message must be rejected");
+}
+
+// ---------------------------------------------------------------------------
+// Financial shard — transferable-asset transfers
+// ---------------------------------------------------------------------------
+//
+// These are the counterpart to the UBC tests above. UBC is soulbound: a
+// "transfer" spends the sender's quota and credits nobody. The financial
+// endpoints move value between two accounts and conserve total supply,
+// so the assertions here always check BOTH sides of the transfer.
+
+/// Build the wallet-side authorization for a financial transfer.
+///
+/// Mirrors what a wallet does on-device: sign the canonical message with
+/// the account's own key. Kept as an independent implementation of the
+/// encoding rather than calling the shard helper, so a change to the wire
+/// format has to be made deliberately in both places instead of silently
+/// agreeing with itself.
+fn sign_financial_transfer(
+    signing_key: &omnia_substrate::crypto::SigningKey,
+    to: &[u8; 32],
+    amount: u64,
+    nonce: u64,
+) -> String {
+    use omnia_substrate::crypto::Signer;
+    let from: [u8; 32] = signing_key.verifying_key().to_bytes();
+    let mut msg = b"omnia-financial-transfer:v1".to_vec();
+    msg.extend_from_slice(&from);
+    msg.extend_from_slice(to);
+    msg.extend_from_slice(&amount.to_le_bytes());
+    msg.extend_from_slice(&nonce.to_le_bytes());
+    hex::encode(signing_key.sign(&msg).to_bytes())
+}
+
+/// Derive the DID the node will expect for a given account key.
+fn did_for(pubkey: &[u8; 32]) -> String {
+    omnia_node::api::wallet_auth::did_from_public_key(pubkey)
+}
+
+/// The full loop: fund an account, sign a transfer on the "wallet" side,
+/// submit it, and confirm the recipient was actually credited.
+///
+/// This is the behaviour UBC structurally cannot provide, and the reason
+/// the financial endpoints exist.
+#[tokio::test]
+async fn financial_transfer_credits_the_recipient() {
+    let alice = omnia_substrate::crypto::SigningKey::from_bytes(&[3u8; 32]);
+    let alice_pk: [u8; 32] = alice.verifying_key().to_bytes();
+    let bob = omnia_substrate::crypto::SigningKey::from_bytes(&[5u8; 32]);
+    let bob_pk: [u8; 32] = bob.verifying_key().to_bytes();
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(alice_pk, omnia_shards::FinancialAccountBalance::with_balance(1_000));
+        fin.total_supply = 1_000;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&did_for(&alice_pk));
+
+    // The wallet asks which nonce to use.
+    let balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(alice_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(balance["balance"], 1_000);
+    assert_eq!(balance["next_nonce"], 1, "an account that never sent starts at nonce 1");
+
+    let resp = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&json!({
+            "from": hex::encode(alice_pk),
+            "to": hex::encode(bob_pk),
+            "amount": 250,
+            "nonce": 1,
+            "signature": sign_financial_transfer(&alice, &bob_pk, 250, 1),
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "a correctly signed transfer should be applied");
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["sender_balance"], 750);
+    assert_eq!(
+        body["recipient_balance"], 250,
+        "the recipient must be credited — this is the whole point"
+    );
+    assert!(
+        body["event_id"].as_str().is_some_and(|s| !s.is_empty()),
+        "the transfer must be recorded on the causal graph"
+    );
+
+    // Confirm through a fresh read, not just the write's response body.
+    let bob_balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(bob_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(bob_balance["balance"], 250);
+    assert_eq!(
+        bob_balance["total_supply"], 1_000,
+        "a transfer moves value; it must not mint or burn"
+    );
+}
+
+/// A caller cannot spend an account they do not hold the key for, even
+/// with a perfectly valid JWT for their own identity.
+#[tokio::test]
+async fn financial_transfer_rejects_spending_another_account() {
+    let victim = omnia_substrate::crypto::SigningKey::from_bytes(&[7u8; 32]);
+    let victim_pk: [u8; 32] = victim.verifying_key().to_bytes();
+    let attacker = omnia_substrate::crypto::SigningKey::from_bytes(&[11u8; 32]);
+    let attacker_pk: [u8; 32] = attacker.verifying_key().to_bytes();
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(victim_pk, omnia_shards::FinancialAccountBalance::with_balance(1_000));
+        fin.total_supply = 1_000;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    // Attacker authenticates as themselves — a legitimate session.
+    let token = make_valid_token(&did_for(&attacker_pk));
+
+    let resp = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&json!({
+            "from": hex::encode(victim_pk),
+            "to": hex::encode(attacker_pk),
+            "amount": 1_000,
+            // Signed by the attacker's key, claiming the victim as sender.
+            "signature": sign_financial_transfer(&attacker, &attacker_pk, 1_000, 1),
+            "nonce": 1,
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        resp.status(),
+        403,
+        "a caller must not be able to move an account they do not control"
+    );
+
+    let balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(victim_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(balance["balance"], 1_000, "the victim must be untouched");
+}
+
+/// Replaying a previously accepted transfer must not move value twice.
+#[tokio::test]
+async fn financial_transfer_rejects_replay() {
+    let alice = omnia_substrate::crypto::SigningKey::from_bytes(&[13u8; 32]);
+    let alice_pk: [u8; 32] = alice.verifying_key().to_bytes();
+    let bob = omnia_substrate::crypto::SigningKey::from_bytes(&[17u8; 32]);
+    let bob_pk: [u8; 32] = bob.verifying_key().to_bytes();
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(alice_pk, omnia_shards::FinancialAccountBalance::with_balance(500));
+        fin.total_supply = 500;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&did_for(&alice_pk));
+    let body = json!({
+        "from": hex::encode(alice_pk),
+        "to": hex::encode(bob_pk),
+        "amount": 100,
+        "nonce": 1,
+        "signature": sign_financial_transfer(&alice, &bob_pk, 100, 1),
+    });
+
+    let first = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 200);
+
+    // Byte-identical resubmission.
+    let replay = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(replay.status(), 400, "a replayed transfer must be rejected");
+
+    let balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(bob_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(balance["balance"], 100, "the recipient must be credited exactly once");
+}
+
+/// A transfer larger than the balance is refused and changes nothing.
+#[tokio::test]
+async fn financial_transfer_rejects_overspend() {
+    let alice = omnia_substrate::crypto::SigningKey::from_bytes(&[19u8; 32]);
+    let alice_pk: [u8; 32] = alice.verifying_key().to_bytes();
+    let bob = omnia_substrate::crypto::SigningKey::from_bytes(&[23u8; 32]);
+    let bob_pk: [u8; 32] = bob.verifying_key().to_bytes();
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(alice_pk, omnia_shards::FinancialAccountBalance::with_balance(50));
+        fin.total_supply = 50;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&did_for(&alice_pk));
+
+    let resp = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&json!({
+            "from": hex::encode(alice_pk),
+            "to": hex::encode(bob_pk),
+            "amount": 5_000,
+            "nonce": 1,
+            "signature": sign_financial_transfer(&alice, &bob_pk, 5_000, 1),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400, "an unaffordable transfer must be rejected");
+
+    let balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(alice_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(balance["balance"], 50, "a rejected transfer must not debit the sender");
+    assert_eq!(
+        balance["next_nonce"], 1,
+        "a rejected transfer must not consume the nonce"
+    );
+}
+
+/// Tampering with the amount after signing invalidates the authorization.
+#[tokio::test]
+async fn financial_transfer_rejects_amount_tampering() {
+    let alice = omnia_substrate::crypto::SigningKey::from_bytes(&[29u8; 32]);
+    let alice_pk: [u8; 32] = alice.verifying_key().to_bytes();
+    let bob = omnia_substrate::crypto::SigningKey::from_bytes(&[31u8; 32]);
+    let bob_pk: [u8; 32] = bob.verifying_key().to_bytes();
+
+    let server = setup_server_with_financial(|fin| {
+        fin.balances
+            .insert(alice_pk, omnia_shards::FinancialAccountBalance::with_balance(1_000));
+        fin.total_supply = 1_000;
+    })
+    .await;
+
+    let client = reqwest::Client::new();
+    let token = make_valid_token(&did_for(&alice_pk));
+
+    let resp = client
+        .post(format!("{}/api/v1/financial/transfer", server.base_url))
+        .bearer_auth(&token)
+        .json(&json!({
+            "from": hex::encode(alice_pk),
+            "to": hex::encode(bob_pk),
+            // Signed for 10, submitted as 900.
+            "amount": 900,
+            "nonce": 1,
+            "signature": sign_financial_transfer(&alice, &bob_pk, 10, 1),
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        resp.status(),
+        401,
+        "an amount not covered by the signature must be rejected"
+    );
+
+    let balance: Value = client
+        .get(format!(
+            "{}/api/v1/financial/balance/{}",
+            server.base_url,
+            hex::encode(alice_pk)
+        ))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(balance["balance"], 1_000);
 }

@@ -285,7 +285,15 @@ impl FinancialState {
     /// before any mutation, so a rejected transfer leaves state
     /// untouched — including the nonce, which must not advance on a
     /// failed transfer or a sender could be griefed into burning nonces.
-    fn apply_signed_transfer(
+    ///
+    /// Public so a relaying node can apply a transfer using the causal
+    /// context of the event it just built, without having to hold on to
+    /// the whole `Event` after submitting it. The authorization checks are
+    /// identical either way — this is the same code path
+    /// [`apply`](Self::apply) takes for
+    /// [`FinancialOp::SignedTransfer`], so a caller gains nothing by
+    /// choosing one entry point over the other.
+    pub fn apply_signed_transfer(
         &mut self,
         from: &AccountId,
         to: &AccountId,
