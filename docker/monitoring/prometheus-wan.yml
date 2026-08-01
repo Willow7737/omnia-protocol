@@ -24,10 +24,12 @@ scrape_configs:
   - job_name: 'omnia-wan'
     metrics_path: /metrics
     static_configs:
-      # Host A — reached via the Docker host gateway (see extra_hosts in
-      # docker-compose.monitoring.yml). Not `localhost`: that would resolve
-      # inside the Prometheus container.
-      - targets: ['host.docker.internal:9090']
+      # Host A — its own public IP. `localhost` would resolve inside the
+      # Prometheus container, and `host.docker.internal` (via extra_hosts)
+      # proved unreliable across Docker/Ubuntu versions: it resolved on some
+      # hosts and silently produced no target on others. The explicit IP is
+      # unambiguous. The node listens on 0.0.0.0:9090 so this always works.
+      - targets: ['78.47.43.136:9090']
         labels:
           node: 'A'
           region: 'nbg1-eu-central'
@@ -57,8 +59,19 @@ scrape_configs:
 #
 # The token is read from a file so it never lands in git. Create it on host A:
 #
-#   printf '%s' '<your-token>' > docker/monitoring/grafana-cloud-token
-#   chmod 600 docker/monitoring/grafana-cloud-token
+#   read -s -p "token: " T && printf '%s' "$T" > docker/monitoring/grafana-cloud-token && unset T
+#   chown 65534:65534 docker/monitoring/grafana-cloud-token
+#   chmod 644 docker/monitoring/grafana-cloud-token
+#
+# The chown is REQUIRED and easy to miss. The Prometheus image runs as
+# `nobody` (uid 65534), so a root-owned 0600 file is unreadable inside the
+# container. Prometheus does not fail loudly on this — it logs
+#   "unable to read basic auth password file ...: permission denied"
+# at WARN level and retries forever. Scraping keeps working, /metrics looks
+# healthy, and NOTHING reaches Grafana Cloud. Verify with
+# prometheus_remote_storage_bytes_total > 0 (see the runbook).
+#
+# `read -s` keeps the token out of shell history and scrollback.
 #
 # (docker/monitoring/grafana-cloud-token is gitignored.)
 #
