@@ -12,7 +12,7 @@
 
 use crate::merkle::MerkleProof;
 use crate::settlement::ethereum::EthereumConfig;
-use crate::settlement::{FinalityProof, SettlementAdapter, SettlementError, TxHash};
+use crate::settlement::{EvmProof, FinalityProof, SettlementAdapter, SettlementError, TxHash};
 use tokio::sync::OnceCell;
 
 // ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ use tokio::sync::OnceCell;
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ethereum-live")]
-use alloy::primitives::{Address, B256};
+use alloy::primitives::{Address, Bytes, B256, U256};
 #[cfg(feature = "ethereum-live")]
 use alloy::providers::{Provider, ProviderBuilder};
 #[cfg(feature = "ethereum-live")]
@@ -37,9 +37,14 @@ alloy::sol! {
     r#"[
         {
             "type": "function",
-            "name": "submitRoot",
+            "name": "submitBatch",
             "inputs": [
-                {"name": "newStateRoot", "type": "bytes32"}
+                {"name": "_newStateRoot", "type": "bytes32"},
+                {"name": "_proofA", "type": "uint256[2]"},
+                {"name": "_proofB", "type": "uint256[2][2]"},
+                {"name": "_proofC", "type": "uint256[2]"},
+                {"name": "_publicInputs", "type": "uint256[]"},
+                {"name": "_batchData", "type": "bytes"}
             ],
             "outputs": [],
             "stateMutability": "nonpayable"
@@ -64,6 +69,16 @@ alloy::sol! {
             "inputs": [
                 {"name": "oldRoot", "type": "bytes32", "indexed": true},
                 {"name": "newRoot", "type": "bytes32", "indexed": true},
+                {"name": "batchIndex", "type": "uint256", "indexed": false}
+            ],
+            "anonymous": false
+        },
+        {
+            "type": "event",
+            "name": "BatchDataBound",
+            "inputs": [
+                {"name": "dataHash", "type": "bytes32", "indexed": true},
+                {"name": "eventCommitment", "type": "bytes32", "indexed": true},
                 {"name": "batchIndex", "type": "uint256", "indexed": false}
             ],
             "anonymous": false
@@ -149,23 +164,58 @@ impl EthereumSettlementAdapter {
 #[async_trait::async_trait]
 impl SettlementAdapter for EthereumSettlementAdapter {
     async fn submit_root(&self, root: [u8; 32]) -> Result<TxHash, SettlementError> {
+        // AUDIT-2026-07 C3 (#341): the previous implementation called a
+        // `submitRoot(bytes32)` function that DOES NOT EXIST on the
+        // OmniaRollup contract (its ABI was hand-written and wrong), so
+        // every live submission failed. The contract's only state-advancing
+        // entry point is `submitBatch`, which requires a Groth16 proof —
+        // use `submit_batch_with_proof`. This method now fails closed
+        // instead of encoding a call to a nonexistent function.
+        let _ = root;
+        Err(SettlementError::ContractError(
+            "OmniaRollup has no submitRoot function — submit proofs via submit_batch_with_proof              (AUDIT-2026-07 C3, #341)"
+                .to_string(),
+        ))
+    }
+
+    async fn submit_batch_with_proof(
+        &self,
+        new_root: [u8; 32],
+        proof: &EvmProof,
+        public_inputs: &[[u8; 32]],
+        batch_data: &[u8],
+    ) -> Result<TxHash, SettlementError> {
         let provider = self.build_provider().await?;
         let contract = OmniaRollup::new(self.contract_address, provider);
 
-        let new_state_root = B256::from(root);
+        let word = |w: &[u8; 32]| U256::from_be_bytes(*w);
+        let proof_a = [word(&proof.a[0]), word(&proof.a[1])];
+        let proof_b = [
+            [word(&proof.b[0][0]), word(&proof.b[0][1])],
+            [word(&proof.b[1][0]), word(&proof.b[1][1])],
+        ];
+        let proof_c = [word(&proof.c[0]), word(&proof.c[1])];
+        let inputs: Vec<U256> = public_inputs.iter().map(word).collect();
 
-        let builder = contract.submitRoot(new_state_root);
-        let builder = builder.gas(self.config.gas_limit);
+        let builder = contract
+            .submitBatch(
+                B256::from(new_root),
+                proof_a,
+                proof_b,
+                proof_c,
+                inputs,
+                Bytes::copy_from_slice(batch_data),
+            )
+            .gas(self.config.gas_limit);
 
         let pending_tx = builder
             .send()
             .await
-            .map_err(|e| SettlementError::TxFailed(format!("submitRoot send failed: {e}")))?;
+            .map_err(|e| SettlementError::TxFailed(format!("submitBatch send failed: {e}")))?;
 
         let tx_hash = *pending_tx.tx_hash();
         let hash_bytes: [u8; 32] = tx_hash.into();
 
-        // Wait for confirmations
         let receipt = pending_tx
             .with_required_confirmations(self.config.confirmation_blocks)
             .get_receipt()
@@ -176,7 +226,7 @@ impl SettlementAdapter for EthereumSettlementAdapter {
             Ok(TxHash(hash_bytes))
         } else {
             Err(SettlementError::TxFailed(format!(
-                "submitRoot transaction reverted: 0x{}",
+                "submitBatch transaction reverted: 0x{}",
                 hex::encode(hash_bytes)
             )))
         }

@@ -171,3 +171,10 @@ Stage Summary:
 - **Fix:** `max_transmit_size` → `MAX_SYNC_MESSAGE_BYTES` (2 MiB, matching the receive bound) via shared `build_gossipsub_config()`; sync publish failures escalated debug→warn + loud oversize guard; regression test pins transmit ≥ receive bound.
 - **Result (same day, verified binary):** 10k burst → **100% propagation + `finalized_total = 10,000` on every node.** Zero loss; the ~4,600-event tail self-healed entirely via anti-entropy. Honest caveat: tail repair took ~580 s (~one byte-budgeted batch per 10 s digest interval); tuning levers documented in benchmark-gates.md (chain `has_more` requests, shorter repair-active sync interval, bigger byte budget) — none needed for correctness.
 - **Lesson recorded:** a silently-dropped oversized message defeated four correct fixes in a row. Publish failures on control-plane topics are now WARN-level; size caps are asserted against each other in tests.
+
+## 2026-07-20 — Geo-distributed WAN campaign: the asterisk is gone
+
+- Executed `docs/operations/geo-testnet.md` as written: 3 Hetzner CPX21 Lane 0 validators — Nuremberg (bootstrap/ingress/bench) + Ashburn + Singapore. Measured RTT matrix: A↔B 98.8 ms, A↔C 160.3 ms, B↔C 217.9 ms.
+- **All three ladder rungs converged at 100% propagation with full quorum finality, zero loss**: 1k in <8 s everywhere; 5k (A 12.4 s / B 91.9 s / C 273.1 s); 10k (A 29.4 s / B 289.1 s / C 37.6 s). `finalized_total` identical on all nodes after every rung (cumulative counters — every submitted event finalized).
+- The straggler alternates with path geometry (C on 5k, B on 10k) — whichever node ends up chasing the tail over the 218 ms B↔C path pays repair-chain round-trips at real RTT. Matches the contention model from the 07-19 arc; the documented next lever is directed (unicast) repair serving. Peak RSS 145 MB — CPX21 has multiples of headroom.
+- Every status-bearing doc updated same day: benchmark-gates (new WAN section + superseding verified-capacity statement), status.md (REQ-P4.5 → Completed), README milestones, and the wiki (Home/Benchmarks/FAQ no longer say "geo pending").

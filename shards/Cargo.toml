@@ -77,3 +77,8 @@ optional = true
 tokio-test = "0.4"
 tempfile = "3"
 proptest = "1"
+# For the C9 (#347) VK-registry tests: building a real Groth16 circuit,
+# trusted setup, and proofs. Only exercised when `real_verification` is
+# enabled (the test files are feature-gated).
+ark-relations = "0.4"
+ark-std = "0.4"

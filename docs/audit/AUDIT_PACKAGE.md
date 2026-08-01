@@ -82,7 +82,7 @@ Auditors should review these documents before starting code review:
 
 The following issues are already known and documented. Auditors should focus on discovering **unknown** issues:
 
-1. **VRF is not ECVRF per RFC 9381** — The V1 construction uses Ed25519 signature + BLAKE3 derivation, not the standard ECVRF algebraic construction. Phase 5 adds ECVRF V2 alongside V1 for migration. See ADR-012.
+1. **VRF is not ECVRF per RFC 9381** — Both the V1 and Phase 5 "V2 ECVRF" constructions use Ed25519 signature + BLAKE3 derivation with **no elliptic-curve operations**, so neither is a real VRF; leader selection was additionally a *public* function, making leaders predictable in advance (AUDIT-2026-07 C1, #339). **Resolved** by a real Edwards25519 EC-VRF (`omnia-crypto::ecvrf`) + unpredictable beacon under ADR-026 (supersedes ADR-012).
 
 2. **Poseidon uses non-standard parameters** — MDS matrix uses Cauchy construction (not Filecoin/Neptune reference), round constants use BLAKE3 (not Grain LFSR). Phase 5 adds the `PoseidonVersion` enum for dual-hash transition. See ADR-009, ADR-014.
 

@@ -130,7 +130,16 @@ async fn main() -> Result<()> {
     // 2. Initialize tracing with the configured log level
     init_tracing(&config.log_level);
 
-    // 2b. Initialize the JWT secret cache from the environment.
+    // 2b. Reject known-weak / placeholder JWT secrets before anything else
+    // touches auth (AUDIT-2026-07 C11, #349). An operator who shipped the
+    // old compose default would otherwise run with a forgeable, publicly
+    // known secret. An unset secret is allowed here (the auth middleware
+    // rejects authenticated requests in that case — it is never a bypass).
+    if let Err(e) = omnia_node::api::auth::validate_jwt_secret_strength() {
+        anyhow::bail!("Refusing to start: {e}");
+    }
+
+    // 2c. Initialize the JWT secret cache from the environment.
     // This must happen before any request hits the auth middleware.
     omnia_node::api::auth::init_jwt_secret();
 

@@ -67,6 +67,17 @@ pub enum ThresholdError {
     /// An individual partial signature failed verification.
     #[error("invalid partial signature from participant {0:?}")]
     InvalidSignature(NodeId),
+    /// True-threshold combination was requested but no group public key is
+    /// set (the manager was not initialized via `deal_shares`).
+    #[error("no group public key: manager was not initialized for true threshold signing")]
+    NoGroupKey,
+    /// Lagrange combination of partial signatures failed (bad indices or
+    /// malformed signature points).
+    #[error("threshold Lagrange combination failed: {0}")]
+    LagrangeFailed(String),
+    /// Trusted-dealer key generation failed.
+    #[error("threshold key generation failed: {0}")]
+    KeyGenFailed(String),
 }
 
 /// Configuration for threshold signature operations.
@@ -246,6 +257,23 @@ pub struct ThresholdSignature {
     pub message: Vec<u8>,
 }
 
+/// A **true** threshold signature (AUDIT-2026-07 C2, #340).
+///
+/// Unlike [`ThresholdSignature`] (multi-sig aggregation), this is a single
+/// BLS signature produced by Lagrange-combining `t` partial signatures over
+/// Shamir shares of a group secret. It verifies under the **fixed group
+/// public key** and, crucially, carries **no signer set** — an external
+/// verifier cannot tell which `t`-of-`n` participants signed, and needs
+/// nothing but the group public key and the message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupThresholdSignature {
+    /// The combined BLS signature, verifying under the group public key.
+    pub signature: BlsSignature,
+    /// The message that was signed.
+    #[serde(with = "serde_bytes")]
+    pub message: Vec<u8>,
+}
+
 /// Manager for threshold signature operations.
 ///
 /// Coordinates the collection of partial signatures, verifies quorum, and
@@ -255,15 +283,34 @@ pub struct ThresholdKeyManager {
     pub config: ThresholdConfig,
     /// Registered key shares (participant → share).
     key_shares: HashMap<NodeId, KeyShare>,
+    /// The fixed group public key, set when the manager is created via
+    /// [`deal_shares`](Self::deal_shares). Present only for the true
+    /// threshold path ([`combine_threshold`](Self::combine_threshold) /
+    /// [`verify_threshold`](Self::verify_threshold)); the legacy multi-sig
+    /// path does not use it.
+    group_public_key: Option<BlsPublicKey>,
 }
 
 impl ThresholdKeyManager {
     /// Create a new threshold key manager with the given configuration.
+    ///
+    /// Shares registered on a manager created this way are independent BLS
+    /// keypairs, suitable only for the legacy multi-sig path
+    /// ([`combine_signatures`](Self::combine_signatures)). For true t-of-n
+    /// threshold signing, construct the manager with
+    /// [`deal_shares`](Self::deal_shares).
     pub fn new(config: ThresholdConfig) -> Self {
         Self {
             config,
             key_shares: HashMap::new(),
+            group_public_key: None,
         }
+    }
+
+    /// The fixed group public key, if this manager was initialized for true
+    /// threshold signing via [`deal_shares`](Self::deal_shares).
+    pub fn group_public_key(&self) -> Option<&BlsPublicKey> {
+        self.group_public_key.as_ref()
     }
 
     /// Register a key share for a participant.
@@ -307,17 +354,23 @@ impl ThresholdKeyManager {
     /// A [`ThresholdSignature`] on success, or an error string if quorum
     /// is not met or aggregation fails.
     ///
-    /// # H-8 fix (audit v0.1.68): Honest documentation
+    /// # This is the legacy multi-sig path — prefer `combine_threshold`
     ///
     /// This method implements **multi-signature aggregation**, NOT true
     /// threshold signing. The combined signature verifies against the
     /// aggregate of the *signing participants'* public keys, not the
-    /// fixed DKG group key. The signer set is revealed via
-    /// `ThresholdSignature.signers`. True threshold signing would use
-    /// Lagrange interpolation to produce a signature that verifies under
-    /// the fixed group public key without revealing which t signers
-    /// participated. Implementing proper Lagrange-weighted combination
-    /// is deferred — see ADR-013.
+    /// fixed group key, and the signer set is revealed via
+    /// `ThresholdSignature.signers`.
+    ///
+    /// AUDIT-2026-07 C2 (#340) added the real thing:
+    /// [`combine_threshold`](Self::combine_threshold) Lagrange-combines
+    /// partial signatures over Shamir shares (from
+    /// [`deal_shares`](Self::deal_shares)) into a
+    /// [`GroupThresholdSignature`] that verifies under the **fixed group
+    /// public key** and reveals no signer set. Use that for anything an
+    /// external party must verify or where signer privacy matters; this
+    /// method remains only for callers that specifically want an
+    /// attributed multi-sig.
     pub fn combine_signatures(
         &self,
         partials: &[PartialSignature],
@@ -419,6 +472,178 @@ impl ThresholdKeyManager {
             ThresholdError::ParticipantNotRegistered(prefix)
         })?;
         Ok(share.partial_sign(message))
+    }
+
+    // ─── True t-of-n threshold BLS (AUDIT-2026-07 C2, #340) ────────────────
+
+    /// Trusted-dealer key generation for **true** threshold signing.
+    ///
+    /// Samples a random degree-`(t-1)` polynomial `f` over the BLS12-381
+    /// scalar field, sets the group secret to `f(0)` and the group public
+    /// key to `f(0)·G2`, and issues each participant `i` (1-based) the
+    /// Shamir share `f(i)`. Any `t` of the resulting shares Lagrange-combine
+    /// to a signature that verifies under the fixed group public key, and no
+    /// fewer than `t` reveal anything about the secret.
+    ///
+    /// Returns a manager pre-loaded with the shares and the group key, plus
+    /// the shares themselves for distribution. The dealer's polynomial and
+    /// group secret are dropped when this function returns.
+    ///
+    /// Note: this is a *trusted-dealer* setup. A dealerless DKG (Feldman
+    /// VSS, already partially present in this module) removes the trusted
+    /// party; wiring the two together is tracked follow-up.
+    pub fn deal_shares(
+        config: ThresholdConfig,
+        participants: &[NodeId],
+        rng: &mut (impl CryptoRng + RngCore),
+    ) -> Result<(Self, Vec<KeyShare>), ThresholdError> {
+        if participants.len() != config.total_participants {
+            return Err(ThresholdError::KeyGenFailed(format!(
+                "expected {} participants, got {}",
+                config.total_participants,
+                participants.len()
+            )));
+        }
+
+        // Random polynomial coefficients c_0..c_{t-1}; c_0 is the secret.
+        let coefficients: Vec<Scalar> = (0..config.threshold).map(|_| Scalar::random(rng)).collect();
+        let group_secret = coefficients[0];
+
+        // Group public key = group_secret · G2, obtained via a keypair built
+        // from the secret scalar.
+        let group_keypair = BlsKeypair::from_scalar(
+            &group_secret.to_bytes(),
+            &bls12_381_scalar::scalar_to_g1_public_key(&group_secret),
+        )
+        .map_err(|e| ThresholdError::KeyGenFailed(format!("group key: {e}")))?;
+        let group_public_key = group_keypair.public_key();
+
+        // Issue share f(i) to participant i (1-based index).
+        let mut shares = Vec::with_capacity(participants.len());
+        for (pos, participant) in participants.iter().enumerate() {
+            let index = pos + 1;
+            let x = Scalar::from_u64(index as u64);
+            let share_scalar = bls12_381_scalar::poly_eval(&coefficients, &x);
+            let keypair = BlsKeypair::from_scalar(
+                &share_scalar.to_bytes(),
+                &bls12_381_scalar::scalar_to_g1_public_key(&share_scalar),
+            )
+            .map_err(|e| ThresholdError::KeyGenFailed(format!("share {index}: {e}")))?;
+            shares.push(KeyShare::new(*participant, index, keypair));
+        }
+
+        let mut manager = Self {
+            config,
+            key_shares: HashMap::new(),
+            group_public_key: Some(group_public_key),
+        };
+        for share in &shares {
+            manager.register_share(share.clone());
+        }
+
+        Ok((manager, shares))
+    }
+
+    /// Combine `t` partial signatures into a **true** threshold signature
+    /// via Lagrange interpolation (AUDIT-2026-07 C2, #340).
+    ///
+    /// The result verifies under the fixed group public key and reveals no
+    /// signer set. Requires this manager to have been created via
+    /// [`deal_shares`](Self::deal_shares). Every partial is verified against
+    /// its participant's share public key before combination, so a single
+    /// bad partial is rejected (and attributed) rather than silently
+    /// corrupting the result.
+    pub fn combine_threshold(
+        &self,
+        partials: &[PartialSignature],
+        message: &[u8],
+    ) -> Result<GroupThresholdSignature, ThresholdError> {
+        if self.group_public_key.is_none() {
+            return Err(ThresholdError::NoGroupKey);
+        }
+
+        // Deduplicate by participant (a repeated index would break Lagrange).
+        let mut seen = std::collections::HashSet::new();
+        let unique: Vec<&PartialSignature> = partials.iter().filter(|p| seen.insert(p.participant)).collect();
+
+        if !self.has_quorum(unique.len()) {
+            return Err(ThresholdError::InsufficientPartials {
+                got: unique.len(),
+                need: self.config.threshold,
+            });
+        }
+
+        // Use exactly `threshold` partials — extra ones are unnecessary and
+        // only enlarge the index set the Lagrange weights are computed over.
+        let chosen = &unique[..self.config.threshold];
+
+        // Verify each partial against its share's public key.
+        for p in chosen {
+            let pubkey = self
+                .key_shares
+                .get(&p.participant)
+                .map(|s| s.public_key())
+                .ok_or(ThresholdError::InvalidParticipant(p.participant))?;
+            pubkey
+                .verify(message, &p.signature)
+                .map_err(|_| ThresholdError::InvalidSignature(p.participant))?;
+        }
+
+        // Lagrange-combine: σ = Σ λ_i(S)·σ_i over the chosen index set S.
+        let indices: Vec<usize> = chosen.iter().map(|p| p.index).collect();
+        let mut terms = Vec::with_capacity(chosen.len());
+        for p in chosen {
+            let coeff = bls12_381_scalar::lagrange_coefficient(p.index, &indices)
+                .ok_or_else(|| ThresholdError::LagrangeFailed(format!("bad index set for participant {}", p.index)))?;
+            let sig_bytes: [u8; 48] = p
+                .signature
+                .as_bytes()
+                .try_into()
+                .map_err(|_| ThresholdError::LagrangeFailed("partial signature is not 48 bytes".into()))?;
+            terms.push((coeff, sig_bytes));
+        }
+
+        let combined = bls12_381_scalar::lagrange_combine_g1(&terms)
+            .ok_or_else(|| ThresholdError::LagrangeFailed("G1 combination failed".into()))?;
+        let signature = BlsSignature::from_bytes(&combined)
+            .map_err(|e| ThresholdError::LagrangeFailed(format!("combined signature invalid: {e}")))?;
+
+        tracing::info!(
+            threshold = self.config.threshold,
+            "Combined true threshold signature (no signer set revealed)"
+        );
+
+        Ok(GroupThresholdSignature {
+            signature,
+            message: message.to_vec(),
+        })
+    }
+
+    /// Verify a [`GroupThresholdSignature`] under the fixed group public key
+    /// (AUDIT-2026-07 C2, #340).
+    ///
+    /// This needs only the group public key and the message — no signer set,
+    /// no threshold parameters — so any external party holding the group key
+    /// can verify it standalone.
+    pub fn verify_threshold(&self, sig: &GroupThresholdSignature) -> Result<(), ThresholdError> {
+        let group_pk = self.group_public_key.as_ref().ok_or(ThresholdError::NoGroupKey)?;
+        group_pk
+            .verify(&sig.message, &sig.signature)
+            .map_err(|e| ThresholdError::VerificationFailed(e.to_string()))
+    }
+
+    /// Verify a [`GroupThresholdSignature`] against an explicit group public
+    /// key, independent of any manager state (AUDIT-2026-07 C2, #340).
+    ///
+    /// This is the external-verifier entry point: a party that knows only
+    /// the group public key can confirm a threshold signature.
+    pub fn verify_threshold_with_key(
+        group_public_key: &BlsPublicKey,
+        sig: &GroupThresholdSignature,
+    ) -> Result<(), ThresholdError> {
+        group_public_key
+            .verify(&sig.message, &sig.signature)
+            .map_err(|e| ThresholdError::VerificationFailed(e.to_string()))
     }
 }
 
@@ -1423,6 +1648,7 @@ fn blake3_hash_hex(data: &[u8]) -> String {
 #[allow(deprecated)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     fn node(id: u8) -> NodeId {
         let mut n = [0u8; 32];
@@ -3033,5 +3259,117 @@ mod tests {
                 );
             }
         });
+    }
+
+    // ─── True t-of-n threshold BLS (AUDIT-2026-07 C2, #340) ────────────────
+
+    fn deal(n: usize, t: usize) -> (ThresholdKeyManager, Vec<KeyShare>, Vec<NodeId>) {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0xC2);
+        let participants: Vec<NodeId> = (1..=n as u8).map(node).collect();
+        let config = ThresholdConfig::new(n, t).unwrap();
+        let (mgr, shares) = ThresholdKeyManager::deal_shares(config, &participants, &mut rng).unwrap();
+        (mgr, shares, participants)
+    }
+
+    #[test]
+    fn threshold_sig_verifies_under_group_key_for_any_t_subset() {
+        let (mgr, shares, _) = deal(5, 3);
+        let msg = b"finalize block 42";
+
+        // Try several distinct 3-of-5 subsets; each must produce a signature
+        // that verifies under the SAME fixed group key.
+        for subset in [[0, 1, 2], [0, 2, 4], [1, 3, 4], [2, 3, 4]] {
+            let partials: Vec<PartialSignature> = subset.iter().map(|&i| shares[i].partial_sign(msg)).collect();
+            let sig = mgr.combine_threshold(&partials, msg).expect("combine");
+            mgr.verify_threshold(&sig).expect("verify under group key");
+            // External verifier with only the group key can check it.
+            ThresholdKeyManager::verify_threshold_with_key(mgr.group_public_key().unwrap(), &sig)
+                .expect("standalone verify");
+        }
+    }
+
+    #[test]
+    fn different_subsets_produce_the_same_group_signature() {
+        // True threshold: the combined signature is the group secret's
+        // signature, independent of which t signers produced it.
+        let (mgr, shares, _) = deal(5, 3);
+        let msg = b"deterministic group sig";
+        let a: Vec<PartialSignature> = [0, 1, 2].iter().map(|&i| shares[i].partial_sign(msg)).collect();
+        let b: Vec<PartialSignature> = [2, 3, 4].iter().map(|&i| shares[i].partial_sign(msg)).collect();
+        let sig_a = mgr.combine_threshold(&a, msg).unwrap();
+        let sig_b = mgr.combine_threshold(&b, msg).unwrap();
+        assert_eq!(
+            sig_a.signature, sig_b.signature,
+            "any t-of-n subset must combine to the identical group signature"
+        );
+    }
+
+    #[test]
+    fn threshold_signature_carries_no_signer_set() {
+        // The C2 flaw: the old ThresholdSignature leaked `signers`. The new
+        // GroupThresholdSignature has no such field — its serialized form is
+        // identical no matter which t-of-n subset produced it, so it cannot
+        // encode signer identity.
+        let (mgr, shares, _) = deal(5, 3);
+        let msg = b"no signer leak";
+        let a: Vec<PartialSignature> = [0, 1, 2].iter().map(|&i| shares[i].partial_sign(msg)).collect();
+        let b: Vec<PartialSignature> = [1, 3, 4].iter().map(|&i| shares[i].partial_sign(msg)).collect();
+        let bytes_a = postcard::to_allocvec(&mgr.combine_threshold(&a, msg).unwrap()).unwrap();
+        let bytes_b = postcard::to_allocvec(&mgr.combine_threshold(&b, msg).unwrap()).unwrap();
+        assert_eq!(
+            bytes_a, bytes_b,
+            "serialized group signature must not depend on the signer subset"
+        );
+    }
+
+    #[test]
+    fn fewer_than_threshold_is_rejected() {
+        let (mgr, shares, _) = deal(5, 3);
+        let msg = b"insufficient";
+        let partials: Vec<PartialSignature> = [0, 1].iter().map(|&i| shares[i].partial_sign(msg)).collect();
+        assert!(matches!(
+            mgr.combine_threshold(&partials, msg),
+            Err(ThresholdError::InsufficientPartials { got: 2, need: 3 })
+        ));
+    }
+
+    #[test]
+    fn wrong_message_fails_verification() {
+        let (mgr, shares, _) = deal(3, 2);
+        let partials: Vec<PartialSignature> = [0, 1].iter().map(|&i| shares[i].partial_sign(b"real")).collect();
+        let mut sig = mgr.combine_threshold(&partials, b"real").unwrap();
+        sig.message = b"tampered".to_vec();
+        assert!(mgr.verify_threshold(&sig).is_err());
+    }
+
+    #[test]
+    fn partial_from_foreign_key_is_rejected() {
+        // A partial signed by a key that isn't a registered share must be
+        // caught before it can corrupt the combination.
+        let (mgr, shares, _) = deal(3, 2);
+        let msg = b"foreign";
+        let mut rng = rand::rngs::StdRng::seed_from_u64(99);
+        let outsider = crate::bls::BlsKeypair::generate_random().unwrap();
+        let foreign = PartialSignature {
+            participant: node(2), // claims to be participant 2
+            index: 2,
+            signature: outsider.sign(msg), // but signed with a foreign key
+        };
+        let _ = &mut rng;
+        let partials = vec![shares[0].partial_sign(msg), foreign];
+        assert!(matches!(
+            mgr.combine_threshold(&partials, msg),
+            Err(ThresholdError::InvalidSignature(_))
+        ));
+    }
+
+    #[test]
+    fn combine_threshold_requires_dealt_manager() {
+        // A manager built via `new` (legacy multi-sig path) has no group key.
+        let mgr = ThresholdKeyManager::new(ThresholdConfig::new(3, 2).unwrap());
+        assert!(matches!(
+            mgr.combine_threshold(&[], b"x"),
+            Err(ThresholdError::NoGroupKey)
+        ));
     }
 }
