@@ -414,7 +414,6 @@ pub struct CliArgs {
     #[arg(long, env = "OMNIA_CONFIG")]
     pub config: Option<String>,
 
-    /// Protocol version to advertise on the network.
     /// Hex-encoded Ed25519 public key authorized to mint on the financial
     /// shard (64 hex characters). Omit to disable minting.
     ///
@@ -424,6 +423,7 @@ pub struct CliArgs {
     #[arg(long, env = "OMNIA_MINT_AUTHORITY")]
     pub mint_authority: Option<String>,
 
+    /// Protocol version to advertise on the network.
     #[arg(long, env = "OMNIA_PROTOCOL_VERSION", default_value = "4.0.0")]
     pub protocol_version: String,
 
