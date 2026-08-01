@@ -55,6 +55,47 @@ impl FinancialValidator {
                 Ok(())
             }
             FinancialOp::BalanceQuery { .. } => Ok(()),
+            FinancialOp::SignedTransfer {
+                from,
+                to,
+                amount,
+                nonce,
+                signature,
+            } => {
+                if *amount == 0 {
+                    return Err(ShardError::InvalidOperation(
+                        "Transfer amount must be greater than zero".into(),
+                    ));
+                }
+                if from == to {
+                    return Err(ShardError::InvalidOperation(
+                        "Cannot transfer to the sending account".into(),
+                    ));
+                }
+                if signature.len() != 64 {
+                    return Err(ShardError::ValidationFailed(format!(
+                        "SignedTransfer signature must be 64 bytes, got {}",
+                        signature.len()
+                    )));
+                }
+                if let Some(&last) = state.signed_transfer_nonces.get(from) {
+                    if *nonce <= last {
+                        return Err(ShardError::ValidationFailed(format!(
+                            "SignedTransfer nonce {nonce} is not greater than the last accepted nonce {last} for this sender"
+                        )));
+                    }
+                }
+                if state.balance_of(from) < *amount {
+                    return Err(ShardError::ValidationFailed("Insufficient balance".into()));
+                }
+                // The signature itself is deliberately NOT verified here.
+                // Validation is a pre-flight check that runs against a
+                // possibly stale state; `apply` verifies the signature and
+                // is the authority. Duplicating verification here would
+                // cost an Ed25519 check per pre-flight without adding any
+                // guarantee that `apply` does not already provide.
+                Ok(())
+            }
         }
     }
 
@@ -623,5 +664,286 @@ mod tests {
         assert!(result.is_ok(), "Mint from authority should succeed");
         assert_eq!(state.balance_of(&target), 100);
         assert_eq!(state.total_supply, 100);
+    }
+
+    // ── SignedTransfer: delegated, self-sovereign transfers ───────────
+    //
+    // These cover the property the whole variant exists for: the relaying
+    // node's key is irrelevant, and only a signature from `from` can move
+    // `from`'s balance.
+
+    use crate::financial::ops::signed_transfer_message;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    /// Helper: build a `SignedTransfer` authorized by `signer`.
+    fn signed_transfer(signer: &SigningKey, to: AccountId, amount: u64, nonce: u64) -> FinancialOp {
+        let from: AccountId = signer.verifying_key().to_bytes();
+        let msg = signed_transfer_message(&from, &to, amount, nonce);
+        FinancialOp::SignedTransfer {
+            from,
+            to,
+            amount,
+            nonce,
+            signature: signer.sign(&msg).to_bytes().to_vec(),
+        }
+    }
+
+    /// A transfer signed by the sender succeeds even though a *different*
+    /// key signed the carrying event. This is the delegation property:
+    /// the wallet authorizes, the node merely relays.
+    #[test]
+    fn signed_transfer_succeeds_when_relayed_by_another_key() {
+        let sender = SigningKey::from_bytes(&[7u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xAA);
+        let mut state = state_with_balance(sender_pubkey, 100);
+
+        // The event is created and signed by the NODE, not the sender.
+        let relaying_node = generate_keypair();
+        let event = make_signed_event(&relaying_node, vec![1]);
+        assert_ne!(
+            event.creator_pubkey, sender_pubkey,
+            "test is meaningless unless the relayer differs from the sender"
+        );
+
+        let op = signed_transfer(&sender, recipient, 40, 1);
+        state
+            .apply(&op, &event)
+            .expect("relayed signed transfer should succeed");
+
+        assert_eq!(state.balance_of(&sender_pubkey), 60);
+        assert_eq!(state.balance_of(&recipient), 40, "recipient must actually be credited");
+    }
+
+    /// A malicious node cannot move someone else's funds by signing the
+    /// event itself — the embedded signature is what is checked.
+    #[test]
+    fn signed_transfer_rejects_forged_authorization() {
+        let victim = SigningKey::from_bytes(&[9u8; 32]);
+        let victim_pubkey: AccountId = victim.verifying_key().to_bytes();
+        let attacker = SigningKey::from_bytes(&[11u8; 32]);
+        let attacker_account = test_account(0xEE);
+        let mut state = state_with_balance(victim_pubkey, 100);
+
+        // Attacker signs a transfer draining the victim, but claims
+        // `from` is the victim's account.
+        let msg = signed_transfer_message(&victim_pubkey, &attacker_account, 100, 1);
+        let op = FinancialOp::SignedTransfer {
+            from: victim_pubkey,
+            to: attacker_account,
+            amount: 100,
+            nonce: 1,
+            signature: attacker.sign(&msg).to_bytes().to_vec(),
+        };
+
+        // Even signing the carrying event as the victim's key would not
+        // help; here the attacker relays it themselves.
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+        let result = state.apply(&op, &event);
+
+        assert!(result.is_err(), "forged authorization must be rejected");
+        assert_eq!(state.balance_of(&victim_pubkey), 100, "victim must not be debited");
+        assert_eq!(state.balance_of(&attacker_account), 0);
+    }
+
+    /// Replaying an observed authorization must fail: the nonce is
+    /// consumed by the first application.
+    #[test]
+    fn signed_transfer_rejects_replay() {
+        let sender = SigningKey::from_bytes(&[13u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xBB);
+        let mut state = state_with_balance(sender_pubkey, 100);
+
+        let op = signed_transfer(&sender, recipient, 30, 1);
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        state.apply(&op, &event).expect("first application should succeed");
+        assert_eq!(state.balance_of(&sender_pubkey), 70);
+
+        // Byte-identical resubmission — the classic replay.
+        let replay = state.apply(&op, &event);
+        assert!(replay.is_err(), "replayed authorization must be rejected");
+        assert_eq!(
+            state.balance_of(&sender_pubkey),
+            70,
+            "replay must not debit the sender a second time"
+        );
+        assert_eq!(state.balance_of(&recipient), 30);
+    }
+
+    /// Tampering with any signed field invalidates the signature.
+    #[test]
+    fn signed_transfer_rejects_tampered_fields() {
+        let sender = SigningKey::from_bytes(&[17u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xCC);
+        let attacker_account = test_account(0xDD);
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        // Amount tampered upward after signing.
+        let mut state = state_with_balance(sender_pubkey, 100);
+        let op = signed_transfer(&sender, recipient, 10, 1);
+        let FinancialOp::SignedTransfer {
+            from,
+            to,
+            nonce,
+            signature,
+            ..
+        } = op.clone()
+        else {
+            panic!("constructed op must be a SignedTransfer");
+        };
+        let inflated = FinancialOp::SignedTransfer {
+            from,
+            to,
+            amount: 99,
+            nonce,
+            signature: signature.clone(),
+        };
+        assert!(
+            state.apply(&inflated, &event).is_err(),
+            "amount tampering must be rejected"
+        );
+        assert_eq!(state.balance_of(&sender_pubkey), 100);
+
+        // Recipient redirected after signing.
+        let redirected = FinancialOp::SignedTransfer {
+            from,
+            to: attacker_account,
+            amount: 10,
+            nonce,
+            signature,
+        };
+        assert!(
+            state.apply(&redirected, &event).is_err(),
+            "recipient redirection must be rejected"
+        );
+        assert_eq!(state.balance_of(&attacker_account), 0);
+    }
+
+    /// A rejected transfer must not advance the sender's nonce, or a
+    /// third party could burn a sender's nonce space with junk.
+    #[test]
+    fn signed_transfer_failure_does_not_consume_nonce() {
+        let sender = SigningKey::from_bytes(&[19u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xAB);
+        let mut state = state_with_balance(sender_pubkey, 50);
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        // Overspend at nonce 1 — correctly signed, but unaffordable.
+        let overspend = signed_transfer(&sender, recipient, 500, 1);
+        assert!(state.apply(&overspend, &event).is_err());
+
+        // Nonce 1 must still be usable for a legitimate transfer.
+        let ok = signed_transfer(&sender, recipient, 20, 1);
+        state
+            .apply(&ok, &event)
+            .expect("nonce 1 must survive a failed transfer");
+        assert_eq!(state.balance_of(&sender_pubkey), 30);
+    }
+
+    /// Self-transfers are rejected rather than silently no-oping.
+    #[test]
+    fn signed_transfer_rejects_self_transfer() {
+        let sender = SigningKey::from_bytes(&[23u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let mut state = state_with_balance(sender_pubkey, 100);
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        let op = signed_transfer(&sender, sender_pubkey, 10, 1);
+        assert!(state.apply(&op, &event).is_err(), "self-transfer must be rejected");
+        assert_eq!(state.balance_of(&sender_pubkey), 100);
+    }
+
+    /// A signature over a different domain must not verify as a transfer.
+    /// Guards the domain-separation tag.
+    #[test]
+    fn signed_transfer_rejects_wrong_domain_signature() {
+        let sender = SigningKey::from_bytes(&[29u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xAC);
+        let mut state = state_with_balance(sender_pubkey, 100);
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        // Same fields, different domain tag.
+        let mut foreign = b"omnia-auth:".to_vec();
+        foreign.extend_from_slice(&sender_pubkey);
+        foreign.extend_from_slice(&recipient);
+        foreign.extend_from_slice(&25u64.to_le_bytes());
+        foreign.extend_from_slice(&1u64.to_le_bytes());
+
+        let op = FinancialOp::SignedTransfer {
+            from: sender_pubkey,
+            to: recipient,
+            amount: 25,
+            nonce: 1,
+            signature: sender.sign(&foreign).to_bytes().to_vec(),
+        };
+        assert!(
+            state.apply(&op, &event).is_err(),
+            "a signature from another domain must not authorize a transfer"
+        );
+        assert_eq!(state.balance_of(&sender_pubkey), 100);
+    }
+
+    /// Total supply is conserved by a transfer — it moves value, it does
+    /// not create or destroy it.
+    #[test]
+    fn signed_transfer_conserves_total_supply() {
+        let sender = SigningKey::from_bytes(&[31u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xAD);
+        let mut state = state_with_balance(sender_pubkey, 100);
+        let supply_before = state.total_supply;
+        let event = make_signed_event(&generate_keypair(), vec![1]);
+
+        state
+            .apply(&signed_transfer(&sender, recipient, 60, 1), &event)
+            .expect("transfer should succeed");
+
+        assert_eq!(state.total_supply, supply_before, "transfer must not change supply");
+        assert_eq!(
+            state.balance_of(&sender_pubkey) + state.balance_of(&recipient),
+            supply_before,
+            "value must be conserved across the two accounts"
+        );
+    }
+
+    /// The validator agrees with `apply` on the cheap rejections, so
+    /// pre-flight checks do not admit operations that would then fail.
+    #[test]
+    fn validator_rejects_what_apply_rejects() {
+        let sender = SigningKey::from_bytes(&[37u8; 32]);
+        let sender_pubkey: AccountId = sender.verifying_key().to_bytes();
+        let recipient = test_account(0xAE);
+        let state = state_with_balance(sender_pubkey, 50);
+
+        // Overspend.
+        let overspend = signed_transfer(&sender, recipient, 500, 1);
+        assert!(FinancialValidator::validate(&state, &overspend).is_err());
+
+        // Zero amount.
+        let zero = signed_transfer(&sender, recipient, 0, 1);
+        assert!(FinancialValidator::validate(&state, &zero).is_err());
+
+        // Self-transfer.
+        let looped = signed_transfer(&sender, sender_pubkey, 10, 1);
+        assert!(FinancialValidator::validate(&state, &looped).is_err());
+
+        // Malformed signature length.
+        let stunted = FinancialOp::SignedTransfer {
+            from: sender_pubkey,
+            to: recipient,
+            amount: 10,
+            nonce: 1,
+            signature: vec![0u8; 8],
+        };
+        assert!(FinancialValidator::validate(&state, &stunted).is_err());
+
+        // A well-formed, affordable transfer passes pre-flight.
+        let good = signed_transfer(&sender, recipient, 10, 1);
+        assert!(FinancialValidator::validate(&state, &good).is_ok());
     }
 }

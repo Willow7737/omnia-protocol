@@ -120,6 +120,19 @@ pub struct FinancialState {
     pub mint_authority: Option<[u8; 32]>,
     /// Result of the last BalanceQuery, stored for retrieval.
     last_query_result: Option<u64>,
+    /// Highest [`FinancialOp::SignedTransfer`] nonce accepted per sender.
+    ///
+    /// A signed transfer authorization is a bearer token until it is
+    /// spent: anyone who observes the event holds a valid signature over
+    /// `(from, to, amount, nonce)` and could resubmit it. Requiring a
+    /// strictly increasing nonce per sender makes every authorization
+    /// single-use.
+    ///
+    /// `BTreeMap` for the same determinism reason as `balances` — this
+    /// map is part of the state snapshot, so its iteration order must be
+    /// identical on every node.
+    #[serde(default)]
+    pub signed_transfer_nonces: BTreeMap<AccountId, u64>,
 }
 
 impl FinancialState {
@@ -137,6 +150,7 @@ impl FinancialState {
             total_supply: 0,
             mint_authority: None,
             last_query_result: None,
+            signed_transfer_nonces: BTreeMap::new(),
         }
     }
 
@@ -149,6 +163,7 @@ impl FinancialState {
             total_supply: 0,
             mint_authority: Some(mint_authority),
             last_query_result: None,
+            signed_transfer_nonces: BTreeMap::new(),
         }
     }
 
@@ -248,7 +263,109 @@ impl FinancialState {
                 self.last_query_result = Some(balance);
                 Ok(())
             }
+            FinancialOp::SignedTransfer {
+                from,
+                to,
+                amount,
+                nonce,
+                signature,
+            } => self.apply_signed_transfer(from, to, *amount, *nonce, signature, &event.vector_clock),
         }
+    }
+
+    /// Apply a [`FinancialOp::SignedTransfer`].
+    ///
+    /// Deliberately ignores `event.creator_pubkey`: the relaying node's
+    /// key says nothing about who authorized this transfer. Authority
+    /// comes from `signature`, verified here against `from`, so the
+    /// result is identical on every node that replays the event and a
+    /// relaying node cannot forge a transfer it did not receive.
+    ///
+    /// Order matters. Every check that can reject the operation runs
+    /// before any mutation, so a rejected transfer leaves state
+    /// untouched — including the nonce, which must not advance on a
+    /// failed transfer or a sender could be griefed into burning nonces.
+    fn apply_signed_transfer(
+        &mut self,
+        from: &AccountId,
+        to: &AccountId,
+        amount: u64,
+        nonce: u64,
+        signature: &[u8],
+        vc: &VectorClock,
+    ) -> Result<(), ShardError> {
+        use ed25519_dalek::{Signature, VerifyingKey};
+
+        if amount == 0 {
+            return Err(ShardError::InvalidOperation(
+                "Transfer amount must be greater than zero".into(),
+            ));
+        }
+        if from == to {
+            return Err(ShardError::InvalidOperation(
+                "Cannot transfer to the sending account".into(),
+            ));
+        }
+
+        // Replay protection before signature work: a resubmitted event is
+        // the cheap attack, and rejecting it early avoids the Ed25519
+        // verification cost entirely.
+        if let Some(&last) = self.signed_transfer_nonces.get(from) {
+            if nonce <= last {
+                return Err(ShardError::ValidationFailed(format!(
+                    "SignedTransfer nonce {nonce} is not greater than the last accepted nonce {last} for this sender"
+                )));
+            }
+        }
+
+        let sig_bytes: [u8; 64] = signature.try_into().map_err(|_| {
+            ShardError::ValidationFailed(format!(
+                "SignedTransfer signature must be 64 bytes, got {}",
+                signature.len()
+            ))
+        })?;
+        let verifying_key = VerifyingKey::from_bytes(from).map_err(|e| {
+            ShardError::ValidationFailed(format!("SignedTransfer sender is not a valid Ed25519 key: {e}"))
+        })?;
+
+        // `verify_strict` rejects small-order and non-canonical keys, which
+        // plain `verify` accepts — matching the node's wallet-auth path.
+        let message = super::ops::signed_transfer_message(from, to, amount, nonce);
+        verifying_key
+            .verify_strict(&message, &Signature::from_bytes(&sig_bytes))
+            .map_err(|_| ShardError::ValidationFailed("SignedTransfer signature verification failed".into()))?;
+
+        // Balance check before any mutation.
+        let from_balance = self
+            .balances
+            .get(from)
+            .ok_or_else(|| ShardError::ValidationFailed("Sender account not found".into()))?;
+        if from_balance.value() < amount {
+            return Err(ShardError::ValidationFailed("Insufficient balance".into()));
+        }
+
+        // Credit before debit would let an overflow on the recipient side
+        // leave the sender already debited, so debit first and let the
+        // recipient's checked_add be the last fallible step.
+        self.balances.entry(*from).or_default().decrement(amount, vc)?;
+        match self.balances.entry(*to).or_default().increment(amount, vc) {
+            Ok(()) => {}
+            Err(e) => {
+                // Recipient balance would overflow u64. Put the sender's
+                // funds back rather than destroying them.
+                self.balances
+                    .entry(*from)
+                    .or_default()
+                    .increment(amount, vc)
+                    .map_err(|_| {
+                        ShardError::ValidationFailed("SignedTransfer rollback failed after recipient overflow".into())
+                    })?;
+                return Err(e);
+            }
+        }
+
+        self.signed_transfer_nonces.insert(*from, nonce);
+        Ok(())
     }
 
     /// Serialize the state to bytes for snapshots.
