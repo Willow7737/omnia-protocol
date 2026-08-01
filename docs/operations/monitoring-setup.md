@@ -111,13 +111,48 @@ data source:
 | Node lost peers | `omnia_node_peers_connected` | `IS BELOW 2` | 3m |
 | Finality stalled | `rate(omnia_node_events_finalized_total[5m])` | `IS BELOW 0.001` | 10m |
 
+The pending period must be **>= the evaluation group's interval** — the
+interval belongs to the group, not the rule. A 1m group interval with a 3m
+pending period gives detection in ~3-4 minutes; leaving the group at 3m
+pushes worst-case notification out to ~6 minutes.
+
+Under **Configure no data and error handling**, set **no data → Alerting**.
+The `< 2` condition catches a *degraded* node, but a node whose host dies
+stops producing the series entirely — there is no value left to compare, so
+without this the rule lands in "No Data" rather than firing. Leave the
+execution-error state as **Error**: it still notifies, but keeps a Grafana
+or datasource fault distinguishable from a real node fault. If you conflate
+them you will learn to distrust the alert.
+
 Attach a contact point (**Alerting → Contact points**) — an alert with no
-contact point notifies nobody.
+contact point notifies nobody. Send a test through it before relying on it.
 
 **Test it for real.** Stop `omnia-node` on host B and *wait past the pending
 period* (4+ minutes for a 3m rule) before starting it again. Stopping and
 starting in one go proves nothing. An untested alert is a hope, not a
 control.
+
+**Check your spam folder on the first fire.** Verified 2026-08-01: the alert
+fired correctly and delivered in 30s — straight into Gmail's spam folder. An
+alert nobody sees is not much better than no alert. Whitelist the sender
+(Gmail: open the message -> Filter messages like these -> Create filter ->
+"Never send it to Spam"), and consider a second contact point that does not
+depend on email deliverability at all — Grafana Cloud supports Discord,
+Slack, Telegram, and generic webhooks.
+
+### Verified behaviour (2026-08-01)
+
+Stopping `omnia-node` on host B produced **two** firing instances, one each
+for A and C — the per-node labels split them, which is correct and confirms
+the labelling works. Each notification carried the templated summary
+("Omnia node C (sin-ap-southeast) has 1 peer(s), expected 2"), the
+diagnosis, and the runbook link.
+
+Note that a dead node is reported *by its neighbours*, not by itself: its
+own series disappears and that alert instance goes stale after
+`missing series evaluations` intervals, while the surviving nodes each drop
+below 2 peers and fire. Total loss of scraping (host A or Prometheus down)
+is what the no-data → Alerting setting covers.
 
 ## Gotchas that cost real time
 
