@@ -44,6 +44,14 @@ scrape_configs:
           node: 'C'
           region: 'sin-ap-southeast'
           role: 'validator'
+      # Expanding the validator set? Add each new node here AND raise the
+      # Grafana alert threshold to (node_count - 1). A `< 2` rule on a
+      # 5-node mesh only fires once a node is down to 1 peer — three of five
+      # already gone. See docs/operations/geo-testnet.md.
+      # - targets: ['<D-ip>:9090']
+      #   labels: {node: 'D', region: '<region>', role: 'validator'}
+      # - targets: ['<E-ip>:9090']
+      #   labels: {node: 'E', region: '<region>', role: 'validator'}
 
   - job_name: 'prometheus'
     static_configs:

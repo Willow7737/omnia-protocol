@@ -31,7 +31,105 @@ internet path — that is the point).
 > validators (2 EU / 2 US / 1 Asia) for real 1-fault tolerance.
 
 Sizing basis: a node peaked at ~160 MB RSS during a 10,000-event burst on
-the 5-node single-host run — CPX21 is generous headroom.
+the 5-node single-host run — CPX21 is generous headroom. Measured in
+production on 2026-08-01, a live node idled at **30 MB RSS with 0.02% CPU**,
+so the constraint is fault tolerance, not resources.
+
+## Expanding the validator set (3 → 5)
+
+Read this whole section before starting. Expansion is not additive: every
+node's `OMNIA_LANE0_VALIDATORS` must change, so **all** nodes restart, not
+just the new ones.
+
+### Why 5
+
+| Validators | Quorum (>2/3 stake) | Faults tolerated |
+|---|---|---|
+| 3 | all 3 | **0** — any node down halts finality |
+| 5 | 4 of 5 | **1** |
+
+Three is a benchmark topology. Five is the smallest set that survives losing
+a node, which is the point of running more than one.
+
+### Procedure
+
+**1. Generate keys for the new nodes — on host A only.**
+
+The validator set must be byte-identical everywhere, so all keys come from
+one place. `setup-validators.sh` reuses existing keys and only creates what
+is missing, so nodes 0–2 keep their identities:
+
+```bash
+cd /opt/omnia-protocol
+NODES=5 ./scripts/setup-validators.sh
+```
+
+This rewrites `OMNIA_LANE0_VALIDATORS` in `docker/.env` with all five
+pubkeys. It preserves an existing `OMNIA_JWT_SECRET` rather than clobbering
+it — confirm that, because a changed secret invalidates every live wallet
+session.
+
+**2. Provision D and E** as in §1–2 above (Docker, clone, firewall). Open
+UDP 4001 between *every* pair of node IPs, and TCP 9090 from host A only.
+Every existing host also needs UDP 4001 opened to D and E — a rule set for
+three nodes does not cover five.
+
+**3. Distribute keys and the shared config.**
+
+```bash
+# On A — copy each node's own key dir, plus the shared validator set
+scp -r ops/testnet-keys/node3 root@<D>:/opt/omnia-protocol/ops/testnet-keys/
+scp -r ops/testnet-keys/node4 root@<E>:/opt/omnia-protocol/ops/testnet-keys/
+for h in <B> <C> <D> <E>; do scp docker/.env root@$h:/opt/omnia-protocol/docker/.env; done
+```
+
+Then on **every** host: `chown -R 1000:1000 ops/testnet-keys`. The container
+runs as uid 1000; an unreadable key does not fail loudly — the node
+silently falls back to an ephemeral identity, logs
+`this_node_is_validator=false`, has every ack rejected as "unknown
+validator", and finality never happens.
+
+Append the per-node variables on D and E (`OMNIA_NODE_ID=4` / `5`,
+`OMNIA_KEY_DIR=../ops/testnet-keys/node3` / `node4`, `OMNIA_TOTAL_NODES=5`,
+and `OMNIA_BOOTSTRAP_NODES` listing the other four).
+
+**4. Restart in order — A first, then everyone else.**
+
+```bash
+# On A:
+docker compose -f docker/docker-compose.wan.yml up -d
+# Then on B, C, D, E:
+docker compose -f docker/docker-compose.wan.yml up -d
+```
+
+A must go first because it is the bootstrap node, and peers do **not**
+re-dial a bootstrap that restarts (#411). Restarting A after the others
+would orphan it — exactly the failure that went unnoticed for four days in
+July 2026.
+
+**5. Verify — every node must report 4 peers.**
+
+```bash
+for ip in localhost <B> <C> <D> <E>; do
+  printf "%-16s " "$ip"
+  curl -s "http://$ip:9090/api/v1/node/info"     | python3 -c "import sys,json; d=json.load(sys.stdin); print('peers=', d['peers'], 'lane0_finalized=', d['lane0']['events_finalized'])"
+done
+```
+
+Anything below `peers=4` is a partial mesh. Do not move on until all five
+agree — a node with a different validator set will reject acks it should
+accept, and the symptom (finality stalls) looks nothing like the cause.
+
+**6. Update monitoring — this is easy to forget and silently degrades it.**
+
+Add D and E to `docker/monitoring/prometheus-wan.yml` and restart
+`omnia-prometheus`, then **change the alert threshold from `< 2` to `< 4`**
+in Grafana Cloud.
+
+Leaving it at `< 2` on a 5-node mesh means the alert only fires once a node
+is down to 1 peer — i.e. after **three of five** nodes are already gone. The
+rule keeps evaluating and reporting healthy through the exact degradation it
+exists to catch. See [monitoring-setup.md](./monitoring-setup.md).
 
 ## 1. Provision B and C
 
