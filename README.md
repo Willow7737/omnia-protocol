@@ -217,6 +217,19 @@ cargo bench --no-run
 - Fee enforcement via FeeSchedule + QuotaSystem integration
 - Security: Per-creator nonce replay protection (`last_nonces` in ShardRouter)
 - FinancialShard uses strict causal ordering (not CRDTs) for balance consistency
+- **Two distinct economies, both reachable over the API:**
+  - **UBC** (`/api/v1/economics/*`) — soulbound monthly compute rights.
+    Non-transferable by design: a "send" spends the sender's quota and
+    credits nobody. This is what stops participation rights from being
+    accumulated and concentrated.
+  - **Financial ledger** (`/api/v1/financial/*`) — the transferable
+    asset. `POST /financial/transfer` debits the sender and credits the
+    recipient, conserving total supply. Authorized by the account
+    holder's own Ed25519 signature over a domain-tagged message
+    (`FinancialOp::SignedTransfer`), re-verified by every node that
+    applies the event — so a relaying node can decline to forward a
+    transfer but cannot forge or alter one. Accounts are addressed by
+    public key, since a `did:omnia:` is a one-way hash of it.
 
 ### Layer 3: Binding Layer ✅
 
