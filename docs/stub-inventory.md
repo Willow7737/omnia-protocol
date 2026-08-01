@@ -56,14 +56,19 @@ This document catalogs all stub, placeholder, and partial implementations in the
 - **What's missing**: Solana RPC integration, program deployment, transaction submission
 - **Phase**: Planned for Phase 1
 
-### Celestia Settlement Adapter — **IMPLEMENTED** (with security caveat) ✅⚠️
+### Celestia Settlement Adapter — **PARTIAL / UNVERIFIED** ⚠️
 
 - **File**: `omnia-adapters/src/settlement/celestia.rs`
-- **Status**: Implemented — `SettlementAdapter` trait has real HTTP RPC integration behind the `celestia` feature flag, with mock mode when disabled
-- **What exists**: Real Celestia RPC integration for `submit_root`, `fetch_finality`, and `verify_inclusion` (with `reqwest` client)
-- **⚠️ SECURITY CAVEAT**: `verify_inclusion` computes the Merkle root locally but **never compares it against the on-chain data root**. A malicious Celestia node could serve a valid-looking but incorrect commitment. This MUST be fixed before mainnet by fetching the on-chain data root hash and comparing it with the computed root. See the `CRITICAL TODO` comment in the source code.
+- **Status**: Partial — HTTP plumbing exists behind the `celestia` feature flag (mock mode when disabled), but it has **never been exercised against a real Celestia node**, and the adapter is **not instantiated anywhere** in the workspace (`CelestiaAdapter` is only re-exported).
+- **What exists**: A `reqwest` client and `SettlementAdapter` impls for `submit_root`, `fetch_finality`, and `verify_inclusion`.
+- **✅ Resolved (C-2, v0.1.68, commit `0725fc7`)**: `verify_inclusion` now compares the locally computed Merkle root against the root parsed from the RPC response and returns `false` on mismatch. The `CRITICAL TODO` this inventory used to point at no longer exists in the source.
+- **⚠️ Remaining gaps — must be closed before this can be called integrated**:
+  1. **Unbound root comparison.** `verify_inclusion` issues `GET /share/commitment` with **no namespace, height, or leaf parameter**, so the root it compares against is not bound to the blob being verified. The comparison is real but unanchored, which limits how much assurance it actually provides.
+  2. **Fabricated transaction hashes.** `submit_root` discards the Celestia response body and returns `mock_tx_hash()` — a locally derived BLAKE3 value. `fetch_finality` then queries `/blob/commitment/0x<that local hash>`, which cannot correspond to a real blob. The submit → finality → verify chain therefore cannot close against a live node.
+  3. **Endpoint paths do not match celestia-node.** `/submit_blob`, `/share/commitment`, and `/blob/commitment/{hash}` are not the celestia-node JSON-RPC 2.0 API (`blob.Submit`, `blob.GetProof`, `header.GetByHeight`, …). These calls would not succeed against a real node as written.
+  4. **Synthesized finality metadata.** `confirmation_count` is hardcoded to `3` and `proof_hash` is derived locally rather than taken from the chain.
 - **Legacy `SettlementLayer` impl**: Returns `NotImplemented` for all methods (Celestia has no proof verification or asset layer)
-- **Phase**: Security fix required before mainnet
+- **Phase**: Needs a real celestia-node JSON-RPC implementation plus an integration test against a devnet before any mainnet consideration.
 
 ### Cosmos Settlement Adapter — **STUB** ⚠️
 

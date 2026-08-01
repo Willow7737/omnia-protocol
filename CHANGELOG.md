@@ -9,6 +9,129 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.84](https://github.com/Willow7737/omnia-protocol/compare/v0.1.83...v0.1.84) (2026-07-18)
+
+
+### Features
+
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([d0cd2f5](https://github.com/Willow7737/omnia-protocol/commit/d0cd2f59ccf19ea3224e670f0cc4e84ae813686d))
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([4cce4d4](https://github.com/Willow7737/omnia-protocol/commit/4cce4d49b3157ed5a329b9a497eda6dda2e829a4))
+* **gossip:** anti-entropy repair — periodic frontier digests + missing-event recovery ([#320](https://github.com/Willow7737/omnia-protocol/issues/320)) ([66a05f5](https://github.com/Willow7737/omnia-protocol/commit/66a05f5551af65d7c472507e968d64436a423225))
+* **lane0:** diagnosable OMNIA_LANE0_VALIDATORS parse errors ([2b8f9ff](https://github.com/Willow7737/omnia-protocol/commit/2b8f9ff4343e192ae9655ec13f44a5e195bc2e76))
+* **lane0:** diagnosable OMNIA_LANE0_VALIDATORS parse errors ([#302](https://github.com/Willow7737/omnia-protocol/issues/302)) ([8a6af15](https://github.com/Willow7737/omnia-protocol/commit/8a6af1539ed3a101aae0a58be3881e432096e950))
+* **testnet:** worker mesh topology, Lane 0 finality metric, deferral observability ([869f6dc](https://github.com/Willow7737/omnia-protocol/commit/869f6dc17b7e2456008dbf8c4e997b8e97a71c3a))
+* **testnet:** worker mesh topology, Lane 0 finality metric, deferral observability ([a648777](https://github.com/Willow7737/omnia-protocol/commit/a6487775fb12434c3bd28e920f4c23410f8e9241))
+
+
+### Bug Fixes
+
+* **gossip:** defer out-of-window events instead of losing them to gap rejects ([2207e69](https://github.com/Willow7737/omnia-protocol/commit/2207e69afd3c6b58cbdfc2b0a847cad8c6a721be))
+* **gossip:** defer out-of-window events instead of losing them to gap rejects ([e1da764](https://github.com/Willow7737/omnia-protocol/commit/e1da76488421189dff33b7d3a4c61f2422971ed2))
+* **lane0:** stable rustfmt formatting for validator parse errors ([9cfd4b4](https://github.com/Willow7737/omnia-protocol/commit/9cfd4b4ef58224eead4b471a3017ae27f5b7418a))
+* **lane0:** stable rustfmt formatting for validator parse errors ([3d0f115](https://github.com/Willow7737/omnia-protocol/commit/3d0f115a1fc05360edc0fa90898b93bc5c8d5260))
+* **network:** add identify so Kademlia populates and peers discover each other ([8a005b3](https://github.com/Willow7737/omnia-protocol/commit/8a005b3f0d4355e758e4417e3529293f9401c64a))
+* **network:** add identify so Kademlia populates and peers discover each other ([7d15ac2](https://github.com/Willow7737/omnia-protocol/commit/7d15ac2463ce3f424d836ca743f09cb53860146d))
+* **network:** gossipsub mesh scoring + rate-limit deferral — 100% testnet propagation ([#314](https://github.com/Willow7737/omnia-protocol/issues/314)) ([968f7a6](https://github.com/Willow7737/omnia-protocol/commit/968f7a6ddc3a1cae76d711b361c4b0a0968fe766))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([86db207](https://github.com/Willow7737/omnia-protocol/commit/86db20712650f383d8449daf07880ee748dd76ed))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([88845dd](https://github.com/Willow7737/omnia-protocol/commit/88845dd363d0f07cb00913087b92e4f92465b06d))
+* **network:** resolve /dns4 bootstrap addresses via DNS transport ([#303](https://github.com/Willow7737/omnia-protocol/issues/303)) ([8f6b0fe](https://github.com/Willow7737/omnia-protocol/commit/8f6b0feb3f5cb9310f6449278de27ca874daffe8))
+
+
+### Documentation
+
+* **benchmarks:** record full Stage 2 multi-node load matrix ([d6331af](https://github.com/Willow7737/omnia-protocol/commit/d6331afaf79eb7e905d6f00ca78279e4564b1a5b))
+* **benchmarks:** record full Stage 2 multi-node load matrix ([323de5a](https://github.com/Willow7737/omnia-protocol/commit/323de5ab3dbc2f96c79fbc6cf006ab0e48de1044))
+* refresh all status-bearing markdown for the live meshed testnet ([b279f15](https://github.com/Willow7737/omnia-protocol/commit/b279f152a737eeb8a4f575525a2384bfa9cfd19d))
+* refresh all status-bearing markdown for the live meshed testnet ([05ceb8c](https://github.com/Willow7737/omnia-protocol/commit/05ceb8c4f840941221c4a950213adc55315b4fd6))
+* refresh all status-bearing markdown for the live meshed testnet ([#321](https://github.com/Willow7737/omnia-protocol/issues/321)) ([b870de8](https://github.com/Willow7737/omnia-protocol/commit/b870de83382b0526c402de397dbd06c37eef690a))
+
+## [0.1.83](https://github.com/Willow7737/omnia-protocol/compare/v0.1.82...v0.1.83) (2026-07-15)
+
+
+### Features
+
+* **consensus:** epoch-fenced Lane 0 validator rotation (ADR-025 Stage 4) ([#290](https://github.com/Willow7737/omnia-protocol/issues/290)) ([1c3d40d](https://github.com/Willow7737/omnia-protocol/commit/1c3d40d130d414aed75420f2b56fbd25cffcb9f4))
+* **consensus:** Lane 1-committed validator-set-change trigger (ADR-025) ([6731b93](https://github.com/Willow7737/omnia-protocol/commit/6731b9335fc34926fc4dd83ca1b2ce970d957d19))
+* **consensus:** Lane 1-committed validator-set-change trigger (ADR-025) ([71e4b14](https://github.com/Willow7737/omnia-protocol/commit/71e4b1441df1201c5786bb6b7ce6d2698dd14cf2))
+* **economics:** transfers become on-chain events (ADR-025 Lane 0, Step 1a) ([f150b34](https://github.com/Willow7737/omnia-protocol/commit/f150b34cc94382db0b86d4c7730b8d3deda9a34c))
+* **economics:** transfers become on-chain events (ADR-025 Lane 0, Step 1a) ([feb91e5](https://github.com/Willow7737/omnia-protocol/commit/feb91e59fe3531c63ec9c3880f637913043a92fc))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([3316c41](https://github.com/Willow7737/omnia-protocol/commit/3316c41931876e733bda34d465e797b27d143269))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([a17f3b4](https://github.com/Willow7737/omnia-protocol/commit/a17f3b48bb3d83ba41fb39bf031f0ecd3f561ec7))
+* **node:** wallet-signed self-sovereign spend authorization (Step 2) ([bfd50a3](https://github.com/Willow7737/omnia-protocol/commit/bfd50a3e29f6c7428deaace1c70214e2f69d98de))
+
+
+### Bug Fixes
+
+* **consensus:** bound the out-of-order buffer's creator map (H-4) ([ca2748e](https://github.com/Willow7737/omnia-protocol/commit/ca2748ef29d79d1c736e44ddacd3379572ff930b))
+* **consensus:** bound the out-of-order buffer's creator map (H-4) ([d137244](https://github.com/Willow7737/omnia-protocol/commit/d13724481144d5a4b787755dbd0f14ffe5332428))
+* restart-safe finalized_height + gossip keepalive ([#287](https://github.com/Willow7737/omnia-protocol/issues/287)) ([388a7e9](https://github.com/Willow7737/omnia-protocol/commit/388a7e909d475465de5bf97abbb2049231b64479))
+* restart-safe finalized_height + gossip keepalive ([#287](https://github.com/Willow7737/omnia-protocol/issues/287)) ([eccc69b](https://github.com/Willow7737/omnia-protocol/commit/eccc69b292068b8e6ffbbb3a5f3e367e7ee8b388))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([7dc0e51](https://github.com/Willow7737/omnia-protocol/commit/7dc0e51aa1fdaf709ab3a1e6e8d5cd16b0deb8e0))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([2e23131](https://github.com/Willow7737/omnia-protocol/commit/2e23131cabf184d3060e1b3861518e9f492d536d))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([51823c3](https://github.com/Willow7737/omnia-protocol/commit/51823c35d0beb003eb8ac5ec9bb6afc5da9dda9f))
+* **tla:** rewrite OmniaCRDT to be TLC-runnable; rejoin the CI matrix ([#296](https://github.com/Willow7737/omnia-protocol/issues/296)) ([1e2641e](https://github.com/Willow7737/omnia-protocol/commit/1e2641e30c7d0d1727caedb8252002889319ac55))
+
+
+### Refactoring
+
+* **economics:** single source of truth (Step 1b, resolves C4) ([3803ac4](https://github.com/Willow7737/omnia-protocol/commit/3803ac4e24d4a29265e220912db135e5eaf9c618))
+* **economics:** single source of truth (Step 1b, resolves C4) ([b328e2c](https://github.com/Willow7737/omnia-protocol/commit/b328e2c41ee5c0941fcd6563054501a1b076368b))
+
+
+### Documentation
+
+* **shards:** fix broken intra-doc links to EconomicsState ([c3b9983](https://github.com/Willow7737/omnia-protocol/commit/c3b9983bcc0bf5ebac83285582f369ae429ae442))
+
+
+### Tests
+
+* **consensus:** Lane 0 adversarial arena — property-based CI gate (ADR-025 Stage 5) ([8ae5f33](https://github.com/Willow7737/omnia-protocol/commit/8ae5f33fc691f28c9e7f2c5dc91224c19c4677f4))
+* **consensus:** Lane 0 adversarial arena — property-based CI gate (ADR-025 Stage 5) ([7aab14a](https://github.com/Willow7737/omnia-protocol/commit/7aab14a391e52e4cef53e44d29c118575a2d2e4d))
+* **substrate:** fix OMNIA_CONSENSUS_SEED test-isolation race in config construction ([#300](https://github.com/Willow7737/omnia-protocol/issues/300)) ([87cd3b8](https://github.com/Willow7737/omnia-protocol/commit/87cd3b8f282fe656213cc1308bf0c240925522fe))
+* **substrate:** route config construction through locked test_config helper ([537d89e](https://github.com/Willow7737/omnia-protocol/commit/537d89eec912e62b0b0153af823c568ef5a11d7b))
+* **substrate:** route config construction through locked test_config helper ([3e5ab42](https://github.com/Willow7737/omnia-protocol/commit/3e5ab42b75b7d76ffa652580c62a419fc167d852))
+
+
+### CI
+
+* TLC model-check gate for the TLA+ specs ([#295](https://github.com/Willow7737/omnia-protocol/issues/295)) ([ba0f908](https://github.com/Willow7737/omnia-protocol/commit/ba0f9082340517e1d1f2c9344338f35767293786))
+
+## [0.1.82](https://github.com/Willow7737/omnia-protocol/compare/v0.1.81...v0.1.82) (2026-07-11)
+
+
+### Features
+
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([f9b350a](https://github.com/Willow7737/omnia-protocol/commit/f9b350ac2ce4f0b624ee078a0a99b9b398117155))
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([934aed7](https://github.com/Willow7737/omnia-protocol/commit/934aed7e49c4485fd4d60e7b5c7e8a7efb93ebfe))
+* **consensus:** Lane 0 consensusless fast-path finality (ADR-025 Stage 3, v1) ([#278](https://github.com/Willow7737/omnia-protocol/issues/278)) ([14a90d9](https://github.com/Willow7737/omnia-protocol/commit/14a90d9090cc0a523d158296b066288eee57f879))
+* **node:** add wallet challenge/signature auth endpoints ([395bf02](https://github.com/Willow7737/omnia-protocol/commit/395bf022158059db111ff4e71f283569143fcd8b))
+* **node:** POST /api/v1/auth/register — register the authenticated caller's DID ([#271](https://github.com/Willow7737/omnia-protocol/issues/271)) ([b2bb717](https://github.com/Willow7737/omnia-protocol/commit/b2bb717ab5ecb43dc013cf507feb6a6582c5ea73))
+* **node:** POST /api/v1/auth/register — register the authenticated caller's DID ([#271](https://github.com/Willow7737/omnia-protocol/issues/271)) ([8b22332](https://github.com/Willow7737/omnia-protocol/commit/8b223327e7ba036be2310fb4dcd5f4dfe69fe5a0))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([446bcba](https://github.com/Willow7737/omnia-protocol/commit/446bcbaf307086a628b16a4860875613391fc8d5))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([3947df2](https://github.com/Willow7737/omnia-protocol/commit/3947df27eac1da4c7bfb2edff0f3fc7ef4f3320f))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([e3debb0](https://github.com/Willow7737/omnia-protocol/commit/e3debb0c1b3a17d3a15daa2546129b4efab4530f))
+* **ops:** ADR-025 Stage 2 tooling — testnet benchmark + live node metrics ([#277](https://github.com/Willow7737/omnia-protocol/issues/277)) ([7ba2c2a](https://github.com/Willow7737/omnia-protocol/commit/7ba2c2a70ae4dfa28acc322657edb4cbbe0a4724))
+
+
+### Performance
+
+* **network:** integrate idle gossip components (AUDIT-14, ADR-025 Stage 1) ([#276](https://github.com/Willow7737/omnia-protocol/issues/276)) ([2ffdfec](https://github.com/Willow7737/omnia-protocol/commit/2ffdfecfb2ef3612ef9dcfa6b3637ac22b23324e))
+
+
+### Refactoring
+
+* **node:** derive wallet DID with SHA-256 for cross-client parity ([45a62fe](https://github.com/Willow7737/omnia-protocol/commit/45a62feec94556b8e02662f752de87978e5387df))
+* **node:** derive wallet DID with SHA-256 for cross-client parity ([e1892ac](https://github.com/Willow7737/omnia-protocol/commit/e1892ac3518e26d127089d304b2572a3ef9d168e))
+
+
+### Documentation
+
+* **adr:** ADR-025 two-lane consensus + catch adr-index up to 025 ([ba3940c](https://github.com/Willow7737/omnia-protocol/commit/ba3940c61a42d9f5aa62193f594dbbd673ba51f3))
+* **adr:** ADR-025 Two-Lane Consensus + catch adr-index up to 025 ([e94e25b](https://github.com/Willow7737/omnia-protocol/commit/e94e25bcc9c1357ac87b5fbd663108542bce5cf2))
+* **bench:** record 2026-07-09 local reference run (v0.1.76+/dev) ([1e36a7b](https://github.com/Willow7737/omnia-protocol/commit/1e36a7b2d4cf48cb9f05a7b3be9a6b212bce79b9))
+* reflect live testnet + shipped wallet ecosystem ([7b21ec5](https://github.com/Willow7737/omnia-protocol/commit/7b21ec50a3d732d887fe70dfdaa711e781e5e92f))
+* reflect live testnet + shipped wallet; record fresh benchmark run ([66338d9](https://github.com/Willow7737/omnia-protocol/commit/66338d9989a372b62628330b34f6a14da2b8e0ea))
+
 ## [0.1.81](https://github.com/Willow7737/omnia-protocol/compare/v0.1.80...v0.1.81) (2026-07-03)
 
 

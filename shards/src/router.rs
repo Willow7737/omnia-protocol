@@ -553,6 +553,38 @@ impl ShardRouter {
             .map(|s| s.state_mut())
     }
 
+    /// Borrow the registered financial shard's [`crate::FinancialState`] —
+    /// the transferable-asset ledger.
+    ///
+    /// This is a different economy from [`economics`](Self::economics).
+    /// UBC, which the economics shard owns, is soulbound: it is a monthly
+    /// compute right that resets each epoch and can only be spent, never
+    /// moved between identities. The financial shard holds balances that
+    /// genuinely move from one account to another. Both are reachable
+    /// through the one shared router, so the API and the event path see
+    /// the same state for each.
+    ///
+    /// Returns `None` if no financial shard is registered.
+    pub fn financial(&self) -> Option<&crate::FinancialState> {
+        self.shards
+            .get(&ShardId::financial())?
+            .as_any()
+            .downcast_ref::<crate::FinancialShard>()
+            .map(|s| s.state())
+    }
+
+    /// Mutably borrow the registered financial shard's [`crate::FinancialState`].
+    ///
+    /// See [`financial`](Self::financial). Returns `None` if no financial
+    /// shard is registered.
+    pub fn financial_mut(&mut self) -> Option<&mut crate::FinancialState> {
+        self.shards
+            .get_mut(&ShardId::financial())?
+            .as_any_mut()
+            .downcast_mut::<crate::FinancialShard>()
+            .map(|s| s.state_mut())
+    }
+
     /// Convert a creator public key to a DID string.
     ///
     /// DIDs are derived as `did:omnia:<hex(pubkey)>` so that each Ed25519
