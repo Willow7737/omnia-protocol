@@ -32,6 +32,10 @@ services:
       # Grafana Cloud API token, referenced by password_file in the config.
       # Gitignored. Create it before enabling remote_write; comment this
       # line out until then, or the container fails to start.
+      #
+      # MUST be chowned to uid 65534 (`nobody`) — this image does not run as
+      # root, and an unreadable token fails silently at WARN level while
+      # everything else looks healthy. See monitoring/prometheus-wan.yml.
       - ./monitoring/grafana-cloud-token:/etc/prometheus/grafana-cloud-token:ro
       - prometheus-wan-data:/prometheus
     command:
