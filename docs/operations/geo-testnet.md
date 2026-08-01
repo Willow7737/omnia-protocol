@@ -15,11 +15,15 @@ real WAN latency, which is the credibility jump that matters: it converts
 Three nodes, three regions, one provider (Hetzner shown; any VPS provider
 works). All three are Lane 0 validators.
 
-| Node | Region | Role | Suggested size |
-|------|--------|------|----------------|
-| **A** | Nuremberg, EU (`nbg1`) | bootstrap + validator + ingress + bench host | existing box |
-| **B** | Ashburn, US-East (`ash`) | validator | CPX21 (3 vCPU / 4 GB) |
-| **C** | Singapore (`sin`) | validator | CPX21 (3 vCPU / 4 GB) |
+| Node | IP | Region | Role |
+|------|----|--------|------|
+| **A** | 78.47.43.136 | Nuremberg, DE (`nbg1`) | bootstrap + validator + ingress + bench host |
+| **B** | 178.156.163.211 | Ashburn, US-East (`ash`) | validator |
+| **C** | 5.223.85.30 | Singapore (`sin`) | validator |
+| **D** | 46.62.218.24 | Helsinki, FI (`hel1`) | validator |
+| **E** | 46.224.103.217 | Falkenstein, DE (`fsn1`) | validator |
+
+Sizing: CPX21 (3 vCPU / 4 GB) is ample — see the footprint note below.
 
 Expected RTTs: A↔B ~90 ms, A↔C ~170 ms, B↔C ~230 ms (the worst common
 internet path — that is the point).
@@ -47,9 +51,20 @@ just the new ones.
 |---|---|---|
 | 3 | all 3 | **0** — any node down halts finality |
 | 5 | 4 of 5 | **1** |
+| 7 | 5 of 7 | **2** |
 
 Three is a benchmark topology. Five is the smallest set that survives losing
 a node, which is the point of running more than one.
+
+**Correlated failure is the limit, not node count.** Five validators tolerate
+one failure, so *any two simultaneous* losses halt finality. Placement
+therefore matters as much as the number: the current set is 3 EU / 1 US / 1
+Asia, with A (`nbg1`) and E (`fsn1`) both in Germany on the same provider.
+A single German or Hetzner-EU incident is one event that can take two nodes
+and stop finality network-wide. That is an accepted trade for now — it is
+still strictly better than the previous zero-fault-tolerance topology — but
+it means the next expansion should add capacity *outside* the EU (and ideally
+outside Hetzner) rather than more of the same region.
 
 ### Procedure
 
@@ -69,18 +84,34 @@ pubkeys. It preserves an existing `OMNIA_JWT_SECRET` rather than clobbering
 it — confirm that, because a changed secret invalidates every live wallet
 session.
 
-**2. Provision D and E** as in §1–2 above (Docker, clone, firewall). Open
-UDP 4001 between *every* pair of node IPs, and TCP 9090 from host A only.
-Every existing host also needs UDP 4001 opened to D and E — a rule set for
-three nodes does not cover five.
+**2. Provision D and E** as in §1–2 above (Docker, clone, firewall).
+
+Firewall is the step most likely to be done incompletely: five nodes means
+**ten pairs**, and the existing hosts each need rules for the two new IPs.
+On every host, allow UDP 4001 from the other four, and TCP 9090 from host A
+only:
+
+```bash
+# Run on EACH host, omitting its own IP:
+for ip in 78.47.43.136 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  ufw allow from "$ip" to any port 4001 proto udp
+done
+ufw allow from 78.47.43.136 to any port 9090 proto tcp   # skip on A itself
+```
+
+A missing rule does not announce itself — the mesh simply forms with fewer
+peers than it should, and `peers` sits at 3 instead of 4 on the affected
+nodes. Step 5 is what catches it.
 
 **3. Distribute keys and the shared config.**
 
 ```bash
 # On A — copy each node's own key dir, plus the shared validator set
-scp -r ops/testnet-keys/node3 root@<D>:/opt/omnia-protocol/ops/testnet-keys/
-scp -r ops/testnet-keys/node4 root@<E>:/opt/omnia-protocol/ops/testnet-keys/
-for h in <B> <C> <D> <E>; do scp docker/.env root@$h:/opt/omnia-protocol/docker/.env; done
+scp -r ops/testnet-keys/node3 root@46.62.218.24:/opt/omnia-protocol/ops/testnet-keys/
+scp -r ops/testnet-keys/node4 root@46.224.103.217:/opt/omnia-protocol/ops/testnet-keys/
+for h in 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  scp docker/.env root@$h:/opt/omnia-protocol/docker/.env
+done
 ```
 
 Then on **every** host: `chown -R 1000:1000 ops/testnet-keys`. The container
@@ -110,7 +141,7 @@ July 2026.
 **5. Verify — every node must report 4 peers.**
 
 ```bash
-for ip in localhost <B> <C> <D> <E>; do
+for ip in localhost 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
   printf "%-16s " "$ip"
   curl -s "http://$ip:9090/api/v1/node/info"     | python3 -c "import sys,json; d=json.load(sys.stdin); print('peers=', d['peers'], 'lane0_finalized=', d['lane0']['events_finalized'])"
 done
