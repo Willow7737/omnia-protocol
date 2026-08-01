@@ -9,6 +9,101 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.85](https://github.com/Willow7737/omnia-protocol/compare/v0.1.84...v0.1.85) (2026-08-01)
+
+
+### Features
+
+* configurable mint authority (fixes per-node divergence) + standing-mesh docs ([4bd58b4](https://github.com/Willow7737/omnia-protocol/commit/4bd58b436fe6f7ba2a815f8df468a5e657810da6))
+* **consensus:** real EC-VRF leader election + unpredictable beacon (AUDIT-2026-07 C1, ADR-026 Phase 1) ([c6bd1d0](https://github.com/Willow7737/omnia-protocol/commit/c6bd1d007e6fc0e706d86d53111713fdf497782e))
+* **consensus:** real EC-VRF leader election + unpredictable beacon (C1, [#339](https://github.com/Willow7737/omnia-protocol/issues/339), ADR-026) ([3aa16db](https://github.com/Willow7737/omnia-protocol/commit/3aa16dba9725ada43b6059dadca5200cf4358953))
+* **crypto:** true t-of-n threshold BLS via Lagrange combination (AUDIT-2026-07 C2) ([57c8a87](https://github.com/Willow7737/omnia-protocol/commit/57c8a8798b567c6945c5b26893f47163ff94f7bf))
+* **crypto:** true t-of-n threshold BLS via Lagrange combination (C2, [#340](https://github.com/Willow7737/omnia-protocol/issues/340)) ([b2d59a3](https://github.com/Willow7737/omnia-protocol/commit/b2d59a32f271c669b6cfe1ef0e23457f081a69ef))
+* **node:** configurable mint authority, and fix the per-node divergence it caused ([0bc50d2](https://github.com/Willow7737/omnia-protocol/commit/0bc50d255795ba6035c515ea930686d8c8d56016))
+* **node:** expose the financial ledger so wallets can actually pay people ([d2f7a1f](https://github.com/Willow7737/omnia-protocol/commit/d2f7a1f3d138e9e8d41fd2967e0c4b12d7f22a74))
+* **shards:** add SignedTransfer so a wallet can move its own funds ([0ddf7c8](https://github.com/Willow7737/omnia-protocol/commit/0ddf7c8337d808c1466c05e138f6af34deec93ab))
+* **substrate:** explicit finality lifecycle for Lane 0/Lane 1 (H5, [#355](https://github.com/Willow7737/omnia-protocol/issues/355)) ([44171f2](https://github.com/Willow7737/omnia-protocol/commit/44171f2e5d23bb9a7ea37f940ece322d49b0939a))
+* **substrate:** explicit finality lifecycle for Lane 0/Lane 1 (H5, [#355](https://github.com/Willow7737/omnia-protocol/issues/355)) ([45cf2ec](https://github.com/Willow7737/omnia-protocol/commit/45cf2ec8edf1ba10edc250634009f9b0416a5333))
+
+
+### Bug Fixes
+
+* **adapters:** ZK rollup proves non-empty batches; real settlement ABI (AUDIT-2026-07 C3) ([1e0f978](https://github.com/Willow7737/omnia-protocol/commit/1e0f9783aba6f7b9fd1c5afe04737258b297c6b9))
+* **adapters:** ZK rollup proves non-empty batches; real settlement ABI (C3, [#341](https://github.com/Willow7737/omnia-protocol/issues/341)) ([270584a](https://github.com/Willow7737/omnia-protocol/commit/270584a1c985f8e9703ea0566013c88ab9586f1c))
+* **consensus:** compute BFT threshold over the active validator set (H2, [#352](https://github.com/Willow7737/omnia-protocol/issues/352)) ([b1e0610](https://github.com/Willow7737/omnia-protocol/commit/b1e0610579084bf171621bdb2cdc877678c52bb6))
+* **consensus:** compute BFT threshold over the active validator set (H2, [#352](https://github.com/Willow7737/omnia-protocol/issues/352)) ([33ee8e8](https://github.com/Willow7737/omnia-protocol/commit/33ee8e892cad928a17c4d9279a4412b8453ca70f))
+* **consensus:** enforce leader eligibility on the propose path (H3, [#353](https://github.com/Willow7737/omnia-protocol/issues/353)) ([#399](https://github.com/Willow7737/omnia-protocol/issues/399)) ([b5123d0](https://github.com/Willow7737/omnia-protocol/commit/b5123d0362d776c26973249b162abd85ac1f5e79))
+* **consensus:** governance-authorized, persistent slashing undo (AUDIT-2026-07 C6) ([5d400d8](https://github.com/Willow7737/omnia-protocol/commit/5d400d8ced75598e61579d4bebc0b40d66fb8c09))
+* **consensus:** governance-authorized, persistent slashing undo (C6, [#344](https://github.com/Willow7737/omnia-protocol/issues/344)) ([99f17c0](https://github.com/Willow7737/omnia-protocol/commit/99f17c06ca6843cbf7fc5818a041333ab3f44463))
+* **consensus:** pruning-invariant finalized state-root accumulator (H1, [#351](https://github.com/Willow7737/omnia-protocol/issues/351)) ([c84d67a](https://github.com/Willow7737/omnia-protocol/commit/c84d67a8045215dc8319285aa74762c5efa3e2cd))
+* **consensus:** pruning-invariant finalized state-root accumulator (H1, [#351](https://github.com/Willow7737/omnia-protocol/issues/351)) ([18f0c14](https://github.com/Willow7737/omnia-protocol/commit/18f0c148400073d3b58a5c9fd43eb446b9e4cb02))
+* **deps:** bump ruint to 1.20.0 for RUSTSEC-2026-0220 ([0a7a1ac](https://github.com/Willow7737/omnia-protocol/commit/0a7a1acfb0c5ef675e41cda0ba084a41567dc924))
+* **financial:** transfer is atomic — no sender debit on recipient overflow ([c597cc6](https://github.com/Willow7737/omnia-protocol/commit/c597cc6cd959e4634f5c36bc6461628afdf2b5d1))
+* **financial:** transfer is atomic — no sender debit on recipient overflow ([#343](https://github.com/Willow7737/omnia-protocol/issues/343)) ([bb7342c](https://github.com/Willow7737/omnia-protocol/commit/bb7342ccc65f7c5f89042d3c22fd0f407865c9bd))
+* **gossip:** break deferral-queue priority-inversion deadlock ([5788fb2](https://github.com/Willow7737/omnia-protocol/commit/5788fb24762837c58156160129a858f41c9909d1))
+* **gossip:** break deferral-queue priority-inversion deadlock ([658b249](https://github.com/Willow7737/omnia-protocol/commit/658b249d1922abe3bfc8145cb0e8aba0720229f3))
+* **gossip:** break deferral-queue priority-inversion deadlock ([#326](https://github.com/Willow7737/omnia-protocol/issues/326)) ([2453288](https://github.com/Willow7737/omnia-protocol/commit/2453288821cc1f0ede43025247ea133b5ac27a5c))
+* **gossip:** solicited repair events bypass the per-peer rate limiter ([d3a4bad](https://github.com/Willow7737/omnia-protocol/commit/d3a4bad3ce14f856a1a7f9dbaa4925ff70d4bf62))
+* **gossip:** solicited repair events bypass the per-peer rate limiter ([bda4027](https://github.com/Willow7737/omnia-protocol/commit/bda40276b7b3fb23c2365eb1cec5ff1d0887806c))
+* **network:** bind fast-sync snapshot to the supermajority attestation (C10, [#348](https://github.com/Willow7737/omnia-protocol/issues/348)) ([f73264a](https://github.com/Willow7737/omnia-protocol/commit/f73264a36efaa0af2f9a8e86f5e55127972b5cb7))
+* **network:** bind fast-sync snapshot to the supermajority attestation (C10, [#348](https://github.com/Willow7737/omnia-protocol/issues/348)) ([99968a1](https://github.com/Willow7737/omnia-protocol/commit/99968a126197057a234ef1eeac2128d1b8d7bf25))
+* **network:** raise gossipsub max_transmit_size — repair batches never fit in 64 KiB ([a2751ef](https://github.com/Willow7737/omnia-protocol/commit/a2751ef15ab253c7ddd0effe101b2bdf0149618e))
+* **network:** raise gossipsub max_transmit_size — repair batches never fit in 64 KiB ([a9421da](https://github.com/Willow7737/omnia-protocol/commit/a9421da391f8eaa14f56374a613d7bbe69542a9d))
+* **node:** reject known-weak JWT secret at startup + require it in compose (C11, [#349](https://github.com/Willow7737/omnia-protocol/issues/349)) ([b8fd944](https://github.com/Willow7737/omnia-protocol/commit/b8fd944780eb6610c4479e70cede825ba360c396))
+* **node:** reject known-weak JWT secret at startup + require it in compose (C11, [#349](https://github.com/Willow7737/omnia-protocol/issues/349)) ([442161f](https://github.com/Willow7737/omnia-protocol/commit/442161f6334cdd6717109e7f51a92990293ae97e))
+* **node:** restore protocol_version's doc comment ([7554e18](https://github.com/Willow7737/omnia-protocol/commit/7554e18a33d8daf5c70dad25139d69ab9ba2cee4))
+* **shards:** cross-shard messages require source-shard attestation (AUDIT-2026-07 C4) ([cd0b38d](https://github.com/Willow7737/omnia-protocol/commit/cd0b38d9ec36d98ebb2ecf9b28ece06e266ad7e0))
+* **shards:** cross-shard messages require source-shard attestation (C4, [#342](https://github.com/Willow7737/omnia-protocol/issues/342)) ([33538a4](https://github.com/Willow7737/omnia-protocol/commit/33538a402a42fe6d4d6be71105acf81a6d83c7c2))
+* **shards:** persist nonce before acknowledging it in memory (AUDIT-2026-07 C8, [#346](https://github.com/Willow7737/omnia-protocol/issues/346)) ([#381](https://github.com/Willow7737/omnia-protocol/issues/381)) ([03c5140](https://github.com/Willow7737/omnia-protocol/commit/03c5140b72122ca991019e4e8c678fe328e22b1b))
+* **shards:** persist nonce before acknowledging it in memory (C8, [#346](https://github.com/Willow7737/omnia-protocol/issues/346)) ([e8abef5](https://github.com/Willow7737/omnia-protocol/commit/e8abef5cccc95c6ce38b9515dca9d5ae165097bc))
+* **shards:** persist nonce before acknowledging it in memory (C8, [#346](https://github.com/Willow7737/omnia-protocol/issues/346)) ([5ae82a9](https://github.com/Willow7737/omnia-protocol/commit/5ae82a94df8ebdbce622a945f8500b70672da137))
+* **shards:** ZK verifying keys come from a VK registry, never the caller (AUDIT-2026-07 C9, [#347](https://github.com/Willow7737/omnia-protocol/issues/347)) ([#382](https://github.com/Willow7737/omnia-protocol/issues/382)) ([93a4ca2](https://github.com/Willow7737/omnia-protocol/commit/93a4ca28e8ece9ab7b50da4b1470f8a4974fadc3))
+* **shards:** ZK verifying keys come from a VK registry, never the caller (C9, [#347](https://github.com/Willow7737/omnia-protocol/issues/347)) ([e505cd6](https://github.com/Willow7737/omnia-protocol/commit/e505cd6f7e4e0564fe88080fb2c35d6a324d153c))
+* **shards:** ZK verifying keys come from a VK registry, never the caller (C9, [#347](https://github.com/Willow7737/omnia-protocol/issues/347)) ([ee57466](https://github.com/Willow7737/omnia-protocol/commit/ee5746619ceaaec08ffe83f6f3d6bfd7d90cd4d2))
+* **substrate:** bind Lane 0 acks to the post-apply state root (H4, [#354](https://github.com/Willow7737/omnia-protocol/issues/354)) ([37e9b01](https://github.com/Willow7737/omnia-protocol/commit/37e9b0132868d441465eee5f8f1b1e32ae68fb04))
+* **substrate:** bind Lane 0 acks to the post-apply state root (H4, [#354](https://github.com/Willow7737/omnia-protocol/issues/354)) ([f550d48](https://github.com/Willow7737/omnia-protocol/commit/f550d4877443477c43bea33e16a402907780bec3))
+* **substrate:** persist Lane 0 finality certificates across restart (C7, [#345](https://github.com/Willow7737/omnia-protocol/issues/345)) ([#394](https://github.com/Willow7737/omnia-protocol/issues/394)) ([57af4bc](https://github.com/Willow7737/omnia-protocol/commit/57af4bc61a5b5c50be0378474b1dc0193a38cec1))
+
+
+### Performance
+
+* **gossip:** has_more fast drain + live benchmark progress ([3d5edd1](https://github.com/Willow7737/omnia-protocol/commit/3d5edd18757ced504b4616437f578af475e5d31f))
+* **gossip:** has_more fast drain + live benchmark progress ([fa38591](https://github.com/Willow7737/omnia-protocol/commit/fa385913add10b86e2210676744ecf48876c7286))
+* **gossip:** raise anti-entropy repair throughput ~order of magnitude ([6facbf8](https://github.com/Willow7737/omnia-protocol/commit/6facbf80d76638e1f24ca87eb46bf1272082a2a3))
+* **gossip:** raise anti-entropy repair throughput ~order of magnitude ([f1693e3](https://github.com/Willow7737/omnia-protocol/commit/f1693e3b81827e6711df6fc2e7de0d49f3438e5d))
+
+
+### Documentation
+
+* bootstrap the GitHub wiki — 8 pages, repo-versioned, auto-published ([88903fd](https://github.com/Willow7737/omnia-protocol/commit/88903fdd281a0e59cff735841387323c9d18acb7))
+* bootstrap the GitHub wiki — 8 pages, repo-versioned, auto-published ([4f5b441](https://github.com/Willow7737/omnia-protocol/commit/4f5b441a39b2ae602cffa289ee0211a30a67fc64))
+* **consensus:** fix rustdoc intra-doc links in vrf_election (C1) ([bff6534](https://github.com/Willow7737/omnia-protocol/commit/bff6534fe7e9ea183ec24940520b01ab5ce57e16))
+* describe the two economies and the new financial endpoints ([a21028f](https://github.com/Willow7737/omnia-protocol/commit/a21028fc3b2f35afd50473130729edfe2be11cb8))
+* record the 10k lossless-convergence milestone (post-[#330](https://github.com/Willow7737/omnia-protocol/issues/330)) ([923a11c](https://github.com/Willow7737/omnia-protocol/commit/923a11c2ed79fbeae8d5ab58ebf0ad0faa9a32c8))
+* record the 10k lossless-convergence milestone (post-[#330](https://github.com/Willow7737/omnia-protocol/issues/330)) ([1ca9db6](https://github.com/Willow7737/omnia-protocol/commit/1ca9db676d2ee94833afdb8e961d913d685c5d3d))
+* record the 5-node 10k headline run + measured fast-drain numbers ([f936ae8](https://github.com/Willow7737/omnia-protocol/commit/f936ae8e0f6cd96fa3ef3367997ae5bc618d21d1))
+* record the 5-node 10k headline run + measured fast-drain numbers ([f634b2f](https://github.com/Willow7737/omnia-protocol/commit/f634b2f459b62abd5c36ef058ba622246e3e2b3c))
+* record the geo-distributed WAN campaign — the asterisk is gone ([8ccd050](https://github.com/Willow7737/omnia-protocol/commit/8ccd050284bb04b207bad50929024cd0e99fed78))
+* record the geo-distributed WAN campaign — the asterisk is gone ([55bde20](https://github.com/Willow7737/omnia-protocol/commit/55bde20f910834a7e4033c145389206b91f0abc6))
+* record the geo-distributed WAN campaign — the asterisk is gone ([#338](https://github.com/Willow7737/omnia-protocol/issues/338)) ([a3f87a6](https://github.com/Willow7737/omnia-protocol/commit/a3f87a67468c44ae01cb61a49e22a690db35247c))
+* staleness audit — multi-node testnet is live, honest 10k status ([7aa5e3c](https://github.com/Willow7737/omnia-protocol/commit/7aa5e3c6a49febc3b61dc8fc95c052e327076839))
+* staleness audit — multi-node testnet is live, honest 10k status ([24983d9](https://github.com/Willow7737/omnia-protocol/commit/24983d90e6a0bc735377c9c808d6f70d5966494e))
+* state the network's actual condition instead of implying a standing mesh ([9bf9f11](https://github.com/Willow7737/omnia-protocol/commit/9bf9f11555d3629ed05cf98f5e50ad718eebc9e8))
+* state the network's actual condition instead of implying a standing mesh ([04b896a](https://github.com/Willow7737/omnia-protocol/commit/04b896a1e9aa747c0c5963b4c7b736f83a507b4a))
+* the validator network is standing now — say so, and say what it isn't ([b87e09a](https://github.com/Willow7737/omnia-protocol/commit/b87e09a7f542ec6656cffb21fe5f077588132462))
+
+
+### Tests
+
+* **e2e:** consensus test can no longer silently pass on failure ([45ee1e4](https://github.com/Willow7737/omnia-protocol/commit/45ee1e4497c761988153ac0698b65018550423ad))
+* **e2e:** consensus test can no longer silently pass on failure ([#350](https://github.com/Willow7737/omnia-protocol/issues/350)) ([fb29211](https://github.com/Willow7737/omnia-protocol/commit/fb292113da7f048c9bdc0c298911369534ed4b07))
+* **node:** pin the wallet's exact wire payload against the HTTP endpoint ([e9f300d](https://github.com/Willow7737/omnia-protocol/commit/e9f300d6dede26211ffdaf6b9a87eea18c14d7d4))
+
+
+### CI
+
+* re-baseline binary size gate 16 -&gt; 17 MiB for release overflow-checks ([3c1166a](https://github.com/Willow7737/omnia-protocol/commit/3c1166a346b11d627156c56e38e0cb64168c0967))
+
 ## [0.1.84](https://github.com/Willow7737/omnia-protocol/compare/v0.1.83...v0.1.84) (2026-07-18)
 
 
