@@ -164,8 +164,8 @@ pub struct GossipConfig {
     pub sync_interval_ms: u64,
     /// Base interval in milliseconds between re-dial sweeps when fewer peers
     /// are connected than [`GossipConfig::bootstrap_peers`] lists (issue
-    /// #411). Doubles per consecutive unsuccessful sweep up to
-    /// [`MAX_REDIAL_INTERVAL_MS`]. `0` disables re-dialling, restoring the
+    /// #411). Doubles per consecutive unsuccessful sweep up to a ceiling of
+    /// 300000 ms. `0` disables re-dialling, restoring the
     /// dial-once-at-startup behaviour. Default: 15000 ms.
     #[serde(default = "default_redial_interval")]
     pub redial_interval_ms: u64,
