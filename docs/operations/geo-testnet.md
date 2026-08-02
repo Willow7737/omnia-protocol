@@ -126,16 +126,23 @@ and `OMNIA_BOOTSTRAP_NODES` listing the other four).
 
 **4. Put every node on the same commit, then restart in order.**
 
-New nodes get a fresh clone of the current default branch. The existing
-nodes are running whatever image they were last built from, which may be
-months behind. **Rebuild them too** — Lane 0 acks are encoded with postcard,
-which is not self-describing, so a field added to `SignedAck` in the interim
-makes the two builds mutually unintelligible.
+New nodes get a fresh clone. The existing nodes are running whatever image
+they were last built from, which may be months behind. **Rebuild them too** —
+Lane 0 acks are encoded with postcard, which is not self-describing, so a
+field added to `SignedAck` in the interim makes the two builds mutually
+unintelligible.
+
+**This testnet tracks `dev`**, per §1. Confirm the branch you deploy actually
+contains the change you mean to ship — a merge into `dev` is not in `main`,
+and checking out the wrong one rebuilds the binary already running. That
+failure is silent: the build succeeds, the containers restart, and nothing
+changes.
 
 ```bash
 # On EVERY host, new and old alike:
 cd /opt/omnia-protocol
-git fetch origin && git checkout -B main origin/main
+git fetch origin && git checkout -B dev origin/dev
+git log -1 --format='%h %s'   # same hash on all five before building
 docker compose -f docker/docker-compose.wan.yml build
 ```
 
