@@ -434,6 +434,47 @@ pub enum NetworkEvent {
     },
 }
 
+/// Whether a connection-level swarm event opened or closed a connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionChange {
+    /// A new connection to the peer was established.
+    Opened,
+    /// An existing connection to the peer was closed.
+    Closed,
+}
+
+/// Map a connection-level swarm event onto a peer-level [`NetworkEvent`],
+/// or `None` when the peer's overall reachability did not change.
+///
+/// libp2p reports **connections**, not peers, and routinely holds more than
+/// one connection to the same peer — a dial that crosses an inbound dial, a
+/// relayed path coexisting with a direct one during a DCUtR upgrade, and so
+/// on. Emitting `PeerConnected` for every `ConnectionEstablished` and
+/// `PeerDisconnected` for every `ConnectionClosed` therefore makes every
+/// downstream peer set flap: closing one of three connections marks a fully
+/// connected peer as gone until the next connection happens to open.
+///
+/// That is not cosmetic. `GossipProtocol::connected_peer_count()` feeds
+/// `omnia_node_peers_connected`, which is the primary partition signal and
+/// the input to the `PeerCountDrop` alert. Issue #422 recorded a node on the
+/// live 5-node mesh reporting 3 of 4 peers for ~64 seconds, then recovering
+/// untouched, while every link was healthy throughout.
+///
+/// `num_established` is the number of connections to that peer remaining
+/// *after* the event, so the peer-level transitions are exactly `Opened`
+/// with 1 (the first connection) and `Closed` with 0 (the last).
+pub(crate) fn peer_level_event(
+    peer_id: PeerId,
+    num_established: u32,
+    change: ConnectionChange,
+) -> Option<NetworkEvent> {
+    match change {
+        ConnectionChange::Opened if num_established == 1 => Some(NetworkEvent::PeerConnected(peer_id)),
+        ConnectionChange::Closed if num_established == 0 => Some(NetworkEvent::PeerDisconnected(peer_id)),
+        _ => None,
+    }
+}
+
 /// Combined libp2p behaviour for Omnia.
 ///
 /// Includes GossipSub for event propagation, mDNS for LAN discovery,
@@ -850,18 +891,51 @@ impl OmniaNetwork {
             SwarmEvent::NewListenAddr { address, .. } => {
                 tracing::info!("Listening on {}", address);
             }
-            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                if let Err(e) = self.event_tx.send(NetworkEvent::PeerConnected(peer_id)).await {
-                    tracing::warn!("Dropped peer connected event - channel full: {}", e);
+            SwarmEvent::ConnectionEstablished {
+                peer_id,
+                num_established,
+                ..
+            } => {
+                // #422: only the peer's FIRST connection is a peer-level
+                // connect. Additional connections to an already-connected
+                // peer are normal and must not re-announce it.
+                match peer_level_event(peer_id, num_established.get(), ConnectionChange::Opened) {
+                    Some(event) => {
+                        if let Err(e) = self.event_tx.send(event).await {
+                            tracing::warn!("Dropped peer connected event - channel full: {}", e);
+                        }
+                    }
+                    None => tracing::debug!(
+                        peer = %peer_id,
+                        connections = num_established.get(),
+                        "Additional connection to an already-connected peer"
+                    ),
                 }
             }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                // H-9 fix (audit v0.1.68): clean up the peer's application
-                // score on disconnect so the score map doesn't grow
-                // unboundedly as peers churn.
-                self.peer_score_tracker.remove_peer(&peer_id);
-                if let Err(e) = self.event_tx.send(NetworkEvent::PeerDisconnected(peer_id)).await {
-                    tracing::warn!("Dropped peer disconnected event - channel full: {}", e);
+            SwarmEvent::ConnectionClosed {
+                peer_id,
+                num_established,
+                ..
+            } => {
+                // #422: only the peer's LAST connection closing is a
+                // peer-level disconnect. Tearing down one of several
+                // connections leaves the peer reachable, so neither the
+                // score entry nor the peer set may be dropped here.
+                match peer_level_event(peer_id, num_established, ConnectionChange::Closed) {
+                    Some(event) => {
+                        // H-9 fix (audit v0.1.68): clean up the peer's
+                        // application score on disconnect so the score map
+                        // doesn't grow unboundedly as peers churn.
+                        self.peer_score_tracker.remove_peer(&peer_id);
+                        if let Err(e) = self.event_tx.send(event).await {
+                            tracing::warn!("Dropped peer disconnected event - channel full: {}", e);
+                        }
+                    }
+                    None => tracing::debug!(
+                        peer = %peer_id,
+                        remaining = num_established,
+                        "Connection closed but peer is still connected"
+                    ),
                 }
             }
             _ => {}
@@ -886,6 +960,78 @@ pub(crate) fn extract_peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId>
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    // -----------------------------------------------------------------
+    // #422: peer-level events must track peers, not connections
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn first_connection_announces_the_peer() {
+        let peer = PeerId::random();
+        let event = peer_level_event(peer, 1, ConnectionChange::Opened);
+        assert!(matches!(event, Some(NetworkEvent::PeerConnected(p)) if p == peer));
+    }
+
+    #[test]
+    fn additional_connections_do_not_re_announce_the_peer() {
+        let peer = PeerId::random();
+        for n in 2..=5 {
+            assert!(
+                peer_level_event(peer, n, ConnectionChange::Opened).is_none(),
+                "connection {n} to an already-connected peer must not emit PeerConnected"
+            );
+        }
+    }
+
+    #[test]
+    fn last_connection_closing_disconnects_the_peer() {
+        let peer = PeerId::random();
+        let event = peer_level_event(peer, 0, ConnectionChange::Closed);
+        assert!(matches!(event, Some(NetworkEvent::PeerDisconnected(p)) if p == peer));
+    }
+
+    #[test]
+    fn closing_one_of_several_connections_keeps_the_peer() {
+        let peer = PeerId::random();
+        for remaining in 1..=4 {
+            assert!(
+                peer_level_event(peer, remaining, ConnectionChange::Closed).is_none(),
+                "peer still has {remaining} connection(s) and must not be reported as disconnected"
+            );
+        }
+    }
+
+    /// The exact sequence behind #422: two connections open, one closes, and
+    /// the peer is still fully connected. Before the fix this produced two
+    /// `PeerConnected` followed by a `PeerDisconnected`, which dropped a live
+    /// peer out of `connected_peers` and made `omnia_node_peers_connected`
+    /// read one short until another connection happened to open.
+    #[test]
+    fn second_connection_closing_does_not_evict_a_live_peer() {
+        let peer = PeerId::random();
+
+        // Two connections established: exactly one peer-level connect.
+        let announced = [
+            peer_level_event(peer, 1, ConnectionChange::Opened),
+            peer_level_event(peer, 2, ConnectionChange::Opened),
+        ]
+        .into_iter()
+        .flatten()
+        .count();
+        assert_eq!(announced, 1, "two connections must announce the peer exactly once");
+
+        // One of them closes, one remains: no peer-level disconnect.
+        assert!(
+            peer_level_event(peer, 1, ConnectionChange::Closed).is_none(),
+            "peer must stay connected while one connection remains"
+        );
+
+        // The survivor closes: now the peer is genuinely gone.
+        assert!(matches!(
+            peer_level_event(peer, 0, ConnectionChange::Closed),
+            Some(NetworkEvent::PeerDisconnected(_))
+        ));
+    }
 
     #[test]
     fn test_version_compatibility_same_version() {

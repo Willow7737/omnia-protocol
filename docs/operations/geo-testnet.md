@@ -3,7 +3,7 @@
 > Audience: Operators
 > Context: Running the Omnia testnet across real internet distance (multiple
 > regions), and benchmarking it honestly.
-> Last Updated: 2026-07-19
+> Last Updated: 2026-08-02
 
 Every benchmark recorded before this runbook ran on a **single host**
 (near-zero RTT between containers). This runbook takes the same stack across
@@ -124,12 +124,29 @@ Append the per-node variables on D and E (`OMNIA_NODE_ID=4` / `5`,
 `OMNIA_KEY_DIR=../ops/testnet-keys/node3` / `node4`, `OMNIA_TOTAL_NODES=5`,
 and `OMNIA_BOOTSTRAP_NODES` listing the other four).
 
-**4. Restart in order — A first, then everyone else.**
+**4. Put every node on the same commit, then restart in order.**
+
+New nodes get a fresh clone of the current default branch. The existing
+nodes are running whatever image they were last built from, which may be
+months behind. **Rebuild them too** — Lane 0 acks are encoded with postcard,
+which is not self-describing, so a field added to `SignedAck` in the interim
+makes the two builds mutually unintelligible.
 
 ```bash
-# On A:
+# On EVERY host, new and old alike:
+cd /opt/omnia-protocol
+git fetch origin && git checkout -B main origin/main
+docker compose -f docker/docker-compose.wan.yml build
+```
+
+Build everywhere *before* restarting anything — a Rust release build takes
+3–7 minutes and you do not want nodes bouncing one at a time across that
+window. Then:
+
+```bash
+# On A first:
 docker compose -f docker/docker-compose.wan.yml up -d
-# Then on B, C, D, E:
+# Then B, C, D, E:
 docker compose -f docker/docker-compose.wan.yml up -d
 ```
 
@@ -137,6 +154,32 @@ A must go first because it is the bootstrap node, and peers do **not**
 re-dial a bootstrap that restarts (#411). Restarting A after the others
 would orphan it — exactly the failure that went unnoticed for four days in
 July 2026.
+
+> **Back up host A's live monitoring files outside the repo before the
+> checkout.** Two of them do not survive it:
+>
+> - `docker/monitoring/prometheus-wan.yml` — the live copy carries the real
+>   `remote_write` url and username; the committed version leaves that block
+>   commented out. Silently stops shipping if overwritten.
+> - `docker/monitoring/grafana-cloud-token` — **`git stash -u` takes this
+>   too.** It is gitignored on current `main`, but `.gitignore` is itself
+>   part of what you are upgrading, so on the old commit the rule does not
+>   exist yet and the file is merely untracked. `-u` stashes untracked files;
+>   only `-a` includes ignored ones. Losing it leaves a bind-mount pointing
+>   at nothing, Docker creates a *directory* in its place, and Prometheus
+>   fails to start with `not a directory`.
+>
+> ```bash
+> mkdir -p /root/monitoring-backup
+> cp -a docker/monitoring/prometheus-wan.yml \
+>       docker/monitoring/grafana-cloud-token /root/monitoring-backup/
+> ```
+>
+> Recover from the stash with `git checkout stash@{0}^3 -- <path>` (untracked
+> files live in the stash's *third* parent, not its tree). Afterwards confirm
+> `grep -c '^remote_write' docker/monitoring/prometheus-wan.yml` returns 1,
+> and re-apply `chown 65534:65534` + `chmod 644` to the token before starting
+> Prometheus.
 
 **5. Verify — every node must report 4 peers.**
 
@@ -150,6 +193,30 @@ done
 Anything below `peers=4` is a partial mesh. Do not move on until all five
 agree — a node with a different validator set will reject acks it should
 accept, and the symptom (finality stalls) looks nothing like the cause.
+
+`peers` alone is not sufficient. Also confirm every node converges on the
+same ack and finality counts, because version skew produces a full peer
+count and zero finality:
+
+```bash
+for ip in localhost 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  printf "%-16s " "$ip"
+  curl -s "http://$ip:9090/api/v1/node/info" | python3 -c "import sys,json; d=json.load(sys.stdin); l=d['lane0']; print('acks_ok=', l['acks_accepted'], 'acks_rej=', l['acks_rejected'], 'final=', l['events_finalized'])"
+done
+```
+
+Certificates are grow-only sets of the same acks, so healthy nodes converge.
+Counts that cluster into groups — 36/36/14 for one build and 24/24 for
+another — mean acks are not crossing between the groups.
+
+**`acks_rejected` staying at 0 does not clear the network.** A batch whose
+wire format the receiver cannot parse fails in `decode_ack_batch`, which is
+upstream of the counter: it logs `Lane 0 ack batch rejected` at WARN and
+drops the message. Check the log, not the counter:
+
+```bash
+docker logs omnia-node 2>&1 | grep -ci "ack batch rejected"   # must be 0
+```
 
 **6. Update monitoring — this is easy to forget and silently degrades it.**
 
@@ -262,8 +329,10 @@ Verify each node, then the mesh:
 curl -s http://localhost:9090/api/v1/node/info | python3 -m json.tool
 # expect: "lane0": {...} present and this_node_is_validator=true in logs
 
-# From A — peers must be 2 on every node before benchmarking:
-for ip in localhost <B> <C>; do printf "%s peers=" "$ip"; \
+# From A — every node must report (node_count - 1) peers before benchmarking.
+# That is 4 on the current 5-node mesh. Fewer means a partial mesh, and Lane 0
+# quorum needs 4 of 5 acks, so one absent peer is enough to halt finality.
+for ip in localhost <B> <C> <D> <E>; do printf "%s peers=" "$ip"; \
   curl -s "http://$ip:9090/metrics" | awk '/^omnia_node_peers_connected /{print $2}'; done
 ```
 

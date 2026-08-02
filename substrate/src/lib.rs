@@ -1033,6 +1033,10 @@ impl Substrate {
                 // frontier so peers that lost events to bounded-queue drops
                 // can request and recover them.
                 gossip.maybe_send_sync_digest().await;
+                // Mesh repair (issue #411): peers were dialled once at
+                // startup and never again, so a dropped link stayed dropped
+                // until a node restarted. No-op while the mesh is complete.
+                gossip.maybe_redial_peers().await;
             }
             self.unprocessed_events.extend(newly_inserted.iter().copied());
 

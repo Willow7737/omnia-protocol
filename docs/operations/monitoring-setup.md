@@ -2,7 +2,7 @@
 
 > Audience: Operators
 > Context: Standing up metrics + alerting for the geo-distributed testnet.
-> Last Updated: 2026-08-01
+> Last Updated: 2026-08-02
 
 ## Why this exists
 
@@ -25,13 +25,15 @@ alerting on metrics that were never collected means the same.
 ## Architecture, and why Grafana runs in the cloud
 
 ```
-node A (Nuremberg) ─┐
-node B (Ashburn)   ─┼─► Prometheus on host A ──remote_write──► Grafana Cloud
-node C (Singapore) ─┘        (scrape :9090)                  (dashboards + alerts)
+node A (Nuremberg)  ─┐
+node B (Ashburn)    ─┤
+node C (Singapore)  ─┼─► Prometheus on host A ──remote_write──► Grafana Cloud
+node D (Helsinki)   ─┤        (scrape :9090)                  (dashboards + alerts)
+node E (Falkenstein)─┘
 ```
 
-Prometheus runs on **host A** because it is the only host permitted through
-B's and C's firewalls on 9090.
+Prometheus runs on **host A** because it is the only host the other members
+allow through their firewalls on 9090.
 
 **Do not run Grafana on host A.** A Grafana there cannot alert you that host
 A is down, which is the single most important thing to be told. Alert
@@ -98,8 +100,8 @@ curl -s localhost:9095/metrics | grep -v '^#' \
 - `samples_pending` **small / falling** — a large growing value means the
   queue is backing up and nothing is being delivered
 
-Then query `omnia_node_peers_connected` in Grafana Cloud → Explore. Three
-series, one per node.
+Then query `omnia_node_peers_connected` in Grafana Cloud → Explore. One series
+per node — five on the current mesh.
 
 ### 4. Alert rules
 
@@ -108,7 +110,7 @@ data source:
 
 | Alert | Query (Code mode) | Condition | Pending |
 |---|---|---|---|
-| Node lost peers | `omnia_node_peers_connected` | `IS BELOW <n-1>` | 3m |
+| Node lost peers | `max_over_time(omnia_node_peers_connected[10m])` | `IS BELOW <n-1>` | 5m |
 | Finality stalled | `rate(omnia_node_events_finalized_total[5m])` | `IS BELOW 0.001` | 10m |
 
 **The peer threshold is `node_count - 1`** — in a healthy mesh every node
@@ -116,6 +118,20 @@ sees every other. It is `2` for the 3-node topology and `4` for 5 nodes.
 **Update it whenever the validator set changes.** A stale `< 2` on a 5-node
 mesh does not error or look broken; it simply keeps reporting healthy until
 three of five nodes are gone.
+
+**Use `max_over_time`, not the raw gauge.** `omnia_node_peers_connected`
+flaps: peer-level connectivity is derived from connection-level libp2p events
+without consulting `num_established`, so closing one of several connections
+to a peer drops it from the count until the next connection is established
+(#422). Measured on the live 5-node mesh, a node read 3 for ~64 seconds and
+recovered untouched. A raw `< 4` pages on every one of those. `max_over_time`
+asks whether the node reached full connectivity *anywhere* in the window — a
+transient dip does, a genuinely dead link never does. Detection costs one
+window; false positives go to zero.
+
+Note the gauge can also over-report. A half-open connection is counted by the
+side that did not observe the close, so a broken link may show as `4` on one
+end and `3` on the other. The alert catches it from the dropping side only.
 
 The pending period must be **>= the evaluation group's interval** — the
 interval belongs to the group, not the rule. A 1m group interval with a 3m
