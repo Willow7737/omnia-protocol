@@ -44,6 +44,20 @@ scrape_configs:
           node: 'C'
           region: 'sin-ap-southeast'
           role: 'validator'
+      - targets: ['46.62.218.24:9090']
+        labels:
+          node: 'D'
+          region: 'hel1-eu-central'
+          role: 'validator'
+      - targets: ['46.224.103.217:9090']
+        labels:
+          node: 'E'
+          region: 'fsn1-eu-central'
+          role: 'validator'
+      # Adding another node? Add it here AND raise the Grafana alert
+      # threshold to (node_count - 1) — currently 4 for this 5-node mesh.
+      # A stale threshold does not error; it just keeps reporting healthy
+      # through the degradation it exists to catch. See geo-testnet.md.
 
   - job_name: 'prometheus'
     static_configs:

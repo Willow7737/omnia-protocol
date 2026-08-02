@@ -108,8 +108,14 @@ data source:
 
 | Alert | Query (Code mode) | Condition | Pending |
 |---|---|---|---|
-| Node lost peers | `omnia_node_peers_connected` | `IS BELOW 2` | 3m |
+| Node lost peers | `omnia_node_peers_connected` | `IS BELOW <n-1>` | 3m |
 | Finality stalled | `rate(omnia_node_events_finalized_total[5m])` | `IS BELOW 0.001` | 10m |
+
+**The peer threshold is `node_count - 1`** — in a healthy mesh every node
+sees every other. It is `2` for the 3-node topology and `4` for 5 nodes.
+**Update it whenever the validator set changes.** A stale `< 2` on a 5-node
+mesh does not error or look broken; it simply keeps reporting healthy until
+three of five nodes are gone.
 
 The pending period must be **>= the evaluation group's interval** — the
 interval belongs to the group, not the rule. A 1m group interval with a 3m
