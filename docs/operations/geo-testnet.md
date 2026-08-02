@@ -155,13 +155,31 @@ re-dial a bootstrap that restarts (#411). Restarting A after the others
 would orphan it — exactly the failure that went unnoticed for four days in
 July 2026.
 
-> **Watch for tracked files you edited in place on host A.** A checkout will
-> refuse to overwrite them, and `git stash -u` will sweep them away —
-> including `docker/monitoring/prometheus-wan.yml`, whose live copy holds the
-> real `remote_write` credentials that the committed version leaves
-> commented out. Restoring the committed version silently stops metrics
-> reaching Grafana Cloud. Back it up outside the repo first, and confirm
-> `grep -c '^remote_write'` returns 1 before restarting Prometheus.
+> **Back up host A's live monitoring files outside the repo before the
+> checkout.** Two of them do not survive it:
+>
+> - `docker/monitoring/prometheus-wan.yml` — the live copy carries the real
+>   `remote_write` url and username; the committed version leaves that block
+>   commented out. Silently stops shipping if overwritten.
+> - `docker/monitoring/grafana-cloud-token` — **`git stash -u` takes this
+>   too.** It is gitignored on current `main`, but `.gitignore` is itself
+>   part of what you are upgrading, so on the old commit the rule does not
+>   exist yet and the file is merely untracked. `-u` stashes untracked files;
+>   only `-a` includes ignored ones. Losing it leaves a bind-mount pointing
+>   at nothing, Docker creates a *directory* in its place, and Prometheus
+>   fails to start with `not a directory`.
+>
+> ```bash
+> mkdir -p /root/monitoring-backup
+> cp -a docker/monitoring/prometheus-wan.yml \
+>       docker/monitoring/grafana-cloud-token /root/monitoring-backup/
+> ```
+>
+> Recover from the stash with `git checkout stash@{0}^3 -- <path>` (untracked
+> files live in the stash's *third* parent, not its tree). Afterwards confirm
+> `grep -c '^remote_write' docker/monitoring/prometheus-wan.yml` returns 1,
+> and re-apply `chown 65534:65534` + `chmod 644` to the token before starting
+> Prometheus.
 
 **5. Verify — every node must report 4 peers.**
 
