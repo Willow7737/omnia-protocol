@@ -262,8 +262,10 @@ Verify each node, then the mesh:
 curl -s http://localhost:9090/api/v1/node/info | python3 -m json.tool
 # expect: "lane0": {...} present and this_node_is_validator=true in logs
 
-# From A — peers must be 2 on every node before benchmarking:
-for ip in localhost <B> <C>; do printf "%s peers=" "$ip"; \
+# From A — every node must report (node_count - 1) peers before benchmarking.
+# That is 4 on the current 5-node mesh. Fewer means a partial mesh, and Lane 0
+# quorum needs 4 of 5 acks, so one absent peer is enough to halt finality.
+for ip in localhost <B> <C> <D> <E>; do printf "%s peers=" "$ip"; \
   curl -s "http://$ip:9090/metrics" | awk '/^omnia_node_peers_connected /{print $2}'; done
 ```
 

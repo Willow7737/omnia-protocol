@@ -16,15 +16,23 @@ groups:
           summary: "No events being finalized"
           description: "The rate of finalized events has been zero for 5 minutes."
 
+      # The threshold is `node_count - 1`: in a healthy mesh every node sees
+      # every other one. It is 4 for the current 5-node WAN testnet.
+      #
+      # RAISE IT WHENEVER THE VALIDATOR SET GROWS. A stale threshold does not
+      # error and does not look broken — it just keeps reporting healthy
+      # through the degradation it exists to catch. A `< 2` left over from the
+      # 3-node topology would stay silent on a 5-node mesh until three of five
+      # nodes were gone, long after Lane 0 finality had already halted.
       - alert: PeerCountDrop
-        expr: omnia_node_peers_connected < 2
+        expr: omnia_node_peers_connected < 4
         for: 3m
         labels:
           severity: warning
           component: network
         annotations:
           summary: "Low peer count"
-          description: "Connected peers dropped below 2."
+          description: "Connected peers dropped below 4 (expected node_count - 1)."
 
       - alert: HighSlashingRate
         expr: rate(omnia_slashing_events_total[10m]) > 0.1

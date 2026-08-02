@@ -25,13 +25,15 @@ alerting on metrics that were never collected means the same.
 ## Architecture, and why Grafana runs in the cloud
 
 ```
-node A (Nuremberg) ─┐
-node B (Ashburn)   ─┼─► Prometheus on host A ──remote_write──► Grafana Cloud
-node C (Singapore) ─┘        (scrape :9090)                  (dashboards + alerts)
+node A (Nuremberg)  ─┐
+node B (Ashburn)    ─┤
+node C (Singapore)  ─┼─► Prometheus on host A ──remote_write──► Grafana Cloud
+node D (Helsinki)   ─┤        (scrape :9090)                  (dashboards + alerts)
+node E (Falkenstein)─┘
 ```
 
-Prometheus runs on **host A** because it is the only host permitted through
-B's and C's firewalls on 9090.
+Prometheus runs on **host A** because it is the only host the other members
+allow through their firewalls on 9090.
 
 **Do not run Grafana on host A.** A Grafana there cannot alert you that host
 A is down, which is the single most important thing to be told. Alert
@@ -98,8 +100,8 @@ curl -s localhost:9095/metrics | grep -v '^#' \
 - `samples_pending` **small / falling** — a large growing value means the
   queue is backing up and nothing is being delivered
 
-Then query `omnia_node_peers_connected` in Grafana Cloud → Explore. Three
-series, one per node.
+Then query `omnia_node_peers_connected` in Grafana Cloud → Explore. One series
+per node — five on the current mesh.
 
 ### 4. Alert rules
 
