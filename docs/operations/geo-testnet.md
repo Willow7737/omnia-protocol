@@ -132,16 +132,16 @@ Lane 0 acks are encoded with postcard, which is not self-describing, so a
 field added to `SignedAck` in the interim makes the two builds mutually
 unintelligible.
 
-**This testnet tracks `dev`**, per §1. Confirm the branch you deploy actually
-contains the change you mean to ship — a merge into `dev` is not in `main`,
-and checking out the wrong one rebuilds the binary already running. That
-failure is silent: the build succeeds, the containers restart, and nothing
-changes.
+**Nodes run `main`** (§1). Before deploying, confirm the change you mean to
+ship has actually reached `main` — a PR merged into `dev` has not, and
+rebuilding then produces the binary already running. That failure is silent:
+the build succeeds, containers restart, and nothing changes. Check with
+`git log origin/main --oneline -1` before touching any host.
 
 ```bash
 # On EVERY host, new and old alike:
 cd /opt/omnia-protocol
-git fetch origin && git checkout -B dev origin/dev
+git fetch origin && git checkout -B main origin/main
 git log -1 --format='%h %s'   # same hash on all five before building
 docker compose -f docker/docker-compose.wan.yml build
 ```
@@ -243,8 +243,13 @@ Ubuntu 24.04, Docker installed:
 ```bash
 apt-get update && apt-get install -y docker.io docker-compose-v2 git curl
 git clone https://github.com/Willow7737/omnia-protocol /opt/omnia-protocol
-cd /opt/omnia-protocol && git checkout dev
+cd /opt/omnia-protocol && git checkout main
 ```
+
+**Nodes run `main`, never `dev`.** `dev` is the integration branch: changes
+land there to be exercised by CI and can be red at any moment. Deploying from
+it puts unvalidated code on validators. The series is
+`feature branch → dev → CI green → merge to main → deploy`.
 
 ## 2. Firewall (all three hosts)
 

@@ -2643,18 +2643,36 @@ mod tests {
 
     /// Builds a protocol with `n` configured peers and a wired command
     /// channel, returning the receiver so dials can be observed.
+    ///
+    /// The base interval is milliseconds rather than the production 15s so a
+    /// sweep can be made due by sleeping. Backdating `last_redial` would be
+    /// the obvious alternative, but `Instant - Duration` panics on Windows,
+    /// whose monotonic clock starts near process start rather than at an
+    /// arbitrary epoch — a subtraction that merely looks large on Linux
+    /// underflows there.
     fn redial_harness(peers: usize) -> (GossipProtocol, mpsc::Receiver<NetworkCommand>) {
         let graph = Arc::new(RwLock::new(CausalGraph::new()));
         let config = GossipConfig {
             bootstrap_peers: (0..peers)
                 .map(|i| format!("/ip4/10.0.0.{}/udp/4001/quic-v1", i + 1))
                 .collect(),
+            redial_interval_ms: REDIAL_TEST_INTERVAL_MS,
             ..GossipConfig::default()
         };
         let mut gossip = GossipProtocol::new(node(1), config, graph);
         let (tx, rx) = mpsc::channel(64);
         gossip.network_cmd_tx = Some(tx);
         (gossip, rx)
+    }
+
+    /// Base re-dial interval used by the tests. With ±20% jitter the first
+    /// sweep comes due between 16ms and 24ms, so [`redial_wait_past_backoff`]
+    /// clears it with room to spare while the second sweep (32-48ms) does not.
+    const REDIAL_TEST_INTERVAL_MS: u64 = 20;
+
+    /// Sleep long enough that a first sweep is definitely due.
+    async fn redial_wait_past_backoff() {
+        tokio::time::sleep(std::time::Duration::from_millis(REDIAL_TEST_INTERVAL_MS * 5)).await;
     }
 
     /// A complete mesh must never dial. This is what keeps the sweep free on
@@ -2668,7 +2686,7 @@ mod tests {
             gossip.last_seen.insert(p, Instant::now());
         }
 
-        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        redial_wait_past_backoff().await;
         gossip.maybe_redial_peers().await;
 
         assert!(rx.try_recv().is_err(), "a complete mesh must not dial");
@@ -2684,7 +2702,7 @@ mod tests {
         gossip.connected_peers.insert(live);
         gossip.last_seen.insert(live, Instant::now());
 
-        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        redial_wait_past_backoff().await;
         gossip.maybe_redial_peers().await;
 
         let mut dialled = 0;
@@ -2700,7 +2718,7 @@ mod tests {
     #[tokio::test]
     async fn redial_respects_backoff_between_sweeps() {
         let (mut gossip, mut rx) = redial_harness(2);
-        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        redial_wait_past_backoff().await;
 
         gossip.maybe_redial_peers().await;
         while rx.try_recv().is_ok() {}
@@ -2754,7 +2772,7 @@ mod tests {
     async fn redial_can_be_disabled() {
         let (mut gossip, mut rx) = redial_harness(2);
         gossip.config.redial_interval_ms = 0;
-        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        redial_wait_past_backoff().await;
 
         gossip.maybe_redial_peers().await;
 
