@@ -34,6 +34,16 @@ const DEFAULT_PARTITION_THRESHOLD_MS: u64 = 30_000; // 30 seconds (was 3s)
 /// before the peer is considered silent.
 const DEFAULT_HEARTBEAT_INTERVAL_MS: u64 = DEFAULT_PARTITION_THRESHOLD_MS / 3;
 
+/// Base delay before the first re-dial attempt after the mesh is detected
+/// incomplete (issue #411). Doubles per consecutive failed sweep up to
+/// [`MAX_REDIAL_INTERVAL_MS`].
+const DEFAULT_REDIAL_INTERVAL_MS: u64 = 15_000;
+
+/// Ceiling for the re-dial backoff. A permanently dead peer is retried at
+/// this cadence forever rather than being abandoned — an operator who fixes
+/// a firewall rule should not also have to restart nodes to recover the mesh.
+const MAX_REDIAL_INTERVAL_MS: u64 = 300_000;
+
 /// Constant topic name for Omnia events gossip. Avoids per-call allocation.
 const OMNIA_EVENTS_TOPIC: &str = "omnia_events";
 
@@ -152,6 +162,13 @@ pub struct GossipConfig {
     /// anti-entropy. Default: 10000 ms.
     #[serde(default = "default_sync_interval")]
     pub sync_interval_ms: u64,
+    /// Base interval in milliseconds between re-dial sweeps when fewer peers
+    /// are connected than [`GossipConfig::bootstrap_peers`] lists (issue
+    /// #411). Doubles per consecutive unsuccessful sweep up to
+    /// [`MAX_REDIAL_INTERVAL_MS`]. `0` disables re-dialling, restoring the
+    /// dial-once-at-startup behaviour. Default: 15000 ms.
+    #[serde(default = "default_redial_interval")]
+    pub redial_interval_ms: u64,
 }
 
 fn default_partition_threshold() -> u64 {
@@ -174,6 +191,10 @@ fn default_sync_interval() -> u64 {
     10_000
 }
 
+fn default_redial_interval() -> u64 {
+    DEFAULT_REDIAL_INTERVAL_MS
+}
+
 impl Default for GossipConfig {
     fn default() -> Self {
         Self {
@@ -190,6 +211,7 @@ impl Default for GossipConfig {
             max_events_per_second: 100,
             burst_capacity: 200,
             sync_interval_ms: default_sync_interval(),
+            redial_interval_ms: DEFAULT_REDIAL_INTERVAL_MS,
         }
     }
 }
@@ -314,6 +336,11 @@ pub struct GossipProtocol {
     connected_peers: HashSet<PeerId>,
     /// When this node last published a keepalive heartbeat.
     last_heartbeat: Instant,
+    /// When the last re-dial sweep ran (issue #411).
+    last_redial: Instant,
+    /// Consecutive re-dial sweeps that have not restored a full mesh. Drives
+    /// the exponential backoff; reset to 0 as soon as the mesh is complete.
+    redial_attempts: u32,
     /// Whether a partition is currently detected (to avoid duplicate events).
     partition_active: bool,
     /// Per-peer rate limiter (token bucket).
@@ -420,6 +447,8 @@ impl GossipProtocol {
             last_seen: HashMap::new(),
             connected_peers: HashSet::new(),
             last_heartbeat: Instant::now(),
+            last_redial: Instant::now(),
+            redial_attempts: 0,
             partition_active: false,
             rate_limiter,
             rate_deferred: VecDeque::new(),
@@ -1161,6 +1190,99 @@ impl GossipProtocol {
         if let Err(e) = self.publish_raw(HEARTBEAT_TOPIC, payload).await {
             tracing::debug!("Heartbeat publish failed: {e}");
         }
+    }
+
+    /// Backoff before the next re-dial sweep, given how many consecutive
+    /// sweeps have failed to restore a full mesh.
+    ///
+    /// Exponential from `base`, capped at [`MAX_REDIAL_INTERVAL_MS`], then
+    /// spread by up to ±20%. The jitter is derived from the node id rather
+    /// than an RNG: it must differ *between* nodes (so a shared upstream blip
+    /// does not make every node redial in lockstep) but does not need to be
+    /// unpredictable, and a deterministic value keeps this testable.
+    fn redial_backoff_ms(&self, attempts: u32) -> u64 {
+        let base = self.config.redial_interval_ms;
+        let stepped = base
+            .saturating_mul(1u64 << attempts.min(16))
+            .min(MAX_REDIAL_INTERVAL_MS);
+
+        // ±20%, keyed on (node_id, attempt) so successive sweeps on one node
+        // also differ rather than landing on a fixed offset.
+        let seed = blake3_hash_domain(
+            b"omnia-redial-jitter",
+            &[&self.node_id[..], &attempts.to_le_bytes()].concat(),
+        );
+        let spread = stepped / 5;
+        if spread == 0 {
+            return stepped;
+        }
+        let offset = u64::from_le_bytes(seed[..8].try_into().unwrap_or([0u8; 8])) % (spread * 2 + 1);
+        stepped.saturating_sub(spread).saturating_add(offset)
+    }
+
+    /// Re-dial configured peers when the mesh is short of members (#411).
+    ///
+    /// [`dial_bootstrap_peers`](Self::dial_bootstrap_peers) previously ran
+    /// exactly once, at startup. Nothing re-dialled afterwards, so **any**
+    /// lost link was permanent until one of the two nodes restarted — the
+    /// mesh could only degrade between restarts. On the 5-node WAN testnet
+    /// two nodes lost their link 15 seconds after forming it and stayed
+    /// disconnected until one was restarted by hand.
+    ///
+    /// That matters beyond connectivity: Lane 0 quorum on five equal-stake
+    /// validators is four, so two accumulated link losses halt finality
+    /// network-wide while every node keeps answering HTTP 200.
+    ///
+    /// A sweep is a no-op unless the mesh is actually short, so a healthy
+    /// network never dials. When it is short, every configured address is
+    /// re-dialled; libp2p suppresses redundant dials to peers it is already
+    /// connected to or currently dialling, so the cost is bounded and there
+    /// is no need to track which specific link is missing.
+    ///
+    /// **This only repairs links that *this* node can initiate.** A node with
+    /// an empty `bootstrap_peers` (the classic bootstrap node) never sweeps
+    /// and relies on its peers dialling it. A link is restored if *either*
+    /// end dials, so listing all other members on every non-bootstrap node is
+    /// enough — but a topology where only one node has peers configured
+    /// leaves that node's losses unrepairable.
+    pub async fn maybe_redial_peers(&mut self) {
+        if self.config.redial_interval_ms == 0
+            || self.network_cmd_tx.is_none()
+            || self.config.bootstrap_peers.is_empty()
+        {
+            return;
+        }
+
+        // A full mesh needs nothing. Reset the backoff so the next genuine
+        // loss is retried promptly rather than at whatever interval the last
+        // outage escalated to.
+        if self.connected_peer_count() >= self.config.bootstrap_peers.len() {
+            if self.redial_attempts > 0 {
+                info!(
+                    peers = self.connected_peer_count(),
+                    "Mesh complete — re-dial backoff reset"
+                );
+                self.redial_attempts = 0;
+            }
+            return;
+        }
+
+        let wait = std::time::Duration::from_millis(self.redial_backoff_ms(self.redial_attempts));
+        if self.last_redial.elapsed() < wait {
+            return;
+        }
+
+        self.last_redial = Instant::now();
+        self.redial_attempts = self.redial_attempts.saturating_add(1);
+
+        warn!(
+            connected = self.connected_peer_count(),
+            expected = self.config.bootstrap_peers.len(),
+            attempt = self.redial_attempts,
+            "Mesh incomplete — re-dialling configured peers"
+        );
+
+        self.dial_bootstrap_peers().await;
     }
 
     /// Publish an anti-entropy digest on [`SYNC_TOPIC`] if one is due
@@ -2515,6 +2637,128 @@ mod tests {
             gossip.take_aux_messages().is_empty(),
             "heartbeats must not be buffered as aux messages"
         );
+    }
+
+    // ── #411: mesh repair via periodic re-dial ────────────────────────
+
+    /// Builds a protocol with `n` configured peers and a wired command
+    /// channel, returning the receiver so dials can be observed.
+    fn redial_harness(peers: usize) -> (GossipProtocol, mpsc::Receiver<NetworkCommand>) {
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            bootstrap_peers: (0..peers)
+                .map(|i| format!("/ip4/10.0.0.{}/udp/4001/quic-v1", i + 1))
+                .collect(),
+            ..GossipConfig::default()
+        };
+        let mut gossip = GossipProtocol::new(node(1), config, graph);
+        let (tx, rx) = mpsc::channel(64);
+        gossip.network_cmd_tx = Some(tx);
+        (gossip, rx)
+    }
+
+    /// A complete mesh must never dial. This is what keeps the sweep free on
+    /// a healthy network.
+    #[tokio::test]
+    async fn redial_is_a_noop_while_the_mesh_is_complete() {
+        let (mut gossip, mut rx) = redial_harness(2);
+        gossip.connected_peers.insert(PeerId::random());
+        gossip.connected_peers.insert(PeerId::random());
+        for p in gossip.connected_peers.clone() {
+            gossip.last_seen.insert(p, Instant::now());
+        }
+
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        gossip.maybe_redial_peers().await;
+
+        assert!(rx.try_recv().is_err(), "a complete mesh must not dial");
+        assert_eq!(gossip.redial_attempts, 0);
+    }
+
+    /// The regression: a link is lost and nothing restarts. Before #411 this
+    /// produced no dial ever, and the mesh stayed degraded indefinitely.
+    #[tokio::test]
+    async fn redial_dials_every_configured_peer_when_short() {
+        let (mut gossip, mut rx) = redial_harness(2);
+        let live = PeerId::random();
+        gossip.connected_peers.insert(live);
+        gossip.last_seen.insert(live, Instant::now());
+
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+        gossip.maybe_redial_peers().await;
+
+        let mut dialled = 0;
+        while rx.try_recv().is_ok() {
+            dialled += 1;
+        }
+        assert_eq!(dialled, 2, "every configured address should be re-dialled");
+        assert_eq!(gossip.redial_attempts, 1);
+    }
+
+    /// Sweeps are rate limited: a second call before the backoff elapses is
+    /// silent, so a persistently unreachable peer is not hammered.
+    #[tokio::test]
+    async fn redial_respects_backoff_between_sweeps() {
+        let (mut gossip, mut rx) = redial_harness(2);
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+
+        gossip.maybe_redial_peers().await;
+        while rx.try_recv().is_ok() {}
+        let after_first = gossip.redial_attempts;
+
+        // Immediately again — the backoff has not elapsed.
+        gossip.maybe_redial_peers().await;
+
+        assert!(rx.try_recv().is_err(), "second sweep must wait for the backoff");
+        assert_eq!(gossip.redial_attempts, after_first);
+    }
+
+    /// Backoff grows per failed sweep and is capped, so a dead peer settles
+    /// into a slow retry instead of being abandoned or hammered.
+    #[test]
+    fn redial_backoff_grows_and_is_capped() {
+        let (gossip, _rx) = redial_harness(1);
+
+        let first = gossip.redial_backoff_ms(0);
+        let later = gossip.redial_backoff_ms(4);
+        assert!(later > first, "backoff must grow with consecutive failures");
+
+        // ±20% jitter, so allow the cap plus that margin.
+        let ceiling = MAX_REDIAL_INTERVAL_MS + MAX_REDIAL_INTERVAL_MS / 5;
+        for attempts in 0..40 {
+            assert!(
+                gossip.redial_backoff_ms(attempts) <= ceiling,
+                "attempt {attempts} exceeded the capped backoff"
+            );
+        }
+    }
+
+    /// Jitter must differ between nodes, or a shared upstream blip makes the
+    /// whole mesh redial in lockstep.
+    #[test]
+    fn redial_jitter_differs_between_nodes() {
+        let graph = Arc::new(RwLock::new(CausalGraph::new()));
+        let config = GossipConfig {
+            bootstrap_peers: vec!["/ip4/10.0.0.1/udp/4001/quic-v1".to_string()],
+            ..GossipConfig::default()
+        };
+        let a = GossipProtocol::new(node(1), config.clone(), graph.clone());
+        let b = GossipProtocol::new(node(2), config, graph);
+
+        let differs = (0..8).any(|n| a.redial_backoff_ms(n) != b.redial_backoff_ms(n));
+        assert!(differs, "two nodes must not share an identical backoff schedule");
+    }
+
+    /// Setting the interval to 0 restores the old dial-once behaviour.
+    #[tokio::test]
+    async fn redial_can_be_disabled() {
+        let (mut gossip, mut rx) = redial_harness(2);
+        gossip.config.redial_interval_ms = 0;
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
+
+        gossip.maybe_redial_peers().await;
+
+        assert!(rx.try_recv().is_err(), "redial_interval_ms = 0 must disable sweeps");
     }
 
     /// A due heartbeat publishes `node_id ‖ unix_millis` on the
