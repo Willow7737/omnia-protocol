@@ -15,11 +15,15 @@ real WAN latency, which is the credibility jump that matters: it converts
 Three nodes, three regions, one provider (Hetzner shown; any VPS provider
 works). All three are Lane 0 validators.
 
-| Node | Region | Role | Suggested size |
-|------|--------|------|----------------|
-| **A** | Nuremberg, EU (`nbg1`) | bootstrap + validator + ingress + bench host | existing box |
-| **B** | Ashburn, US-East (`ash`) | validator | CPX21 (3 vCPU / 4 GB) |
-| **C** | Singapore (`sin`) | validator | CPX21 (3 vCPU / 4 GB) |
+| Node | IP | Region | Role |
+|------|----|--------|------|
+| **A** | 78.47.43.136 | Nuremberg, DE (`nbg1`) | bootstrap + validator + ingress + bench host |
+| **B** | 178.156.163.211 | Ashburn, US-East (`ash`) | validator |
+| **C** | 5.223.85.30 | Singapore (`sin`) | validator |
+| **D** | 46.62.218.24 | Helsinki, FI (`hel1`) | validator |
+| **E** | 46.224.103.217 | Falkenstein, DE (`fsn1`) | validator |
+
+Sizing: CPX21 (3 vCPU / 4 GB) is ample — see the footprint note below.
 
 Expected RTTs: A↔B ~90 ms, A↔C ~170 ms, B↔C ~230 ms (the worst common
 internet path — that is the point).
@@ -31,7 +35,132 @@ internet path — that is the point).
 > validators (2 EU / 2 US / 1 Asia) for real 1-fault tolerance.
 
 Sizing basis: a node peaked at ~160 MB RSS during a 10,000-event burst on
-the 5-node single-host run — CPX21 is generous headroom.
+the 5-node single-host run — CPX21 is generous headroom. Measured in
+production on 2026-08-01, a live node idled at **30 MB RSS with 0.02% CPU**,
+so the constraint is fault tolerance, not resources.
+
+## Expanding the validator set (3 → 5)
+
+Read this whole section before starting. Expansion is not additive: every
+node's `OMNIA_LANE0_VALIDATORS` must change, so **all** nodes restart, not
+just the new ones.
+
+### Why 5
+
+| Validators | Quorum (>2/3 stake) | Faults tolerated |
+|---|---|---|
+| 3 | all 3 | **0** — any node down halts finality |
+| 5 | 4 of 5 | **1** |
+| 7 | 5 of 7 | **2** |
+
+Three is a benchmark topology. Five is the smallest set that survives losing
+a node, which is the point of running more than one.
+
+**Correlated failure is the limit, not node count.** Five validators tolerate
+one failure, so *any two simultaneous* losses halt finality. Placement
+therefore matters as much as the number: the current set is 3 EU / 1 US / 1
+Asia, with A (`nbg1`) and E (`fsn1`) both in Germany on the same provider.
+A single German or Hetzner-EU incident is one event that can take two nodes
+and stop finality network-wide. That is an accepted trade for now — it is
+still strictly better than the previous zero-fault-tolerance topology — but
+it means the next expansion should add capacity *outside* the EU (and ideally
+outside Hetzner) rather than more of the same region.
+
+### Procedure
+
+**1. Generate keys for the new nodes — on host A only.**
+
+The validator set must be byte-identical everywhere, so all keys come from
+one place. `setup-validators.sh` reuses existing keys and only creates what
+is missing, so nodes 0–2 keep their identities:
+
+```bash
+cd /opt/omnia-protocol
+NODES=5 ./scripts/setup-validators.sh
+```
+
+This rewrites `OMNIA_LANE0_VALIDATORS` in `docker/.env` with all five
+pubkeys. It preserves an existing `OMNIA_JWT_SECRET` rather than clobbering
+it — confirm that, because a changed secret invalidates every live wallet
+session.
+
+**2. Provision D and E** as in §1–2 above (Docker, clone, firewall).
+
+Firewall is the step most likely to be done incompletely: five nodes means
+**ten pairs**, and the existing hosts each need rules for the two new IPs.
+On every host, allow UDP 4001 from the other four, and TCP 9090 from host A
+only:
+
+```bash
+# Run on EACH host, omitting its own IP:
+for ip in 78.47.43.136 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  ufw allow from "$ip" to any port 4001 proto udp
+done
+ufw allow from 78.47.43.136 to any port 9090 proto tcp   # skip on A itself
+```
+
+A missing rule does not announce itself — the mesh simply forms with fewer
+peers than it should, and `peers` sits at 3 instead of 4 on the affected
+nodes. Step 5 is what catches it.
+
+**3. Distribute keys and the shared config.**
+
+```bash
+# On A — copy each node's own key dir, plus the shared validator set
+scp -r ops/testnet-keys/node3 root@46.62.218.24:/opt/omnia-protocol/ops/testnet-keys/
+scp -r ops/testnet-keys/node4 root@46.224.103.217:/opt/omnia-protocol/ops/testnet-keys/
+for h in 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  scp docker/.env root@$h:/opt/omnia-protocol/docker/.env
+done
+```
+
+Then on **every** host: `chown -R 1000:1000 ops/testnet-keys`. The container
+runs as uid 1000; an unreadable key does not fail loudly — the node
+silently falls back to an ephemeral identity, logs
+`this_node_is_validator=false`, has every ack rejected as "unknown
+validator", and finality never happens.
+
+Append the per-node variables on D and E (`OMNIA_NODE_ID=4` / `5`,
+`OMNIA_KEY_DIR=../ops/testnet-keys/node3` / `node4`, `OMNIA_TOTAL_NODES=5`,
+and `OMNIA_BOOTSTRAP_NODES` listing the other four).
+
+**4. Restart in order — A first, then everyone else.**
+
+```bash
+# On A:
+docker compose -f docker/docker-compose.wan.yml up -d
+# Then on B, C, D, E:
+docker compose -f docker/docker-compose.wan.yml up -d
+```
+
+A must go first because it is the bootstrap node, and peers do **not**
+re-dial a bootstrap that restarts (#411). Restarting A after the others
+would orphan it — exactly the failure that went unnoticed for four days in
+July 2026.
+
+**5. Verify — every node must report 4 peers.**
+
+```bash
+for ip in localhost 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
+  printf "%-16s " "$ip"
+  curl -s "http://$ip:9090/api/v1/node/info"     | python3 -c "import sys,json; d=json.load(sys.stdin); print('peers=', d['peers'], 'lane0_finalized=', d['lane0']['events_finalized'])"
+done
+```
+
+Anything below `peers=4` is a partial mesh. Do not move on until all five
+agree — a node with a different validator set will reject acks it should
+accept, and the symptom (finality stalls) looks nothing like the cause.
+
+**6. Update monitoring — this is easy to forget and silently degrades it.**
+
+Add D and E to `docker/monitoring/prometheus-wan.yml` and restart
+`omnia-prometheus`, then **change the alert threshold from `< 2` to `< 4`**
+in Grafana Cloud.
+
+Leaving it at `< 2` on a 5-node mesh means the alert only fires once a node
+is down to 1 peer — i.e. after **three of five** nodes are already gone. The
+rule keeps evaluating and reporting healthy through the exact degradation it
+exists to catch. See [monitoring-setup.md](./monitoring-setup.md).
 
 ## 1. Provision B and C
 
