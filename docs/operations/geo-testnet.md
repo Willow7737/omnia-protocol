@@ -126,16 +126,23 @@ and `OMNIA_BOOTSTRAP_NODES` listing the other four).
 
 **4. Put every node on the same commit, then restart in order.**
 
-New nodes get a fresh clone of the current default branch. The existing
-nodes are running whatever image they were last built from, which may be
-months behind. **Rebuild them too** — Lane 0 acks are encoded with postcard,
-which is not self-describing, so a field added to `SignedAck` in the interim
-makes the two builds mutually unintelligible.
+New nodes get a fresh clone. The existing nodes are running whatever image
+they were last built from, which may be months behind. **Rebuild them too** —
+Lane 0 acks are encoded with postcard, which is not self-describing, so a
+field added to `SignedAck` in the interim makes the two builds mutually
+unintelligible.
+
+**Nodes run `main`** (§1). Before deploying, confirm the change you mean to
+ship has actually reached `main` — a PR merged into `dev` has not, and
+rebuilding then produces the binary already running. That failure is silent:
+the build succeeds, containers restart, and nothing changes. Check with
+`git log origin/main --oneline -1` before touching any host.
 
 ```bash
 # On EVERY host, new and old alike:
 cd /opt/omnia-protocol
 git fetch origin && git checkout -B main origin/main
+git log -1 --format='%h %s'   # same hash on all five before building
 docker compose -f docker/docker-compose.wan.yml build
 ```
 
@@ -236,8 +243,13 @@ Ubuntu 24.04, Docker installed:
 ```bash
 apt-get update && apt-get install -y docker.io docker-compose-v2 git curl
 git clone https://github.com/Willow7737/omnia-protocol /opt/omnia-protocol
-cd /opt/omnia-protocol && git checkout dev
+cd /opt/omnia-protocol && git checkout main
 ```
+
+**Nodes run `main`, never `dev`.** `dev` is the integration branch: changes
+land there to be exercised by CI and can be red at any moment. Deploying from
+it puts unvalidated code on validators. The series is
+`feature branch → dev → CI green → merge to main → deploy`.
 
 ## 2. Firewall (all three hosts)
 
