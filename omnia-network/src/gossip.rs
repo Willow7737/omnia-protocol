@@ -2668,9 +2668,7 @@ mod tests {
             gossip.last_seen.insert(p, Instant::now());
         }
 
-        gossip.last_redial = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(|| Instant::now() - std::time::Duration::from_secs(60));
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
         gossip.maybe_redial_peers().await;
 
         assert!(rx.try_recv().is_err(), "a complete mesh must not dial");
@@ -2686,9 +2684,7 @@ mod tests {
         gossip.connected_peers.insert(live);
         gossip.last_seen.insert(live, Instant::now());
 
-        gossip.last_redial = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(|| Instant::now() - std::time::Duration::from_secs(60));
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
         gossip.maybe_redial_peers().await;
 
         let mut dialled = 0;
@@ -2704,9 +2700,7 @@ mod tests {
     #[tokio::test]
     async fn redial_respects_backoff_between_sweeps() {
         let (mut gossip, mut rx) = redial_harness(2);
-        gossip.last_redial = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(|| Instant::now() - std::time::Duration::from_secs(60));
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
 
         gossip.maybe_redial_peers().await;
         while rx.try_recv().is_ok() {}
@@ -2760,9 +2754,7 @@ mod tests {
     async fn redial_can_be_disabled() {
         let (mut gossip, mut rx) = redial_harness(2);
         gossip.config.redial_interval_ms = 0;
-        gossip.last_redial = Instant::now()
-            .checked_sub(std::time::Duration::from_secs(3600))
-            .unwrap_or_else(|| Instant::now() - std::time::Duration::from_secs(60));
+        gossip.last_redial = Instant::now() - std::time::Duration::from_secs(3600);
 
         gossip.maybe_redial_peers().await;
 
