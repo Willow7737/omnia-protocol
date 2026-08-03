@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.86](https://github.com/Willow7737/omnia-protocol/compare/v0.1.85...v0.1.86) (2026-08-03)
+
+
+### Bug Fixes
+
+* **tests:** use saturating_sub to prevent Instant overflow on short-lived CI runners ([a230f58](https://github.com/Willow7737/omnia-protocol/commit/a230f581d1e9401c644377aff9a7e5c6ac5a558d))
+
 ## [0.1.85](https://github.com/Willow7737/omnia-protocol/compare/v0.1.84...v0.1.85) (2026-08-01)
 
 
