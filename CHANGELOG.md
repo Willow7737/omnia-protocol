@@ -9,6 +9,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.87](https://github.com/Willow7737/omnia-protocol/compare/v0.1.86...v0.1.87) (2026-08-04)
+
+
+### Bug Fixes
+
+* **auth:** create_token falls back to HS256 when RSA not configured ([8358e6d](https://github.com/Willow7737/omnia-protocol/commit/8358e6de735814d430a543813de7afdd5795949f))
+* **ci:** resolve clippy errors — RfFingerprint::stub, unused mut, deprecated SubstrateConfig ([05d4147](https://github.com/Willow7737/omnia-protocol/commit/05d41475baf0eb16ac26654156556b99f33e2c12))
+* **fmt:** add trailing comma in encode call for rustfmt ([4e866ca](https://github.com/Willow7737/omnia-protocol/commit/4e866cac86e8c95fdb17a9ef2fede644a4d33d5b))
+* **fmt:** apply cargo fmt to auth.rs method chain formatting ([41a95df](https://github.com/Willow7737/omnia-protocol/commit/41a95df9d91d9326e3e1e73b0b75845be012c625))
+* **monitoring:** add omnia_node_cpu_usage_ratio metric to replace missing process_cpu_seconds_total ([6bce45c](https://github.com/Willow7737/omnia-protocol/commit/6bce45cb259ef9d4c6411611a53d9d5c8932d993))
+* **tests:** adapt api_integration to RS256 auth migration ([8bb86d5](https://github.com/Willow7737/omnia-protocol/commit/8bb86d5918d10fc41bb3e280cdd29ed096c92edf))
+* **tests:** allow legacy HS256 JWTs in docker e2e tests ([29436e0](https://github.com/Willow7737/omnia-protocol/commit/29436e0927de6ac973469445e55b77b352b726ac))
+* **tests:** allow legacy HS256 JWTs in integration tests ([4156be8](https://github.com/Willow7737/omnia-protocol/commit/4156be8272c3b9068445817955af25c5f8608d54))
+* **tests:** reset JWT secret cache in all api_integration test helpers ([47f562e](https://github.com/Willow7737/omnia-protocol/commit/47f562e3708e7b9692d8f1c515aa0de32295323a))
+
 ## [0.1.86](https://github.com/Willow7737/omnia-protocol/compare/v0.1.85...v0.1.86) (2026-08-03)
 
 
