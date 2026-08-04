@@ -379,7 +379,7 @@ pub fn create_token(caller_id: &str, ttl_secs: u64) -> Result<String, AuthError>
         return encode(
             &header,
             &claims,
-            &EncodingKey::from_rsa_pem(signing_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?
+            &EncodingKey::from_rsa_pem(signing_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?,
         )
         .map_err(|e| AuthError::InvalidToken(e.to_string()));
     }
