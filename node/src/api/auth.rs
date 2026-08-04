@@ -349,6 +349,10 @@ pub fn reset_jwt_secret_for_test() {
 
 /// Create a signed JWT for the given caller identity.
 ///
+/// Tries RS256 first (if `OMNIA_JWT_SIGNING_KEY(_PATH)` is set),
+/// then falls back to HS256 when `OMNIA_JWT_ALLOW_LEGACY_HS256=true`
+/// and `OMNIA_JWT_SECRET` is set.
+///
 /// The token is valid for `ttl_secs` seconds from the current time.
 ///
 /// # Arguments
@@ -358,24 +362,42 @@ pub fn reset_jwt_secret_for_test() {
 ///
 /// # Errors
 ///
-/// Returns [`AuthError::SecretNotConfigured`] if no asymmetric signing key is set.
+/// Returns [`AuthError::SecretNotConfigured`] if no signing key is configured.
 pub fn create_token(caller_id: &str, ttl_secs: u64) -> Result<String, AuthError> {
     let config = jwt_config()?;
-    let signing_pem = config.rs256_signing_pem.ok_or(AuthError::SecretNotConfigured)?;
     let now = epoch_secs();
     let claims = Claims {
         sub: caller_id.to_string(),
         iat: now,
         exp: now + ttl_secs,
     };
-    let mut header = Header::new(Algorithm::RS256);
-    header.kid = config.key_id;
-    encode(
-        &header,
-        &claims,
-        &EncodingKey::from_rsa_pem(&signing_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?,
-    )
-    .map_err(|e| AuthError::InvalidToken(e.to_string()))
+
+    // Try RS256 first (preferred), fall back to legacy HS256 when enabled.
+    if let Some(ref signing_pem) = config.rs256_signing_pem {
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = config.key_id.clone();
+        return encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(signing_pem)
+                .map_err(|e| AuthError::InvalidToken(e.to_string()))?,
+        )
+        .map_err(|e| AuthError::InvalidToken(e.to_string()));
+    }
+
+    if config.allow_legacy_hs256 {
+        let secret = config
+            .legacy_hs256_secret
+            .ok_or(AuthError::SecretNotConfigured)?;
+        return encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .map_err(|e| AuthError::InvalidToken(e.to_string()));
+    }
+
+    Err(AuthError::SecretNotConfigured)
 }
 
 /// Validate a JWT string and return the decoded [`Claims`].
@@ -894,7 +916,7 @@ lwIDAQAB
         let result = decode::<Claims>(
             &token,
             &DecodingKey::from_secret(secret.as_bytes()),
-            &Validation::default(),
+            &Validation::new(Algorithm::HS256),
         );
         assert!(result.is_err(), "Token with exp=1 should be expired");
     }
