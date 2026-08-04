@@ -34,7 +34,7 @@
 | 🌱 New to Omnia         | [docs/use-cases/](docs/use-cases/)                                             | [Quick Start](#-quick-start)                                                   |
 | 💻 Contributor          | [CONTRIBUTING.md](CONTRIBUTING.md)                                             | [docs/architecture/](docs/architecture/)                                       |
 | 🏗️ Systems Architect    | [docs/reference/blueprint-reference.md](docs/reference/blueprint-reference.md) | [docs/architecture/trait-boundaries.md](docs/architecture/trait-boundaries.md) |
-| 📦 Validator Operator   | [docs/building/feature-matrix.md](docs/building/feature-matrix.md)             | [docs/operations/validator-setup.md](docs/operations/validator-setup.md)       |
+| 📦 Validator Operator   | [docs/building/feature-matrix.md](docs/building/feature-matrix.md)             | [External validator onboarding](docs/operations/validator-setup.md#external-validator-onboarding) |
 | 📱 Wallet user          | [Omnia Wallet](https://github.com/Willow7737/Omnia-Wallet)                     | [Live node](#-live-right-now)                                                  |
 | 📊 Performance Engineer | [docs/reference/benchmark-gates.md](docs/reference/benchmark-gates.md)         | [docs/architecture/pipeline-design.md](docs/architecture/pipeline-design.md)   |
 
@@ -466,8 +466,9 @@ _Goal: Performance Validation_
   finalizing events. Measured RTTs match the benchmark baseline exactly.
 - 🔄 **Independent operators — not yet.** All three nodes are run by the
   same operator, so the network is geo-distributed but not yet
-  trust-distributed. Third-party validators are the remaining step; see
-  [validator-setup.md](docs/operations/validator-setup.md).
+  trust-distributed. The external operator onboarding path is documented,
+  but third-party validators are still the remaining step; see
+  [validator-setup.md](docs/operations/validator-setup.md#external-validator-onboarding).
 
 #### v0.1.69 Critical Security Hardening
 

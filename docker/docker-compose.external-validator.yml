@@ -1,0 +1,50 @@
+# Omnia external validator compose sample
+#
+# Usage:
+#   cp docker/.env.external-validator.example docker/.env
+#   cp config/external-validator.toml /etc/omnia/validator.toml
+#   docker compose -f docker/docker-compose.external-validator.yml up -d
+#
+# This stack runs exactly one externally operated validator. It expects the
+# operator to provide bootstrap peers, a shared Lane 0 validator set, and a
+# persistent node key through environment variables / mounted files.
+
+services:
+  omnia-validator:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    image: omnia-protocol:external-validator
+    container_name: omnia-external-validator
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - OMNIA_CONFIG=/etc/omnia/validator.toml
+      - OMNIA_NODE_ID=${OMNIA_NODE_ID:?set unique numeric OMNIA_NODE_ID}
+      - OMNIA_HTTP_PORT=8080
+      - OMNIA_DATA_DIR=/var/lib/omnia
+      - OMNIA_NODE_KEY_FILE=/run/secrets/omnia_node_key
+      - OMNIA_BOOTSTRAP_NODES=${OMNIA_BOOTSTRAP_NODES:?set bootstrap multiaddrs}
+      - OMNIA_LISTEN_ADDR=${OMNIA_LISTEN_ADDR:-/ip4/0.0.0.0/udp/4001/quic-v1}
+      - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:?set shared hex_pubkey:stake list}
+      - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?set JWT HMAC secret}
+      - OMNIA_AUTHORIZED_CALLERS=${OMNIA_AUTHORIZED_CALLERS:-operator-admin}
+      - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-10}
+      - OMNIA_CORS_ORIGINS=${OMNIA_CORS_ORIGINS:-}
+      - OMNIA_MINT_AUTHORITY=${OMNIA_MINT_AUTHORITY:-}
+    ports:
+      - "${OMNIA_HTTP_BIND:-127.0.0.1}:8080:8080/tcp"
+      - "4001:4001/udp"
+    volumes:
+      - omnia-validator-data:/var/lib/omnia
+      - ${OMNIA_CONFIG_FILE:-../config/external-validator.toml}:/etc/omnia/validator.toml:ro
+      - ${OMNIA_NODE_KEY_FILE:?set path to persistent raw node key}:/run/secrets/omnia_node_key:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  omnia-validator-data:

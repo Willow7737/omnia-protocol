@@ -97,8 +97,10 @@ This document catalogs all stub, placeholder, and partial implementations in the
   party. BFT's security argument assumes *independent* operators, so the
   network is currently fault-tolerant against machine and region failure but
   not against operator compromise. Third-party validators are the open item.
-- **What's still planned**: staking pool management, auto-scaling validator
-  set, validator onboarding flow
+- **What's still planned**: staking pool management and auto-scaling validator
+  set. The external validator onboarding documentation and sample configs now
+  exist, but they are not evidence of independent operators until a third party
+  is admitted and monitored in production.
 - **Phase**: Phase 1
 
 ### Conviction Voting — **NOT STARTED** 🌑
