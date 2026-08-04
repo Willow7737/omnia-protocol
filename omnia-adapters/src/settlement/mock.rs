@@ -42,8 +42,18 @@ pub struct MockSettlementAdapter {
 }
 
 impl MockSettlementAdapter {
+    fn assert_not_production() {
+        if matches!(std::env::var("OMNIA_ENV").as_deref(), Ok("production")) {
+            panic!("MockSettlementAdapter is test/dev-only and cannot be constructed with OMNIA_ENV=production");
+        }
+    }
+
     /// Create a new mock adapter with default latency (10 ms).
+    ///
+    /// Panics if `OMNIA_ENV=production` so the mock path cannot be
+    /// accidentally selected for live deployments.
     pub fn new() -> Self {
+        Self::assert_not_production();
         Self {
             latency: Duration::from_millis(10),
             counter: AtomicU64::new(0),
@@ -54,6 +64,7 @@ impl MockSettlementAdapter {
     ///
     /// Useful for testing timeout behavior or simulating slow networks.
     pub fn with_latency(latency: Duration) -> Self {
+        Self::assert_not_production();
         Self {
             latency,
             counter: AtomicU64::new(0),

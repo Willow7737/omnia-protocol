@@ -123,6 +123,17 @@ All fixes were verified with:
 
 All changes to the Omnia Protocol codebase are subject to security review according to the following rules:
 
+
+### Launch-Critical vs Roadmap Surfaces
+
+Auditors should treat the following as the current production launch boundary:
+
+- **Launch-critical settlement**: live Ethereum (`ethereum-live`) or the FFI settlement adapter with `has_settlement_lib`. Node startup refuses `OMNIA_ENV=production` when the selected adapter is not live.
+- **Roadmap/test-only settlement**: `MockSettlementAdapter`, Bitcoin, Solana, Cosmos, and disabled/mock Celestia. Bitcoin/Solana/Cosmos return `NotImplemented`; mock and disabled Celestia cannot be constructed under `OMNIA_ENV=production`.
+- **Roadmap/test-only physical binding**: RF fingerprint verification is a byte-array simulator and fails closed under `OMNIA_ENV=production` until SDR integration lands.
+- **Roadmap economics**: Proof-of-Useful-Work verifies Ed25519 attestation only; production work rewards remain admin-gated until real zkML/folding verification lands.
+- **Superseded node pipeline**: `node/src/pipeline.rs` is deprecated compatibility/roadmap code superseded by ADR-025 and is not instantiated by production startup.
+
 ### Mandatory Security Review
 
 Every pull request that touches the following directories **requires** security review before merge:

@@ -342,13 +342,15 @@ async fn main() -> Result<()> {
     //   - Bitcoin / Solana / Cosmos / Celestia adapters: STUBS, return NotImplemented
     //   - Mock adapter: testing only
     if !settlement.is_live() {
-        tracing::warn!(
-            "Settlement adapter is NOT a live L1 (is_live() == false). \
+        let message = "Settlement adapter is NOT a live L1 (is_live() == false). \
              All SettlementAdapter::submit_root() calls will return \
              NotImplemented or be no-ops. Do not use in production. \
              Enable --features ethereum-live and configure EthereumConfig \
-             for real settlement."
-        );
+             for real settlement.";
+        if matches!(std::env::var("OMNIA_ENV").as_deref(), Ok("production")) {
+            anyhow::bail!("Refusing production startup with non-live settlement adapter. {message}");
+        }
+        tracing::warn!(message);
     }
 
     // Initialize Prometheus metrics

@@ -31,6 +31,9 @@ base64 = "0.22"
 [features]
 default = []
 pqc = ["dep:pqc_dilithium", "dep:ml-kem"]
+# Exposes simulator-only RF helpers for integration tests and local development.
+# Do not enable for production builds.
+test-utils = []
 
 [dev-dependencies]
 tokio-test = "0.4"
