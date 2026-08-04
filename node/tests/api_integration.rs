@@ -215,6 +215,11 @@ where
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
     std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+    // Reset the JWT secret cache and re-initialize from the env var we just set.
+    // Without this, create_token() reads a stale cache from a prior test run
+    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    omnia_node::api::auth::reset_jwt_secret_for_test();
+    omnia_node::api::auth::init_jwt_secret();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -265,6 +270,11 @@ where
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
     std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+    // Reset the JWT secret cache and re-initialize from the env var we just set.
+    // Without this, create_token() reads a stale cache from a prior test run
+    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    omnia_node::api::auth::reset_jwt_secret_for_test();
+    omnia_node::api::auth::init_jwt_secret();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -348,6 +358,11 @@ async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     // Set auth env vars
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+    // Reset the JWT secret cache and re-initialize from the env var we just set.
+    // Without this, create_token() reads a stale cache from a prior test run
+    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    omnia_node::api::auth::reset_jwt_secret_for_test();
+    omnia_node::api::auth::init_jwt_secret();
 
     // Set or clear rate limit override
     if let Some(rps) = rate_limit_rps {
