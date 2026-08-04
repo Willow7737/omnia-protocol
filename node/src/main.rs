@@ -555,6 +555,7 @@ async fn spawn_background_tasks(
                         }
                         node_metrics.consensus_round.set(substrate.current_round() as i64);
                         node_metrics.sample_memory_rss();
+                        node_metrics.sample_cpu_usage();
                     }
 
                     // P0-3: refresh peer count from gossip layer.
