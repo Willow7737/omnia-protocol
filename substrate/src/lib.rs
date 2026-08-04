@@ -1741,16 +1741,16 @@ mod tests {
     }
 
     /// Build a `SubstrateConfig` for tests under `SEED_TEST_LOCK` with
-    /// `OMNIA_CONSENSUS_SEED` cleared. `SubstrateConfig::new` reads that
-    /// env var at construction and panics on a malformed value, so any
-    /// test that constructs a config must serialize against the seed-parse
-    /// tests (which set deliberately invalid seeds). Routing every
-    /// construction through this helper closes that race — do not call the
-    /// panicking `SubstrateConfig::new` directly from a test.
+    /// `OMNIA_CONSENSUS_SEED` cleared. Uses `try_new()` to avoid panicking
+    /// on malformed env vars. Every test that constructs a config must
+    /// serialize against the seed-parse tests (which set deliberately
+    /// invalid seeds). Routing every construction through this helper
+    /// closes that race.
     fn test_config(id: u8) -> SubstrateConfig {
         let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        SubstrateConfig::new(test_node(id))
+        SubstrateConfig::try_new(test_node(id))
+            .expect("valid test config")
     }
 
     #[test]
@@ -1971,7 +1971,8 @@ mod tests {
     fn test_substrate_config_with_network_size() {
         let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::with_network_size(test_node(1), 10);
+        let config = SubstrateConfig::try_with_network_size(test_node(1), 10)
+            .expect("valid test config");
         assert_eq!(config.total_nodes, 10);
         assert_eq!(config.consensus.total_nodes, 10);
     }

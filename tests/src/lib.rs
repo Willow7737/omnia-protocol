@@ -905,7 +905,7 @@ fn provenance_log_deep_chain() {
     let item_id = [0xABu8; 32];
     let anchor = [0xCDu8; 32];
 
-    let rf = RfFingerprint::stub("did:omnia:factory", [0x55u8; 32]);
+    let rf = RfFingerprint::new([0x55u8; 32], VectorClock::new(), "did:omnia:factory".to_string(), 950_000);
     let commitment = QuantumCommitment::new_classical(b"creation", vec![0u8; 64], VectorClock::new());
 
     let mut log = ProvenanceLog::new(item_id, "did:omnia:factory".to_string(), rf, commitment, anchor);
@@ -913,7 +913,7 @@ fn provenance_log_deep_chain() {
     let transfer_count = 1_000;
     for i in 0..transfer_count {
         let holder = format!("did:omnia:holder{i}");
-        let rf = RfFingerprint::stub(&holder, [0x55u8; 32]);
+        let rf = RfFingerprint::new([0x55u8; 32], VectorClock::new(), holder.clone(), 950_000);
         let commitment =
             QuantumCommitment::new_classical(format!("transfer{i}").as_bytes(), vec![0u8; 64], VectorClock::new());
         log.transfer(holder, rf, commitment).unwrap();
