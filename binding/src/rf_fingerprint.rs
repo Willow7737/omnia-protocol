@@ -20,6 +20,10 @@
 //! comparison. Real RF capture requires hardware access (SDR, spectrum
 //! analyzer) and would produce spectral feature vectors rather than simple
 //! byte arrays.
+//!
+//! The current verifier is intentionally non-production: when `OMNIA_ENV=production`,
+//! [`RfFingerprint::verify`] fails closed until a real SDR-backed capture and
+//! calibration pipeline replaces the byte-array simulator.
 
 use omnia_substrate::VectorClock;
 use serde::{Deserialize, Serialize};
@@ -69,6 +73,7 @@ impl RfFingerprint {
     ///
     /// Uses a default `VectorClock` and a confidence of 950_000 PPM (95%).
     /// **Do not use in production** — only for test code.
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn stub(device_did: &str, spectral_hash: [u8; 32]) -> Self {
         Self {
             spectral_hash,
@@ -94,6 +99,14 @@ impl RfFingerprint {
     ///
     /// `true` if the similarity exceeds the confidence threshold.
     pub fn verify(&self, current_measurement: &[u8; 32]) -> bool {
+        if matches!(std::env::var("OMNIA_ENV").as_deref(), Ok("production")) {
+            tracing::error!(
+                "RF fingerprint verification is simulator-only and not SDR-backed; \
+                 refusing verification in OMNIA_ENV=production"
+            );
+            return false;
+        }
+
         let distance = hamming_distance(&self.spectral_hash, current_measurement);
         // Integer PPM-based similarity: (256 - distance) * 1_000_000 / 256
         let similarity_ppm = (256u64 - distance as u64) * 1_000_000 / 256;

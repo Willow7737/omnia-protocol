@@ -11,13 +11,21 @@ use async_trait::async_trait;
 
 /// Solana settlement adapter.
 ///
+/// Roadmap-only stub: every legacy [`SettlementLayer`] operation returns
+/// [`SettlementError::NotImplemented`](super::SettlementError::NotImplemented).
+/// Do not wire this adapter into production settlement selection.
+///
 /// This is a stub implementation. Solana's native Rust programs and
 /// high throughput make it an attractive settlement target. Future
 /// implementation would use an Anchor program for on-chain proof
 /// verification and SPL tokens for bridging.
+#[deprecated(
+    note = "roadmap-only settlement stub; all operations return NotImplemented and it is not production selectable"
+)]
 pub struct SolanaAdapter;
 
 #[async_trait]
+#[allow(deprecated)]
 impl SettlementLayer for SolanaAdapter {
     fn chain_id(&self) -> &'static str {
         "solana"

@@ -83,6 +83,7 @@ pub use settlement::{
 };
 
 // Legacy settlement adapters (always available)
+#[allow(deprecated)]
 pub use settlement::{
     BitcoinAdapter, CelestiaAdapter, CosmosAdapter, EthereumAdapter, EthereumConfig, EthereumMode,
     NoopSettlementAdapter, SolanaAdapter,

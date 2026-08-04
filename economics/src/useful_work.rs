@@ -127,14 +127,12 @@ impl UsefulWorkProof {
     /// proves that a trusted verifier ATTESTED to the work — it does NOT
     /// prove that the work was actually done. Real PoUW verification
     /// (zkML for AI training, folding schemes for scientific computation)
-    /// is not yet implemented. In production, PoUW reward minting should
-    /// be gated behind `OMNIA_ALLOW_UNVERIFIED_POUW=1` until real
-    /// verification lands.
+    /// is not yet implemented. Production PoUW reward minting remains
+    /// admin-gated at the shard boundary until real verification lands.
     ///
-    /// In production mode, real Ed25519 verification is always performed.
-    /// In non-production mode, if the verifier_signature is empty, a
-    /// warning is logged and the proof is accepted (testing mode). If
-    /// the signature is non-empty, it is verified cryptographically.
+    /// This method now fails closed in all builds: an empty verifier
+    /// signature is rejected, and non-empty signatures must verify
+    /// cryptographically against the supplied Ed25519 verifier public key.
     pub fn verify(&self, verifier_pubkey: &[u8; 32]) -> bool {
         // NEW-H1 fix: the previous F-6 fix gated on #[cfg(feature = "production")]
         // but the production feature is NOT in the default feature set. The default

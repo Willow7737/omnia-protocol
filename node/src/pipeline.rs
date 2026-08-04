@@ -31,6 +31,16 @@
 //! The router uses bounded channels for hot and warm paths to provide
 //! back-pressure, and an unbounded channel for cold paths since they
 //! are inherently slow and should not block the hot path.
+//!
+//! # Current audit boundary
+//!
+//! ADR-025 superseded this worker model with direct consensus-to-shard routing.
+//! The module is retained only as a documented roadmap sketch and compatibility
+//! surface; production node startup does not instantiate `PipelineRouter`. New
+//! callers should not use these types until the ADR-025 follow-up design reopens
+//! the pipeline work.
+
+#![allow(deprecated)]
 
 use tokio::sync::mpsc;
 
@@ -40,6 +50,7 @@ use tokio::sync::mpsc;
 /// and causal graph insertion. These operations must never
 /// perform I/O or block the async runtime.
 #[derive(Debug)]
+#[deprecated(note = "ADR-025 superseded PipelineRouter; retained as roadmap-only compatibility surface")]
 pub struct HotWork {
     /// The event payload to process (serialized).
     pub event_bytes: Vec<u8>,
@@ -50,6 +61,7 @@ pub struct HotWork {
 /// Warm work includes consensus processing, mempool insertion,
 /// shard routing, and gossip broadcast. Light I/O is acceptable.
 #[derive(Debug)]
+#[deprecated(note = "ADR-025 superseded PipelineRouter; retained as roadmap-only compatibility surface")]
 pub struct WarmWork {
     /// The event ID that was validated and inserted.
     pub event_id: [u8; 32],
@@ -61,6 +73,7 @@ pub struct WarmWork {
 /// settlement layer submissions, and other CPU-heavy or
 /// network-bound operations.
 #[derive(Debug)]
+#[deprecated(note = "ADR-025 superseded PipelineRouter; retained as roadmap-only compatibility surface")]
 pub enum ColdWork {
     /// Generate a ZK proof for a batch of events.
     GenerateProof {
@@ -84,6 +97,7 @@ pub enum ColdWork {
 /// The router provides bounded senders for hot and warm paths, and
 /// an unbounded sender for cold paths. Workers are spawned separately
 /// via `PipelineRouter::spawn_workers`.
+#[deprecated(note = "ADR-025 superseded this router; production node startup does not instantiate it")]
 pub struct PipelineRouter {
     /// Sender for hot-path work items (bounded, provides back-pressure).
     hot_tx: mpsc::Sender<HotWork>,

@@ -83,8 +83,21 @@ pub struct CelestiaAdapter {
 }
 
 impl CelestiaAdapter {
+    fn assert_not_production_without_live_feature() {
+        #[cfg(not(feature = "celestia"))]
+        if matches!(std::env::var("OMNIA_ENV").as_deref(), Ok("production")) {
+            panic!(
+                "CelestiaAdapter mock mode is disabled for OMNIA_ENV=production; enable the celestia feature only after live-node validation"
+            );
+        }
+    }
+
     /// Create a new Celestia adapter with the given configuration.
+    ///
+    /// Panics in mock/disabled mode when `OMNIA_ENV=production`; the disabled
+    /// path fabricates local hashes and must never be selected for live use.
     pub fn new(config: CelestiaConfig) -> Self {
+        Self::assert_not_production_without_live_feature();
         #[cfg(feature = "celestia")]
         let client = reqwest::Client::new();
         Self {
