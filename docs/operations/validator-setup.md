@@ -90,7 +90,8 @@ omnia-node \
 # Liveness probe (always returns 200 if process is alive)
 curl http://localhost:8080/healthz
 
-# Readiness probe (returns 200 when node has peers, not syncing, recent finalization)
+# Readiness probe (returns 200 when node has enough peers and is not syncing;
+# quiet networks do not need recent finalization to be ready)
 curl http://localhost:8080/readyz
 
 # Node info

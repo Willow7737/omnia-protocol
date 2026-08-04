@@ -25,7 +25,7 @@ omnia-node --config config/external-validator.toml
 # Check health
 curl http://localhost:8080/healthz
 
-# Check readiness
+# Check readiness (peers present + not syncing; idle networks can be ready)
 curl http://localhost:8080/readyz
 
 # View metrics

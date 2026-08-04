@@ -92,18 +92,19 @@ API. Lane 0 is doing real work on it:
 { "peers": 2, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
 ```
 
-**One honest caveat.** `/readyz` still reports `not_ready`, but the reason
-has changed from `no_peers` to `no_finalization`:
+**Readiness contract.** `/readyz` reports the node as ready when it is
+operational for traffic: it has the configured minimum peer count and is
+not in fast-sync. It does **not** require recent traffic, Lane 1 canonical
+commits, or Lane 0 preconfirmations, so quiet networks stay ready:
 
 ```jsonc
-{ "status": "not_ready", "reason": "no_finalization", "peers": 2, "is_syncing": false }
+{ "status": "ready", "peers": 2, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 9 }
 ```
 
-Readiness requires `finalized_height > 0`, which counts **Lane 1**
-(canonical DAG consensus) commits — and Lane 1 has committed nothing
-because the network is quiet, not because anything is broken. Lane 0
-fast-path finality is working (9 events finalized, 27 acks accepted,
-zero rejected). Submit traffic and Lane 1 follows.
+Use `/api/v1/node/info` and Prometheus finality metrics to monitor Lane 0
+fast-path progress and Lane 1 canonical commits. A zero `finalized_height`
+on `/readyz` can be normal on an idle network; `/readyz` should fail only
+for reachability/sync blockers such as `no_peers` or `syncing`.
 
 **Utilization:** the node process uses ~30 MB RSS on a 16 GB host, with
 load average flat at 0.00 over 31 days and 4.7 MB of chain data. Even at
