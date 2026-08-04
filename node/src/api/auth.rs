@@ -379,16 +379,13 @@ pub fn create_token(caller_id: &str, ttl_secs: u64) -> Result<String, AuthError>
         return encode(
             &header,
             &claims,
-            &EncodingKey::from_rsa_pem(signing_pem)
-                .map_err(|e| AuthError::InvalidToken(e.to_string()))?,
+            &EncodingKey::from_rsa_pem(signing_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?
         )
         .map_err(|e| AuthError::InvalidToken(e.to_string()));
     }
 
     if config.allow_legacy_hs256 {
-        let secret = config
-            .legacy_hs256_secret
-            .ok_or(AuthError::SecretNotConfigured)?;
+        let secret = config.legacy_hs256_secret.ok_or(AuthError::SecretNotConfigured)?;
         return encode(
             &Header::default(),
             &claims,
