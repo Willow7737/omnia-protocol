@@ -156,19 +156,14 @@ The REST API requires JWT authentication:
 
 ```sh
 # Set required environment variables
-export OMNIA_JWT_SIGNING_KEY_PATH="/etc/omnia/jwt-signing.pem"
-export OMNIA_JWT_VERIFICATION_KEY_PATH="/etc/omnia/jwt-verification.pem"
-export OMNIA_JWT_KEY_ID="jwt-2026-08"
+export OMNIA_JWT_SECRET="your-hmac-secret"
 export OMNIA_AUTHORIZED_CALLERS="caller1,caller2"
 export OMNIA_RATE_LIMIT_RPS=10
 
 omnia-node --node-id 1 --http-port 8080
 ```
 
-- `OMNIA_JWT_SIGNING_KEY_PATH` / `OMNIA_JWT_SIGNING_KEY` — RS256 private key for nodes or services that issue JWTs.
-- `OMNIA_JWT_VERIFICATION_KEY_PATH` / `OMNIA_JWT_VERIFICATION_KEY` — RS256 public key required by API verifiers; authenticated routes return 503 if no verifier key is configured.
-- `OMNIA_JWT_KEY_ID` — Optional `kid` value; when set, verifiers reject tokens with any other key ID.
-- `OMNIA_JWT_SECRET` + `OMNIA_JWT_ALLOW_LEGACY_HS256=true` — Temporary migration-only compatibility for pre-RS256 HS256 tokens; remove after the longest old token TTL has elapsed.
+- `OMNIA_JWT_SECRET` — HMAC secret for JWT validation (required; API returns 401 if not set)
 - `OMNIA_AUTHORIZED_CALLERS` — Comma-separated list of authorized caller IDs
 - `OMNIA_RATE_LIMIT_RPS` — Maximum requests per second per IP
 - `OMNIA_MINT_AUTHORITY` — Financial-shard mint authority (see below)
