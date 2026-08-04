@@ -80,9 +80,13 @@
 | `OMNIA_LISTEN_ADDR`        | `/ip4/0.0.0.0/udp/4001/quic-v1` | Libp2p listen address                            |
 | `OMNIA_TOTAL_NODES`        | `5`                     | Expected number of nodes in the network          |
 | `OMNIA_DATA_DIR`           | `/app/data`             | Data directory for persistent storage            |
-| `OMNIA_JWT_SECRET`         | (none)                  | HMAC secret for JWT auth                         |
+| `OMNIA_JWT_SIGNING_KEY_PATH` | (none) | PEM RSA private key path for RS256 JWT issuance |
+| `OMNIA_JWT_VERIFICATION_KEY_PATH` | (none) | PEM RSA public key path for RS256 JWT verification |
+| `OMNIA_JWT_KEY_ID` | (none) | Optional JWT `kid`; verifiers reject mismatches when set |
+| `OMNIA_JWT_SECRET` | (none) | Legacy HS256 secret; accepted only with `OMNIA_JWT_ALLOW_LEGACY_HS256=true` |
+| `OMNIA_JWT_ALLOW_LEGACY_HS256` | `false` | Temporary migration window for existing symmetric JWTs |
 
-> **Rotation:** the node reads `OMNIA_JWT_SECRET` once at startup and caches it, so rotating requires recreating the container. Use `scripts/rotate-jwt-secret.sh` — it generates a fresh secret into `docker/.env` (git-ignored; compose substitutes it), recreates the containers, and prints the value to mirror into Supabase's edge-function secrets. All outstanding JWTs are invalidated on rotation; the wallet re-authenticates transparently on the next 401. Rotate on a schedule (e.g. monthly) or immediately on suspected leak — the compose default (`omnia-testnet-jwt-secret-CHANGE-ME`) is public and must never run in production.
+> **JWT key management:** use RS256 key pairs. Mount the private key only where tokens are issued (`/auth/login` nodes or external issuers), mount the public key on every API verifier, and set `OMNIA_JWT_KEY_ID` during rotation so old/new keys are distinguishable. To migrate without logging out all users, keep `OMNIA_JWT_SECRET` only on verifiers with `OMNIA_JWT_ALLOW_LEGACY_HS256=true` until old HS256 tokens expire, then remove both variables and recreate the containers. The legacy HMAC secret must never be used for new deployments.
 | `OMNIA_AUTHORIZED_CALLERS` | (none)                  | Comma-separated authorized caller IDs            |
 | `OMNIA_RATE_LIMIT_RPS`     | (none)                  | Max requests per second per IP                   |
 | `OMNIA_LANE0_VALIDATORS`   | (empty = disabled)      | Lane 0 static validator set (ADR-025): `hex64_pubkey:stake[,…]` |
