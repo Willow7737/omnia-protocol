@@ -15,7 +15,7 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | **Overall Completion**  | **96%** (8 of 23 v0.1.68 audit findings remediated + 16 of 16 v0.1.69 critical findings closed; 15 medium-priority tracked)                                                                                                                  | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance                                                                                                                                                                                              | Needs Growth                                             |
 | **Code Health**         | Run `cargo test --workspace` for current count (1,283 sync + 99 async), 86,000+ lines, 225 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                  | Verified                                                 |
-| **Network Status**      | 🟢 **Public multi-node testnet live** at `https://78.47.43.136.sslip.io` (Docker, 3–5 Lane 0 validator nodes on one host, QUIC/gossipsub mesh, anti-entropy repair); 100% propagation + full quorum finality measured at 2k/5k bursts ([benchmark-gates.md](./benchmark-gates.md))                                                       | Live                                                     |
+| **Network Status**      | 🟢 **Public multi-node testnet live** at `https://78.47.43.136.sslip.io`; standing operator-run geo mesh with Lane 0 finality, plus documented external-validator onboarding samples for the next trust-distribution step ([validator-setup.md](../operations/validator-setup.md#external-validator-onboarding)) | Live / onboarding ready |
 | **Client Ecosystem**    | 📱 [Omnia Wallet v1](https://github.com/Willow7737/Omnia-Wallet) (Flutter, dual-mode auth, verified E2E against the live node) · 🖥️ [web dashboard](https://github.com/Willow7737/omnia-protocol-interface) · 🌐 [site](https://github.com/Willow7737/omnia-web) | Shipped                                                  |
 | **Security Posture**    | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved                                         |
 | **Mutation Testing**    | 75% minimum score on primitives; consensus sharded across 4 parallel jobs                                                                                                                                                   | Nightly CI                                               |
@@ -31,8 +31,8 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 > (7 high-priority: BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS,
 > DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence; 1 medium: signature
 > dedup). 1 additional finding resolved post-audit (AUDIT-16: event signing now uses persistent
-> keypair instead of ephemeral). Remaining: 14 medium-priority issues, geo-distributed multi-host rollout,
-> and external audit. (Docker multi-node verification and public testnet launch: done — live since 2026-07.)
+> keypair instead of ephemeral). Remaining: 14 medium-priority issues, admission of independent external validators,
+> and external audit. (Docker multi-node verification, public testnet launch, geo-distributed multi-host rollout, and external-operator onboarding docs: done.)
 
 ---
 

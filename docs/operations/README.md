@@ -8,7 +8,7 @@
 
 | Document                                                         | Description                                                         |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [validator-setup.md](validator-setup.md)                         | Validator setup guide — key generation, node configuration, startup |
+| [validator-setup.md](validator-setup.md)                         | Validator setup guide — key generation, external operator onboarding, node configuration, startup |
 | [monitoring.md](monitoring.md)                                   | Monitoring setup — Grafana, Prometheus, alert rules                 |
 | [deployment.md](deployment.md)                                   | Deployment procedures — Docker Compose, Kubernetes/Helm             |
 | [runbook.md](runbook.md)                                         | Operations runbook — key rotation, slashing, partition recovery     |
@@ -19,8 +19,8 @@
 ## Quick Reference
 
 ```bash
-# Start a node
-omnia-node --node-id 1 --http-port 8080
+# Start a single external validator from sample config
+omnia-node --config config/external-validator.toml
 
 # Check health
 curl http://localhost:8080/healthz
