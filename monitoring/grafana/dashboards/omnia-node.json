@@ -1,7 +1,56 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.0+"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "row",
+      "name": "Row",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": []
   },
+  "description": "Geo-distributed 5-node WAN testnet. A (Nuremberg), B (Ashburn), C (Singapore), D (Helsinki), E (Falkenstein). Every query uses by (node) \u2014 no phantom metrics, no single-line aggregation.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -10,211 +59,676 @@
   "liveNow": false,
   "panels": [
     {
-      "title": "Finalized Events/sec",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "id": 1,
+      "title": "Connected Peers",
+      "type": "table",
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "rate(omnia_node_events_finalized_total[1m])",
-          "legendFormat": "events/sec",
-          "refId": "A"
+          "expr": "omnia_node_peers_connected{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "network": true,
+              "role": true
+            },
+            "indexByName": {
+              "node": 0,
+              "region": 1,
+              "Value": 2
+            },
+            "renameByName": {
+              "node": "Node",
+              "region": "Region",
+              "Value": "Peers"
+            }
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "color": { "mode": "palette-classic" }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "containHeader": false
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "mean"
+          ],
+          "countRows": false,
+          "fields": ""
         }
       }
     },
     {
-      "title": "Peer Count",
-      "type": "stat",
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
       "id": 2,
+      "title": "Finalization Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 4,
+        "w": 9,
+        "x": 10,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "omnia_node_peers_connected",
-          "legendFormat": "peers",
+          "expr": "sum by (node) (rate(omnia_node_events_finalized_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "$node",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "thresholds": {
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 2 },
-              { "color": "green", "value": 4 }
-            ]
-          }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
         }
-      }
+      },
+      "description": "Events finalized/sec per node. Flat zero across all nodes = finality stalled."
     },
     {
-      "title": "Consensus Round Latency",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
       "id": 3,
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, rate(omnia_consensus_round_duration_seconds_bucket[5m]))",
-          "legendFormat": "p95 latency",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": { "mode": "palette-classic" }
-        }
-      }
-    },
-    {
-      "title": "Gossip Message Rate",
+      "title": "Submitted vs Finalized",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "rate(omnia_gossip_events_sent_total[1m])",
-          "legendFormat": "sent/sec",
+          "expr": "sum(rate(omnia_node_events_submitted_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "submitted",
           "refId": "A"
         },
         {
-          "expr": "rate(omnia_gossip_events_received_total[1m])",
-          "legendFormat": "received/sec",
+          "expr": "sum(rate(omnia_node_events_finalized_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "finalized",
           "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
         }
+      },
+      "description": "Network-wide totals. Gap = events pending consensus."
+    },
+    {
+      "id": 4,
+      "title": "Throughput",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
       }
     },
     {
-      "title": "Slashing Events",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
       "id": 5,
-      "targets": [
-        {
-          "expr": "rate(omnia_slashing_events_total[1h])",
-          "legendFormat": "slashes/hr",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "color": { "fixedColor": "red", "mode": "fixed" }
-        }
-      }
-    },
-    {
-      "title": "Fee Revenue",
+      "title": "Events Submitted vs Finalized per Node",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
-      "id": 6,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "rate(omnia_fees_collected_total[1h])",
-          "legendFormat": "UBC/hr",
+          "expr": "sum by (node) (rate(omnia_node_events_submitted_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "submitted ($node)",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (node) (rate(omnia_node_events_finalized_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "finalized ($node)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "description": "Per-node breakdown. A node lagging in finalized vs submitted is struggling with consensus."
+    },
+    {
+      "id": 6,
+      "title": "Consensus TPS",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum by (node) (rate(omnia_consensus_tps{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "$node",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "UBC",
-          "color": { "fixedColor": "green", "mode": "fixed" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "description": "Finalized transactions per second from the consensus counter."
+    },
+    {
+      "id": 7,
+      "title": "Latency (Geo Distribution)",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "id": 8,
+      "title": "Consensus Finality Latency",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p50 ($node)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p95 ($node)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p99 ($node)",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        }
+      },
+      "description": "Event creation to finality commitment. Singapore node should show higher p95 due to ~170-230ms RTT."
+    },
+    {
+      "id": 9,
+      "title": "Gossip Propagation Latency",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_gossip_propagation_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p50 ($node)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, node) (rate(omnia_gossip_propagation_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p95 ($node)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        }
+      },
+      "description": "End-to-end gossip propagation. The WAN RTT floor is visible here."
+    },
+    {
+      "id": 10,
+      "title": "DAG & Consensus Detail",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "id": 11,
+      "title": "DAG Insertion Latency",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_dag_insertion_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p50 ($node)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, node) (rate(omnia_dag_insertion_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))",
+          "legendFormat": "p99 ($node)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        }
+      },
+      "description": "Local DAG insert time. Should be sub-millisecond; spikes = lock contention or GC."
+    },
+    {
+      "id": 12,
+      "title": "DAG Insertion Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum by (node) (rate(omnia_dag_events_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "$node",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
         }
       }
     },
     {
-      "title": "Causal Graph Size",
-      "type": "stat",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "id": 7,
+      "id": 13,
+      "title": "Shard Operations Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "omnia_causal_graph_total_events",
-          "legendFormat": "total events",
+          "expr": "sum by (node) (rate(omnia_node_shard_operations_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "$node",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 100000 },
-              { "color": "red", "value": 1000000 }
-            ]
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Network",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "id": 15,
+      "title": "Peer Count Over Time",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "omnia_node_peers_connected{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}",
+          "legendFormat": "$node",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillBelowTo": "0",
+            "fillOpacity": 15,
+            "pointSize": 5,
+            "showPoints": "always",
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "spanNulls": false,
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            }
           }
         }
-      }
+      },
+      "description": "Step plot. Each node should sit at 4. Dips = lost connections."
     },
     {
-      "title": "Memory Usage",
+      "id": 16,
+      "title": "HTTP Request Rate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "id": 8,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes",
-          "legendFormat": "RSS",
+          "expr": "sum by (node) (rate(omnia_node_http_requests_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))",
+          "legendFormat": "$node",
           "refId": "A"
-        },
-        {
-          "expr": "process_heap_bytes",
-          "legendFormat": "Heap",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "bytes",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps"
         }
       }
     },
     {
-      "title": "Events Submitted vs Finalized",
+      "id": 17,
+      "title": "Resources",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "id": 18,
+      "title": "Memory (RSS) per Node",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "targets": [
         {
-          "expr": "rate(omnia_node_events_submitted_total[1m])",
-          "legendFormat": "submitted/sec",
+          "expr": "omnia_node_memory_rss_bytes{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}",
+          "legendFormat": "$node",
           "refId": "A"
-        },
-        {
-          "expr": "rate(omnia_node_events_finalized_total[1m])",
-          "legendFormat": "finalized/sec",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "bytes"
         }
-      }
+      },
+      "description": "Process RSS from /proc/self/status. Idle ~30 MB, burst ~160 MB under load."
+    },
+    {
+      "id": 19,
+      "title": "CPU Usage per Node",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 41
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "rate(process_cpu_seconds_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])",
+          "legendFormat": "$node",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        }
+      },
+      "description": "Single-core fraction. 1.0 = one full core. From Prometheus process exporter."
     }
   ],
-  "schemaVersion": 38,
+  "refresh": "10s",
+  "schemaVersion": 39,
   "style": "dark",
-  "tags": ["omnia", "node"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "omnia",
+    "wan-testnet",
+    "geo-distributed"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "label": "Data source",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "node",
+        "type": "custom",
+        "label": "Node",
+        "query": "A,B,C,D,E",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0
+      },
+      {
+        "name": "region",
+        "type": "custom",
+        "label": "Region",
+        "query": "nbg1-eu-central,ash-us-east,sin-ap-southeast,hel1-eu-central,fsn1-eu-central",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
-  "title": "Omnia Node Dashboard",
-  "uid": "omnia-node",
+  "title": "Omnia WAN Testnet",
+  "uid": "omnia-wan-testnet",
   "version": 1
 }
