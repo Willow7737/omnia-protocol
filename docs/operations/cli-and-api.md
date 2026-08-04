@@ -65,7 +65,7 @@ The node exposes 17 REST API endpoints under `/api/v1/`:
 
 **Public endpoints:** 5 endpoints are PUBLIC (no JWT): `/api/v1/node/info`, `/api/v1/node/peers`, `/api/v1/errors`, `/api/v1/ceremony/state`, `/api/v1/ceremony/transcript`
 
-**Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. JWTs use asymmetric RS256 by default: issuers need `OMNIA_JWT_SIGNING_KEY(_PATH)`, verifiers need `OMNIA_JWT_VERIFICATION_KEY(_PATH)`, and `OMNIA_JWT_KEY_ID` is recommended for rotation. Legacy HS256 tokens are accepted only during an explicit migration window with `OMNIA_JWT_SECRET` plus `OMNIA_JWT_ALLOW_LEGACY_HS256=true`.
+**Security (Phase 0, FIND-001):** JWT authentication, AuthorizedCallers ACL, rate limiting, and CORS are now implemented. Configured via `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, `OMNIA_RATE_LIMIT_RPS`.
 
 ---
 
