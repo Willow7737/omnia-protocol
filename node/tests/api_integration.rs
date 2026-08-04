@@ -26,7 +26,7 @@ use std::time::Instant;
 
 use jsonwebtoken::{encode, EncodingKey, Header};
 use omnia_economics::EconomicsState;
-use omnia_node::api::auth::{create_token, Claims};
+use omnia_node::api::auth::Claims;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
 use omnia_node::state::{AppState, NodeMetrics};
@@ -82,11 +82,26 @@ impl Drop for EnvGuard {
 // Token helpers
 // ---------------------------------------------------------------------------
 
-/// Create a valid JWT for `caller_id`, valid for 1 hour.
+/// Create a valid HS256 JWT for `caller_id`, valid for 1 hour.
 ///
 /// Requires `OMNIA_JWT_SECRET` to be set in the environment.
 fn make_valid_token(caller_id: &str) -> String {
-    create_token(caller_id, 3600).expect("Failed to create valid token")
+    let secret = std::env::var("OMNIA_JWT_SECRET").expect("OMNIA_JWT_SECRET must be set");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let claims = Claims {
+        sub: caller_id.to_string(),
+        iat: now,
+        exp: now + 3600,
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .expect("Failed to encode valid token")
 }
 
 /// Create an expired JWT (exp = 1 → 1970-01-01 00:00:01 UTC).
@@ -214,10 +229,11 @@ where
 
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+    std::env::set_var("OMNIA_JWT_ALLOW_LEGACY_HS256", "true");
     std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
-    // Reset the JWT secret cache and re-initialize from the env var we just set.
-    // Without this, create_token() reads a stale cache from a prior test run
-    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    // Reset the JWT config cache and re-initialize from the env vars we just set.
+    // Without this, validate_token() reads a stale cache from a prior test run
+    // and rejects HS256 tokens.
     omnia_node::api::auth::reset_jwt_secret_for_test();
     omnia_node::api::auth::init_jwt_secret();
 
@@ -248,7 +264,12 @@ where
     let base_url = format!("http://127.0.0.1:{port}");
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {
@@ -269,10 +290,11 @@ where
 
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
+    std::env::set_var("OMNIA_JWT_ALLOW_LEGACY_HS256", "true");
     std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
-    // Reset the JWT secret cache and re-initialize from the env var we just set.
-    // Without this, create_token() reads a stale cache from a prior test run
-    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    // Reset the JWT config cache and re-initialize from the env vars we just set.
+    // Without this, validate_token() reads a stale cache from a prior test run
+    // and rejects HS256 tokens.
     omnia_node::api::auth::reset_jwt_secret_for_test();
     omnia_node::api::auth::init_jwt_secret();
 
@@ -299,7 +321,12 @@ where
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {
@@ -358,9 +385,10 @@ async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     // Set auth env vars
     std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
     std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-    // Reset the JWT secret cache and re-initialize from the env var we just set.
-    // Without this, create_token() reads a stale cache from a prior test run
-    // and returns SecretNotConfigured. Mirrors the fix in integration.rs.
+    std::env::set_var("OMNIA_JWT_ALLOW_LEGACY_HS256", "true");
+    // Reset the JWT config cache and re-initialize from the env vars we just set.
+    // Without this, validate_token() reads a stale cache from a prior test run
+    // and rejects HS256 tokens.
     omnia_node::api::auth::reset_jwt_secret_for_test();
     omnia_node::api::auth::init_jwt_secret();
 
@@ -374,7 +402,12 @@ async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     let (base_url, handle) = start_test_server().await;
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {

@@ -1749,8 +1749,7 @@ mod tests {
     fn test_config(id: u8) -> SubstrateConfig {
         let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        SubstrateConfig::try_new(test_node(id))
-            .expect("valid test config")
+        SubstrateConfig::try_new(test_node(id)).expect("valid test config")
     }
 
     #[test]
@@ -1971,8 +1970,7 @@ mod tests {
     fn test_substrate_config_with_network_size() {
         let _lock = SEED_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("OMNIA_CONSENSUS_SEED");
-        let config = SubstrateConfig::try_with_network_size(test_node(1), 10)
-            .expect("valid test config");
+        let config = SubstrateConfig::try_with_network_size(test_node(1), 10).expect("valid test config");
         assert_eq!(config.total_nodes, 10);
         assert_eq!(config.consensus.total_nodes, 10);
     }
