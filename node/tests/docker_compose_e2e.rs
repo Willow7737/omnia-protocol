@@ -106,6 +106,7 @@ impl ComposeGuard {
                 "30",
             ])
             .env("OMNIA_JWT_SECRET", TEST_COMPOSE_JWT_SECRET)
+            .env("OMNIA_JWT_ALLOW_LEGACY_HS256", "true")
             .current_dir(&self.project_root)
             .status()
             .expect("failed to run docker compose down");
@@ -141,6 +142,7 @@ fn compose_up(project_root: &PathBuf) {
     let output = Command::new("docker")
         .args(["compose", "-f", COMPOSE_FILE, "up", "-d", "--build", "--wait"])
         .env("OMNIA_JWT_SECRET", TEST_COMPOSE_JWT_SECRET)
+        .env("OMNIA_JWT_ALLOW_LEGACY_HS256", "true")
         .current_dir(project_root)
         .output()
         .expect("failed to run docker compose up");
