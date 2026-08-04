@@ -36,12 +36,3 @@ log_level = "info"
 
 # Directory for persistent slashing state (default: <data_dir>/slashing.redb)
 # slashing_data_dir = "/var/lib/omnia/slashing"
-
-# JWT authentication keys (environment-driven; keep secrets out of TOML in production)
-# Generate with:
-#   openssl genrsa -out /etc/omnia/jwt-signing.pem 3072
-#   openssl rsa -in /etc/omnia/jwt-signing.pem -pubout -out /etc/omnia/jwt-verification.pem
-# Then set OMNIA_JWT_SIGNING_KEY_PATH on nodes/wallet-auth issuers and
-# OMNIA_JWT_VERIFICATION_KEY_PATH on every API verifier. OMNIA_JWT_KEY_ID is
-# optional but recommended during rotation. Temporary HS256 compatibility uses
-# OMNIA_JWT_SECRET plus OMNIA_JWT_ALLOW_LEGACY_HS256=true.
