@@ -186,6 +186,8 @@ docker compose down
 docker compose up -d
 ```
 
+> **Readiness contract**: `/readyz` is an operational routing signal. It returns 200 when the node has at least `readiness_min_peers` connected peers and is not in fast-sync. It includes `finalized_height`, `lane0_enabled`, and `lane0_finalized_events` for visibility, but quiet networks with no recent Lane 1 commits or Lane 0 preconfirmations are still ready. 503 reasons are reachability/sync blockers: `no_peers` or `syncing`.
+>
 > **v0.1.69**: `/readyz` now reports actual peer count via `GossipProtocol::connected_peer_count()`. The background consensus loop polls this every 1s and updates `AppState.peers`.
 
 ---
