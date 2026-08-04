@@ -13,7 +13,7 @@ use async_trait::async_trait;
 /// Cosmos settlement adapter.
 ///
 /// Roadmap-only stub: every legacy [`SettlementLayer`] operation returns
-/// [`SettlementError::NotImplemented`](super::SettlementError::NotImplemented).
+/// [`SettlementError::NotImplemented`].
 /// Do not wire this adapter into production settlement selection.
 ///
 /// This is a stub implementation. Cosmos SDK chains with CosmWasm
