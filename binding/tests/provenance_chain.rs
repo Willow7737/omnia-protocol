@@ -12,7 +12,7 @@ use omnia_binding::{
 use omnia_substrate::{generate_keypair, NodeKeypair, VectorClock};
 
 fn make_rf(did: &str, hash: [u8; 32]) -> RfFingerprint {
-    RfFingerprint::stub(did, hash)
+    RfFingerprint::new(hash, VectorClock::new(), did.to_string(), 950_000)
 }
 
 /// Create a keypair and corresponding PqPublicKey for testing.
@@ -251,7 +251,7 @@ fn test_rf_fingerprint_matching() {
     let hash_b = [0x55u8; 32]; // Identical
     let hash_c = [0xFFu8; 32]; // Completely different
 
-    let fp = RfFingerprint::stub("did:omnia:device", hash_a);
+    let fp = RfFingerprint::new(hash_a, VectorClock::new(), "did:omnia:device".to_string(), 950_000);
 
     assert!(fp.verify(&hash_b)); // Same hash -> match
     assert!(!fp.verify(&hash_c)); // Different hash -> no match

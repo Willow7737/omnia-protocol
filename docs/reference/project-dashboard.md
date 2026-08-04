@@ -15,7 +15,7 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 | **Overall Completion**  | **96%** (8 of 23 v0.1.68 audit findings remediated + 16 of 16 v0.1.69 critical findings closed; 15 medium-priority tracked)                                                                                                                  | All core layers implemented; 7 high + 1 medium bug fixed |
 | **Active Contributors** | 1 (Lead) + AI Agent assistance                                                                                                                                                                                              | Needs Growth                                             |
 | **Code Health**         | Run `cargo test --workspace` for current count (1,283 sync + 99 async), 86,000+ lines, 225 source files, 0 production `unwrap()`, 34 typed error enums, `#![deny(unsafe_code) (see SAFETY.md)]` enforced                  | Verified                                                 |
-| **Network Status**      | 🟢 **Public multi-node testnet live** at `https://78.47.43.136.sslip.io` (Docker, 3–5 Lane 0 validator nodes on one host, QUIC/gossipsub mesh, anti-entropy repair); 100% propagation + full quorum finality measured at 2k/5k bursts ([benchmark-gates.md](./benchmark-gates.md))                                                       | Live                                                     |
+| **Network Status**      | 🟢 **Public multi-node testnet live** at `https://78.47.43.136.sslip.io`; standing operator-run geo mesh with Lane 0 finality, plus documented external-validator onboarding samples for the next trust-distribution step ([validator-setup.md](../operations/validator-setup.md#external-validator-onboarding)) | Live / onboarding ready |
 | **Client Ecosystem**    | 📱 [Omnia Wallet v1](https://github.com/Willow7737/Omnia-Wallet) (Flutter, dual-mode auth, verified E2E against the live node) · 🖥️ [web dashboard](https://github.com/Willow7737/omnia-protocol-interface) · 🌐 [site](https://github.com/Willow7737/omnia-web) | Shipped                                                  |
 | **Security Posture**    | AES-256-GCM encrypted keys, gradual slashing, ML-KEM-768 PQC, Feldman VSS DKG with BLS12-381 field arithmetic, constant-time BLS/VRF comparisons, dedup-protected signature combining, persistent keypair for event signing | Phase 3 resolved                                         |
 | **Mutation Testing**    | 75% minimum score on primitives; consensus sharded across 4 parallel jobs                                                                                                                                                   | Nightly CI                                               |
@@ -31,8 +31,8 @@ This dashboard provides a real-time overview of the Omnia Protocol's development
 > (7 high-priority: BatchCrdtMerger rollback, GCounter overflow, constant-time VRF/BLS,
 > DkgSession fixes, gossip topic mismatch, KeyStoreBridge persistence; 1 medium: signature
 > dedup). 1 additional finding resolved post-audit (AUDIT-16: event signing now uses persistent
-> keypair instead of ephemeral). Remaining: 14 medium-priority issues, geo-distributed multi-host rollout,
-> and external audit. (Docker multi-node verification and public testnet launch: done — live since 2026-07.)
+> keypair instead of ephemeral). Remaining: 14 medium-priority issues, admission of independent external validators,
+> and external audit. (Docker multi-node verification, public testnet launch, geo-distributed multi-host rollout, and external-operator onboarding docs: done.)
 
 ---
 
@@ -57,20 +57,26 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | **Causal Consensus**           | Implemented | Low        | Rust, 267 consensus tests + 33 substrate tests, O(new_events) processing                                                                                                                                                            |
 | **Identity Shard**             | Implemented | Low        | DIDs (`did:omnia:` method), Shamir's Secret Sharing (GF(256)), BLAKE3 biometric anchors, AI agents (5 capability types), social recovery                                                                                            |
 | **Financial Shard**            | Implemented | Low        | Balances with causal tracking, transfers/mint/burn, replay protection (nonce tracking with redb persistence)                                                                                                                        |
-| **Computational Shard**        | Implemented | Low        | Task lifecycle (Submitted → Proved → Verified/Failed), proof verification stub                                                                                                                                                      |
+| **Computational Shard**        | Implemented | Low        | Task lifecycle (Submitted → Proved → Verified/Failed); proof verification remains roadmap-scoped                                                                                                                                                      |
 | **Physical Shard**             | Implemented | Low        | Append-only provenance log (CRDT-friendly), ownership tracking, chain verification                                                                                                                                                  |
 | **Biological Shard**           | Implemented | Low        | Consent registry (grant/revoke), ZK query stub, expiration tracking                                                                                                                                                                 |
 | **Economics Shard**            | Implemented | Medium     | UBC quota (1,000/month, 30-day epochs), quadratic voting with PPM decay, time-locked voting (flash loan prevention), useful-work proof (3 types: AI training, scientific simulation, distributed storage)                           |
-| **Physical Binding**           | Implemented | Medium     | Provenance log full; RF/QC are stubs (need hardware)                                                                                                                                                                                |
+| **Physical Binding**           | Implemented | Medium     | Provenance log full; RF simulator fails closed in production; QC remains roadmap/hardware-dependent                                                                                                                                                                                |
 | **Fee Enforcement**            | Implemented | Medium     | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch                                                                                                                                                  |
 | **UBC Economic Model**         | Implemented | Medium     | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay                                                                                                               |
-| **ZK-Rollup Settlement**       | Implemented | **Medium** | Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3)  |
+| **ZK-Rollup Settlement**       | Implemented | **Medium** | Launch-critical path is live Ethereum/FFI only; mock, Bitcoin, Solana, Cosmos, and disabled Celestia are roadmap/test-only; Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3)  |
 | **Encrypted Keystore**         | Implemented | Low        | AES-256-GCM + HKDF-SHA256 + BLAKE3 domain separation; legacy XOR migration supported (see ADR-010)                                                                                                                                  |
 | **VRF Leader Election**        | Implemented | **Medium** | Non-standard VRF construction (Ed25519 + BLAKE3, not ECVRF — see ADR-012); functional for internal use but not spec-compliant                                                                                                       |
 | **DKG / Threshold Signatures** | Implemented | Low        | Feldman VSS-based DKG with proper BLS12-381 scalar field arithmetic (see ADR-013); polynomial evaluation via Horner's method; Lagrange interpolation for secret reconstruction; AES-256-GCM share encryption (see ADR-016, Phase 3) |
 | **Slashing**                   | Implemented | Low        | Gradual slashing implemented (ADR-011): 3-tier Warning → Jail → Ejection                                                                                                                                                            |
 
-### Shard Architecture Summary
+### Audit Boundary Quick View
+
+- **Launch-critical now:** causal consensus, shard routing, financial ledger/fees, identity primitives, provenance log, live Ethereum/FFI settlement.
+- **Explicit roadmap/test-only:** Bitcoin/Solana/Cosmos settlement stubs, mock/disabled Celestia, mock settlement, RF fingerprint simulator, PoUW attestation-only useful work, and the ADR-025-superseded pipeline router.
+- **Production guardrail:** `OMNIA_ENV=production` refuses non-live settlement at node startup and fails closed for simulator RF verification.
+
+## Shard Architecture Summary
 
 The shards crate (`omnia-shards`) implements 6 domain shards, all conforming to the `Shard` trait defined in `shards/src/shard.rs`:
 

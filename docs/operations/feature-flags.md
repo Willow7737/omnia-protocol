@@ -195,7 +195,7 @@ These are not compile-time feature flags but runtime configuration options that 
 | Parameter                        | Default | Description                                      |
 | -------------------------------- | ------- | ------------------------------------------------ |
 | `readiness_min_peers`            | 1       | Minimum peers for readiness probe                |
-| `readiness_max_finalization_age` | 600     | Max rounds since last finalization for readiness |
+| `readiness_max_finalization_age` | 600     | Legacy setting; `/readyz` no longer gates on finalization age |
 
 ### Security Configuration
 

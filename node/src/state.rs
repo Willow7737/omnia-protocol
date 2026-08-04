@@ -169,6 +169,7 @@ static NODE_METRICS: OnceLock<NodeMetrics> = OnceLock::new();
 /// - `omnia_dag_events_total` — counter for total events inserted into the DAG
 /// - `omnia_dag_insertion_latency_seconds` — histogram of DAG event insertion latency
 /// - `omnia_node_memory_rss_bytes` — gauge of process resident memory (RSS)
+/// - `omnia_node_cpu_usage_ratio` — gauge of process CPU usage as 0.0–1.0 fraction
 #[cfg(feature = "metrics")]
 #[derive(Debug, Clone)]
 pub struct NodeMetrics {
@@ -209,6 +210,13 @@ pub struct NodeMetrics {
     /// On Linux, this reads from `/proc/self/status` VmRSS.
     /// On other platforms, reports 0.
     pub node_memory_rss_bytes: IntGauge,
+    /// Gauge for process CPU usage as a 0.0–1.0 fraction of a single core.
+    ///
+    /// Updated periodically by [`Self::sample_cpu_usage`].
+    /// 1.0 means the process is using 100% of one CPU core;
+    /// 2.0 means two cores fully saturated, etc.
+    /// On non-Linux platforms the gauge is left untouched (stays 0).
+    pub node_cpu_usage_ratio: prometheus::Gauge,
 }
 
 #[cfg(feature = "metrics")]
@@ -283,6 +291,11 @@ impl NodeMetrics {
                 let node_memory_rss_bytes =
                     IntGauge::new("omnia_node_memory_rss_bytes", "Process resident memory (RSS) in bytes")
                         .expect("Failed to create node_memory_rss_bytes gauge");
+                let node_cpu_usage_ratio = prometheus::Gauge::new(
+                    "omnia_node_cpu_usage_ratio",
+                    "Process CPU usage as a fraction of one core (0.0–1.0+). Updated periodically.",
+                )
+                .expect("Failed to create node_cpu_usage_ratio gauge");
 
                 let registry = prometheus::default_registry();
                 // Ignore AlreadyReg errors — metrics may have been registered
@@ -299,6 +312,7 @@ impl NodeMetrics {
                 let _ = registry.register(Box::new(dag_events_total.clone()));
                 let _ = registry.register(Box::new(dag_insertion_latency_seconds.clone()));
                 let _ = registry.register(Box::new(node_memory_rss_bytes.clone()));
+                let _ = registry.register(Box::new(node_cpu_usage_ratio.clone()));
 
                 Self {
                     events_submitted,
@@ -313,6 +327,7 @@ impl NodeMetrics {
                     dag_events_total,
                     dag_insertion_latency_seconds,
                     node_memory_rss_bytes,
+                    node_cpu_usage_ratio,
                 }
             })
             .clone();
@@ -331,6 +346,63 @@ impl NodeMetrics {
                     let kb: i64 = rest.trim().trim_end_matches("kB").trim().parse().unwrap_or(0);
                     self.node_memory_rss_bytes.set(kb.saturating_mul(1024));
                     break;
+                }
+            }
+        }
+    }
+
+    /// Sample process CPU usage and update the gauge.
+    ///
+    /// Uses `getrusage` on Unix to get user + system CPU time, then
+    /// computes usage as a fraction of wall-clock time since the last
+    /// sample. Must be called at regular intervals (e.g., every 5s)
+    /// for the delta to be meaningful.
+    ///
+    /// On non-Unix platforms the gauge is left untouched (stays 0).
+    pub fn sample_cpu_usage(&self) {
+        #[cfg(target_os = "linux")]
+        if let Ok(stat) = std::fs::read_to_string("/proc/self/stat") {
+            // /proc/[pid]/stat — see proc(5).  Fields after the closing
+            // paren of the comm name are space-separated.  utime is field
+            // 14 and stime is field 15 (1-indexed), i.e. indices 13 and 14
+            // from the split after ") ".  Values are in USER_HZ ticks
+            // (always 100 on Linux x86/ARM).
+            if let Some(close_paren) = stat.rfind(')') {
+                let after_comm = &stat[close_paren + 2..]; // skip ") "
+                let fields: Vec<&str> = after_comm.split_whitespace().collect();
+                if fields.len() > 14 {
+                    let utime: f64 = fields[11].parse().unwrap_or(0.0);
+                    let stime: f64 = fields[12].parse().unwrap_or(0.0);
+                    let ticks = utime + stime;
+
+                    // Persist previous reading across calls via static atomics.
+                    use std::sync::atomic::{AtomicU64, Ordering};
+                    use std::time::SystemTime;
+
+                    static PREV_CPU_TICKS: AtomicU64 = AtomicU64::new(0);
+                    static PREV_WALL_NS: AtomicU64 = AtomicU64::new(0);
+
+                    // Store as milli-ticks to preserve sub-tick precision.
+                    let cpu_ticks_now = (ticks * 1000.0) as u64;
+                    let wall_ns_now = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .map(|d| d.as_nanos() as u64)
+                        .unwrap_or(0);
+
+                    let prev_ticks = PREV_CPU_TICKS.load(Ordering::Relaxed);
+                    let prev_wall = PREV_WALL_NS.load(Ordering::Relaxed);
+
+                    if prev_wall > 0 && wall_ns_now > prev_wall {
+                        let delta_ticks = cpu_ticks_now.saturating_sub(prev_ticks) as f64 / 1000.0;
+                        // USER_HZ = 100 on all Linux architectures.
+                        let delta_cpu_secs = delta_ticks / 100.0;
+                        let delta_wall_secs = (wall_ns_now - prev_wall) as f64 / 1_000_000_000.0;
+                        let usage = delta_cpu_secs / delta_wall_secs;
+                        self.node_cpu_usage_ratio.set(usage);
+                    }
+
+                    PREV_CPU_TICKS.store(cpu_ticks_now, Ordering::Relaxed);
+                    PREV_WALL_NS.store(wall_ns_now, Ordering::Relaxed);
                 }
             }
         }

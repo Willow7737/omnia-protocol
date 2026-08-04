@@ -15,14 +15,22 @@ use async_trait::async_trait;
 
 /// Bitcoin settlement adapter.
 ///
+/// Roadmap-only stub: every legacy [`SettlementLayer`] operation returns
+/// [`SettlementError::NotImplemented`].
+/// Do not wire this adapter into production settlement selection.
+///
 /// This is a stub implementation that returns `NotImplemented` for all
 /// operations. Bitcoin's lack of general-purpose smart contracts makes
 /// ZK proof verification challenging. Future adapters may leverage
 /// BitVM for optimistic verification or sidechains like RSK/Liquid
 /// for smart contract support.
+#[deprecated(
+    note = "roadmap-only settlement stub; all operations return NotImplemented and it is not production selectable"
+)]
 pub struct BitcoinAdapter;
 
 #[async_trait]
+#[allow(deprecated)]
 impl SettlementLayer for BitcoinAdapter {
     fn chain_id(&self) -> &'static str {
         "bitcoin"

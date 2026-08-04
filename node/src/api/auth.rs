@@ -10,7 +10,9 @@
 //!
 //! | Env var                    | Purpose                                    | Default                  |
 //! |----------------------------|--------------------------------------------|--------------------------|
-//! | `OMNIA_JWT_SECRET`        | HMAC-SHA256 secret for signing/verifying   | *(required for JWT ops)* |
+//! | `OMNIA_JWT_SIGNING_KEY(_PATH)` | RS256 private key for issuing JWTs | *(required for token issuance)* |
+//! | `OMNIA_JWT_VERIFICATION_KEY(_PATH)` | RS256 public key for verifying JWTs | *(required for authenticated API)* |
+//! | `OMNIA_JWT_SECRET` + `OMNIA_JWT_ALLOW_LEGACY_HS256` | Temporary HS256 migration fallback | *(disabled by default)* |
 //! | `OMNIA_AUTHORIZED_CALLERS` | Comma-separated list of caller IDs         | *(empty — no privileged callers)* |
 //! | `OMNIA_RATE_LIMIT_RPS`    | Max requests per second per client         | `10`                     |
 //! | `OMNIA_CORS_ORIGINS`      | Comma-separated allowed origins (or `*`)   | `*` (all origins)        |
@@ -27,7 +29,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
@@ -57,7 +59,7 @@ pub struct Claims {
 // ---------------------------------------------------------------------------
 
 /// Errors produced by authentication and authorization checks.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum AuthError {
     /// The `Authorization` header is missing entirely.
     #[error("missing authorization header")]
@@ -79,8 +81,8 @@ pub enum AuthError {
     #[error("caller '{0}' is not authorized for this operation")]
     Unauthorized(String),
 
-    /// The `OMNIA_JWT_SECRET` environment variable is not set.
-    #[error("JWT secret not configured — set OMNIA_JWT_SECRET")]
+    /// JWT signing or verification key material is not configured.
+    #[error("JWT key material not configured — set OMNIA_JWT_SIGNING_KEY(_PATH) for issuance and OMNIA_JWT_VERIFICATION_KEY(_PATH) for verification")]
     SecretNotConfigured,
 
     /// Rate-limit exceeded — too many requests.
@@ -173,13 +175,67 @@ pub struct CallerIdentity {
 // JWT helpers
 // ---------------------------------------------------------------------------
 
-/// Global cache for the JWT signing secret.
+/// Global cache for JWT signing/verification material.
 ///
-/// `None` means the cache has not been populated yet; `Some(inner)` holds
-/// the cached result of reading `OMNIA_JWT_SECRET` (where `inner` is
-/// `None` if the env var is unset). The cache persists for the process
-/// lifetime but can be reset in tests via \[`reset_jwt_secret_for_test`\].
-static JWT_SECRET: StdMutex<Option<Option<String>>> = StdMutex::new(None);
+/// Prefer asymmetric RS256 keys: `OMNIA_JWT_SIGNING_KEY(_PATH)` for issuers and
+/// `OMNIA_JWT_VERIFICATION_KEY(_PATH)` for every verifier. `OMNIA_JWT_SECRET`
+/// remains as an explicitly enabled HS256 migration fallback.
+static JWT_CONFIG: StdMutex<Option<Result<JwtConfig, AuthError>>> = StdMutex::new(None);
+
+#[derive(Debug, Clone)]
+struct JwtConfig {
+    rs256_signing_pem: Option<Vec<u8>>,
+    rs256_verification_pem: Option<Vec<u8>>,
+    key_id: Option<String>,
+    legacy_hs256_secret: Option<String>,
+    allow_legacy_hs256: bool,
+}
+
+fn read_env_or_file(value_var: &str, path_var: &str) -> Result<Option<Vec<u8>>, AuthError> {
+    if let Ok(value) = std::env::var(value_var) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(trimmed.as_bytes().to_vec()));
+        }
+    }
+    if let Ok(path) = std::env::var(path_var) {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            return std::fs::read(trimmed)
+                .map(Some)
+                .map_err(|e| AuthError::InvalidToken(format!("failed to read {path_var}={trimmed}: {e}")));
+        }
+    }
+    Ok(None)
+}
+
+fn load_jwt_config() -> Result<JwtConfig, AuthError> {
+    Ok(JwtConfig {
+        rs256_signing_pem: read_env_or_file("OMNIA_JWT_SIGNING_KEY", "OMNIA_JWT_SIGNING_KEY_PATH")?,
+        rs256_verification_pem: read_env_or_file("OMNIA_JWT_VERIFICATION_KEY", "OMNIA_JWT_VERIFICATION_KEY_PATH")?,
+        key_id: std::env::var("OMNIA_JWT_KEY_ID")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        legacy_hs256_secret: std::env::var("OMNIA_JWT_SECRET").ok().filter(|s| !s.trim().is_empty()),
+        allow_legacy_hs256: std::env::var("OMNIA_JWT_ALLOW_LEGACY_HS256")
+            .ok()
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+            .unwrap_or(false),
+    })
+}
+
+fn jwt_config() -> Result<JwtConfig, AuthError> {
+    let mut guard = JWT_CONFIG.lock().unwrap_or_else(|e| e.into_inner());
+    match &*guard {
+        Some(cached) => cached.clone(),
+        None => {
+            let val = load_jwt_config();
+            *guard = Some(val.clone());
+            val
+        }
+    }
+}
 
 /// Minimum acceptable length (in bytes) for `OMNIA_JWT_SECRET`.
 ///
@@ -264,36 +320,19 @@ fn check_jwt_secret_strength(secret: &str) -> Result<(), WeakJwtSecretError> {
     Ok(())
 }
 
-/// Initialise the JWT secret cache. Called once at application startup.
+/// Initialise the JWT key cache. Called once at application startup.
 ///
 /// This must be invoked before any request hits the auth middleware so
 /// that the secret is captured from the environment at a deterministic
 /// point. Subsequent calls are no-ops if the cache is already populated.
 pub fn init_jwt_secret() {
-    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = JWT_CONFIG.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_none() {
-        *guard = Some(std::env::var("OMNIA_JWT_SECRET").ok());
+        *guard = Some(load_jwt_config());
     }
 }
 
-/// Read the JWT signing secret from the `OMNIA_JWT_SECRET` env var.
-///
-/// Returns `None` if the variable is not set. The value is cached so
-/// that it is read at most once per process lifetime (unless explicitly
-/// reset via \[`reset_jwt_secret_for_test`\] in test code).
-fn jwt_secret() -> Option<String> {
-    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
-    match &*guard {
-        Some(cached) => cached.clone(),
-        None => {
-            let val = std::env::var("OMNIA_JWT_SECRET").ok();
-            *guard = Some(val.clone());
-            val
-        }
-    }
-}
-
-/// Reset the JWT secret cache so the env var will be re-read on next access.
+/// Reset the JWT key cache so env vars/files will be re-read on next access.
 ///
 /// Intended for tests. This cannot be `#[cfg(test)]`-gated: that gate only
 /// exists when compiling the library's own unit tests, so integration test
@@ -304,11 +343,15 @@ fn jwt_secret() -> Option<String> {
 /// hidden from docs.
 #[doc(hidden)]
 pub fn reset_jwt_secret_for_test() {
-    let mut guard = JWT_SECRET.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = JWT_CONFIG.lock().unwrap_or_else(|e| e.into_inner());
     *guard = None;
 }
 
 /// Create a signed JWT for the given caller identity.
+///
+/// Tries RS256 first (if `OMNIA_JWT_SIGNING_KEY(_PATH)` is set),
+/// then falls back to HS256 when `OMNIA_JWT_ALLOW_LEGACY_HS256=true`
+/// and `OMNIA_JWT_SECRET` is set.
 ///
 /// The token is valid for `ttl_secs` seconds from the current time.
 ///
@@ -319,21 +362,39 @@ pub fn reset_jwt_secret_for_test() {
 ///
 /// # Errors
 ///
-/// Returns [`AuthError::SecretNotConfigured`] if `OMNIA_JWT_SECRET` is not set.
+/// Returns [`AuthError::SecretNotConfigured`] if no signing key is configured.
 pub fn create_token(caller_id: &str, ttl_secs: u64) -> Result<String, AuthError> {
-    let secret = jwt_secret().ok_or(AuthError::SecretNotConfigured)?;
+    let config = jwt_config()?;
     let now = epoch_secs();
     let claims = Claims {
         sub: caller_id.to_string(),
         iat: now,
         exp: now + ttl_secs,
     };
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| AuthError::InvalidToken(e.to_string()))
+
+    // Try RS256 first (preferred), fall back to legacy HS256 when enabled.
+    if let Some(ref signing_pem) = config.rs256_signing_pem {
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = config.key_id.clone();
+        return encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(signing_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?,
+        )
+        .map_err(|e| AuthError::InvalidToken(e.to_string()));
+    }
+
+    if config.allow_legacy_hs256 {
+        let secret = config.legacy_hs256_secret.ok_or(AuthError::SecretNotConfigured)?;
+        return encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .map_err(|e| AuthError::InvalidToken(e.to_string()));
+    }
+
+    Err(AuthError::SecretNotConfigured)
 }
 
 /// Validate a JWT string and return the decoded [`Claims`].
@@ -343,15 +404,50 @@ pub fn create_token(caller_id: &str, ttl_secs: u64) -> Result<String, AuthError>
 /// Returns an [`AuthError`] variant if the token is invalid, expired, or the
 /// secret is not configured.
 pub fn validate_token(token: &str) -> Result<Claims, AuthError> {
-    let secret = jwt_secret().ok_or(AuthError::SecretNotConfigured)?;
-    let validation = Validation::default();
-    // `validate_exp` is true by default; leeway is 60 s.
-    decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)
-        .map(|data| data.claims)
-        .map_err(|e| match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired,
-            other => AuthError::InvalidToken(format!("{other:?}")),
-        })
+    validate_token_with_config(token, &jwt_config()?)
+}
+
+fn validate_token_with_config(token: &str, config: &JwtConfig) -> Result<Claims, AuthError> {
+    let header = decode_header(token).map_err(|e| AuthError::InvalidToken(e.to_string()))?;
+    match header.alg {
+        Algorithm::RS256 => {
+            let verification_pem = config
+                .rs256_verification_pem
+                .as_ref()
+                .ok_or(AuthError::SecretNotConfigured)?;
+            if let Some(expected_kid) = &config.key_id {
+                if header.kid.as_deref() != Some(expected_kid.as_str()) {
+                    return Err(AuthError::InvalidToken("unexpected JWT key id".to_string()));
+                }
+            }
+            let validation = Validation::new(Algorithm::RS256);
+            decode::<Claims>(
+                token,
+                &DecodingKey::from_rsa_pem(verification_pem).map_err(|e| AuthError::InvalidToken(e.to_string()))?,
+                &validation,
+            )
+            .map(|data| data.claims)
+            .map_err(jwt_decode_error)
+        }
+        Algorithm::HS256 if config.allow_legacy_hs256 => {
+            let secret = config
+                .legacy_hs256_secret
+                .as_ref()
+                .ok_or(AuthError::SecretNotConfigured)?;
+            let validation = Validation::new(Algorithm::HS256);
+            decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)
+                .map(|data| data.claims)
+                .map_err(jwt_decode_error)
+        }
+        alg => Err(AuthError::InvalidToken(format!("unsupported JWT algorithm: {alg:?}"))),
+    }
+}
+
+fn jwt_decode_error(e: jsonwebtoken::errors::Error) -> AuthError {
+    match e.kind() {
+        jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired,
+        other => AuthError::InvalidToken(format!("{other:?}")),
+    }
 }
 
 /// Return the current Unix timestamp in seconds.
@@ -378,26 +474,6 @@ fn epoch_secs() -> u64 {
 ///
 /// On failure an appropriate HTTP error response is returned immediately.
 pub async fn require_auth(mut req: Request, next: Next) -> Response {
-    // If no JWT secret is configured, reject the request instead of
-    // silently bypassing authentication. This prevents a critical auth
-    // bypass in production when OMNIA_JWT_SECRET is accidentally unset.
-    let secret = match jwt_secret() {
-        Some(s) => s,
-        None => {
-            // Reject all requests when JWT secret is not configured
-            // This prevents silent auth bypass in production
-            tracing::error!("OMNIA_JWT_SECRET not set - rejecting authenticated request");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({
-                    "error": "authentication not configured",
-                    "message": "OMNIA_JWT_SECRET environment variable must be set"
-                })),
-            )
-                .into_response();
-        }
-    };
-
     let auth_header = req.headers().get(AUTHORIZATION).and_then(|v| v.to_str().ok());
 
     let token = match auth_header {
@@ -411,18 +487,19 @@ pub async fn require_auth(mut req: Request, next: Next) -> Response {
         }
     };
 
-    let validation = Validation::default();
-    match decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation) {
-        Ok(token_data) => {
-            req.extensions_mut().insert(CallerIdentity {
-                caller_id: token_data.claims.sub,
-            });
+    match validate_token(token) {
+        Ok(claims) => {
+            req.extensions_mut().insert(CallerIdentity { caller_id: claims.sub });
             next.run(req).await
         }
-        Err(e) => match e.kind() {
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::TokenExpired.into_response(),
-            other => AuthError::InvalidToken(format!("{other:?}")).into_response(),
-        },
+        Err(AuthError::SecretNotConfigured) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "error": "authentication not configured",
+                "message": "set OMNIA_JWT_VERIFICATION_KEY(_PATH) or temporarily enable OMNIA_JWT_ALLOW_LEGACY_HS256 with OMNIA_JWT_SECRET"
+            })),
+        ).into_response(),
+        Err(e) => e.into_response(),
     }
 }
 
@@ -721,6 +798,60 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
+    const TEST_RSA_PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCoB68ZEAUukji9
+kdVadaJxHiL87UYXk5kZseKjA+8PTodUtUwjpZatepknqLzpNtck7XEf47qx+2r2
+ZP5kQ7ypRU/gkAyTiaLctz7+KDDx247J0aGCIkROXb9EtWFR/HPCPk18MwBnjNSD
+wuJ2WEsxDvZE8NYFuwZSVq0zdKHA867xKA/zEw2euZbnPIMYmY5gBFvf27GrVYfI
+fkDQsCKrYY/jKoJPPF6d7dF8TiCL66T42Rp3NhdBNMZxRP8iCSIaltw64c1cTqII
+t0qmm8+8E20Rwb9gowX6+WWarr11s8dIDk8ls0k6nFpzJ2p0GlCByh6jxfeUZwl4
+zgyrrsCXAgMBAAECggEAMCIfXQETUu9tFJTRdrvK4Dd/U0/O69MKoOstnn/ye8KF
+jtTubimxm5lKhStXjkD46WmhJb7xDKoWTmXI38Ttptmlk5EAIUVko3BUua6esrGv
+2g1UhDg3s/Ez6MVCjx9Ps71wKdtcSs1zVRk/ESKiy3dbQY1x6atVGMIelGZdLa3J
+l6iJ4y0luxnVBR6OS/NP6KMQjm3T7wW5z5Cvyrd7G99ESJ5gs9EfBnuaymiScJ3q
+GwaXTCUmW2/AvioWz9TtkZnKimTlTutuLuGGroYlQiHEi5TcXCkdEPYTTFziUQeQ
++F+J0PLIwpj8qfqp/Jw4xGQHfxyyyy/9Xv5XeagJ2QKBgQDa/iCGw1wj6tdccMt0
+4whCvO93cc+ta0kIhICRYYFAkeGyzNcKYxH0k2YStelelN3MjiGNGvSSpvJGvMTZ
+cQxk2/JCB43WPO940bcCDxObuX1JiuRLQPUbJNmDdx6kVv0lO8oGhaTpMI3dX/BT
+rpoAgPHgpa4D+n9lSBTTpc4KTwKBgQDEbNqVWNPJ9f+H8AjzZLvc55VpR/LoRwkD
+7bpmMgOY6nhCYPf4wU10ZzwGuDh4H0owhX00gp2KyRJMkf8RH0YfwKVgr+cavHHA
+qxjjqZ90t5R5BXOaYwI4ZfpoTMhi1rO3ADZRTgviOeHhf+e7ubI6ymQhjx6BTASA
+bfREol37OQKBgBjnf5Fz1B2tjlJP7YNccksMq3r88W46XjLexrRBz24laPJpgycG
+Pzt+K8SC9YgxC8xAeaZPY3LuE21h+Ez2Iz+xF6rUqxerFFy8FMDiMAusm4fqiK3a
+NEWi+i2ONWjhD6bVVtNJDYkLYYbEa1NI7vCRuXAfx1tieGxvNxceqwDXAoGAHPGR
+T/pz0smt6qEDIKJSUF3LlWTltTZqbKrGEbMC9rBuIhHZ2EzblfB0VuUkZQbvTrEM
+3wT0I/Q2/xNwS1yZX6pqdBHXcwgblvFfTIS9G1zFwwN7ol8+f4L/YAkYagALIUcl
+udtPQvmWgDzxr6bQTXtvP8awDwtdinMpUEfAo3kCgYEAzVAFdaQOhZc18ousvxio
+n3XjOIHqp0XgOJqjhhBv6TbtdYvxHYZTCzTCAenIjKH5paxWP4UNhteIh6ovMktR
+omgb0Z8YpMT6wkss9ITn5dHeZkonOGXxLl7XMHdp+rgzUCxMWJ02YrpWv5l4BOzk
+gqUozbw7wL2l1EYtc8lW+Mc=
+-----END PRIVATE KEY-----"#;
+
+    const TEST_RSA_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqAevGRAFLpI4vZHVWnWi
+cR4i/O1GF5OZGbHiowPvD06HVLVMI6WWrXqZJ6i86TbXJO1xH+O6sftq9mT+ZEO8
+qUVP4JAMk4mi3Lc+/igw8duOydGhgiJETl2/RLVhUfxzwj5NfDMAZ4zUg8LidlhL
+MQ72RPDWBbsGUlatM3ShwPOu8SgP8xMNnrmW5zyDGJmOYARb39uxq1WHyH5A0LAi
+q2GP4yqCTzxene3RfE4gi+uk+NkadzYXQTTGcUT/IgkiGpbcOuHNXE6iCLdKppvP
+vBNtEcG/YKMF+vllmq69dbPHSA5PJbNJOpxacydqdBpQgcoeo8X3lGcJeM4Mq67A
+lwIDAQAB
+-----END PUBLIC KEY-----"#;
+
+    fn clear_jwt_env() {
+        for var in [
+            "OMNIA_JWT_SIGNING_KEY",
+            "OMNIA_JWT_SIGNING_KEY_PATH",
+            "OMNIA_JWT_VERIFICATION_KEY",
+            "OMNIA_JWT_VERIFICATION_KEY_PATH",
+            "OMNIA_JWT_KEY_ID",
+            "OMNIA_JWT_SECRET",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+        ] {
+            std::env::remove_var(var);
+        }
+        reset_jwt_secret_for_test();
+    }
+
     /// Global mutex to serialize tests that read/write `OMNIA_JWT_SECRET`.
     /// Without this, parallel test execution causes race conditions where
     /// one test sets the var and another removes it mid-assertion.
@@ -753,13 +884,15 @@ mod tests {
         // Hold the lock for the entire test so no other test touches the
         // JWT_SECRET env var while we depend on it.
         let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        reset_jwt_secret_for_test();
-        std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_SIGNING_KEY", TEST_RSA_PRIVATE_KEY);
+        std::env::set_var("OMNIA_JWT_VERIFICATION_KEY", TEST_RSA_PUBLIC_KEY);
+        std::env::set_var("OMNIA_JWT_KEY_ID", "test-key");
         let token = create_token("caller-42", 3600).expect("create token");
+        assert_eq!(decode_header(&token).expect("header").kid.as_deref(), Some("test-key"));
         let claims = validate_token(&token).expect("validate token");
         assert_eq!(claims.sub, "caller-42");
-        std::env::remove_var("OMNIA_JWT_SECRET");
-        reset_jwt_secret_for_test();
+        clear_jwt_env();
     }
 
     #[test]
@@ -780,9 +913,87 @@ mod tests {
         let result = decode::<Claims>(
             &token,
             &DecodingKey::from_secret(secret.as_bytes()),
-            &Validation::default(),
+            &Validation::new(Algorithm::HS256),
         );
         assert!(result.is_err(), "Token with exp=1 should be expired");
+    }
+
+    #[test]
+    fn test_validate_asymmetric_invalid_signature() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_SIGNING_KEY", TEST_RSA_PRIVATE_KEY);
+        std::env::set_var("OMNIA_JWT_VERIFICATION_KEY", TEST_RSA_PUBLIC_KEY);
+        let mut token = create_token("caller-42", 3600).expect("create token");
+        let last = token.pop().expect("non-empty token");
+        token.push(if last == 'a' { 'b' } else { 'a' });
+        assert!(matches!(validate_token(&token), Err(AuthError::InvalidToken(_))));
+        clear_jwt_env();
+    }
+
+    #[test]
+    fn test_validate_asymmetric_wrong_key_id() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_SIGNING_KEY", TEST_RSA_PRIVATE_KEY);
+        std::env::set_var("OMNIA_JWT_VERIFICATION_KEY", TEST_RSA_PUBLIC_KEY);
+        std::env::set_var("OMNIA_JWT_KEY_ID", "expected-key");
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some("wrong-key".to_string());
+        let claims = Claims {
+            sub: "caller-42".to_string(),
+            iat: epoch_secs(),
+            exp: epoch_secs() + 3600,
+        };
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(TEST_RSA_PRIVATE_KEY.as_bytes()).expect("key"),
+        )
+        .expect("encode");
+        assert!(matches!(validate_token(&token), Err(AuthError::InvalidToken(_))));
+        clear_jwt_env();
+    }
+
+    #[test]
+    fn test_validate_asymmetric_expired_token() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_VERIFICATION_KEY", TEST_RSA_PUBLIC_KEY);
+        let claims = Claims {
+            sub: "expired-caller".to_string(),
+            iat: 1,
+            exp: 1,
+        };
+        let token = encode(
+            &Header::new(Algorithm::RS256),
+            &claims,
+            &EncodingKey::from_rsa_pem(TEST_RSA_PRIVATE_KEY.as_bytes()).expect("key"),
+        )
+        .expect("encode");
+        assert!(matches!(validate_token(&token), Err(AuthError::TokenExpired)));
+        clear_jwt_env();
+    }
+
+    #[test]
+    fn test_validate_legacy_hs256_when_migration_enabled() {
+        let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_SECRET", "legacy-test-secret-that-is-long-enough");
+        std::env::set_var("OMNIA_JWT_ALLOW_LEGACY_HS256", "true");
+        let claims = Claims {
+            sub: "legacy-caller".to_string(),
+            iat: epoch_secs(),
+            exp: epoch_secs() + 3600,
+        };
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"legacy-test-secret-that-is-long-enough"),
+        )
+        .expect("encode");
+        assert_eq!(validate_token(&token).expect("legacy token").sub, "legacy-caller");
+        clear_jwt_env();
     }
 
     #[test]
@@ -790,8 +1001,7 @@ mod tests {
         let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Remove the var if it was set by a previous test, then verify
         // that create_token returns SecretNotConfigured.
-        std::env::remove_var("OMNIA_JWT_SECRET");
-        reset_jwt_secret_for_test();
+        clear_jwt_env();
         let result = create_token("caller-42", 3600);
         assert!(
             matches!(result, Err(AuthError::SecretNotConfigured)),
@@ -803,12 +1013,11 @@ mod tests {
     #[test]
     fn test_validate_invalid_token() {
         let _lock = JWT_SECRET_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("OMNIA_JWT_SECRET", "test-secret-key");
-        reset_jwt_secret_for_test();
+        clear_jwt_env();
+        std::env::set_var("OMNIA_JWT_VERIFICATION_KEY", TEST_RSA_PUBLIC_KEY);
         let result = validate_token("not.a.valid-token");
         assert!(matches!(result, Err(AuthError::InvalidToken(_))));
-        std::env::remove_var("OMNIA_JWT_SECRET");
-        reset_jwt_secret_for_test();
+        clear_jwt_env();
     }
 
     #[tokio::test]

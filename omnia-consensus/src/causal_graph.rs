@@ -2277,7 +2277,7 @@ mod tests {
         e2.sign_with_keypair(&kp).expect("signing");
         let e2_id = e2.id;
 
-        let mut build = || {
+        let build = || {
             let mut g = CausalGraph::new();
             g.insert(e1.clone()).unwrap();
             g.insert(e2.clone()).unwrap();

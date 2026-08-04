@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: 2026-08-01 (standing 3-node geo-distributed validator mesh; financial ledger + mint authority config)
+> Last updated: 2026-08-04 (audit-boundary hardening for roadmap stubs and non-production adapters)
 
 ---
 
@@ -12,7 +12,7 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 - **File**: `binding/src/rf_fingerprint.rs`
 - **Status**: Stub — requires SDR hardware (HackRF/USRP) for production use
-- **What exists**: Trait definition and mock implementation for testing
+- **What exists**: Data model plus byte-array/Hamming-distance simulator. `RfFingerprint::stub` is compiled only for tests or the `test-utils` feature, and `verify` fails closed when `OMNIA_ENV=production`.
 - **What's missing**: Real SDR integration, signal capture, fingerprint extraction, matching algorithm
 - **Blocker**: Hardware dependency — requires physical SDR device
 - **Phase**: Planned for Phase 1
@@ -26,11 +26,12 @@ This document catalogs all stub, placeholder, and partial implementations in the
 - **File**: `economics/src/useful_work.rs`
 - **Status**: Partial — 3 work types defined, not production-ready
 - **What exists**:
-  - `UsefulWorkType` enum with 3 variants (ML training, scientific compute, data analysis)
-  - `UsefulWorkVerifier` trait with mock implementation
+  - `UsefulWorkType` enum with 3 variants (ML training, scientific compute, distributed storage)
+  - `UsefulWorkProof::verify` requires an Ed25519 verifier signature and rejects empty signatures in all builds
   - Basic reward calculation logic
+  - `EconomicsShard::SubmitWork` remains admin-gated in production until real zkML/folding proof verification exists
 - **What's missing**:
-  - Real work verification (currently trusts prover's claim)
+  - Real work verification (current signature only proves trusted verifier attestation, not the work itself)
   - Benchmark-based difficulty adjustment
   - Anti-Sybil measures for work submission
   - Integration with external compute providers
@@ -43,16 +44,16 @@ This document catalogs all stub, placeholder, and partial implementations in the
 ### Bitcoin Settlement Adapter — **STUB** ⚠️
 
 - **File**: `omnia-adapters/src/settlement/bitcoin.rs`
-- **Status**: Stub — implements `SettlementAdapter` trait but returns hardcoded values
-- **What exists**: Trait implementation with `submit_batch()` and `verify_batch()` returning success
+- **Status**: Stub — legacy `SettlementLayer` only; all methods return `NotImplemented`; the adapter type is deprecated so new use emits compiler warnings
+- **What exists**: Fail-closed legacy implementation returning `SettlementError::NotImplemented` for every operation
 - **What's missing**: Actual Bitcoin script integration, OP_RETURN data embedding, transaction construction
 - **Phase**: Planned for Phase 1
 
 ### Solana Settlement Adapter — **STUB** ⚠️
 
 - **File**: `omnia-adapters/src/settlement/solana.rs`
-- **Status**: Stub — implements `SettlementAdapter` trait but returns hardcoded values
-- **What exists**: Trait implementation with no-op methods
+- **Status**: Stub — legacy `SettlementLayer` only; all methods return `NotImplemented`; the adapter type is deprecated so new use emits compiler warnings
+- **What exists**: Fail-closed legacy implementation returning `SettlementError::NotImplemented` for every operation
 - **What's missing**: Solana RPC integration, program deployment, transaction submission
 - **Phase**: Planned for Phase 1
 
@@ -67,18 +68,23 @@ This document catalogs all stub, placeholder, and partial implementations in the
   2. **Fabricated transaction hashes.** `submit_root` discards the Celestia response body and returns `mock_tx_hash()` — a locally derived BLAKE3 value. `fetch_finality` then queries `/blob/commitment/0x<that local hash>`, which cannot correspond to a real blob. The submit → finality → verify chain therefore cannot close against a live node.
   3. **Endpoint paths do not match celestia-node.** `/submit_blob`, `/share/commitment`, and `/blob/commitment/{hash}` are not the celestia-node JSON-RPC 2.0 API (`blob.Submit`, `blob.GetProof`, `header.GetByHeight`, …). These calls would not succeed against a real node as written.
   4. **Synthesized finality metadata.** `confirmation_count` is hardcoded to `3` and `proof_hash` is derived locally rather than taken from the chain.
+- **Runtime guard**: In disabled/mock mode, `CelestiaAdapter::new` panics under `OMNIA_ENV=production`; node startup also refuses any non-live settlement adapter in production.
 - **Legacy `SettlementLayer` impl**: Returns `NotImplemented` for all methods (Celestia has no proof verification or asset layer)
 - **Phase**: Needs a real celestia-node JSON-RPC implementation plus an integration test against a devnet before any mainnet consideration.
 
 ### Cosmos Settlement Adapter — **STUB** ⚠️
 
 - **File**: `omnia-adapters/src/settlement/cosmos.rs`
-- **Status**: Stub — implements `SettlementAdapter` trait but returns hardcoded values
-- **What exists**: Trait implementation with no-op methods
+- **Status**: Stub — legacy `SettlementLayer` only; all methods return `NotImplemented`; the adapter type is deprecated so new use emits compiler warnings
+- **What exists**: Fail-closed legacy implementation returning `SettlementError::NotImplemented` for every operation
 - **What's missing**: IBC integration, Cosmos SDK module, staking-based finality
 - **Phase**: Planned for Phase 1
 
 ---
+
+## Cross-cutting launch boundary
+
+Launch-critical production settlement is limited to live Ethereum (`ethereum-live`) or the FFI settlement path with the native library present. Mock settlement, Bitcoin, Solana, Cosmos, disabled Celestia, RF fingerprint simulation, PoUW attestation-only verification, and `node::pipeline` are roadmap/test surfaces. The node refuses startup with `OMNIA_ENV=production` when the selected settlement adapter reports `is_live() == false`.
 
 ## Phase 1: Planned Features (Not Started)
 
@@ -97,8 +103,10 @@ This document catalogs all stub, placeholder, and partial implementations in the
   party. BFT's security argument assumes *independent* operators, so the
   network is currently fault-tolerant against machine and region failure but
   not against operator compromise. Third-party validators are the open item.
-- **What's still planned**: staking pool management, auto-scaling validator
-  set, validator onboarding flow
+- **What's still planned**: staking pool management and auto-scaling validator
+  set. The external validator onboarding documentation and sample configs now
+  exist, but they are not evidence of independent operators until a third party
+  is admitted and monitored in production.
 - **Phase**: Phase 1
 
 ### Conviction Voting — **NOT STARTED** 🌑
@@ -130,12 +138,12 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 | Feature              | Layer | Status                             | File                                        | Phase Planned         |
 | -------------------- | ----- | ---------------------------------- | ------------------------------------------- | --------------------- |
-| RF Fingerprinting    | 3     | ⚠️ STUB                            | `binding/src/rf_fingerprint.rs`             | Phase 1               |
+| RF Fingerprinting    | 3     | ⚠️ STUB — production fails closed  | `binding/src/rf_fingerprint.rs`             | Phase 1               |
 | Proof-of-Useful-Work | 5     | ⚠️ PARTIAL                         | `economics/src/useful_work.rs`              | Phase 2               |
-| Bitcoin Settlement   | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/bitcoin.rs`  | Phase 1               |
-| Solana Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
+| Bitcoin Settlement   | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/bitcoin.rs`  | Phase 1               |
+| Solana Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
 | Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
-| Cosmos Settlement    | 0     | ⚠️ STUB                            | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
+| Cosmos Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
 | Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅ SHIPPED (v1, July 2026) | Dual-mode auth, live vs. testnet node | Done |
 | Validator Network    | —     | ✅⚠️ RUNNING (3 nodes, one operator) | —                                           | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |

@@ -12,13 +12,21 @@ use async_trait::async_trait;
 
 /// Cosmos settlement adapter.
 ///
+/// Roadmap-only stub: every legacy [`SettlementLayer`] operation returns
+/// [`SettlementError::NotImplemented`].
+/// Do not wire this adapter into production settlement selection.
+///
 /// This is a stub implementation. Cosmos SDK chains with CosmWasm
 /// support can host ZK proof verification contracts. Future implementation
 /// would deploy a CosmWasm contract and use IBC for cross-chain
 /// asset transfers.
+#[deprecated(
+    note = "roadmap-only settlement stub; all operations return NotImplemented and it is not production selectable"
+)]
 pub struct CosmosAdapter;
 
 #[async_trait]
+#[allow(deprecated)]
 impl SettlementLayer for CosmosAdapter {
     fn chain_id(&self) -> &'static str {
         "cosmos"

@@ -40,10 +40,13 @@ pub mod solana;
 // The old ethereum.rs is now at settlement/ethereum/mod.rs which re-exports
 // the legacy EthereumAdapter from the parent module.
 
+#[allow(deprecated)]
 pub use bitcoin::BitcoinAdapter;
 pub use celestia::CelestiaAdapter;
+#[allow(deprecated)]
 pub use cosmos::CosmosAdapter;
 pub use noop::NoopSettlementAdapter;
+#[allow(deprecated)]
 pub use solana::SolanaAdapter;
 
 // Re-export new hybrid architecture types

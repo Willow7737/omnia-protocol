@@ -90,7 +90,8 @@ omnia-node \
 # Liveness probe (always returns 200 if process is alive)
 curl http://localhost:8080/healthz
 
-# Readiness probe (returns 200 when node has peers, not syncing, recent finalization)
+# Readiness probe (returns 200 when node has enough peers and is not syncing;
+# quiet networks do not need recent finalization to be ready)
 curl http://localhost:8080/readyz
 
 # Node info
@@ -216,6 +217,168 @@ WARN No mint_authority configured … minting on the financial shard is DISABLED
 A malformed key fails at startup rather than being ignored — the
 alternative is a node that boots cleanly and then rejects every mint,
 which is far harder to trace back to a typo.
+
+---
+
+## External Validator Onboarding
+
+External operators should follow this path when joining a shared Omnia network
+instead of copying the local single-operator Docker topology. Coordinate with
+the current validator set before starting: every node must agree on validator
+public keys, stake weights, bootstrap peers, protocol version, and any network-
+wide mint authority.
+
+### 1. Operator intake
+
+Collect and confirm these values before the node is admitted:
+
+| Item | Operator provides | Network operator provides |
+| ---- | ----------------- | ------------------------- |
+| Numeric node ID | A unique non-zero `OMNIA_NODE_ID` | Confirmation it does not collide |
+| Validator public key | Hex Ed25519 public key derived from the persistent node key | Final `OMNIA_LANE0_VALIDATORS` entry and stake weight |
+| P2P address | Public DNS/IP that accepts UDP/4001 QUIC | Bootstrap peer multiaddrs, preferably pinned with `/p2p/<PeerId>` |
+| HTTP policy | Whether `/healthz`, `/readyz`, and `/metrics` are local-only or exposed through a VPN/reverse proxy | Monitoring scrape allow-list |
+| Secrets | JWT secret, authorized caller IDs, node key storage path | Shared genesis parameters such as `OMNIA_MINT_AUTHORITY` if minting is enabled |
+
+Stake is currently configured statically in `OMNIA_LANE0_VALIDATORS` as
+`hex_ed25519_pubkey:stake`. All validators must receive the same comma-
+separated value. A mismatch can produce peer connectivity with rejected Lane 0
+acks, so treat changes to the validator set as coordinated maintenance.
+
+### 2. Generate or load persistent keys
+
+Use a long-lived libp2p/Event signing key. For Docker, mount the raw key read-
+only and point `OMNIA_NODE_KEY_FILE` at that mount. For bare metal, store it
+outside the repo with `0600` permissions and include it in host backups.
+
+```sh
+install -d -m 0700 /secure/omnia
+omnia-node keygen --output-dir /secure/omnia --passphrase "$KEY_PASSPHRASE"
+# If your deployment expects a raw node_key.bin, export or provision it through
+# your secrets manager; do not commit it or bake it into an image.
+export OMNIA_NODE_KEY_FILE=/secure/omnia/node_key.bin
+```
+
+Record the resulting `validator_pubkey.txt` and share only the public key with
+the coordinator. Never send the private key, JWT secret, or passphrase.
+
+### 3. Configure network, ports, and secrets
+
+Use `config/external-validator.toml`,
+`docker/docker-compose.external-validator.yml`, and
+`docker/.env.external-validator.example` as the external-operator starting
+point. Replace every example value before boot.
+
+Required ports and reachability:
+
+- UDP `4001` inbound from bootstrap peers and other validators for QUIC/libp2p.
+- TCP `8080` for local health, readiness, metrics, and API access. Keep it
+  bound to `127.0.0.1` or a private management network unless the operator has
+  an explicit ingress plan.
+- Prometheus can scrape `/metrics` directly or through a VPN/reverse proxy; do
+  not expose unauthenticated operational metadata publicly by accident.
+
+Minimum environment:
+
+```sh
+export OMNIA_NODE_ID=42
+export OMNIA_NODE_KEY_FILE=/secure/omnia/node_key.bin
+export OMNIA_BOOTSTRAP_NODES='/dns4/bootstrap-1.example.net/udp/4001/quic-v1/p2p/12D3KooW...'
+export OMNIA_LANE0_VALIDATORS='hex_pubkey_a:1,hex_pubkey_b:1,hex_pubkey_c:1'
+export OMNIA_JWT_SECRET='replace-with-32-plus-random-bytes'
+export OMNIA_AUTHORIZED_CALLERS='operator-admin'
+export OMNIA_RATE_LIMIT_RPS=10
+```
+
+### 4. Deploy with Docker or systemd
+
+Docker Compose:
+
+```sh
+cp docker/.env.external-validator.example docker/.env
+# edit docker/.env and config/external-validator.toml
+docker compose -f docker/docker-compose.external-validator.yml up -d --build
+```
+
+Bare-metal systemd unit example:
+
+```ini
+[Unit]
+Description=Omnia external validator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=omnia
+Group=omnia
+EnvironmentFile=/etc/omnia/validator.env
+ExecStart=/usr/local/bin/omnia-node --config /etc/omnia/validator.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/omnia
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 5. Monitoring, verification, and recovery
+
+Initial verification commands:
+
+```sh
+curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS http://127.0.0.1:8080/readyz
+curl -fsS http://127.0.0.1:8080/metrics | awk '/^omnia_node_peers_connected /{print $2}'
+curl -fsS http://127.0.0.1:8080/api/v1/node/peers
+curl -fsS http://127.0.0.1:8080/api/v1/node/info
+```
+
+Confirm the following before announcing the node as live:
+
+- `/healthz` returns HTTP 200.
+- `/readyz` is ready, or any not-ready reason is understood during initial
+  quiet periods.
+- `omnia_node_peers_connected` reaches the expected peer count for the network.
+- `/api/v1/node/info` shows the expected `validator_pubkey` and a non-null
+  `lane0` object.
+- Lane 0 counters advance after test traffic: `acks_accepted` increases,
+  `acks_rejected` stays at zero, and `events_finalized` increases or the test
+  event reports `lane0_final: true`.
+
+Recovery rules:
+
+- Restore the same data directory and node key after host loss; changing the
+  key changes the validator identity and requires a validator-set update.
+- If peers are zero, verify UDP/4001 firewall rules and bootstrap multiaddrs
+  before rotating keys.
+- If peers are healthy but Lane 0 rejects acks, compare `OMNIA_LANE0_VALIDATORS`
+  byte-for-byte across operators.
+- If the JWT secret leaks, rotate `OMNIA_JWT_SECRET` and caller IDs, then
+  restart the API process; this does not require validator-set coordination.
+
+### Minimal onboarding checklist
+
+- [ ] Generate or load a persistent node key and back it up securely.
+- [ ] Share only the validator public key and public P2P address with the
+      network coordinator.
+- [ ] Set `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, and any required
+      network-wide secrets such as `OMNIA_MINT_AUTHORITY`.
+- [ ] Configure `OMNIA_BOOTSTRAP_NODES`, `OMNIA_LISTEN_ADDR`, and firewall
+      rules for UDP/4001.
+- [ ] Confirm the shared `OMNIA_LANE0_VALIDATORS` list includes the operator's
+      public key with the agreed stake and is identical on every validator.
+- [ ] Start with Docker Compose or systemd using persistent storage.
+- [ ] Verify `/healthz`, `/readyz`, `/metrics`, and `/api/v1/node/peers`.
+- [ ] Confirm peer count equals the expected network target.
+- [ ] Submit or observe test traffic and confirm Lane 0 acknowledgements and
+      finality (`acks_accepted`, `acks_rejected=0`, `events_finalized` or
+      `lane0_final: true`).
+- [ ] Add the node to monitoring and document recovery contacts/runbooks.
 
 ---
 

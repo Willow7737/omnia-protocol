@@ -17,9 +17,10 @@
 //!   responding? If this fails, Kubernetes restarts the container. This
 //!   should always return 200 as long as the server is running.
 //!
-//! - **Readiness** (`/readyz`): Is the node ready to accept traffic?
-//!   Returns 200 only when the node has peers, is not syncing, and has
-//!   finalized at least one event. Returns 503 with a reason otherwise.
+//! - **Readiness** (`/readyz`): Is the node operational and reachable?
+//!   Returns 200 when the node has enough peers and is not syncing. Quiet
+//!   networks that have not recently finalized Lane 1 events still report
+//!   ready; finality counters are included as informational fields.
 //!   If this fails, Kubernetes removes the pod from service endpoints
 //!   but does NOT restart it.
 //!
@@ -123,15 +124,18 @@ pub async fn liveness_handler(State(state): State<AppState>) -> impl IntoRespons
     }))
 }
 
-/// Readiness probe: is the node ready to accept traffic?
+/// Readiness probe: is the node operational and reachable?
 ///
-/// Returns 200 only if:
+/// Returns 200 if:
 /// - At least `readiness_min_peers` peers are connected (default: 1)
 /// - Not currently in fast-sync
-/// - Consensus has finalized at least one event
+///
+/// Finality progress is reported for operator visibility, but is not a
+/// readiness gate: a quiet network can be fully operational while Lane 1 has
+/// no canonical commits and Lane 0 has no recent events to preconfirm.
 ///
 /// Returns 503 with a JSON body containing a `reason` field if not ready.
-/// Possible reasons: `"no_peers"`, `"syncing"`, `"no_finalization"`.
+/// Possible reasons: `"no_peers"`, `"syncing"`.
 ///
 /// Kubernetes removes the pod from service endpoints if this probe fails,
 /// but does NOT restart the container.
@@ -149,11 +153,20 @@ pub async fn readiness_handler(State(state): State<AppState>) -> Response {
     let consensus_committed = state.substrate.read().await.committed_count();
     let finalized_height = event_store_len.max(consensus_committed);
 
-    // Determine readiness: need peers, not syncing, and recent finalization
+    let (lane0_enabled, lane0_finalized_events) = {
+        let substrate = state.substrate.read().await;
+        match substrate.lane0_stats() {
+            Some((_, _, finalized)) => (true, finalized),
+            None => (false, 0),
+        }
+    };
+
+    // Determine readiness: need peers and not syncing. Finalization signals
+    // describe chain progress, not process reachability; quiet networks can
+    // be operational while neither Lane 1 nor Lane 0 has recent work.
     let has_peers = peers >= min_peers;
     let not_syncing = !is_syncing;
-    let has_finalization = finalized_height > 0;
-    let is_ready = has_peers && not_syncing && has_finalization;
+    let is_ready = has_peers && not_syncing;
 
     if is_ready {
         axum::Json(json!({
@@ -161,16 +174,12 @@ pub async fn readiness_handler(State(state): State<AppState>) -> Response {
             "node_id": node_id,
             "peers": peers,
             "finalized_height": finalized_height,
+            "lane0_enabled": lane0_enabled,
+            "lane0_finalized_events": lane0_finalized_events,
         }))
         .into_response()
     } else {
-        let reason = if !has_peers {
-            "no_peers"
-        } else if is_syncing {
-            "syncing"
-        } else {
-            "no_finalization"
-        };
+        let reason = if !has_peers { "no_peers" } else { "syncing" };
         (
             StatusCode::SERVICE_UNAVAILABLE,
             axum::Json(json!({
@@ -179,6 +188,9 @@ pub async fn readiness_handler(State(state): State<AppState>) -> Response {
                 "node_id": node_id,
                 "peers": peers,
                 "is_syncing": is_syncing,
+                "finalized_height": finalized_height,
+                "lane0_enabled": lane0_enabled,
+                "lane0_finalized_events": lane0_finalized_events,
             })),
         )
             .into_response()
@@ -370,8 +382,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_readiness_returns_503_when_no_finalization() {
-        // Peers + not syncing + 0 finalized events → 503 "no_finalization"
+    async fn test_readiness_returns_200_when_operational_but_idle() {
+        // Peers + not syncing + no Lane 1 or Lane 0 finality is still ready:
+        // readiness tracks process reachability, not recent traffic.
         let state = make_test_state(vec![make_peer("peer1")], false, 0);
         let app = build_http_router().with_state(state);
 
@@ -380,12 +393,49 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
+        assert_eq!(response.status(), HttpStatus::OK);
 
         let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(body["status"], "not_ready");
-        assert_eq!(body["reason"], "no_finalization");
+        assert_eq!(body["status"], "ready");
+        assert_eq!(body["finalized_height"], 0);
+        assert_eq!(body["lane0_enabled"], false);
+        assert_eq!(body["lane0_finalized_events"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_readiness_returns_200_with_lane0_finality_but_no_lane1_finalization() {
+        // Lane 0 preconfirmation demonstrates useful finality progress even
+        // when Lane 1 canonical commits remain at 0; either way, readiness is
+        // governed by peers + sync state.
+        let state = make_test_state(vec![make_peer("peer1")], false, 0);
+        {
+            let mut substrate = state.substrate.write().await;
+            let keypair = state.keypair.as_ref().unwrap();
+            let validators =
+                omnia_substrate::lane0::ValidatorSet::new([(keypair.verifying_key().to_bytes(), 1)]).unwrap();
+            substrate.init_lane0(validators);
+            substrate.add_validator(state.config.node_id_bytes(), keypair.clone(), 1);
+            let mut event = omnia_substrate::Event::genesis(state.config.node_id_bytes(), vec![1, 2, 3])
+                .expect("valid genesis event");
+            event.sign_with_keypair(keypair).expect("signing");
+            substrate.submit_event(event).await.unwrap();
+        }
+        let app = build_http_router().with_state(state);
+
+        let response = app
+            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), HttpStatus::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["status"], "ready");
+        assert_eq!(body["finalized_height"], 0);
+        assert_eq!(body["lane0_enabled"], true);
+        assert_eq!(body["lane0_finalized_events"], 1);
     }
 
     #[tokio::test]

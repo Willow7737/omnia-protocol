@@ -656,7 +656,7 @@
       },
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])",
+          "expr": "omnia_node_cpu_usage_ratio{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}",
           "legendFormat": "$node",
           "refId": "A"
         }
@@ -666,10 +666,33 @@
           "color": {
             "mode": "palette-classic"
           },
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "min": 0,
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 0.5
+                },
+                {
+                  "color": "red",
+                  "value": 0.8
+                }
+              ]
+            }
+          }
         }
       },
-      "description": "Single-core fraction. 1.0 = one full core. From Prometheus process exporter."
+      "description": "Process CPU usage as a fraction of one core. 1.0 = 100% of one core. Sampled every 1s from /proc/self/stat (utime+stime delta).",
+      "alertThreshold": true
     }
   ],
   "refresh": "10s",

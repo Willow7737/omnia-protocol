@@ -26,7 +26,7 @@ use std::time::Instant;
 
 use jsonwebtoken::{encode, EncodingKey, Header};
 use omnia_economics::EconomicsState;
-use omnia_node::api::auth::{create_token, Claims};
+use omnia_node::api::auth::Claims;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
 use omnia_node::state::{AppState, NodeMetrics};
@@ -82,11 +82,26 @@ impl Drop for EnvGuard {
 // Token helpers
 // ---------------------------------------------------------------------------
 
-/// Create a valid JWT for `caller_id`, valid for 1 hour.
+/// Create a valid HS256 JWT for `caller_id`, valid for 1 hour.
 ///
 /// Requires `OMNIA_JWT_SECRET` to be set in the environment.
 fn make_valid_token(caller_id: &str) -> String {
-    create_token(caller_id, 3600).expect("Failed to create valid token")
+    let secret = std::env::var("OMNIA_JWT_SECRET").expect("OMNIA_JWT_SECRET must be set");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let claims = Claims {
+        sub: caller_id.to_string(),
+        iat: now,
+        exp: now + 3600,
+    };
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .expect("Failed to encode valid token")
 }
 
 /// Create an expired JWT (exp = 1 → 1970-01-01 00:00:01 UTC).
@@ -203,6 +218,33 @@ fn build_test_app_state(port: u16) -> AppState {
     }
 }
 
+/// Configure auth and rate-limit environment for a test server.
+///
+/// Callers must hold [`ENV_LOCK`] before invoking this so the process-global
+/// environment remains stable while router state reads it.
+fn configure_test_server_env(authorized_callers: Option<&str>, rate_limit_rps: Option<u64>) {
+    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
+    std::env::set_var("OMNIA_JWT_ALLOW_LEGACY_HS256", "true");
+
+    if let Some(callers) = authorized_callers {
+        std::env::set_var("OMNIA_AUTHORIZED_CALLERS", callers);
+    } else {
+        std::env::remove_var("OMNIA_AUTHORIZED_CALLERS");
+    }
+
+    if let Some(rps) = rate_limit_rps {
+        std::env::set_var("OMNIA_RATE_LIMIT_RPS", rps.to_string());
+    } else {
+        std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+    }
+
+    // Reset the JWT config cache and re-initialize from the env vars we just set.
+    // Without this, validate_token() reads a stale cache from a prior test run
+    // and rejects HS256 tokens.
+    omnia_node::api::auth::reset_jwt_secret_for_test();
+    omnia_node::api::auth::init_jwt_secret();
+}
+
 /// Like `setup_server` but allows pre-registering DIDs in the economics
 /// state before the server starts. Uses the same ENV_LOCK + EnvGuard pattern
 /// as `setup_server` to avoid env var races with parallel tests.
@@ -212,9 +254,7 @@ where
 {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-    std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+    configure_test_server_env(Some(ADMIN_CALLER), None);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -243,7 +283,12 @@ where
     let base_url = format!("http://127.0.0.1:{port}");
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {
@@ -262,9 +307,7 @@ where
 {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-    std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
+    configure_test_server_env(Some(ADMIN_CALLER), None);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -289,7 +332,12 @@ where
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {
@@ -302,10 +350,16 @@ where
 
 /// Start a test HTTP server on a random port.
 ///
-/// Reads `OMNIA_JWT_SECRET`, `OMNIA_AUTHORIZED_CALLERS`, and
-/// `OMNIA_RATE_LIMIT_RPS` from the environment at construction time.
-/// The caller must set these **before** calling this function.
-async fn start_test_server() -> (String, tokio::task::JoinHandle<()>) {
+/// The caller must hold [`ENV_LOCK`] for the lifetime of the returned server.
+/// This helper configures the environment and refreshes the JWT cache before
+/// constructing state or building the router.
+async fn start_test_server(
+    _lock: &std::sync::MutexGuard<'static, ()>,
+    authorized_callers: Option<&str>,
+    rate_limit_rps: Option<u64>,
+) -> (String, tokio::task::JoinHandle<()>) {
+    configure_test_server_env(authorized_callers, rate_limit_rps);
+
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
@@ -345,21 +399,15 @@ struct TestServer {
 async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
-    // Set auth env vars
-    std::env::set_var("OMNIA_JWT_SECRET", JWT_SECRET);
-    std::env::set_var("OMNIA_AUTHORIZED_CALLERS", ADMIN_CALLER);
-
-    // Set or clear rate limit override
-    if let Some(rps) = rate_limit_rps {
-        std::env::set_var("OMNIA_RATE_LIMIT_RPS", rps.to_string());
-    } else {
-        std::env::remove_var("OMNIA_RATE_LIMIT_RPS");
-    }
-
-    let (base_url, handle) = start_test_server().await;
+    let (base_url, handle) = start_test_server(&lock, Some(ADMIN_CALLER), rate_limit_rps).await;
 
     let env_guard = EnvGuard {
-        keys: vec!["OMNIA_JWT_SECRET", "OMNIA_AUTHORIZED_CALLERS", "OMNIA_RATE_LIMIT_RPS"],
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
     };
 
     TestServer {

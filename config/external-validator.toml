@@ -1,0 +1,29 @@
+# Omnia external validator sample configuration
+#
+# Copy to /etc/omnia/validator.toml and replace every EXAMPLE value before
+# joining a shared network. This file is intentionally single-node and does not
+# assume Docker DNS names or the repository's five-node local topology.
+
+node_id = 42
+http_port = 8080
+data_dir = "/var/lib/omnia"
+log_level = "info"
+snapshot_interval = 10000
+pruning_depth = 0
+
+# QUIC/libp2p listen address. Open UDP/4001 from every bootstrap/validator peer
+# that should be able to dial this node.
+listen_addr = "/ip4/0.0.0.0/udp/4001/quic-v1"
+
+# Comma-separated bootstrap peers. Prefer pinned /p2p/<PeerId> addresses once
+# the bootstrap operator publishes stable PeerIds.
+bootstrap_nodes = "/dns4/bootstrap-1.example.net/udp/4001/quic-v1/p2p/12D3KooWEXAMPLEBOOTSTRAP1,/ip4/203.0.113.20/udp/4001/quic-v1/p2p/12D3KooWEXAMPLEBOOTSTRAP2"
+
+# Every validator must use the byte-identical Lane 0 set. Format:
+# hex_ed25519_pubkey:stake,hex_ed25519_pubkey:stake
+lane0_validators = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:1,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:1,cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:1"
+
+# Genesis/network-wide mint authority. Omit or leave unset if minting is disabled
+# for the network. Do not set this to your own validator key unless governance
+# has explicitly selected that key network-wide.
+# mint_authority = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
