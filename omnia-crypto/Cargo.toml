@@ -10,7 +10,7 @@ omnia-primitives = { path = "../omnia-primitives" }
 ed25519-dalek = { version = "2.1", features = ["serde", "hazmat"] }
 # Direct curve access for the Edwards25519 EC-VRF (AUDIT-2026-07 C1,
 # #339): real point/scalar operations, not a hash construction.
-curve25519-dalek = { version = "4.1", features = ["digest"] }
+curve25519-dalek = { version = "5.0", features = ["digest"] }
 blst = { version = "0.3", optional = true }
 aes-gcm = { version = "0.10", optional = true }
 bip39 = { version = "2.0", features = ["zeroize", "rand"], optional = true }
