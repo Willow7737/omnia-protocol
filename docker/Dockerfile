@@ -25,13 +25,15 @@ COPY substrate/Cargo.toml substrate/
 # 4) Pre-fetch all dependencies
 RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
     mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
-    omnia-network/src omnia-adapters/src shards/src binding/src \
+    omnia-network/src omnia-adapters/src omnia-adapters/examples \
+    shards/src binding/src \
     economics/src node/src substrate/src && \
     echo "" > omnia-primitives/src/lib.rs && \
     echo "" > omnia-consensus/src/lib.rs && \
     echo "" > omnia-crypto/src/lib.rs && \
     echo "" > omnia-network/src/lib.rs && \
     echo "" > omnia-adapters/src/lib.rs && \
+    echo "fn main() {}" > omnia-adapters/examples/bitcoin_regtest_e2e.rs && \
     echo "" > shards/src/lib.rs && \
     echo "" > binding/src/lib.rs && \
     echo "" > economics/src/lib.rs && \
