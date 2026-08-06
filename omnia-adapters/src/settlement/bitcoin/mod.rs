@@ -1,29 +1,40 @@
-//! Bitcoin settlement adapter (STUB).
+//! Bitcoin settlement adapter.
 //!
-//! Bitcoin has no native smart contract support for proof verification.
-//! Production options:
+//! Bitcoin has no native smart contract support for proof verification, so
+//! (unlike Ethereum) there is no on-chain path for `submit_batch_with_proof`
+//! — the live adapter settles by anchoring state roots as OP_RETURN data
+//! instead. See the `live` module for the real implementation (behind the
+//! `bitcoin-live` feature) and [`BitcoinAdapter`] below for the legacy,
+//! backward-compatible `SettlementLayer` stub.
+//!
+//! Production options considered for full proof verification, none wired
+//! up yet:
 //! - Taproot scripts with limited verification
 //! - Lightning Network for fast bridging
 //! - Sidechains (Liquid, RSK) for smart contract compatibility
 //! - BitVM for optimistic verification
-//!
-//! Phase 0: All methods return `NotImplemented`.
 
 use super::{SettlementError, SettlementLayer};
 use crate::proof_bundle::ProofBundle;
 use async_trait::async_trait;
 
-/// Bitcoin settlement adapter.
+#[cfg(feature = "bitcoin-live")]
+pub mod live;
+
+#[cfg(feature = "bitcoin-live")]
+pub use live::{BitcoinConfig, BitcoinSettlementAdapter};
+
+/// Legacy Bitcoin settlement adapter (roadmap-only stub).
 ///
-/// Roadmap-only stub: every legacy [`SettlementLayer`] operation returns
-/// [`SettlementError::NotImplemented`].
-/// Do not wire this adapter into production settlement selection.
+/// Every [`SettlementLayer`] operation returns
+/// [`SettlementError::NotImplemented`]. Kept for backward compatibility;
+/// new code should use `BitcoinSettlementAdapter` (behind the
+/// `bitcoin-live` feature) instead, which implements the modern
+/// `SettlementAdapter` trait against a real Bitcoin Core node.
 ///
-/// This is a stub implementation that returns `NotImplemented` for all
-/// operations. Bitcoin's lack of general-purpose smart contracts makes
-/// ZK proof verification challenging. Future adapters may leverage
-/// BitVM for optimistic verification or sidechains like RSK/Liquid
-/// for smart contract support.
+/// Unchanged from the original stub — this file was only reorganized
+/// from a flat `bitcoin.rs` into this module so `live.rs` could sit
+/// alongside it, the same way `ethereum.rs` was restructured earlier.
 #[deprecated(
     note = "roadmap-only settlement stub; all operations return NotImplemented and it is not production selectable"
 )]
