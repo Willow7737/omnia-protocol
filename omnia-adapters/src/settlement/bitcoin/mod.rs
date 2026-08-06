@@ -3,7 +3,7 @@
 //! Bitcoin has no native smart contract support for proof verification, so
 //! (unlike Ethereum) there is no on-chain path for `submit_batch_with_proof`
 //! — the live adapter settles by anchoring state roots as OP_RETURN data
-//! instead. See [`live`] for the real implementation (behind the
+//! instead. See the `live` module for the real implementation (behind the
 //! `bitcoin-live` feature) and [`BitcoinAdapter`] below for the legacy,
 //! backward-compatible `SettlementLayer` stub.
 //!
@@ -28,7 +28,7 @@ pub use live::{BitcoinConfig, BitcoinSettlementAdapter};
 ///
 /// Every [`SettlementLayer`] operation returns
 /// [`SettlementError::NotImplemented`]. Kept for backward compatibility;
-/// new code should use [`BitcoinSettlementAdapter`] (behind the
+/// new code should use `BitcoinSettlementAdapter` (behind the
 /// `bitcoin-live` feature) instead, which implements the modern
 /// `SettlementAdapter` trait against a real Bitcoin Core node.
 ///
