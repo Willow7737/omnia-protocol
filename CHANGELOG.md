@@ -9,6 +9,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.90](https://github.com/Willow7737/omnia-protocol/compare/v0.1.89...v0.1.90) (2026-08-06)
+
+
+### Bug Fixes
+
+* **docker:** create stub example file for cargo fetch in builder stage ([b85e530](https://github.com/Willow7737/omnia-protocol/commit/b85e530994e1e4e75fc19371e33a71357ec06e89))
+* **docker:** create stub example file for cargo fetch in builder stage ([93b9306](https://github.com/Willow7737/omnia-protocol/commit/93b93064c2bfe0799a52c177f4cf11de4ea5845d))
+
 ## [0.1.89](https://github.com/Willow7737/omnia-protocol/compare/v0.1.88...v0.1.89) (2026-08-06)
 
 
