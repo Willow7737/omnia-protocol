@@ -35,6 +35,8 @@ alloy = { version = "1", optional = true, features = [
     "provider-ws", "provider-http", "signers", "signer-local",
     "contract", "network", "essentials",
 ] }
+# Bitcoin Core RPC client (feature-gated: bitcoin-live)
+bitcoincore-rpc = { version = "0.19", optional = true }
 # HTTP client for Celestia DA layer integration (feature-gated)
 reqwest = { version = "0.12", optional = true, features = ["json"] }
 serde_json = { version = "1.0", optional = true }
@@ -61,6 +63,7 @@ arkworks = [
     "dep:ark-crypto-primitives", "dep:rand", "dep:rand_chacha",
 ]
 ethereum-live = ["dep:alloy"]
+bitcoin-live = ["dep:bitcoincore-rpc", "dep:serde_json"]
 settlement-ffi = []
 cosmos = []
 ceremony = []

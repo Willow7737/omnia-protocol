@@ -61,6 +61,10 @@ pub use ffi::FfiSettlementAdapter;
 #[cfg(feature = "ethereum-live")]
 pub use ethereum::EthereumSettlementAdapter;
 
+// Conditionally re-export live Bitcoin adapter
+#[cfg(feature = "bitcoin-live")]
+pub use bitcoin::BitcoinSettlementAdapter;
+
 // ---------------------------------------------------------------------------
 // SettlementAdapter trait (hybrid architecture core)
 // ---------------------------------------------------------------------------
