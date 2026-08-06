@@ -9,6 +9,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.89](https://github.com/Willow7737/omnia-protocol/compare/v0.1.88...v0.1.89) (2026-08-06)
+
+
+### Features
+
+* **adapters:** add live Bitcoin settlement adapter (bitcoin-live feature) ([47d96d8](https://github.com/Willow7737/omnia-protocol/commit/47d96d8e36159d09d8668dbbb9b8273fa52f8ed8))
+* **adapters:** add live Bitcoin settlement adapter (bitcoin-live feature) ([01df4b2](https://github.com/Willow7737/omnia-protocol/commit/01df4b2f275fc6b2cd5ae6780011732580c35144))
+
+
+### Bug Fixes
+
+* **ci:** gate bitcoin_regtest_e2e example behind bitcoin-live feature ([3a5a22c](https://github.com/Willow7737/omnia-protocol/commit/3a5a22cc01a9b9dc36d4ac14b1b94cfa262b5e9a))
+* **doc:** escape feature-gated doc links in bitcoin module ([eb0b6cb](https://github.com/Willow7737/omnia-protocol/commit/eb0b6cbe98c3adeda7fcd52ee2d54028b510b075))
+* **fmt:** apply cargo fmt to bitcoin e2e example ([96a821e](https://github.com/Willow7737/omnia-protocol/commit/96a821efb5a3c731cfe050c2ee1240fd7141ae47))
+
+
+### Tests
+
+* **adapters:** add bitcoin regtest e2e example ([bd42782](https://github.com/Willow7737/omnia-protocol/commit/bd427828e95e201409ca69323f6296af65c1ed9b))
+
 ## [0.1.88](https://github.com/Willow7737/omnia-protocol/compare/v0.1.87...v0.1.88) (2026-08-05)
 
 
