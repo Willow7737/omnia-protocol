@@ -49,6 +49,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tx_hash = adapter.submit_root(test_root).await?;
     println!("  TXID: {tx_hash}");
 
+    // Bitcoin Core RPC expects bare hex (no 0x prefix).
+    let txid_hex: String = format!("{tx_hash}")
+        .strip_prefix("0x")
+        .unwrap_or(&format!("{tx_hash}"))
+        .to_string();
+
     // --- Step 2: wait for confirmation ---
     let url = std::env::var("OMNIA_BITCOIN_RPC_URL")?;
     let user = std::env::var("OMNIA_BITCOIN_RPC_USER")?;
@@ -72,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             loop {
                 let tx: serde_json::Value =
-                    rpc.call("gettransaction", &[json!(tx_hash)])?;
+                    rpc.call("gettransaction", &[json!(txid_hex)])?;
                 let confirmations = tx["confirmations"].as_i64().unwrap_or(0);
                 println!("  [{:?}] confirmations: {confirmations}", start.elapsed());
                 if confirmations >= 1 {
