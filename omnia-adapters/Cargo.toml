@@ -88,3 +88,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[example]]
 name = "bitcoin_regtest_e2e"
 required-features = ["bitcoin-live"]
+
+[[example]]
+name = "bitcoin_testnet4_verify"
+required-features = ["bitcoin-live"]
