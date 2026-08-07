@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => {
             // testnet4 / any public network — poll until the tx is confirmed.
             println!("\nWaiting for transaction to be confirmed (polling every 30s)...");
-            let timeout = Duration::from_secs(600); // 10 minutes hard limit
+            let timeout = Duration::from_secs(1800); // 30 minutes hard limit
             let poll_interval = Duration::from_secs(30);
             let start = std::time::Instant::now();
 
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
                 if start.elapsed() > timeout {
-                    return Err("Timed out waiting for transaction confirmation after 600s".into());
+                    return Err("Timed out waiting for transaction confirmation after 1800s".into());
                 }
                 std::thread::sleep(poll_interval);
             }
