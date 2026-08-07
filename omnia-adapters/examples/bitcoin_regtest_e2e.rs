@@ -1,6 +1,10 @@
-//! End-to-end test for the Bitcoin settlement adapter against a regtest node.
+//! End-to-end test for the Bitcoin settlement adapter.
 //!
-//! Usage (after starting bitcoind in regtest mode with wallet funded):
+//! Works against regtest (mines a block on demand) or testnet4 (polls for real
+//! confirmation).  The mode is selected via the `OMNIA_BITCOIN_NETWORK`
+//! environment variable, defaulting to `regtest`.
+//!
+//! ## regtest (default)
 //!
 //! ```
 //! export OMNIA_BITCOIN_RPC_URL=http://127.0.0.1:18443
@@ -9,16 +13,31 @@
 //! export OMNIA_BITCOIN_MIN_CONFIRMATIONS=1
 //! cargo run -p omnia-adapters --features bitcoin-live --example bitcoin_regtest_e2e
 //! ```
+//!
+//! ## testnet4
+//!
+//! ```
+//! export OMNIA_BITCOIN_RPC_URL=http://127.0.0.1:48332
+//! export OMNIA_BITCOIN_RPC_USER=omnia
+//! export OMNIA_BITCOIN_RPC_PASSWORD=<your-password>
+//! export OMNIA_BITCOIN_MIN_CONFIRMATIONS=1
+//! OMNIA_BITCOIN_NETWORK=testnet4 \
+//!   cargo run -p omnia-adapters --features bitcoin-live --example bitcoin_regtest_e2e
+//! ```
 
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use omnia_adapters::settlement::bitcoin::{BitcoinConfig, BitcoinSettlementAdapter};
 use omnia_adapters::settlement::SettlementAdapter;
 use serde_json::json;
+use std::time::Duration;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = BitcoinConfig::from_env()?;
     let adapter = BitcoinSettlementAdapter::new(config)?;
+
+    let network = std::env::var("OMNIA_BITCOIN_NETWORK").unwrap_or_else(|_| "regtest".into());
+    println!("Running e2e test on network: {network}");
 
     // --- Step 1: submit_root ---
     let test_root: [u8; 32] = [
@@ -28,18 +47,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Submitting state root (OP_RETURN anchor)...");
     let tx_hash = adapter.submit_root(test_root).await?;
-    println!("  TXID: {}", tx_hash);
+    println!("  TXID: {tx_hash}");
 
-    // --- Step 2: mine a block so the tx gets a confirmation ---
-    println!("\nMining 1 regtest block...");
+    // --- Step 2: wait for confirmation ---
     let url = std::env::var("OMNIA_BITCOIN_RPC_URL")?;
     let user = std::env::var("OMNIA_BITCOIN_RPC_USER")?;
     let pass = std::env::var("OMNIA_BITCOIN_RPC_PASSWORD")?;
     let rpc = Client::new(&url, Auth::UserPass(user, pass))?;
 
-    let addr: String = rpc.call("getnewaddress", &[])?;
-    let _: Vec<String> = rpc.call("generatetoaddress", &[json!(1), json!(addr)])?;
-    println!("  Block mined.");
+    match network.as_str() {
+        "regtest" => {
+            println!("\nMining 1 regtest block...");
+            let addr: String = rpc.call("getnewaddress", &[])?;
+            let _: Vec<String> =
+                rpc.call("generatetoaddress", &[json!(1), json!(addr)])?;
+            println!("  Block mined.");
+        }
+        _ => {
+            // testnet4 / any public network — poll until the tx is confirmed.
+            println!("\nWaiting for transaction to be confirmed (polling every 30s)...");
+            let timeout = Duration::from_secs(600); // 10 minutes hard limit
+            let poll_interval = Duration::from_secs(30);
+            let start = std::time::Instant::now();
+
+            loop {
+                let tx: serde_json::Value =
+                    rpc.call("gettransaction", &[json!(tx_hash)])?;
+                let confirmations = tx["confirmations"].as_i64().unwrap_or(0);
+                println!("  [{:?}] confirmations: {confirmations}", start.elapsed());
+                if confirmations >= 1 {
+                    break;
+                }
+                if start.elapsed() > timeout {
+                    return Err("Timed out waiting for transaction confirmation after 600s".into());
+                }
+                std::thread::sleep(poll_interval);
+            }
+        }
+    }
 
     // --- Step 3: fetch_finality ---
     println!("\nFetching finality proof...");
@@ -50,7 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Proof hash: 0x{}", hex::encode(proof.proof_hash));
 
     // --- Verify ---
-    assert!(proof.confirmation_count >= 1, "Expected >= 1 confirmation");
+    assert!(
+        proof.confirmation_count >= 1,
+        "Expected >= 1 confirmation"
+    );
     assert!(proof.block_number > 0, "Expected block number > 0");
 
     println!("\n✓ End-to-end test PASSED");
