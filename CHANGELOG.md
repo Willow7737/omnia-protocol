@@ -9,6 +9,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased](https://github.com/Willow7737/omnia-protocol/compare/v0.1.90...dev)
+
+
+### Features
+
+* **adapters:** add testnet4 finality verification example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+* **adapters:** support testnet4 e2e polling for real block confirmation ([6d5e351](https://github.com/Willow7737/omnia-protocol/commit/6d5e351))
+
+
+### Bug Fixes
+
+* **adapters:** strip 0x prefix before passing txid to Bitcoin Core RPC ([c16aa3b](https://github.com/Willow7737/omnia-protocol/commit/c16aa3b))
+* **adapters:** increase testnet4 e2e timeout to 30 minutes ([2eee0bd](https://github.com/Willow7737/omnia-protocol/commit/2eee0bd))
+
+
+### Tests
+
+* **adapters:** testnet4 finality verification against confirmed block 147371 ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+* **adapters:** testnet4 env-var-driven finality check example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+
+
 ## [0.1.90](https://github.com/Willow7737/omnia-protocol/compare/v0.1.89...v0.1.90) (2026-08-06)
 
 

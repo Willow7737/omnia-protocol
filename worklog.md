@@ -178,3 +178,49 @@ Stage Summary:
 - **All three ladder rungs converged at 100% propagation with full quorum finality, zero loss**: 1k in <8 s everywhere; 5k (A 12.4 s / B 91.9 s / C 273.1 s); 10k (A 29.4 s / B 289.1 s / C 37.6 s). `finalized_total` identical on all nodes after every rung (cumulative counters — every submitted event finalized).
 - The straggler alternates with path geometry (C on 5k, B on 10k) — whichever node ends up chasing the tail over the 218 ms B↔C path pays repair-chain round-trips at real RTT. Matches the contention model from the 07-19 arc; the documented next lever is directed (unicast) repair serving. Peak RSS 145 MB — CPX21 has multiples of headroom.
 - Every status-bearing doc updated same day: benchmark-gates (new WAN section + superseding verified-capacity statement), status.md (REQ-P4.5 → Completed), README milestones, and the wiki (Home/Benchmarks/FAQ no longer say "geo pending").
+
+## 2026-08-07/08 — Bitcoin Settlement Adapter: testnet4 end-to-end validation
+
+- **Objective:** Validate BitcoinSettlementAdapter against a real Bitcoin testnet4 network, proving the full round-trip (submit_root → confirm → fetch_finality) on a public blockchain with on-chain artifacts.
+- **Mentor mandate:** Must use testnet4 (not testnet3, deprecated in Core v28, removed v30). Must produce a real confirmed anchor tx as a public artifact for Product Hunt.
+
+### Infrastructure
+- Migrated from 4 GB sandbox (OOM kills during IBD, RSS hit 3.4 GB) to Hetzner Node A (nbg1-eu-central, 16 GB RAM, 300 GB SSD, Ubuntu 26.04 LTS).
+- Bitcoin Core v28+ configured for testnet4: RPC port 48332, prune=5500, dbcache=300, txindex=0, maxconnections=10, fallbackfee=0.0002.
+- Completed IBD to block 147354 (verificationprogress=1.0, ibd=false). Wallet created and funded with 0.01079531 tBTC from testnet4 faucet.
+
+### Issues encountered and resolved
+1. **Testnet3 OOM on 4 GB sandbox** — bitcoind RSS hit 3.4 GB → OOM killer. Tried dbcache=100, still too much. Fixed by migrating to Node A (16 GB).
+2. **Testnet3 deprecation** — Mentor corrected: must use testnet4. Port 48332, data dir ~/.bitcoin/testnet4/. Updated bitcoin.conf with [testnet4] section.
+3. **0x prefix in gettransaction RPC** — submit_root returns 0x-prefixed txid, Bitcoin Core expects bare hex. Caused JsonRpc code:-3 error. Fixed with strip_prefix("0x") in e2e test.
+4. **Testnet4 block timing** — Blocks target 10 min but took 30+ min due to variable hashrate. Caused timeouts at 600s and 1800s. Not a code bug — infrastructure characteristic.
+5. **RBF with descendants** — bumpfee fails when tx has child txs spending its change. Cannot bump parent after child exists.
+6. **CI cargo fmt failures** — Multi-line vs single-line function calls, assertion formatting, missing trailing newline. Fixed with targeted edits.
+7. **ISP blocking mempool.space** — DNS resolves but TCP to 103.165.192.x times out. Workaround: rely entirely on Bitcoin Core RPC for verification.
+8. **Screen env vars not inherited** — screen -S starts fresh shell, loses exported env vars. Must export inside screen session.
+
+### Validation results
+- **Stage 1 (regtest):** PASSED — submit_root → mine block → fetch_finality, all fields correct.
+- **Stage 2 (testnet4):** PASSED — Anchor TX cbe1da89872c718f4c2553efeaaf212a287d9b16962191f12ba8fc4b146c64e6 confirmed in block 147371. OP_RETURN verified on-chain: 4f4d4e494131 (OMNIA1) + 32-byte test root.
+- **Stage 3 (finality verify):** PASSED — fetch_finality against confirmed tx returned block_number=147371, confirmations=20, proof_hash=0x5fabda6933d7586b2b6c196cc19063e717634ba01a54dddd7dd12acfb4d6dfda. blake3 derivation matched.
+- **Full round-trip proven on public testnet4 network with zero ambiguity.**
+
+### Production node fleet (5 nodes)
+| Node | Location | Specs | Role |
+|------|----------|-------|------|
+| A | nbg1-eu-central (Nuremberg) | 16 GB, 300 GB SSD | Bitcoin testnet4 + validator |
+| B | us-east-3 (Ashburn) | CPX21 | Validator |
+| C | sin-ap-southeast (Singapore) | CPX21 | Validator |
+| D | fsn1-eu-central (Falkenstein) | CPX21 | Validator |
+| E | hel1-eu-central (Helsinki) | CPX21 | Validator |
+
+### Commits (dev branch)
+- 6d5e351 feat(bitcoin): support testnet4 e2e — poll for confirmation instead of mining
+- c16aa3b fix(bitcoin): strip 0x prefix before passing txid to Bitcoin RPC
+- 2eee0bd fix(bitcoin): increase testnet4 e2e timeout to 30 minutes
+- 49a0dad style: fix cargo fmt in bitcoin e2e test
+- 4750287 feat(bitcoin): add testnet4 finality verification example
+
+### Funds returned
+- 0.01078 tBTC returned to tb1qerzrlxcfu24davlur5sqmgzzgsal6wusda40er via TX 4dcf91c776330c8db018da5bdf18f62696323eaa1258a72b4c52d0b657fd2eea.
+- Small amount consumed by network fees for anchor txs + return transfer.
