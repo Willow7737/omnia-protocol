@@ -65,8 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "regtest" => {
             println!("\nMining 1 regtest block...");
             let addr: String = rpc.call("getnewaddress", &[])?;
-            let _: Vec<String> =
-                rpc.call("generatetoaddress", &[json!(1), json!(addr)])?;
+            let _: Vec<String> = rpc.call("generatetoaddress", &[json!(1), json!(addr)])?;
             println!("  Block mined.");
         }
         _ => {
@@ -77,8 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let start = std::time::Instant::now();
 
             loop {
-                let tx: serde_json::Value =
-                    rpc.call("gettransaction", &[json!(txid_hex)])?;
+                let tx: serde_json::Value = rpc.call("gettransaction", &[json!(txid_hex)])?;
                 let confirmations = tx["confirmations"].as_i64().unwrap_or(0);
                 println!("  [{:?}] confirmations: {confirmations}", start.elapsed());
                 if confirmations >= 1 {
@@ -101,10 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Proof hash: 0x{}", hex::encode(proof.proof_hash));
 
     // --- Verify ---
-    assert!(
-        proof.confirmation_count >= 1,
-        "Expected >= 1 confirmation"
-    );
+    assert!(proof.confirmation_count >= 1, "Expected >= 1 confirmation");
     assert!(proof.block_number > 0, "Expected block number > 0");
 
     println!("\n✓ End-to-end test PASSED");
