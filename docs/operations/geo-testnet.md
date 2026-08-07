@@ -3,7 +3,7 @@
 > Audience: Operators
 > Context: Running the Omnia testnet across real internet distance (multiple
 > regions), and benchmarking it honestly.
-> Last Updated: 2026-08-02
+> Last Updated: 2026-08-08
 
 Every benchmark recorded before this runbook ran on a **single host**
 (near-zero RTT between containers). This runbook takes the same stack across
@@ -15,15 +15,15 @@ real WAN latency, which is the credibility jump that matters: it converts
 Three nodes, three regions, one provider (Hetzner shown; any VPS provider
 works). All three are Lane 0 validators.
 
-| Node | IP | Region | Role |
-|------|----|--------|------|
-| **A** | 78.47.43.136 | Nuremberg, DE (`nbg1`) | bootstrap + validator + ingress + bench host |
-| **B** | 178.156.163.211 | Ashburn, US-East (`ash`) | validator |
-| **C** | 5.223.85.30 | Singapore (`sin`) | validator |
-| **D** | 46.62.218.24 | Helsinki, FI (`hel1`) | validator |
-| **E** | 46.224.103.217 | Falkenstein, DE (`fsn1`) | validator |
+| Node | IP | Region | vCPU | Role |
+|------|----|--------|:----:|------|
+| **A** | 78.47.43.136 | Nuremberg, DE (`nbg1`) | 3 | bootstrap + validator + ingress + bench host + Bitcoin testnet4 |
+| **B** | 178.156.163.211 | Ashburn, US-East (`ash`) | 3 | validator |
+| **C** | 5.223.85.30 | Singapore (`sin`) | 4 | validator |
+| **D** | 46.62.218.24 | Helsinki, FI (`hel1`) | 4 | validator |
+| **E** | 46.224.103.217 | Falkenstein, DE (`fsn1`) | 4 | validator |
 
-Sizing: CPX21 (3 vCPU / 4 GB) is ample — see the footprint note below.
+Sizing: CPX21 (3–4 vCPU / 4 GB) is ample for validator nodes — see the footprint note below. Node A runs a larger instance (CPX31, 16 GB / 300 GB SSD) to accommodate Bitcoin Core's testnet4 IBD and full unpruned chain with `txindex=1`.
 
 Expected RTTs: A↔B ~90 ms, A↔C ~170 ms, B↔C ~230 ms (the worst common
 internet path — that is the point).
@@ -413,3 +413,47 @@ numbers carry an asterisk; these don't — say so.
 | finality stuck at 0, propagation fine | `OMNIA_LANE0_VALIDATORS` differs between hosts | re-copy `docker/.env` from A; every node must have the identical list |
 | peers connect then stall | UDP MTU clamped on the path | `ping -M do -s 1400` test; try another region pair |
 | propagation wedges at a flat % | repair-path regression | compare against the 2026-07-19 diagnosis arc in benchmark-gates.md before touching code |
+| bitcoind won't start after config edit | `addnode=` outside `[testnet4]` section, or pruned blocks with `txindex=1` | Network-specific settings must be under `[testnet4]` header; `txindex=1` requires `prune=0`. If pruned, restart with `-reindex` |
+
+## 8. Bitcoin testnet4 on Node A
+
+Node A (nbg1) also runs a Bitcoin Core v28+ instance for settlement layer validation. The Bitcoin Settlement Adapter uses testnet4 (testnet3 was removed in Core v28/v30).
+
+### bitcoind configuration
+
+```bash
+# Node A only — ~/.bitcoin/bitcoin.conf
+rpcuser=<your-rpc-user>
+rpcpassword=<your-rpc-password>
+server=1
+txindex=1
+prune=0
+maxconnections=25
+
+[testnet4]
+rpcport=48332
+addnode=testnet4.nodelete.org:48333
+addnode=testnet4-services.arcblaze.com:48333
+addnode=seed.testnet4.bitcoin.sprovoost.nl:48333
+addnode=testnet4.bitcoin.jonasschnelli.ch:48333
+```
+
+**Critical notes:**
+- `txindex=1` and `prune=0` are **mandatory** — `fetch_finality` calls `gettransaction` which requires the full unpruned chain with transaction index.
+- All `addnode=` entries must be inside the `[testnet4]` section. Entries outside it will be rejected and bitcoind will not start.
+- If the node was previously running with pruning enabled, adding `txindex=1` requires a full reindex: `bitcoind -testnet4 -daemon -reindex`.
+- Testnet4 uses port 48332 for RPC and 48333 for P2P. Data directory is `~/.bitcoin/testnet4/`.
+
+### Verify Bitcoin settlement
+
+```bash
+# Check peer count (should be 8+)
+bitcoin-cli -testnet4 -rpcuser=<user> -rpcpassword=<pass> getconnectioncount
+
+# Check sync progress
+bitcoin-cli -testnet4 -rpcuser=<user> -rpcpassword=<pass> getblockchaininfo | python3 -m json.tool | head -15
+
+# Run finality verification (from repo root)
+cd /opt/omnia-protocol
+cargo run --example bitcoin_testnet4_finality_verify --features bitcoin-live
+```
