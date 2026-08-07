@@ -20,8 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = BitcoinConfig::from_env()?;
     let adapter = BitcoinSettlementAdapter::new(config)?;
 
-    let txid_str = std::env::var("OMNIA_BITCOIN_VERIFY_TXID")
-        .map_err(|_| "missing env var OMNIA_BITCOIN_VERIFY_TXID")?;
+    let txid_str =
+        std::env::var("OMNIA_BITCOIN_VERIFY_TXID").map_err(|_| "missing env var OMNIA_BITCOIN_VERIFY_TXID")?;
 
     // Strip 0x prefix if present — TxHash is raw 32 bytes.
     let clean = txid_str.strip_prefix("0x").unwrap_or(&txid_str);

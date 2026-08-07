@@ -43,8 +43,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Proof hash:      0x{}", hex::encode(proof.proof_hash));
     println!();
 
-    assert!(proof.confirmation_count >= 1, "Expected >= 1 confirmation, got {}", proof.confirmation_count);
-    assert!(proof.block_number > 0, "Expected block number > 0, got {}", proof.block_number);
+    assert!(
+        proof.confirmation_count >= 1,
+        "Expected >= 1 confirmation, got {}",
+        proof.confirmation_count
+    );
+    assert!(
+        proof.block_number > 0,
+        "Expected block number > 0, got {}",
+        proof.block_number
+    );
 
     // Verify the proof_hash is derived correctly: blake3 keyed with "OMNIA-BTC-FINALITY" over the tx bytes.
     let expected_hash = blake3::derive_key("OMNIA-BTC-FINALITY", &tx_hash.0);

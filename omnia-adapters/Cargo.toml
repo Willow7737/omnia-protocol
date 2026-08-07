@@ -92,3 +92,7 @@ required-features = ["bitcoin-live"]
 [[example]]
 name = "bitcoin_testnet4_verify"
 required-features = ["bitcoin-live"]
+
+[[example]]
+name = "bitcoin_testnet4_finality_verify"
+required-features = ["bitcoin-live"]
