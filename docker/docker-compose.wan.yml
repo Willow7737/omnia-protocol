@@ -9,8 +9,9 @@
 # real host addresses and there is no Docker NAT between peers — inbound
 # QUIC dials and identify/observed-address exchange just work.
 #
-# Required environment (put them in docker/.env on this host — the runbook
-# copies it from the key-generating host so the validator set matches):
+# Required environment (copy docker/.env.wan.example to docker/.env on
+# this host, then edit the per-node variables — the runbook copies it from
+# the key-generating host so the validator set matches):
 #   OMNIA_JWT_SECRET        same secret on every node
 #   OMNIA_LANE0_VALIDATORS  identical comma list on every node
 #   OMNIA_RATE_LIMIT_RPS    e.g. 1000 for benchmarks
