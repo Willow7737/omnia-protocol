@@ -46,19 +46,19 @@ use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main]
 /// Create a live Bitcoin settlement adapter from environment variables.
 #[cfg(feature = "bitcoin-live")]
 fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
-use omnia_adapters::settlement::bitcoin::BitcoinConfig;
-use omnia_adapters::settlement::BitcoinSettlementAdapter;
-let config = BitcoinConfig::from_env()
-.map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
-let adapter = BitcoinSettlementAdapter::new(config)
-.map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
-Ok(Arc::new(adapter))
+    use omnia_adapters::settlement::bitcoin::BitcoinConfig;
+    use omnia_adapters::settlement::BitcoinSettlementAdapter;
+    let config = BitcoinConfig::from_env()
+        .map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
+    let adapter = BitcoinSettlementAdapter::new(config)
+        .map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
+    Ok(Arc::new(adapter))
 }
 
+#[tokio::main]
 async fn main() -> Result<()> {
     // 1. Parse CLI arguments and dispatch subcommands
     let cli = CliArgs::parse();
