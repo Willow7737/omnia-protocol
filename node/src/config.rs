@@ -472,8 +472,8 @@ pub struct CliArgs {
     /// and TCP, improving connectivity in networks that block UDP.
     /// Set `--no-enable-tcp-fallback` or `OMNIA_ENABLE_TCP_FALLBACK=false`
     /// to disable.
-    #[arg(long, env = "OMNIA_ENABLE_TCP_FALLBACK", default_value_t = true)]
-    pub enable_tcp_fallback: bool,
+    #[arg(long, env = "OMNIA_ENABLE_TCP_FALLBACK")]
+    pub enable_tcp_fallback: Option<bool>,
 
     /// Optional subcommand (e.g., keygen).
     #[command(subcommand)]
