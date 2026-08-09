@@ -674,7 +674,7 @@ impl OmniaNetwork {
         if enable_tcp {
             let tcp_addr = listen_addr
                 .iter()
-                .map(|p| match p {
+                .filter_map(|p| match p {
                     libp2p::multiaddr::Protocol::Udp(port) => Some(libp2p::multiaddr::Protocol::Tcp(port)),
                     libp2p::multiaddr::Protocol::QuicV1 => {
                         tracing::debug!("Stripping /quic-v1 from listen addr for TCP fallback");
@@ -682,7 +682,6 @@ impl OmniaNetwork {
                     }
                     other => Some(other),
                 })
-                .flatten()
                 .collect::<Multiaddr>();
             if !tcp_addr.is_empty() {
                 match swarm.listen_on(tcp_addr.clone()) {
