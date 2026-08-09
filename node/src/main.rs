@@ -47,6 +47,18 @@ use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
+/// Create a live Bitcoin settlement adapter from environment variables.
+#[cfg(feature = "bitcoin-live")]
+fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
+use omnia_adapters::settlement::bitcoin::BitcoinConfig;
+use omnia_adapters::settlement::BitcoinSettlementAdapter;
+let config = BitcoinConfig::from_env()
+.map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
+let adapter = BitcoinSettlementAdapter::new(config)
+.map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
+Ok(Arc::new(adapter))
+}
+
 async fn main() -> Result<()> {
     // 1. Parse CLI arguments and dispatch subcommands
     let cli = CliArgs::parse();
@@ -302,17 +314,7 @@ async fn main() -> Result<()> {
     tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
 
 
-/// Create a live Bitcoin settlement adapter from environment variables.
-#[cfg(feature = "bitcoin-live")]
-fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
-    use omnia_adapters::settlement::bitcoin::BitcoinConfig;
-    use omnia_adapters::settlement::BitcoinSettlementAdapter;
-    let config = BitcoinConfig::from_env()
-        .map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
-    let adapter = BitcoinSettlementAdapter::new(config)
-        .map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
-    Ok(Arc::new(adapter))
-}
+
 
     // Construct the settlement adapter based on enabled features.
     // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
