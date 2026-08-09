@@ -301,31 +301,52 @@ async fn main() -> Result<()> {
     substrate = substrate.with_shard_processor(Box::new(shard_processor));
     tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
 
+
+/// Create a live Bitcoin settlement adapter from environment variables.
+#[cfg(feature = "bitcoin-live")]
+fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
+    use omnia_adapters::settlement::bitcoin::BitcoinConfig;
+    use omnia_adapters::settlement::BitcoinSettlementAdapter;
+    let config = BitcoinConfig::from_env()
+        .map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
+    let adapter = BitcoinSettlementAdapter::new(config)
+        .map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
+    Ok(Arc::new(adapter))
+}
+
     // Construct the settlement adapter based on enabled features.
     // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
     // When ethereum-live is enabled, uses EthereumSettlementAdapter (requires rustc >= 1.91).
     let settlement: Arc<dyn SettlementAdapter> = {
-        #[cfg(feature = "ethereum-live")]
+        #[cfg(feature = "bitcoin-live")]
         {
-            // Try to create a live Ethereum adapter from environment config.
-            // Falls back to MockSettlementAdapter if config is missing or invalid.
+            match create_bitcoin_settlement_adapter() {
+                Ok(adapter) => {
+                    tracing::info!("Settlement: Bitcoin live adapter (OP_RETURN anchoring via bitcoincore-rpc)");
+                    adapter
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Settlement: Falling back to MockSettlementAdapter — Bitcoin live config invalid or missing");
+                    Arc::new(omnia_adapters::MockSettlementAdapter::new())
+                }
+            }
+        }
+        #[cfg(all(feature = "ethereum-live", not(feature = "bitcoin-live")))]
+        {
             match create_ethereum_settlement_adapter() {
                 Ok(adapter) => {
                     tracing::info!("Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)");
                     adapter
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Settlement: Falling back to MockSettlementAdapter — Ethereum live config invalid or missing"
-                    );
+                    tracing::warn!(error = %e, "Settlement: Falling back to MockSettlementAdapter — Ethereum live config invalid or missing");
                     Arc::new(omnia_adapters::MockSettlementAdapter::new())
                 }
             }
         }
-        #[cfg(not(feature = "ethereum-live"))]
+        #[cfg(not(any(feature = "bitcoin-live", feature = "ethereum-live")))]
         {
-            tracing::info!("Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)");
+            tracing::info!("Settlement: Mock adapter (enable --features bitcoin-live or --features ethereum-live for live settlement)");
             Arc::new(omnia_adapters::MockSettlementAdapter::new())
         }
     };

@@ -11,6 +11,7 @@
 //! CORS and rate limiting are applied at the top-level HTTP router
 //! (see [`crate::http`]).
 
+pub mod admin;
 pub mod auth;
 pub mod ceremony;
 pub mod economics;
@@ -56,6 +57,7 @@ use crate::state::AppState;
         crate::api::node::node_info,
         crate::api::node::node_peers,
         crate::api::node::list_validators,
+        crate::api::admin::submit_root,
         crate::api::errors::error_codes,
         crate::api::wallet_auth::request_challenge,
         crate::api::wallet_auth::login,
@@ -70,6 +72,8 @@ use crate::state::AppState;
         crate::api::economics::TransferRequest,
         crate::api::financial::FinancialTransferRequest,
         crate::api::node::PeerInfo,
+        crate::api::admin::SubmitRootRequest,
+        crate::api::admin::SubmitRootResponse,
         crate::api::errors::ErrorCode,
         crate::api::errors::ErrorResponse,
         crate::api::wallet_auth::ChallengeRequest,
@@ -140,6 +144,7 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/node/peers", get(node::node_peers))
         .route("/validators", get(node::list_validators))
         .route("/errors", get(errors::error_codes))
+        .route("/admin/settlement/submit-root", post(admin::submit_root))
         .route("/ceremony/state", get(ceremony::ceremony_state))
         .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
         // Wallet challenge/signature login — issues JWTs, so must be public.
