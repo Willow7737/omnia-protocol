@@ -112,15 +112,19 @@ pub async fn submit_root(
                 Json(serde_json::json!({ "error": "request body with \"root\" field required when OMNIA_SETTLEMENT_ALLOW_CUSTOM_ROOT is set" })),
             ))?
             .0;
-        let root_str = req_body.root.as_deref().ok_or_else(|| (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "\"root\" field is required in the request body" })),
-        ))?;
+        let root_str = req_body.root.as_deref().ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "\"root\" field is required in the request body" })),
+            )
+        })?;
         let hex_str = root_str.strip_prefix("0x").unwrap_or(root_str);
-        let root_bytes = hex::decode(hex_str).map_err(|e| (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": format!("invalid hex in root: {e}") })),
-        ))?;
+        let root_bytes = hex::decode(hex_str).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": format!("invalid hex in root: {e}") })),
+            )
+        })?;
         if root_bytes.len() != 32 {
             return Err((
                 StatusCode::BAD_REQUEST,
