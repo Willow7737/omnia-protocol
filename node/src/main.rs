@@ -444,6 +444,16 @@ async fn main() -> Result<()> {
 
     tracing::info!(listen_addr = %listen_addr, "HTTP server starting");
 
+    // 7a. Restore causal graph from persisted snapshot (if any).
+    // This recovers all events/transactions that were live at the time
+    // of the last snapshot, so the node doesn't start with an empty
+    // graph after a container restart.
+    match substrate_for_consensus.restore_event_snapshot().await {
+        Ok(true) => tracing::info!("Event snapshot restored on boot"),
+        Ok(false) => tracing::info!("No event snapshot found — fresh start"),
+        Err(e) => tracing::warn!(error = %e, "Failed to restore event snapshot, starting fresh"),
+    }
+
     // 7. Spawn background tasks for consensus loop and pipeline router
     // These are the critical integration pieces that enable the node to
     // participate in the network autonomously.
@@ -528,10 +538,24 @@ async fn spawn_background_tasks(
         #[cfg(feature = "metrics")]
         let mut last_lane0_finalized: u64 = 0;
 
+        // Event snapshot persistence: save the full causal graph to
+        // redb every 30 seconds (warm-path, after consensus processing).
+        // This bounds the data-loss window to 30s on unclean shutdowns.
+        // A final snapshot is also taken on SIGTERM (see shutdown branch).
+        let snapshot_interval = tokio::time::Duration::from_secs(30);
+        let mut last_snapshot = std::time::Instant::now();
+
         loop {
             tokio::select! {
                 _ = shutdown_consensus.recv() => {
                     tracing::info!("Consensus loop shutting down");
+                    // Final event snapshot on graceful shutdown so that
+                    // all in-memory events survive the container restart.
+                    if let Err(e) = substrate_consensus.read().await.save_event_snapshot().await {
+                        tracing::warn!(error = %e, "Failed to save event snapshot on shutdown");
+                    } else {
+                        tracing::info!("Event snapshot saved on shutdown");
+                    }
                     break;
                 }
                 _ = round_timer.tick() => {
@@ -607,6 +631,18 @@ async fn spawn_background_tasks(
                     }
 
                     drop(substrate);
+
+                    // Periodic event snapshot: persist the causal
+                    // graph to redb every 30s (warm path). The write
+                    // lock is released before the redb I/O.
+                    if last_snapshot.elapsed() >= snapshot_interval {
+                        if let Err(e) =
+                            substrate_consensus.read().await.save_event_snapshot().await
+                        {
+                            tracing::warn!(error = %e, "Periodic event snapshot failed");
+                        }
+                        last_snapshot = std::time::Instant::now();
+                    }
                 }
             }
         }

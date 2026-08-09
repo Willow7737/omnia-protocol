@@ -1282,6 +1282,61 @@ impl Substrate {
         self.graph.read().await
     }
 
+    /// Save the current causal graph as an event snapshot to the
+    /// consensus store (if configured).
+    ///
+    /// Serializes the graph via [`GraphSnapshot`] + postcard and writes
+    /// the blob under the `"events_snapshot"` key. This is intended to
+    /// be called periodically from the warm path (after round
+    /// processing) and once on SIGTERM, so that a node retains its full
+    /// event history across container restarts.
+    pub async fn save_event_snapshot(&self) -> Result<(), String> {
+        let Some(ref store) = self.consensus_store else {
+            return Ok(());
+        };
+        let graph = self.graph.read().await;
+        if graph.is_empty() {
+            return Ok(());
+        }
+        let snapshot = GraphSnapshot::from(&*graph);
+        let bytes =
+            postcard::to_allocvec(&snapshot).map_err(|e| format!("event snapshot serialization: {e}"))?;
+        drop(graph); // release the read lock before the (blocking) redb write
+        store
+            .save_events_blob(&bytes)
+            .map_err(|e| format!("event snapshot persist: {e}"))?;
+        tracing::debug!(size = bytes.len(), "Event snapshot persisted");
+        Ok(())
+    }
+
+    /// Restore the causal graph from a previously persisted event
+    /// snapshot in the consensus store (if one exists).
+    ///
+    /// Returns `true` if a snapshot was found and the graph was
+    /// restored, `false` if no snapshot existed (fresh start).
+    pub async fn restore_event_snapshot(&self) -> Result<bool, String> {
+        let Some(ref store) = self.consensus_store else {
+            return Ok(false);
+        };
+        let Some(bytes) = store
+            .load_events_blob()
+            .map_err(|e| format!("event snapshot load: {e}"))?
+        else {
+            return Ok(false);
+        };
+        let snapshot: GraphSnapshot =
+            postcard::from_bytes(&bytes).map_err(|e| format!("event snapshot deserialization: {e}"))?;
+        let restored = CausalGraph::from_snapshot(&snapshot);
+        let event_count = restored.len();
+        *self.graph.write().await = restored;
+        tracing::info!(
+            events = event_count,
+            bytes = bytes.len(),
+            "Causal graph restored from persisted snapshot"
+        );
+        Ok(true)
+    }
+
     /// Get consensus statistics
     pub fn consensus_stats(&self) -> consensus::ConsensusStats {
         self.consensus.stats()

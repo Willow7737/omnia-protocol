@@ -122,6 +122,20 @@ pub trait ConsensusStore: Send + Sync {
     ///
     /// Returns `0` if no round has been persisted.
     fn load_round(&self) -> Result<u64, ConsensusStoreError>;
+
+    /// Save a serialized event snapshot blob.
+    ///
+    /// Persists a postcard-serialized `GraphSnapshot` under the key
+    /// `"events_snapshot"` in the existing `consensus_state` table.
+    /// This provides crash-recovery for the full causal graph (all events),
+    /// complementing [`save_state`](Self::save_state) which only persists
+    /// consensus metadata.
+    fn save_events_blob(&self, bytes: &[u8]) -> Result<(), ConsensusStoreError>;
+
+    /// Load the last persisted event snapshot blob.
+    ///
+    /// Returns `Ok(None)` if no event snapshot has been persisted yet.
+    fn load_events_blob(&self) -> Result<Option<Vec<u8>>, ConsensusStoreError>;
 }
 
 /// redb-backed consensus state store.
@@ -283,6 +297,41 @@ impl ConsensusStore for RedbConsensusStore {
         match table.get("current") {
             Ok(Some(value)) => Ok(value.value()),
             Ok(None) => Ok(0),
+            Err(e) => Err(ConsensusStoreError::Database(e.to_string())),
+        }
+    }
+
+    fn save_events_blob(&self, bytes: &[u8]) -> Result<(), ConsensusStoreError> {
+        let write_tx = self
+            .db
+            .begin_write()
+            .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+        {
+            let mut table = write_tx
+                .open_table(CONSENSUS_STATE_TABLE)
+                .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+            table
+                .insert("events_snapshot", bytes)
+                .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+        }
+        write_tx
+            .commit()
+            .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    fn load_events_blob(&self) -> Result<Option<Vec<u8>>, ConsensusStoreError> {
+        let read_tx = self
+            .db
+            .begin_read()
+            .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+        let table = read_tx
+            .open_table(CONSENSUS_STATE_TABLE)
+            .map_err(|e| ConsensusStoreError::Database(e.to_string()))?;
+
+        match table.get("events_snapshot") {
+            Ok(Some(value)) => Ok(Some(value.value().to_vec())),
+            Ok(None) => Ok(None),
             Err(e) => Err(ConsensusStoreError::Database(e.to_string())),
         }
     }
@@ -788,5 +837,25 @@ mod tests {
         // Final sanity check.
         let loaded = store.load_state().unwrap().unwrap();
         assert!(loaded.current_round < 50);
+    }
+
+    #[test]
+    fn test_events_blob_round_trip() {
+        let store = RedbConsensusStore::in_memory().unwrap();
+
+        // No blob initially.
+        assert!(store.load_events_blob().unwrap().is_none());
+
+        let data = vec![1u8, 2, 3, 4, 5];
+        store.save_events_blob(&data).unwrap();
+
+        let loaded = store.load_events_blob().unwrap().unwrap();
+        assert_eq!(loaded, data);
+
+        // Overwrite with larger blob.
+        let big = vec![0xFF; 10_000];
+        store.save_events_blob(&big).unwrap();
+        let loaded2 = store.load_events_blob().unwrap().unwrap();
+        assert_eq!(loaded2.len(), 10_000);
     }
 }
