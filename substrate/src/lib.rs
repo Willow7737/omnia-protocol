@@ -1299,8 +1299,7 @@ impl Substrate {
             return Ok(());
         }
         let snapshot = GraphSnapshot::from(&*graph);
-        let bytes =
-            postcard::to_allocvec(&snapshot).map_err(|e| format!("event snapshot serialization: {e}"))?;
+        let bytes = postcard::to_allocvec(&snapshot).map_err(|e| format!("event snapshot serialization: {e}"))?;
         drop(graph); // release the read lock before the (blocking) redb write
         store
             .save_events_blob(&bytes)
