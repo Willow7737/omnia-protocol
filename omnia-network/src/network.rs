@@ -675,7 +675,7 @@ impl OmniaNetwork {
             let tcp_addr = listen_addr
                 .iter()
                 .map(|p| match p {
-                    libp2p::multiaddr::Protocol::Udp(port) => libp2p::multiaddr::Protocol::Tcp(port),
+                    libp2p::multiaddr::Protocol::Udp(port) => Some(libp2p::multiaddr::Protocol::Tcp(port)),
                     libp2p::multiaddr::Protocol::QuicV1 => {
                         tracing::debug!("Stripping /quic-v1 from listen addr for TCP fallback");
                         None
