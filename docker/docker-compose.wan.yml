@@ -43,6 +43,8 @@ services:
       - OMNIA_DATA_DIR=/app/data
       - OMNIA_TOTAL_NODES=${OMNIA_TOTAL_NODES:-3}
       - OMNIA_JWT_SECRET=${OMNIA_JWT_SECRET:?copy docker/.env from the key host}
+      - OMNIA_JWT_ALLOW_LEGACY_HS256=${OMNIA_JWT_ALLOW_LEGACY_HS256:-false}
+      - OMNIA_JWT_ALLOW_LEGACY_HS256=${OMNIA_JWT_ALLOW_LEGACY_HS256:-false}
       - OMNIA_AUTHORIZED_CALLERS=admin-caller
       - OMNIA_RATE_LIMIT_RPS=${OMNIA_RATE_LIMIT_RPS:-1000}
       - OMNIA_LANE0_VALIDATORS=${OMNIA_LANE0_VALIDATORS:?copy docker/.env from the key host}

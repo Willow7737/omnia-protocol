@@ -1,48 +1,17 @@
-# Monitoring for the geo-distributed WAN testnet — run on host A only.
-#
-# Host A is the only host permitted through B's and C's firewalls on port
-# 9090, so it is the natural place to scrape from.
-#
-# Deliberately Prometheus-only: metrics are shipped to Grafana Cloud via
-# remote_write (configure it in monitoring/prometheus-wan.yml). A Grafana
-# running on host A could not alert you that host A is down — which is the
-# single most important thing to be alerted about. Dashboards and alert
-# rules live in Grafana Cloud instead.
-#
-# Bring up:
-#   docker compose -f docker/docker-compose.monitoring.yml up -d
-#
-# Check that all three nodes are being scraped ("up" must be 1 for each):
-#   curl -s localhost:9095/api/v1/query?query=up | python3 -m json.tool
-
 services:
   prometheus:
     image: prom/prometheus:v2.52.0
     container_name: omnia-prometheus
     restart: unless-stopped
-    # Bridge networking, NOT host: the Omnia node already owns host port
-    # 9090, so Prometheus is published on 9095 to avoid the clash.
-    ports:
-      - "127.0.0.1:9095:9090"
-    extra_hosts:
-      # Lets the container reach host A's own node at host.docker.internal:9090.
-      - "host.docker.internal:host-gateway"
+    ports: ['127.0.0.1:9095:9090']
+    extra_hosts: ['host.docker.internal:host-gateway']
     volumes:
       - ./monitoring/prometheus-wan.yml:/etc/prometheus/prometheus.yml:ro
-      # Grafana Cloud API token, referenced by password_file in the config.
-      # Gitignored. Create it before enabling remote_write; comment this
-      # line out until then, or the container fails to start.
-      #
-      # MUST be chowned to uid 65534 (`nobody`) — this image does not run as
-      # root, and an unreadable token fails silently at WARN level while
-      # everything else looks healthy. See monitoring/prometheus-wan.yml.
       - ./monitoring/grafana-cloud-token:/etc/prometheus/grafana-cloud-token:ro
       - prometheus-wan-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      # Local retention only needs to cover a Grafana Cloud outage; the
-      # cloud holds the long-term series.
       - '--storage.tsdb.retention.time=15d'
 
 volumes:
