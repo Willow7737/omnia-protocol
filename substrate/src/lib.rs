@@ -393,6 +393,9 @@ pub enum SubstrateError {
     #[error("Configuration error: {0}")]
     /// Configuration error
     Config(String),
+    #[error("Snapshot error: {0}")]
+    /// Event-snapshot persistence / deserialization error
+    Snapshot(String),
 }
 
 /// Result type for substrate operations
@@ -1290,7 +1293,7 @@ impl Substrate {
     /// be called periodically from the warm path (after round
     /// processing) and once on SIGTERM, so that a node retains its full
     /// event history across container restarts.
-    pub async fn save_event_snapshot(&self) -> Result<(), String> {
+    pub async fn save_event_snapshot(&self) -> Result<()> {
         let Some(ref store) = self.consensus_store else {
             return Ok(());
         };
@@ -1299,11 +1302,12 @@ impl Substrate {
             return Ok(());
         }
         let snapshot = GraphSnapshot::from(&*graph);
-        let bytes = postcard::to_allocvec(&snapshot).map_err(|e| format!("event snapshot serialization: {e}"))?;
+        let bytes =
+            postcard::to_allocvec(&snapshot).map_err(|e| SubstrateError::Snapshot(format!("serialization: {e}")))?;
         drop(graph); // release the read lock before the (blocking) redb write
         store
             .save_events_blob(&bytes)
-            .map_err(|e| format!("event snapshot persist: {e}"))?;
+            .map_err(|e| SubstrateError::Snapshot(format!("persist: {e}")))?;
         tracing::debug!(size = bytes.len(), "Event snapshot persisted");
         Ok(())
     }
@@ -1313,18 +1317,18 @@ impl Substrate {
     ///
     /// Returns `true` if a snapshot was found and the graph was
     /// restored, `false` if no snapshot existed (fresh start).
-    pub async fn restore_event_snapshot(&self) -> Result<bool, String> {
+    pub async fn restore_event_snapshot(&self) -> Result<bool> {
         let Some(ref store) = self.consensus_store else {
             return Ok(false);
         };
         let Some(bytes) = store
             .load_events_blob()
-            .map_err(|e| format!("event snapshot load: {e}"))?
+            .map_err(|e| SubstrateError::Snapshot(format!("load: {e}")))?
         else {
             return Ok(false);
         };
         let snapshot: GraphSnapshot =
-            postcard::from_bytes(&bytes).map_err(|e| format!("event snapshot deserialization: {e}"))?;
+            postcard::from_bytes(&bytes).map_err(|e| SubstrateError::Snapshot(format!("deserialization: {e}")))?;
         let restored = CausalGraph::from_snapshot(&snapshot);
         let event_count = restored.len();
         *self.graph.write().await = restored;
