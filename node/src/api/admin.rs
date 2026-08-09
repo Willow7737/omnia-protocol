@@ -143,7 +143,6 @@ pub async fn submit_root(
             .read()
             .await
             .lane0_leading_root()
-            .map(|(root, _stake)| root)
             .ok_or_else(|| (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({
