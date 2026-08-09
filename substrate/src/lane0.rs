@@ -1469,6 +1469,7 @@ mod tests {
                 events_finalized: 2,
                 finalized: vec![eid(1), eid(2)],
                 validators: Some(set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+                last_finalized_root: None,
             };
             store.save(&state).unwrap();
         }
