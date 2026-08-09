@@ -448,7 +448,7 @@ async fn main() -> Result<()> {
     // This recovers all events/transactions that were live at the time
     // of the last snapshot, so the node doesn't start with an empty
     // graph after a container restart.
-    match substrate_for_consensus.restore_event_snapshot().await {
+    match substrate_for_consensus.read().await.restore_event_snapshot().await {
         Ok(true) => tracing::info!("Event snapshot restored on boot"),
         Ok(false) => tracing::info!("No event snapshot found — fresh start"),
         Err(e) => tracing::warn!(error = %e, "Failed to restore event snapshot, starting fresh"),
