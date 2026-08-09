@@ -687,7 +687,9 @@ impl OmniaNetwork {
             if !tcp_addr.is_empty() {
                 match swarm.listen_on(tcp_addr.clone()) {
                     Ok(_) => tracing::info!(addr = %tcp_addr, "TCP fallback listener added"),
-                    Err(e) => tracing::warn!(addr = %tcp_addr, error = %e, "Failed to add TCP fallback listener (QUIC transport cannot accept TCP — enable dual-transport in swarm builder)"),
+                    Err(e) => {
+                        tracing::warn!(addr = %tcp_addr, error = %e, "Failed to add TCP fallback listener (QUIC transport cannot accept TCP — enable dual-transport in swarm builder)")
+                    }
                 }
             }
         }
