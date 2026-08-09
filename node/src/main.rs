@@ -51,10 +51,9 @@ use tracing_subscriber::EnvFilter;
 fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
     use omnia_adapters::settlement::bitcoin::BitcoinConfig;
     use omnia_adapters::settlement::BitcoinSettlementAdapter;
-    let config = BitcoinConfig::from_env()
-        .map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
-    let adapter = BitcoinSettlementAdapter::new(config)
-        .map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
+    let config = BitcoinConfig::from_env().map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
+    let adapter =
+        BitcoinSettlementAdapter::new(config).map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
     Ok(Arc::new(adapter))
 }
 
@@ -312,9 +311,6 @@ async fn main() -> Result<()> {
     // via the HTTP API bypass.
     substrate = substrate.with_shard_processor(Box::new(shard_processor));
     tracing::info!("ShardRouter wired as EventProcessor on Substrate — committed events will reach shards");
-
-
-
 
     // Construct the settlement adapter based on enabled features.
     // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
