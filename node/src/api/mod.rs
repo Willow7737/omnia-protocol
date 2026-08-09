@@ -105,6 +105,7 @@ pub struct ApiDoc;
 /// | GET    | `/api/v1/economics/transfers`             | `economics::list_transfers` | JWT |
 /// | GET    | `/api/v1/financial/balance/:pubkey`       | `financial::get_balance` | JWT |
 /// | POST   | `/api/v1/financial/transfer`              | `financial::transfer`  | JWT   |
+/// | POST   | `/api/v1/admin/settlement/submit-root`    | `admin::submit_root`   | JWT+Priv |
 /// | GET    | `/api/v1/errors`                          | `errors::error_codes`  | Public |
 /// | POST   | `/api/v1/auth/challenge`                  | `wallet_auth::request_challenge` | Public |
 /// | POST   | `/api/v1/auth/login`                      | `wallet_auth::login`   | Public |
@@ -144,7 +145,6 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/node/peers", get(node::node_peers))
         .route("/validators", get(node::list_validators))
         .route("/errors", get(errors::error_codes))
-        .route("/admin/settlement/submit-root", post(admin::submit_root))
         .route("/ceremony/state", get(ceremony::ceremony_state))
         .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
         // Wallet challenge/signature login — issues JWTs, so must be public.
@@ -153,6 +153,8 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
+        // Admin — settlement submission (JWT + AuthorizedCallers required)
+        .route("/admin/settlement/submit-root", post(admin::submit_root))
         // Register the caller's DID (for externally-minted JWTs, e.g. the
         // wallet's Supabase sign-in; challenge/signature login self-registers)
         .route("/auth/register", post(wallet_auth::register))

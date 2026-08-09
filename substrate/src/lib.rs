@@ -1460,6 +1460,19 @@ impl Substrate {
         self.lane0_validators.as_ref().map(|_| self.lane0_store.epoch())
     }
 
+    /// The state root with the most committed stake (the rolling BLAKE3
+    /// commitment), and that stake. Returns `None` when Lane 0 is disabled
+    /// or no acks have been recorded yet.
+    ///
+    /// This is the value an operator should anchor on L1 — it is the
+    /// root the fleet actually agreed on, not an arbitrary caller-supplied
+    /// value.
+    pub fn lane0_leading_root(&self) -> Option<([u8; 32], u64)> {
+        self.lane0_validators
+            .as_ref()
+            .and_then(|_| self.lane0_store.leading_root())
+    }
+
     /// Rotate the Lane 0 validator set (ADR-025 Stage 4: Lane 1 commits as
     /// epoch fences for Lane 0 certificate validity).
     ///
