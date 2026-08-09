@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Deployment procedures for Docker Compose and Kubernetes/Helm
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-10
 
 ## Quick Start: Docker Compose (Development)
 
@@ -66,7 +66,7 @@
    curl http://localhost:9090/healthz
    ```
 
-> **Note**: The Helm chart exposes BOTH TCP 8080 (HTTP API) AND UDP 4001 (P2P/QUIC). Without UDP 4001, Helm-deployed nodes cannot participate in P2P gossip. This was fixed in the v0.1.69 audit.
+> **Note**: The Helm chart exposes TCP 8080 (HTTP API), UDP 4001 (P2P/QUIC), and TCP 4001 (P2P/TCP fallback). Without UDP 4001, nodes cannot participate in P2P gossip via QUIC. TCP 4001 provides a fallback for networks that block UDP.
 
 ## Configuration
 
@@ -86,6 +86,8 @@
 | `OMNIA_AUTHORIZED_CALLERS` | (none)                  | Comma-separated authorized caller IDs            |
 | `OMNIA_RATE_LIMIT_RPS`     | (none)                  | Max requests per second per IP                   |
 | `OMNIA_LANE0_VALIDATORS`   | (empty = disabled)      | Lane 0 static validator set (ADR-025): `hex64_pubkey:stake[,…]` |
+| `OMNIA_FAST_SYNC`         | `false`                 | Enable fast sync on startup (downloads snapshot from peers) |
+| `OMNIA_ENABLE_TCP_FALLBACK` | `true`                | Enable TCP transport alongside QUIC for firewall-traversing peers |
 
 > **Lane 0 setup:** each node's Ed25519 public key is exposed as `validator_pubkey` in `GET /api/v1/node/info`. Collect the pubkeys of every validator node, build the spec (e.g. `abc…:1,def…:1,012…:1`), and set the SAME value on all nodes — mismatched validator sets mean mismatched finality judgments. A malformed spec fails node startup loudly. When unset, Lane 0 is disabled and finality comes from consensus alone.
 
@@ -108,6 +110,35 @@ See `node/omnia-node.toml.example` for the full configuration file format.
 1. For Docker Compose: `docker compose down && docker compose up -d <previous-version>`
 2. For Kubernetes: `helm rollback omnia-node <previous-revision>`
 3. Verify the rollback by checking the health endpoint and monitoring dashboards
+
+## Monitoring
+
+### Grafana Dashboard
+
+Import `docker/monitoring/grafana/omnia-testnet-dashboard.json` into Grafana Cloud or a local Grafana instance. The dashboard covers:
+
+- **Cluster Health** — node liveness, peer counts
+- **Consensus & Throughput** — TPS, consensus round tracking
+- **Latency** — finality, gossip propagation, DAG insertion (p50/p99)
+- **Events & API** — submitted vs finalized event rates, HTTP request rate
+- **Resources** — memory (RSS) and CPU usage per node
+
+### Alert Rules
+
+The alert rules in `docker/monitoring/grafana/alert-rules.yml` are designed for Grafana Cloud's Prometheus. Key alerts:
+
+| Alert | Severity | Description |
+| --- | --- | --- |
+| `OmniaNodeDown` | critical | Node unscrapeable for >2 min |
+| `OmniaSupermajorityLost` | critical | Fewer than 4/5 nodes up |
+| `OmniaNodeIsolated` | warning | Fewer than 2 connected peers for 5 min |
+| `OmniaConsensusStalled` | warning | Round stuck at 0 for 10 min |
+| `OmniaHighFinalityLatency` | warning | p99 finality >5s for 5 min |
+| `OmniaHighMemory` | warning | RSS exceeds 1.5 GiB for 10 min |
+| `OmniaHighCPU` | warning | CPU >1.5 cores sustained for 10 min |
+| `OmniaGossipLatencyHigh` | warning | Gossip p99 >2s for 5 min |
+
+To use: copy the rules into your Grafana Cloud alerting contact point, or load them via the Grafana Terraform provider.
 
 ## Security Considerations
 

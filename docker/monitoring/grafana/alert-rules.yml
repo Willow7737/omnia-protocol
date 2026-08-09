@@ -1,0 +1,84 @@
+groups:
+  - name: omnia-testnet-alerts
+    interval: 30s
+    rules:
+      # ── Node Liveness ──────────────────────────────────────────────
+      - alert: OmniaNodeDown
+        expr: up{job="omnia-wan"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node {{ $labels.node }} ({{ $labels.region }}) is down"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for over 2 minutes. The node process may have crashed or the host is unreachable."
+          runbook_url: "https://github.com/Willow7737/omnia-protocol/blob/dev/docs/operations/runbook.md"
+
+      # ── Partition Detection ───────────────────────────────────────
+      - alert: OmniaNodeIsolated
+        expr: omnia_node_peers_connected{job="omnia-wan"} < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} has only {{ $value }} peer(s)"
+          description: "A healthy 5-node mesh should have at least 2 connected peers. This node may be partitioned or the P2P port (4001/udp) is blocked by a firewall."
+
+      # ── Consensus Liveness ────────────────────────────────────────
+      - alert: OmniaConsensusStalled
+        expr: omnia_node_consensus_round{job="omnia-wan"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} consensus stuck at round 0"
+          description: "The consensus round has not advanced in 10 minutes. The node may not have enough peers to reach supermajority."
+
+      # ── Finality Latency ─────────────────────────────────────────
+      - alert: OmniaHighFinalityLatency
+        expr: histogram_quantile(0.99, rate(omnia_consensus_finality_latency_seconds_bucket{job="omnia-wan"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p99 finality latency on {{ $labels.node }} is {{ $value }}s"
+          description: "Finality latency exceeds 5 seconds. Check network conditions between {{ $labels.region }} and other nodes."
+
+      # ── Memory ────────────────────────────────────────────────────
+      - alert: OmniaHighMemory
+        expr: omnia_node_memory_rss_bytes{job="omnia-wan"} > 1.5e9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} using {{ $value | humanize1024 }}B RSS"
+          description: "Memory usage exceeds 1.5 GiB. Check for event-store bloat or consider increasing pruning_depth."
+
+      # ── CPU ───────────────────────────────────────────────────────
+      - alert: OmniaHighCPU
+        expr: omnia_node_cpu_usage_ratio{job="omnia-wan"} > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} CPU at {{ $value | humanizePercentage }}"
+          description: "CPU usage exceeds 1.5 cores sustained. May indicate consensus thrashing or expensive event processing."
+
+      # ── Gossip Propagation ────────────────────────────────────────
+      - alert: OmniaGossipLatencyHigh
+        expr: histogram_quantile(0.99, rate(omnia_gossip_propagation_latency_seconds_bucket{job="omnia-wan"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gossip p99 latency on {{ $labels.node }} is {{ $value }}s"
+          description: "Cross-network gossip is slow. Check inter-region connectivity and QUIC port (4001/udp) reachability."
+
+      # ── Supermajority Check ───────────────────────────────────────
+      - alert: OmniaSupermajorityLost
+        expr: count(up{job="omnia-wan"} == 1) < 4
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Only {{ $value }} of 5 nodes are up — supermajority at risk"
+          description: "With fewer than 4 nodes, the network cannot reach 3/5 supermajority. Consensus will halt. Immediate investigation required."

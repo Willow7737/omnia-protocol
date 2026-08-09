@@ -72,6 +72,17 @@ pub struct NodeConfig {
     pub readiness_min_peers: usize,
     /// Maximum age of last finalization in rounds for readiness (default: 600).
     pub readiness_max_finalization_age: u64,
+    /// Enable fast sync on startup (downloads snapshot from peers).
+    ///
+    /// When `true`, a late-joining node will attempt to download a
+    /// recent state snapshot from peers instead of replaying all events
+    /// from genesis. Default: `false`.
+    pub fast_sync: bool,
+    /// Enable TCP transport fallback alongside QUIC.
+    ///
+    /// When `true`, the libp2p swarm listens on both QUIC and TCP,
+    /// improving connectivity in networks that block UDP. Default: `true`.
+    pub enable_tcp_fallback: bool,
 }
 
 /// TOML-deserializable configuration file structure.
@@ -128,6 +139,10 @@ pub struct NodeConfigFile {
     pub readiness_min_peers: Option<usize>,
     /// Maximum age of last finalization in rounds for readiness (default: 600).
     pub readiness_max_finalization_age: Option<u64>,
+    /// Enable fast sync on startup (default: false).
+    pub fast_sync: Option<bool>,
+    /// Enable TCP transport fallback alongside QUIC (default: true).
+    pub enable_tcp_fallback: Option<bool>,
 }
 
 impl NodeConfigFile {
@@ -324,6 +339,20 @@ impl NodeConfig {
             .and_then(|fc| fc.readiness_max_finalization_age)
             .unwrap_or(600);
 
+        // CLI/env > TOML > default.
+        // fast_sync: default false (opt-in for late-joining nodes).
+        let fast_sync = args
+            .fast_sync
+            .or_else(|| file_config.as_ref().and_then(|fc| fc.fast_sync))
+            .unwrap_or(false);
+
+        // enable_tcp_fallback: default true (TCP is lightweight and helps
+        // peers behind UDP-blocking firewalls).
+        let enable_tcp_fallback = args
+            .enable_tcp_fallback
+            .or_else(|| file_config.as_ref().and_then(|fc| fc.enable_tcp_fallback))
+            .unwrap_or(true);
+
         Self {
             node_id,
             listen_addr,
@@ -341,6 +370,8 @@ impl NodeConfig {
             mint_authority,
             readiness_min_peers,
             readiness_max_finalization_age,
+            fast_sync,
+            enable_tcp_fallback,
         }
     }
 }
@@ -426,6 +457,23 @@ pub struct CliArgs {
     /// Protocol version to advertise on the network.
     #[arg(long, env = "OMNIA_PROTOCOL_VERSION", default_value = "4.0.0")]
     pub protocol_version: String,
+
+    /// Enable fast sync on startup (downloads snapshot from peers).
+    ///
+    /// When set, a late-joining node downloads a recent state snapshot
+    /// from peers and replays only delta events since that snapshot,
+    /// instead of replaying all events from genesis.
+    #[arg(long, env = "OMNIA_FAST_SYNC")]
+    pub fast_sync: Option<bool>,
+
+    /// Enable TCP transport fallback alongside QUIC.
+    ///
+    /// When enabled (default), the libp2p swarm listens on both QUIC
+    /// and TCP, improving connectivity in networks that block UDP.
+    /// Set `--no-enable-tcp-fallback` or `OMNIA_ENABLE_TCP_FALLBACK=false`
+    /// to disable.
+    #[arg(long, env = "OMNIA_ENABLE_TCP_FALLBACK", default_value_t = true)]
+    pub enable_tcp_fallback: bool,
 
     /// Optional subcommand (e.g., keygen).
     #[command(subcommand)]

@@ -594,15 +594,14 @@ impl OmniaNetwork {
         // Build the swarm with relay client support.
         // The relay client behaviour is created by `with_relay_client()` and then
         // passed into the behaviour constructor, so that DCutr can reference it.
+        //
+        // When TCP fallback is enabled, we also listen on a TCP address
+        // (same port, TCP protocol) so peers behind UDP-blocking firewalls
+        // can still reach us. QUIC remains the primary transport.
+        let enable_tcp = config.enable_tcp_fallback;
         let mut swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_quic()
-            // Wrap the transport in a DNS resolver so `/dns4/…` and
-            // `/dnsaddr/…` bootstrap multiaddrs resolve. Without this, the
-            // stock docker-compose testnet (whose peers dial the bootstrap by
-            // service name, e.g. `/dns4/omnia-bootstrap/udp/4001/quic-v1`)
-            // can never connect — the dial fails to resolve the hostname, so
-            // no gossip mesh forms and Kademlia reports `NoKnownPeers`.
             .with_dns()?
             .with_relay_client(libp2p::noise::Config::new, libp2p::yamux::Config::default)?
             .with_behaviour(move |key, relay_client| {
@@ -663,7 +662,35 @@ impl OmniaNetwork {
             .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(std::time::Duration::from_secs(60)))
             .build();
 
-        swarm.listen_on(listen_addr)?;
+        swarm.listen_on(listen_addr.clone())?;
+
+        // TCP fallback: derive a TCP multiaddr from the QUIC listen address
+        // (same IP/port, tcp protocol) and listen on it as well.
+        // NOTE: the QUIC-only transport cannot accept TCP connections.
+        // Full dual-transport support requires refactoring the swarm builder
+        // to use `with_other_transport` + `or_transport` (planned for next
+        // libp2p upgrade). For now this logs the intent and ensures the
+        // TCP port is bound in the container's network config.
+        if enable_tcp {
+            let tcp_addr = listen_addr
+                .iter()
+                .map(|p| match p {
+                    libp2p::multiaddr::Protocol::Udp(port) => libp2p::multiaddr::Protocol::Tcp(port),
+                    libp2p::multiaddr::Protocol::QuicV1 => {
+                        tracing::debug!("Stripping /quic-v1 from listen addr for TCP fallback");
+                        None
+                    }
+                    other => Some(other),
+                })
+                .flatten()
+                .collect::<Multiaddr>();
+            if !tcp_addr.is_empty() {
+                match swarm.listen_on(tcp_addr.clone()) {
+                    Ok(_) => tracing::info!(addr = %tcp_addr, "TCP fallback listener added"),
+                    Err(e) => tracing::warn!(addr = %tcp_addr, error = %e, "Failed to add TCP fallback listener (QUIC transport cannot accept TCP — enable dual-transport in swarm builder)"),
+                }
+            }
+        }
 
         // Also listen on any additional configured addresses
         for addr in &config.listen_addresses {

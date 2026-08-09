@@ -22,8 +22,14 @@ pub struct SubmitRootRequest {
 /// Response body for a successful root submission.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SubmitRootResponse {
-    /// Transaction hash of the on-chain anchor transaction.
+    /// Transaction hash of the on-chain anchor transaction (hex, reversed for Bitcoin).
     pub tx_hash: String,
+    /// Block explorer URL for the anchor transaction.
+    ///
+    /// Populated when the settlement adapter targets a known network
+    /// (e.g. Bitcoin testnet4). `None` for mock or unrecognised networks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explorer_url: Option<String>,
 }
 
 /// Manually submit a state root to the configured settlement adapter.
@@ -92,12 +98,18 @@ pub async fn submit_root(
 
     // Call the settlement adapter's submit_root.
     match state.settlement.submit_root(root).await {
-        Ok(tx_hash) => Ok((
-            StatusCode::OK,
-            Json(SubmitRootResponse {
-                tx_hash: tx_hash.to_string(),
-            }),
-        )),
+        Ok(tx_hash) => {
+            // Build a block explorer URL when the tx targets a known network.
+            // Bitcoin testnet4 → mempool.space/testnet4.
+            let explorer_url = explorer_url_for_tx(&tx_hash);
+            Ok((
+                StatusCode::OK,
+                Json(SubmitRootResponse {
+                    tx_hash: tx_hash.to_string(),
+                    explorer_url,
+                }),
+            ))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
@@ -105,4 +117,34 @@ pub async fn submit_root(
             })),
         )),
     }
+}
+
+/// Return a block explorer URL for the given transaction hash,
+/// based on the configured settlement network.
+///
+/// Currently supports:
+/// - Bitcoin testnet4 → `https://mempool.space/testnet4/tx/<txid>`
+/// - Bitcoin mainnet → `https://mempool.space/tx/<txid>`
+///
+/// Returns `None` for mock adapters or unknown networks.
+fn explorer_url_for_tx(tx: &omnia_adapters::TxHash) -> Option<String> {
+    // Detect the Bitcoin network from the RPC URL env var.
+    // If the adapter is not Bitcoin or the URL is missing, we
+    // return None rather than guessing.
+    let rpc_url = std::env::var("OMNIA_BITCOIN_RPC_URL").ok()?;
+    let txid = tx.to_string();
+
+    // Bitcoin testnet4 RPC endpoints typically contain "testnet4".
+    // mempool.space uses the same identifier in its URL path.
+    if rpc_url.contains("testnet4") || rpc_url.contains("18444") {
+        return Some(format!("https://mempool.space/testnet4/tx/{txid}"));
+    }
+    if rpc_url.contains("testnet") || rpc_url.contains("18332") {
+        return Some(format!("https://mempool.space/testnet/tx/{txid}"));
+    }
+    if rpc_url.contains("mainnet") || rpc_url.contains("8332") {
+        return Some(format!("https://mempool.space/tx/{txid}"));
+    }
+    // No recognised network — don't guess.
+    None
 }

@@ -200,6 +200,7 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
+    substrate_config.fast_sync = config.fast_sync;
 
     // A2: Populate GossipConfig.bootstrap_peers from CLI/TOML config so that
     // the gossip layer dials the same seed nodes as the network layer.
@@ -705,6 +706,7 @@ async fn spawn_background_tasks(
             // `/p2p/<PeerId>` bootstrap addresses stay valid. Previously
             // the identity was regenerated on every start, which broke
             // any pinned address as soon as the node restarted.
+            let enable_tcp = config.enable_tcp_fallback;
             let network_config = NetworkConfig {
                 identity: Some(load_or_generate_node_keypair(&config.data_dir).to_bytes()),
                 bootstrap_peers: config
@@ -712,6 +714,7 @@ async fn spawn_background_tasks(
                     .iter()
                     .filter_map(|addr| addr.parse::<Multiaddr>().ok())
                     .collect(),
+                enable_tcp_fallback: enable_tcp,
                 ..Default::default()
             };
 
