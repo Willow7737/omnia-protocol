@@ -80,7 +80,7 @@ pub struct SubmitRootResponse {
         (status = 503, description = "Settlement adapter is not live"),
         (status = 500, description = "L1 submission failed"),
     ),
-    security("bearer_auth" = []),
+    security(("bearer_auth" = [])),
     tag = "Admin"
 )]
 pub async fn submit_root(
