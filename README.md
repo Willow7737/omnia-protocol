@@ -600,3 +600,7 @@ Omnia is a public-interest protocol. Join the conversation:
 <p align="center">
   <strong>Omnia is the infrastructure for a future where trust is mathematically guaranteed.</strong>
 </p>
+
+<p align="center">
+  <a href="https://ko-fi.com/U4C324U81N"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
+</p>
