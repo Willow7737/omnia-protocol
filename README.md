@@ -16,6 +16,10 @@
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/omnia-protocol-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-omnia-protocol-2" target="_blank" rel="noopener noreferrer"><img alt="Omnia Protocol - Parallel consensus for the next generation of Blockchains | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1215154&theme=light&t=1786376330702"></a>
+</p>
+
 <h1 align="center">Omnia Protocol</h1>
 
 <p align="center">
@@ -48,7 +52,7 @@ serving traffic, with a full client ecosystem built against it:
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **3-node geo-distributed mesh**, 2 peers each (v0.1.76, protocol `/omnia/4.0.0`) |
+| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **5-node geo-distributed mesh**, 4 peers each, 3 regions (v0.1.76+, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
@@ -67,29 +71,28 @@ curl https://78.47.43.136.sslip.io/readyz
 
 The full loop — create wallet → challenge/login → registered DID with a 1,000 UBC monthly quota → send → history — is verified end-to-end against this node (see the wallet repo's `tool/e2e_wallet_auth.dart`).
 
-### 🌍 The standing network (as of 2026-08-01)
+### 🌍 The standing network (as of 2026-08-10)
 
-A **3-node geo-distributed validator mesh** is running continuously —
+A **5-node geo-distributed validator mesh** is running continuously —
 this is a standing network, not a mesh brought up for a benchmark:
 
 | Node | Region | Role | Peers |
 | :--- | :----- | :--- | :---- |
-| **A** `78.47.43.136` | eu-central (Nuremberg) | bootstrap + validator + public ingress | 2 |
-| **B** `178.156.163.211` | us-east (Ashburn) | validator | 2 |
-| **C** `5.223.85.30` | ap-southeast (Singapore) | validator | 2 |
+| **A** `78.47.43.136` | eu-central (Nuremberg, nbg1) | bootstrap + validator + public ingress | 4 |
+| **B** `178.156.163.211` | us-east (Ashburn, ash) | validator | 4 |
+| **C** `5.223.85.30` | ap-southeast (Singapore, sin) | validator | 4 |
+| **D** `46.62.218.24` | eu-central (Helsinki) | validator | 4 |
+| **E** `46.224.103.217` | eu-central (Falkenstein) | validator | 4 |
 
-All three on v0.1.76, stake 1 each. Measured RTTs **A↔B 98.9 ms**,
-**A↔C 159.8 ms** — matching the 2026-07-20 benchmark baseline exactly,
-so the WAN figures in [benchmark-gates.md](docs/reference/benchmark-gates.md)
-describe this network rather than a lab.
+All five on v0.1.76+, stake 1 each. Three regions (eu-central, us-east,
+ap-southeast) with two continents. Only node A exposes HTTP publicly; B–E
+are validators reachable over the P2P mesh but not the REST API.
 
-Only node A exposes HTTP publicly; B and C are validators without public
-ingress, so they are reachable over the P2P mesh but not over the REST
-API. Lane 0 is doing real work on it:
+Lane 0 is doing real work on it:
 
 ```jsonc
 // GET /api/v1/node/info  (node A)
-{ "peers": 2, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
+{ "peers": 4, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
 ```
 
 **Readiness contract.** `/readyz` reports the node as ready when it is
@@ -98,7 +101,7 @@ not in fast-sync. It does **not** require recent traffic, Lane 1 canonical
 commits, or Lane 0 preconfirmations, so quiet networks stay ready:
 
 ```jsonc
-{ "status": "ready", "peers": 2, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 9 }
+{ "status": "ready", "peers": 4, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 9 }
 ```
 
 Use `/api/v1/node/info` and Prometheus finality metrics to monitor Lane 0
@@ -114,8 +117,7 @@ available would carry this network comfortably.
 
 **July 2026 throughput milestones** — measured on a real 5-node mesh, not
 simulated, during stress runs on the dates given. These are load results
-from a mesh sized for the benchmark; the standing network above is the
-3-node one (see [benchmark-gates.md](docs/reference/benchmark-gates.md)):
+from a mesh sized for the benchmark; the standing network above is the production 5-node one (see [benchmark-gates.md](docs/reference/benchmark-gates.md)):
 
 - **5-node gossipsub mesh over QUIC** — 1,000-event bursts propagate to
   100% of nodes in ~10 s; 5,000-event bursts in ~40–45 s, zero loss.
