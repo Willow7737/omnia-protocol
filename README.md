@@ -48,7 +48,7 @@ serving traffic, with a full client ecosystem built against it:
 
 | Piece | Where | Status |
 | :---- | :---- | :----- |
-| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **3-node geo-distributed mesh**, 2 peers each (v0.1.76, protocol `/omnia/4.0.0`) |
+| **Public testnet** | `https://78.47.43.136.sslip.io` (REST `/api/v1/*`, Swagger UI) | 🟢 Live — **5-node geo-distributed mesh**, 4 peers each, 3 regions (v0.1.76+, protocol `/omnia/4.0.0`) |
 | **Mobile wallet** | [`Willow7737/Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) (Flutter, Android/iOS) | ✅ v1 shipped |
 | **Web dashboard** | [`Willow7737/omnia-protocol-interface`](https://github.com/Willow7737/omnia-protocol-interface) (Next.js + Supabase) | ✅ Deployed |
 | **Website** | [`Willow7737/omnia-web`](https://github.com/Willow7737/omnia-web) | ✅ Deployed |
