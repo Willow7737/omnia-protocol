@@ -9,6 +9,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.91](https://github.com/Willow7737/omnia-protocol/compare/v0.1.90...v0.1.91) (2026-08-10)
+
+
+### Features
+
+* **admin:** add POST /admin/settlement/submit-root + bitcoin-live adapter ([fbff344](https://github.com/Willow7737/omnia-protocol/commit/fbff344e4441be71ea52fc0e71fe48df27ad496b))
+* **bitcoin:** add testnet4 finality verification example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287fb7595261327fe057f1fd59406b2cd0d9))
+* **bitcoin:** support testnet4 e2e — poll for confirmation instead of mining ([6d5e351](https://github.com/Willow7737/omnia-protocol/commit/6d5e3512872e111cdd4ef0d3584395b94ddfa882))
+* **persistence:** persist causal graph events to redb on shutdown + periodic snapshot ([230cd3b](https://github.com/Willow7737/omnia-protocol/commit/230cd3bf9ca54683eb6d399730b767de305fc49b))
+* wire fast_sync/TCP-fallback to CLI+env, add Grafana dashboard/alerts, explorer links, update deployment docs ([1245968](https://github.com/Willow7737/omnia-protocol/commit/1245968b5706b92c14b57a75777d1fce30472406))
+
+
+### Bug Fixes
+
+* add .read().await for restore_event_snapshot on Arc&lt;RwLock&lt;Substrate&gt;&gt; ([163557f](https://github.com/Willow7737/omnia-protocol/commit/163557ff33f0a0d37eb38018302ea7df47b1eaff))
+* add CertificateStore::last_finalized_root; track root at quorum time ([fb0de93](https://github.com/Willow7737/omnia-protocol/commit/fb0de933179519bf5ebe246d13f5f73b6aa897c4))
+* add missing fast_sync and enable_tcp_fallback fields to all test NodeConfig instances ([652e874](https://github.com/Willow7737/omnia-protocol/commit/652e8741aaed1bde5bcc8155cfdb42ac83631de0))
+* add missing fast_sync and enable_tcp_fallback to integration test NodeConfig ([1ca7619](https://github.com/Willow7737/omnia-protocol/commit/1ca7619c8e791f61710840cd6fc9889089f25073))
+* **bitcoin:** increase testnet4 e2e timeout to 30 minutes ([2eee0bd](https://github.com/Willow7737/omnia-protocol/commit/2eee0bd36bc916a077427d7f05ea776b6eba09db))
+* **bitcoin:** strip 0x prefix before passing txid to Bitcoin RPC ([c16aa3b](https://github.com/Willow7737/omnia-protocol/commit/c16aa3be6e6051e34ddbf21df3431ac6f2b046df))
+* change enable_tcp_fallback CLI arg from bool to Option&lt;bool&gt; for or_else compat ([6f399fb](https://github.com/Willow7737/omnia-protocol/commit/6f399fb25053d98ce320a77e800250fcdc91ff07))
+* **ci:** gate bitcoin_testnet4_finality_verify behind bitcoin-live feature ([2f71202](https://github.com/Willow7737/omnia-protocol/commit/2f712028e957e02d352294ed1a4602b365586e7d))
+* **compose:** pass OMNIA_JWT_ALLOW_LEGACY_HS256 to container ([1476375](https://github.com/Willow7737/omnia-protocol/commit/1476375240a23007b663874e4468e7e85828b1e4))
+* correct utoipa security attribute syntax in submit-root handler ([dc858bd](https://github.com/Willow7737/omnia-protocol/commit/dc858bde9939654753ed99c5e9f416b02fd0c086))
+* **docker:** add stub files for bitcoin testnet4 examples in cargo fetch step ([cb0f090](https://github.com/Willow7737/omnia-protocol/commit/cb0f090780b4e8a72d3b205e1d8d02a04f1feb4f))
+* **fmt:** collapse snapshot serialization to single line ([aebdd13](https://github.com/Willow7737/omnia-protocol/commit/aebdd131a251925e2638013bf3297bfbf19fc6c6))
+* remove unnecessary crate::crypto qualification and update Cargo.lock for async-trait dev-dep ([3ea1c3d](https://github.com/Willow7737/omnia-protocol/commit/3ea1c3d7f672a96f486a93ef7549f8bdfcf5d103))
+* replace map().flatten() with filter_map() per clippy::map_flatten ([7d162f3](https://github.com/Willow7737/omnia-protocol/commit/7d162f3a18315892cba2fcda6907d60d8b249050))
+* rustfmt — expand Err(e) match arm to multi-line block for tracing::warn! ([5464565](https://github.com/Willow7737/omnia-protocol/commit/5464565e287458ddbc468f9b1a67c410a549f33d))
+* rustfmt — use braces for closure bodies returning tuples ([603ffb9](https://github.com/Willow7737/omnia-protocol/commit/603ffb9e63f29bdafae817721f32459e8ff61545))
+* **test:** add missing last_finalized_root field in Lane0PersistentState test ([62c2d32](https://github.com/Willow7737/omnia-protocol/commit/62c2d32c4b96299825d909f9662086bd0524d1d8))
+* use SubstrateError::Snapshot instead of String in result types ([510db15](https://github.com/Willow7737/omnia-protocol/commit/510db156fac8f92f2c906d78e3463bb735111762))
+* wrap Udp→Tcp protocol conversion in Some() for match arm type consistency ([1a94404](https://github.com/Willow7737/omnia-protocol/commit/1a94404d4055a632863f87c0f933a973b65756fa))
+
+
+### Documentation
+
+* add Bitcoin testnet4 validation session to worklog + CHANGELOG ([93bc20a](https://github.com/Willow7737/omnia-protocol/commit/93bc20a7f5991df317f2ca4ecd0f96f0157acd86))
+* update Bitcoin settlement validation status and testnet4 ops ([03db238](https://github.com/Willow7737/omnia-protocol/commit/03db238628e478bf420edf162e9c0659434dc5ae))
+
+
+### Tests
+
+* add submit-root integration tests (6 tests, auth + logic) and privilege gate handler, handler now checks AuthorizedCallers via Extension&lt;CallerIdentity&gt; and Extension&lt;Arc&lt;AuthorizedCallers&gt;&gt;, rejecting non-privileged callers with 403. CertificateStore gains test_set_last_finalized_root(); Substrate gains test_inject_lane0_root(). New LiveTestSettlementAdapter (is_live()=true) for testing past the adapter-liveness gate. async-trait added to node dev-deps. ([6abc68b](https://github.com/Willow7737/omnia-protocol/commit/6abc68b5f714711dae20f95c03e86762c2d05083))
+
 ## [Unreleased](https://github.com/Willow7737/omnia-protocol/compare/v0.1.90...dev)
 
 
