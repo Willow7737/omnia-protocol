@@ -429,6 +429,35 @@ impl CausalGraph {
         }
     }
 
+    /// Restore a causal graph from a previously taken [`GraphSnapshot`].
+    ///
+    /// Rebuilds the graph's in-memory state from a serialized snapshot.
+    /// The `seq_buffer` is left empty (buffered events are transient gossip
+    /// state that does not survive a restart). The `max_depth` is
+    /// recomputed from the `depths` map to ensure consistency.
+    ///
+    /// This is the boot-time counterpart to `GraphSnapshot::from(&graph)`
+    /// and is used for crash recovery so that a node does not lose its
+    /// entire event history on restart.
+    pub fn from_snapshot(snapshot: &GraphSnapshot) -> Self {
+        let max_depth = snapshot.depths.values().copied().max().unwrap_or(0);
+        Self {
+            events: snapshot.events.clone(),
+            by_creator: snapshot.by_creator.clone(),
+            tips: snapshot.tips.iter().copied().collect(),
+            node_sequences: snapshot.node_sequences.clone(),
+            frontier: snapshot.frontier.clone(),
+            max_depth,
+            finalized_count: snapshot.finalized_count,
+            depths: snapshot.depths.clone(),
+            pruned_events: snapshot.pruned_events.clone(),
+            pruned_order: VecDeque::new(),
+            finalized_rounds: snapshot.finalized_rounds.clone(),
+            finalized_state_root: snapshot.finalized_state_root,
+            seq_buffer: SequenceBuffer::new(),
+        }
+    }
+
     /// Insert a new event into the graph.
     ///
     /// Validates the event hash, enforces sequence monotonicity, checks that

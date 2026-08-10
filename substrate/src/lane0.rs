@@ -482,6 +482,10 @@ pub struct Lane0PersistentState {
     /// resumes with the correct epoch's set and cannot accept acks from a
     /// superseded one. `None` before Lane 0 is enabled.
     pub validators: Option<Vec<([u8; 32], u64)>>,
+    /// The rolling BLAKE3 state root agreed on by the quorum for the most
+    /// recently finalized event. Used by the settlement adapter to anchor
+    /// the correct root on L1 without trusting a caller-supplied value.
+    pub last_finalized_root: Option<[u8; 32]>,
 }
 
 /// Errors from the Lane 0 persistence backend.
@@ -601,6 +605,10 @@ pub struct CertificateStore {
     events_finalized: u64,
     /// Number of validator-set rotations applied (see [`Self::rotate_validators`]).
     epoch: u64,
+    /// The rolling BLAKE3 state root agreed on by the quorum for the
+    /// most recently finalized event. `None` until the first event
+    /// reaches Lane 0 finality.
+    last_finalized_root: Option<[u8; 32]>,
     /// AUDIT-2026-07 C7 (#345): the current validator set, kept so it can
     /// be persisted (and restored on restart) alongside the epoch fence.
     current_validators: Option<ValidatorSet>,
@@ -648,6 +656,7 @@ impl CertificateStore {
             acks_rejected: 0,
             events_finalized: persisted.events_finalized,
             epoch: persisted.epoch,
+            last_finalized_root: persisted.last_finalized_root,
             current_validators: validators,
             store: Some(store),
         })
@@ -677,6 +686,7 @@ impl CertificateStore {
                 .current_validators
                 .as_ref()
                 .map(|set| set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+            last_finalized_root: self.last_finalized_root,
         }
     }
 
@@ -751,6 +761,7 @@ impl CertificateStore {
             self.finalized.insert(event_id);
             self.finalized_order.push_back(event_id);
             self.events_finalized += 1;
+            self.last_finalized_root = Some(ack_root);
             while self.finalized.len() > MAX_FINALIZED_EVENTS {
                 if let Some(evicted) = self.finalized_order.pop_front() {
                     self.finalized.remove(&evicted);
@@ -879,9 +890,23 @@ impl CertificateStore {
         self.pending.get(event_id)
     }
 
+    /// The rolling BLAKE3 state root agreed on by the quorum for the
+    /// most recently finalized event. Returns `None` until at least one
+    /// event has reached Lane 0 finality.
+    pub fn last_finalized_root(&self) -> Option<[u8; 32]> {
+        self.last_finalized_root
+    }
+
     /// `(acks_accepted, acks_rejected, events_finalized)` counters.
     pub fn stats(&self) -> (u64, u64, u64) {
         (self.acks_accepted, self.acks_rejected, self.events_finalized)
+    }
+
+    /// Inject a finalized root for testing the settlement submission path
+    /// without running a full Lane 0 finalization round.
+    #[doc(hidden)]
+    pub fn test_set_last_finalized_root(&mut self, root: [u8; 32]) {
+        self.last_finalized_root = Some(root);
     }
 }
 
@@ -1451,6 +1476,7 @@ mod tests {
                 events_finalized: 2,
                 finalized: vec![eid(1), eid(2)],
                 validators: Some(set.stakes.iter().map(|(k, v)| (*k, *v)).collect()),
+                last_finalized_root: None,
             };
             store.save(&state).unwrap();
         }

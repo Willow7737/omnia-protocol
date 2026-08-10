@@ -34,6 +34,8 @@ RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
     echo "" > omnia-network/src/lib.rs && \
     echo "" > omnia-adapters/src/lib.rs && \
     echo "fn main() {}" > omnia-adapters/examples/bitcoin_regtest_e2e.rs && \
+    echo "fn main() {}" > omnia-adapters/examples/bitcoin_testnet4_verify.rs && \
+    echo "fn main() {}" > omnia-adapters/examples/bitcoin_testnet4_finality_verify.rs && \
     echo "" > shards/src/lib.rs && \
     echo "" > binding/src/lib.rs && \
     echo "" > economics/src/lib.rs && \

@@ -194,6 +194,8 @@ fn build_test_app_state(port: u16) -> AppState {
         nonce_data_dir: None,
         consensus_data_dir: None,
         protocol_version: omnia_substrate::PROTOCOL_VERSION.to_string(),
+        fast_sync: false,
+        enable_tcp_fallback: true,
         mint_authority: None,
         readiness_min_peers: 1,
         readiness_max_finalization_age: 600,
@@ -2553,4 +2555,299 @@ async fn financial_transfer_accepts_the_wallets_exact_payload() {
     assert_eq!(body["sender_balance"], 750);
     assert_eq!(body["recipient_balance"], 250);
     assert_eq!(body["authorization"], "wallet_signed");
+}
+
+// ===========================================================================
+//  6. SETTLEMENT SUBMISSION — submit-root auth + logic tests
+// ===========================================================================
+
+/// A settlement adapter that reports `is_live() == true` so the
+/// submit-root handler proceeds past the adapter-liveness gate.
+struct LiveTestSettlementAdapter;
+
+#[async_trait::async_trait]
+impl omnia_adapters::settlement::SettlementAdapter for LiveTestSettlementAdapter {
+    async fn submit_root(
+        &self,
+        root: [u8; 32],
+    ) -> Result<omnia_adapters::settlement::TxHash, omnia_adapters::settlement::SettlementError> {
+        // Echo the root as the tx hash so tests can verify which root
+        // was actually passed to the adapter.
+        Ok(omnia_adapters::settlement::TxHash(root))
+    }
+    async fn fetch_finality(
+        &self,
+        tx: omnia_adapters::settlement::TxHash,
+    ) -> Result<omnia_adapters::settlement::FinalityProof, omnia_adapters::settlement::SettlementError> {
+        Ok(omnia_adapters::settlement::FinalityProof {
+            tx_hash: tx,
+            block_number: 0,
+            confirmation_count: 1,
+            proof_hash: [0u8; 32],
+        })
+    }
+    async fn verify_inclusion(
+        &self,
+        _leaf: &[u8; 32],
+        _proof: &omnia_adapters::merkle::MerkleProof,
+    ) -> Result<bool, omnia_adapters::settlement::SettlementError> {
+        Ok(true)
+    }
+    fn is_live(&self) -> bool {
+        true
+    }
+}
+
+/// Build [`AppState`] with a custom settlement adapter (instead of the
+/// default mock which always reports `is_live() == false`).
+fn build_test_app_state_with_settlement(
+    port: u16,
+    settlement: Arc<dyn omnia_adapters::settlement::SettlementAdapter>,
+) -> AppState {
+    let mut state = build_test_app_state(port);
+    state.settlement = settlement;
+    state
+}
+
+/// Spawn a test server that uses [`LiveTestSettlementAdapter`] so the
+/// submit-root handler can reach the root-determination logic.
+async fn setup_live_settlement_server() -> TestServer {
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    configure_test_server_env(Some(ADMIN_CALLER), None);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().unwrap().port();
+
+    let app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    let env_guard = EnvGuard {
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+        ],
+    };
+
+    TestServer {
+        base_url: format!("http://127.0.0.1:{port}"),
+        _handle: handle,
+        _env_guard: env_guard,
+        _lock: lock,
+    }
+}
+
+/// Spawn a test server with a live settlement adapter and a known Lane 0
+/// root injected into the Substrate.  Returns the server and the 32-byte
+/// root that was injected (hex-encoded with `0x` prefix).
+async fn setup_live_settlement_server_with_root() -> (TestServer, String) {
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    configure_test_server_env(Some(ADMIN_CALLER), None);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().unwrap().port();
+
+    let known_root = [0xAB_u8; 32];
+    let root_hex = format!("0x{}", hex::encode(known_root));
+
+    let mut app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
+    app_state.substrate.write().await.test_inject_lane0_root(known_root);
+
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    let env_guard = EnvGuard {
+        keys: vec![
+            "OMNIA_JWT_SECRET",
+            "OMNIA_AUTHORIZED_CALLERS",
+            "OMNIA_JWT_ALLOW_LEGACY_HS256",
+            "OMNIA_RATE_LIMIT_RPS",
+            "OMNIA_SETTLEMENT_ALLOW_CUSTOM_ROOT",
+        ],
+    };
+
+    let server = TestServer {
+        base_url: format!("http://127.0.0.1:{port}"),
+        _handle: handle,
+        _env_guard: env_guard,
+        _lock: lock,
+    };
+
+    (server, root_hex)
+}
+
+// ---- No JWT → 401 (middleware rejects before handler) ----
+
+#[tokio::test]
+async fn test_submit_root_no_jwt_rejected() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 401, "submit-root must reject requests without a JWT");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].is_string(), "401 response should have an 'error' field");
+}
+
+// ---- Valid JWT but not in AuthorizedCallers → 403 ----
+
+#[tokio::test]
+async fn test_submit_root_non_admin_forbidden() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let regular_token = make_valid_token(REGULAR_CALLER);
+
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .bearer_auth(&regular_token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 403, "non-admin caller must get 403 for submit-root");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].is_string());
+    let error_msg = body["error"].as_str().unwrap();
+    assert!(
+        error_msg.contains("not authorized"),
+        "error should mention authorization, got: {error_msg}"
+    );
+}
+
+// ---- Adapter not live → 503 (MockSettlementAdapter.is_live() == false) ----
+
+#[tokio::test]
+async fn test_submit_root_adapter_not_live() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+    let admin_token = make_valid_token(ADMIN_CALLER);
+
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .bearer_auth(&admin_token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 503, "mock adapter must cause 503 Service Unavailable");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].is_string());
+    assert!(
+        body["error"].as_str().unwrap().contains("not live"),
+        "error should mention adapter not live"
+    );
+}
+
+// ---- No Lane 0 root → 404 (live adapter but nothing finalized yet) ----
+
+#[tokio::test]
+async fn test_submit_root_no_lane0_root() {
+    let server = setup_live_settlement_server().await;
+    let client = reqwest::Client::new();
+    let admin_token = make_valid_token(ADMIN_CALLER);
+
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .bearer_auth(&admin_token)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 404, "must return 404 when Lane 0 has no leading root");
+    let body: Value = resp.json().await.unwrap();
+    assert!(body["error"].is_string());
+    assert!(
+        body["error"].as_str().unwrap().contains("no Lane 0 leading root"),
+        "error should mention no root available"
+    );
+}
+
+// ---- Caller-supplied root silently ignored; response echoes state root ----
+
+#[tokio::test]
+async fn test_submit_root_custom_root_ignored_when_flag_unset() {
+    let (server, state_root_hex) = setup_live_settlement_server_with_root().await;
+    let client = reqwest::Client::new();
+    let admin_token = make_valid_token(ADMIN_CALLER);
+
+    // Ensure the debug flag is NOT set (default behaviour).
+    std::env::remove_var("OMNIA_SETTLEMENT_ALLOW_CUSTOM_ROOT");
+
+    // Send a body with a DIFFERENT root than what consensus state holds.
+    let attacker_root = "0x".to_string() + &"de".repeat(32);
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .bearer_auth(&admin_token)
+        .json(&json!({ "root": attacker_root }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "should succeed with state-sourced root");
+    let body: Value = resp.json().await.unwrap();
+
+    // The response must echo the STATE root, not the caller's root.
+    assert_eq!(
+        body["root"].as_str().unwrap(),
+        &state_root_hex,
+        "response root must match the consensus state root, not the caller-supplied value"
+    );
+    // The tx hash should also be based on the state root since our
+    // LiveTestSettlementAdapter echoes root bytes as the tx hash.
+    assert_eq!(
+        body["tx_hash"].as_str().unwrap(),
+        &state_root_hex,
+        "tx hash must correspond to the state root"
+    );
+}
+
+// ---- Debug flag set → caller-supplied root is honored ----
+
+#[tokio::test]
+async fn test_submit_root_custom_root_honored_when_flag_set() {
+    let (server, _state_root_hex) = setup_live_settlement_server_with_root().await;
+    let client = reqwest::Client::new();
+    let admin_token = make_valid_token(ADMIN_CALLER);
+
+    // Enable the debug override.
+    std::env::set_var("OMNIA_SETTLEMENT_ALLOW_CUSTOM_ROOT", "true");
+
+    let custom_root = "0x".to_string() + &"cc".repeat(32);
+    let resp = client
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
+        .bearer_auth(&admin_token)
+        .json(&json!({ "root": &custom_root }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200, "should succeed with custom root when flag is set");
+    let body: Value = resp.json().await.unwrap();
+
+    assert_eq!(
+        body["root"].as_str().unwrap(),
+        &custom_root,
+        "response root must match the caller-supplied root when the debug flag is set"
+    );
 }

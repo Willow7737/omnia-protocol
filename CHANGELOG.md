@@ -2,12 +2,41 @@
 
 > 🎯 Audience: Developers, Operators
 > 🔗 Context: Version history and migration notes for all releases
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-08
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased](https://github.com/Willow7737/omnia-protocol/compare/v0.1.90...dev)
+
+
+### Features
+
+* **adapters:** add testnet4 finality verification example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+* **adapters:** support testnet4 e2e polling for real block confirmation ([6d5e351](https://github.com/Willow7737/omnia-protocol/commit/6d5e351))
+
+
+### Bug Fixes
+
+* **adapters:** strip 0x prefix before passing txid to Bitcoin Core RPC ([c16aa3b](https://github.com/Willow7737/omnia-protocol/commit/c16aa3b))
+* **adapters:** increase testnet4 e2e timeout to 30 minutes ([2eee0bd](https://github.com/Willow7737/omnia-protocol/commit/2eee0bd))
+* **ops:** bitcoind testnet4 peer fix — proper `[testnet4]` section for addnode entries, prune=0 to prevent txindex conflict
+
+
+### Tests
+
+* **adapters:** testnet4 finality verification against confirmed block 147371 ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+* **adapters:** testnet4 env-var-driven finality check example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+
+
+### Operations
+
+* **bitcoin-settlement:** full 3-stage validation pipeline proven on testnet4: regtest submit_root/fetch_finality → testnet4 anchor TX (block 147371, 20 confirmations) → blake3 proof_hash verification. OP_RETURN prefix `4f4d4e494131` (OMNIA1) + 32-byte state root confirmed on-chain.
+* **bitcoin-settlement:** Node A (nbg1-eu-central) reconfigured with unpruned bitcoind, txindex=1, 4 persistent testnet4 seed peers, maxconnections=25. Full IBD reindex completed.
+* **bitcoin-settlement:** production node fleet documented: 5 nodes across 4 regions (EU-central ×3, US-east ×1, AP-southeast ×1).
+
 
 ## [0.1.90](https://github.com/Willow7737/omnia-protocol/compare/v0.1.89...v0.1.90) (2026-08-06)
 

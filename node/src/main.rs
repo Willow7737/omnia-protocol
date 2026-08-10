@@ -46,6 +46,17 @@ use std::time::Instant;
 use tokio::sync::{Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
 
+/// Create a live Bitcoin settlement adapter from environment variables.
+#[cfg(feature = "bitcoin-live")]
+fn create_bitcoin_settlement_adapter() -> Result<Arc<dyn SettlementAdapter>, anyhow::Error> {
+    use omnia_adapters::settlement::bitcoin::BitcoinConfig;
+    use omnia_adapters::settlement::BitcoinSettlementAdapter;
+    let config = BitcoinConfig::from_env().map_err(|e| anyhow::anyhow!("Bitcoin config error: {e}"))?;
+    let adapter =
+        BitcoinSettlementAdapter::new(config).map_err(|e| anyhow::anyhow!("Bitcoin adapter creation failed: {e}"))?;
+    Ok(Arc::new(adapter))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // 1. Parse CLI arguments and dispatch subcommands
@@ -189,6 +200,7 @@ async fn main() -> Result<()> {
     substrate_config.snapshot_interval = config.snapshot_interval;
     substrate_config.nonce_data_dir = Some(config.nonce_dir());
     substrate_config.consensus_data_dir = Some(config.consensus_dir());
+    substrate_config.fast_sync = config.fast_sync;
 
     // A2: Populate GossipConfig.bootstrap_peers from CLI/TOML config so that
     // the gossip layer dials the same seed nodes as the network layer.
@@ -305,27 +317,35 @@ async fn main() -> Result<()> {
     // By default, uses MockSettlementAdapter (zero alloy, compiles on MSRV 1.88).
     // When ethereum-live is enabled, uses EthereumSettlementAdapter (requires rustc >= 1.91).
     let settlement: Arc<dyn SettlementAdapter> = {
-        #[cfg(feature = "ethereum-live")]
+        #[cfg(feature = "bitcoin-live")]
         {
-            // Try to create a live Ethereum adapter from environment config.
-            // Falls back to MockSettlementAdapter if config is missing or invalid.
+            match create_bitcoin_settlement_adapter() {
+                Ok(adapter) => {
+                    tracing::info!("Settlement: Bitcoin live adapter (OP_RETURN anchoring via bitcoincore-rpc)");
+                    adapter
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Settlement: Falling back to MockSettlementAdapter — Bitcoin live config invalid or missing");
+                    Arc::new(omnia_adapters::MockSettlementAdapter::new())
+                }
+            }
+        }
+        #[cfg(all(feature = "ethereum-live", not(feature = "bitcoin-live")))]
+        {
             match create_ethereum_settlement_adapter() {
                 Ok(adapter) => {
                     tracing::info!("Settlement: Ethereum live adapter (alloy-backed, requires rustc >= 1.91)");
                     adapter
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Settlement: Falling back to MockSettlementAdapter — Ethereum live config invalid or missing"
-                    );
+                    tracing::warn!(error = %e, "Settlement: Falling back to MockSettlementAdapter — Ethereum live config invalid or missing");
                     Arc::new(omnia_adapters::MockSettlementAdapter::new())
                 }
             }
         }
-        #[cfg(not(feature = "ethereum-live"))]
+        #[cfg(not(any(feature = "bitcoin-live", feature = "ethereum-live")))]
         {
-            tracing::info!("Settlement: Mock adapter (enable --features ethereum-live for live Ethereum)");
+            tracing::info!("Settlement: Mock adapter (enable --features bitcoin-live or --features ethereum-live for live settlement)");
             Arc::new(omnia_adapters::MockSettlementAdapter::new())
         }
     };
@@ -425,6 +445,16 @@ async fn main() -> Result<()> {
 
     tracing::info!(listen_addr = %listen_addr, "HTTP server starting");
 
+    // 7a. Restore causal graph from persisted snapshot (if any).
+    // This recovers all events/transactions that were live at the time
+    // of the last snapshot, so the node doesn't start with an empty
+    // graph after a container restart.
+    match substrate_for_consensus.read().await.restore_event_snapshot().await {
+        Ok(true) => tracing::info!("Event snapshot restored on boot"),
+        Ok(false) => tracing::info!("No event snapshot found — fresh start"),
+        Err(e) => tracing::warn!(error = %e, "Failed to restore event snapshot, starting fresh"),
+    }
+
     // 7. Spawn background tasks for consensus loop and pipeline router
     // These are the critical integration pieces that enable the node to
     // participate in the network autonomously.
@@ -509,10 +539,24 @@ async fn spawn_background_tasks(
         #[cfg(feature = "metrics")]
         let mut last_lane0_finalized: u64 = 0;
 
+        // Event snapshot persistence: save the full causal graph to
+        // redb every 30 seconds (warm-path, after consensus processing).
+        // This bounds the data-loss window to 30s on unclean shutdowns.
+        // A final snapshot is also taken on SIGTERM (see shutdown branch).
+        let snapshot_interval = tokio::time::Duration::from_secs(30);
+        let mut last_snapshot = std::time::Instant::now();
+
         loop {
             tokio::select! {
                 _ = shutdown_consensus.recv() => {
                     tracing::info!("Consensus loop shutting down");
+                    // Final event snapshot on graceful shutdown so that
+                    // all in-memory events survive the container restart.
+                    if let Err(e) = substrate_consensus.read().await.save_event_snapshot().await {
+                        tracing::warn!(error = %e, "Failed to save event snapshot on shutdown");
+                    } else {
+                        tracing::info!("Event snapshot saved on shutdown");
+                    }
                     break;
                 }
                 _ = round_timer.tick() => {
@@ -588,6 +632,18 @@ async fn spawn_background_tasks(
                     }
 
                     drop(substrate);
+
+                    // Periodic event snapshot: persist the causal
+                    // graph to redb every 30s (warm path). The write
+                    // lock is released before the redb I/O.
+                    if last_snapshot.elapsed() >= snapshot_interval {
+                        if let Err(e) =
+                            substrate_consensus.read().await.save_event_snapshot().await
+                        {
+                            tracing::warn!(error = %e, "Periodic event snapshot failed");
+                        }
+                        last_snapshot = std::time::Instant::now();
+                    }
                 }
             }
         }
@@ -650,6 +706,7 @@ async fn spawn_background_tasks(
             // `/p2p/<PeerId>` bootstrap addresses stay valid. Previously
             // the identity was regenerated on every start, which broke
             // any pinned address as soon as the node restarted.
+            let enable_tcp = config.enable_tcp_fallback;
             let network_config = NetworkConfig {
                 identity: Some(load_or_generate_node_keypair(&config.data_dir).to_bytes()),
                 bootstrap_peers: config
@@ -657,6 +714,7 @@ async fn spawn_background_tasks(
                     .iter()
                     .filter_map(|addr| addr.parse::<Multiaddr>().ok())
                     .collect(),
+                enable_tcp_fallback: enable_tcp,
                 ..Default::default()
             };
 

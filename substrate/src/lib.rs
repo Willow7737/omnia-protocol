@@ -393,6 +393,9 @@ pub enum SubstrateError {
     #[error("Configuration error: {0}")]
     /// Configuration error
     Config(String),
+    #[error("Snapshot error: {0}")]
+    /// Event-snapshot persistence / deserialization error
+    Snapshot(String),
 }
 
 /// Result type for substrate operations
@@ -1282,6 +1285,61 @@ impl Substrate {
         self.graph.read().await
     }
 
+    /// Save the current causal graph as an event snapshot to the
+    /// consensus store (if configured).
+    ///
+    /// Serializes the graph via [`GraphSnapshot`] + postcard and writes
+    /// the blob under the `"events_snapshot"` key. This is intended to
+    /// be called periodically from the warm path (after round
+    /// processing) and once on SIGTERM, so that a node retains its full
+    /// event history across container restarts.
+    pub async fn save_event_snapshot(&self) -> Result<()> {
+        let Some(ref store) = self.consensus_store else {
+            return Ok(());
+        };
+        let graph = self.graph.read().await;
+        if graph.is_empty() {
+            return Ok(());
+        }
+        let snapshot = GraphSnapshot::from(&*graph);
+        let bytes =
+            postcard::to_allocvec(&snapshot).map_err(|e| SubstrateError::Snapshot(format!("serialization: {e}")))?;
+        drop(graph); // release the read lock before the (blocking) redb write
+        store
+            .save_events_blob(&bytes)
+            .map_err(|e| SubstrateError::Snapshot(format!("persist: {e}")))?;
+        tracing::debug!(size = bytes.len(), "Event snapshot persisted");
+        Ok(())
+    }
+
+    /// Restore the causal graph from a previously persisted event
+    /// snapshot in the consensus store (if one exists).
+    ///
+    /// Returns `true` if a snapshot was found and the graph was
+    /// restored, `false` if no snapshot existed (fresh start).
+    pub async fn restore_event_snapshot(&self) -> Result<bool> {
+        let Some(ref store) = self.consensus_store else {
+            return Ok(false);
+        };
+        let Some(bytes) = store
+            .load_events_blob()
+            .map_err(|e| SubstrateError::Snapshot(format!("load: {e}")))?
+        else {
+            return Ok(false);
+        };
+        let snapshot: GraphSnapshot =
+            postcard::from_bytes(&bytes).map_err(|e| SubstrateError::Snapshot(format!("deserialization: {e}")))?;
+        let restored = CausalGraph::from_snapshot(&snapshot);
+        let event_count = restored.len();
+        *self.graph.write().await = restored;
+        tracing::info!(
+            events = event_count,
+            bytes = bytes.len(),
+            "Causal graph restored from persisted snapshot"
+        );
+        Ok(true)
+    }
+
     /// Get consensus statistics
     pub fn consensus_stats(&self) -> consensus::ConsensusStats {
         self.consensus.stats()
@@ -1400,6 +1458,35 @@ impl Substrate {
     /// original set, never rotated), or `None` when Lane 0 is disabled.
     pub fn lane0_epoch(&self) -> Option<u64> {
         self.lane0_validators.as_ref().map(|_| self.lane0_store.epoch())
+    }
+
+    /// The state root agreed on by the quorum for the most recently
+    /// Lane-0-finalized event (the rolling BLAKE3 commitment).
+    /// Returns `None` when Lane 0 is disabled or no event has reached
+    /// finality yet.
+    ///
+    /// This is the value an operator should anchor on L1 — it is the
+    /// root the fleet actually agreed on, not an arbitrary caller-supplied
+    /// value.
+    pub fn lane0_leading_root(&self) -> Option<[u8; 32]> {
+        self.lane0_validators
+            .as_ref()
+            .and_then(|_| self.lane0_store.last_finalized_root())
+    }
+
+    /// Inject a Lane 0 finalized root for integration testing.
+    ///
+    /// Creates a minimal validator set (one node, stake 1) so that
+    /// [`Self::lane0_leading_root`] returns `Some(root)`, and sets the
+    /// root on the certificate store. This allows testing the settlement
+    /// submission handler without running a full Lane 0 finalization round.
+    #[doc(hidden)]
+    pub fn test_inject_lane0_root(&mut self, root: [u8; 32]) {
+        let kp = generate_keypair();
+        let vs = lane0::ValidatorSet::new(std::iter::once((kp.verifying_key().to_bytes(), 1)))
+            .expect("single validator with stake 1");
+        self.lane0_validators = Some(vs);
+        self.lane0_store.test_set_last_finalized_root(root);
     }
 
     /// Rotate the Lane 0 validator set (ADR-025 Stage 4: Lane 1 commits as

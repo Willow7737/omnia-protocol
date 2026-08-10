@@ -117,6 +117,7 @@ zk = ["omnia-adapters/arkworks", "omnia-substrate/zk", "dep:reqwest"]
 bls = ["omnia-crypto/bls", "omnia-substrate/bls", "dep:omnia-crypto"]
 pqc = ["omnia-crypto/pqc", "omnia-substrate/pqc", "dep:omnia-crypto"]
 ethereum-live = ["omnia-adapters/ethereum-live", "zk"]
+bitcoin-live = ["omnia-adapters/bitcoin-live"]
 # Docker Compose E2E test — requires Docker daemon and ports 9090–9094.
 # Run with: cargo test -p omnia-node --test docker_compose_e2e --features docker-tests
 docker-tests = []
@@ -130,3 +131,5 @@ utoipa = "5"
 tower = { version = "0.5", features = ["util"] }
 # http-body for reading response bodies in tests
 http-body-util = "0.1"
+# async_trait for implementing SettlementAdapter in integration tests
+async-trait = "0.1"

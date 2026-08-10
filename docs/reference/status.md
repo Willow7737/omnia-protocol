@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Granular tracking of technical requirements and completion
-> 📅 Last Updated: 2026-07-20
+> 📅 Last Updated: 2026-08-08
 
 This document tracks the granular requirements for the Omnia Protocol and their current implementation status.
 
@@ -161,7 +161,7 @@ This document tracks the granular requirements for the Omnia Protocol and their 
 
 | ID           | Requirement                                 | Priority | Status         |
 | :----------- | :------------------------------------------ | :------- | :------------- |
-| **REQ-P4.1** | Bitcoin Settlement Adapter                  | P1       | 🔄 Stub        |
+| **REQ-P4.1** | Bitcoin Settlement Adapter                  | P1       | ✅ Completed — full 3-stage validation on testnet4 (anchor TX in block 147371, 20 confirmations, blake3 proof verified). See §18 below. |
 | **REQ-P4.2** | Solana Settlement Adapter                   | P1       | 🔄 Stub        |
 | **REQ-P4.3** | Celestia Settlement Adapter                 | P1       | 🔄 Stub        |
 | **REQ-P4.4** | Validator Network (multi-node)              | P0       | ✅ Completed — live multi-node Lane 0 validator network (quorum-signed finality measured; see [benchmark-gates.md](./benchmark-gates.md)) |
@@ -331,7 +331,8 @@ _Legend:_
 | **Primitives** | Node ID size                       | 32 bytes                      | `vector_clock.rs:NodeId`                         |
 | **Shards**     | Domain shard count                 | 6                             | `ShardId` well-known IDs                         |
 | **Settlement** | Ethereum adapter                   | Simulated + Live (alloy)      | `settlement/ethereum/`                           |
-| **Settlement** | Multi-chain support                | Ethereum, Solana (stub), FFI  | `settlement/`                                    |
+| **Settlement** | Bitcoin adapter (testnet4 validated) | submit_root, fetch_finality, OP_RETURN anchor | `settlement/bitcoin/` |
+| **Settlement** | Multi-chain support                | Ethereum, Bitcoin, Solana (stub), FFI  | `settlement/`                                    |
 
 ### Throughput Estimates (Verified by Limit Verification Tests)
 
@@ -368,6 +369,46 @@ _Legend:_
 | **C-14**      | Substrate fallback                            | ✅ Remediated |
 | **C-15**      | Genesis hex                                   | ✅ Remediated |
 | **C-16**      | Phase 2 ceremony                              | ✅ Remediated |
+
+---
+
+## 18. Bitcoin Settlement Adapter — Testnet4 Validation (August 2026)
+
+> **2026-08-07/08:** The Bitcoin Settlement Adapter completed full
+> end-to-end validation on the public Bitcoin testnet4 network, proving the
+> complete round-trip: `submit_root` → on-chain confirmation →
+> `fetch_finality` with blake3 proof verification.
+
+### Validation Pipeline (3 stages, all PASSED)
+
+| Stage | Environment | Result | Evidence |
+| :---- | :--------- | :----- | :------- |
+| **1. Regtest** | Local bitcoind (mined blocks) | PASSED | `submit_root` → mine → `fetch_finality`, all fields correct |
+| **2. Testnet4 anchor** | Public testnet4 network | PASSED | TX `cbe1da89…` confirmed in block 147371. OP_RETURN: `4f4d4e494131` (OMNIA1) + 32-byte test state root |
+| **3. Finality verify** | Confirmed testnet4 TX | PASSED | `fetch_finality` returned block_number=147371, confirmations=20, proof_hash=`5fabda69…dfda`. blake3 derivation matched. |
+
+### On-Chain Artifacts
+
+- **Anchor TXID:** `cbe1da89872c718f4c2553efeaaf212a287d9b16962191f12ba8fc4b146c64e6`
+- **Block:** 147371 (testnet4)
+- **Confirmations:** 20+ at time of verification
+- **OP_RETURN prefix:** `4f4d4e494131` (ASCII: `OMNIA1`)
+- **Funds returned:** 0.01078 tBTC via TX `4dcf91c776330c8db018da5bdf18f62696323eaa1258a72b4c52d0b657fd2eea`
+
+### Infrastructure (Node A — nbg1-eu-central)
+
+- Hetzner CPX31 (16 GB RAM, 300 GB SSD, Ubuntu 26.04)
+- Bitcoin Core v28+ on testnet4 (port 48332, `~/.bitcoin/testnet4/`)
+- Config: `txindex=1`, `prune=0`, `maxconnections=25`, 4 persistent seed peers
+- Full unpruned chain with transaction index enabled for `gettransaction` RPC
+
+### Issues Resolved During Validation
+
+1. **0x prefix mismatch** — Rust `Display` adds `0x` to txid, Bitcoin Core RPC expects bare hex. Fixed with `strip_prefix`.
+2. **Testnet3 deprecation** — testnet3 removed in Bitcoin Core v28/v30. Migrated to testnet4.
+3. **Block timing variability** — testnet4 blocks target 10 min but took 30+ min due to variable hashrate. Increased e2e timeout to 30 min.
+4. **bitcoin.conf section headers** — `addnode=` entries outside `[testnet4]` section rejected. Restructured config.
+5. **Pruned blocks vs txindex** — Previous node ran with pruning; `txindex=1` requires unpruned chain. Resolved with full `-reindex`.
 
 ---
 

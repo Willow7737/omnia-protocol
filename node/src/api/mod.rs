@@ -11,6 +11,7 @@
 //! CORS and rate limiting are applied at the top-level HTTP router
 //! (see [`crate::http`]).
 
+pub mod admin;
 pub mod auth;
 pub mod ceremony;
 pub mod economics;
@@ -56,6 +57,7 @@ use crate::state::AppState;
         crate::api::node::node_info,
         crate::api::node::node_peers,
         crate::api::node::list_validators,
+        crate::api::admin::submit_root,
         crate::api::errors::error_codes,
         crate::api::wallet_auth::request_challenge,
         crate::api::wallet_auth::login,
@@ -70,6 +72,8 @@ use crate::state::AppState;
         crate::api::economics::TransferRequest,
         crate::api::financial::FinancialTransferRequest,
         crate::api::node::PeerInfo,
+        crate::api::admin::SubmitRootRequest,
+        crate::api::admin::SubmitRootResponse,
         crate::api::errors::ErrorCode,
         crate::api::errors::ErrorResponse,
         crate::api::wallet_auth::ChallengeRequest,
@@ -101,6 +105,7 @@ pub struct ApiDoc;
 /// | GET    | `/api/v1/economics/transfers`             | `economics::list_transfers` | JWT |
 /// | GET    | `/api/v1/financial/balance/:pubkey`       | `financial::get_balance` | JWT |
 /// | POST   | `/api/v1/financial/transfer`              | `financial::transfer`  | JWT   |
+/// | POST   | `/api/v1/admin/settlement/submit-root`    | `admin::submit_root`   | JWT+Priv |
 /// | GET    | `/api/v1/errors`                          | `errors::error_codes`  | Public |
 /// | POST   | `/api/v1/auth/challenge`                  | `wallet_auth::request_challenge` | Public |
 /// | POST   | `/api/v1/auth/login`                      | `wallet_auth::login`   | Public |
@@ -148,6 +153,8 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
+        // Admin — settlement submission (JWT + AuthorizedCallers required)
+        .route("/admin/settlement/submit-root", post(admin::submit_root))
         // Register the caller's DID (for externally-minted JWTs, e.g. the
         // wallet's Supabase sign-in; challenge/signature login self-registers)
         .route("/auth/register", post(wallet_auth::register))
