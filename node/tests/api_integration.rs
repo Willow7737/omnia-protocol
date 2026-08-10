@@ -2600,7 +2600,10 @@ impl omnia_adapters::settlement::SettlementAdapter for LiveTestSettlementAdapter
 
 /// Build [`AppState`] with a custom settlement adapter (instead of the
 /// default mock which always reports `is_live() == false`).
-fn build_test_app_state_with_settlement(port: u16, settlement: Arc<dyn omnia_adapters::settlement::SettlementAdapter>) -> AppState {
+fn build_test_app_state_with_settlement(
+    port: u16,
+    settlement: Arc<dyn omnia_adapters::settlement::SettlementAdapter>,
+) -> AppState {
     let mut state = build_test_app_state(port);
     state.settlement = settlement;
     state
@@ -2659,11 +2662,7 @@ async fn setup_live_settlement_server_with_root() -> (TestServer, String) {
     let root_hex = format!("0x{}", hex::encode(known_root));
 
     let mut app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
-    app_state
-        .substrate
-        .write()
-        .await
-        .test_inject_lane0_root(known_root);
+    app_state.substrate.write().await.test_inject_lane0_root(known_root);
 
     let app = http::build_http_router().with_state(app_state);
 
@@ -2701,24 +2700,14 @@ async fn test_submit_root_no_jwt_rejected() {
     let client = reqwest::Client::new();
 
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .send()
         .await
         .unwrap();
 
-    assert_eq!(
-        resp.status(),
-        401,
-        "submit-root must reject requests without a JWT"
-    );
+    assert_eq!(resp.status(), 401, "submit-root must reject requests without a JWT");
     let body: Value = resp.json().await.unwrap();
-    assert!(
-        body["error"].is_string(),
-        "401 response should have an 'error' field"
-    );
+    assert!(body["error"].is_string(), "401 response should have an 'error' field");
 }
 
 // ---- Valid JWT but not in AuthorizedCallers → 403 ----
@@ -2730,20 +2719,13 @@ async fn test_submit_root_non_admin_forbidden() {
     let regular_token = make_valid_token(REGULAR_CALLER);
 
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .bearer_auth(&regular_token)
         .send()
         .await
         .unwrap();
 
-    assert_eq!(
-        resp.status(),
-        403,
-        "non-admin caller must get 403 for submit-root"
-    );
+    assert_eq!(resp.status(), 403, "non-admin caller must get 403 for submit-root");
     let body: Value = resp.json().await.unwrap();
     assert!(body["error"].is_string());
     let error_msg = body["error"].as_str().unwrap();
@@ -2762,20 +2744,13 @@ async fn test_submit_root_adapter_not_live() {
     let admin_token = make_valid_token(ADMIN_CALLER);
 
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .bearer_auth(&admin_token)
         .send()
         .await
         .unwrap();
 
-    assert_eq!(
-        resp.status(),
-        503,
-        "mock adapter must cause 503 Service Unavailable"
-    );
+    assert_eq!(resp.status(), 503, "mock adapter must cause 503 Service Unavailable");
     let body: Value = resp.json().await.unwrap();
     assert!(body["error"].is_string());
     assert!(
@@ -2793,20 +2768,13 @@ async fn test_submit_root_no_lane0_root() {
     let admin_token = make_valid_token(ADMIN_CALLER);
 
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .bearer_auth(&admin_token)
         .send()
         .await
         .unwrap();
 
-    assert_eq!(
-        resp.status(),
-        404,
-        "must return 404 when Lane 0 has no leading root"
-    );
+    assert_eq!(resp.status(), 404, "must return 404 when Lane 0 has no leading root");
     let body: Value = resp.json().await.unwrap();
     assert!(body["error"].is_string());
     assert!(
@@ -2829,10 +2797,7 @@ async fn test_submit_root_custom_root_ignored_when_flag_unset() {
     // Send a body with a DIFFERENT root than what consensus state holds.
     let attacker_root = "0x".to_string() + &"de".repeat(32);
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .bearer_auth(&admin_token)
         .json(&json!({ "root": attacker_root }))
         .send()
@@ -2870,10 +2835,7 @@ async fn test_submit_root_custom_root_honored_when_flag_set() {
 
     let custom_root = "0x".to_string() + &"cc".repeat(32);
     let resp = client
-        .post(format!(
-            "{}/api/v1/admin/settlement/submit-root",
-            server.base_url
-        ))
+        .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .bearer_auth(&admin_token)
         .json(&json!({ "root": &custom_root }))
         .send()
