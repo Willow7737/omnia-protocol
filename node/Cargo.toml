@@ -131,3 +131,5 @@ utoipa = "5"
 tower = { version = "0.5", features = ["util"] }
 # http-body for reading response bodies in tests
 http-body-util = "0.1"
+# async_trait for implementing SettlementAdapter in integration tests
+async-trait = "0.1"

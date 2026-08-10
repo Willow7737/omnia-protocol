@@ -901,6 +901,13 @@ impl CertificateStore {
     pub fn stats(&self) -> (u64, u64, u64) {
         (self.acks_accepted, self.acks_rejected, self.events_finalized)
     }
+
+    /// Inject a finalized root for testing the settlement submission path
+    /// without running a full Lane 0 finalization round.
+    #[doc(hidden)]
+    pub fn test_set_last_finalized_root(&mut self, root: [u8; 32]) {
+        self.last_finalized_root = Some(root);
+    }
 }
 
 #[cfg(test)]

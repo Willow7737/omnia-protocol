@@ -12,11 +12,14 @@
 //! trusting a caller-supplied value, eliminating "sent the wrong root by
 //! accident" as a failure category entirely.
 
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 
+use crate::api::auth::{AuthorizedCallers, CallerIdentity};
 use crate::state::AppState;
 
 /// Request body for submitting a state root to the settlement layer.
@@ -85,8 +88,21 @@ pub struct SubmitRootResponse {
 )]
 pub async fn submit_root(
     State(state): State<AppState>,
+    Extension(authorized): Extension<Arc<AuthorizedCallers>>,
+    Extension(caller): Extension<CallerIdentity>,
     req: Option<Json<SubmitRootRequest>>,
 ) -> Result<(StatusCode, Json<SubmitRootResponse>), (StatusCode, Json<serde_json::Value>)> {
+    // Privilege gate: only callers in the AuthorizedCallers registry may
+    // trigger a settlement submission — this endpoint spends real money.
+    if !authorized.is_authorized(&caller.caller_id) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": format!("caller '{}' is not authorized for settlement submission", caller.caller_id)
+            })),
+        ));
+    }
+
     // Refuse to submit if the adapter isn't connected to a real L1.
     if !state.settlement.is_live() {
         return Err((
