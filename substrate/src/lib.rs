@@ -1482,7 +1482,7 @@ impl Substrate {
     /// submission handler without running a full Lane 0 finalization round.
     #[doc(hidden)]
     pub fn test_inject_lane0_root(&mut self, root: [u8; 32]) {
-        let kp = crate::crypto::generate_keypair();
+        let kp = generate_keypair();
         let vs = lane0::ValidatorSet::new(std::iter::once((kp.verifying_key().to_bytes(), 1)))
             .expect("single validator with stake 1");
         self.lane0_validators = Some(vs);

@@ -5109,6 +5109,7 @@ version = "0.1.76"
 dependencies = [
  "aes-gcm",
  "anyhow",
+ "async-trait",
  "axum",
  "blake3",
  "chrono",
