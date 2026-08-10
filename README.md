@@ -604,3 +604,7 @@ Omnia is a public-interest protocol. Join the conversation:
 <p align="center">
   <a href="https://ko-fi.com/U4C324U81N"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a>
 </p>
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/willow7737"><img src="https://img.buymeacoffee.com/button-api/?text=Support us&emoji=&slug=willow7737&button_colour=FFDD00&font_colour=000000&font_family=Lato&outline_colour=000000&coffee_colour=ffffff" /></a>
+</p>
