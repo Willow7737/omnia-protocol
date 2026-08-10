@@ -16,6 +16,10 @@
   <img src="https://img.shields.io/github/stars/Willow7737/omnia-protocol?style=for-the-badge&color=gold" alt="GitHub Stars">
 </p>
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/omnia-protocol-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-omnia-protocol-2" target="_blank" rel="noopener noreferrer"><img alt="Omnia Protocol - Parallel consensus for the next generation of Blockchains | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1215154&theme=light&t=1786376330702"></a>
+</p>
+
 <h1 align="center">Omnia Protocol</h1>
 
 <p align="center">
