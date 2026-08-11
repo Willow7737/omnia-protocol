@@ -21,11 +21,10 @@ multi-node validator testnet with real BFT finality (10,000/10,000 events
 finalized across 5 validators in stress testing); a **geo-distributed
 3-region WAN run** (EU/US/Asia, RTTs to ~218 ms) with 100% propagation
 and full finality at 10k bursts; anti-entropy self-healing; a shipped
-mobile wallet, web dashboard, and website; ZK proof generation with an
-Ethereum settlement adapter; TLA+ specs model-checked in CI.
+mobile wallet, web dashboard, and website; ZK proof generation with Ethereum and Bitcoin settlement adapters; TLA+ specs model-checked in CI.
 
 Explicitly not done yet: a permanently-running geo network (the WAN run
-was a measured campaign), external security audit, Bitcoin/Solana/Celestia adapters
+was a measured campaign), external security audit, Solana/Celestia adapters
 (stubs), proof-of-useful-work, conviction voting/delegation. The
 requirement-level truth lives in
 [`docs/reference/status.md`](https://github.com/Willow7737/omnia-protocol/blob/main/docs/reference/status.md)
@@ -52,7 +51,8 @@ the event-signature workhorse for now.
 
 The architecture is settlement-agnostic (ZK proofs + data availability are
 the only requirements of the settlement layer). Ethereum settlement exists
-(`OmniaRollup.sol` with a Groth16 verifier); other adapters are interface
+(`OmniaRollup.sol` with a Groth16 verifier); Bitcoin settlement is also live
+(`bitcoin-live` feature flag); other adapters are interface
 stubs awaiting implementation. "Agnostic" describes the design boundary,
 not a claim that every adapter exists.
 

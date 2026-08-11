@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Real-world application scenarios, phase deliverables mapped to user impact, and community documentation
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 This directory contains user-facing documentation: real-world scenarios that demonstrate Omnia's capabilities, an FAQ for common questions, and the governance system documentation.
 

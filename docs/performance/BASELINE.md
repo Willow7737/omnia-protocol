@@ -2,10 +2,10 @@
 
 > Audience: Performance Engineers
 > Context: Part of the performance documentation section
-> Last Updated: 2026-06-24
+> Last Updated: 2026-08-11
 
 > **Status**: v0.1.68 baselines captured. 3-layer benchmark gate operational (IAI + multi-sample + single-sample). Network-simulated multi-node benchmarks added.
-> **Last Updated**: 2026-06-24
+> **Last Updated**: 2026-08-11
 
 ## Test Environment
 

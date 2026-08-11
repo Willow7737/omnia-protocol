@@ -1,6 +1,6 @@
 # cargo-vet Gap Analysis — 222 Unvetted Dependencies
 
-**Date:** 2026-06-29
+**Date:** 2026-08-11
 **Source:** Architecture audit finding H6
 **Status:** Tracked — awaiting audit work
 

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Omnia's governance system — quadratic voting, reputation decay, time-locked voting, AI agent participation, and future plans
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 > **This document describes the governance system as implemented. Sections are labeled with their implementation status.**
 
