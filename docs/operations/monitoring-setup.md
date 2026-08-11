@@ -167,7 +167,7 @@ Slack, Telegram, and generic webhooks.
 Stopping `omnia-node` on host B produced **two** firing instances, one each
 for A and C — the per-node labels split them, which is correct and confirms
 the labelling works. Each notification carried the templated summary
-("Omnia node C (sin-ap-southeast) has 1 peer(s), expected 2"), the
+("Omnia node C (sin-ap-southeast) has 1 peer(s), expected 4"), the
 diagnosis, and the runbook link.
 
 Note that a dead node is reported *by its neighbours*, not by itself: its

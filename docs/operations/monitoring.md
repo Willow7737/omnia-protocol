@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Grafana dashboards, Prometheus configuration, and alert rules for Omnia nodes
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ The alert rules in `monitoring/grafana/alerts/omnia-alerts.yml` are evaluated by
 | Alert            | Condition                                              | Duration | Severity | Component |
 | ---------------- | ------------------------------------------------------ | -------- | -------- | --------- |
 | FinalityStalled  | `rate(omnia_node_events_finalized_total[5m]) == 0`     | 5m       | Critical | consensus |
-| PeerCountDrop    | `omnia_node_peers_connected < 2`                       | 3m       | Warning  | network   |
+| PeerCountDrop    | `omnia_node_peers_connected < 4`                       | 3m       | Warning  | network   |
 | HighSlashingRate | `rate(omnia_slashing_events_total[10m]) > 0.1`         | 10m      | Warning  | slashing  |
 | MemoryGrowth     | `deriv(process_resident_memory_bytes[30m]) > 10485760` | 30m      | Warning  | system    |
 

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Step-by-step procedures for common operational tasks when running Omnia Protocol nodes
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Table of Contents
 

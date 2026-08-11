@@ -2,10 +2,10 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Node CLI subcommands and REST API endpoint reference
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
-**Version:** v0.1.68
-**Last Updated:** 2026-06-20
+**Version:** v0.1.76+
+**Last Updated:** 2026-08-11
 
 ---
 
