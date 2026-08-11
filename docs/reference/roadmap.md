@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Consolidated roadmap from Phase 0 through Phase 5, with remaining milestones
-> 📅 Last Updated: 2026-07-19
+> 📅 Last Updated: 2026-08-11
 
 ## Phase 0: The Seed ✅ Complete
 
@@ -138,7 +138,7 @@ _Goal: Proof of Concept_
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
-12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
+12. Bitcoin settlement adapter ✅ live (testnet4 validated) / Solana settlement adapter (Celestia ✅ already implemented)
 13. ~~Mobile wallet~~ ✅ Shipped July 2026 — [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) (Flutter, dual-mode auth, live against the public testnet node)
 14. Throughput optimization (multi-threaded, sharded consensus)
 

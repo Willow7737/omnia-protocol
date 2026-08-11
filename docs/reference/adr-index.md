@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Index and summaries of all Architecture Decision Records (ADRs)
-> 📅 Last Updated: 2026-07-20
+> 📅 Last Updated: 2026-08-11
 
 > **Note:** ADR-004 is intentionally reserved/skipped.
 

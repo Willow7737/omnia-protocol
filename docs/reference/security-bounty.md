@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Vulnerability disclosure and bounty reward structure
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 **Version**: 1.0
 **Effective Date**: 2026-05-21

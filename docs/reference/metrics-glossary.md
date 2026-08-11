@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Definitions of key metrics, terms, and abbreviations used across Omnia Protocol documentation
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Protocol Terms
 

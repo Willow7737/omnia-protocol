@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 5 milestones and deliverables
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 **Phase**: 5 of N
 **Status**: Complete (with real benchmark data captured)
@@ -228,7 +228,7 @@ After Phase 5, the project is in a **testnet-ready** state with:
 - Running a persistent public testnet with external validators
 - Commissioning and addressing external audit findings
 - Completing Poseidon dual-hash transition (Phase B)
-- Bitcoin settlement adapter (if needed for launch)
+- Bitcoin settlement adapter ✅ already proven on testnet4
 - Validator onboarding documentation and tooling
 - Mainnet genesis ceremony
 - Launch coordination

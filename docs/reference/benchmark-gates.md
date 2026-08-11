@@ -2,7 +2,7 @@
 
 > Audience: Developers, CI Engineers
 > Context: 3-layer benchmark regression gate architecture, current baselines, and IAI instruction-count gates
-> Last Updated: 2026-07-20
+> Last Updated: 2026-08-11
 
 
 ## Local Reference Run — 2026-07-09 (v0.1.76+/dev)
@@ -85,7 +85,7 @@ Self-hosted runners (bench-self-hosted.yml):
   Setup: see docs/operations/self-hosted-runner-setup.md
 ```
 
-## Current Baselines (v0.1.68)
+## Current Baselines (v0.1.76+)
 
 Source of truth: `benches/baselines.json` (criterion) and
 `benches/iai_baselines.json` (IAI instruction counts).
