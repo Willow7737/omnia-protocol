@@ -2,12 +2,12 @@
 
 > 🎯 Audience: Architects
 > 🔗 Context: Comprehensive architecture specification covering all layers, node binary, and cross-layer interactions
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
-**Version:** v0.1.68
-**Last Updated:** 2026-06-24
+**Version:** v0.1.76+
+**Last Updated:** 2026-08-11
 
-> **This document describes the full architecture of the Omnia Protocol as implemented in v0.1.68. Sections are labeled with their implementation status: ✅ Implemented, ⚠️ Partially Implemented (has stubs), 🔮 Aspirational (no code).**
+> **This document describes the full architecture of the Omnia Protocol as implemented in v0.1.76+. Sections are labeled with their implementation status: ✅ Implemented, ⚠️ Partially Implemented (has stubs), 🔮 Aspirational (no code).**
 
 ## Table of Contents
 
@@ -47,7 +47,7 @@ Omnia is a five-layer distributed system designed to enable trustless coordinati
 └─────────────────────────────────────────┘
 ```
 
-**Implementation status:** All five core layers are implemented and tested (run `cargo test --workspace` for current test counts). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash round constants).
+**Implementation status:** All five core layers are implemented and tested (run `cargo test --workspace` for current test counts). The node binary provides a CLI, REST API with Swagger UI, and Prometheus metrics. Phase 0 (ZK-rollup settlement) has an Ethereum adapter plus Solana, Celestia, and Bitcoin adapters. Bitcoin is now live (feature-gated behind `bitcoin-live`). Some features within layers are ⚠️ stubs (RF fingerprinting, ZK circuit hash round constants).
 
 ---
 
@@ -417,7 +417,7 @@ The TLA+ model (`formal-verification/OmniaConsensus.tla`, 191 lines) verifies:
 
 ### Throughput
 
-✅ **Benchmarked (Phase 5).** 12,000 ops/s (v0.1.68) single-node synchronous. The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
+✅ **Benchmarked (Phase 5).** 12,000 ops/s (v0.1.76+) single-node synchronous. The consensus engine processes O(new_events) per round via the `unprocessed_events` queue, which is designed for scalability.
 
 ### Latency
 
@@ -506,7 +506,7 @@ The `prune_old_events()` method provides a mechanism for sustainable state growt
 - Ben-Sasson, E., et al. (2014). "Zerocash: Decentralized Anonymous Payments from Bitcoin"
 
 **Status:** Architecture Specification — Partially Implemented
-**Version:** v0.1.68
+**Version:** v0.1.76+
 
 ---
 

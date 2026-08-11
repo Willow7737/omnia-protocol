@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Phase 0 implements settlement-agnostic ZK-rollup architecture for bridging to L1 chains
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Overview
 
@@ -65,9 +65,11 @@ Located in: `omnia-adapters/src/settlement/ethereum/`
 
 The `SettlementAdapter::verify_proof` trait method now fails-closed in Ethereum live mode. It cannot safely derive `batch_merkle_root` from the prover's own proof bytes (a malicious prover could craft proof bytes whose offset 192..224 matched the on-chain root). Use `EthereumAdapter::verify_proof_with_root()` instead, which requires the `batch_merkle_root` as a trusted parameter fetched from the on-chain event log. See `omnia-adapters/src/settlement/ethereum/mod.rs`.
 
-## Other Adapters — Stubs
+## Other Adapters
 
-Bitcoin, Solana, and Celestia adapters are stubs that return `SettlementError::NotImplemented`.
+- **Bitcoin** — ✅ Implemented (feature-gated behind `bitcoin-live`). The Bitcoin settlement adapter is now fully implemented.
+- **Solana** — 🔄 Stub (returns `SettlementError::NotImplemented`)
+- **Celestia** — 🔄 Stub (returns `SettlementError::NotImplemented`)
 
 Located in: `omnia-adapters/src/settlement/`
 
@@ -145,9 +147,9 @@ Located in: `omnia-adapters/src/operator.rs`
 ┌───────────────────────────────────────────────┐
 │            Settlement-Agnostic ZK-Rollup      │
 ├───────────────┬───────────────┬───────────────┤
-│  Ethereum ✅  │ Bitcoin 🔄    │  Solana 🔄    │
-│  (OmniaRollup │  (stub)       │  (stub)       │
-│   .sol)       │               │               │
+│  Ethereum ✅  │ Bitcoin ✅     │  Solana 🔄    │
+│  (OmniaRollup │  (bitcoin-    │  (stub)       │
+│   .sol)       │   live)       │               │
 ├───────────────┴───────────────┴───────────────┤
 │           SettlementLayer Trait                │
 ├───────────────────────────────────────────────┤

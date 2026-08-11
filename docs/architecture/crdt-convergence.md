@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Mathematical foundation for why CRDTs guarantee convergence under arbitrary message delivery order
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Formal Convergence Theorem
 
