@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Maps each development phase to concrete user-facing capabilities and feature availability
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 This document maps Omnia's development phases to the capabilities available to users, operators, and developers at each stage. Understanding phase alignment helps stakeholders know what they can do today and what's coming next.
 
@@ -93,7 +93,7 @@ Phase 3 closed all 5 open Phase 2 findings (3 critical, 1 high, 1 medium) and de
 ### What Changed for Users
 
 - **Operators**: Nodes can now discover peers via Kademlia DHT, traverse NATs with AutoNAT/Relay/DCutr, and persist consensus state across restarts. Fast-sync enables new nodes to bootstrap without full genesis replay. Gossip messages are compressed with Snappy.
-- **Developers**: ML-KEM-768 (FIPS-203) replaces pqc_kyber, eliminating the KyberSlash vulnerability. Ethereum settlement adapter architecture is ready (live mode behind `ethereum-live` feature flag).
+- **Developers**: ML-KEM-768 (FIPS-203) replaces pqc_kyber, eliminating the KyberSlash vulnerability. Ethereum settlement adapter architecture is ready (live mode behind `ethereum-live` feature flag); Bitcoin settlement adapter is also live (`bitcoin-live` feature flag).
 - **Architects**: Network layer is production-ready with peer scoring, graylisting, and NAT traversal.
 
 ### Key Deliverables
@@ -194,7 +194,7 @@ Phase 5 captured real benchmark data (~12,000 ops/s (v0.1.68 baseline; ~7,190 op
 9. Multi-party trusted setup ceremony over network
 10. Extended formal verification (unbounded TLA+, Rust verification)
 11. RF fingerprint hardware integration
-12. Bitcoin/Solana settlement adapters (Celestia ✅ already implemented)
+12. Bitcoin settlement adapter (bitcoin-live feature, now live; Solana/Celestia adapters remain stubs)
 13. Mobile wallet
 14. Throughput optimization (multi-threaded, sharded consensus)
 

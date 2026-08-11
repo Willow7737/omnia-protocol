@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Index for build guides, feature profiles, and binary optimization
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Prerequisites
 

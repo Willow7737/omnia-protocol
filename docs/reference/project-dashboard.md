@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: High-level project health, team status, and risk assessment
-> 📅 Last Updated: 2026-07-19
+> 📅 Last Updated: 2026-08-11
 
 This dashboard provides a real-time overview of the Omnia Protocol's development, contributor health, and strategic alignment. We believe in **radical transparency**: every step, from conceptualization to mainnet, is documented here.
 
@@ -64,7 +64,7 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 | **Physical Binding**           | Implemented | Medium     | Provenance log full; RF simulator fails closed in production; QC remains roadmap/hardware-dependent                                                                                                                                                                                |
 | **Fee Enforcement**            | Implemented | Medium     | `FeeSchedule` with per-domain flat fees, enforced by `ShardRouter` before dispatch                                                                                                                                                  |
 | **UBC Economic Model**         | Implemented | Medium     | `QuotaSystem` with epoch advancement, `UbcToken` (soulbound, monthly reset), `GovernanceState` with fixed-point decay                                                                                                               |
-| **ZK-Rollup Settlement**       | Implemented | **Medium** | Launch-critical path is live Ethereum/FFI only; mock, Bitcoin, Solana, Cosmos, and disabled Celestia are roadmap/test-only; Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3)  |
+| **ZK-Rollup Settlement**       | Implemented | **Medium** | Launch-critical path is live Ethereum/FFI and Bitcoin (testnet4 validated); mock, Solana, Cosmos, and disabled Celestia are roadmap/test-only; Ethereum adapter done; Poseidon hash in ZK circuit (BLAKE3-derived round constants, **non-standard params** — see ADR-014); trusted setup uses BLAKE3 domain separation (Phase 3); circuit witnesses use non-zero fields (Phase 3)  |
 | **Encrypted Keystore**         | Implemented | Low        | AES-256-GCM + HKDF-SHA256 + BLAKE3 domain separation; legacy XOR migration supported (see ADR-010)                                                                                                                                  |
 | **VRF Leader Election**        | Implemented | **Medium** | Non-standard VRF construction (Ed25519 + BLAKE3, not ECVRF — see ADR-012); functional for internal use but not spec-compliant                                                                                                       |
 | **DKG / Threshold Signatures** | Implemented | Low        | Feldman VSS-based DKG with proper BLS12-381 scalar field arithmetic (see ADR-013); polynomial evaluation via Horner's method; Lagrange interpolation for secret reconstruction; AES-256-GCM share encryption (see ADR-016, Phase 3) |
@@ -72,8 +72,8 @@ Omnia is a community-driven protocol. We track our human capital as transparentl
 
 ### Audit Boundary Quick View
 
-- **Launch-critical now:** causal consensus, shard routing, financial ledger/fees, identity primitives, provenance log, live Ethereum/FFI settlement.
-- **Explicit roadmap/test-only:** Bitcoin/Solana/Cosmos settlement stubs, mock/disabled Celestia, mock settlement, RF fingerprint simulator, PoUW attestation-only useful work, and the ADR-025-superseded pipeline router.
+- **Launch-critical now:** causal consensus, shard routing, financial ledger/fees, identity primitives, provenance log, live Ethereum/FFI settlement, Bitcoin (testnet4 validated).
+- **Explicit roadmap/test-only:** Solana/Cosmos settlement stubs, mock/disabled Celestia, mock settlement, RF fingerprint simulator, PoUW attestation-only useful work, and the ADR-025-superseded pipeline router.
 - **Production guardrail:** `OMNIA_ENV=production` refuses non-live settlement at node startup and fails closed for simulator RF verification.
 
 ## Shard Architecture Summary

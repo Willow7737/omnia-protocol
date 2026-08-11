@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Step-by-step guide for setting up and running an Omnia Protocol validator node
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Prerequisites
 
@@ -207,7 +207,7 @@ Transfers work fine with minting disabled — accounts simply start at zero
 until an authority is configured network-wide.
 
 The node logs its choice at startup, so `grep` the boot log to confirm all
-three nodes agree:
+five nodes agree:
 
 ```
 INFO Financial shard mint authority configured  authority=ed4928c6…
@@ -396,8 +396,8 @@ setup script resolves by pre-generating the keys.
 # Generates a persistent keypair per node, assembles OMNIA_LANE0_VALIDATORS
 # from their public keys, and writes docker/.env (with a fresh
 # OMNIA_JWT_SECRET if none exists, and OMNIA_RATE_LIMIT_RPS=1000).
-./scripts/setup-validators.sh            # 3 nodes, stake 1 each
-# NODES=5 STAKE=1 ./scripts/setup-validators.sh   # to scale
+./scripts/setup-validators.sh            # 5 nodes (default), stake 1 each
+# NODES=3 STAKE=1 ./scripts/setup-validators.sh   # override to 3 nodes
 ```
 
 This writes `ops/testnet-keys/nodeK/` (git-ignored secrets):
@@ -414,13 +414,13 @@ docker compose -f docker/docker-compose.testnet.yml up -d --build
 ```
 
 Compose reads `docker/.env` automatically, so `OMNIA_LANE0_VALIDATORS`,
-`OMNIA_JWT_SECRET`, and `OMNIA_RATE_LIMIT_RPS` flow to all three nodes.
+`OMNIA_JWT_SECRET`, and `OMNIA_RATE_LIMIT_RPS` flow to all five nodes.
 
 ### Verify
 
 ```sh
 # Each node should report a `lane0` stats object (not null) and its own pubkey.
-for p in 9090 9091 9092; do
+for p in 9090 9091 9092 9093 9094; do
   curl -s http://localhost:$p/api/v1/node/info \
     | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["node_id"], d["lane0"], d["validator_pubkey"][:8])'
 done

@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers, Operators
 > 🔗 Context: Version history and migration notes for all releases
-> 📅 Last Updated: 2026-08-08
+> 📅 Last Updated: 2026-08-11
 
 All notable changes to this project will be documented in this file.
 
@@ -61,6 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * **adapters:** add testnet4 finality verification example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
 * **adapters:** support testnet4 e2e polling for real block confirmation ([6d5e351](https://github.com/Willow7737/omnia-protocol/commit/6d5e351))
+* **network:** wire fast_sync and enable_tcp_fallback to CLI flags + env vars ([1245968](https://github.com/Willow7737/omnia-protocol/commit/1245968))
+* **network:** TCP transport fallback via `.with_tcp()` in network.rs ([1a94404](https://github.com/Willow7737/omnia-protocol/commit/1a94404))
+* **settlement:** add POST /admin/settlement/submit-root with JWT auth + privilege gate ([fbff344](https://github.com/Willow7737/omnia-protocol/commit/fbff344))
+* **settlement:** add CertificateStore::last_finalized_root, track root at quorum time ([fb0f293](https://github.com/Willow7737/omnia-protocol/commit/fb0f293))
+* **settlement:** bitcoin-live adapter — live Bitcoin settlement via OP_RETURN anchor TXs ([47d96d8](https://github.com/Willow7737/omnia-protocol/commit/47d96d8))
+* **settlement:** ethereum-live adapter — live Ethereum settlement via OmniaRollup contract ([v0.1.76])
 
 
 ### Bug Fixes
@@ -68,19 +74,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **adapters:** strip 0x prefix before passing txid to Bitcoin Core RPC ([c16aa3b](https://github.com/Willow7737/omnia-protocol/commit/c16aa3b))
 * **adapters:** increase testnet4 e2e timeout to 30 minutes ([2eee0bd](https://github.com/Willow7737/omnia-protocol/commit/2eee0bd))
 * **ops:** bitcoind testnet4 peer fix — proper `[testnet4]` section for addnode entries, prune=0 to prevent txindex conflict
+* **security:** gate submit-root behind JWT auth + AuthorizedCallers privilege check ([d8ff007](https://github.com/Willow7737/omnia-protocol/commit/d8ff007))
+* **security:** submit-root reads root from consensus state, not caller-supplied bytes ([d8ff007](https://github.com/Willow7737/omnia-protocol/commit/d8ff007))
+* **security:** fix utoipa security attribute syntax in submit-root handler ([dc858bd](https://github.com/Willow7737/omnia-protocol/commit/dc858bd))
+* **security:** gate test helpers behind cfg(any(test, feature="test-utils")) instead of doc(hidden) ([0b8459f](https://github.com/Willow7737/omnia-protocol/commit/0b8459f))
+* **substrate:** remove unnecessary crate::crypto::generate_keypair qualification ([3ea1c3d](https://github.com/Willow7737/omnia-protocol/commit/3ea1c3d))
 
 
 ### Tests
 
 * **adapters:** testnet4 finality verification against confirmed block 147371 ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
 * **adapters:** testnet4 env-var-driven finality check example ([4750287](https://github.com/Willow7737/omnia-protocol/commit/4750287))
+* **settlement:** 6 integration tests for submit-root handler (auth, privilege, liveness, state root, debug flag) ([6abc68b](https://github.com/Willow7737/omnia-protocol/commit/6abc68b))
+
+
+### Documentation
+
+* **readme:** update standing network to 5-node fleet (nbg1/ash/sin/helsinki/falkenstein) ([16639eb](https://github.com/Willow7737/omnia-protocol/commit/16639eb))
+* **readme:** update Live Right Now to 5-node, 4 peers, 3 regions ([d435e7d](https://github.com/Willow7737/omnia-protocol/commit/d435e7d))
+* **readme:** add Product Hunt featured badge ([b856c63](https://github.com/Willow7737/omnia-protocol/commit/b856c63))
+* **readme:** add OP RetroPGF project identifier (funding.json) ([f50b79e](https://github.com/Willow7737/omnia-protocol/commit/f50b79e))
+* **readme:** add Ko-fi and Buy Me a Coffee support buttons ([470a796](https://github.com/Willow7737/omnia-protocol/commit/470a796), [0590cfe](https://github.com/Willow7737/omnia-protocol/commit/0590cfe))
 
 
 ### Operations
 
 * **bitcoin-settlement:** full 3-stage validation pipeline proven on testnet4: regtest submit_root/fetch_finality → testnet4 anchor TX (block 147371, 20 confirmations) → blake3 proof_hash verification. OP_RETURN prefix `4f4d4e494131` (OMNIA1) + 32-byte state root confirmed on-chain.
 * **bitcoin-settlement:** Node A (nbg1-eu-central) reconfigured with unpruned bitcoind, txindex=1, 4 persistent testnet4 seed peers, maxconnections=25. Full IBD reindex completed.
-* **bitcoin-settlement:** production node fleet documented: 5 nodes across 4 regions (EU-central ×3, US-east ×1, AP-southeast ×1).
+* **fleet:** production node fleet expanded to 5 validators across 3 regions (EU-central ×3, US-east ×1, AP-southeast ×1). Nodes: nbg1 (bootstrap+ingress), ash, sin, helsinki, falkenstein.
+* **monitoring:** Grafana dashboard + alert rules for 5-node fleet ([1245968](https://github.com/Willow7737/omnia-protocol/commit/1245968))
 
 
 ## [0.1.90](https://github.com/Willow7737/omnia-protocol/compare/v0.1.89...v0.1.90) (2026-08-06)

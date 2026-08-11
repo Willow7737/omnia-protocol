@@ -3,7 +3,7 @@
 This directory contains TLA+ specifications that model the Omnia consensus protocol and its CRDT convergence properties, verifying safety and liveness through exhaustive state-space exploration using the TLC model checker.
 
 **Version:** v0.1.76
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-08-11
 
 ## Protocol Model
 

@@ -2,12 +2,12 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Protocol implementation specifications and protocol-level details
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
-**Version:** v0.1.68
+**Version:** v0.1.76+
 **Last Updated:** 2026-03-05
 
-> **This document describes the implementation status of the Omnia Protocol as of v0.1.68. The codebase uses a custom Rust implementation (not Parity Substrate). A REST API with Swagger UI is now available.**
+> **This document describes the implementation status of the Omnia Protocol as of v0.1.76+. The codebase uses a custom Rust implementation (not Parity Substrate). A REST API with Swagger UI is now available.**
 
 ---
 

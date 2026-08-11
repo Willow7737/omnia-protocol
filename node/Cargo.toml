@@ -133,3 +133,5 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 # async_trait for implementing SettlementAdapter in integration tests
 async-trait = "0.1"
+# test-utils feature on substrate exposes test-only helpers (e.g. test_inject_lane0_root)
+omnia-substrate = { path = "../substrate", features = ["test-utils"] }

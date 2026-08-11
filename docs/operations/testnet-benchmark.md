@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Measures real multi-node throughput and propagation for the [ADR-025](../adr/ADR-025-two-lane-consensus.md) rollout
-> 📅 Last Updated: 2026-07-10
+> 📅 Last Updated: 2026-08-11
 
 Stage 2 of ADR-025 requires **honest multi-node numbers**: the causal-graph
 hot path does ~7,675 events/s in-process, but the only multi-node figure on
@@ -49,12 +49,12 @@ granularity — fine for the second-scale answers Stage 2 needs.
 ## Running
 
 ```bash
-# Local 3-node compose testnet (defaults match its port mappings):
+# Local 5-node compose testnet (defaults match its port mappings):
 OMNIA_JWT_SECRET=<secret> ./scripts/testnet-bench.sh
 
 # Real hosts:
 OMNIA_JWT_SECRET=<secret> ./scripts/testnet-bench.sh \
-  --nodes https://node-a.example,https://node-b.example,https://node-c.example \
+  --nodes https://node-a.example,https://node-b.example,https://node-c.example,https://node-d.example,https://node-e.example \
   --events 1000 --concurrency 16 --timeout 180
 ```
 

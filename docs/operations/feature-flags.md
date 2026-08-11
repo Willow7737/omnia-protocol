@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Operators
 > 🔗 Context: Feature flags and their operational impact for running Omnia Protocol nodes
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## Feature Flags
 
@@ -39,6 +39,39 @@ docker build --build-arg FEATURES=ethereum-live -f docker/Dockerfile .
 **CI:** Feature-gated tests run in `.github/workflows/ethereum-settlement.yml` with Anvil.
 
 **Impact on binary size:** Adding `alloy` increases binary size significantly (~300+ sub-crates). Use only when real Ethereum settlement is needed.
+
+---
+
+### `bitcoin-live`
+
+**Crate:** `omnia-adapters`, `omnia-node`
+
+**Purpose:** Enables real Bitcoin settlement via Bitcoin Core RPC integration.
+
+**Without flag (default):** Bitcoin adapter returns `NotImplemented` for all operations.
+
+**With flag:** Adds real Bitcoin RPC calls for:
+
+- OP_RETURN anchor TX submission with `4f4d4e494131` (OMNIA1) prefix + 32-byte state root
+- Block confirmation polling for finality verification
+- Transaction fee estimation (wallet createfundedpsbt)
+- Proven on Bitcoin testnet4 (block 147371, 20 confirmations)
+
+**Requirements:** A running Bitcoin Core node with RPC enabled, txindex=1, and unpruned blocks.
+
+**Build:**
+
+```bash
+cargo build --features bitcoin-live
+```
+
+**Docker:**
+
+```bash
+docker build --build-arg FEATURES=bitcoin-live -f docker/Dockerfile .
+```
+
+**Impact on binary size:** Adds Bitcoin Core RPC client (reqwest). Moderate binary size increase.
 
 ---
 
@@ -170,6 +203,7 @@ The `omnia-node` crate provides pre-configured profiles:
 | `full` (default) | network, zk, bls, pqc, metrics | `cargo build -p omnia-node`                                        |
 | `light`          | minimal                        | `cargo build -p omnia-node --no-default-features --features light` |
 | Full + Ethereum  | full + ethereum-live           | `cargo build -p omnia-node --features ethereum-live`               |
+| Full + Bitcoin   | full + bitcoin-live             | `cargo build -p omnia-node --features bitcoin-live`                 |
 | `docker-tests`   | full + docker integration      | `cargo build -p omnia-node --features docker-tests`                |
 
 ---

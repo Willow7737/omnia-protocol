@@ -904,7 +904,7 @@ impl CertificateStore {
 
     /// Inject a finalized root for testing the settlement submission path
     /// without running a full Lane 0 finalization round.
-    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn test_set_last_finalized_root(&mut self, root: [u8; 32]) {
         self.last_finalized_root = Some(root);
     }

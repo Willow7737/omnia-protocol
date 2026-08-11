@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Developers
 > 🔗 Context: Contribution guidelines, CI gates, and code review process for the Rust-only codebase
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 Thank you for your interest in contributing to Omnia! Whether you're a cryptographer, Rust developer, or visionary, there's a place for you.
 
@@ -290,7 +290,7 @@ What actually happens
 
 - OS: macOS 12.0
 - Rust: 1.91.0
-- Version: 0.1.68
+- Version: 0.1.76+
 ```
 
 ### Feature Requests
@@ -331,7 +331,7 @@ By contributing to Omnia Protocol, you agree that your contributions will be lic
 
 ---
 
-**Last Updated:** May 2026
+**Last Updated:** August 2026
 
 ---
 

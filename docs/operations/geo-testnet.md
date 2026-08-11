@@ -12,8 +12,8 @@ real WAN latency, which is the credibility jump that matters: it converts
 
 ## Target topology (reference)
 
-Three nodes, three regions, one provider (Hetzner shown; any VPS provider
-works). All three are Lane 0 validators.
+Five nodes, three regions (EU-central, US-east, AP-southeast), two continents.
+All five are Lane 0 validators.
 
 | Node | IP | Region | vCPU | Role |
 |------|----|--------|:----:|------|
@@ -28,11 +28,9 @@ Sizing: CPX21 (3–4 vCPU / 4 GB) is ample for validator nodes — see the footp
 Expected RTTs: A↔B ~90 ms, A↔C ~170 ms, B↔C ~230 ms (the worst common
 internet path — that is the point).
 
-> **Quorum note:** three equal-stake validators means Lane 0 finality needs
-> **all three** acks (> 2/3 of stake). Fine for a benchmark where all nodes
-> stay up, but it has zero fault tolerance — one node down halts finality
-> (propagation continues; finality resumes when it returns). Scale to 5
-> validators (2 EU / 2 US / 1 Asia) for real 1-fault tolerance.
+> **Quorum note:** five equal-stake validators means Lane 0 finality needs
+> **four of five** acks (> 3/5 of stake). This provides 1-fault tolerance —
+> one node down still achieves quorum.
 
 Sizing basis: a node peaked at ~160 MB RSS during a 10,000-event burst on
 the 5-node single-host run — CPX21 is generous headroom. Measured in
@@ -251,22 +249,24 @@ land there to be exercised by CI and can be red at any moment. Deploying from
 it puts unvalidated code on validators. The series is
 `feature branch → dev → CI green → merge to main → deploy`.
 
-## 2. Firewall (all three hosts)
+## 2. Firewall (all five hosts)
 
-Only two ports matter. QUIC needs UDP 4001 open **between the three node
+Only two ports matter. QUIC needs UDP 4001 open **between all five node
 IPs**; the HTTP API/metrics port should be reachable **only from the bench
 host (A)** — do not expose /metrics to the world.
 
 ```bash
-# On each host — substitute the two OTHER node IPs and A's IP:
+# On each host — substitute the four OTHER node IPs and A's IP:
 ufw allow from <peer-ip-1> to any port 4001 proto udp
 ufw allow from <peer-ip-2> to any port 4001 proto udp
+ufw allow from <peer-ip-3> to any port 4001 proto udp
+ufw allow from <peer-ip-4> to any port 4001 proto udp
 ufw allow from <bench-host-ip> to any port 9090 proto tcp
 ufw allow OpenSSH && ufw enable
 ```
 
 (Host A already exposes 9090/9443 publicly for the wallet/dashboard via the
-sslip.io reverse proxy — leave that as is; the rule above is for B and C.)
+sslip.io reverse proxy — leave that as is; the rule above is for B–E.)
 
 > **QUIC/MTU note:** QUIC v1 performs path-MTU discovery, but some clouds
 > clamp UDP. If peers connect and then stall, test with
@@ -281,12 +281,16 @@ on host A and copy each node's key directory to its host:
 ```bash
 # On A:
 cd /opt/omnia-protocol
-NODES=3 ./scripts/setup-validators.sh          # writes keys + docker/.env
+NODES=5 ./scripts/setup-validators.sh          # writes keys + docker/.env
 
 scp -r ops/testnet-keys/node1 root@<B>:/opt/omnia-protocol/ops/testnet-keys/
 scp -r ops/testnet-keys/node2 root@<C>:/opt/omnia-protocol/ops/testnet-keys/
+scp -r ops/testnet-keys/node3 root@<D>:/opt/omnia-protocol/ops/testnet-keys/
+scp -r ops/testnet-keys/node4 root@<E>:/opt/omnia-protocol/ops/testnet-keys/
 scp docker/.env root@<B>:/opt/omnia-protocol/docker/.env
 scp docker/.env root@<C>:/opt/omnia-protocol/docker/.env
+scp docker/.env root@<D>:/opt/omnia-protocol/docker/.env
+scp docker/.env root@<E>:/opt/omnia-protocol/docker/.env
 ```
 
 Then append the per-node variables to `docker/.env` **on each host**:
@@ -297,7 +301,7 @@ cat >> docker/.env <<'EOF'
 OMNIA_NODE_ID=1
 OMNIA_BOOTSTRAP_NODES=
 OMNIA_KEY_DIR=../ops/testnet-keys/node0
-OMNIA_TOTAL_NODES=3
+OMNIA_TOTAL_NODES=5
 EOF
 
 # On B:
@@ -305,15 +309,17 @@ cat >> docker/.env <<'EOF'
 OMNIA_NODE_ID=2
 OMNIA_BOOTSTRAP_NODES=/ip4/<A-public-ip>/udp/4001/quic-v1
 OMNIA_KEY_DIR=../ops/testnet-keys/node1
-OMNIA_TOTAL_NODES=3
+OMNIA_TOTAL_NODES=5
 EOF
 
 # On C (same as B but OMNIA_NODE_ID=3, OMNIA_KEY_DIR=../ops/testnet-keys/node2)
+# On D (same as B but OMNIA_NODE_ID=4, OMNIA_KEY_DIR=../ops/testnet-keys/node3)
+# On E (same as B but OMNIA_NODE_ID=5, OMNIA_KEY_DIR=../ops/testnet-keys/node4)
 ```
 
 Keys are secrets: `chmod -R go-rwx ops/testnet-keys` and remember the
 containers run as **uid 1000** — `setup-validators.sh` chowns for you when
-run as root, but after `scp` re-check on B and C:
+run as root, but after `scp` re-check on B–E:
 `chown -R 1000:1000 ops/testnet-keys`. (An unreadable key silently degrades
 the node to a non-validator identity and finality never happens — the
 classic failure, see the operational note in
@@ -321,7 +327,7 @@ classic failure, see the operational note in
 
 ## 4. Bring the nodes up
 
-Start **A first** (it is the bootstrap), then B and C:
+Start **A first** (it is the bootstrap), then B, C, D, and E:
 
 ```bash
 # Each host:
@@ -352,14 +358,16 @@ for ip in localhost <B> <C> <D> <E>; do printf "%s peers=" "$ip"; \
 
 ```bash
 # On A:
-for ip in <B> <C>; do printf "A->%s  " "$ip"; ping -c 5 -q "$ip" | tail -1; done
+for ip in <B> <C> <D> <E>; do printf "A->%s  " "$ip"; ping -c 5 -q "$ip" | tail -1; done
 # On B:
-printf "B->C  "; ping -c 5 -q <C> | tail -1
+for ip in <C> <D> <E>; do printf "B->%s  " "$ip"; ping -c 5 -q "$ip" | tail -1; done
+# On C:
+for ip in <D> <E>; do printf "C->%s  " "$ip"; ping -c 5 -q "$ip" | tail -1; done
 ```
 
 Record the matrix (min/avg/max) in `benchmark-gates.md` next to the run —
-"3 nodes across EU / US-East / Asia, RTTs 90/170/230 ms" is the sentence
-that makes the numbers credible.
+"5 nodes across EU-central / US-East / AP-southeast, RTTs 90/170/230 ms" is
+the sentence that makes the numbers credible.
 
 ## 6. The benchmark ladder
 
@@ -369,7 +377,7 @@ Run from A. Climb; don't jump straight to 10k — each rung either passes
 ```bash
 OMNIA_JWT_SECRET=$(grep ^OMNIA_JWT_SECRET= docker/.env | cut -d= -f2-) \
   ./scripts/testnet-bench.sh \
-  --nodes http://localhost:9090,http://<B>:9090,http://<C>:9090 \
+  --nodes http://localhost:9090,http://<B>:9090,http://<C>:9090,http://<D>:9090,http://<E>:9090 \
   --events 1000  --concurrency 16 --timeout 300     # rung 1
 # then: --events 5000  --concurrency 64 --timeout 600   rung 2
 # then: --events 10000 --concurrency 64 --timeout 900   rung 3

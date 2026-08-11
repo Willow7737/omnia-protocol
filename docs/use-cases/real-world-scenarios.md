@@ -2,7 +2,7 @@
 
 > 🎯 Audience: Laymen, All
 > 🔗 Context: 10 real-world use cases demonstrating how Omnia solves problems across financial inclusion, supply chain, healthcare, IP, AI, and governance
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 ## 1. Financial Inclusion for the Unbanked
 

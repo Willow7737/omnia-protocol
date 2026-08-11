@@ -3,8 +3,8 @@
 This directory contains monitoring configuration for Omnia Protocol nodes,
 including Grafana dashboards, alert rules, and Prometheus configuration.
 
-**Version:** v0.1.68
-**Last Updated:** 2026-06-24
+**Version:** v0.1.76+
+**Last Updated:** 2026-08-11
 
 ## Directory Structure
 

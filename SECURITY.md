@@ -2,10 +2,10 @@
 
 > 🎯 Audience: Operators, Architects
 > 🔗 Context: Vulnerability disclosure policy, security review process, and threat model references
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
-**Document version**: 5.0
-**Last Updated**: 2026-06-24
+**Document version**: 5.1
+**Last Updated**: 2026-08-11
 
 ## Supported Versions
 
@@ -16,9 +16,8 @@ The following versions of Omnia Protocol are currently being supported with secu
 | 0.1.x   | :white_check_mark: |
 | < 0.1   | :x:                |
 
-**Note**: The current crate versions in `Cargo.toml` are `0.1.68 (workspace version)` for both
-`omnia-adapters` and `omnia-binding`. Security patches are applied to the `0.1.x`
-line until a stable `1.0.0` release.
+**Note**: The current workspace version is `0.1.76+`. Security patches are applied to
+the `0.1.x` line until a stable `1.0.0` release.
 
 ## Reporting a Vulnerability
 
@@ -59,7 +58,13 @@ The following are considered in scope for vulnerability reports:
 - Denial-of-service vectors in the protocol layer
 - Data integrity violations in the provenance log or state snapshots
 - Side-channel vulnerabilities in cryptographic comparison operations
-- **Newly hardened surfaces (v0.1.69)** — bounty researchers should re-examine:
+- **Newly hardened surfaces (v0.1.76)** — submit-root endpoint secured:
+  - JWT authentication required for `POST /admin/settlement/submit-root` (`node/src/api/admin.rs`)
+  - AuthorizedCallers privilege check — non-privileged callers rejected with 403
+  - Root read from consensus state (`lane0_leading_root()`), not caller-supplied bytes
+  - Debug flag `OMNIA_SETTLEMENT_ALLOW_CUSTOM_ROOT` optionally accepts caller-supplied root
+  - Test helpers (`test_inject_lane0_root`, `test_set_last_finalized_root`) gated behind `cfg(any(test, feature = "test-utils"))`, absent from shipping binaries
+- **Previously hardened surfaces (v0.1.69)** — bounty researchers should also re-examine:
   - Identity recovery with `secret_commitment` (`shards/src/identity/state.rs`)
   - Biological ZK with non-empty `public_inputs` (`shards/src/biological/state.rs`)
   - Cross-shard causal proof verification (`shards/src/router.rs`)
@@ -128,8 +133,8 @@ All changes to the Omnia Protocol codebase are subject to security review accord
 
 Auditors should treat the following as the current production launch boundary:
 
-- **Launch-critical settlement**: live Ethereum (`ethereum-live`) or the FFI settlement adapter with `has_settlement_lib`. Node startup refuses `OMNIA_ENV=production` when the selected adapter is not live.
-- **Roadmap/test-only settlement**: `MockSettlementAdapter`, Bitcoin, Solana, Cosmos, and disabled/mock Celestia. Bitcoin/Solana/Cosmos return `NotImplemented`; mock and disabled Celestia cannot be constructed under `OMNIA_ENV=production`.
+- **Launch-critical settlement**: live Ethereum (`ethereum-live`) or live Bitcoin (`bitcoin-live`) or the FFI settlement adapter with `has_settlement_lib`. Node startup refuses `OMNIA_ENV=production` when the selected adapter is not live.
+- **Test-only settlement**: `MockSettlementAdapter`, Solana, Cosmos, and disabled/mock Celestia. Solana/Cosmos return `NotImplemented`; mock and disabled Celestia cannot be constructed under `OMNIA_ENV=production`.
 - **Roadmap/test-only physical binding**: RF fingerprint verification is a byte-array simulator and fails closed under `OMNIA_ENV=production` until SDR integration lands.
 - **Roadmap economics**: Proof-of-Useful-Work verifies Ed25519 attestation only; production work rewards remain admin-gated until real zkML/folding verification lands.
 - **Superseded node pipeline**: `node/src/pipeline.rs` is deprecated compatibility/roadmap code superseded by ADR-025 and is not instantiated by production startup.

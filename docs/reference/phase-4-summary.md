@@ -2,7 +2,7 @@
 
 > 🎯 Audience: All
 > 🔗 Context: Summary of Phase 4 milestones and deliverables
-> 📅 Last Updated: 2026-06-24
+> 📅 Last Updated: 2026-08-11
 
 **Project:** Omnia Protocol
 **Phase:** 4 of N
@@ -249,7 +249,7 @@ Phase 4 closed the remaining gaps between the architecturally-complete codebase 
 2. **Load test baseline capture** — Run actual benchmarks on dedicated hardware, populate BASELINE.md
 3. **Ceremony HTTP API** — Full implementation of ceremony endpoints (currently stubs)
 4. **Multi-party ceremony over network** — Client-server ceremony with real network transport
-5. **Bitcoin/Solana/Celestia settlement stubs** — Still architecture-only (not Phase 4 scope)
+5. **Bitcoin settlement adapter** ✅ live with testnet4 validation; **Solana/Celestia settlement stubs** — Still architecture-only (not Phase 4 scope)
 6. **Parking lot upgrade** — Migrate to parking_lot 0.12.x to eliminate `instant` dependency (RUSTSEC-2024-0384)
 
 ---

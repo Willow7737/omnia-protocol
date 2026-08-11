@@ -42,7 +42,8 @@ anti-entropy), `substrate` (the consensus round loop).
 
 State transitions are proven with **Groth16 ZK proofs** (arkworks, BN254)
 and can settle on any L1 that verifies proofs and stores data — an Ethereum
-adapter (`OmniaRollup.sol`) exists today; Bitcoin/Solana/Celestia adapters
+adapter (`OmniaRollup.sol`) exists today; a Bitcoin adapter is also live
+(`bitcoin-live` feature flag); Solana/Celestia adapters
 are stubs by design. Omnia is a coordination layer, not another L1
 competing for your liquidity.
 
