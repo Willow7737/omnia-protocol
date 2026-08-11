@@ -1480,7 +1480,7 @@ impl Substrate {
     /// [`Self::lane0_leading_root`] returns `Some(root)`, and sets the
     /// root on the certificate store. This allows testing the settlement
     /// submission handler without running a full Lane 0 finalization round.
-    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn test_inject_lane0_root(&mut self, root: [u8; 32]) {
         let kp = generate_keypair();
         let vs = lane0::ValidatorSet::new(std::iter::once((kp.verifying_key().to_bytes(), 1)))
