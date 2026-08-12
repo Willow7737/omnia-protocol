@@ -9,6 +9,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.92](https://github.com/Willow7737/omnia-protocol/compare/v0.1.91...v0.1.92) (2026-08-12)
+
+
+### Features
+
+* add SyncSnapshot&lt;-&gt;StateSnapshot bridge and Substrate::restore_from_snapshot() ([8989ff9](https://github.com/Willow7737/omnia-protocol/commit/8989ff9d87013809d51df40914f1e7a0eb77e32b))
+* add SyncSnapshot&lt;-&gt;StateSnapshot bridge and Substrate::restore_from_snapshot() ([45d8c1a](https://github.com/Willow7737/omnia-protocol/commit/45d8c1a160e7c95fbbf77aee7680c287be4633ba))
+
+
+### Bug Fixes
+
+* **ci:** eliminate version-sticking bug across build pipeline ([ee5c894](https://github.com/Willow7737/omnia-protocol/commit/ee5c894fc9edd50b82394691b8d27ab9a18a455f))
+* **ci:** regenerate Cargo.lock with minimal workspace-only update ([33f2b95](https://github.com/Willow7737/omnia-protocol/commit/33f2b950585b5ea722200f5c62abbaa07b6ec2b7))
+* **substrate:** resolve E0107, E0277, clippy, and cargo fmt violations ([fcb03d5](https://github.com/Willow7737/omnia-protocol/commit/fcb03d5ca2dc264d0aa48801bf2566e4c3f526f2))
+
+
+### Documentation
+
+* add Buy Me a Coffee button ([5d6fefe](https://github.com/Willow7737/omnia-protocol/commit/5d6fefe50392541d2b0da370385ebdd519b2317b))
+* add Buy Me a Coffee button ([0590cfe](https://github.com/Willow7737/omnia-protocol/commit/0590cfe967e383b7e3abfbc3c09c8769931edacf))
+* add Ko-fi support button ([f2ee903](https://github.com/Willow7737/omnia-protocol/commit/f2ee90393ee4a3d0324d09768f5e9cdd61afa8bc))
+* add Ko-fi support button ([470a796](https://github.com/Willow7737/omnia-protocol/commit/470a79677bf4cc96c47a41c7a5130c19afae0716))
+* add Product Hunt featured badge ([dabf665](https://github.com/Willow7737/omnia-protocol/commit/dabf665378fc0a3309b2df14bea8a8b83739f9a4))
+* add Product Hunt featured badge ([b856c63](https://github.com/Willow7737/omnia-protocol/commit/b856c63cf9174ae3a1b33fc5bb78b082322fca60))
+* update batch 1 root files — CHANGELOG, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT ([3a06b13](https://github.com/Willow7737/omnia-protocol/commit/3a06b133befb6f52e270d902a4dfb068a364c011))
+* update batch 3 — all 11 docs/operations/ files for 5-node fleet, bitcoin-live, current versions ([ee0cd15](https://github.com/Willow7737/omnia-protocol/commit/ee0cd1532edbd4a4e4e834ebe204be75444ccb8f))
+* update batch 4 — all 24 docs/reference/ files: dates, versions, bitcoin status ([fa00ff0](https://github.com/Willow7737/omnia-protocol/commit/fa00ff073699b88e71e30e97a19e9d52a47c1829))
+* update batch 5 — all 14 docs/architecture/ files: dates, versions, bitcoin status ([4bb0bca](https://github.com/Willow7737/omnia-protocol/commit/4bb0bca5d94138e1ff6a5e59c558696e2e05336c))
+* update batch 6 — all 25 docs/adr/ files: header dates to 2026-08-11 ([955aa67](https://github.com/Willow7737/omnia-protocol/commit/955aa67366e6e82e0f7f1251df9af1b4255b22e2))
+* update batches 7-12 — remaining 29 files: dates, versions, bitcoin status across specs, security, audit, building, use-cases, wiki, formal-verification, monitoring ([e356717](https://github.com/Willow7737/omnia-protocol/commit/e356717ad1e1d13639713f066f837bd428869827))
+* update Live Right Now to 5-node, 4 peers, 3 regions ([d435e7d](https://github.com/Willow7737/omnia-protocol/commit/d435e7dbac59b17f2b227f0884f92100bb4feeba))
+* update standing network to 5-node fleet (nbg1/ash/sin/helsinki/falkenstein) ([16639eb](https://github.com/Willow7737/omnia-protocol/commit/16639ebb1c1a41e04e3f4da9b95e139dc00c6b75))
+
 ## [0.1.91](https://github.com/Willow7737/omnia-protocol/compare/v0.1.90...v0.1.91) (2026-08-10)
 
 
