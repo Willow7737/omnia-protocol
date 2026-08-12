@@ -482,7 +482,25 @@ jobs:
           echo "=== Checksums ==="
           cat SHA256SUMS
 
-      - name: Create or update GitHub Release
+      - name: Delete existing release (created by release-please)
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          echo "Checking for existing release on tag $TAG..."
+          RELEASE_ID=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+          if [ -n "$RELEASE_ID" ] && [ "$RELEASE_ID" != "" ]; then
+            echo "Deleting existing release $RELEASE_ID (will recreate with artifacts)"
+            curl -sf -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
+            echo "Release $RELEASE_ID deleted"
+          else
+            echo "No existing release found — will create new one"
+          fi
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
@@ -490,42 +508,6 @@ jobs:
           draft: false
           prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
           generate_release_notes: true
-          body: |
-            ## Omnia Protocol ${{ needs.validate.outputs.tag }}
-
-            ### Binaries
-            | Platform | Architecture | File |
-            |----------|-------------|------|
-            | Linux | x86_64 | `omnia-node-x86_64-linux.tar.gz` |
-            | Linux | ARM64 | `omnia-node-aarch64-linux.tar.gz` |
-            | macOS | x86_64 | `omnia-node-x86_64-macos.tar.gz` |
-            | macOS | ARM64 (Apple Silicon) | `omnia-node-aarch64-macos.tar.gz` |
-            | Windows | x86_64 | `omnia-node-x86_64-windows.zip` |
-
-            ### Smart Contract
-            - `contract/OmniaRollup-artifact.json` — Combined ABI + bytecode + metadata (v${{ needs.validate.outputs.version }})
-            - `contract/OmniaRollup.json` — ABI only
-            - `contract/OmniaRollup.bin.txt` — Bytecode only
-            - `contract/checksums.txt` — Contract file checksums
-
-            ### Supply Chain
-            - `sbom/` — CycloneDX Software Bill of Materials (JSON + XML)
-            - `audit-report.json` — `cargo audit` security report
-            - `SHA256SUMS` — Checksums for all binary archives
-
-            ### Docker
-            ```
-            docker pull ghcr.io/willow7737/omnia-node:${{ needs.validate.outputs.version }}
-            ```
-
-            ### Verification
-            ```bash
-            sha256sum -c SHA256SUMS
-            cat contract/checksums.txt
-            ```
-
-            ---
-            **Full Changelog**: https://github.com/${{ github.repository }}/commits/${{ needs.validate.outputs.tag }}
           files: |
             release-files/*.tar.gz
             release-files/*.zip
