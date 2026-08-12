@@ -21,9 +21,9 @@
         },
         "Cargo.lock",
         {
-          "type": "json",
+          "type": "yaml",
           "path": "helm/omnia-node/Chart.yaml",
-          "jsonpath": "$..appVersion"
+          "target": "appVersion"
         }
       ]
     }
