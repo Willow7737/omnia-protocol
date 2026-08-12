@@ -68,7 +68,7 @@ jobs:
           ' Cargo.toml)
           if [ "$CURRENT" != "$EXPECTED" ]; then
             echo "::warning::Cargo.toml version ($CURRENT) -> $EXPECTED"
-            sed -i "s/^version = \".*\"/version = \"$EXPECTED\"/" Cargo.toml
+            perl -pi -e "s/^version = \".*\"/version = \"$EXPECTED\"/" Cargo.toml
             CHANGED=1
           else
             echo "Cargo.toml confirmed: $EXPECTED"
@@ -153,7 +153,7 @@ jobs:
       # (versions were already correct) but we still want to be sure.
       - name: Ensure version matches release tag
         shell: bash
-        run: sed -i 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
+        run: perl -pi -e 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
 
       - name: Install cross-compilation tools (Linux ARM64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -162,7 +162,7 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
           export OPENSSL_VERSION=3.1.8
-          curl -sL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz
+          curl -sL https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz | tar xz
           cd openssl-${OPENSSL_VERSION}
           ./Configure linux-aarch64 --prefix=/opt/openssl-arm64 \
             --cross-compile-prefix=aarch64-linux-gnu- \
@@ -372,7 +372,7 @@ jobs:
       # before Docker build. The Dockerfile deletes and regenerates
       # Cargo.lock internally, but CARGO_PKG_VERSION comes from Cargo.toml.
       - name: Ensure version matches release tag
-        run: sed -i 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
+        run: perl -pi -e 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
