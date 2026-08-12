@@ -21,7 +21,7 @@ resolver = "2"
 # Keep in sync with .release-please-manifest.json.
 # release-please updates this via extra-files; the release workflow
 # hard-fails if tag and workspace version diverge.
-version = "0.1.90"
+version = "0.1.92"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"
