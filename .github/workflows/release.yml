@@ -21,16 +21,17 @@ permissions:
 
 jobs:
   validate:
-    name: Validate Release
+    name: Validate & Sync Versions
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.91.0"
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract version from tag
         id: version
         run: |
@@ -39,18 +40,24 @@ jobs:
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
-          # Strip leading 'v' for semver comparison
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release tag: $TAG"
           echo "Version: $VERSION"
 
-      - name: Verify version matches workspace
+      # release-please cannot reliably update Cargo.toml because our
+      # version lives under [workspace.package] (nested TOML), which
+      # breaks its JSONPath-based version extraction. So we sync here.
+      # If any file is stale, we fix it, commit, and force-move the tag
+      # so all downstream jobs (which checkout the tag) get the fix.
+      - name: Sync all version files to release tag
         run: |
           EXPECTED="${{ steps.version.outputs.version }}"
-          # Extract version from [workspace.package] section in root Cargo.toml
-          ACTUAL=$(awk '
+          CHANGED=0
+
+          # --- Cargo.toml ---
+          CURRENT=$(awk '
             /^\[workspace\.package\]/ { in_section=1; next }
             /^\[/ && in_section { exit }
             in_section && /^version[[:space:]]*=/ {
@@ -59,33 +66,46 @@ jobs:
               exit
             }
           ' Cargo.toml)
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::error::Tag version ($EXPECTED) does not match workspace version ($ACTUAL)"
-            echo "::error::Cargo.toml must be updated BEFORE tagging."
-            echo "::error::release-please should update Cargo.toml via extra-files in its release PR."
-            exit 1
+          if [ "$CURRENT" != "$EXPECTED" ]; then
+            echo "::warning::Cargo.toml version ($CURRENT) -> $EXPECTED"
+            sed -i "s/^version = \".*\"/version = \"$EXPECTED\"/" Cargo.toml
+            CHANGED=1
           else
             echo "Cargo.toml confirmed: $EXPECTED"
           fi
 
-      - name: Auto-sync Helm files to release version
-        run: |
-          EXPECTED="${{ steps.version.outputs.version }}"
-          CHART_ACTUAL=$(awk '/^appVersion:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/Chart.yaml)
-          VALUES_ACTUAL=$(awk '/^  tag:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/values.yaml)
-
-          if [ "$CHART_ACTUAL" != "$EXPECTED" ]; then
-            echo "::warning::Chart.yaml appVersion ($CHART_ACTUAL) → $EXPECTED — auto-fixing"
+          # --- Helm Chart.yaml ---
+          CHART=$(awk '/^appVersion:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/Chart.yaml)
+          if [ "$CHART" != "$EXPECTED" ]; then
+            echo "::warning::Chart.yaml appVersion ($CHART) -> $EXPECTED"
             sed -i "s/^appVersion: \".*\"/appVersion: \"$EXPECTED\"/" helm/omnia-node/Chart.yaml
+            CHANGED=1
           else
             echo "Chart.yaml confirmed: $EXPECTED"
           fi
 
-          if [ "$VALUES_ACTUAL" != "$EXPECTED" ]; then
-            echo "::warning::values.yaml image.tag ($VALUES_ACTUAL) → $EXPECTED — auto-fixing"
+          # --- Helm values.yaml ---
+          VALUES=$(awk '/^  tag:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/values.yaml)
+          if [ "$VALUES" != "$EXPECTED" ]; then
+            echo "::warning::values.yaml image.tag ($VALUES) -> $EXPECTED"
             sed -i "s/^  tag: \".*\"/  tag: \"$EXPECTED\"/" helm/omnia-node/values.yaml
+            CHANGED=1
           else
             echo "values.yaml confirmed: $EXPECTED"
+          fi
+
+          # Commit + force-move tag so downstream jobs pick up fixes.
+          # This is safe: the tag was just created by release-please and
+          # no one else has consumed it yet.
+          if [ "$CHANGED" -eq 1 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Cargo.toml helm/omnia-node/Chart.yaml helm/omnia-node/values.yaml
+            git commit -m "chore: sync versions to $EXPECTED for release"
+            TAG="${{ steps.version.outputs.tag }}"
+            git tag -f "$TAG" HEAD
+            git push origin "$TAG" --force
+            echo "Tag $TAG moved to include version-sync commit"
           fi
 
   build-binaries:
@@ -112,7 +132,11 @@ jobs:
             os: windows-latest
             artifact: omnia-node-x86_64-windows
     steps:
+      # fetch-depth 0 + ref ${{ needs.validate.outputs.tag }} ensures
+      # we get the version-sync commit if validate job moved the tag.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
@@ -124,14 +148,19 @@ jobs:
         with:
           shared-key: "omnia-release-${{ matrix.target }}"
 
+      # Belt-and-suspenders: sed the version even if validate synced it.
+      # Also handles the case where validate didn't need to move the tag
+      # (versions were already correct) but we still want to be sure.
+      - name: Ensure version matches release tag
+        shell: bash
+        run: sed -i 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
+
       - name: Install cross-compilation tools (Linux ARM64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          # Build OpenSSL from source for ARM64 cross-compilation
-          # This avoids the need for system ARM64 OpenSSL packages
           export OPENSSL_VERSION=3.1.8
           curl -sL https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz
           cd openssl-${OPENSSL_VERSION}
@@ -146,18 +175,18 @@ jobs:
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=/opt/openssl-arm64/lib/pkgconfig" >> "$GITHUB_ENV"
 
-      # Build only the omnia-node binary, not the entire workspace.
-      # The fuzz crate requires libfuzzer-sys which doesn't cross-compile
-      # for ARM64 and doesn't link on Windows MSVC.
-      # Production profile: --no-default-features --features full (excludes swagger-ui to reduce binary size)
+      # No --locked: Cargo.toml version may differ from Cargo.lock after
+      # the sed sync above. Without --locked, cargo uses the lockfile as
+      # a guide but resolves workspace-member versions from Cargo.toml.
+      # The Dockerfile already builds without --locked for the same reason.
       - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }} -p omnia-node --no-default-features --features full
+        run: cargo build --release --target ${{ matrix.target }} -p omnia-node --no-default-features --features full
 
-      - name: Verify binary size ≤ 17 MB (Linux x86_64 only)
+      - name: Verify binary size <= 17 MB (Linux x86_64 only)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           SIZE=$(stat --format="%s" target/${{ matrix.target }}/release/omnia-node)
-          MAX=$((17 * 1024 * 1024))  # re-baselined 2026-07-20 for release overflow-checks (#343)
+          MAX=$((17 * 1024 * 1024))
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 / 1024 )) MB)"
           if [ "$SIZE" -gt "$MAX" ]; then
             echo "::error::Release binary exceeds 17 MB limit ($SIZE > $MAX)"
@@ -208,14 +237,12 @@ jobs:
       - name: Compile OmniaRollup.sol
         run: |
           mkdir -p contract-output
-          # Ethereum contracts relocated to omnia-adapters/contracts/ethereum/
           solc --combined-json abi,bin,metadata \
             --optimize --optimize-runs 200 \
             --overwrite \
             -o contract-output \
             omnia-adapters/contracts/ethereum/OmniaRollup.sol
 
-          # Also produce standalone ABI and bytecode files
           solc --abi \
             --optimize --optimize-runs 200 \
             -o contract-output \
@@ -226,11 +253,9 @@ jobs:
             -o contract-output \
             omnia-adapters/contracts/ethereum/OmniaRollup.sol
 
-          # Rename for clarity
           mv contract-output/OmniaRollup.abi contract-output/OmniaRollup.json 2>/dev/null || true
           mv contract-output/OmniaRollup.bin contract-output/OmniaRollup.bin.txt 2>/dev/null || true
 
-          # Create a combined artifact with version info
           VERSION="${{ needs.validate.outputs.version }}"
           python3 -c "
           import json, os
@@ -340,6 +365,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      # Belt-and-suspenders: ensure Cargo.toml version is correct
+      # before Docker build. The Dockerfile deletes and regenerates
+      # Cargo.lock internally, but CARGO_PKG_VERSION comes from Cargo.toml.
+      - name: Ensure version matches release tag
+        run: sed -i 's/^version = ".*"/version = "${{ needs.validate.outputs.version }}"/' Cargo.toml
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -356,7 +389,6 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           TAG="${{ needs.validate.outputs.tag }}"
-          # Docker requires lowercase repository names — github.repository may contain uppercase
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "repo_lower=$REPO_LOWER" >> "$GITHUB_OUTPUT"
@@ -422,26 +454,20 @@ jobs:
       - name: Consolidate release files
         run: |
           mkdir -p release-files
-          # Move all tar.gz, zip, and checksum files
           find release-artifacts/ -name '*.tar.gz' -exec mv {} release-files/ \; 2>/dev/null || true
           find release-artifacts/ -name '*.zip' -exec mv {} release-files/ \; 2>/dev/null || true
           find release-artifacts/ -name '*.sha256' -exec mv {} release-files/ \; 2>/dev/null || true
-          # Move contract artifacts
           mkdir -p release-files/contract
           find release-artifacts/omnia-rollup-contract/ -type f -exec mv {} release-files/contract/ \; 2>/dev/null || true
-          # Move SBOM artifacts
           mkdir -p release-files/sbom
           find release-artifacts/omnia-release-sbom/ -type f -exec mv {} release-files/sbom/ \; 2>/dev/null || true
-          # Move audit report
           find release-artifacts/security-audit/ -name 'audit-report.json' -exec mv {} release-files/ \; 2>/dev/null || true
-          # List everything
           echo "=== Release files ==="
           find release-files/ -type f | sort
 
       - name: Generate comprehensive checksums
         run: |
           cd release-files
-          # Use nullglob-style approach: only checksum files that actually exist
           shopt -s nullglob
           files=(*.tar.gz *.zip)
           if [ ${#files[@]} -gt 0 ]; then
@@ -490,10 +516,7 @@ jobs:
 
             ### Verification
             ```bash
-            # Verify binary integrity
             sha256sum -c SHA256SUMS
-
-            # Verify the contract
             cat contract/checksums.txt
             ```
 
