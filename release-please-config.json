@@ -14,13 +14,7 @@
       "tag-format": "v${version}",
       "separate-pull-requests": false,
       "skip-github-release": false,
-      "extra-files": [
-        {
-          "type": "toml",
-          "path": "Cargo.toml"
-        },
-        "Cargo.lock"
-      ]
+      "extra-files": ["Cargo.toml", "Cargo.lock"]
     }
   },
   "changelog-type": "default",
