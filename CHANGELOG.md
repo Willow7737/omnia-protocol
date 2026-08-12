@@ -9,6 +9,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.93](https://github.com/Willow7737/omnia-protocol/compare/v0.1.92...v0.1.93) (2026-08-12)
+
+
+### Bug Fixes
+
+* **ci:** bump workspace version to 0.1.92, fix release-please toml targeting ([86b9717](https://github.com/Willow7737/omnia-protocol/commit/86b9717896e5c4309d8601e331a511b1b235186a))
+* **ci:** bump workspace version to 0.1.92, fix release-please toml targeting ([c834034](https://github.com/Willow7737/omnia-protocol/commit/c8340345e6782e35f98ebc3db915154ea97cfa3c))
+* **ci:** remove Chart.yaml from release-please, auto-sync both Helm files in release.yml ([5efe768](https://github.com/Willow7737/omnia-protocol/commit/5efe768e07a0c632c3b70549cbf4192aaacf0ce8))
+* **ci:** remove Chart.yaml from release-please, auto-sync both Helm files in release.yml ([fbff361](https://github.com/Willow7737/omnia-protocol/commit/fbff361b988627896749dbb336394518c1f66004))
+* **ci:** use plain-string extra-files for release-please ([edb3f4e](https://github.com/Willow7737/omnia-protocol/commit/edb3f4e7d6dc4f525d5b5a0c08d4c733421242f5))
+* **ci:** use plain-string extra-files for release-please ([c3a0e2f](https://github.com/Willow7737/omnia-protocol/commit/c3a0e2fdc380555deaa92e871934766cb5e47b72))
+* **ci:** use yaml type for Chart.yaml in release-please config ([ee68750](https://github.com/Willow7737/omnia-protocol/commit/ee68750143f3751979603dd15ab137c867b474f7))
+* **ci:** use yaml type for Chart.yaml in release-please config ([65d2e01](https://github.com/Willow7737/omnia-protocol/commit/65d2e01ab575c94bbec67cb68b131fde44a236d5))
+
+
+### CI
+
+* complete release automation — release-please + Helm validation + auto-sync ([6820d5a](https://github.com/Willow7737/omnia-protocol/commit/6820d5a1b2d6b0747cd5c5dcd166744a2fa02e25))
+
 ## [0.1.92](https://github.com/Willow7737/omnia-protocol/compare/v0.1.91...v0.1.92) (2026-08-12)
 
 
