@@ -528,7 +528,6 @@ jobs:
             release-files/*.sha256
             release-files/SHA256SUMS
             release-files/contract/*
-            release-files/sbom/*
             release-files/audit-report.json
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
