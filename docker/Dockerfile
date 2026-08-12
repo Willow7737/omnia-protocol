@@ -1,4 +1,5 @@
 FROM rust:1.91-slim-bookworm AS builder
+ARG VERSION=dev
 WORKDIR /build
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -53,6 +54,8 @@ RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
 RUN cargo build --release -p omnia-node --no-default-features --features full
 
 FROM debian:bookworm-slim AS runtime
+ARG VERSION=dev
+LABEL org.opencontainers.image.version="${VERSION}"
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
