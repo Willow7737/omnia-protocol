@@ -398,6 +398,12 @@ pub enum SubstrateError {
     Snapshot(String),
 }
 
+impl From<SnapshotError> for SubstrateError {
+    fn from(e: SnapshotError) -> Self {
+        SubstrateError::Snapshot(e.to_string())
+    }
+}
+
 /// Result type for substrate operations
 pub type Result<T> = std::result::Result<T, SubstrateError>;
 
@@ -887,9 +893,9 @@ impl Substrate {
     ///
     /// - **Consensus engine round/seed** — the `ConsensusEngine::restore_state`
     ///   method (`consensus_store`'s `ConsensusState`) handles round
-    /// continuity on restart. Fast-sync does not touch it because the
-    /// snapshot's round is informational — the consensus engine resumes from
-    /// its own last-persisted round.
+    ///   continuity on restart. Fast-sync does not touch it because the
+    ///   snapshot's round is informational — the consensus engine resumes from
+    ///   its own last-persisted round.
     /// - **Validator candidates** — set by the caller after restore via
     ///   [`Self::add_validator`].
     /// - **Lane 0 / settled events** — not part of the snapshot.
@@ -913,24 +919,19 @@ impl Substrate {
     ///     }
     /// }
     /// ```
-    pub async fn restore_from_snapshot(
-        &mut self,
-        snapshot: &StateSnapshot,
-    ) -> Result<HashMap<[u8; 32], u64>, SnapshotError> {
+    pub async fn restore_from_snapshot(&mut self, snapshot: &StateSnapshot) -> Result<HashMap<[u8; 32], u64>> {
         // 1. Restore the causal graph from the serialized GraphSnapshot.
         let graph_snapshot: GraphSnapshot = postcard::from_bytes(&snapshot.causal_graph_bytes)
             .map_err(|e| SnapshotError::Serialization(format!("causal graph deserialization: {e}")))?;
         let restored_graph = CausalGraph::from_snapshot(&graph_snapshot);
 
         // 2. Restore slashing state.
-        let restored_slashing: SlashingState =
-            postcard::from_bytes(&snapshot.slashing_state_bytes)
-                .map_err(|e| SnapshotError::Serialization(format!("slashing state deserialization: {e}")))?;
+        let restored_slashing: SlashingState = postcard::from_bytes(&snapshot.slashing_state_bytes)
+            .map_err(|e| SnapshotError::Serialization(format!("slashing state deserialization: {e}")))?;
 
         // 3. Deserialize nonce map for the caller.
-        let nonces: HashMap<[u8; 32], u64> =
-            postcard::from_bytes(&snapshot.nonce_state_bytes)
-                .map_err(|e| SnapshotError::Serialization(format!("nonce map deserialization: {e}")))?;
+        let nonces: HashMap<[u8; 32], u64> = postcard::from_bytes(&snapshot.nonce_state_bytes)
+            .map_err(|e| SnapshotError::Serialization(format!("nonce map deserialization: {e}")))?;
 
         // 4. Swap in the restored graph.
         {
@@ -1650,6 +1651,7 @@ impl Substrate {
     }
 
     /// Fold acks received from the network into the certificate store.
+    #[allow(dead_code)]
     fn lane0_fold_received(&mut self, payloads: Vec<(String, Vec<u8>)>) {
         let Some(ref validators) = self.lane0_validators else {
             return;

@@ -255,7 +255,7 @@ impl StateSnapshot {
 }
 
 /// Envelope for packing slashing state + nonce map into
-/// [`SyncSnapshot::consensus_data`].
+/// [`omnia_network::fast_sync::SyncSnapshot::consensus_data`](::omnia_network::fast_sync::SyncSnapshot::consensus_data).
 ///
 /// The P2P wire format (`SyncSnapshot`) has a single opaque
 /// `consensus_data: Vec<u8>` blob, but the local format (`StateSnapshot`)
@@ -286,24 +286,19 @@ impl SyncConsensusEnvelope {
 
     /// Pack slashing state and nonces into a single blob for
     /// `SyncSnapshot::consensus_data`.
-    pub fn pack(
-        slashing_state_bytes: Vec<u8>,
-        nonce_state_bytes: Vec<u8>,
-    ) -> Result<Vec<u8>, SnapshotError> {
+    pub fn pack(slashing_state_bytes: Vec<u8>, nonce_state_bytes: Vec<u8>) -> Result<Vec<u8>, SnapshotError> {
         let envelope = Self {
             envelope_version: Self::VERSION,
             slashing_state_bytes,
             nonce_state_bytes,
         };
-        postcard::to_allocvec(&envelope)
-            .map_err(|e| SnapshotError::Serialization(format!("consensus envelope: {e}")))
+        postcard::to_allocvec(&envelope).map_err(|e| SnapshotError::Serialization(format!("consensus envelope: {e}")))
     }
 
     /// Unpack `SyncSnapshot::consensus_data` back into its components.
     pub fn unpack(data: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SnapshotError> {
-        let envelope: Self = postcard::from_bytes(data).map_err(|e| {
-            SnapshotError::Serialization(format!("consensus envelope deserialization: {e}"))
-        })?;
+        let envelope: Self = postcard::from_bytes(data)
+            .map_err(|e| SnapshotError::Serialization(format!("consensus envelope deserialization: {e}")))?;
         if envelope.envelope_version != Self::VERSION {
             return Err(SnapshotError::UnsupportedVersion(envelope.envelope_version));
         }
@@ -316,7 +311,7 @@ impl SyncConsensusEnvelope {
 // ---------------------------------------------------------------------------
 
 impl StateSnapshot {
-    /// Convert from a P2P wire [`SyncSnapshot`].
+    /// Convert from a P2P wire [`SyncSnapshot`](::omnia_network::fast_sync::SyncSnapshot).
     ///
     /// Unpacks the opaque `consensus_data` blob into slashing state
     /// and nonce components using [`SyncConsensusEnvelope`].
@@ -335,11 +330,8 @@ impl StateSnapshot {
     /// [`SnapshotError::UnsupportedVersion`] if the envelope version
     /// is not recognized.
     #[cfg(feature = "network")]
-    pub fn from_sync_snapshot(
-        sync: &omnia_network::fast_sync::SyncSnapshot,
-    ) -> Result<Self, SnapshotError> {
-        let (slashing_state_bytes, nonce_state_bytes) =
-            SyncConsensusEnvelope::unpack(&sync.consensus_data)?;
+    pub fn from_sync_snapshot(sync: &omnia_network::fast_sync::SyncSnapshot) -> Result<Self, SnapshotError> {
+        let (slashing_state_bytes, nonce_state_bytes) = SyncConsensusEnvelope::unpack(&sync.consensus_data)?;
 
         Ok(Self {
             version: SNAPSHOT_VERSION,
@@ -353,7 +345,7 @@ impl StateSnapshot {
         })
     }
 
-    /// Convert into a P2P wire [`SyncSnapshot`].
+    /// Convert into a P2P wire [`SyncSnapshot`](::omnia_network::fast_sync::SyncSnapshot).
     ///
     /// Packs slashing state and nonces into a single
     /// `consensus_data` blob using [`SyncConsensusEnvelope`].
@@ -363,14 +355,9 @@ impl StateSnapshot {
     /// Returns [`SnapshotError::Serialization`] if the consensus
     /// envelope cannot be serialized.
     #[cfg(feature = "network")]
-    pub fn into_sync_snapshot(
-        &self,
-    ) -> Result<omnia_network::fast_sync::SyncSnapshot, SnapshotError> {
+    pub fn into_sync_snapshot(&self) -> Result<omnia_network::fast_sync::SyncSnapshot, SnapshotError> {
         let consensus_data =
-            SyncConsensusEnvelope::pack(
-                self.slashing_state_bytes.clone(),
-                self.nonce_state_bytes.clone(),
-            )?;
+            SyncConsensusEnvelope::pack(self.slashing_state_bytes.clone(), self.nonce_state_bytes.clone())?;
 
         Ok(omnia_network::fast_sync::SyncSnapshot {
             round: self.height,
@@ -582,8 +569,7 @@ mod tests {
         let restored = StateSnapshot::from_sync_snapshot(&sync).unwrap();
 
         // Nonces must survive the round-trip
-        let restored_nonces: HashMap<[u8; 32], u64> =
-            postcard::from_bytes(&restored.nonce_state_bytes).unwrap();
+        let restored_nonces: HashMap<[u8; 32], u64> = postcard::from_bytes(&restored.nonce_state_bytes).unwrap();
         assert_eq!(restored_nonces.len(), 3);
         assert_eq!(restored_nonces[&test_node(1)], 100);
         assert_eq!(restored_nonces[&test_node(2)], 200);
