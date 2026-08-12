@@ -19,12 +19,7 @@
           "type": "toml",
           "path": "Cargo.toml"
         },
-        "Cargo.lock",
-        {
-          "type": "yaml",
-          "path": "helm/omnia-node/Chart.yaml",
-          "target": "appVersion"
-        }
+        "Cargo.lock"
       ]
     }
   },

@@ -68,25 +68,22 @@ jobs:
             echo "Cargo.toml confirmed: $EXPECTED"
           fi
 
-      - name: Verify Helm Chart.yaml appVersion
+      - name: Auto-sync Helm files to release version
         run: |
           EXPECTED="${{ steps.version.outputs.version }}"
-          ACTUAL=$(awk '/^appVersion:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/Chart.yaml)
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::error::Chart.yaml appVersion ($ACTUAL) does not match tag ($EXPECTED)"
-            exit 1
+          CHART_ACTUAL=$(awk '/^appVersion:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/Chart.yaml)
+          VALUES_ACTUAL=$(awk '/^  tag:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/values.yaml)
+
+          if [ "$CHART_ACTUAL" != "$EXPECTED" ]; then
+            echo "::warning::Chart.yaml appVersion ($CHART_ACTUAL) → $EXPECTED — auto-fixing"
+            sed -i "s/^appVersion: \".*\"/appVersion: \"$EXPECTED\"/" helm/omnia-node/Chart.yaml
           else
             echo "Chart.yaml confirmed: $EXPECTED"
           fi
 
-      - name: Auto-sync Helm values.yaml image tag
-        run: |
-          EXPECTED="${{ steps.version.outputs.version }}"
-          ACTUAL=$(awk '/^  tag:/{gsub(/[^0-9.]/, "", $2); print $2; exit}' helm/omnia-node/values.yaml)
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::warning::values.yaml image.tag ($ACTUAL) does not match tag ($EXPECTED) — auto-fixing"
+          if [ "$VALUES_ACTUAL" != "$EXPECTED" ]; then
+            echo "::warning::values.yaml image.tag ($VALUES_ACTUAL) → $EXPECTED — auto-fixing"
             sed -i "s/^  tag: \".*\"/  tag: \"$EXPECTED\"/" helm/omnia-node/values.yaml
-            echo "Auto-fixed values.yaml to: $EXPECTED"
           else
             echo "values.yaml confirmed: $EXPECTED"
           fi
