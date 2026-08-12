@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: 2026-08-04 (audit-boundary hardening for roadmap stubs and non-production adapters)
+> Last updated: 2026-08-11 (Bitcoin adapter promoted to live; validator network expanded to 5 nodes)
 
 ---
 
@@ -41,13 +41,24 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 ## Phase 0: ZK-Rollup Settlement Adapters
 
-### Bitcoin Settlement Adapter — **STUB** ⚠️
+> **Live adapters not tracked here**: The Ethereum live adapter (`ethereum-live` feature, `omnia-adapters/src/settlement/ethereum/live.rs`) and Bitcoin live adapter (`bitcoin-live` feature) are production-integrated and `is_live() == true`. This section only covers adapters that are still stubs, partial, or have unresolved caveats.
 
-- **File**: `omnia-adapters/src/settlement/bitcoin.rs`
-- **Status**: Stub — legacy `SettlementLayer` only; all methods return `NotImplemented`; the adapter type is deprecated so new use emits compiler warnings
-- **What exists**: Fail-closed legacy implementation returning `SettlementError::NotImplemented` for every operation
-- **What's missing**: Actual Bitcoin script integration, OP_RETURN data embedding, transaction construction
-- **Phase**: Planned for Phase 1
+### Bitcoin Settlement Adapter — **LIVE** ✅ (with legacy stub coexisting)
+
+- **File**: `omnia-adapters/src/settlement/bitcoin/live.rs` (live), `omnia-adapters/src/settlement/bitcoin/mod.rs` (legacy stub)
+- **Feature flag**: `bitcoin-live`
+- **Status**: Live — `BitcoinSettlementAdapter` implements `SettlementAdapter` against a real Bitcoin Core node via `bitcoincore-rpc`
+- **What exists**:
+  - `submit_root`: anchors state roots as OP_RETURN outputs (`OMNIA1` prefix + 32-byte root), using `createrawtransaction` → `fundrawtransaction` → `signrawtransactionwithwallet` → `sendrawtransaction`
+  - `fetch_finality`: queries `gettransaction` for confirmation count and block height; rejects conflicted (negative confirmation) transactions
+  - `is_live()` returns `true`
+  - `BitcoinConfig::from_env()` reads `OMNIA_BITCOIN_RPC_URL`, `OMNIA_BITCOIN_RPC_USER`, `OMNIA_BITCOIN_RPC_PASSWORD`, `OMNIA_BITCOIN_MIN_CONFIRMATIONS`
+  - Lazy connection via `OnceCell<Arc<Client>>`, blocking RPC calls on `spawn_blocking`
+- **What's still missing**:
+  - `verify_inclusion`: needs an OP_RETURN history scan to recover the last anchored root — fails closed for now
+  - `submit_batch_with_proof`: intentionally not overridden (Bitcoin has no on-chain verifier; trait default fails closed)
+- **Legacy stub**: The deprecated `BitcoinAdapter` (legacy `SettlementLayer`) still exists in `mod.rs` for backward compatibility — all methods return `NotImplemented` and it emits deprecation warnings
+- **Phase**: ✅ Shipped
 
 ### Solana Settlement Adapter — **STUB** ⚠️
 
@@ -84,9 +95,9 @@ This document catalogs all stub, placeholder, and partial implementations in the
 
 ## Cross-cutting launch boundary
 
-Launch-critical production settlement is limited to live Ethereum (`ethereum-live`) or the FFI settlement path with the native library present. Mock settlement, Bitcoin, Solana, Cosmos, disabled Celestia, RF fingerprint simulation, PoUW attestation-only verification, and `node::pipeline` are roadmap/test surfaces. The node refuses startup with `OMNIA_ENV=production` when the selected settlement adapter reports `is_live() == false`.
+Launch-critical production settlement is available via live Ethereum (`ethereum-live`) **or live Bitcoin (`bitcoin-live`)** or the FFI settlement path with the native library present. Mock settlement, Solana, Cosmos, disabled Celestia, RF fingerprint simulation, PoUW attestation-only verification, and `node::pipeline` are roadmap/test surfaces. The node refuses startup with `OMNIA_ENV=production` when the selected settlement adapter reports `is_live() == false`.
 
-## Phase 1: Planned Features (Not Started)
+## Phase 1: Features
 
 ### Mobile Wallet — **SHIPPED** ✅
 
@@ -94,12 +105,16 @@ Launch-critical production settlement is limited to live Ethereum (`ethereum-liv
 - **What shipped**: Flutter wallet with dual-mode auth (on-device Ed25519 challenge/signature login **or** Google/GitHub/email via Supabase + `mint-node-jwt` edge function), UBC balance/send/history with per-transaction detail, governance voting, QR-based transfers, address book, biometric app lock, team news feed, in-app notifications — verified end-to-end against the live testnet node
 - **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`)
 
-### Validator Network — **RUNNING** (3 nodes) ✅⚠️
+### Validator Network — **RUNNING** (5 nodes) ✅⚠️
 
-- **Status**: A standing 3-node geo-distributed mesh (EU-central / US-east /
-  AP-southeast) runs continuously on v0.1.76, 2 peers each, stake 1 each,
-  with Lane 0 finalizing events.
-- **⚠️ Not yet trust-distributed**: all three nodes are operated by the same
+- **Status**: A standing 5-node geo-distributed mesh runs continuously on
+  v0.1.76+, protocol `/omnia/4.0.0`, 4 peers each, 3 regions, 2 continents:
+  - **Node A** — Nuremberg, Germany (bootstrap + validator + ingress), 78.47.43.136
+  - **Node B** — Ashburn, US (validator), 178.156.163.211
+  - **Node C** — Singapore (validator), 5.223.85.30
+  - **Node D** — Helsinki, Finland (validator), 46.62.218.24
+  - **Node E** — Falkenstein, Germany (validator), 46.224.103.217
+- **⚠️ Not yet trust-distributed**: all five nodes are operated by the same
   party. BFT's security argument assumes *independent* operators, so the
   network is currently fault-tolerant against machine and region failure but
   not against operator compromise. Third-party validators are the open item.
@@ -140,12 +155,12 @@ Launch-critical production settlement is limited to live Ethereum (`ethereum-liv
 | -------------------- | ----- | ---------------------------------- | ------------------------------------------- | --------------------- |
 | RF Fingerprinting    | 3     | ⚠️ STUB — production fails closed  | `binding/src/rf_fingerprint.rs`             | Phase 1               |
 | Proof-of-Useful-Work | 5     | ⚠️ PARTIAL                         | `economics/src/useful_work.rs`              | Phase 2               |
-| Bitcoin Settlement   | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/bitcoin.rs`  | Phase 1               |
+| Bitcoin Settlement   | 0     | ✅ LIVE (OP_RETURN anchoring via `bitcoincore-rpc`) | `omnia-adapters/src/settlement/bitcoin/live.rs` | ✅ Shipped          |
 | Solana Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
 | Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
 | Cosmos Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
 | Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅ SHIPPED (v1, July 2026) | Dual-mode auth, live vs. testnet node | Done |
-| Validator Network    | —     | ✅⚠️ RUNNING (3 nodes, one operator) | —                                           | Phase 1               |
+| Validator Network    | —     | ✅⚠️ RUNNING (5 nodes, 4 peers, 3 regions, one operator) | — | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 
@@ -157,8 +172,8 @@ The following items were identified during the v0.1.68 audit cycle but explicitl
 
 ### Pipeline workers (C-8 deferred) — **DEAD CODE** ⚠️
 
-- **File**: `node/src/pipeline.rs` (262 lines)
-- **Status**: Deferred — `node/src/pipeline.rs` is 262 lines of dead code
+- **File**: `node/src/pipeline.rs` (276 lines)
+- **Status**: Deferred — `node/src/pipeline.rs` is 276 lines of dead code. The module is declared `pub mod pipeline` in `lib.rs` but the pipeline router and hot/warm/cold workers were removed from `main.rs` in the C-14 audit fix (v0.1.68). `main.rs` retains comments explaining the removal. The module is compiled but never instantiated at runtime.
 - **What's missing**: Real worker threads that process pipeline stages; current code is unreachable
 - **Phase**: Deferred from v0.1.68 audit
 
@@ -187,12 +202,11 @@ The following items were identified during the v0.1.68 audit cycle but explicitl
 - **What's missing**: Automated verification of safety properties (e.g. no double-spend, causal consistency) at the end of each chaos test run
 - **Phase**: Deferred from v0.1.68 audit
 
-### Substrate write lock scope (H-3 deferred) — **CONTENTION** ⚠️
+### Substrate write lock scope (H-3 deferred) — **RESOLVED** ✅
 
-- **File**: `substrate/src/consensus.rs`
-- **Status**: Deferred — reduce lock holding time
-- **What's missing**: Narrow the substrate write-lock critical section to reduce contention; currently the lock is held across the full consensus round
-- **Phase**: Deferred from v0.1.68 audit
+- **Original file**: `substrate/src/consensus.rs` (now a 2-line re-export to `omnia-consensus`)
+- **Status**: Resolved — the original write-lock contention issue was in the monolithic `substrate/src/consensus.rs`. That file was refactored into the `omnia-consensus` crate during the ADR-025 two-lane consensus rewrite. The current `omnia-consensus/src/consensus.rs` (2648 lines) uses a lock-free event pool with slab allocation and vector clock indexing — no `RwLock` or `Mutex` write locks exist in the consensus hot path.
+- **Phase**: Deferred from v0.1.68 audit; implicitly resolved by ADR-025 refactor
 
 | Deferred Item                       | Layer | Status       | File                                | Phase         |
 | ----------------------------------- | ----- | ------------ | ----------------------------------- | ------------- |
@@ -201,4 +215,4 @@ The following items were identified during the v0.1.68 audit cycle but explicitl
 | VRF rename (C-7)                    | 1     | ⚠️ DEFERRED  | `substrate/src/vrf.rs`              | v0.1.68 audit |
 | LRU creator buffer (H-4)            | 1     | ✅ DONE      | `omnia-consensus/src/causal_graph.rs` | v0.1.68 audit |
 | Chaos test safety checker (H-11)    | —     | ⚠️ DEFERRED  | —                                   | v0.1.68 audit |
-| Substrate write lock scope (H-3)    | 1     | ⚠️ DEFERRED  | `substrate/src/consensus.rs`        | v0.1.68 audit |
+| Substrate write lock scope (H-3)    | 1     | ✅ RESOLVED (ADR-025 refactor)  | `omnia-consensus/src/consensus.rs` | v0.1.68 audit |

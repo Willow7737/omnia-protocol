@@ -11,6 +11,24 @@
 //! - The nonce map (per-creator last nonce)
 //! - An integrity hash (BLAKE3 over all serialized components)
 //!
+//! # P2P Wire Bridge
+//!
+//! [`StateSnapshot`] is the **local** format (disk, same-process).
+//! [`omnia_network::fast_sync::SyncSnapshot`] is the **P2P wire** format.
+//! They carry the same logical data but with different blob layouts:
+//!
+//! | Data                | `StateSnapshot`               | `SyncSnapshot`                    |
+//! |---------------------|-------------------------------|-----------------------------------|
+//! | Round/height        | `height`                     | `round`                           |
+//! | State root          | `state_root`                 | `state_root`                      |
+//! | Causal graph        | `causal_graph_bytes`         | `causal_graph_data`               |
+//! | Slashing + nonces    | `slashing_state_bytes` +     | `consensus_data` (packed envelope |
+//! |                     | `nonce_state_bytes`           |  via [`SyncConsensusEnvelope`])   |
+//! | Event count         | `event_count`                | `event_count`                     |
+//!
+//! Use [`StateSnapshot::from_sync_snapshot`] and
+//! [`StateSnapshot::into_sync_snapshot`] to convert between them.
+//!
 //! # Usage
 //!
 //! ```ignore
@@ -236,6 +254,134 @@ impl StateSnapshot {
     }
 }
 
+/// Envelope for packing slashing state + nonce map into
+/// [`SyncSnapshot::consensus_data`].
+///
+/// The P2P wire format (`SyncSnapshot`) has a single opaque
+/// `consensus_data: Vec<u8>` blob, but the local format (`StateSnapshot`)
+/// stores slashing and nonces as separate blobs. This envelope
+/// defines the serialization contract so both sides agree on the
+/// layout.
+///
+/// # Wire layout (postcard)
+///
+/// ```text
+/// [u32: envelope_version]  -- must be 1
+/// [Vec<u8>: slashing_state_bytes]
+/// [Vec<u8>: nonce_state_bytes]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncConsensusEnvelope {
+    /// Envelope format version.
+    pub envelope_version: u32,
+    /// Serialized [`SlashingState`].
+    pub slashing_state_bytes: Vec<u8>,
+    /// Serialized nonce map (`HashMap<NodeId, u64>`).
+    pub nonce_state_bytes: Vec<u8>,
+}
+
+impl SyncConsensusEnvelope {
+    /// Current envelope version.
+    pub const VERSION: u32 = 1;
+
+    /// Pack slashing state and nonces into a single blob for
+    /// `SyncSnapshot::consensus_data`.
+    pub fn pack(
+        slashing_state_bytes: Vec<u8>,
+        nonce_state_bytes: Vec<u8>,
+    ) -> Result<Vec<u8>, SnapshotError> {
+        let envelope = Self {
+            envelope_version: Self::VERSION,
+            slashing_state_bytes,
+            nonce_state_bytes,
+        };
+        postcard::to_allocvec(&envelope)
+            .map_err(|e| SnapshotError::Serialization(format!("consensus envelope: {e}")))
+    }
+
+    /// Unpack `SyncSnapshot::consensus_data` back into its components.
+    pub fn unpack(data: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SnapshotError> {
+        let envelope: Self = postcard::from_bytes(data).map_err(|e| {
+            SnapshotError::Serialization(format!("consensus envelope deserialization: {e}"))
+        })?;
+        if envelope.envelope_version != Self::VERSION {
+            return Err(SnapshotError::UnsupportedVersion(envelope.envelope_version));
+        }
+        Ok((envelope.slashing_state_bytes, envelope.nonce_state_bytes))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P2P wire bridge
+// ---------------------------------------------------------------------------
+
+impl StateSnapshot {
+    /// Convert from a P2P wire [`SyncSnapshot`].
+    ///
+    /// Unpacks the opaque `consensus_data` blob into slashing state
+    /// and nonce components using [`SyncConsensusEnvelope`].
+    ///
+    /// # Integrity
+    ///
+    /// Does **not** call [`Self::verify`] — the caller is responsible
+    /// for verifying integrity after conversion (the P2P layer has
+    /// already checked the BLAKE3 snapshot hash via
+    /// `SyncCheckpoint::verify_snapshot`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SnapshotError::Serialization`] if the consensus
+    /// envelope cannot be deserialized, or
+    /// [`SnapshotError::UnsupportedVersion`] if the envelope version
+    /// is not recognized.
+    #[cfg(feature = "network")]
+    pub fn from_sync_snapshot(
+        sync: &omnia_network::fast_sync::SyncSnapshot,
+    ) -> Result<Self, SnapshotError> {
+        let (slashing_state_bytes, nonce_state_bytes) =
+            SyncConsensusEnvelope::unpack(&sync.consensus_data)?;
+
+        Ok(Self {
+            version: SNAPSHOT_VERSION,
+            height: sync.round,
+            event_count: sync.event_count,
+            timestamp: 0, // Not carried on the wire; set by local snapshot taker
+            state_root: sync.state_root,
+            causal_graph_bytes: sync.causal_graph_data.clone(),
+            slashing_state_bytes,
+            nonce_state_bytes,
+        })
+    }
+
+    /// Convert into a P2P wire [`SyncSnapshot`].
+    ///
+    /// Packs slashing state and nonces into a single
+    /// `consensus_data` blob using [`SyncConsensusEnvelope`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SnapshotError::Serialization`] if the consensus
+    /// envelope cannot be serialized.
+    #[cfg(feature = "network")]
+    pub fn into_sync_snapshot(
+        &self,
+    ) -> Result<omnia_network::fast_sync::SyncSnapshot, SnapshotError> {
+        let consensus_data =
+            SyncConsensusEnvelope::pack(
+                self.slashing_state_bytes.clone(),
+                self.nonce_state_bytes.clone(),
+            )?;
+
+        Ok(omnia_network::fast_sync::SyncSnapshot {
+            round: self.height,
+            state_root: self.state_root,
+            causal_graph_data: self.causal_graph_bytes.clone(),
+            consensus_data,
+            event_count: self.event_count,
+        })
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -342,5 +488,105 @@ mod tests {
             matches!(result, Err(SnapshotError::UnsupportedVersion(999))),
             "unsupported version should be rejected"
         );
+    }
+
+    // ── SyncConsensusEnvelope tests ─────────────────────────────
+
+    #[test]
+    fn test_envelope_pack_unpack_round_trip() {
+        let slashing = vec![0x01, 0x02, 0x03];
+        let nonces = vec![0xAA, 0xBB, 0xCC, 0xDD];
+
+        let packed = SyncConsensusEnvelope::pack(slashing.clone(), nonces.clone()).unwrap();
+        let (out_slashing, out_nonces) = SyncConsensusEnvelope::unpack(&packed).unwrap();
+
+        assert_eq!(out_slashing, slashing);
+        assert_eq!(out_nonces, nonces);
+    }
+
+    #[test]
+    fn test_envelope_rejects_bad_version() {
+        // Serialize an envelope with version 99, then unpack should reject
+        let bad = SyncConsensusEnvelope {
+            envelope_version: 99,
+            slashing_state_bytes: vec![1],
+            nonce_state_bytes: vec![2],
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let result = SyncConsensusEnvelope::unpack(&bytes);
+        assert!(
+            matches!(result, Err(SnapshotError::UnsupportedVersion(99))),
+            "bad envelope version should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_envelope_rejects_garbage() {
+        let result = SyncConsensusEnvelope::unpack(&[0xFF, 0xFE, 0xFD]);
+        assert!(result.is_err(), "garbage bytes should fail deserialization");
+    }
+
+    // ── P2P bridge tests (requires `network` feature) ───────────
+
+    #[cfg(feature = "network")]
+    #[test]
+    fn test_state_to_sync_to_state_round_trip() {
+        use omnia_network::fast_sync::SyncSnapshot;
+
+        let mut graph = CausalGraph::new();
+        let e = make_event(test_node(1), 0);
+        graph.insert(e).unwrap();
+
+        let slashing = SlashingState::default();
+        let mut nonces = HashMap::new();
+        nonces.insert(test_node(1), 42);
+
+        // Take a real StateSnapshot
+        let state = StateSnapshot::take(&graph, &slashing, &nonces, 7).unwrap();
+
+        // Convert to P2P wire format
+        let sync: SyncSnapshot = state.into_sync_snapshot().unwrap();
+        assert_eq!(sync.round, 7);
+        assert_eq!(sync.event_count, 1);
+        assert_eq!(sync.state_root, state.state_root);
+        assert!(!sync.causal_graph_data.is_empty());
+        assert!(!sync.consensus_data.is_empty());
+
+        // Convert back to StateSnapshot
+        let restored = StateSnapshot::from_sync_snapshot(&sync).unwrap();
+        assert_eq!(restored.height, 7);
+        assert_eq!(restored.event_count, 1);
+        assert_eq!(restored.state_root, state.state_root);
+        assert_eq!(restored.causal_graph_bytes, state.causal_graph_bytes);
+        assert_eq!(restored.slashing_state_bytes, state.slashing_state_bytes);
+        assert_eq!(restored.nonce_state_bytes, state.nonce_state_bytes);
+
+        // Restored snapshot should pass its own integrity check
+        restored.verify().unwrap();
+    }
+
+    #[cfg(feature = "network")]
+    #[test]
+    fn test_sync_with_nonces_survives_round_trip() {
+        use omnia_network::fast_sync::SyncSnapshot;
+
+        let graph = CausalGraph::new();
+        let slashing = SlashingState::default();
+        let mut nonces = HashMap::new();
+        nonces.insert(test_node(1), 100);
+        nonces.insert(test_node(2), 200);
+        nonces.insert(test_node(3), 300);
+
+        let state = StateSnapshot::take(&graph, &slashing, &nonces, 0).unwrap();
+        let sync: SyncSnapshot = state.into_sync_snapshot().unwrap();
+        let restored = StateSnapshot::from_sync_snapshot(&sync).unwrap();
+
+        // Nonces must survive the round-trip
+        let restored_nonces: HashMap<[u8; 32], u64> =
+            postcard::from_bytes(&restored.nonce_state_bytes).unwrap();
+        assert_eq!(restored_nonces.len(), 3);
+        assert_eq!(restored_nonces[&test_node(1)], 100);
+        assert_eq!(restored_nonces[&test_node(2)], 200);
+        assert_eq!(restored_nonces[&test_node(3)], 300);
     }
 }

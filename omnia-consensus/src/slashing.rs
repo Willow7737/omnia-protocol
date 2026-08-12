@@ -1603,6 +1603,21 @@ impl SlashingEngine {
         state.clone()
     }
 
+    /// Replace the internal slashing state with a previously captured
+    /// [`SlashingState`].
+    ///
+    /// Used by fast-sync to restore slashing state from a snapshot.
+    /// The caller is responsible for ensuring the thresholds in the
+    /// provided state match the engine's configured thresholds — this
+    /// method does not adjust them.
+    pub fn set_state(&self, new_state: SlashingState) {
+        let mut state = self.state.write().unwrap_or_else(|e| {
+            tracing::error!(error = %e, "set_state — lock poisoned");
+            std::process::abort()
+        });
+        *state = new_state;
+    }
+
     /// Returns a reference to the internal slash points map.
     ///
     /// Used by genesis replay to capture the final state.
