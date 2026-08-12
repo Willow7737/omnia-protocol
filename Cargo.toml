@@ -21,7 +21,7 @@ resolver = "2"
 # Do NOT manually edit this version. It is managed by release-please.
 # On push to main, release-please opens a PR that bumps this field,
 # Cargo.lock, and Helm Chart.yaml. The release workflow validates all match the tag.
-version = "0.1.92"
+version = "0.1.94"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
 license = "CC0-1.0"
