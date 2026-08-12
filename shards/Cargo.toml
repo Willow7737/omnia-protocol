@@ -81,4 +81,4 @@ proptest = "1"
 # trusted setup, and proofs. Only exercised when `real_verification` is
 # enabled (the test files are feature-gated).
 ark-relations = "0.4"
-ark-std = "0.4"
+ark-std = "0.6"
