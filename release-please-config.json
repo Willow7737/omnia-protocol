@@ -14,7 +14,18 @@
       "tag-format": "v${version}",
       "separate-pull-requests": false,
       "skip-github-release": false,
-      "extra-files": ["Cargo.toml", "Cargo.lock"]
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml"
+        },
+        "Cargo.lock",
+        {
+          "type": "json",
+          "path": "helm/omnia-node/Chart.yaml",
+          "jsonpath": "$..appVersion"
+        }
+      ]
     }
   },
   "changelog-type": "default",

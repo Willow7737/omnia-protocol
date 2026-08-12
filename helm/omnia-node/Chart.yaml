@@ -3,7 +3,7 @@ name: omnia-node
 description: Omnia Protocol Node
 type: application
 version: 0.1.0
-appVersion: "0.1.90"
+appVersion: "0.1.92"
 maintainers:
   - name: omnia-protocol
 keywords:
