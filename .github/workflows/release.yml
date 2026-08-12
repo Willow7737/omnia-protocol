@@ -50,14 +50,20 @@ jobs:
         run: |
           EXPECTED="${{ steps.version.outputs.version }}"
           # Extract version from [workspace.package] section in root Cargo.toml
-          ACTUAL=$(grep '^version' Cargo.toml | head -1 | sed 's/version *= *"\(.*\)"/\1/')
+          ACTUAL=$(awk '
+            /^\[workspace\.package\]/ { in_section=1; next }
+            /^\[/ && in_section { exit }
+            in_section && /^version[[:space:]]*=/ {
+              gsub(/[" ]/, "", $3)
+              print $3
+              exit
+            }
+          ' Cargo.toml)
           if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::warning::Tag version ($EXPECTED) does not match workspace version ($ACTUAL). Auto-fixing."
-            # Bump the workspace version to match the tag
-            sed -i "s/^version *= *\"$ACTUAL\"/version = \"$EXPECTED\"/" Cargo.toml
-            # Re-generate Cargo.lock after version change
-            cargo generate-lockfile
-            echo "Workspace version updated to $EXPECTED"
+            echo "::error::Tag version ($EXPECTED) does not match workspace version ($ACTUAL)"
+            echo "::error::Cargo.toml must be updated BEFORE tagging."
+            echo "::error::release-please should update Cargo.toml via extra-files in its release PR."
+            exit 1
           else
             echo "Version confirmed: $EXPECTED"
           fi

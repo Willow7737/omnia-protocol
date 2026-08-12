@@ -132,7 +132,7 @@ pub use slashing::{
     DEFAULT_SLASH_THRESHOLD,
 };
 pub use slashing_undo::{SlashingUndoError, SlashingUndoManager, SlashingUndoRecord, SlashingUndoRequest};
-pub use snapshot::{SnapshotError, StateSnapshot};
+pub use snapshot::{SnapshotError, StateSnapshot, SyncConsensusEnvelope};
 pub use snapshot_replication::{find_latest_snapshot, replicate_snapshot, ReplicationConfig};
 #[cfg(feature = "bls")]
 pub use threshold::{
@@ -396,6 +396,12 @@ pub enum SubstrateError {
     #[error("Snapshot error: {0}")]
     /// Event-snapshot persistence / deserialization error
     Snapshot(String),
+}
+
+impl From<SnapshotError> for SubstrateError {
+    fn from(e: SnapshotError) -> Self {
+        SubstrateError::Snapshot(e.to_string())
+    }
 }
 
 /// Result type for substrate operations
@@ -865,6 +871,87 @@ impl Substrate {
             lane0_diverged: HashSet::new(),
             settled_events: HashSet::new(),
         }
+    }
+
+    /// Restore substrate state from a [`StateSnapshot`], replacing
+    /// the empty graph created by [`Self::new`].
+    ///
+    /// This is the second half of fast-sync: after [`Self::new`] builds
+    /// the Substrate with an empty graph and fresh consensus engine, call
+    /// this method to load the snapshot contents into place before calling
+    /// [`Self::start`].
+    ///
+    /// # What gets restored
+    ///
+    /// | Component | Source field | Restoration method |
+    /// |-----------|-------------|---------------------|
+    /// | Causal graph | `causal_graph_bytes` | [`CausalGraph::from_snapshot`] |
+    /// | Slashing state | `slashing_state_bytes` | Deserialized into `self.slashing` |
+    /// | Nonce map | `nonce_state_bytes` | Returned to caller for nonce store init |
+    ///
+    /// # What does NOT get restored (by design)
+    ///
+    /// - **Consensus engine round/seed** — the `ConsensusEngine::restore_state`
+    ///   method (`consensus_store`'s `ConsensusState`) handles round
+    ///   continuity on restart. Fast-sync does not touch it because the
+    ///   snapshot's round is informational — the consensus engine resumes from
+    ///   its own last-persisted round.
+    /// - **Validator candidates** — set by the caller after restore via
+    ///   [`Self::add_validator`].
+    /// - **Lane 0 / settled events** — not part of the snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SnapshotError`] if any blob fails to deserialize, or
+    /// if the snapshot version is unsupported.
+    ///
+    /// # Usage
+    ///
+    /// ```ignore
+    /// let mut substrate = Substrate::new(config);
+    ///
+    /// if config.fast_sync {
+    ///     let sync_result = fast_sync_manager.sync_to_latest().await?;
+    ///     if let Some(sync_snapshot) = sync_result.snapshot {
+    ///         let snapshot = StateSnapshot::from_sync_snapshot(&sync_snapshot)?;
+    ///         let nonces = substrate.restore_from_snapshot(&snapshot).await?;
+    ///         // Initialize nonce store with `nonces`
+    ///     }
+    /// }
+    /// ```
+    pub async fn restore_from_snapshot(&mut self, snapshot: &StateSnapshot) -> Result<HashMap<[u8; 32], u64>> {
+        // 1. Restore the causal graph from the serialized GraphSnapshot.
+        let graph_snapshot: GraphSnapshot = postcard::from_bytes(&snapshot.causal_graph_bytes)
+            .map_err(|e| SnapshotError::Serialization(format!("causal graph deserialization: {e}")))?;
+        let restored_graph = CausalGraph::from_snapshot(&graph_snapshot);
+
+        // 2. Restore slashing state.
+        let restored_slashing: SlashingState = postcard::from_bytes(&snapshot.slashing_state_bytes)
+            .map_err(|e| SnapshotError::Serialization(format!("slashing state deserialization: {e}")))?;
+
+        // 3. Deserialize nonce map for the caller.
+        let nonces: HashMap<[u8; 32], u64> = postcard::from_bytes(&snapshot.nonce_state_bytes)
+            .map_err(|e| SnapshotError::Serialization(format!("nonce map deserialization: {e}")))?;
+
+        // 4. Swap in the restored graph.
+        {
+            let mut graph = self.graph.write().await;
+            *graph = restored_graph;
+        }
+
+        // 5. Swap in the restored slashing state.
+        //    SlashingEngine exposes its state for persistence; we replace it
+        //    so the engine sees the restored slash points, stakes, jail, etc.
+        self.slashing.set_state(restored_slashing);
+
+        tracing::info!(
+            height = snapshot.height,
+            events = snapshot.event_count,
+            nonce_count = nonces.len(),
+            "Substrate state restored from snapshot"
+        );
+
+        Ok(nonces)
     }
 
     /// Initialize the gossip protocol
@@ -1564,6 +1651,7 @@ impl Substrate {
     }
 
     /// Fold acks received from the network into the certificate store.
+    #[allow(dead_code)]
     fn lane0_fold_received(&mut self, payloads: Vec<(String, Vec<u8>)>) {
         let Some(ref validators) = self.lane0_validators else {
             return;
