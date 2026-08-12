@@ -18,9 +18,9 @@ members = [
 resolver = "2"
 
 [workspace.package]
-# Keep in sync with .release-please-manifest.json.
-# release-please updates this via extra-files; the release workflow
-# hard-fails if tag and workspace version diverge.
+# Do NOT manually edit this version. It is managed by release-please.
+# On push to main, release-please opens a PR that bumps this field,
+# Cargo.lock, and Helm Chart.yaml. The release workflow validates all match the tag.
 version = "0.1.92"
 edition = "2021"
 authors = ["Omnia Protocol Contributors"]
