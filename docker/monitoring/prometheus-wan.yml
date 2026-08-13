@@ -91,8 +91,8 @@ scrape_configs:
 #
 # Uncomment and fill in the two values below once the token file exists.
 #
-# remote_write:
-#   - url: https://prometheus-prod-XX-prod-YY-ZZZZ.grafana.net/api/prom/push
-#     basic_auth:
-#       username: '000000'
-#       password_file: /etc/prometheus/grafana-cloud-token
+remote_write:
+   - url: https://prometheus-prod-67-prod-us-west-0.grafana.net/api/prom/push
+     basic_auth:
+       username: '3380048'
+       password_file: /etc/prometheus/grafana-cloud-token
