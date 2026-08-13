@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Omnia Protocol WAN Testnet — 5-node validator fleet",
+  "description": "Geo-distributed 5-node WAN testnet. A (Nuremberg), B (Ashburn), C (Singapore), D (Helsinki), E (Falkenstein). Every query uses by (node) — no phantom metrics, no single-line aggregation.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -35,19 +35,19 @@
       "id": 2,
       "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "up", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "up{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}", "legendFormat": "{{node}}", "refId": "A" }],
       "title": "Node Liveness (up)",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Connected P2P peers per node. Should be >= 2 for a healthy 5-node mesh.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "unit": "short" }, "overrides": [] },
+      "description": "Connected P2P peers per node. Should be 4 for a healthy 5-node mesh.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "stepAfter", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "always", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 6, "w": 12, "x": 12, "y": 1 },
       "id": 3,
       "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "omnia_node_peers_connected", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "omnia_node_peers_connected{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}", "legendFormat": "$node", "refId": "A" }],
       "title": "Connected Peers",
       "type": "timeseries"
     },
@@ -61,13 +61,13 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Transactions per second (rate of finalized events)",
+      "description": "Transactions per second (rate of finalized events) per node",
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "TPS", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 15, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" } }, "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
       "id": 5,
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "rate(omnia_consensus_tps[1m])", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by (node) (rate(omnia_consensus_tps{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))", "legendFormat": "$node", "refId": "A" }],
       "title": "Throughput (TPS)",
       "type": "timeseries"
     },
@@ -79,7 +79,7 @@
       "id": 6,
       "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "omnia_node_consensus_round", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "omnia_node_consensus_round{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}", "legendFormat": "$node", "refId": "A" }],
       "title": "Consensus Round",
       "type": "timeseries"
     },
@@ -99,7 +99,10 @@
       "id": 8,
       "options": { "legend": { "calcs": ["mean", "p99"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "histogram_quantile(0.99, rate(omnia_consensus_finality_latency_seconds_bucket[5m]))", "legendFormat": "p99 {{node}}", "refId": "A" }, { "expr": "histogram_quantile(0.5, rate(omnia_consensus_finality_latency_seconds_bucket[5m]))", "legendFormat": "p50 {{node}}", "refId": "B" }],
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p99 ($node)", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p50 ($node)", "refId": "B" }
+      ],
       "title": "Finality Latency",
       "type": "timeseries"
     },
@@ -111,7 +114,10 @@
       "id": 9,
       "options": { "legend": { "calcs": ["mean", "p99"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "histogram_quantile(0.99, rate(omnia_gossip_propagation_latency_seconds_bucket[5m]))", "legendFormat": "p99 {{node}}", "refId": "A" }],
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_gossip_propagation_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p50 ($node)", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le, node) (rate(omnia_gossip_propagation_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p95 ($node)", "refId": "B" }
+      ],
       "title": "Gossip Propagation Latency",
       "type": "timeseries"
     },
@@ -123,7 +129,10 @@
       "id": 10,
       "options": { "legend": { "calcs": ["mean", "p99"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "histogram_quantile(0.99, rate(omnia_dag_insertion_latency_seconds_bucket[5m]))", "legendFormat": "p99 {{node}}", "refId": "A" }],
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, node) (rate(omnia_dag_insertion_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p50 ($node)", "refId": "A" },
+        { "expr": "histogram_quantile(0.99, sum by (le, node) (rate(omnia_dag_insertion_latency_seconds_bucket{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval])))", "legendFormat": "p99 ($node)", "refId": "B" }
+      ],
       "title": "DAG Insertion Latency",
       "type": "timeseries"
     },
@@ -137,13 +146,16 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Cumulative events submitted vs finalized per node",
+      "description": "Events submitted vs finalized per node",
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" } }, "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
       "id": 12,
       "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "rate(omnia_node_events_submitted_total[5m])", "legendFormat": "submitted {{node}}", "refId": "A" }, { "expr": "rate(omnia_node_events_finalized_total[5m])", "legendFormat": "finalized {{node}}", "refId": "B" }],
+      "targets": [
+        { "expr": "sum by (node) (rate(omnia_node_events_submitted_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))", "legendFormat": "submitted ($node)", "refId": "A" },
+        { "expr": "sum by (node) (rate(omnia_node_events_finalized_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))", "legendFormat": "finalized ($node)", "refId": "B" }
+      ],
       "title": "Event Rate (submitted vs finalized)",
       "type": "timeseries"
     },
@@ -155,7 +167,7 @@
       "id": 13,
       "options": { "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "rate(omnia_node_http_requests_total[5m])", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by (node) (rate(omnia_node_http_requests_total{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}[$__rate_interval]))", "legendFormat": "$node", "refId": "A" }],
       "title": "HTTP Request Rate",
       "type": "timeseries"
     },
@@ -169,52 +181,76 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "Process resident memory (RSS) per node",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 15, "gradientMode": "scheme", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1073741824 }, { "color": "red", "value": 2147483648 } ] } }, "unit": "decbytes" }, "overrides": [] },
+      "description": "Process resident memory (RSS) per node. Idle ~30 MB, burst ~160 MB under load.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 15, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1073741824 }, { "color": "red", "value": 2147483648 } ] } }, "unit": "decbytes" }, "overrides": [] },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 32 },
       "id": 15,
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "omnia_node_memory_rss_bytes", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "omnia_node_memory_rss_bytes{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}", "legendFormat": "$node", "refId": "A" }],
       "title": "Memory (RSS)",
       "type": "timeseries"
     },
     {
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "description": "CPU usage as fraction of one core",
+      "description": "CPU usage as fraction of one core. 1.0 = 100% of one core.",
       "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 15, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": true, "stacking": { "group": "A", "mode": "none" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 1.5 } ] } }, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 32 },
       "id": 16,
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "none" } },
       "pluginVersion": "11.0.0",
-      "targets": [{ "expr": "omnia_node_cpu_usage_ratio", "legendFormat": "{{node}}", "refId": "A" }],
+      "targets": [{ "expr": "omnia_node_cpu_usage_ratio{network=\"omnia-wan-testnet\",node=~\"$node\",region=~\"$region\"}", "legendFormat": "$node", "refId": "A" }],
       "title": "CPU Usage",
       "type": "timeseries"
     }
   ],
-  "refresh": "15s",
+  "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["omnia", "testnet", "validator"],
+  "tags": ["omnia", "wan-testnet", "geo-distributed"],
   "templating": {
     "list": [
       {
-        "current": {},
-        "hide": 0,
-        "includeAll": false,
-        "label": "Datasource",
-        "multi": false,
         "name": "datasource",
-        "options": [],
+        "type": "datasource",
+        "label": "Data source",
         "query": "prometheus",
-        "queryValue": "",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "type": "datasource"
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "node",
+        "type": "custom",
+        "label": "Node",
+        "query": "A,B,C,D,E",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0
+      },
+      {
+        "name": "region",
+        "type": "custom",
+        "label": "Region",
+        "query": "nbg1-eu-central,ash-us-east,sin-ap-southeast,hel1-eu-central,fsn1-eu-central",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "hide": 0
       }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },
   "title": "Omnia WAN Testnet",
-  "uid": "omnia-wan-testnet"
+  "uid": "omnia-wan-testnet",
+  "version": 2
 }

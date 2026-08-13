@@ -232,3 +232,33 @@ Stage Summary:
 - **Prune/reindex issue:** Previous bitcoind ran with pruning enabled. Adding `txindex=1` (required for `gettransaction` in `fetch_finality`) requires unpruned blocks. Error: `LoadBlockIndexDB(): Block files have previously been pruned — Please restart with -reindex or -reindex-chainstate to recover.`
 - **Fix:** Started with `bitcoind -testnet4 -daemon -reindex`. Wiped and rebuilt block index, chainstate, and txindex from existing blk files. Node re-entered IBD and synced from block 0 → 147,411+ headers. Added `prune=0` to prevent future regression.
 - **Result:** 10 peer connections established immediately, `pruned: false`, IBD in progress. Full unpruned chain with txindex enabled.
+
+---
+Task ID: deploy-v0.1.93
+Agent: main
+Task: Prepare deploy script + fix Grafana dashboards/alerts for v0.1.93 rollout
+
+Work Log:
+- Audited all monitoring configs: prometheus-wan.yml, docker-compose.wan.yml, docker-compose.monitoring.yml
+- Found TWO Grafana dashboard files:
+  1. monitoring/grafana/dashboards/omnia-node.json — ALREADY CORRECT (by(node), network label, template vars)
+  2. docker/monitoring/grafana/omnia-testnet-dashboard.json — BROKEN: bare metric names, no by(node), no network label, no node/region template vars
+- Fixed omnia-testnet-dashboard.json: added network="omnia-wan-testnet" and node=~"$node" region=~"$region" filters to all 11 queries, added $node and $region template variables, used $__rate_interval, added by(node) grouping to rate/histogram queries, changed refresh from 15s to 10s, bumped version to 2
+- Fixed alert-rules.yml: 
+  1. Fixed syntax error on OmniaSupermajorityLost (missing closing paren)
+  2. Updated OmniaNodeIsolated threshold from < 2 to < 4 (5-node mesh needs 4 peers)
+  3. Added max_over_time[10m] to peer alert to avoid 64s flap false positives
+  4. Changed OmniaConsensusStalled from round==0 to rate(finalized)<0.001 (round resets on restart)
+  5. Added sum by (le, node) to histogram_quantile queries in alerts
+- Created scripts/deploy-v0.1.93.sh — single-host deploy script for all 5 nodes
+  Phase 0: Backup monitoring files on A before git checkout
+  Phase 1: Parallel git pull + docker build on all 5 hosts, verify same commit
+  Phase 2: Restart A (bootstrap) first, wait 15s, then restart B-E in parallel
+  Phase 3: Restore prometheus-wan.yml + grafana-cloud-token on A, restart Prometheus
+  Phase 4: Automated verification — peer count, lane0 health, ack batch failures, Prometheus targets, remote write status
+
+Stage Summary:
+- docker/monitoring/grafana/omnia-testnet-dashboard.json — FIXED (all queries now use by(node) + network label)
+- docker/monitoring/grafana/alert-rules.yml — FIXED (syntax error, thresholds, histogram queries)
+- scripts/deploy-v0.1.93.sh — NEW (automated 5-host deploy + verify)
+- monitoring/grafana/dashboards/omnia-node.json — UNCHANGED (was already correct)

@@ -11,31 +11,37 @@ groups:
         annotations:
           summary: "Node {{ $labels.node }} ({{ $labels.region }}) is down"
           description: "Prometheus has been unable to scrape {{ $labels.instance }} for over 2 minutes. The node process may have crashed or the host is unreachable."
-          runbook_url: "https://github.com/Willow7737/omnia-protocol/blob/dev/docs/operations/runbook.md"
+          runbook_url: "https://github.com/Willow7737/omnia-protocol/blob/main/docs/operations/runbook.md"
 
       # ── Partition Detection ───────────────────────────────────────
+      # Threshold is 4 for a 5-node mesh. A node with < 4 peers has lost
+      # at least one connection. Use max_over_time to avoid the ~64s
+      # connection flap false positive described in the monitoring doc.
       - alert: OmniaNodeIsolated
-        expr: omnia_node_peers_connected{job="omnia-wan"} < 2
+        expr: max_over_time(omnia_node_peers_connected{job="omnia-wan"}[10m]) < 4
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Node {{ $labels.node }} has only {{ $value }} peer(s)"
-          description: "A healthy 5-node mesh should have at least 2 connected peers. This node may be partitioned or the P2P port (4001/udp) is blocked by a firewall."
+          description: "A healthy 5-node mesh requires 4 connected peers. This node may be partitioned or P2P port (4001/udp) is blocked by a firewall."
 
       # ── Consensus Liveness ────────────────────────────────────────
+      # Uses rate of finality rather than round==0, because the round
+      # counter resets on restart. A truly stalled network has zero
+      # finality rate, regardless of what the round counter shows.
       - alert: OmniaConsensusStalled
-        expr: omnia_node_consensus_round{job="omnia-wan"} == 0
+        expr: rate(omnia_node_events_finalized_total{job="omnia-wan"}[5m]) < 0.001
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "Node {{ $labels.node }} consensus stuck at round 0"
-          description: "The consensus round has not advanced in 10 minutes. The node may not have enough peers to reach supermajority."
+          summary: "Node {{ $labels.node }} finality stalled"
+          description: "Events are not being finalized on this node. The node may not have enough peers to reach 4/5 supermajority, or there is a version mismatch causing ack rejections."
 
       # ── Finality Latency ─────────────────────────────────────────
       - alert: OmniaHighFinalityLatency
-        expr: histogram_quantile(0.99, rate(omnia_consensus_finality_latency_seconds_bucket{job="omnia-wan"}[5m])) > 5
+        expr: histogram_quantile(0.99, sum by (le, node) (rate(omnia_consensus_finality_latency_seconds_bucket{job="omnia-wan"}[$__rate_interval]))) > 5
         for: 5m
         labels:
           severity: warning
@@ -65,7 +71,7 @@ groups:
 
       # ── Gossip Propagation ────────────────────────────────────────
       - alert: OmniaGossipLatencyHigh
-        expr: histogram_quantile(0.99, rate(omnia_gossip_propagation_latency_seconds_bucket{job="omnia-wan"}[5m])) > 2
+        expr: histogram_quantile(0.99, sum by (le, node) (rate(omnia_gossip_propagation_latency_seconds_bucket{job="omnia-wan"}[$__rate_interval]))) > 2
         for: 5m
         labels:
           severity: warning
@@ -74,6 +80,7 @@ groups:
           description: "Cross-network gossip is slow. Check inter-region connectivity and QUIC port (4001/udp) reachability."
 
       # ── Supermajority Check ───────────────────────────────────────
+      # 4 of 5 nodes must be up for supermajority. Fewer than 4 = halt.
       - alert: OmniaSupermajorityLost
         expr: count(up{job="omnia-wan"} == 1) < 4
         for: 3m
@@ -81,4 +88,4 @@ groups:
           severity: critical
         annotations:
           summary: "Only {{ $value }} of 5 nodes are up — supermajority at risk"
-          description: "With fewer than 4 nodes, the network cannot reach 3/5 supermajority. Consensus will halt. Immediate investigation required."
+          description: "With fewer than 4 nodes, the network cannot reach 4/5 supermajority. Consensus will halt. Immediate investigation required."
