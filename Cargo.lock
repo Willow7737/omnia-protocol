@@ -4871,7 +4871,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-adapters"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "alloy",
  "ark-bn254",
@@ -4911,7 +4911,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-benches"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -4935,7 +4935,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-binding"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -4961,7 +4961,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-chaos-tests"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "anyhow",
  "blake3",
@@ -4985,7 +4985,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-consensus"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "blake3",
  "ed25519-dalek",
@@ -5008,7 +5008,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-crypto"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "aes-gcm",
  "bip39",
@@ -5038,7 +5038,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-economics"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "ed25519-dalek",
  "hex",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-fuzz"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "libfuzzer-sys",
  "omnia-adapters",
@@ -5071,7 +5071,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-limit-verification"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "blake3",
  "omnia-binding",
@@ -5083,7 +5083,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-network"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "blake3",
  "futures",
@@ -5105,7 +5105,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-node"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -5148,7 +5148,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-primitives"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "bincode",
  "blake3",
@@ -5166,7 +5166,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-shards"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5198,7 +5198,7 @@ dependencies = [
 
 [[package]]
 name = "omnia-substrate"
-version = "0.1.92"
+version = "0.1.95"
 dependencies = [
  "aes-gcm",
  "async-trait",

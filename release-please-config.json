@@ -14,19 +14,64 @@
       "tag-format": "v${version}",
       "separate-pull-requests": false,
       "skip-github-release": false,
-      "extra-files": ["Cargo.toml", "Cargo.lock"]
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock"
+        }
+      ]
     }
   },
   "changelog-type": "default",
   "changelog-sections": [
-    { "type": "feat", "section": "Features", "hidden": false },
-    { "type": "fix", "section": "Bug Fixes", "hidden": false },
-    { "type": "perf", "section": "Performance", "hidden": false },
-    { "type": "refactor", "section": "Refactoring", "hidden": false },
-    { "type": "docs", "section": "Documentation", "hidden": false },
-    { "type": "test", "section": "Tests", "hidden": false },
-    { "type": "build", "section": "Build", "hidden": false },
-    { "type": "ci", "section": "CI", "hidden": false },
-    { "type": "chore", "section": "Chores", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features",
+      "hidden": false
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes",
+      "hidden": false
+    },
+    {
+      "type": "perf",
+      "section": "Performance",
+      "hidden": false
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring",
+      "hidden": false
+    },
+    {
+      "type": "docs",
+      "section": "Documentation",
+      "hidden": false
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": false
+    },
+    {
+      "type": "build",
+      "section": "Build",
+      "hidden": false
+    },
+    {
+      "type": "ci",
+      "section": "CI",
+      "hidden": false
+    },
+    {
+      "type": "chore",
+      "section": "Chores",
+      "hidden": true
+    }
   ]
 }
