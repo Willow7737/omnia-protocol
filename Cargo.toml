@@ -5,6 +5,7 @@ members = [
     "omnia-consensus",
     "omnia-network",
     "omnia-adapters",
+    "asset-registry",
     "substrate",
     "shards",
     "binding",
