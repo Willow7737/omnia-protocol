@@ -87,7 +87,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuar
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let node_id_bytes = {
         let mut id = [0u8; 32];

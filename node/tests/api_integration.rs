@@ -270,7 +270,7 @@ where
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let app_state = build_test_app_state(port);
     {
@@ -323,7 +323,7 @@ where
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let app_state = build_test_app_state(port);
     {
@@ -374,7 +374,7 @@ async fn start_test_server(
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let app_state = build_test_app_state(port);
     let app = http::build_http_router().with_state(app_state);
@@ -445,9 +445,9 @@ async fn test_auth_node_info() {
         .get(format!("{}/api/v1/node/info", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200, "Public endpoint should be accessible without auth");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["node_id"].is_string(), "Response should contain node_id");
 }
 
@@ -463,9 +463,9 @@ async fn test_auth_node_peers() {
         .get(format!("{}/api/v1/node/peers", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200, "Public endpoint should be accessible without auth");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["peers"].is_array(), "Response should contain peers array");
 }
 
@@ -490,7 +490,7 @@ async fn test_auth_submit_event() {
         .json(&event_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 201
@@ -500,9 +500,9 @@ async fn test_auth_submit_event() {
         .json(&event_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 201, "Valid JWT should yield 201 for event submission");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["event_id"].is_string(), "Response should contain event_id");
 
     // Expired JWT → 401
@@ -512,7 +512,7 @@ async fn test_auth_submit_event() {
         .json(&event_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -522,7 +522,7 @@ async fn test_auth_submit_event() {
         .json(&event_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -547,17 +547,20 @@ async fn test_auth_get_event() {
         .json(&event_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 201);
-    let create_body: Value = resp.json().await.unwrap();
-    let event_id = create_body["event_id"].as_str().unwrap().to_string();
+    let create_body: Value = resp.json().await.expect("test assertion failed");
+    let event_id = create_body["event_id"]
+        .as_str()
+        .expect("test assertion failed")
+        .to_string();
 
     // No auth → 401
     let resp = client
         .get(format!("{}/api/v1/events/{event_id}", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 200 (event found)
@@ -566,10 +569,10 @@ async fn test_auth_get_event() {
         .bearer_auth(&valid_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200);
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["id"].as_str().unwrap(), event_id);
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(body["id"].as_str().expect("test assertion failed"), event_id);
 
     // Valid JWT + nonexistent event → 404
     let resp = client
@@ -577,7 +580,7 @@ async fn test_auth_get_event() {
         .bearer_auth(&valid_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 404);
 
     // Expired JWT → 401
@@ -586,7 +589,7 @@ async fn test_auth_get_event() {
         .bearer_auth(&expired_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -595,7 +598,7 @@ async fn test_auth_get_event() {
         .bearer_auth(&wrong_secret_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -621,7 +624,7 @@ async fn test_auth_shard_operation() {
         .json(&op_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 200 (register is non-privileged, so any valid JWT works)
@@ -631,7 +634,7 @@ async fn test_auth_shard_operation() {
         .json(&op_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(
         resp.status(),
         200,
@@ -645,7 +648,7 @@ async fn test_auth_shard_operation() {
         .json(&op_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -655,7 +658,7 @@ async fn test_auth_shard_operation() {
         .json(&op_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -681,7 +684,7 @@ async fn test_auth_create_proposal() {
         .json(&proposal_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 201
@@ -691,10 +694,10 @@ async fn test_auth_create_proposal() {
         .json(&proposal_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 201, "Valid JWT should yield 201 for proposal creation");
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["id"].as_str().unwrap(), "proposal-test-1");
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(body["id"].as_str().expect("test assertion failed"), "proposal-test-1");
 
     // Expired JWT → 401
     let resp = client
@@ -707,7 +710,7 @@ async fn test_auth_create_proposal() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -721,7 +724,7 @@ async fn test_auth_create_proposal() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -749,7 +752,7 @@ async fn test_auth_cast_vote() {
         .json(&vote_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 400 (auth passed, but voter has no registered stake)
@@ -759,7 +762,7 @@ async fn test_auth_cast_vote() {
         .json(&vote_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert!(
         resp.status() == 400 || resp.status() == 200,
         "Valid JWT should yield 400 (no stake) or 200, not 401; got {}",
@@ -773,7 +776,7 @@ async fn test_auth_cast_vote() {
         .json(&vote_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -783,7 +786,7 @@ async fn test_auth_cast_vote() {
         .json(&vote_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -802,7 +805,7 @@ async fn test_auth_get_balance() {
         .get(format!("{}/api/v1/economics/balance/did:test:unknown", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 404 (DID not registered — auth passed, handler returned 404)
@@ -811,7 +814,7 @@ async fn test_auth_get_balance() {
         .bearer_auth(&valid_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(
         resp.status(),
         404,
@@ -824,7 +827,7 @@ async fn test_auth_get_balance() {
         .bearer_auth(&expired_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -833,7 +836,7 @@ async fn test_auth_get_balance() {
         .bearer_auth(&wrong_secret_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -859,7 +862,7 @@ async fn test_auth_transfer() {
         .json(&transfer_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Valid JWT → 404 (sender not registered — auth passed, handler returned 404)
@@ -869,7 +872,7 @@ async fn test_auth_transfer() {
         .json(&transfer_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert!(
         resp.status() == 404 || resp.status() == 400,
         "Valid JWT should yield 404/400 for unregistered DID, not 401; got {}",
@@ -883,7 +886,7 @@ async fn test_auth_transfer() {
         .json(&transfer_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 
     // Wrong-secret JWT → 401
@@ -893,7 +896,7 @@ async fn test_auth_transfer() {
         .json(&transfer_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
 }
 
@@ -921,14 +924,14 @@ async fn test_rate_limit_events_endpoint() {
             .json(&event_body)
             .send()
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         if resp.status() == 429 {
             got_429 = true;
             // Verify the 429 response body
-            let body: Value = resp.json().await.unwrap();
+            let body: Value = resp.json().await.expect("test assertion failed");
             assert!(body["error"].is_string(), "429 response should contain 'error' field");
-            let error_msg = body["error"].as_str().unwrap();
+            let error_msg = body["error"].as_str().expect("test assertion failed");
             assert!(
                 error_msg.contains("rate limit"),
                 "Error message should mention rate limit, got: {error_msg}"
@@ -964,16 +967,16 @@ async fn test_mint_ubc_non_admin_forbidden() {
         .json(&mint_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(
         resp.status(),
         403,
         "Non-admin caller should get 403 Forbidden for MintUbc"
     );
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string(), "403 response should have 'error' field");
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(
         error_msg.contains("not authorized"),
         "Error message should mention authorization, got: {error_msg}"
@@ -997,12 +1000,12 @@ async fn test_mint_ubc_admin_ok() {
         .json(&mint_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "Admin caller should get 200 OK for MintUbc");
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["status"].as_str().unwrap(), "processed");
-    assert_eq!(body["operation"].as_str().unwrap(), "mint");
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(body["status"].as_str().expect("test assertion failed"), "processed");
+    assert_eq!(body["operation"].as_str().expect("test assertion failed"), "mint");
 }
 
 #[tokio::test]
@@ -1022,16 +1025,16 @@ async fn test_advance_epoch_non_admin_forbidden() {
         .json(&advance_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(
         resp.status(),
         403,
         "Non-admin caller should get 403 Forbidden for AdvanceEpoch"
     );
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string(), "403 response should have 'error' field");
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(
         error_msg.contains("not authorized"),
         "Error message should mention authorization, got: {error_msg}"
@@ -1055,12 +1058,15 @@ async fn test_advance_epoch_admin_ok() {
         .json(&advance_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "Admin caller should get 200 OK for AdvanceEpoch");
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["status"].as_str().unwrap(), "processed");
-    assert_eq!(body["operation"].as_str().unwrap(), "advance_epoch");
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(body["status"].as_str().expect("test assertion failed"), "processed");
+    assert_eq!(
+        body["operation"].as_str().expect("test assertion failed"),
+        "advance_epoch"
+    );
 }
 
 // ===========================================================================
@@ -1083,7 +1089,7 @@ async fn test_cors_preflight() {
         .header("Access-Control-Request-Headers", "Authorization, Content-Type")
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     // CORS preflight should return 200 (handled by the CORS layer,
     // not forwarded to auth or handler)
@@ -1103,7 +1109,7 @@ async fn test_cors_preflight() {
         .headers()
         .get("access-control-allow-methods")
         .expect("Should have access-control-allow-methods header");
-    let methods_str = allow_methods.to_str().unwrap();
+    let methods_str = allow_methods.to_str().expect("test assertion failed");
     assert!(
         methods_str.contains("GET") && methods_str.contains("POST"),
         "Allowed methods should include GET and POST, got: {methods_str}"
@@ -1113,7 +1119,7 @@ async fn test_cors_preflight() {
         .headers()
         .get("access-control-allow-headers")
         .expect("Should have access-control-allow-headers header");
-    let headers_str = allow_headers.to_str().unwrap();
+    let headers_str = allow_headers.to_str().expect("test assertion failed");
     assert!(
         headers_str.contains("authorization") && headers_str.contains("content-type"),
         "Allowed headers should include Authorization and Content-Type, got: {headers_str}"
@@ -1123,7 +1129,11 @@ async fn test_cors_preflight() {
         .headers()
         .get("access-control-max-age")
         .expect("Should have access-control-max-age header");
-    assert_eq!(max_age.to_str().unwrap(), "3600", "Max-Age should be 3600");
+    assert_eq!(
+        max_age.to_str().expect("test assertion failed"),
+        "3600",
+        "Max-Age should be 3600"
+    );
 }
 
 #[tokio::test]
@@ -1139,7 +1149,7 @@ async fn test_cors_cross_origin_request() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "Cross-origin GET with auth should return 200");
 
@@ -1170,14 +1180,14 @@ async fn test_error_format_401_unauthorized() {
     let auth_url = format!("{}/api/v1/events", server.base_url);
 
     // --- Missing auth header ---
-    let resp = client.get(&auth_url).send().await.unwrap();
+    let resp = client.get(&auth_url).send().await.expect("test assertion failed");
     assert_eq!(resp.status(), 401);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "401 response should have 'error' string field, got: {body:?}"
     );
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(!error_msg.is_empty(), "Error message should not be empty");
     assert!(
         error_msg.contains("authorization"),
@@ -1186,30 +1196,43 @@ async fn test_error_format_401_unauthorized() {
 
     // --- Expired token ---
     let expired_token = make_expired_token(JWT_SECRET);
-    let resp = client.get(&auth_url).bearer_auth(&expired_token).send().await.unwrap();
+    let resp = client
+        .get(&auth_url)
+        .bearer_auth(&expired_token)
+        .send()
+        .await
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "401 response should have 'error' string field, got: {body:?}"
     );
     assert!(
-        body["error"].as_str().unwrap().contains("expired"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("expired"),
         "Expired-token error should mention 'expired', got: {}",
-        body["error"].as_str().unwrap()
+        body["error"].as_str().expect("test assertion failed")
     );
 
     // --- Invalid (wrong-secret) token ---
     let wrong_token = make_wrong_secret_token();
-    let resp = client.get(&auth_url).bearer_auth(&wrong_token).send().await.unwrap();
+    let resp = client
+        .get(&auth_url)
+        .bearer_auth(&wrong_token)
+        .send()
+        .await
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "401 response should have 'error' string field, got: {body:?}"
     );
     assert!(
-        !body["error"].as_str().unwrap().is_empty(),
+        !body["error"].as_str().expect("test assertion failed").is_empty(),
         "Invalid-token error message should not be empty"
     );
 }
@@ -1233,15 +1256,15 @@ async fn test_error_format_403_forbidden() {
         .json(&mint_body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 403);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "403 response should have 'error' string field, got: {body:?}"
     );
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(
         error_msg.contains("not authorized"),
         "403 error should mention 'not authorized', got: {error_msg}"
@@ -1262,15 +1285,15 @@ async fn test_error_format_404_not_found() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 404);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "404 response should have 'error' string field, got: {body:?}"
     );
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(!error_msg.is_empty(), "404 error message should not be empty");
 
     // Also test 404 from economics balance (unregistered DID)
@@ -1279,10 +1302,10 @@ async fn test_error_format_404_not_found() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 404);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
         body["error"].is_string(),
         "Economics 404 response should have 'error' string field, got: {body:?}"
@@ -1305,15 +1328,15 @@ async fn test_error_format_429_rate_limited() {
             .bearer_auth(&token)
             .send()
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         if resp.status() == 429 {
-            let body: Value = resp.json().await.unwrap();
+            let body: Value = resp.json().await.expect("test assertion failed");
             assert!(
                 body["error"].is_string(),
                 "429 response should have 'error' string field, got: {body:?}"
             );
-            let error_msg = body["error"].as_str().unwrap();
+            let error_msg = body["error"].as_str().expect("test assertion failed");
             assert!(
                 error_msg.contains("rate limit"),
                 "429 error should mention 'rate limit', got: {error_msg}"
@@ -1367,7 +1390,7 @@ async fn test_create_proposal_duplicate_returns_409() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 201);
 
     // Duplicate creation → 409
@@ -1377,10 +1400,13 @@ async fn test_create_proposal_duplicate_returns_409() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 409, "Duplicate proposal should return 409 Conflict");
-    let body: Value = resp.json().await.unwrap();
-    assert!(body["error"].as_str().unwrap().contains("Failed to create proposal"));
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert!(body["error"]
+        .as_str()
+        .expect("test assertion failed")
+        .contains("Failed to create proposal"));
 }
 
 // ---- governance: cast_vote 400 invalid choice ----
@@ -1403,14 +1429,17 @@ async fn test_cast_vote_invalid_choice_returns_400() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     // Should get 400 for invalid choice, NOT 401 (auth passed) and NOT
     // the "no stake" 400 (the choice parse happens before the stake check).
     assert_eq!(resp.status(), 400, "Invalid vote choice should return 400");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
-        body["error"].as_str().unwrap().contains("invalid vote choice"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("invalid vote choice"),
         "Error should mention invalid vote choice, got: {body}"
     );
 }
@@ -1435,7 +1464,7 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     // Should NOT get the "invalid vote choice" 400 — trimming worked.
     // It will still get 400 for "no stake", but the error message should
@@ -1445,8 +1474,8 @@ async fn test_cast_vote_whitespace_choice_trimmed() {
         400,
         "Should get 400 for no stake, not for invalid choice"
     );
-    let body: Value = resp.json().await.unwrap();
-    let error = body["error"].as_str().unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
+    let error = body["error"].as_str().expect("test assertion failed");
     assert!(
         !error.contains("invalid vote choice"),
         "Whitespace should be trimmed — choice should parse as 'for'. Got error: {error}"
@@ -1472,16 +1501,22 @@ async fn test_get_balance_registered_did_returns_200() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "Registered DID should return 200");
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["did"].as_str().unwrap(), "did:test:balance-check");
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(
+        body["did"].as_str().expect("test assertion failed"),
+        "did:test:balance-check"
+    );
     assert!(
-        body["balance"].as_u64().unwrap() >= 5000,
+        body["balance"].as_u64().expect("test assertion failed") >= 5000,
         "Balance should reflect minted amount"
     );
-    assert!(body["is_registered"].as_bool().unwrap(), "Should be registered");
+    assert!(
+        body["is_registered"].as_bool().expect("test assertion failed"),
+        "Should be registered"
+    );
 }
 
 // ---- economics: transfer 400 zero amount ----
@@ -1504,12 +1539,15 @@ async fn test_transfer_zero_amount_returns_400() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 400, "Zero amount should return 400");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
-        body["error"].as_str().unwrap().contains("must be greater than zero"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("must be greater than zero"),
         "Error should mention zero amount"
     );
 }
@@ -1539,14 +1577,14 @@ async fn test_transfer_success_returns_200() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "Valid transfer should return 200");
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["status"].as_str().unwrap(), "completed");
-    assert_eq!(body["amount"].as_u64().unwrap(), 500);
+    let body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(body["status"].as_str().expect("test assertion failed"), "completed");
+    assert_eq!(body["amount"].as_u64().expect("test assertion failed"), 500);
     assert!(
-        body["new_balance"].as_u64().unwrap() >= 9_500,
+        body["new_balance"].as_u64().expect("test assertion failed") >= 9_500,
         "New balance should reflect the spent amount"
     );
 }
@@ -1575,14 +1613,14 @@ async fn test_transfer_emits_provenance_event() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
 
     // Every transfer is now recorded as a signed causal-graph event.
     let event_id = body["event_id"].as_str();
     assert!(
-        event_id.is_some() && event_id.unwrap().len() == 64,
+        event_id.is_some() && event_id.expect("test assertion failed").len() == 64,
         "transfer response must carry a 32-byte hex provenance event_id, got {:?}",
         body["event_id"]
     );
@@ -1593,10 +1631,10 @@ async fn test_transfer_emits_provenance_event() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     let recorded = list["transfers"][0]["event_id"].as_str();
     assert_eq!(
         recorded, event_id,
@@ -1634,12 +1672,12 @@ async fn test_transfer_wallet_signed_end_to_end_with_replay_rejection() {
         .json(&json!({ "public_key": public_key_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let nonce = challenge["nonce"].as_str().unwrap().to_string();
-    assert_eq!(challenge["did"].as_str().unwrap(), wallet_did);
+        .expect("test assertion failed");
+    let nonce = challenge["nonce"].as_str().expect("test assertion failed").to_string();
+    assert_eq!(challenge["did"].as_str().expect("test assertion failed"), wallet_did);
 
     // 2. Sign the canonical transfer message with the wallet key.
     let to_did = "did:test:recipient";
@@ -1664,13 +1702,16 @@ async fn test_transfer_wallet_signed_end_to_end_with_replay_rejection() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200, "wallet-signed transfer should succeed");
-    let resp_body: Value = resp.json().await.unwrap();
-    assert_eq!(resp_body["provenance"].as_str().unwrap(), "wallet_signed");
+    let resp_body: Value = resp.json().await.expect("test assertion failed");
+    assert_eq!(
+        resp_body["provenance"].as_str().expect("test assertion failed"),
+        "wallet_signed"
+    );
     // Registration grants a base quota on top of the minted 10_000, so
     // assert the spend relative to that floor (as the v1 test does).
-    let balance_after_spend = resp_body["new_balance"].as_u64().unwrap();
+    let balance_after_spend = resp_body["new_balance"].as_u64().expect("test assertion failed");
     assert!(
         balance_after_spend >= 9_500,
         "new balance should reflect the 500 spend, got {balance_after_spend}"
@@ -1684,7 +1725,7 @@ async fn test_transfer_wallet_signed_end_to_end_with_replay_rejection() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(replay.status(), 401, "replayed authorization must be rejected");
 
     // 5. The listing shows the provenance.
@@ -1693,11 +1734,16 @@ async fn test_transfer_wallet_signed_end_to_end_with_replay_rejection() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    assert_eq!(list["transfers"][0]["provenance"].as_str().unwrap(), "wallet_signed");
+        .expect("test assertion failed");
+    assert_eq!(
+        list["transfers"][0]["provenance"]
+            .as_str()
+            .expect("test assertion failed"),
+        "wallet_signed"
+    );
 }
 
 #[tokio::test]
@@ -1725,11 +1771,11 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         .bearer_auth(make_valid_token(&wallet_did))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let balance_before = balance_before["balance"].as_u64().unwrap();
+        .expect("test assertion failed");
+    let balance_before = balance_before["balance"].as_u64().expect("test assertion failed");
 
     // (a) A JWT for a DIFFERENT identity than the signing key → 403,
     //     even with a perfectly valid signature and fresh nonce.
@@ -1738,11 +1784,11 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         .json(&json!({ "public_key": public_key_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let nonce = challenge["nonce"].as_str().unwrap().to_string();
+        .expect("test assertion failed");
+    let nonce = challenge["nonce"].as_str().expect("test assertion failed").to_string();
     // The message signs the ATTACKER's spend from their own DID — but the
     // JWT belongs to REGULAR_CALLER, whose funds would be spent.
     let message = omnia_node::api::wallet_auth::transfer_message(&nonce, &wallet_did, "did:test:recipient", 500);
@@ -1762,7 +1808,7 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(
         mismatched.status(),
         403,
@@ -1775,11 +1821,11 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         .json(&json!({ "public_key": public_key_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let nonce = challenge["nonce"].as_str().unwrap().to_string();
+        .expect("test assertion failed");
+    let nonce = challenge["nonce"].as_str().expect("test assertion failed").to_string();
     let message = omnia_node::api::wallet_auth::transfer_message(&nonce, &wallet_did, "did:test:recipient", 500);
     let mut sig = sk.sign(message.as_bytes()).to_bytes();
     sig[0] ^= 0xFF;
@@ -1798,7 +1844,7 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(bad_sig.status(), 401, "corrupted signature must be rejected");
 
     // Balance is untouched by all rejected attempts.
@@ -1807,12 +1853,12 @@ async fn test_transfer_wallet_signed_rejects_wrong_key_and_bad_signature() {
         .bearer_auth(make_valid_token(&wallet_did))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(
-        balance_after["balance"].as_u64().unwrap(),
+        balance_after["balance"].as_u64().expect("test assertion failed"),
         balance_before,
         "rejected authorization attempts must never move funds"
     );
@@ -1842,12 +1888,15 @@ async fn test_transfer_to_self_returns_400() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 400, "Self-transfer should return 400");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
-        body["error"].as_str().unwrap().contains("soulbound"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("soulbound"),
         "Error should explain that UBC is soulbound"
     );
 
@@ -1860,11 +1909,11 @@ async fn test_transfer_to_self_returns_400() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 200);
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
-        body["balance"].as_u64().unwrap() >= 10_000,
+        body["balance"].as_u64().expect("test assertion failed") >= 10_000,
         "Rejected self-transfer must not burn any UBC"
     );
 }
@@ -1894,12 +1943,15 @@ async fn test_transfer_insufficient_balance_returns_400() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 400, "Insufficient balance should return 400");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(
-        body["error"].as_str().unwrap().contains("Transfer failed"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("Transfer failed"),
         "Error should mention transfer failure"
     );
 }
@@ -1931,7 +1983,7 @@ async fn test_repeated_submissions_chain_and_do_not_self_slash() {
             .json(&body)
             .send()
             .await
-            .unwrap();
+            .expect("test assertion failed");
         assert_eq!(
             resp.status(),
             201,
@@ -1968,18 +2020,21 @@ async fn test_wallet_challenge_login_flow() {
         .json(&json!({ "public_key": pubkey_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
-    let nonce = chal["nonce"].as_str().unwrap().to_string();
+    let nonce = chal["nonce"].as_str().expect("test assertion failed").to_string();
     assert_eq!(
-        chal["did"].as_str().unwrap(),
+        chal["did"].as_str().expect("test assertion failed"),
         expected_did,
         "server DID must match client-derived DID"
     );
-    assert_eq!(chal["message"].as_str().unwrap(), format!("omnia-auth:{nonce}"));
+    assert_eq!(
+        chal["message"].as_str().expect("test assertion failed"),
+        format!("omnia-auth:{nonce}")
+    );
 
     // Step 2: sign the challenge message and log in.
     let message = format!("omnia-auth:{nonce}");
@@ -1991,11 +2046,11 @@ async fn test_wallet_challenge_login_flow() {
         .json(&json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(login_resp.status(), 200, "valid login should return 200");
-    let login: Value = login_resp.json().await.unwrap();
-    let token = login["token"].as_str().unwrap().to_string();
-    assert_eq!(login["did"].as_str().unwrap(), expected_did);
+    let login: Value = login_resp.json().await.expect("test assertion failed");
+    let token = login["token"].as_str().expect("test assertion failed").to_string();
+    assert_eq!(login["did"].as_str().expect("test assertion failed"), expected_did);
 
     // Step 3: use the JWT against an authenticated endpoint for this DID.
     let bal_resp = client
@@ -2003,12 +2058,12 @@ async fn test_wallet_challenge_login_flow() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(bal_resp.status(), 200, "balance lookup with wallet JWT should succeed");
-    let bal: Value = bal_resp.json().await.unwrap();
-    assert_eq!(bal["did"].as_str().unwrap(), expected_did);
+    let bal: Value = bal_resp.json().await.expect("test assertion failed");
+    assert_eq!(bal["did"].as_str().expect("test assertion failed"), expected_did);
     assert!(
-        bal["is_registered"].as_bool().unwrap(),
+        bal["is_registered"].as_bool().expect("test assertion failed"),
         "login should have registered the DID"
     );
 }
@@ -2032,7 +2087,7 @@ async fn test_auth_register_registers_external_did() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(before.status(), 404, "unregistered DID should 404");
 
     // Register.
@@ -2041,12 +2096,12 @@ async fn test_auth_register_registers_external_did() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(reg.status(), 200);
-    let reg_body: Value = reg.json().await.unwrap();
-    assert_eq!(reg_body["did"].as_str().unwrap(), did);
-    assert!(reg_body["newly_registered"].as_bool().unwrap());
-    assert!(reg_body["is_registered"].as_bool().unwrap());
+    let reg_body: Value = reg.json().await.expect("test assertion failed");
+    assert_eq!(reg_body["did"].as_str().expect("test assertion failed"), did);
+    assert!(reg_body["newly_registered"].as_bool().expect("test assertion failed"));
+    assert!(reg_body["is_registered"].as_bool().expect("test assertion failed"));
 
     // Idempotent: second call succeeds and reports it already existed.
     let again = client
@@ -2054,10 +2109,10 @@ async fn test_auth_register_registers_external_did() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(again.status(), 200);
-    let again_body: Value = again.json().await.unwrap();
-    assert!(!again_body["newly_registered"].as_bool().unwrap());
+    let again_body: Value = again.json().await.expect("test assertion failed");
+    assert!(!again_body["newly_registered"].as_bool().expect("test assertion failed"));
 
     // Balance now resolves.
     let after = client
@@ -2065,7 +2120,7 @@ async fn test_auth_register_registers_external_did() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(after.status(), 200, "registered DID should have a balance");
 
     // No JWT -> 401.
@@ -2073,7 +2128,7 @@ async fn test_auth_register_registers_external_did() {
         .post(format!("{}/api/v1/auth/register", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(anon.status(), 401, "register requires a JWT");
 }
 
@@ -2093,11 +2148,11 @@ async fn test_wallet_login_nonce_is_single_use() {
         .json(&json!({ "public_key": pubkey_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let nonce = chal["nonce"].as_str().unwrap().to_string();
+        .expect("test assertion failed");
+    let nonce = chal["nonce"].as_str().expect("test assertion failed").to_string();
     let sig_hex = hex::encode(signing_key.sign(format!("omnia-auth:{nonce}").as_bytes()).to_bytes());
     let payload = json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce });
 
@@ -2107,7 +2162,7 @@ async fn test_wallet_login_nonce_is_single_use() {
         .json(&payload)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(first.status(), 200);
 
     // Replay with the same nonce must fail.
@@ -2116,7 +2171,7 @@ async fn test_wallet_login_nonce_is_single_use() {
         .json(&payload)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(second.status(), 401, "reused nonce must be rejected");
 }
 
@@ -2136,11 +2191,11 @@ async fn test_wallet_login_bad_signature_rejected() {
         .json(&json!({ "public_key": pubkey_hex }))
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
-    let nonce = chal["nonce"].as_str().unwrap().to_string();
+        .expect("test assertion failed");
+    let nonce = chal["nonce"].as_str().expect("test assertion failed").to_string();
 
     // Sign the WRONG message.
     let sig_hex = hex::encode(signing_key.sign(b"omnia-auth:not-the-nonce").to_bytes());
@@ -2150,7 +2205,7 @@ async fn test_wallet_login_bad_signature_rejected() {
         .json(&json!({ "public_key": pubkey_hex, "signature": sig_hex, "nonce": nonce }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 401, "signature over wrong message must be rejected");
 }
 
@@ -2223,10 +2278,10 @@ async fn financial_transfer_credits_the_recipient() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(balance["balance"], 1_000);
     assert_eq!(balance["next_nonce"], 1, "an account that never sent starts at nonce 1");
 
@@ -2242,10 +2297,10 @@ async fn financial_transfer_credits_the_recipient() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "a correctly signed transfer should be applied");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert_eq!(body["sender_balance"], 750);
     assert_eq!(
         body["recipient_balance"], 250,
@@ -2266,10 +2321,10 @@ async fn financial_transfer_credits_the_recipient() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(bob_balance["balance"], 250);
     assert_eq!(
         bob_balance["total_supply"], 1_000,
@@ -2310,7 +2365,7 @@ async fn financial_transfer_rejects_spending_another_account() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(
         resp.status(),
@@ -2327,10 +2382,10 @@ async fn financial_transfer_rejects_spending_another_account() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(balance["balance"], 1_000, "the victim must be untouched");
 }
 
@@ -2365,7 +2420,7 @@ async fn financial_transfer_rejects_replay() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(first.status(), 200);
 
     // Byte-identical resubmission.
@@ -2375,7 +2430,7 @@ async fn financial_transfer_rejects_replay() {
         .json(&body)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(replay.status(), 400, "a replayed transfer must be rejected");
 
     let balance: Value = client
@@ -2387,10 +2442,10 @@ async fn financial_transfer_rejects_replay() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(balance["balance"], 100, "the recipient must be credited exactly once");
 }
 
@@ -2424,7 +2479,7 @@ async fn financial_transfer_rejects_overspend() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(resp.status(), 400, "an unaffordable transfer must be rejected");
 
     let balance: Value = client
@@ -2436,10 +2491,10 @@ async fn financial_transfer_rejects_overspend() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(balance["balance"], 50, "a rejected transfer must not debit the sender");
     assert_eq!(
         balance["next_nonce"], 1,
@@ -2478,7 +2533,7 @@ async fn financial_transfer_rejects_amount_tampering() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(
         resp.status(),
@@ -2495,10 +2550,10 @@ async fn financial_transfer_rejects_amount_tampering() {
         .bearer_auth(&token)
         .send()
         .await
-        .unwrap()
+        .expect("test assertion failed")
         .json()
         .await
-        .unwrap();
+        .expect("test assertion failed");
     assert_eq!(balance["balance"], 1_000);
 }
 
@@ -2553,14 +2608,14 @@ async fn financial_transfer_accepts_the_wallets_exact_payload() {
         }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(
         resp.status(),
         200,
         "the node must accept the exact payload the wallet produces"
     );
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert_eq!(body["sender_balance"], 750);
     assert_eq!(body["recipient_balance"], 250);
     assert_eq!(body["authorization"], "wallet_signed");
@@ -2627,7 +2682,7 @@ async fn setup_live_settlement_server() -> TestServer {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
     let app = http::build_http_router().with_state(app_state);
@@ -2665,7 +2720,7 @@ async fn setup_live_settlement_server_with_root() -> (TestServer, String) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let known_root = [0xAB_u8; 32];
     let root_hex = format!("0x{}", hex::encode(known_root));
@@ -2712,10 +2767,10 @@ async fn test_submit_root_no_jwt_rejected() {
         .post(format!("{}/api/v1/admin/settlement/submit-root", server.base_url))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 401, "submit-root must reject requests without a JWT");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string(), "401 response should have an 'error' field");
 }
 
@@ -2732,12 +2787,12 @@ async fn test_submit_root_non_admin_forbidden() {
         .bearer_auth(&regular_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 403, "non-admin caller must get 403 for submit-root");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string());
-    let error_msg = body["error"].as_str().unwrap();
+    let error_msg = body["error"].as_str().expect("test assertion failed");
     assert!(
         error_msg.contains("not authorized"),
         "error should mention authorization, got: {error_msg}"
@@ -2757,13 +2812,16 @@ async fn test_submit_root_adapter_not_live() {
         .bearer_auth(&admin_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 503, "mock adapter must cause 503 Service Unavailable");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string());
     assert!(
-        body["error"].as_str().unwrap().contains("not live"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("not live"),
         "error should mention adapter not live"
     );
 }
@@ -2781,13 +2839,16 @@ async fn test_submit_root_no_lane0_root() {
         .bearer_auth(&admin_token)
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 404, "must return 404 when Lane 0 has no leading root");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["error"].is_string());
     assert!(
-        body["error"].as_str().unwrap().contains("no Lane 0 leading root"),
+        body["error"]
+            .as_str()
+            .expect("test assertion failed")
+            .contains("no Lane 0 leading root"),
         "error should mention no root available"
     );
 }
@@ -2811,21 +2872,21 @@ async fn test_submit_root_custom_root_ignored_when_flag_unset() {
         .json(&json!({ "root": attacker_root }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "should succeed with state-sourced root");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
 
     // The response must echo the STATE root, not the caller's root.
     assert_eq!(
-        body["root"].as_str().unwrap(),
+        body["root"].as_str().expect("test assertion failed"),
         &state_root_hex,
         "response root must match the consensus state root, not the caller-supplied value"
     );
     // The tx hash should also be based on the state root since our
     // LiveTestSettlementAdapter echoes root bytes as the tx hash.
     assert_eq!(
-        body["tx_hash"].as_str().unwrap(),
+        body["tx_hash"].as_str().expect("test assertion failed"),
         &state_root_hex,
         "tx hash must correspond to the state root"
     );
@@ -2849,13 +2910,13 @@ async fn test_submit_root_custom_root_honored_when_flag_set() {
         .json(&json!({ "root": &custom_root }))
         .send()
         .await
-        .unwrap();
+        .expect("test assertion failed");
 
     assert_eq!(resp.status(), 200, "should succeed with custom root when flag is set");
-    let body: Value = resp.json().await.unwrap();
+    let body: Value = resp.json().await.expect("test assertion failed");
 
     assert_eq!(
-        body["root"].as_str().unwrap(),
+        body["root"].as_str().expect("test assertion failed"),
         &custom_root,
         "response root must match the caller-supplied root when the debug flag is set"
     );

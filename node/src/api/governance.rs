@@ -282,29 +282,50 @@ mod tests {
 
     #[test]
     fn test_parse_vote_choice_for() {
-        assert_eq!(parse_vote_choice("for").unwrap(), VoteChoice::For);
+        assert_eq!(
+            parse_vote_choice("for").expect("test assertion failed"),
+            VoteChoice::For
+        );
         // Case-insensitive
-        assert_eq!(parse_vote_choice("FOR").unwrap(), VoteChoice::For);
-        assert_eq!(parse_vote_choice("For").unwrap(), VoteChoice::For);
+        assert_eq!(
+            parse_vote_choice("FOR").expect("test assertion failed"),
+            VoteChoice::For
+        );
+        assert_eq!(
+            parse_vote_choice("For").expect("test assertion failed"),
+            VoteChoice::For
+        );
     }
 
     #[test]
     fn test_parse_vote_choice_against() {
-        assert_eq!(parse_vote_choice("against").unwrap(), VoteChoice::Against);
-        assert_eq!(parse_vote_choice("AGAINST").unwrap(), VoteChoice::Against);
+        assert_eq!(
+            parse_vote_choice("against").expect("test assertion failed"),
+            VoteChoice::Against
+        );
+        assert_eq!(
+            parse_vote_choice("AGAINST").expect("test assertion failed"),
+            VoteChoice::Against
+        );
     }
 
     #[test]
     fn test_parse_vote_choice_abstain() {
-        assert_eq!(parse_vote_choice("abstain").unwrap(), VoteChoice::Abstain);
-        assert_eq!(parse_vote_choice("ABSTAIN").unwrap(), VoteChoice::Abstain);
+        assert_eq!(
+            parse_vote_choice("abstain").expect("test assertion failed"),
+            VoteChoice::Abstain
+        );
+        assert_eq!(
+            parse_vote_choice("ABSTAIN").expect("test assertion failed"),
+            VoteChoice::Abstain
+        );
     }
 
     #[test]
     fn test_parse_vote_choice_invalid() {
         let result = parse_vote_choice("yes");
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ApiParseError::InvalidVoteChoice(s) => assert!(s.contains("yes")),
             other => panic!("Expected InvalidVoteChoice, got {other:?}"),
         }
@@ -321,9 +342,18 @@ mod tests {
         // Whitespace IS trimmed — " for " should parse as For.
         // This prevents silent rejection of votes with accidental leading/
         // trailing spaces, which is a correctness issue in governance.
-        assert_eq!(parse_vote_choice(" for ").unwrap(), VoteChoice::For);
-        assert_eq!(parse_vote_choice("\tagainst\t").unwrap(), VoteChoice::Against);
-        assert_eq!(parse_vote_choice(" abstain").unwrap(), VoteChoice::Abstain);
+        assert_eq!(
+            parse_vote_choice(" for ").expect("test assertion failed"),
+            VoteChoice::For
+        );
+        assert_eq!(
+            parse_vote_choice("\tagainst\t").expect("test assertion failed"),
+            VoteChoice::Against
+        );
+        assert_eq!(
+            parse_vote_choice(" abstain").expect("test assertion failed"),
+            VoteChoice::Abstain
+        );
     }
 
     #[test]

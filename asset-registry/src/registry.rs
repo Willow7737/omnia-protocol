@@ -307,22 +307,24 @@ mod tests {
     #[test]
     fn duplicate_registration_rejected() {
         let mut reg = AssetRegistry::with_genesis_assets();
-        let err = reg.register(AssetDefinition::omnia()).unwrap_err();
+        let err = reg
+            .register(AssetDefinition::omnia())
+            .expect_err("test assertion failed");
         assert!(matches!(err, RegistryError::AssetAlreadyExists(_, _)));
     }
 
     #[test]
     fn freeze_prevents_transfer() {
         let mut reg = AssetRegistry::with_genesis_assets();
-        reg.freeze(AssetId::OMNIA).unwrap();
+        reg.freeze(AssetId::OMNIA).expect("test assertion failed");
         assert!(reg.can_transfer(AssetId::OMNIA).is_err());
     }
 
     #[test]
     fn unfreeze_restores_transfer() {
         let mut reg = AssetRegistry::with_genesis_assets();
-        reg.freeze(AssetId::OMNIA).unwrap();
-        reg.unfreeze(AssetId::OMNIA).unwrap();
+        reg.freeze(AssetId::OMNIA).expect("test assertion failed");
+        reg.unfreeze(AssetId::OMNIA).expect("test assertion failed");
         assert!(reg.can_transfer(AssetId::OMNIA).is_ok());
     }
 
@@ -351,7 +353,7 @@ mod tests {
             status: AssetStatus::Stub,
             existential_deposit: 0,
         };
-        reg.register(btc).unwrap();
+        reg.register(btc).expect("test assertion failed");
         assert_eq!(reg.asset_ids().len(), 3);
         assert!(reg.get(AssetId::new(2)).is_some());
     }
@@ -380,17 +382,17 @@ mod tests {
     fn update_metadata() {
         let mut reg = AssetRegistry::with_genesis_assets();
         reg.update_metadata(AssetId::OMNIA, Some("OMNIA2".into()), None, None, None, None)
-            .unwrap();
-        assert_eq!(reg.omnia().unwrap().symbol, "OMNIA2");
+            .expect("test assertion failed");
+        assert_eq!(reg.omnia().expect("test assertion failed").symbol, "OMNIA2");
     }
 
     #[test]
     fn events_logged() {
         let mut reg = AssetRegistry::with_genesis_assets();
         assert_eq!(reg.events().len(), 2); // OMNIA + UBC
-        reg.freeze(AssetId::OMNIA).unwrap();
+        reg.freeze(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(reg.events().len(), 3);
-        reg.unfreeze(AssetId::OMNIA).unwrap();
+        reg.unfreeze(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(reg.events().len(), 4);
     }
 

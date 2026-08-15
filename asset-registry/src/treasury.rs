@@ -1465,7 +1465,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.bucket_funded(AllocationBucket::NetworkIncentives),
@@ -1489,7 +1489,7 @@ mod tests {
         );
         assert!(result.is_err());
         assert!(matches!(
-            result.unwrap_err(),
+            result.expect_err("test assertion failed"),
             RegistryError::TreasuryLimitExceeded { .. }
         ));
     }
@@ -1519,12 +1519,12 @@ mod tests {
                     reg.supply_tracker_mut(),
                     &def,
                 )
-                .unwrap();
+                .expect("test assertion failed");
         }
 
         assert_eq!(reg.total_supply(AssetId::OMNIA), HARD_CAP);
         assert_eq!(treasury.total_bucket_funded(), HARD_CAP);
-        treasury.verify_bucket_invariants().unwrap();
+        treasury.verify_bucket_invariants().expect("test assertion failed");
     }
 
     #[test]
@@ -1542,7 +1542,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Allocate 3M from ecosystem (within daily limit of hard_cap/30 = 5M)
         treasury
@@ -1557,10 +1557,10 @@ mod tests {
                 1, // day 1
                 1, // month 1
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Treasury balance should have decreased, account balance increased
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.treasury_balances, 147_000_000 * OMNIA_PLANCKS);
         assert_eq!(supply.account_balances, 3_000_000 * OMNIA_PLANCKS);
     }
@@ -1579,7 +1579,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         treasury.trip_circuit_breaker("suspicious activity detected");
         assert!(treasury.is_paused());
@@ -1613,7 +1613,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Allocate within daily limit
         treasury
@@ -1627,7 +1627,7 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(treasury.pilot_inventory().daily_spent, 100_000 * OMNIA_PLANCKS);
     }
@@ -1646,7 +1646,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Try to allocate more than daily limit
         let result = treasury.allocate_pilot(
@@ -1677,9 +1677,11 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        treasury.create_vesting("alice", 10_000_000 * OMNIA_PLANCKS).unwrap();
+        treasury
+            .create_vesting("alice", 10_000_000 * OMNIA_PLANCKS)
+            .expect("test assertion failed");
 
         // Try to release before cliff (at half-cliff time)
         let half_cliff = 365 * 24 * 60 * 60 * 1_000 / 2;
@@ -1707,9 +1709,11 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        treasury.create_vesting("bob", 12_000_000 * OMNIA_PLANCKS).unwrap();
+        treasury
+            .create_vesting("bob", 12_000_000 * OMNIA_PLANCKS)
+            .expect("test assertion failed");
 
         // Release right at cliff
         let at_cliff = 365 * 24 * 60 * 60 * 1_000;
@@ -1721,7 +1725,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // At cliff, 25% of total is available immediately.
         // Test slightly after cliff to get a non-zero post-cliff portion.
@@ -1734,7 +1738,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
         assert!(matches!(event2, TreasuryEvent::VestingRelease { .. }));
     }
 
@@ -1769,7 +1773,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         treasury.trip_circuit_breaker("test");
         treasury.reset_circuit_breaker();
@@ -1793,7 +1797,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(treasury.bucket_spent(AllocationBucket::Ecosystem), 0);
         assert_eq!(
@@ -1813,7 +1817,7 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.bucket_spent(AllocationBucket::Ecosystem),
@@ -1836,7 +1840,7 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.bucket_spent(AllocationBucket::Ecosystem),
@@ -1862,7 +1866,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Spend across multiple days to avoid daily limits
         // Daily limit = hard_cap / 30 ≈ 3.33M OMNIA, so 3M per day is fine
@@ -1878,7 +1882,7 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         treasury
             .allocate(
@@ -1892,7 +1896,7 @@ mod tests {
                 2,
                 1, // day 2
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.bucket_spent(AllocationBucket::Liquidity),
@@ -1902,7 +1906,7 @@ mod tests {
         // Try to spend more — should fail on lifetime check
         let result = treasury.allocate(
             AllocationBucket::Liquidity,
-            1 * OMNIA_PLANCKS,
+            OMNIA_PLANCKS,
             "dex",
             "overflow",
             None,
@@ -1935,7 +1939,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.accounting().balance(&TreasuryCategory::EcosystemGrants),
@@ -1955,7 +1959,7 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(
             treasury.accounting().balance(&TreasuryCategory::EcosystemGrants),
@@ -1980,7 +1984,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Allocate pilot → OperatingReserve decreases, PilotAllocation increases
         treasury
@@ -1994,16 +1998,16 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.escrow_balances, 100_000 * OMNIA_PLANCKS);
 
         // Confirm delivery → escrow → account, PilotAllocation debited
         treasury
             .confirm_pilot_delivery(100_000 * OMNIA_PLANCKS, reg.supply_tracker_mut())
-            .unwrap();
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+            .expect("test assertion failed");
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.escrow_balances, 0);
         assert_eq!(supply.account_balances, 100_000 * OMNIA_PLANCKS);
 
@@ -2019,17 +2023,17 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.escrow_balances, 50_000 * OMNIA_PLANCKS);
 
         // Refund → escrow → treasury, RefundsReserved credited
         treasury
             .refund_pilot(50_000 * OMNIA_PLANCKS, "order-ref", reg.supply_tracker_mut())
-            .unwrap();
+            .expect("test assertion failed");
 
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.escrow_balances, 0);
         // Treasury balance: 50M OMNIA funded - 100K pilot alloc - 50K pilot alloc + 50K refund
         // = 49,999,900,000 ... no wait.
@@ -2063,17 +2067,17 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         let _ = &reg; // used above for supply tracker
 
         // Reserve inventory for an order
         treasury
             .reserve_inventory(10_000 * OMNIA_PLANCKS, "user-1", "wallet-approved", "order-001", 1000)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(treasury.total_reserved(), 10_000 * OMNIA_PLANCKS);
-        let res = treasury.get_reservation("order-001").unwrap();
+        let res = treasury.get_reservation("order-001").expect("test assertion failed");
         assert_eq!(res.state, ReservationState::Active);
         assert_eq!(res.amount, 10_000 * OMNIA_PLANCKS);
 
@@ -2088,8 +2092,10 @@ mod tests {
         assert!(dup.is_err());
 
         // Release the reservation
-        treasury.release_reservation("order-001", "order cancelled").unwrap();
-        let res = treasury.get_reservation("order-001").unwrap();
+        treasury
+            .release_reservation("order-001", "order cancelled")
+            .expect("test assertion failed");
+        let res = treasury.get_reservation("order-001").expect("test assertion failed");
         assert_eq!(res.state, ReservationState::Released);
         assert_eq!(treasury.total_reserved(), 0);
 
@@ -2122,18 +2128,28 @@ mod tests {
         let mut treasury = Treasury::with_genesis_buckets();
 
         // Create reservations at different times
-        treasury.reserve_inventory(1_000, "u1", "w", "old-order", 100).unwrap();
-        treasury.reserve_inventory(2_000, "u2", "w", "new-order", 500).unwrap();
+        treasury
+            .reserve_inventory(1_000, "u1", "w", "old-order", 100)
+            .expect("test assertion failed");
+        treasury
+            .reserve_inventory(2_000, "u2", "w", "new-order", 500)
+            .expect("test assertion failed");
 
         // Expire reservations older than 200ms (as of time 600)
         let expired = treasury.expire_reservations(600, 200);
         assert_eq!(expired, 1); // only old-order
         assert_eq!(
-            treasury.get_reservation("old-order").unwrap().state,
+            treasury
+                .get_reservation("old-order")
+                .expect("test assertion failed")
+                .state,
             ReservationState::Expired
         );
         assert_eq!(
-            treasury.get_reservation("new-order").unwrap().state,
+            treasury
+                .get_reservation("new-order")
+                .expect("test assertion failed")
+                .state,
             ReservationState::Active
         );
         assert_eq!(treasury.total_reserved(), 2_000); // only new-order
@@ -2143,11 +2159,16 @@ mod tests {
     fn consume_reservation_marks_consumed() {
         let mut treasury = Treasury::with_genesis_buckets();
 
-        treasury.reserve_inventory(5_000, "u1", "w", "order-x", 100).unwrap();
-        treasury.consume_reservation("order-x").unwrap();
+        treasury
+            .reserve_inventory(5_000, "u1", "w", "order-x", 100)
+            .expect("test assertion failed");
+        treasury.consume_reservation("order-x").expect("test assertion failed");
 
         assert_eq!(
-            treasury.get_reservation("order-x").unwrap().state,
+            treasury
+                .get_reservation("order-x")
+                .expect("test assertion failed")
+                .state,
             ReservationState::Consumed
         );
         assert_eq!(treasury.total_reserved(), 0); // consumed reservations don't count
@@ -2171,7 +2192,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         treasury
             .allocate(
@@ -2185,13 +2206,15 @@ mod tests {
                 1,
                 1,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Reserve some pilot inventory
-        treasury.reserve_inventory(1_000, "u1", "w", "r1", 100).unwrap();
+        treasury
+            .reserve_inventory(1_000, "u1", "w", "r1", 100)
+            .expect("test assertion failed");
 
         // All invariants should pass
-        treasury.verify_bucket_invariants().unwrap();
+        treasury.verify_bucket_invariants().expect("test assertion failed");
     }
 
     #[test]
@@ -2208,7 +2231,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(treasury.bucket_spent(AllocationBucket::Team), 0);
         assert_eq!(

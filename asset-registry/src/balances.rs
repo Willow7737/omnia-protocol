@@ -511,7 +511,7 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 1_000_000);
         assert_eq!(balances.total_balance(AssetId::OMNIA, &alice()), 1_000_000);
@@ -525,11 +525,11 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         balances
             .transfer(AssetId::OMNIA, &alice(), &bob(), 300_000, &reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 700_000);
         assert_eq!(balances.free_balance(AssetId::OMNIA, &bob()), 300_000);
@@ -545,7 +545,7 @@ mod tests {
         // Credit some UBC
         balances
             .credit(AssetId::UBC, &alice(), 100, SupplyAuthority::EpochEligibility, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         // UBC is non-transferable
         let result = balances.transfer(AssetId::UBC, &alice(), &bob(), 10, &reg);
@@ -559,13 +559,13 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(reg.total_supply(AssetId::OMNIA), 1_000_000);
 
         balances
             .burn(AssetId::OMNIA, &alice(), 100_000, SupplyAuthority::Protocol, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 900_000);
         assert_eq!(reg.total_supply(AssetId::OMNIA), 900_000);
@@ -578,7 +578,7 @@ mod tests {
 
         balances
             .credit(AssetId::UBC, &alice(), 100, SupplyAuthority::EpochEligibility, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         let result = balances.burn(AssetId::UBC, &alice(), 10, SupplyAuthority::AccountOwner, &mut reg);
         assert!(matches!(result, Err(RegistryError::UbcBurnProhibited)));
@@ -591,7 +591,7 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 100, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &bob(), 200, &reg);
         assert!(matches!(result, Err(RegistryError::InsufficientBalance(_, 100, 200))));
@@ -604,16 +604,22 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
-        balances.freeze_account(AssetId::OMNIA, &alice()).unwrap();
+        balances
+            .freeze_account(AssetId::OMNIA, &alice())
+            .expect("test assertion failed");
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg);
         assert!(matches!(result, Err(RegistryError::AssetFrozen(_))));
 
         // Unfreeze restores transfer
-        balances.unfreeze_account(AssetId::OMNIA, &alice()).unwrap();
-        balances.transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg).unwrap();
+        balances
+            .unfreeze_account(AssetId::OMNIA, &alice())
+            .expect("test assertion failed");
+        balances
+            .transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg)
+            .expect("test assertion failed");
     }
 
     #[test]
@@ -623,10 +629,12 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         // Lock 400k
-        balances.lock(AssetId::OMNIA, &alice(), 400_000).unwrap();
+        balances
+            .lock(AssetId::OMNIA, &alice(), 400_000)
+            .expect("test assertion failed");
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 600_000);
         assert_eq!(balances.locked_balance(AssetId::OMNIA, &alice()), 400_000);
         assert_eq!(balances.total_balance(AssetId::OMNIA, &alice()), 1_000_000);
@@ -639,7 +647,9 @@ mod tests {
         ));
 
         // Unlock 200k
-        balances.unlock(AssetId::OMNIA, &alice(), 200_000).unwrap();
+        balances
+            .unlock(AssetId::OMNIA, &alice(), 200_000)
+            .expect("test assertion failed");
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 800_000);
         assert_eq!(balances.locked_balance(AssetId::OMNIA, &alice()), 200_000);
     }
@@ -651,7 +661,7 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &alice(), 100, &reg);
         assert!(matches!(result, Err(RegistryError::InvariantViolation(_))));
@@ -665,15 +675,15 @@ mod tests {
         // Credit OMNIA and UBC to same account
         balances
             .credit(AssetId::OMNIA, &alice(), 500, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
         balances
             .credit(AssetId::UBC, &alice(), 300, SupplyAuthority::EpochEligibility, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         // Burning OMNIA does not affect UBC
         balances
             .burn(AssetId::OMNIA, &alice(), 200, SupplyAuthority::Protocol, &mut reg)
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 300);
         assert_eq!(balances.free_balance(AssetId::UBC, &alice()), 300);
@@ -688,8 +698,10 @@ mod tests {
 
         balances
             .credit(AssetId::OMNIA, &alice(), 1_000, SupplyAuthority::Genesis, &mut reg)
-            .unwrap();
-        balances.transfer(AssetId::OMNIA, &alice(), &bob(), 300, &reg).unwrap();
+            .expect("test assertion failed");
+        balances
+            .transfer(AssetId::OMNIA, &alice(), &bob(), 300, &reg)
+            .expect("test assertion failed");
 
         assert_eq!(balances.events().len(), 2);
     }

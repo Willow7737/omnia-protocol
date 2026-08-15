@@ -596,7 +596,7 @@ mod tests {
                 "MTN".into(),
                 NOW,
             )
-            .unwrap();
+            .expect("test assertion failed");
         let err = engine
             .create_order(
                 "dup-001".into(),
@@ -611,7 +611,7 @@ mod tests {
                 "MTN".into(),
                 NOW,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, PaymentError::OrderAlreadyExists(_)));
     }
 
@@ -619,7 +619,7 @@ mod tests {
     fn full_happy_path() {
         let mut engine = create_test_engine();
         let id = create_and_advance_to(&mut engine, PaymentState::Delivered);
-        let order = engine.get_order(&id).unwrap();
+        let order = engine.get_order(&id).expect("test assertion failed");
         assert_eq!(order.state, PaymentState::Delivered);
         assert!(order.is_terminal());
         assert!(order.is_economically_delivered());
@@ -641,8 +641,11 @@ mod tests {
                 NOW + 400_000, // after 5-min quote window
                 Some("quote timed out".into()),
             )
-            .unwrap();
-        assert_eq!(engine.get_order(&id).unwrap().state, PaymentState::QuoteExpired);
+            .expect("test assertion failed");
+        assert_eq!(
+            engine.get_order(&id).expect("test assertion failed").state,
+            PaymentState::QuoteExpired
+        );
     }
 
     #[test]
@@ -660,7 +663,7 @@ mod tests {
                 NOW + 1000,
                 Some("insufficient funds".into()),
             )
-            .unwrap();
+            .expect("test assertion failed");
         engine
             .advance_state(
                 &id,
@@ -671,7 +674,7 @@ mod tests {
                 NOW + 2000,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
         engine
             .advance_state(
                 &id,
@@ -682,8 +685,8 @@ mod tests {
                 NOW + 3000,
                 None,
             )
-            .unwrap();
-        let order = engine.get_order(&id).unwrap();
+            .expect("test assertion failed");
+        let order = engine.get_order(&id).expect("test assertion failed");
         assert_eq!(order.state, PaymentState::Refunded);
         assert!(order.is_terminal());
         assert_eq!(order.refund_status, RefundStatus::Completed);
@@ -706,11 +709,11 @@ mod tests {
                 "MTN".into(),
                 NOW,
             )
-            .unwrap();
+            .expect("test assertion failed");
         // Sender cannot advance CREATED → QUOTED (only system:quote-service can)
         let err = engine
             .advance_state("auth-test", PaymentState::Quoted, Caller::Sender, NOW + 1000, None)
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, PaymentError::Unauthorized { .. }));
     }
 
@@ -730,7 +733,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, PaymentError::Unauthorized { .. }));
     }
 
@@ -748,7 +751,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, PaymentError::TerminalState { .. }));
     }
 
@@ -767,7 +770,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, PaymentError::InvalidTransition { .. }));
     }
 
@@ -788,7 +791,7 @@ mod tests {
                 "MTN".into(),
                 NOW,
             )
-            .unwrap();
+            .expect("test assertion failed");
         engine
             .advance_state(
                 "idem-test",
@@ -799,7 +802,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
         // Duplicate: same state → should be a no-op, not error
         let result = engine.advance_state(
             "idem-test",
@@ -812,7 +815,14 @@ mod tests {
         );
         assert!(result.is_ok());
         // Event count should still be 2 (create + quote), not 3
-        assert_eq!(engine.get_order("idem-test").unwrap().event_history.len(), 2);
+        assert_eq!(
+            engine
+                .get_order("idem-test")
+                .expect("test assertion failed")
+                .event_history
+                .len(),
+            2
+        );
     }
 
     #[test]
@@ -827,10 +837,10 @@ mod tests {
                 Caller::System {
                     service: "timeout-monitor".into(),
                 },
-                NOW + 2000_000, // after 30-min payment timeout
+                NOW + 2_000_000, // after 30-min payment timeout
                 Some("no provider callback".into()),
             )
-            .unwrap();
+            .expect("test assertion failed");
         engine
             .advance_state(
                 &id,
@@ -838,10 +848,10 @@ mod tests {
                 Caller::System {
                     service: "timeout-monitor".into(),
                 },
-                NOW + 3000_000,
+                NOW + 3_000_000,
                 Some("routed to ops".into()),
             )
-            .unwrap();
+            .expect("test assertion failed");
         // Manual reviewer sends back to risk review
         engine
             .advance_state(
@@ -850,11 +860,14 @@ mod tests {
                 Caller::ManualReview {
                     reviewer: "ops-1".into(),
                 },
-                NOW + 4000_000,
+                NOW + 4_000_000,
                 Some("re-evaluate risk".into()),
             )
-            .unwrap();
-        assert_eq!(engine.get_order(&id).unwrap().state, PaymentState::RiskReview);
+            .expect("test assertion failed");
+        assert_eq!(
+            engine.get_order(&id).expect("test assertion failed").state,
+            PaymentState::RiskReview
+        );
     }
 
     #[test]
@@ -871,7 +884,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
         engine
             .advance_state(
                 &id,
@@ -882,7 +895,7 @@ mod tests {
                 NOW + 2000,
                 Some("gas estimation failed".into()),
             )
-            .unwrap();
+            .expect("test assertion failed");
         // Retry: back to INVENTORY_RESERVED
         engine
             .advance_state(
@@ -894,8 +907,11 @@ mod tests {
                 NOW + 3000,
                 Some("retrying allocation".into()),
             )
-            .unwrap();
-        assert_eq!(engine.get_order(&id).unwrap().state, PaymentState::InventoryReserved);
+            .expect("test assertion failed");
+        assert_eq!(
+            engine.get_order(&id).expect("test assertion failed").state,
+            PaymentState::InventoryReserved
+        );
     }
 
     #[test]
@@ -916,7 +932,7 @@ mod tests {
                 NOW + 1000,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
         assert_eq!(engine.active_order_count(), 1);
         // Complete the other to terminal
         let _ = create_and_advance_to(&mut engine, PaymentState::Delivered);

@@ -368,7 +368,9 @@ mod tests {
     #[test]
     fn ubc_identity_fee_is_ubc() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::BasicIdentity, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::BasicIdentity, 0)
+            .expect("test assertion failed");
         assert!(result.is_ubc);
         assert_eq!(result.total_fee, 2); // standard UBC identity fee
         assert_eq!(result.burned_amount, 0); // UBC not burned
@@ -377,7 +379,9 @@ mod tests {
     #[test]
     fn ubc_compute_fee() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::Compute, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::Compute, 0)
+            .expect("test assertion failed");
         assert!(result.is_ubc);
         assert_eq!(result.total_fee, 5);
         assert_eq!(result.burned_amount, 0);
@@ -389,7 +393,9 @@ mod tests {
             OmniaFeeSchedule::standard(),
             BurnRatio::from_bps(300), // 3%
         );
-        let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::OmniaTransfer, 0)
+            .expect("test assertion failed");
         assert!(!result.is_ubc);
         assert_eq!(result.total_fee, 1_000_000); // 0.001 OMNIA base
                                                  // burned = 1_000_000 * 300 / 10000 = 30,000
@@ -405,7 +411,9 @@ mod tests {
     #[test]
     fn omnia_transfer_with_priority() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::OmniaTransfer, 50_000_000).unwrap();
+        let result = formula
+            .calculate(ActivityType::OmniaTransfer, 50_000_000)
+            .expect("test assertion failed");
         assert_eq!(result.total_fee, 51_000_000); // base + priority
                                                   // validator gets priority + share of base
         assert!(result.validator_amount > 50_000_000);
@@ -414,14 +422,18 @@ mod tests {
     #[test]
     fn priority_fee_exceeds_max() {
         let formula = FeeFormula::new();
-        let err = formula.calculate(ActivityType::OmniaTransfer, 200_000_000).unwrap_err();
+        let err = formula
+            .calculate(ActivityType::OmniaTransfer, 200_000_000)
+            .expect_err("test assertion failed");
         assert!(matches!(err, FeeError::PriorityFeeExceeded { .. }));
     }
 
     #[test]
     fn external_chain_no_omnia_fee() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::ExternalChain, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::ExternalChain, 0)
+            .expect("test assertion failed");
         assert_eq!(result.total_fee, 0);
         assert_eq!(result.burned_amount, 0);
     }
@@ -429,7 +441,9 @@ mod tests {
     #[test]
     fn ghana_mobile_money_has_service_fee() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::GhanaMobileMoney, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::GhanaMobileMoney, 0)
+            .expect("test assertion failed");
         // base (500k) + service (500k) = 1,000,000
         assert_eq!(result.total_fee, 1_000_000);
         // Ghana is not burnable
@@ -442,7 +456,9 @@ mod tests {
             OmniaFeeSchedule::standard(),
             BurnRatio::from_bps(500), // 5%
         );
-        let result = formula.calculate(ActivityType::MerchantPayment, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::MerchantPayment, 0)
+            .expect("test assertion failed");
         assert!(result.burned_amount > 0);
         // burned = 1_000_000 * 500 / 10000 = 50,000
         assert_eq!(result.burned_amount, 50_000);
@@ -451,7 +467,9 @@ mod tests {
     #[test]
     fn governance_proposal_high_base_fee() {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::GovernanceProposal, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::GovernanceProposal, 0)
+            .expect("test assertion failed");
         assert_eq!(result.total_fee, 1_000_000_000); // 1 OMNIA
     }
 
@@ -459,17 +477,23 @@ mod tests {
     fn fee_separation_enforced() {
         // UBC activities must NOT produce OMNIA fees
         let formula = FeeFormula::new();
-        let ubc_result = formula.calculate(ActivityType::BasicIdentity, 0).unwrap();
+        let ubc_result = formula
+            .calculate(ActivityType::BasicIdentity, 0)
+            .expect("test assertion failed");
         assert!(ubc_result.is_ubc);
         // OMNIA activities must NOT be UBC
-        let omnia_result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
+        let omnia_result = formula
+            .calculate(ActivityType::OmniaTransfer, 0)
+            .expect("test assertion failed");
         assert!(!omnia_result.is_ubc);
     }
 
     #[test]
     fn zero_burn_ratio() {
         let formula = FeeFormula::with_params(OmniaFeeSchedule::standard(), BurnRatio::from_bps(0));
-        let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::OmniaTransfer, 0)
+            .expect("test assertion failed");
         assert_eq!(result.burned_amount, 0);
         assert_eq!(result.total_fee, 1_000_000);
     }
@@ -484,7 +508,9 @@ mod tests {
             },
             BurnRatio::default(),
         );
-        let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
+        let result = formula
+            .calculate(ActivityType::OmniaTransfer, 0)
+            .expect("test assertion failed");
         assert_eq!(result.total_fee, 100_000); // min enforced
     }
 

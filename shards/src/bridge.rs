@@ -836,7 +836,7 @@ mod tests {
     fn test_mock_initiate_payment_success() {
         let mut op = MockBridgeOperator::new(MobileProvider::Mtn);
         let order = make_order("+233201234567", 5000); // 50 GHS
-        let result = op.initiate_payment(order).unwrap();
+        let result = op.initiate_payment(order).expect("test assertion failed");
         assert_eq!(result.status, BridgePaymentStatus::Confirmed);
         assert!(result.provider_ref.is_some());
     }
@@ -863,9 +863,9 @@ mod tests {
         let mut order = make_order("+233201234567", 5000);
         // Use a fixed ID for this test
         order.order_id = "idem-test".to_string();
-        let first = op.initiate_payment(order.clone()).unwrap();
+        let first = op.initiate_payment(order.clone()).expect("test assertion failed");
         // Resubmit with same order_id
-        let second = op.initiate_payment(order).unwrap();
+        let second = op.initiate_payment(order).expect("test assertion failed");
         assert_eq!(first.order_id, second.order_id);
         assert_eq!(first.provider_ref, second.provider_ref);
     }
@@ -875,8 +875,8 @@ mod tests {
         let mut op = MockBridgeOperator::new(MobileProvider::Mtn);
         let order = make_order("+233201234567", 5000);
         let order_id = order.order_id.clone();
-        op.initiate_payment(order).unwrap();
-        let status = op.query_status(&order_id).unwrap();
+        op.initiate_payment(order).expect("test assertion failed");
+        let status = op.query_status(&order_id).expect("test assertion failed");
         assert_eq!(status, BridgePaymentStatus::Confirmed);
     }
 
@@ -892,8 +892,8 @@ mod tests {
         let mut op = MockBridgeOperator::new_failing(MobileProvider::Mtn);
         let order = make_order("+233201234567", 5000);
         let order_id = order.order_id.clone();
-        op.initiate_payment(order).unwrap(); // will fail
-        let refunded = op.refund(&order_id).unwrap();
+        op.initiate_payment(order).expect("test assertion failed"); // will fail
+        let refunded = op.refund(&order_id).expect("test assertion failed");
         assert_eq!(refunded.status, BridgePaymentStatus::Refunded);
     }
 
@@ -902,7 +902,7 @@ mod tests {
         let mut op = MockBridgeOperator::new(MobileProvider::Mtn);
         let order = make_order("+233201234567", 5000);
         let order_id = order.order_id.clone();
-        op.initiate_payment(order).unwrap(); // succeeds
+        op.initiate_payment(order).expect("test assertion failed"); // succeeds
         let result = op.refund(&order_id);
         assert!(result.is_err()); // can't refund confirmed order
     }
@@ -963,7 +963,10 @@ mod tests {
         let mut registry = BridgeRegistry::new();
         registry.register(MockBridgeOperator::new(MobileProvider::Mtn));
         let results = registry.health_check_all();
-        assert!(results.get(&MobileProvider::Mtn).unwrap().is_ok());
+        assert!(results
+            .get(&MobileProvider::Mtn)
+            .expect("test assertion failed")
+            .is_ok());
     }
 
     // Serialization tests
@@ -971,8 +974,8 @@ mod tests {
     #[test]
     fn test_order_serialization() {
         let order = make_order("+233201234567", 5000);
-        let bytes = postcard::to_allocvec(&order).unwrap();
-        let restored: BridgePaymentOrder = postcard::from_bytes(&bytes).unwrap();
+        let bytes = postcard::to_allocvec(&order).expect("test assertion failed");
+        let restored: BridgePaymentOrder = postcard::from_bytes(&bytes).expect("test assertion failed");
         assert_eq!(restored.order_id, order.order_id);
         assert_eq!(restored.phone_number, order.phone_number);
         assert_eq!(restored.amount_ghs_pesewas, order.amount_ghs_pesewas);
@@ -983,8 +986,8 @@ mod tests {
         let mut cb = CircuitBreaker::new(5, 2, 10000);
         cb.record_failure(0);
         cb.record_failure(0);
-        let bytes = postcard::to_allocvec(&cb).unwrap();
-        let restored: CircuitBreaker = postcard::from_bytes(&bytes).unwrap();
+        let bytes = postcard::to_allocvec(&cb).expect("test assertion failed");
+        let restored: CircuitBreaker = postcard::from_bytes(&bytes).expect("test assertion failed");
         assert_eq!(restored.consecutive_failures, 2);
     }
 }

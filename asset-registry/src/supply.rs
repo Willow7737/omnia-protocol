@@ -592,7 +592,7 @@ mod tests {
 
     // Helper to get mutable supply for test compartment adjustments.
     // In production, compartment tracking is managed by the financial shard.
-    fn get_mut<'a>(tracker: &'a mut SupplyTracker, asset_id: AssetId) -> Option<&'a mut AssetSupply> {
+    fn get_mut(tracker: &mut SupplyTracker, asset_id: AssetId) -> Option<&mut AssetSupply> {
         tracker.get_mut(asset_id)
     }
 
@@ -611,7 +611,7 @@ mod tests {
                 Some("block-0".into()),
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(tracker.total_supply(AssetId::OMNIA), 1_000_000);
     }
@@ -631,7 +631,7 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
         tracker
             .burn(
                 AssetId::OMNIA,
@@ -641,7 +641,7 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(tracker.total_supply(AssetId::OMNIA), 900_000);
     }
@@ -667,10 +667,10 @@ mod tests {
                 None,
                 &ubc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // OMNIA cannot exceed hard cap
-        let cap = omnia.max_supply().unwrap();
+        let cap = omnia.max_supply().expect("test assertion failed");
         let err = tracker
             .mint(
                 AssetId::OMNIA,
@@ -680,7 +680,7 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, RegistryError::SupplyExceedsHardCap(_, _, _, _)));
     }
 
@@ -699,7 +699,7 @@ mod tests {
                 None,
                 &ubc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         let err = tracker
             .burn(
@@ -710,7 +710,7 @@ mod tests {
                 None,
                 &ubc,
             )
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, RegistryError::UbcBurnProhibited));
     }
 
@@ -722,7 +722,7 @@ mod tests {
 
         let err = tracker
             .mint(AssetId::OMNIA, 0, SupplyAuthority::Genesis, "test".into(), None, &omnia)
-            .unwrap_err();
+            .expect_err("test assertion failed");
         assert!(matches!(err, RegistryError::InvariantViolation(_)));
     }
 
@@ -742,7 +742,7 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.account_balances = 500_000;
         }
@@ -757,7 +757,7 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.treasury_balances = 300_000;
         }
@@ -772,14 +772,14 @@ mod tests {
                 None,
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.account_balances = 450_000;
         }
 
         // Verify invariant: total_supply (750k) == 450k + 0 + 300k + 0
-        let supply = tracker.get(AssetId::OMNIA).unwrap();
-        assert_eq!(supply.verify_invariant().unwrap(), 750_000);
+        let supply = tracker.get(AssetId::OMNIA).expect("test assertion failed");
+        assert_eq!(supply.verify_invariant().expect("test assertion failed"), 750_000);
         assert_eq!(tracker.total_supply(AssetId::OMNIA), 750_000);
     }
 
@@ -798,7 +798,7 @@ mod tests {
                 Some("block-0".into()),
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
         tracker
             .burn(
                 AssetId::OMNIA,
@@ -808,7 +808,7 @@ mod tests {
                 Some("tx-42".into()),
                 &omnia,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         let events = tracker.events_for(AssetId::OMNIA);
         assert_eq!(events.len(), 2);
@@ -836,7 +836,7 @@ mod tests {
     #[test]
     fn reward_authority_activate() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         assert!(auth.active);
         assert_eq!(auth.current_year, 1);
     }
@@ -844,7 +844,7 @@ mod tests {
     #[test]
     fn reward_authority_double_activate_fails() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         assert!(auth.activate(2).is_err());
     }
 
@@ -858,7 +858,7 @@ mod tests {
     #[test]
     fn reward_authority_unscheduled_year_rejected() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         let err = auth.validate_reward_mint(1000, 5); // no year 5 schedule
         assert!(matches!(err, Err(RegistryError::RewardYearNotScheduled(5))));
     }
@@ -866,7 +866,7 @@ mod tests {
     #[test]
     fn reward_authority_within_budget() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         // Year 1 budget: 80M OMNIA = 80_000_000_000_000_000 plancks
         let half = 40_000_000_000_000_000;
         assert!(auth.validate_reward_mint(half, 1).is_ok());
@@ -880,7 +880,7 @@ mod tests {
     #[test]
     fn reward_authority_budget_exceeded() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         let budget = 80_000_000_000_000_000u64;
         auth.record_release(budget, 1);
         let err = auth.validate_reward_mint(1, 1);
@@ -890,7 +890,7 @@ mod tests {
     #[test]
     fn reward_authority_deactivate() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         auth.deactivate();
         assert!(!auth.active);
         // Reactivation allowed after deactivation
@@ -905,7 +905,7 @@ mod tests {
             slashed_policy: crate::genesis::SlashedRewardPolicy::ReturnToPool,
             ..crate::genesis::RewardSchedule::canonical()
         });
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         let budget = 80_000_000_000_000_000u64;
         auth.record_release(budget, 1);
         assert_eq!(auth.total_released, budget);
@@ -924,7 +924,7 @@ mod tests {
             slashed_policy: crate::genesis::SlashedRewardPolicy::Burned,
             ..crate::genesis::RewardSchedule::canonical()
         });
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         auth.record_release(50_000_000_000_000_000, 1);
         auth.record_unclaimed(10_000_000_000_000_000, 1);
         assert_eq!(auth.total_released, 40_000_000_000_000_000);
@@ -938,7 +938,7 @@ mod tests {
     #[test]
     fn reward_authority_invariant_holds() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         auth.record_release(40_000_000_000_000_000, 1);
         assert!(auth.verify_invariant());
         // Even after a slash
@@ -949,7 +949,7 @@ mod tests {
     #[test]
     fn reward_authority_multi_year_tracking() {
         let mut auth = RewardAuthority::default();
-        auth.activate(1).unwrap();
+        auth.activate(1).expect("test assertion failed");
         // Release full year 1
         auth.record_release(80_000_000_000_000_000, 1);
         // Move to year 2

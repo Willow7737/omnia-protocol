@@ -86,7 +86,7 @@ mod tests {
         };
         let result = ComputationalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::StateConflict(msg) => assert!(msg.contains("Task already exists")),
             other => panic!("Expected StateConflict, got {other:?}"),
         }
@@ -101,7 +101,7 @@ mod tests {
         };
         let result = ComputationalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Task not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -113,7 +113,7 @@ mod tests {
         let op = ComputationalOp::VerifyProof { task_id: task_id() };
         let result = ComputationalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Task not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -125,7 +125,7 @@ mod tests {
         let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
         let result = ComputationalValidator::validate_shard_op(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("Not a Computational")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }

@@ -356,7 +356,7 @@ mod tests {
 
         tracker
             .record("order-1".into(), 100, 400_000, "treasury".into(), 0)
-            .unwrap();
+            .expect("test assertion failed");
         assert_eq!(tracker.remaining(), 600_000);
 
         // Over budget

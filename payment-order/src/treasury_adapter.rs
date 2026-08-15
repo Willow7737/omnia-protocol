@@ -198,6 +198,7 @@ impl TreasuryBridgeAdapter {
 mod tests {
     use crate::engine::{Caller, PaymentEngine};
     use crate::state::PaymentState;
+    use crate::TreasuryBridgeAdapter;
     use crate::TreasuryBridgeResult;
     use omnia_asset_registry::types::AssetId;
     use omnia_asset_registry::Treasury;

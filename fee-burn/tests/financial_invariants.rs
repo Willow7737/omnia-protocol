@@ -13,9 +13,8 @@
 use proptest::prelude::*;
 
 use omnia_fee_burn::{
-    burn::{BurnAccounting, BurnPolicy, BurnRatio},
-    error::FeeError,
-    fee::{ActivityType, FeeCalculation, FeeFormula, FeeResult, OmniaFeeSchedule},
+    burn::{BurnAccounting, BurnRatio},
+    fee::{ActivityType, FeeFormula, OmniaFeeSchedule},
     supply_api::SupplySnapshot,
 };
 
@@ -56,7 +55,8 @@ proptest! {
     #[test]
     fn prop_external_chain_no_omnia_fee(_priority in 0u64..1_000_000u64) {
         let formula = FeeFormula::new();
-        let result = formula.calculate(ActivityType::ExternalChain, 0).unwrap();
+        let result = formula.calculate(ActivityType::ExternalChain, 0)
+            .expect("ExternalChain fee calculation should succeed");
         prop_assert_eq!(result.total_fee, 0, "External chain must have zero OMNIA fee");
         prop_assert_eq!(result.burned_amount, 0, "External chain must not be burned as OMNIA");
     }
@@ -156,7 +156,8 @@ proptest! {
         let result = BurnRatio::new_governance(bps);
         if bps <= 2500 {
             prop_assert!(result.is_ok(), "{}bps should be valid governance ratio", bps);
-            prop_assert!(result.unwrap().bps() <= 2500);
+            let ratio = result.expect("valid bps already checked");
+            prop_assert!(ratio.bps() <= 2500);
         } else {
             prop_assert!(result.is_err(), "{}bps should exceed ceiling", bps);
         }
@@ -168,7 +169,7 @@ proptest! {
 proptest! {
     /// For any OMNIA fee, burned + validator + protocol <= total_fee.
     #[test]
-    fn prop_fee_decomposition(base in 100_000u64..1_000_000_000u64, priority in 0u64..100_000_000u64,
+    fn prop_fee_decomposition(_base in 100_000u64..1_000_000_000u64, priority in 0u64..100_000_000u64,
                                 burn_bps in 0u16..500u16) {
         let formula = FeeFormula::with_params(OmniaFeeSchedule::standard(), BurnRatio::from_bps(burn_bps));
         if let Ok(result) = formula.calculate(ActivityType::OmniaTransfer, priority) {

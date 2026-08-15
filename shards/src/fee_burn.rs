@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn test_new_valid_config() {
-        let cfg = FeeBurnConfig::new(3, 20).unwrap();
+        let cfg = FeeBurnConfig::new(3, 20).expect("test assertion failed");
         assert_eq!(cfg.baseline_burn_pct, 3);
         assert_eq!(cfg.governance_burn_cap_pct, 20);
         assert_eq!(cfg.governance_burn_pct, 3); // defaults to baseline
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn test_set_governance_rate_valid() {
         let mut cfg = FeeBurnConfig::standard();
-        cfg.set_governance_rate(10).unwrap();
+        cfg.set_governance_rate(10).expect("test assertion failed");
         assert_eq!(cfg.governance_burn_pct, 10);
         assert_eq!(cfg.effective_burn_pct(), 10); // max(2, 10) = 10
     }
@@ -435,24 +435,24 @@ mod tests {
 
     #[test]
     fn test_set_governance_rate_below_baseline() {
-        let mut cfg = FeeBurnConfig::new(5, 20).unwrap();
+        let mut cfg = FeeBurnConfig::new(5, 20).expect("test assertion failed");
         // Setting governance to 1% when baseline is 5% should succeed
         // (governance can set lower), but effective stays at 5%
-        cfg.set_governance_rate(1).unwrap();
+        cfg.set_governance_rate(1).expect("test assertion failed");
         assert_eq!(cfg.governance_burn_pct, 1);
         assert_eq!(cfg.effective_burn_pct(), 5); // max(5, 1) = 5
     }
 
     #[test]
     fn test_effective_burn_pct_uses_max() {
-        let mut cfg = FeeBurnConfig::new(3, 25).unwrap();
-        cfg.set_governance_rate(7).unwrap();
+        let mut cfg = FeeBurnConfig::new(3, 25).expect("test assertion failed");
+        cfg.set_governance_rate(7).expect("test assertion failed");
         assert_eq!(cfg.effective_burn_pct(), 7); // max(3, 7) = 7
     }
 
     #[test]
     fn test_effective_burn_bps_conversion() {
-        let cfg = FeeBurnConfig::new(5, 20).unwrap();
+        let cfg = FeeBurnConfig::new(5, 20).expect("test assertion failed");
         assert_eq!(cfg.effective_burn_bps(), 500); // 5% = 500 bps
     }
 
@@ -497,7 +497,7 @@ mod tests {
 
     #[test]
     fn test_calculate_burn_5pct() {
-        let tracker = FeeBurnTracker::new(FeeBurnConfig::new(5, 25).unwrap());
+        let tracker = FeeBurnTracker::new(FeeBurnConfig::new(5, 25).expect("test assertion failed"));
         // 5% of 1000 = 50
         assert_eq!(tracker.calculate_burn(1000), 50);
         // 5% of 100 = 5
@@ -517,7 +517,9 @@ mod tests {
         let mut tracker = FeeBurnTracker::new(FeeBurnConfig::standard());
         let fee = 1000;
         let burned = tracker.calculate_burn(fee);
-        tracker.record_burn(fee, burned, "financial").unwrap();
+        tracker
+            .record_burn(fee, burned, "financial")
+            .expect("test assertion failed");
         assert_eq!(tracker.total_burned, 20);
         assert_eq!(tracker.burn_event_count, 1);
         assert_eq!(tracker.per_domain_burned.get("financial"), 20);
@@ -526,9 +528,13 @@ mod tests {
     #[test]
     fn test_record_burn_multiple_domains() {
         let mut tracker = FeeBurnTracker::new(FeeBurnConfig::standard());
-        tracker.record_burn(1000, 20, "financial").unwrap();
-        tracker.record_burn(500, 10, "identity").unwrap();
-        tracker.record_burn(2000, 40, "cross_shard").unwrap();
+        tracker
+            .record_burn(1000, 20, "financial")
+            .expect("test assertion failed");
+        tracker.record_burn(500, 10, "identity").expect("test assertion failed");
+        tracker
+            .record_burn(2000, 40, "cross_shard")
+            .expect("test assertion failed");
         assert_eq!(tracker.total_burned, 70);
         assert_eq!(tracker.burn_event_count, 3);
         assert_eq!(tracker.per_domain_burned.get("financial"), 20);
@@ -545,13 +551,15 @@ mod tests {
         let result = tracker.record_burn(fee, correct_burn + 1, "financial");
         assert!(result.is_err());
         // Correct burn amount should succeed
-        tracker.record_burn(fee, correct_burn, "financial").unwrap();
+        tracker
+            .record_burn(fee, correct_burn, "financial")
+            .expect("test assertion failed");
     }
 
     #[test]
     fn test_record_burn_zero_fee() {
         let mut tracker = FeeBurnTracker::new(FeeBurnConfig::standard());
-        tracker.record_burn(0, 0, "financial").unwrap();
+        tracker.record_burn(0, 0, "financial").expect("test assertion failed");
         assert_eq!(tracker.total_burned, 0);
         assert_eq!(tracker.burn_event_count, 1);
     }
@@ -564,7 +572,7 @@ mod tests {
 
         // Raise governance rate to 10%
         let mut new_cfg = FeeBurnConfig::standard();
-        new_cfg.set_governance_rate(10).unwrap();
+        new_cfg.set_governance_rate(10).expect("test assertion failed");
         tracker.update_config(new_cfg);
 
         // 10% of 1000 = 100
@@ -574,7 +582,9 @@ mod tests {
     #[test]
     fn test_stats_snapshot() {
         let mut tracker = FeeBurnTracker::new(FeeBurnConfig::standard());
-        tracker.record_burn(1000, 20, "financial").unwrap();
+        tracker
+            .record_burn(1000, 20, "financial")
+            .expect("test assertion failed");
         let stats = tracker.stats();
         assert_eq!(stats.total_burned, 20);
         assert_eq!(stats.burn_event_count, 1);
@@ -585,10 +595,12 @@ mod tests {
     #[test]
     fn test_serialization_roundtrip() {
         let mut tracker = FeeBurnTracker::new(FeeBurnConfig::standard());
-        tracker.record_burn(1000, 20, "financial").unwrap();
-        tracker.record_burn(500, 10, "identity").unwrap();
-        let bytes = postcard::to_allocvec(&tracker).unwrap();
-        let restored: FeeBurnTracker = postcard::from_bytes(&bytes).unwrap();
+        tracker
+            .record_burn(1000, 20, "financial")
+            .expect("test assertion failed");
+        tracker.record_burn(500, 10, "identity").expect("test assertion failed");
+        let bytes = postcard::to_allocvec(&tracker).expect("test assertion failed");
+        let restored: FeeBurnTracker = postcard::from_bytes(&bytes).expect("test assertion failed");
         assert_eq!(restored.total_burned, 30);
         assert_eq!(restored.burn_event_count, 2);
         assert_eq!(restored.config.effective_burn_pct(), 2);
@@ -596,21 +608,21 @@ mod tests {
 
     #[test]
     fn test_governance_rate_at_max_cap() {
-        let mut cfg = FeeBurnConfig::new(2, 25).unwrap();
-        cfg.set_governance_rate(25).unwrap();
+        let mut cfg = FeeBurnConfig::new(2, 25).expect("test assertion failed");
+        cfg.set_governance_rate(25).expect("test assertion failed");
         assert_eq!(cfg.effective_burn_pct(), 25);
     }
 
     #[test]
     fn test_governance_rate_one_above_cap() {
-        let mut cfg = FeeBurnConfig::new(2, 25).unwrap();
+        let mut cfg = FeeBurnConfig::new(2, 25).expect("test assertion failed");
         let result = cfg.set_governance_rate(26);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_large_fee_burn_precision() {
-        let tracker = FeeBurnTracker::new(FeeBurnConfig::new(3, 20).unwrap());
+        let tracker = FeeBurnTracker::new(FeeBurnConfig::new(3, 20).expect("test assertion failed"));
         // 3% of u64::MAX / 100 to avoid overflow
         let fee = 1_000_000_000_000_u64;
         let burned = tracker.calculate_burn(fee);

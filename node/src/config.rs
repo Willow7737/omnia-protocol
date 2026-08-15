@@ -735,7 +735,10 @@ mod tests {
         };
         let result = config.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("node_id"));
+        assert!(result
+            .expect_err("test assertion failed")
+            .to_string()
+            .contains("node_id"));
     }
 
     #[test]
@@ -762,7 +765,10 @@ mod tests {
         };
         let result = config.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("http_port"));
+        assert!(result
+            .expect_err("test assertion failed")
+            .to_string()
+            .contains("http_port"));
     }
 
     #[test]
@@ -789,7 +795,10 @@ mod tests {
         };
         let result = config.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("log_level"));
+        assert!(result
+            .expect_err("test assertion failed")
+            .to_string()
+            .contains("log_level"));
     }
 
     #[test]

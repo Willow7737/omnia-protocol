@@ -290,25 +290,25 @@ mod tests {
 
     #[test]
     fn new_ratio_within_initial_range() {
-        let ratio = BurnRatio::new(300).unwrap();
+        let ratio = BurnRatio::new(300).expect("test assertion failed");
         assert_eq!(ratio.bps(), 300);
     }
 
     #[test]
     fn new_ratio_exceeds_initial() {
-        let err = BurnRatio::new(600).unwrap_err();
+        let err = BurnRatio::new(600).expect_err("test assertion failed");
         assert!(matches!(err, FeeError::BurnRatioExceedsInitial { .. }));
     }
 
     #[test]
     fn governance_ratio_within_ceiling() {
-        let ratio = BurnRatio::new_governance(2000).unwrap(); // 20%
+        let ratio = BurnRatio::new_governance(2000).expect("test assertion failed"); // 20%
         assert_eq!(ratio.bps(), 2000);
     }
 
     #[test]
     fn governance_ratio_exceeds_ceiling() {
-        let err = BurnRatio::new_governance(3000).unwrap_err(); // 30%
+        let err = BurnRatio::new_governance(3000).expect_err("test assertion failed"); // 30%
         assert!(matches!(err, FeeError::BurnRatioExceedsCeiling { .. }));
     }
 
@@ -339,17 +339,17 @@ mod tests {
     fn burn_policy_pause_resume() {
         let mut policy = BurnPolicy::new(BurnRatio::from_bps(100), 1000);
         assert!(!policy.paused);
-        policy.pause("incident".into(), 2000).unwrap();
+        policy.pause("incident".into(), 2000).expect("test assertion failed");
         assert!(policy.paused);
         assert_eq!(policy.pause_reason.as_deref(), Some("incident"));
-        policy.resume(3000).unwrap();
+        policy.resume(3000).expect("test assertion failed");
         assert!(!policy.paused);
     }
 
     #[test]
     fn burn_policy_double_pause_fails() {
         let mut policy = BurnPolicy::new(BurnRatio::from_bps(100), 1000);
-        policy.pause("reason".into(), 2000).unwrap();
+        policy.pause("reason".into(), 2000).expect("test assertion failed");
         assert!(policy.pause("again".into(), 3000).is_err());
     }
 
@@ -364,7 +364,7 @@ mod tests {
         let mut policy = BurnPolicy::new(BurnRatio::from_bps(100), 1000);
         policy
             .set_burn_ratio_governance(BurnRatio::from_bps(1500), 2000)
-            .unwrap();
+            .expect("test assertion failed");
         assert_eq!(policy.burn_ratio.bps(), 1500);
         assert_eq!(policy.change_sequence, 1);
     }
@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn burn_policy_change_while_paused_fails() {
         let mut policy = BurnPolicy::new(BurnRatio::from_bps(100), 1000);
-        policy.pause("incident".into(), 2000).unwrap();
+        policy.pause("incident".into(), 2000).expect("test assertion failed");
         assert!(policy
             .set_burn_ratio_governance(BurnRatio::from_bps(1500), 3000)
             .is_err());

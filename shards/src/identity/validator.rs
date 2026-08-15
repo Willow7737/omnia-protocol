@@ -159,7 +159,7 @@ mod tests {
         let op = IdentityOp::CreateDid { document: doc };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("DID cannot be empty")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }
@@ -179,7 +179,7 @@ mod tests {
         let op = IdentityOp::CreateDid { document: make_doc() };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::StateConflict(msg) => assert!(msg.contains("DID already exists")),
             other => panic!("Expected StateConflict, got {other:?}"),
         }
@@ -196,7 +196,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("DID not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -224,7 +224,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("No recovery config")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -256,7 +256,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Insufficient recovery shares")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -297,7 +297,7 @@ mod tests {
         let op = IdentityOp::VerifyDid { did: test_did() };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("DID not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -322,7 +322,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Owner DID not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -339,7 +339,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::StateConflict(msg) => assert!(msg.contains("Agent already exists")),
             other => panic!("Expected StateConflict, got {other:?}"),
         }
@@ -368,7 +368,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("DID not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -398,7 +398,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("No biometric enrolled")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -414,7 +414,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Agent not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -433,7 +433,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("DID not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -451,7 +451,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("threshold must be at least 2")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }
@@ -469,7 +469,7 @@ mod tests {
         };
         let result = IdentityValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("threshold cannot exceed total")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }
@@ -496,7 +496,7 @@ mod tests {
         let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
         let result = IdentityValidator::validate_shard_op(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("Not an Identity")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }

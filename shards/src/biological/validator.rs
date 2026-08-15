@@ -100,7 +100,7 @@ mod tests {
         };
         let result = BiologicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("Scope")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }
@@ -127,7 +127,7 @@ mod tests {
         };
         let result = BiologicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Consent record not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -144,7 +144,7 @@ mod tests {
         };
         let result = BiologicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("No consent")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -156,7 +156,7 @@ mod tests {
         let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
         let result = BiologicalValidator::validate_shard_op(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("Not a Biological")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }

@@ -207,7 +207,7 @@ mod tests {
     fn split_extracts_circuit_id_and_proof() {
         let mut bytes = vec![0xABu8; CIRCUIT_ID_LEN];
         bytes.extend_from_slice(&[0xCD; MIN_GROTH16_PROOF_LEN]);
-        let (id, proof) = split_circuit_proof(&bytes).unwrap();
+        let (id, proof) = split_circuit_proof(&bytes).expect("test assertion failed");
         assert_eq!(id, [0xAB; 32]);
         assert_eq!(proof, &[0xCD; MIN_GROTH16_PROOF_LEN][..]);
     }

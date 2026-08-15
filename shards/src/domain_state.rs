@@ -166,7 +166,7 @@ mod tests {
         let state = FinancialState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod tests {
         let state = IdentityState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 
     #[test]
@@ -212,7 +212,7 @@ mod tests {
         let state = ComputationalState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 
     #[test]
@@ -233,7 +233,7 @@ mod tests {
         let state = PhysicalState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         let state = BiologicalState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 
     #[test]
@@ -275,6 +275,6 @@ mod tests {
         let state = EconomicsState::new();
         let bytes = state.snapshot();
         assert!(bytes.is_ok());
-        assert!(!bytes.unwrap().is_empty());
+        assert!(!bytes.expect("test assertion failed").is_empty());
     }
 }

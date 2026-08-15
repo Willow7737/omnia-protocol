@@ -129,7 +129,7 @@ mod tests {
         };
         let result = PhysicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::StateConflict(msg) => assert!(msg.contains("Item already anchored")),
             other => panic!("Expected StateConflict, got {other:?}"),
         }
@@ -144,7 +144,7 @@ mod tests {
         };
         let result = PhysicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Item not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -156,7 +156,7 @@ mod tests {
         let op = PhysicalOp::VerifyChain { item_id: item_id() };
         let result = PhysicalValidator::validate(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => assert!(msg.contains("Item not found")),
             other => panic!("Expected ValidationFailed, got {other:?}"),
         }
@@ -168,7 +168,7 @@ mod tests {
         let op = ShardOp::Financial(crate::FinancialOp::BalanceQuery { account: [0u8; 32] });
         let result = PhysicalValidator::validate_shard_op(&state, &op);
         assert!(result.is_err());
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::InvalidOperation(msg) => assert!(msg.contains("Not a Physical")),
             other => panic!("Expected InvalidOperation, got {other:?}"),
         }

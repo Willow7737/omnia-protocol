@@ -23,7 +23,7 @@ proptest! {
         ubc_amount in 1u64..1_000_000_000u64,
     ) {
         let mut reg = AssetRegistry::with_genesis_assets();
-        let ubc_def = reg.ubc().unwrap().clone();
+        let ubc_def = reg.ubc().expect("test assertion failed").clone();
 
         // Mint UBC (epoch reset)
         reg.supply_tracker_mut()
@@ -35,7 +35,7 @@ proptest! {
                 None,
                 &ubc_def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // OMNIA supply must remain 0
         assert_eq!(reg.total_supply(AssetId::OMNIA), 0);
@@ -52,7 +52,7 @@ proptest! {
         burn_amount in 1u64..1_000_000_000u64,
     ) {
         let mut reg = AssetRegistry::with_genesis_assets();
-        let ubc_def = reg.ubc().unwrap().clone();
+        let ubc_def = reg.ubc().expect("test assertion failed").clone();
 
         // First mint some UBC
         reg.supply_tracker_mut()
@@ -64,7 +64,7 @@ proptest! {
                 None,
                 &ubc_def,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Attempt to burn — must fail regardless of amount
         let result = reg.supply_tracker_mut().burn(
@@ -76,7 +76,7 @@ proptest! {
             &ubc_def,
         );
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RegistryError::UbcBurnProhibited));
+        assert!(matches!(result.expect_err("test assertion failed"), RegistryError::UbcBurnProhibited));
     }
 }
 
@@ -88,8 +88,8 @@ proptest! {
         mint_amount in 1u64..100_000_000_000_000u64,
     ) {
         let mut reg = AssetRegistry::with_genesis_assets();
-        let omnia_def = reg.omnia().unwrap().clone();
-        let cap = omnia_def.max_supply().unwrap();
+        let omnia_def = reg.omnia().expect("test assertion failed").clone();
+        let cap = omnia_def.max_supply().expect("test assertion failed");
 
         // Try to mint — if it would exceed cap, must fail
         let result = reg.supply_tracker_mut().mint(
@@ -125,7 +125,7 @@ proptest! {
         burn2 in 1u64..1_000_000u64,
     ) {
         let mut reg = AssetRegistry::with_genesis_assets();
-        let omnia_def = reg.omnia().unwrap().clone();
+        let omnia_def = reg.omnia().expect("test assertion failed").clone();
 
         // Mint twice
         let _ = reg.supply_tracker_mut().mint(
@@ -150,13 +150,13 @@ proptest! {
         }
 
         // Verify: supply = minted - burned (capped at 0)
-        let expected = total_minted.saturating_sub(total_burn.min(supply_after_mints));
+        let _expected = total_minted.saturating_sub(total_burn.min(supply_after_mints));
         // For partial burns, compute actual
         let actual = reg.total_supply(AssetId::OMNIA);
         assert!(actual <= total_minted, "supply ({}) exceeded total minted ({})", actual, total_minted);
 
         // Check supply tracker consistency
-        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("test assertion failed");
         assert_eq!(supply.total_supply(), actual);
     }
 }
@@ -170,7 +170,7 @@ proptest! {
     ) {
         let mut reg = AssetRegistry::with_genesis_assets();
         if freeze {
-            reg.freeze(AssetId::OMNIA).unwrap();
+            reg.freeze(AssetId::OMNIA).expect("test assertion failed");
         }
         let result = reg.can_transfer(AssetId::OMNIA);
         if freeze {
@@ -204,7 +204,7 @@ fn omnia_and_ubc_have_distinct_ids() {
 #[test]
 fn supply_events_form_complete_audit_trail() {
     let mut reg = AssetRegistry::with_genesis_assets();
-    let omnia_def = reg.omnia().unwrap().clone();
+    let omnia_def = reg.omnia().expect("test assertion failed").clone();
 
     // Perform 3 mints and 1 burn
     reg.supply_tracker_mut()
@@ -216,7 +216,7 @@ fn supply_events_form_complete_audit_trail() {
             Some("ref-1".into()),
             &omnia_def,
         )
-        .unwrap();
+        .expect("test assertion failed");
     reg.supply_tracker_mut()
         .mint(
             AssetId::OMNIA,
@@ -226,7 +226,7 @@ fn supply_events_form_complete_audit_trail() {
             Some("ref-2".into()),
             &omnia_def,
         )
-        .unwrap();
+        .expect("test assertion failed");
     reg.supply_tracker_mut()
         .burn(
             AssetId::OMNIA,
@@ -236,7 +236,7 @@ fn supply_events_form_complete_audit_trail() {
             Some("tx-42".into()),
             &omnia_def,
         )
-        .unwrap();
+        .expect("test assertion failed");
     reg.supply_tracker_mut()
         .mint(
             AssetId::OMNIA,
@@ -246,7 +246,7 @@ fn supply_events_form_complete_audit_trail() {
             Some("era-5".into()),
             &omnia_def,
         )
-        .unwrap();
+        .expect("test assertion failed");
 
     let events = reg.supply_tracker().events_for(AssetId::OMNIA);
     assert_eq!(events.len(), 4);

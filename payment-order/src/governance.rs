@@ -403,12 +403,13 @@ mod tests {
     #[test]
     fn delegation_cooldown() {
         let mut dc = DelegationCooldown::new();
-        dc.set_delegation("alice", "bob", 0).unwrap();
+        dc.set_delegation("alice", "bob", 0).expect("test assertion failed");
         assert_eq!(dc.get_delegate("alice"), Some("bob"));
         // Immediate re-delegation fails
         assert!(dc.set_delegation("alice", "carol", 1000).is_err());
         // After cooldown succeeds
-        dc.set_delegation("alice", "carol", 25 * 60 * 60 * 1_000).unwrap();
+        dc.set_delegation("alice", "carol", 25 * 60 * 60 * 1_000)
+            .expect("test assertion failed");
         assert_eq!(dc.get_delegate("alice"), Some("carol"));
     }
 }
