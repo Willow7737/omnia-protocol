@@ -433,6 +433,30 @@ async fn main() -> Result<()> {
         settlement,
         #[cfg(feature = "zk")]
         ceremony_server,
+        // Sprint 3–5: Initialize financial pallet state (Spec §4–§7, §8, §15)
+        asset_registry: Arc::new(RwLock::new(
+            omnia_asset_registry::AssetRegistry::new(),
+        )),
+        supply_tracker: Arc::new(RwLock::new(
+            omnia_asset_registry::SupplyTracker::new(),
+        )),
+        treasury: Arc::new(RwLock::new(
+            omnia_asset_registry::Treasury::new(),
+        )),
+        fee_schedule: Arc::new(RwLock::new(
+            omnia_fee_burn::OmniaFeeSchedule::default(),
+        )),
+        burn_accounting: Arc::new(RwLock::new(
+            omnia_fee_burn::BurnAccounting::new(),
+        )),
+        payment_engine: Arc::new(std::sync::Mutex::new(
+            omnia_payment_order::PaymentEngine::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0),
+            ),
+        )),
     };
 
     // 6. Build and start the HTTP server

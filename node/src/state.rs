@@ -29,6 +29,12 @@ use tokio::sync::{Mutex, RwLock};
 
 use omnia_shards::ShardRouter;
 
+use omnia_asset_registry::{
+    AssetRegistry, SupplyTracker, Treasury,
+};
+use omnia_fee_burn::{BurnAccounting, BurnPolicy, FeeFormula, OmniaFeeSchedule};
+use omnia_payment_order::PaymentEngine;
+
 #[cfg(feature = "zk")]
 use omnia_adapters::setup::CeremonyServer;
 use omnia_adapters::SettlementAdapter;
@@ -491,4 +497,17 @@ pub struct AppState {
     /// When absent, ceremony endpoints return 503 Service Unavailable.
     #[cfg(feature = "zk")]
     pub ceremony_server: Option<Arc<RwLock<CeremonyServer>>>,
+    // ── Sprint 3–5 financial pallet state (Spec §4–§7, §8, §15) ──────
+    /// Asset registry — tracks registered assets (OMNIA, UBC, future assets).
+    pub asset_registry: Arc<RwLock<AssetRegistry>>,
+    /// Per-asset supply tracker — enforces hard cap and compartment invariants (§4.4).
+    pub supply_tracker: Arc<RwLock<SupplyTracker>>,
+    /// Treasury — allocation buckets, pilot inventory, vesting, circuit breaker (§5, §6).
+    pub treasury: Arc<RwLock<Treasury>>,
+    /// Fee schedule — activity-based fee calculation (§7.1, §7.2).
+    pub fee_schedule: Arc<RwLock<OmniaFeeSchedule>>,
+    /// Burn accounting — tracks total burned per asset, burn ratio (§7.3).
+    pub burn_accounting: Arc<RwLock<BurnAccounting>>,
+    /// Payment engine — 25-state order lifecycle (§8).
+    pub payment_engine: Arc<std::sync::Mutex<PaymentEngine>>,
 }

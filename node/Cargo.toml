@@ -22,6 +22,12 @@ omnia-network = { path = "../omnia-network", default-features = false, optional 
 omnia-adapters = { path = "../omnia-adapters", default-features = false } # ZK-rollup settlement adapters (required for SettlementAdapter trait)
 omnia-crypto = { path = "../omnia-crypto", default-features = false, optional = true }     # Crypto primitives (for light mode keygen)
 
+# Sprint 3–5 financial pallets — Spec §4–§7, §8, §15
+omnia-asset-registry = { path = "../asset-registry" }     # Asset registry, supply tracker, treasury, balances
+omnia-fee-burn = { path = "../fee-burn" }               # Fee calculation and burn policy (§7)
+omnia-payment-order = { path = "../payment-order" }     # 25-state payment order state machine (§8)
+# omnia-shards already declared above — re-exported BridgeOperator trait used for §15
+
 # Async runtime — needed for all async I/O, signal handling, and task spawning
 tokio = { version = "1", features = ["full", "signal"] }
 

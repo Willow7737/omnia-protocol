@@ -13,14 +13,19 @@
 
 pub mod admin;
 pub mod auth;
+pub mod bridge;
 pub mod ceremony;
 pub mod economics;
 pub mod errors;
 pub mod events;
+pub mod fees;
 pub mod financial;
 pub mod governance;
 pub mod node;
+pub mod payment_orders;
 pub mod shards;
+pub mod supply;
+pub mod treasury;
 pub mod wallet_auth;
 
 use std::sync::Arc;
@@ -182,6 +187,25 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/ceremony/finalize", post(ceremony::ceremony_finalize))
         // Sprint 3: Fee-burn statistics (public for dashboards/monitoring)
         .route("/economics/fee-burn", get(economics::get_fee_burn_stats))
+        // Sprint 3–5: Financial pallet endpoints (Spec §4–§7, §8, §15)
+        // Treasury (§5, §6) — public for monitoring
+        .route("/treasury/status", get(treasury::get_treasury_status))
+        .route("/treasury/inventory", get(treasury::get_pilot_inventory))
+        .route("/treasury/accounting", get(treasury::get_treasury_accounting))
+        // Supply (§4.4, §5.1) — public for monitoring
+        .route("/supply", get(supply::get_supply))
+        .route("/supply/invariants", get(supply::verify_supply_invariants))
+        // Fees and burn (§7)
+        .route("/fees/burn-policy", get(fees::get_burn_policy))
+        .route("/fees/calculate", post(fees::calculate_fee))
+        .route("/fees/stats", get(fees::get_fee_stats))
+        // Bridge (§8, §15)
+        .route("/bridge/providers", get(bridge::list_providers))
+        .route("/bridge/health", get(bridge::bridge_health))
+        // Payment orders (§8)
+        .route("/payment-orders/create", post(payment_orders::create_order))
+        .route("/payment-orders/:id", get(payment_orders::get_order))
+        .route("/payment-orders/:id/advance", post(payment_orders::advance_order))
         // --- Middleware layers (outermost = last added) ---
         // Provide AuthorizedCallers via Extension for handler-level checks
         .layer(Extension(Arc::clone(&authorized)))
