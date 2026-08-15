@@ -330,3 +330,27 @@ Stage Summary:
 - Complete financial layer code coverage for Gates 1-3
 - Remaining: external adapter productionization (§13), staking system (§11), wallet integration, 5-node testnet financial flow validation (§17 Gate 4)
 - Next: integration tests between crates, ADR-029 for fee-burn architecture
+---
+Task ID: sprint-3-4-5
+Agent: main
+Task: Implement Sprint 3 (fee-burn), Sprint 4 (supply), Sprint 5 (bridge operators), integration, and push to GitHub
+
+Work Log:
+- Read full project structure, economic-analysis.md, fee_schedule.rs, router.rs, financial/state.rs, economics/ modules
+- Created shards/src/fee_burn.rs: FeeBurnConfig (0-5% baseline, 10-25% governance cap), FeeBurnTracker (per-domain accounting, consistency checks, serialization), FeeBurnStats. 26 tests.
+- Created shards/src/supply.rs: SupplyTracker (minted/burned/phase), SupplyError enum, reward schedule 80M->60M->45M->34M, phase transitions, invariant checks, versioned serialization. 29 tests.
+- Created shards/src/bridge.rs: BridgeOperator trait, MobileProvider (MTN/Telecel/AT), CircuitBreaker (closed/open/half-open), MockBridgeOperator, BridgeRegistry, ProviderConfig, BridgePaymentOrder. 24 tests.
+- Registered all 3 modules in shards/src/lib.rs with re-exports.
+- Integrated FeeBurnTracker into ShardRouter (all 4 constructors), added shard_domain_name helper, fee_burn_stats() accessor.
+- Added fee-burn recording after every fee deduction in route_event().
+- Added GET /api/v1/economics/fee-burn endpoint in node/src/api/economics.rs + route registration in mod.rs.
+- Fixed compilation: Rust 1.97.1 installed, em-dash unicode, MobileProvider Ord derive, idempotency test with atomic counter, circuit breaker timing, all 4 ShardRouter constructors missing fee_burn_tracker field, node handler return type.
+- All 222 shard tests pass, node crate compiles clean.
+- Pushed to GitHub (rebase + push to origin/dev).
+
+Stage Summary:
+- Sprint 3: fee_burn.rs — 26 tests, FeeBurnConfig + FeeBurnTracker + FeeBurnStats
+- Sprint 4: supply.rs — 29 tests, SupplyTracker + SupplySnapshot + 4-phase reward schedule
+- Sprint 5: bridge.rs — 24 tests, BridgeOperator trait + CircuitBreaker + MockBridgeOperator + BridgeRegistry
+- Integration: FeeBurnTracker in ShardRouter, API endpoint /economics/fee-burn
+- Total new code: ~1800 lines, 79 new tests, zero regressions
