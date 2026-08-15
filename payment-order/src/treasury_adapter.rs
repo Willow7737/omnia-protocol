@@ -210,9 +210,14 @@ mod tests {
         Treasury::with_genesis_buckets()
     }
 
-    /// Create a test engine and advance an order to RISK_APPROVED.
+    /// Create a test engine with a raised per-order limit and advance an order to RISK_APPROVED.
     fn advance_to_risk_approved(order_id: &str) -> PaymentEngine {
-        let mut engine = PaymentEngine::new(NOW);
+        use crate::risk::RiskLimits;
+        let limits = RiskLimits {
+            per_order_ghs_limit: 100_000_000, // 1,000,000 GHS for test
+            ..RiskLimits::default()
+        };
+        let mut engine = PaymentEngine::with_limits(limits, NOW);
         engine
             .create_order(
                 order_id.to_string(),
