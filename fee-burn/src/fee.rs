@@ -69,10 +69,7 @@ impl ActivityType {
 
     /// Return true if this activity type accepts UBC for fees.
     pub fn accepts_ubc(&self) -> bool {
-        matches!(
-            self,
-            ActivityType::BasicIdentity | ActivityType::Compute
-        )
+        matches!(self, ActivityType::BasicIdentity | ActivityType::Compute)
     }
 
     /// Return true if fees from this activity are subject to the burn ratio.
@@ -80,9 +77,7 @@ impl ActivityType {
     pub fn is_burnable(&self) -> bool {
         matches!(
             self,
-            ActivityType::OmniaTransfer
-                | ActivityType::MerchantPayment
-                | ActivityType::GovernanceProposal
+            ActivityType::OmniaTransfer | ActivityType::MerchantPayment | ActivityType::GovernanceProposal
         )
     }
 
@@ -164,17 +159,17 @@ impl OmniaFeeSchedule {
     /// | Ghana svc| 0.0005 OMNIA    |
     pub fn standard() -> Self {
         Self {
-            omnia_transfer_base: 1_000_000,     // 0.001 OMNIA
-            merchant_payment_base: 1_000_000,   // 0.001 OMNIA
+            omnia_transfer_base: 1_000_000,          // 0.001 OMNIA
+            merchant_payment_base: 1_000_000,        // 0.001 OMNIA
             governance_proposal_base: 1_000_000_000, // 1.0 OMNIA
-            ghana_service_fee: 500_000,          // 0.0005 OMNIA
-            max_base_fee: 10_000_000_000,        // 10 OMNIA
-            min_base_fee: 100_000,               // 0.0001 OMNIA
-            ubc_identity_fee: 2,                 // 2 UBC
-            ubc_compute_fee: 5,                  // 5 UBC
-            max_priority_fee: 100_000_000,       // 0.1 OMNIA
-            validator_share_bps: 8000,            // 80%
-            protocol_share_bps: 2000,             // 20%
+            ghana_service_fee: 500_000,              // 0.0005 OMNIA
+            max_base_fee: 10_000_000_000,            // 10 OMNIA
+            min_base_fee: 100_000,                   // 0.0001 OMNIA
+            ubc_identity_fee: 2,                     // 2 UBC
+            ubc_compute_fee: 5,                      // 5 UBC
+            max_priority_fee: 100_000_000,           // 0.1 OMNIA
+            validator_share_bps: 8000,               // 80%
+            protocol_share_bps: 2000,                // 20%
             rounding: RoundingRule::Up,
         }
     }
@@ -188,7 +183,7 @@ impl OmniaFeeSchedule {
             ActivityType::PriorityInclusion => 0, // priority only
             ActivityType::GhanaMobileMoney => self.ghana_service_fee,
             ActivityType::MerchantPayment => self.merchant_payment_base,
-            ActivityType::ExternalChain => 0,   // paid in external asset
+            ActivityType::ExternalChain => 0, // paid in external asset
             ActivityType::GovernanceProposal => self.governance_proposal_base,
         }
     }
@@ -244,11 +239,7 @@ impl FeeFormula {
     }
 
     /// Calculate the fee for an activity.
-    pub fn calculate(
-        &self,
-        activity: ActivityType,
-        priority_fee: u64,
-    ) -> Result<FeeResult, FeeError> {
+    pub fn calculate(&self, activity: ActivityType, priority_fee: u64) -> Result<FeeResult, FeeError> {
         // UBC-only activities
         if activity.accepts_ubc() && !activity.accepts_omnia() {
             let base = match activity {
@@ -334,15 +325,14 @@ impl FeeFormula {
         let distributable_base = base_fee.saturating_sub(burned_amount);
 
         // Validator share: priority_fee + distributable_base × validator_share_bps / 10000
-        let validator_from_base = (distributable_base as u128 * self.schedule.validator_share_bps as u128 / 10_000)
-            as u64;
+        let validator_from_base =
+            (distributable_base as u128 * self.schedule.validator_share_bps as u128 / 10_000) as u64;
         let validator_amount = priority_fee
             .checked_add(validator_from_base)
             .ok_or(FeeError::ArithmeticOverflow("validator share".into()))?;
 
         // Protocol share: distributable_base × protocol_share_bps / 10000
-        let protocol_amount = (distributable_base as u128 * self.schedule.protocol_share_bps as u128 / 10_000)
-            as u64;
+        let protocol_amount = (distributable_base as u128 * self.schedule.protocol_share_bps as u128 / 10_000) as u64;
 
         Ok(FeeResult {
             total_fee,
@@ -361,19 +351,11 @@ impl FeeFormula {
 /// Enables dependency injection for testing.
 pub trait FeeCalculation {
     /// Calculate the fee for the given activity and priority.
-    fn calculate_fee(
-        &self,
-        activity: ActivityType,
-        priority_fee: u64,
-    ) -> Result<FeeResult, FeeError>;
+    fn calculate_fee(&self, activity: ActivityType, priority_fee: u64) -> Result<FeeResult, FeeError>;
 }
 
 impl FeeCalculation for FeeFormula {
-    fn calculate_fee(
-        &self,
-        activity: ActivityType,
-        priority_fee: u64,
-    ) -> Result<FeeResult, FeeError> {
+    fn calculate_fee(&self, activity: ActivityType, priority_fee: u64) -> Result<FeeResult, FeeError> {
         self.calculate(activity, priority_fee)
     }
 }
@@ -412,7 +394,7 @@ mod tests {
         let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
         assert!(!result.is_ubc);
         assert_eq!(result.total_fee, 1_000_000); // 0.001 OMNIA base
-        // burned = 1_000_000 * 300 / 10000 = 30,000
+                                                 // burned = 1_000_000 * 300 / 10000 = 30,000
         assert_eq!(result.burned_amount, 30_000);
         // distributable = 1_000_000 - 30,000 = 970,000
         // validator = 970,000 * 8000 / 10000 = 776,000
@@ -425,20 +407,16 @@ mod tests {
     #[test]
     fn omnia_transfer_with_priority() {
         let formula = FeeFormula::new();
-        let result = formula
-            .calculate(ActivityType::OmniaTransfer, 50_000_000)
-            .unwrap();
+        let result = formula.calculate(ActivityType::OmniaTransfer, 50_000_000).unwrap();
         assert_eq!(result.total_fee, 51_000_000); // base + priority
-        // validator gets priority + share of base
+                                                  // validator gets priority + share of base
         assert!(result.validator_amount > 50_000_000);
     }
 
     #[test]
     fn priority_fee_exceeds_max() {
         let formula = FeeFormula::new();
-        let err = formula
-            .calculate(ActivityType::OmniaTransfer, 200_000_000)
-            .unwrap_err();
+        let err = formula.calculate(ActivityType::OmniaTransfer, 200_000_000).unwrap_err();
         assert!(matches!(err, FeeError::PriorityFeeExceeded { .. }));
     }
 
@@ -453,9 +431,7 @@ mod tests {
     #[test]
     fn ghana_mobile_money_has_service_fee() {
         let formula = FeeFormula::new();
-        let result = formula
-            .calculate(ActivityType::GhanaMobileMoney, 0)
-            .unwrap();
+        let result = formula.calculate(ActivityType::GhanaMobileMoney, 0).unwrap();
         // base (500k) + service (500k) = 1,000,000
         assert_eq!(result.total_fee, 1_000_000);
         // Ghana is not burnable
@@ -468,9 +444,7 @@ mod tests {
             OmniaFeeSchedule::standard(),
             BurnRatio::from_bps(500), // 5%
         );
-        let result = formula
-            .calculate(ActivityType::MerchantPayment, 0)
-            .unwrap();
+        let result = formula.calculate(ActivityType::MerchantPayment, 0).unwrap();
         assert!(result.burned_amount > 0);
         // burned = 1_000_000 * 500 / 10000 = 50,000
         assert_eq!(result.burned_amount, 50_000);
@@ -479,9 +453,7 @@ mod tests {
     #[test]
     fn governance_proposal_high_base_fee() {
         let formula = FeeFormula::new();
-        let result = formula
-            .calculate(ActivityType::GovernanceProposal, 0)
-            .unwrap();
+        let result = formula.calculate(ActivityType::GovernanceProposal, 0).unwrap();
         assert_eq!(result.total_fee, 1_000_000_000); // 1 OMNIA
     }
 
@@ -492,21 +464,14 @@ mod tests {
         let ubc_result = formula.calculate(ActivityType::BasicIdentity, 0).unwrap();
         assert!(ubc_result.is_ubc);
         // OMNIA activities must NOT be UBC
-        let omnia_result = formula
-            .calculate(ActivityType::OmniaTransfer, 0)
-            .unwrap();
+        let omnia_result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
         assert!(!omnia_result.is_ubc);
     }
 
     #[test]
     fn zero_burn_ratio() {
-        let formula = FeeFormula::with_params(
-            OmniaFeeSchedule::standard(),
-            BurnRatio::from_bps(0),
-        );
-        let result = formula
-            .calculate(ActivityType::OmniaTransfer, 0)
-            .unwrap();
+        let formula = FeeFormula::with_params(OmniaFeeSchedule::standard(), BurnRatio::from_bps(0));
+        let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
         assert_eq!(result.burned_amount, 0);
         assert_eq!(result.total_fee, 1_000_000);
     }
@@ -521,9 +486,7 @@ mod tests {
             },
             BurnRatio::default(),
         );
-        let result = formula
-            .calculate(ActivityType::OmniaTransfer, 0)
-            .unwrap();
+        let result = formula.calculate(ActivityType::OmniaTransfer, 0).unwrap();
         assert_eq!(result.total_fee, 100_000); // min enforced
     }
 

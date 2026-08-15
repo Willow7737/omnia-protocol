@@ -9,8 +9,8 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
-use utoipa::ToSchema;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
 use omnia_fee_burn::{ActivityType, FeeCalculation, FeeFormula};
@@ -63,12 +63,9 @@ pub async fn calculate_fee(
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let formula = FeeFormula::new();
     let activity = parse_activity(&body.activity)?;
-    let result = formula.calculate(activity, body.priority_fee).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": format!("{e}") })),
-        )
-    })?;
+    let result = formula
+        .calculate(activity, body.priority_fee)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({ "error": format!("{e}") }))))?;
 
     Ok((
         StatusCode::OK,
@@ -111,10 +108,7 @@ pub async fn get_fee_stats(
         ActivityType::ExternalChain,
         ActivityType::PriorityInclusion,
     ] {
-        activity_breakdown.insert(
-            act.label().to_string(),
-            json!(burn.burned_for_activity(act.label())),
-        );
+        activity_breakdown.insert(act.label().to_string(), json!(burn.burned_for_activity(act.label())));
     }
 
     Ok((

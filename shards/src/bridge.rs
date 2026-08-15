@@ -349,14 +349,21 @@ pub enum BridgeError {
     /// The provider is not configured or enabled.
     ProviderNotConfigured(MobileProvider),
     /// Rate limit exceeded for this provider.
-    RateLimited { provider: MobileProvider, retry_after_ms: u64 },
+    RateLimited {
+        provider: MobileProvider,
+        retry_after_ms: u64,
+    },
 }
 
 impl std::fmt::Display for BridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BridgeError::CircuitOpen => write!(f, "Circuit breaker is open"),
-            BridgeError::ProviderError { provider, code, message } => {
+            BridgeError::ProviderError {
+                provider,
+                code,
+                message,
+            } => {
                 write!(f, "Provider {provider} error ({code}): {message}")
             }
             BridgeError::InvalidPhoneNumber(phone) => {
@@ -377,7 +384,10 @@ impl std::fmt::Display for BridgeError {
             BridgeError::ProviderNotConfigured(p) => {
                 write!(f, "Provider not configured: {p}")
             }
-            BridgeError::RateLimited { provider, retry_after_ms } => {
+            BridgeError::RateLimited {
+                provider,
+                retry_after_ms,
+            } => {
                 write!(f, "Rate limited by {provider}, retry after {retry_after_ms}ms")
             }
         }
@@ -417,10 +427,7 @@ pub trait BridgeOperator: Send + Sync {
     /// # Returns
     ///
     /// The updated payment order with provider reference and status.
-    fn initiate_payment(
-        &mut self,
-        order: BridgePaymentOrder,
-    ) -> Result<BridgePaymentOrder, BridgeError>;
+    fn initiate_payment(&mut self, order: BridgePaymentOrder) -> Result<BridgePaymentOrder, BridgeError>;
 
     /// Query the current status of a payment order.
     ///
@@ -516,10 +523,7 @@ impl MockBridgeOperator {
 }
 
 impl BridgeOperator for MockBridgeOperator {
-    fn initiate_payment(
-        &mut self,
-        mut order: BridgePaymentOrder,
-    ) -> Result<BridgePaymentOrder, BridgeError> {
+    fn initiate_payment(&mut self, mut order: BridgePaymentOrder) -> Result<BridgePaymentOrder, BridgeError> {
         // Check circuit breaker
         let now_ms = order.created_at;
         if !self.circuit_breaker.allow_request(now_ms) {
@@ -546,7 +550,8 @@ impl BridgeOperator for MockBridgeOperator {
         }
 
         // Validate amount
-        if order.amount_ghs_pesewas < 100 { // minimum 1 GHS = 100 pesewas
+        if order.amount_ghs_pesewas < 100 {
+            // minimum 1 GHS = 100 pesewas
             return Err(BridgeError::AmountBelowMinimum {
                 min_pesewas: 100,
                 requested: order.amount_ghs_pesewas,
@@ -591,9 +596,7 @@ impl BridgeOperator for MockBridgeOperator {
             .orders
             .get_mut(order_id)
             .ok_or_else(|| BridgeError::OrderNotFound(order_id.to_string()))?;
-        if order.status != BridgePaymentStatus::Failed
-            && order.status != BridgePaymentStatus::Reversing
-        {
+        if order.status != BridgePaymentStatus::Failed && order.status != BridgePaymentStatus::Reversing {
             return Err(BridgeError::ProviderError {
                 provider: self.provider,
                 code: "INVALID_STATE".to_string(),
@@ -669,10 +672,7 @@ impl BridgeRegistry {
 
     /// List all registered providers.
     pub fn providers(&self) -> Vec<MobileProvider> {
-        self.mock_operators
-            .values()
-            .map(|op| op.provider())
-            .collect()
+        self.mock_operators.values().map(|op| op.provider()).collect()
     }
 
     /// Check health of all registered operators.
@@ -729,7 +729,10 @@ mod tests {
         assert_eq!(MobileProvider::from_str_loose("mtn"), Some(MobileProvider::Mtn));
         assert_eq!(MobileProvider::from_str_loose("MTN"), Some(MobileProvider::Mtn));
         assert_eq!(MobileProvider::from_str_loose("Telecel"), Some(MobileProvider::Telecel));
-        assert_eq!(MobileProvider::from_str_loose("vodafone"), Some(MobileProvider::Telecel));
+        assert_eq!(
+            MobileProvider::from_str_loose("vodafone"),
+            Some(MobileProvider::Telecel)
+        );
         assert_eq!(MobileProvider::from_str_loose("at"), Some(MobileProvider::At));
         assert_eq!(MobileProvider::from_str_loose("airteltigo"), Some(MobileProvider::At));
         assert_eq!(MobileProvider::from_str_loose("unknown"), None);

@@ -84,9 +84,7 @@ impl PaymentState {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            PaymentState::Delivered
-                | PaymentState::Refunded
-                | PaymentState::Cancelled
+            PaymentState::Delivered | PaymentState::Refunded | PaymentState::Cancelled
         )
     }
 
@@ -96,10 +94,7 @@ impl PaymentState {
     /// remain economically delivered.
     #[inline]
     pub fn is_economically_delivered(&self) -> bool {
-        matches!(
-            self,
-            PaymentState::AllocationFinalized | PaymentState::Delivered
-        )
+        matches!(self, PaymentState::AllocationFinalized | PaymentState::Delivered)
     }
 
     /// Return true if funds are held and a refund path should exist.
@@ -283,11 +278,7 @@ mod tests {
 
     #[test]
     fn terminal_states_reject_all_transitions() {
-        let terminals = [
-            PaymentState::Delivered,
-            PaymentState::Refunded,
-            PaymentState::Cancelled,
-        ];
+        let terminals = [PaymentState::Delivered, PaymentState::Refunded, PaymentState::Cancelled];
         let targets = [
             PaymentState::Created,
             PaymentState::Quoted,
@@ -341,17 +332,25 @@ mod tests {
     #[test]
     fn reject_skip_ahead() {
         // Created → PaymentPending skips QUOTED
-        assert!(PaymentState::Created.can_transition_to(PaymentState::PaymentPending).is_err());
+        assert!(PaymentState::Created
+            .can_transition_to(PaymentState::PaymentPending)
+            .is_err());
         // Created → Delivered skips everything
-        assert!(PaymentState::Created.can_transition_to(PaymentState::Delivered).is_err());
+        assert!(PaymentState::Created
+            .can_transition_to(PaymentState::Delivered)
+            .is_err());
     }
 
     #[test]
     fn reject_backward_transition() {
         // PaymentVerified → Quoted (going backward)
-        assert!(PaymentState::PaymentVerified.can_transition_to(PaymentState::Quoted).is_err());
+        assert!(PaymentState::PaymentVerified
+            .can_transition_to(PaymentState::Quoted)
+            .is_err());
         // AllocationFinalized → RiskReview (going backward)
-        assert!(PaymentState::AllocationFinalized.can_transition_to(PaymentState::RiskReview).is_err());
+        assert!(PaymentState::AllocationFinalized
+            .can_transition_to(PaymentState::RiskReview)
+            .is_err());
     }
 
     // ------------------------------------------------------------------
@@ -361,73 +360,139 @@ mod tests {
     #[test]
     fn quote_failure_paths() {
         assert!(PaymentState::Created.can_transition_to(PaymentState::Cancelled).is_ok());
-        assert!(PaymentState::Quoted.can_transition_to(PaymentState::QuoteExpired).is_ok());
+        assert!(PaymentState::Quoted
+            .can_transition_to(PaymentState::QuoteExpired)
+            .is_ok());
         assert!(PaymentState::Quoted.can_transition_to(PaymentState::Cancelled).is_ok());
     }
 
     #[test]
     fn payment_failure_paths() {
-        assert!(PaymentState::PaymentPending.can_transition_to(PaymentState::PaymentFailed).is_ok());
-        assert!(PaymentState::PaymentPending.can_transition_to(PaymentState::PaymentTimeout).is_ok());
-        assert!(PaymentState::PaymentVerified.can_transition_to(PaymentState::PaymentReversed).is_ok());
+        assert!(PaymentState::PaymentPending
+            .can_transition_to(PaymentState::PaymentFailed)
+            .is_ok());
+        assert!(PaymentState::PaymentPending
+            .can_transition_to(PaymentState::PaymentTimeout)
+            .is_ok());
+        assert!(PaymentState::PaymentVerified
+            .can_transition_to(PaymentState::PaymentReversed)
+            .is_ok());
     }
 
     #[test]
     fn amount_discrepancy_paths() {
-        assert!(PaymentState::PaymentVerified.can_transition_to(PaymentState::PaymentUnderpaid).is_ok());
-        assert!(PaymentState::PaymentVerified.can_transition_to(PaymentState::PaymentOverpaid).is_ok());
-        assert!(PaymentState::PaymentUnderpaid.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::PaymentUnderpaid.can_transition_to(PaymentState::ManualReview).is_ok());
-        assert!(PaymentState::PaymentOverpaid.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::PaymentOverpaid.can_transition_to(PaymentState::ManualReview).is_ok());
+        assert!(PaymentState::PaymentVerified
+            .can_transition_to(PaymentState::PaymentUnderpaid)
+            .is_ok());
+        assert!(PaymentState::PaymentVerified
+            .can_transition_to(PaymentState::PaymentOverpaid)
+            .is_ok());
+        assert!(PaymentState::PaymentUnderpaid
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::PaymentUnderpaid
+            .can_transition_to(PaymentState::ManualReview)
+            .is_ok());
+        assert!(PaymentState::PaymentOverpaid
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::PaymentOverpaid
+            .can_transition_to(PaymentState::ManualReview)
+            .is_ok());
     }
 
     #[test]
     fn risk_paths() {
-        assert!(PaymentState::RiskReview.can_transition_to(PaymentState::RiskRejected).is_ok());
-        assert!(PaymentState::RiskRejected.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::RiskRejected.can_transition_to(PaymentState::Cancelled).is_ok());
+        assert!(PaymentState::RiskReview
+            .can_transition_to(PaymentState::RiskRejected)
+            .is_ok());
+        assert!(PaymentState::RiskRejected
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::RiskRejected
+            .can_transition_to(PaymentState::Cancelled)
+            .is_ok());
     }
 
     #[test]
     fn inventory_paths() {
-        assert!(PaymentState::RiskApproved.can_transition_to(PaymentState::InventoryUnavailable).is_ok());
-        assert!(PaymentState::InventoryUnavailable.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::InventoryUnavailable.can_transition_to(PaymentState::Cancelled).is_ok());
+        assert!(PaymentState::RiskApproved
+            .can_transition_to(PaymentState::InventoryUnavailable)
+            .is_ok());
+        assert!(PaymentState::InventoryUnavailable
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::InventoryUnavailable
+            .can_transition_to(PaymentState::Cancelled)
+            .is_ok());
     }
 
     #[test]
     fn allocation_failure_paths() {
-        assert!(PaymentState::InventoryReserved.can_transition_to(PaymentState::AllocationFailed).is_ok());
-        assert!(PaymentState::AllocationSubmitted.can_transition_to(PaymentState::AllocationFailed).is_ok());
-        assert!(PaymentState::AllocationFailed.can_transition_to(PaymentState::RefundPending).is_ok());
+        assert!(PaymentState::InventoryReserved
+            .can_transition_to(PaymentState::AllocationFailed)
+            .is_ok());
+        assert!(PaymentState::AllocationSubmitted
+            .can_transition_to(PaymentState::AllocationFailed)
+            .is_ok());
+        assert!(PaymentState::AllocationFailed
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
         // Retry: ALLOCATION_FAILED → INVENTORY_RESERVED
-        assert!(PaymentState::AllocationFailed.can_transition_to(PaymentState::InventoryReserved).is_ok());
+        assert!(PaymentState::AllocationFailed
+            .can_transition_to(PaymentState::InventoryReserved)
+            .is_ok());
     }
 
     #[test]
     fn on_chain_failure_paths() {
-        assert!(PaymentState::AllocationSubmitted.can_transition_to(PaymentState::OnChainTimeout).is_ok());
-        assert!(PaymentState::AllocationSubmitted.can_transition_to(PaymentState::OnChainUncertain).is_ok());
-        assert!(PaymentState::OnChainTimeout.can_transition_to(PaymentState::ManualReview).is_ok());
-        assert!(PaymentState::OnChainUncertain.can_transition_to(PaymentState::ManualReview).is_ok());
+        assert!(PaymentState::AllocationSubmitted
+            .can_transition_to(PaymentState::OnChainTimeout)
+            .is_ok());
+        assert!(PaymentState::AllocationSubmitted
+            .can_transition_to(PaymentState::OnChainUncertain)
+            .is_ok());
+        assert!(PaymentState::OnChainTimeout
+            .can_transition_to(PaymentState::ManualReview)
+            .is_ok());
+        assert!(PaymentState::OnChainUncertain
+            .can_transition_to(PaymentState::ManualReview)
+            .is_ok());
     }
 
     #[test]
     fn refund_paths() {
-        assert!(PaymentState::PaymentFailed.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::PaymentReversed.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::PaymentTimeout.can_transition_to(PaymentState::ManualReview).is_ok());
-        assert!(PaymentState::RefundPending.can_transition_to(PaymentState::Refunded).is_ok());
+        assert!(PaymentState::PaymentFailed
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::PaymentReversed
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::PaymentTimeout
+            .can_transition_to(PaymentState::ManualReview)
+            .is_ok());
+        assert!(PaymentState::RefundPending
+            .can_transition_to(PaymentState::Refunded)
+            .is_ok());
     }
 
     #[test]
     fn manual_review_exit_paths() {
-        assert!(PaymentState::ManualReview.can_transition_to(PaymentState::RefundPending).is_ok());
-        assert!(PaymentState::ManualReview.can_transition_to(PaymentState::Cancelled).is_ok());
-        assert!(PaymentState::ManualReview.can_transition_to(PaymentState::PaymentPending).is_ok());
-        assert!(PaymentState::ManualReview.can_transition_to(PaymentState::RiskReview).is_ok());
-        assert!(PaymentState::ManualReview.can_transition_to(PaymentState::InventoryReserved).is_ok());
+        assert!(PaymentState::ManualReview
+            .can_transition_to(PaymentState::RefundPending)
+            .is_ok());
+        assert!(PaymentState::ManualReview
+            .can_transition_to(PaymentState::Cancelled)
+            .is_ok());
+        assert!(PaymentState::ManualReview
+            .can_transition_to(PaymentState::PaymentPending)
+            .is_ok());
+        assert!(PaymentState::ManualReview
+            .can_transition_to(PaymentState::RiskReview)
+            .is_ok());
+        assert!(PaymentState::ManualReview
+            .can_transition_to(PaymentState::InventoryReserved)
+            .is_ok());
     }
 
     // ------------------------------------------------------------------

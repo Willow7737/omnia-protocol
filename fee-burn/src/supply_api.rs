@@ -52,9 +52,7 @@ impl SupplySnapshot {
     ) -> Self {
         let total_burned = burn_accounting.total_burned();
         let circulating_supply = total_minted.saturating_sub(total_burned);
-        let cap_reached = hard_cap
-            .map(|cap| circulating_supply >= cap)
-            .unwrap_or(false);
+        let cap_reached = hard_cap.map(|cap| circulating_supply >= cap).unwrap_or(false);
         Self {
             asset_id,
             total_minted,
@@ -94,8 +92,7 @@ impl SupplySnapshot {
 
     /// Return remaining capacity before hard cap.
     pub fn remaining_capacity(&self) -> Option<u64> {
-        self.hard_cap
-            .map(|cap| cap.saturating_sub(self.circulating_supply))
+        self.hard_cap.map(|cap| cap.saturating_sub(self.circulating_supply))
     }
 }
 
@@ -116,7 +113,15 @@ mod tests {
     fn snapshot_circulating_supply() {
         let acc = make_accounting(50_000);
         let snap = SupplySnapshot::new(
-            0, 1_000_000_000, &acc, 600_000, 200_000, 149_750_000, 50_000, Some(1_000_000_000), 0,
+            0,
+            1_000_000_000,
+            &acc,
+            600_000,
+            200_000,
+            149_750_000,
+            50_000,
+            Some(1_000_000_000),
+            0,
         );
         assert_eq!(snap.total_minted, 1_000_000_000);
         assert_eq!(snap.total_burned, 50_000);
@@ -127,18 +132,14 @@ mod tests {
     #[test]
     fn snapshot_decomposition_valid() {
         let acc = make_accounting(0);
-        let snap = SupplySnapshot::new(
-            0, 1_000_000, &acc, 500_000, 200_000, 200_000, 100_000, None, 0,
-        );
+        let snap = SupplySnapshot::new(0, 1_000_000, &acc, 500_000, 200_000, 200_000, 100_000, None, 0);
         assert!(snap.verify_decomposition());
     }
 
     #[test]
     fn snapshot_decomposition_invalid() {
         let acc = make_accounting(0);
-        let snap = SupplySnapshot::new(
-            0, 1_000_000, &acc, 500_000, 200_000, 200_000, 999_000, None, 0,
-        );
+        let snap = SupplySnapshot::new(0, 1_000_000, &acc, 500_000, 200_000, 200_000, 999_000, None, 0);
         // 500k + 200k + 200k + 999k = 1,899k != 1,000k
         assert!(!snap.verify_decomposition());
     }
@@ -146,27 +147,21 @@ mod tests {
     #[test]
     fn burn_rate_calculation() {
         let acc = make_accounting(50_000_000);
-        let snap = SupplySnapshot::new(
-            0, 1_000_000_000, &acc, 0, 0, 0, 0, None, 0,
-        );
+        let snap = SupplySnapshot::new(0, 1_000_000_000, &acc, 0, 0, 0, 0, None, 0);
         assert!((snap.burn_rate_pct() - 5.0).abs() < 0.01);
     }
 
     #[test]
     fn remaining_capacity() {
         let acc = make_accounting(0);
-        let snap = SupplySnapshot::new(
-            0, 800_000_000, &acc, 0, 0, 0, 0, Some(1_000_000_000), 0,
-        );
+        let snap = SupplySnapshot::new(0, 800_000_000, &acc, 0, 0, 0, 0, Some(1_000_000_000), 0);
         assert_eq!(snap.remaining_capacity(), Some(200_000_000));
     }
 
     #[test]
     fn cap_reached() {
         let acc = make_accounting(0);
-        let snap = SupplySnapshot::new(
-            0, 1_000_000_000, &acc, 0, 0, 0, 0, Some(1_000_000_000), 0,
-        );
+        let snap = SupplySnapshot::new(0, 1_000_000_000, &acc, 0, 0, 0, 0, Some(1_000_000_000), 0);
         assert!(snap.cap_reached);
     }
 }

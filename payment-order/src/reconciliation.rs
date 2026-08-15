@@ -225,7 +225,10 @@ impl DailyReconciliationReport {
     pub fn add_discrepancy(&mut self, discrepancy: Discrepancy) {
         self.all_passed = false;
         self.summary.total_discrepancies = self.summary.total_discrepancies.saturating_add(1);
-        if matches!(discrepancy.status, DiscrepancyStatus::Open | DiscrepancyStatus::Investigating) {
+        if matches!(
+            discrepancy.status,
+            DiscrepancyStatus::Open | DiscrepancyStatus::Investigating
+        ) {
             self.summary.open_discrepancies = self.summary.open_discrepancies.saturating_add(1);
         }
         self.summary.total_discrepancy_value = self
@@ -278,8 +281,8 @@ impl OrderReconciliation {
         let required_reconciliations = match order_state {
             PaymentState::Delivered => 4, // provider + allocation + inventory + wallet
             PaymentState::Refunded => 3,  // provider + refund + inventory (return)
-            PaymentState::Cancelled => 1,  // provider (or none if cancelled before payment)
-            _ => 0, // in-flight orders aren't fully reconciled yet
+            PaymentState::Cancelled => 1, // provider (or none if cancelled before payment)
+            _ => 0,                       // in-flight orders aren't fully reconciled yet
         };
 
         let completed = self.provider_reconciled as u8

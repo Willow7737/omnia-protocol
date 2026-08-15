@@ -153,7 +153,7 @@ impl VestingSchedule {
     pub fn standard(total: u64) -> Self {
         Self {
             total,
-            cliff_ms: 365 * 24 * 60 * 60 * 1_000, // 1 year
+            cliff_ms: 365 * 24 * 60 * 60 * 1_000,              // 1 year
             total_duration_ms: 4 * 365 * 24 * 60 * 60 * 1_000, // 4 years
             released: 0,
             cliff_reached: false,
@@ -193,9 +193,10 @@ impl VestingSchedule {
                 "no vesting amount available to release".into(),
             ));
         }
-        self.released = self.released.checked_add(actual).ok_or_else(|| {
-            RegistryError::SupplyAccounting("vesting released overflow".into())
-        })?;
+        self.released = self
+            .released
+            .checked_add(actual)
+            .ok_or_else(|| RegistryError::SupplyAccounting("vesting released overflow".into()))?;
         if now_ms >= self.cliff_ms {
             self.cliff_reached = true;
         }
@@ -275,10 +276,7 @@ pub enum TreasuryEvent {
     /// Circuit breaker was reset (unpaused).
     CircuitBreakerReset,
     /// Vesting release occurred.
-    VestingRelease {
-        amount: u64,
-        recipient: String,
-    },
+    VestingRelease { amount: u64, recipient: String },
     /// Inventory was reserved for a payment order.
     InventoryReserved {
         reference: String,
@@ -292,10 +290,7 @@ pub enum TreasuryEvent {
         reason: String,
     },
     /// Pilot refund — escrow returned to treasury.
-    PilotRefunded {
-        amount: u64,
-        reference: String,
-    },
+    PilotRefunded { amount: u64, reference: String },
 }
 
 /// Per-bucket spending tracker for circuit breaker enforcement.
@@ -347,9 +342,9 @@ impl SpendingTracker {
         // Daily limit
         let daily_spent = self.daily_spent.get(&bucket).copied().unwrap_or(0);
         let daily_max = config.daily_limit_per_bucket.get(&bucket).copied().unwrap_or(u64::MAX);
-        let new_daily = daily_spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("daily spending overflow".into())
-        })?;
+        let new_daily = daily_spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("daily spending overflow".into()))?;
         if new_daily > daily_max {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: format!("daily_{}", bucket.label()),
@@ -365,9 +360,9 @@ impl SpendingTracker {
             .get(&bucket)
             .copied()
             .unwrap_or(u64::MAX);
-        let new_monthly = monthly_spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("monthly spending overflow".into())
-        })?;
+        let new_monthly = monthly_spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("monthly spending overflow".into()))?;
         if new_monthly > monthly_max {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: format!("monthly_{}", bucket.label()),
@@ -463,29 +458,22 @@ impl PilotInventory {
     /// Allocate from pilot inventory.
     ///
     /// Enforces: cap, daily limit, monthly limit, pause state, approved wallets.
-    pub fn allocate(
-        &mut self,
-        amount: u64,
-        wallet: &str,
-        day: u64,
-        month: u64,
-    ) -> Result<(), RegistryError> {
+    pub fn allocate(&mut self, amount: u64, wallet: &str, day: u64, month: u64) -> Result<(), RegistryError> {
         if self.paused {
             return Err(RegistryError::TreasuryPaused("pilot allocation paused".into()));
         }
 
         if !self.approved_wallets.is_empty() && !self.approved_wallets.contains(&wallet.to_string()) {
-            return Err(RegistryError::UnauthorizedTreasuryWallet(
-                wallet.to_string(),
-            ));
+            return Err(RegistryError::UnauthorizedTreasuryWallet(wallet.to_string()));
         }
 
         self.maybe_reset(day, month);
 
         // Cap check
-        let new_allocated = self.allocated.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("pilot allocated overflow".into())
-        })?;
+        let new_allocated = self
+            .allocated
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("pilot allocated overflow".into()))?;
         if new_allocated > self.cap {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: "pilot_inventory_cap".into(),
@@ -495,9 +483,10 @@ impl PilotInventory {
         }
 
         // Daily limit
-        let new_daily = self.daily_spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("pilot daily overflow".into())
-        })?;
+        let new_daily = self
+            .daily_spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("pilot daily overflow".into()))?;
         if new_daily > self.daily_limit {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: "pilot_daily".into(),
@@ -507,9 +496,10 @@ impl PilotInventory {
         }
 
         // Monthly limit
-        let new_monthly = self.monthly_spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("pilot monthly overflow".into())
-        })?;
+        let new_monthly = self
+            .monthly_spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("pilot monthly overflow".into()))?;
         if new_monthly > self.monthly_limit {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: "pilot_monthly".into(),
@@ -521,9 +511,10 @@ impl PilotInventory {
         self.allocated = new_allocated;
         self.daily_spent = new_daily;
         self.monthly_spent = new_monthly;
-        self.total_subsidy_spent = self.total_subsidy_spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("pilot total subsidy overflow".into())
-        })?;
+        self.total_subsidy_spent = self
+            .total_subsidy_spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("pilot total subsidy overflow".into()))?;
 
         Ok(())
     }
@@ -684,15 +675,13 @@ impl Treasury {
         }
 
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "fund amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("fund amount must be > 0".into()));
         }
 
         let current = self.bucket_allocated.get(&bucket).copied().unwrap_or(0);
-        let new_total = current.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("bucket fund overflow".into())
-        })?;
+        let new_total = current
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("bucket fund overflow".into()))?;
 
         if new_total > bucket.hard_cap() {
             return Err(RegistryError::TreasuryLimitExceeded {
@@ -715,9 +704,10 @@ impl Treasury {
         // Move from supply account_balances to treasury_balances compartment
         if let Some(supply) = supply_tracker.get_mut(AssetId::OMNIA) {
             supply.account_balances = supply.account_balances.saturating_sub(amount);
-            supply.treasury_balances = supply.treasury_balances.checked_add(amount).ok_or_else(|| {
-                RegistryError::SupplyAccounting("treasury_balances overflow".into())
-            })?;
+            supply.treasury_balances = supply
+                .treasury_balances
+                .checked_add(amount)
+                .ok_or_else(|| RegistryError::SupplyAccounting("treasury_balances overflow".into()))?;
         }
 
         self.bucket_allocated.insert(bucket, new_total);
@@ -787,9 +777,7 @@ impl Treasury {
         month: u64,
     ) -> Result<TreasuryEvent, RegistryError> {
         if self.circuit_breaker.paused {
-            return Err(RegistryError::TreasuryPaused(
-                "circuit breaker tripped".into(),
-            ));
+            return Err(RegistryError::TreasuryPaused("circuit breaker tripped".into()));
         }
 
         if amount == 0 {
@@ -801,15 +789,14 @@ impl Treasury {
         let funded = self.bucket_allocated.get(&bucket).copied().unwrap_or(0);
 
         // Check spending limits via circuit breaker
-        self.spending.check_and_record(
-            bucket, amount, &self.circuit_breaker, day, month,
-        )?;
+        self.spending
+            .check_and_record(bucket, amount, &self.circuit_breaker, day, month)?;
 
         // Per-bucket cumulative spent check (never resets — lifetime outflow)
         let spent = self.bucket_spent.get(&bucket).copied().unwrap_or(0);
-        let new_spent = spent.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting(format!("bucket {} spent overflow", bucket.label()))
-        })?;
+        let new_spent = spent
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting(format!("bucket {} spent overflow", bucket.label())))?;
         if new_spent > funded {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: format!("{}_lifetime", bucket.label()),
@@ -822,7 +809,9 @@ impl Treasury {
         if funded > bucket.hard_cap() {
             return Err(RegistryError::InvariantViolation(format!(
                 "bucket {} funded amount {} exceeds hard cap {}",
-                bucket, funded, bucket.hard_cap()
+                bucket,
+                funded,
+                bucket.hard_cap()
             )));
         }
 
@@ -839,9 +828,10 @@ impl Treasury {
                 });
             }
             supply.treasury_balances -= amount;
-            supply.account_balances = supply.account_balances.checked_add(amount).ok_or_else(|| {
-                RegistryError::SupplyAccounting("account_balances overflow".into())
-            })?;
+            supply.account_balances = supply
+                .account_balances
+                .checked_add(amount)
+                .ok_or_else(|| RegistryError::SupplyAccounting("account_balances overflow".into()))?;
         }
 
         // Debit the accounting category
@@ -878,9 +868,7 @@ impl Treasury {
         month: u64,
     ) -> Result<TreasuryEvent, RegistryError> {
         if self.circuit_breaker.paused {
-            return Err(RegistryError::TreasuryPaused(
-                "circuit breaker tripped".into(),
-            ));
+            return Err(RegistryError::TreasuryPaused("circuit breaker tripped".into()));
         }
 
         // Enforce pilot-specific limits
@@ -909,14 +897,17 @@ impl Treasury {
                 });
             }
             supply.treasury_balances -= amount;
-            supply.escrow_balances = supply.escrow_balances.checked_add(amount).ok_or_else(|| {
-                RegistryError::SupplyAccounting("escrow_balances overflow".into())
-            })?;
+            supply.escrow_balances = supply
+                .escrow_balances
+                .checked_add(amount)
+                .ok_or_else(|| RegistryError::SupplyAccounting("escrow_balances overflow".into()))?;
         }
 
         // Update accounting: OperatingReserve → PilotAllocation
-        self.accounting.debit(crate::genesis::TreasuryCategory::OperatingReserve, amount);
-        self.accounting.credit(crate::genesis::TreasuryCategory::PilotAllocation, amount);
+        self.accounting
+            .debit(crate::genesis::TreasuryCategory::OperatingReserve, amount);
+        self.accounting
+            .credit(crate::genesis::TreasuryCategory::PilotAllocation, amount);
 
         self.event_sequence += 1;
         let event = TreasuryEvent::PilotAllocated {
@@ -945,15 +936,14 @@ impl Treasury {
                 ));
             }
             supply.escrow_balances -= amount;
-            supply.account_balances = supply.account_balances.checked_add(amount).ok_or_else(|| {
-                RegistryError::SupplyAccounting("account_balances overflow".into())
-            })?;
+            supply.account_balances = supply
+                .account_balances
+                .checked_add(amount)
+                .ok_or_else(|| RegistryError::SupplyAccounting("account_balances overflow".into()))?;
         }
         // Debit pilot allocation category (OMNIA leaving escrow → user)
-        self.accounting.debit(
-            crate::genesis::TreasuryCategory::PilotAllocation,
-            amount,
-        );
+        self.accounting
+            .debit(crate::genesis::TreasuryCategory::PilotAllocation, amount);
         Ok(())
     }
 
@@ -975,14 +965,17 @@ impl Treasury {
                 ));
             }
             supply.escrow_balances -= amount;
-            supply.treasury_balances = supply.treasury_balances.checked_add(amount).ok_or_else(|| {
-                RegistryError::SupplyAccounting("treasury_balances overflow on refund".into())
-            })?;
+            supply.treasury_balances = supply
+                .treasury_balances
+                .checked_add(amount)
+                .ok_or_else(|| RegistryError::SupplyAccounting("treasury_balances overflow on refund".into()))?;
         }
 
         // Credit refunds_reserved category, debit pilot_allocation
-        self.accounting.credit(crate::genesis::TreasuryCategory::RefundsReserved, amount);
-        self.accounting.debit(crate::genesis::TreasuryCategory::PilotAllocation, amount);
+        self.accounting
+            .credit(crate::genesis::TreasuryCategory::RefundsReserved, amount);
+        self.accounting
+            .debit(crate::genesis::TreasuryCategory::PilotAllocation, amount);
 
         self.event_sequence += 1;
         let event = TreasuryEvent::PilotRefunded {
@@ -1014,9 +1007,7 @@ impl Treasury {
         now_ms: u64,
     ) -> Result<TreasuryEvent, RegistryError> {
         if self.circuit_breaker.paused {
-            return Err(RegistryError::TreasuryPaused(
-                "circuit breaker tripped".into(),
-            ));
+            return Err(RegistryError::TreasuryPaused("circuit breaker tripped".into()));
         }
 
         if amount == 0 {
@@ -1059,7 +1050,8 @@ impl Treasury {
         self.inventory_reservations.insert(reference.to_string(), reservation);
 
         // Credit provider fee subsidies category for tracking
-        self.accounting.credit(crate::genesis::TreasuryCategory::ProviderFeeSubsidies, amount);
+        self.accounting
+            .credit(crate::genesis::TreasuryCategory::ProviderFeeSubsidies, amount);
 
         self.event_sequence += 1;
         let event = TreasuryEvent::InventoryReserved {
@@ -1073,20 +1065,11 @@ impl Treasury {
 
     /// Release (cancel) an inventory reservation.
     /// Returns the reserved amount back to the available pool.
-    pub fn release_reservation(
-        &mut self,
-        reference: &str,
-        reason: &str,
-    ) -> Result<TreasuryEvent, RegistryError> {
+    pub fn release_reservation(&mut self, reference: &str, reason: &str) -> Result<TreasuryEvent, RegistryError> {
         let reservation = self
             .inventory_reservations
             .get_mut(reference)
-            .ok_or_else(|| {
-                RegistryError::InvariantViolation(format!(
-                    "reservation {} not found",
-                    reference
-                ))
-            })?;
+            .ok_or_else(|| RegistryError::InvariantViolation(format!("reservation {} not found", reference)))?;
 
         if reservation.state != ReservationState::Active {
             return Err(RegistryError::InvariantViolation(format!(
@@ -1099,7 +1082,8 @@ impl Treasury {
         reservation.state = ReservationState::Released;
 
         // Debit provider fee subsidies category
-        self.accounting.debit(crate::genesis::TreasuryCategory::ProviderFeeSubsidies, amount);
+        self.accounting
+            .debit(crate::genesis::TreasuryCategory::ProviderFeeSubsidies, amount);
 
         self.event_sequence += 1;
         let event = TreasuryEvent::ReservationReleased {
@@ -1117,12 +1101,7 @@ impl Treasury {
         let reservation = self
             .inventory_reservations
             .get_mut(reference)
-            .ok_or_else(|| {
-                RegistryError::InvariantViolation(format!(
-                    "reservation {} not found",
-                    reference
-                ))
-            })?;
+            .ok_or_else(|| RegistryError::InvariantViolation(format!("reservation {} not found", reference)))?;
 
         if reservation.state != ReservationState::Active {
             return Err(RegistryError::InvariantViolation(format!(
@@ -1141,13 +1120,13 @@ impl Treasury {
         let cutoff = now_ms.saturating_sub(max_age_ms);
         let mut expired = 0u64;
         for reservation in self.inventory_reservations.values_mut() {
-            if reservation.state == ReservationState::Active
-                && reservation.created_at_ms < cutoff
-            {
+            if reservation.state == ReservationState::Active && reservation.created_at_ms < cutoff {
                 reservation.state = ReservationState::Expired;
                 // Debit provider fee subsidies
-                self.accounting
-                    .debit(crate::genesis::TreasuryCategory::ProviderFeeSubsidies, reservation.amount);
+                self.accounting.debit(
+                    crate::genesis::TreasuryCategory::ProviderFeeSubsidies,
+                    reservation.amount,
+                );
                 expired += 1;
             }
         }
@@ -1178,11 +1157,7 @@ impl Treasury {
     // --- Vesting ---
 
     /// Create a vesting schedule for a team allocation.
-    pub fn create_vesting(
-        &mut self,
-        recipient: &str,
-        total: u64,
-    ) -> Result<(), RegistryError> {
+    pub fn create_vesting(&mut self, recipient: &str, total: u64) -> Result<(), RegistryError> {
         if self.vesting_schedules.contains_key(recipient) {
             return Err(RegistryError::InvariantViolation(format!(
                 "vesting schedule already exists for {}",
@@ -1190,16 +1165,8 @@ impl Treasury {
             )));
         }
         // Ensure team bucket can cover this
-        let team_funded = self
-            .bucket_allocated
-            .get(&AllocationBucket::Team)
-            .copied()
-            .unwrap_or(0);
-        let current_vesting_total: u64 = self
-            .vesting_schedules
-            .values()
-            .map(|v| v.total)
-            .sum();
+        let team_funded = self.bucket_allocated.get(&AllocationBucket::Team).copied().unwrap_or(0);
+        let current_vesting_total: u64 = self.vesting_schedules.values().map(|v| v.total).sum();
         if current_vesting_total.saturating_add(total) > team_funded {
             return Err(RegistryError::TreasuryLimitExceeded {
                 limit_type: "team_vesting_total".into(),
@@ -1208,7 +1175,8 @@ impl Treasury {
             });
         }
 
-        self.vesting_schedules.insert(recipient.to_string(), VestingSchedule::standard(total));
+        self.vesting_schedules
+            .insert(recipient.to_string(), VestingSchedule::standard(total));
         Ok(())
     }
 
@@ -1221,12 +1189,9 @@ impl Treasury {
         supply_tracker: &mut SupplyTracker,
         _definition: &AssetDefinition,
     ) -> Result<TreasuryEvent, RegistryError> {
-        let schedule = self
-            .vesting_schedules
-            .get_mut(recipient)
-            .ok_or_else(|| {
-                RegistryError::AssetNotFound(u32::MAX) // reuse; no treasury-specific not-found
-            })?;
+        let schedule = self.vesting_schedules.get_mut(recipient).ok_or_else(|| {
+            RegistryError::AssetNotFound(u32::MAX) // reuse; no treasury-specific not-found
+        })?;
 
         let released = schedule.release(amount, now_ms)?;
 
@@ -1240,9 +1205,10 @@ impl Treasury {
                 });
             }
             supply.treasury_balances -= released;
-            supply.locked_balances = supply.locked_balances.checked_add(released).ok_or_else(|| {
-                RegistryError::SupplyAccounting("locked_balances overflow".into())
-            })?;
+            supply.locked_balances = supply
+                .locked_balances
+                .checked_add(released)
+                .ok_or_else(|| RegistryError::SupplyAccounting("locked_balances overflow".into()))?;
         }
 
         self.event_sequence += 1;
@@ -1291,9 +1257,7 @@ impl Treasury {
 
     /// Get the remaining capacity for a bucket.
     pub fn bucket_remaining(&self, bucket: AllocationBucket) -> u64 {
-        bucket
-            .hard_cap()
-            .saturating_sub(self.bucket_funded(bucket))
+        bucket.hard_cap().saturating_sub(self.bucket_funded(bucket))
     }
 
     /// Get pilot inventory state.
@@ -1424,11 +1388,17 @@ mod tests {
 
     #[test]
     fn bucket_caps_match_spec() {
-        assert_eq!(AllocationBucket::NetworkIncentives.hard_cap(), 400_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            AllocationBucket::NetworkIncentives.hard_cap(),
+            400_000_000 * OMNIA_PLANCKS
+        );
         assert_eq!(AllocationBucket::Team.hard_cap(), 150_000_000 * OMNIA_PLANCKS);
         assert_eq!(AllocationBucket::EarlyInvestors.hard_cap(), 100_000_000 * OMNIA_PLANCKS);
         assert_eq!(AllocationBucket::Ecosystem.hard_cap(), 150_000_000 * OMNIA_PLANCKS);
-        assert_eq!(AllocationBucket::TreasuryReserve.hard_cap(), 100_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            AllocationBucket::TreasuryReserve.hard_cap(),
+            100_000_000 * OMNIA_PLANCKS
+        );
         assert_eq!(AllocationBucket::Liquidity.hard_cap(), 100_000_000 * OMNIA_PLANCKS);
     }
 
@@ -1462,7 +1432,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(
             treasury.bucket_funded(AllocationBucket::NetworkIncentives),
@@ -1485,7 +1455,10 @@ mod tests {
             &def,
         );
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), RegistryError::TreasuryLimitExceeded { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            RegistryError::TreasuryLimitExceeded { .. }
+        ));
     }
 
     #[test]
@@ -1506,7 +1479,13 @@ mod tests {
 
         for (bucket, amount) in &buckets {
             treasury
-                .fund_bucket(*bucket, *amount, SupplyAuthority::Genesis, reg.supply_tracker_mut(), &def)
+                .fund_bucket(
+                    *bucket,
+                    *amount,
+                    SupplyAuthority::Genesis,
+                    reg.supply_tracker_mut(),
+                    &def,
+                )
                 .unwrap();
         }
 
@@ -1530,7 +1509,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         // Allocate 3M from ecosystem (within daily limit of hard_cap/30 = 5M)
         treasury
@@ -1545,7 +1524,7 @@ mod tests {
                 1, // day 1
                 1, // month 1
             )
-        .unwrap();
+            .unwrap();
 
         // Treasury balance should have decreased, account balance increased
         let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
@@ -1567,7 +1546,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         treasury.trip_circuit_breaker("suspicious activity detected");
         assert!(treasury.is_paused());
@@ -1580,7 +1559,8 @@ mod tests {
             None,
             reg.supply_tracker_mut(),
             &def,
-            1, 1,
+            1,
+            1,
         );
         assert!(matches!(result, Err(RegistryError::TreasuryPaused(_))));
     }
@@ -1600,7 +1580,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         // Allocate within daily limit
         treasury
@@ -1611,9 +1591,10 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
-        .unwrap();
+            .unwrap();
 
         assert_eq!(treasury.pilot_inventory().daily_spent, 100_000 * OMNIA_PLANCKS);
     }
@@ -1632,7 +1613,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         // Try to allocate more than daily limit
         let result = treasury.allocate_pilot(
@@ -1642,7 +1623,8 @@ mod tests {
             None,
             reg.supply_tracker_mut(),
             &def,
-            1, 1,
+            1,
+            1,
         );
         assert!(matches!(result, Err(RegistryError::TreasuryLimitExceeded { .. })));
     }
@@ -1662,7 +1644,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         treasury.create_vesting("alice", 10_000_000 * OMNIA_PLANCKS).unwrap();
 
@@ -1692,7 +1674,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         treasury.create_vesting("bob", 12_000_000 * OMNIA_PLANCKS).unwrap();
 
@@ -1706,7 +1688,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         // At cliff, 25% of total is available immediately.
         // Test slightly after cliff to get a non-zero post-cliff portion.
@@ -1754,7 +1736,7 @@ mod tests {
                 reg.supply_tracker_mut(),
                 &def,
             )
-        .unwrap();
+            .unwrap();
 
         treasury.trip_circuit_breaker("test");
         treasury.reset_circuit_breaker();
@@ -1781,7 +1763,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(treasury.bucket_spent(AllocationBucket::Ecosystem), 0);
-        assert_eq!(treasury.bucket_available(AllocationBucket::Ecosystem), 10_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            treasury.bucket_available(AllocationBucket::Ecosystem),
+            10_000_000 * OMNIA_PLANCKS
+        );
 
         treasury
             .allocate(
@@ -1792,12 +1777,19 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
-        assert_eq!(treasury.bucket_spent(AllocationBucket::Ecosystem), 3_000_000 * OMNIA_PLANCKS);
-        assert_eq!(treasury.bucket_available(AllocationBucket::Ecosystem), 7_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            treasury.bucket_spent(AllocationBucket::Ecosystem),
+            3_000_000 * OMNIA_PLANCKS
+        );
+        assert_eq!(
+            treasury.bucket_available(AllocationBucket::Ecosystem),
+            7_000_000 * OMNIA_PLANCKS
+        );
 
         treasury
             .allocate(
@@ -1808,12 +1800,19 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
-        assert_eq!(treasury.bucket_spent(AllocationBucket::Ecosystem), 5_000_000 * OMNIA_PLANCKS);
-        assert_eq!(treasury.bucket_available(AllocationBucket::Ecosystem), 5_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            treasury.bucket_spent(AllocationBucket::Ecosystem),
+            5_000_000 * OMNIA_PLANCKS
+        );
+        assert_eq!(
+            treasury.bucket_available(AllocationBucket::Ecosystem),
+            5_000_000 * OMNIA_PLANCKS
+        );
     }
 
     #[test]
@@ -1843,7 +1842,8 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
@@ -1856,11 +1856,15 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                2, 1, // day 2
+                2,
+                1, // day 2
             )
             .unwrap();
 
-        assert_eq!(treasury.bucket_spent(AllocationBucket::Liquidity), 5_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            treasury.bucket_spent(AllocationBucket::Liquidity),
+            5_000_000 * OMNIA_PLANCKS
+        );
 
         // Try to spend more — should fail on lifetime check
         let result = treasury.allocate(
@@ -1871,10 +1875,14 @@ mod tests {
             None,
             reg.supply_tracker_mut(),
             &def,
-            3, 1,
+            3,
+            1,
         );
-        assert!(matches!(result, Err(RegistryError::TreasuryLimitExceeded { .. })),
-            "expected lifetime limit error, got {:?}", result);
+        assert!(
+            matches!(result, Err(RegistryError::TreasuryLimitExceeded { .. })),
+            "expected lifetime limit error, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -1911,7 +1919,8 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
@@ -1949,7 +1958,8 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
@@ -1957,7 +1967,9 @@ mod tests {
         assert_eq!(supply.escrow_balances, 100_000 * OMNIA_PLANCKS);
 
         // Confirm delivery → escrow → account, PilotAllocation debited
-        treasury.confirm_pilot_delivery(100_000 * OMNIA_PLANCKS, reg.supply_tracker_mut()).unwrap();
+        treasury
+            .confirm_pilot_delivery(100_000 * OMNIA_PLANCKS, reg.supply_tracker_mut())
+            .unwrap();
         let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
         assert_eq!(supply.escrow_balances, 0);
         assert_eq!(supply.account_balances, 100_000 * OMNIA_PLANCKS);
@@ -1971,7 +1983,8 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
@@ -2023,13 +2036,7 @@ mod tests {
 
         // Reserve inventory for an order
         treasury
-            .reserve_inventory(
-                10_000 * OMNIA_PLANCKS,
-                "user-1",
-                "wallet-approved",
-                "order-001",
-                1000,
-            )
+            .reserve_inventory(10_000 * OMNIA_PLANCKS, "user-1", "wallet-approved", "order-001", 1000)
             .unwrap();
 
         assert_eq!(treasury.total_reserved(), 10_000 * OMNIA_PLANCKS);
@@ -2064,13 +2071,7 @@ mod tests {
 
         // Don't fund treasury reserve — pilot remaining = 10M (default cap)
         // But reserve more than 10M
-        let result = treasury.reserve_inventory(
-            11_000_000 * OMNIA_PLANCKS,
-            "user-1",
-            "wallet",
-            "order-big",
-            1000,
-        );
+        let result = treasury.reserve_inventory(11_000_000 * OMNIA_PLANCKS, "user-1", "wallet", "order-big", 1000);
         assert!(matches!(result, Err(RegistryError::TreasuryLimitExceeded { .. })));
     }
 
@@ -2079,13 +2080,7 @@ mod tests {
         let mut treasury = Treasury::with_genesis_buckets();
         treasury.trip_circuit_breaker("suspicious");
 
-        let result = treasury.reserve_inventory(
-            1_000 * OMNIA_PLANCKS,
-            "user-1",
-            "wallet",
-            "order-cb",
-            1000,
-        );
+        let result = treasury.reserve_inventory(1_000 * OMNIA_PLANCKS, "user-1", "wallet", "order-cb", 1000);
         assert!(matches!(result, Err(RegistryError::TreasuryPaused(_))));
     }
 
@@ -2100,8 +2095,14 @@ mod tests {
         // Expire reservations older than 200ms (as of time 600)
         let expired = treasury.expire_reservations(600, 200);
         assert_eq!(expired, 1); // only old-order
-        assert_eq!(treasury.get_reservation("old-order").unwrap().state, ReservationState::Expired);
-        assert_eq!(treasury.get_reservation("new-order").unwrap().state, ReservationState::Active);
+        assert_eq!(
+            treasury.get_reservation("old-order").unwrap().state,
+            ReservationState::Expired
+        );
+        assert_eq!(
+            treasury.get_reservation("new-order").unwrap().state,
+            ReservationState::Active
+        );
         assert_eq!(treasury.total_reserved(), 2_000); // only new-order
     }
 
@@ -2112,7 +2113,10 @@ mod tests {
         treasury.reserve_inventory(5_000, "u1", "w", "order-x", 100).unwrap();
         treasury.consume_reservation("order-x").unwrap();
 
-        assert_eq!(treasury.get_reservation("order-x").unwrap().state, ReservationState::Consumed);
+        assert_eq!(
+            treasury.get_reservation("order-x").unwrap().state,
+            ReservationState::Consumed
+        );
         assert_eq!(treasury.total_reserved(), 0); // consumed reservations don't count
 
         // Double-consume fails
@@ -2145,7 +2149,8 @@ mod tests {
                 None,
                 reg.supply_tracker_mut(),
                 &def,
-                1, 1,
+                1,
+                1,
             )
             .unwrap();
 
@@ -2173,6 +2178,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(treasury.bucket_spent(AllocationBucket::Team), 0);
-        assert_eq!(treasury.bucket_available(AllocationBucket::Team), 150_000_000 * OMNIA_PLANCKS);
+        assert_eq!(
+            treasury.bucket_available(AllocationBucket::Team),
+            150_000_000 * OMNIA_PLANCKS
+        );
     }
 }

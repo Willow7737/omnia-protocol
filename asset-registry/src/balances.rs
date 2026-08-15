@@ -51,15 +51,9 @@ pub enum BalanceEvent {
         authority: SupplyAuthority,
     },
     /// Account balance frozen (e.g., legal hold).
-    Frozen {
-        asset_id: AssetId,
-        account: AccountId,
-    },
+    Frozen { asset_id: AssetId, account: AccountId },
     /// Account balance unfrozen.
-    Unfrozen {
-        asset_id: AssetId,
-        account: AccountId,
-    },
+    Unfrozen { asset_id: AssetId, account: AccountId },
 }
 
 /// Per-account balance state for a single asset.
@@ -166,9 +160,7 @@ impl AssetScopedBalances {
         registry: &mut AssetRegistry,
     ) -> Result<BalanceEvent, RegistryError> {
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "credit amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("credit amount must be > 0".into()));
         }
 
         let def = registry
@@ -177,22 +169,17 @@ impl AssetScopedBalances {
             .clone();
 
         // Record mint in supply tracker
-        registry
-            .supply_tracker_mut()
-            .mint(
-                asset_id,
-                amount,
-                authority.clone(),
-                format!("credit to {}", hex::encode(account)),
-                None,
-                &def,
-            )?;
+        registry.supply_tracker_mut().mint(
+            asset_id,
+            amount,
+            authority.clone(),
+            format!("credit to {}", hex::encode(account)),
+            None,
+            &def,
+        )?;
 
         // Update supply compartment
-        if let Some(supply) = registry
-            .supply_tracker_mut()
-            .get_mut(asset_id)
-        {
+        if let Some(supply) = registry.supply_tracker_mut().get_mut(asset_id) {
             supply.account_balances = supply
                 .account_balances
                 .checked_add(amount)
@@ -205,9 +192,10 @@ impl AssetScopedBalances {
         if bal.frozen {
             return Err(RegistryError::AssetFrozen(asset_id.as_u32()));
         }
-        bal.free = bal.free.checked_add(amount).ok_or_else(|| {
-            RegistryError::SupplyAccounting("balance credit overflow".into())
-        })?;
+        bal.free = bal
+            .free
+            .checked_add(amount)
+            .ok_or_else(|| RegistryError::SupplyAccounting("balance credit overflow".into()))?;
 
         let event = BalanceEvent::Minted {
             asset_id,
@@ -236,15 +224,11 @@ impl AssetScopedBalances {
         registry: &AssetRegistry,
     ) -> Result<BalanceEvent, RegistryError> {
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "transfer amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("transfer amount must be > 0".into()));
         }
 
         if from == to {
-            return Err(RegistryError::InvariantViolation(
-                "cannot transfer to self".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("cannot transfer to self".into()));
         }
 
         // Check asset is transferable
@@ -252,13 +236,10 @@ impl AssetScopedBalances {
 
         // Get or create sender balance
         let asset_balances = self.balances.entry(asset_id).or_default();
-        let sender = asset_balances
-            .get_mut(from)
-            .ok_or(RegistryError::InsufficientBalance(
-                asset_id.as_u32(),
-                0,
-                amount,
-            ))?;
+        let sender =
+            asset_balances
+                .get_mut(from)
+                .ok_or(RegistryError::InsufficientBalance(asset_id.as_u32(), 0, amount))?;
 
         if sender.frozen {
             return Err(RegistryError::AssetFrozen(asset_id.as_u32()));
@@ -287,9 +268,7 @@ impl AssetScopedBalances {
             None => {
                 // Rollback sender
                 asset_balances.get_mut(from).unwrap().free += amount;
-                return Err(RegistryError::SupplyAccounting(
-                    "recipient balance overflow".into(),
-                ));
+                return Err(RegistryError::SupplyAccounting("recipient balance overflow".into()));
             }
         };
         recipient.free = new_recipient_free;
@@ -324,9 +303,7 @@ impl AssetScopedBalances {
         registry: &mut AssetRegistry,
     ) -> Result<BalanceEvent, RegistryError> {
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "burn amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("burn amount must be > 0".into()));
         }
 
         let def = registry
@@ -335,47 +312,32 @@ impl AssetScopedBalances {
             .clone();
 
         // Record burn in supply tracker (also checks UBC burn prohibition)
-        registry
-            .supply_tracker_mut()
-            .burn(
-                asset_id,
-                amount,
-                authority.clone(),
-                format!("burn from {}", hex::encode(account)),
-                None,
-                &def,
-            )?;
+        registry.supply_tracker_mut().burn(
+            asset_id,
+            amount,
+            authority.clone(),
+            format!("burn from {}", hex::encode(account)),
+            None,
+            &def,
+        )?;
 
         // Update supply compartment
-        if let Some(supply) = registry
-            .supply_tracker_mut()
-            .get_mut(asset_id)
-        {
-            supply.account_balances = supply
-                .account_balances
-                .saturating_sub(amount);
+        if let Some(supply) = registry.supply_tracker_mut().get_mut(asset_id) {
+            supply.account_balances = supply.account_balances.saturating_sub(amount);
         }
 
         // Debit balance ledger
         let asset_balances = self.balances.entry(asset_id).or_default();
         let bal = asset_balances
             .get_mut(account)
-            .ok_or(RegistryError::InsufficientBalance(
-                asset_id.as_u32(),
-                0,
-                amount,
-            ))?;
+            .ok_or(RegistryError::InsufficientBalance(asset_id.as_u32(), 0, amount))?;
 
         if bal.frozen {
             return Err(RegistryError::AssetFrozen(asset_id.as_u32()));
         }
 
         if bal.free < amount {
-            return Err(RegistryError::InsufficientBalance(
-                asset_id.as_u32(),
-                bal.free,
-                amount,
-            ));
+            return Err(RegistryError::InsufficientBalance(asset_id.as_u32(), bal.free, amount));
         }
 
         bal.free -= amount;
@@ -395,30 +357,17 @@ impl AssetScopedBalances {
 
     /// Lock tokens (for vesting, staking reserve, legal hold).
     /// Moves from free to locked within the same account.
-    pub fn lock(
-        &mut self,
-        asset_id: AssetId,
-        account: &AccountId,
-        amount: u64,
-    ) -> Result<(), RegistryError> {
+    pub fn lock(&mut self, asset_id: AssetId, account: &AccountId, amount: u64) -> Result<(), RegistryError> {
         let asset_balances = self
             .balances
             .get_mut(&asset_id)
             .ok_or(RegistryError::AssetNotFound(asset_id.as_u32()))?;
         let bal = asset_balances
             .get_mut(account)
-            .ok_or(RegistryError::InsufficientBalance(
-                asset_id.as_u32(),
-                0,
-                amount,
-            ))?;
+            .ok_or(RegistryError::InsufficientBalance(asset_id.as_u32(), 0, amount))?;
 
         if bal.free < amount {
-            return Err(RegistryError::InsufficientBalance(
-                asset_id.as_u32(),
-                bal.free,
-                amount,
-            ));
+            return Err(RegistryError::InsufficientBalance(asset_id.as_u32(), bal.free, amount));
         }
 
         bal.free -= amount;
@@ -430,12 +379,7 @@ impl AssetScopedBalances {
     }
 
     /// Unlock tokens (move from locked back to free).
-    pub fn unlock(
-        &mut self,
-        asset_id: AssetId,
-        account: &AccountId,
-        amount: u64,
-    ) -> Result<(), RegistryError> {
+    pub fn unlock(&mut self, asset_id: AssetId, account: &AccountId, amount: u64) -> Result<(), RegistryError> {
         let asset_balances = self
             .balances
             .get_mut(&asset_id)
@@ -461,11 +405,7 @@ impl AssetScopedBalances {
     }
 
     /// Freeze an account's balance for a specific asset (legal hold).
-    pub fn freeze_account(
-        &mut self,
-        asset_id: AssetId,
-        account: &AccountId,
-    ) -> Result<BalanceEvent, RegistryError> {
+    pub fn freeze_account(&mut self, asset_id: AssetId, account: &AccountId) -> Result<BalanceEvent, RegistryError> {
         let asset_balances = self
             .balances
             .get_mut(&asset_id)
@@ -484,11 +424,7 @@ impl AssetScopedBalances {
     }
 
     /// Unfreeze an account's balance.
-    pub fn unfreeze_account(
-        &mut self,
-        asset_id: AssetId,
-        account: &AccountId,
-    ) -> Result<BalanceEvent, RegistryError> {
+    pub fn unfreeze_account(&mut self, asset_id: AssetId, account: &AccountId) -> Result<BalanceEvent, RegistryError> {
         let asset_balances = self
             .balances
             .get_mut(&asset_id)
@@ -521,10 +457,7 @@ impl AssetScopedBalances {
 
     /// Get total number of accounts across all assets.
     pub fn total_accounts(&self) -> usize {
-        self.balances
-            .values()
-            .map(|accounts| accounts.len())
-            .sum()
+        self.balances.values().map(|accounts| accounts.len()).sum()
     }
 }
 
@@ -551,13 +484,7 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 1_000_000);
@@ -571,13 +498,7 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         balances
@@ -597,13 +518,7 @@ mod tests {
 
         // Credit some UBC
         balances
-            .credit(
-                AssetId::UBC,
-                &alice(),
-                100,
-                SupplyAuthority::EpochEligibility,
-                &mut reg,
-            )
+            .credit(AssetId::UBC, &alice(), 100, SupplyAuthority::EpochEligibility, &mut reg)
             .unwrap();
 
         // UBC is non-transferable
@@ -617,25 +532,13 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         assert_eq!(reg.total_supply(AssetId::OMNIA), 1_000_000);
 
         balances
-            .burn(
-                AssetId::OMNIA,
-                &alice(),
-                100_000,
-                SupplyAuthority::Protocol,
-                &mut reg,
-            )
+            .burn(AssetId::OMNIA, &alice(), 100_000, SupplyAuthority::Protocol, &mut reg)
             .unwrap();
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 900_000);
@@ -648,22 +551,10 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::UBC,
-                &alice(),
-                100,
-                SupplyAuthority::EpochEligibility,
-                &mut reg,
-            )
+            .credit(AssetId::UBC, &alice(), 100, SupplyAuthority::EpochEligibility, &mut reg)
             .unwrap();
 
-        let result = balances.burn(
-            AssetId::UBC,
-            &alice(),
-            10,
-            SupplyAuthority::AccountOwner,
-            &mut reg,
-        );
+        let result = balances.burn(AssetId::UBC, &alice(), 10, SupplyAuthority::AccountOwner, &mut reg);
         assert!(matches!(result, Err(RegistryError::UbcBurnProhibited)));
     }
 
@@ -673,20 +564,11 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                100,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 100, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &bob(), 200, &reg);
-        assert!(matches!(
-            result,
-            Err(RegistryError::InsufficientBalance(_, 100, 200))
-        ));
+        assert!(matches!(result, Err(RegistryError::InsufficientBalance(_, 100, 200))));
     }
 
     #[test]
@@ -695,29 +577,17 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
-        balances
-            .freeze_account(AssetId::OMNIA, &alice())
-            .unwrap();
+        balances.freeze_account(AssetId::OMNIA, &alice()).unwrap();
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg);
         assert!(matches!(result, Err(RegistryError::AssetFrozen(_))));
 
         // Unfreeze restores transfer
-        balances
-            .unfreeze_account(AssetId::OMNIA, &alice())
-            .unwrap();
-        balances
-            .transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg)
-            .unwrap();
+        balances.unfreeze_account(AssetId::OMNIA, &alice()).unwrap();
+        balances.transfer(AssetId::OMNIA, &alice(), &bob(), 100, &reg).unwrap();
     }
 
     #[test]
@@ -726,31 +596,24 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         // Lock 400k
-        balances
-            .lock(AssetId::OMNIA, &alice(), 400_000)
-            .unwrap();
+        balances.lock(AssetId::OMNIA, &alice(), 400_000).unwrap();
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 600_000);
         assert_eq!(balances.locked_balance(AssetId::OMNIA, &alice()), 400_000);
         assert_eq!(balances.total_balance(AssetId::OMNIA, &alice()), 1_000_000);
 
         // Can only transfer from free balance
         let result = balances.transfer(AssetId::OMNIA, &alice(), &bob(), 700_000, &reg);
-        assert!(matches!(result, Err(RegistryError::InsufficientBalance(_, 600_000, 700_000))));
+        assert!(matches!(
+            result,
+            Err(RegistryError::InsufficientBalance(_, 600_000, 700_000))
+        ));
 
         // Unlock 200k
-        balances
-            .unlock(AssetId::OMNIA, &alice(), 200_000)
-            .unwrap();
+        balances.unlock(AssetId::OMNIA, &alice(), 200_000).unwrap();
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 800_000);
         assert_eq!(balances.locked_balance(AssetId::OMNIA, &alice()), 200_000);
     }
@@ -761,13 +624,7 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
 
         let result = balances.transfer(AssetId::OMNIA, &alice(), &alice(), 100, &reg);
@@ -781,33 +638,15 @@ mod tests {
 
         // Credit OMNIA and UBC to same account
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                500,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 500, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
         balances
-            .credit(
-                AssetId::UBC,
-                &alice(),
-                300,
-                SupplyAuthority::EpochEligibility,
-                &mut reg,
-            )
+            .credit(AssetId::UBC, &alice(), 300, SupplyAuthority::EpochEligibility, &mut reg)
             .unwrap();
 
         // Burning OMNIA does not affect UBC
         balances
-            .burn(
-                AssetId::OMNIA,
-                &alice(),
-                200,
-                SupplyAuthority::Protocol,
-                &mut reg,
-            )
+            .burn(AssetId::OMNIA, &alice(), 200, SupplyAuthority::Protocol, &mut reg)
             .unwrap();
 
         assert_eq!(balances.free_balance(AssetId::OMNIA, &alice()), 300);
@@ -822,17 +661,9 @@ mod tests {
         let mut reg = AssetRegistry::with_genesis_assets();
 
         balances
-            .credit(
-                AssetId::OMNIA,
-                &alice(),
-                1_000,
-                SupplyAuthority::Genesis,
-                &mut reg,
-            )
+            .credit(AssetId::OMNIA, &alice(), 1_000, SupplyAuthority::Genesis, &mut reg)
             .unwrap();
-        balances
-            .transfer(AssetId::OMNIA, &alice(), &bob(), 300, &reg)
-            .unwrap();
+        balances.transfer(AssetId::OMNIA, &alice(), &bob(), 300, &reg).unwrap();
 
         assert_eq!(balances.events().len(), 2);
     }

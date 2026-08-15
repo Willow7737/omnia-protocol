@@ -20,20 +20,16 @@ use omnia_asset_registry::types::AssetId;
         (status = 200, description = "Per-asset supply snapshot"),
     )
 )]
-pub async fn get_supply(
-    State(state): State<AppState>,
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+pub async fn get_supply(State(state): State<AppState>) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     let tracker = state.supply_tracker.read().await;
 
     let mut assets = Vec::new();
     for asset_id in [AssetId::OMNIA, AssetId::UBC] {
         if let Some(supply) = tracker.get(asset_id) {
             let current = supply.total_minted.saturating_sub(supply.total_burned);
-            let decomposition_ok = supply.account_balances
-                + supply.locked_balances
-                + supply.treasury_balances
-                + supply.escrow_balances
-                == current;
+            let decomposition_ok =
+                supply.account_balances + supply.locked_balances + supply.treasury_balances + supply.escrow_balances
+                    == current;
             assets.push(json!({
                 "asset": format!("{:?}", asset_id),
                 "total_minted": supply.total_minted,

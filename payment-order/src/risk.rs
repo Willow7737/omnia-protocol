@@ -129,11 +129,7 @@ impl RiskLimits {
     /// `quoted_rate` and `current_rate` are in the same fixed-point format.
     /// Returns true if the movement exceeds the tolerance (allocation should pause).
     #[inline]
-    pub fn price_movement_exceeded(
-        &self,
-        quoted_rate: u64,
-        current_rate: u64,
-    ) -> bool {
+    pub fn price_movement_exceeded(&self, quoted_rate: u64, current_rate: u64) -> bool {
         if quoted_rate == 0 {
             return true;
         }
@@ -224,9 +220,7 @@ impl CircuitBreaker {
     /// Check if any circuit breaker is open.
     #[inline]
     pub fn is_any_open(&self) -> bool {
-        self.breakers
-            .values()
-            .any(|s| *s == BreakerState::Open)
+        self.breakers.values().any(|s| *s == BreakerState::Open)
     }
 
     /// Check if a specific breaker is open.
@@ -291,11 +285,7 @@ impl CircuitBreaker {
         }
 
         // Provider exposure
-        let provider_total = self
-            .provider_exposure
-            .get(provider_name)
-            .copied()
-            .unwrap_or(0);
+        let provider_total = self.provider_exposure.get(provider_name).copied().unwrap_or(0);
         let new_provider_total = provider_total
             .checked_add(ghs_amount)
             .ok_or_else(|| PaymentError::ArithmeticOverflow("provider exposure".into()))?;
@@ -337,33 +327,16 @@ impl CircuitBreaker {
     }
 
     /// Record that an order has been created (accumulate daily limits).
-    pub fn record_order(
-        &mut self,
-        ghs_amount: u64,
-        customer_ref: &str,
-        merchant_ref: &str,
-        provider_name: &str,
-    ) {
-        *self
-            .customer_daily
-            .entry(customer_ref.into())
-            .or_insert(0) += ghs_amount;
-        *self
-            .merchant_daily
-            .entry(merchant_ref.into())
-            .or_insert(0) += ghs_amount;
-        *self
-            .provider_exposure
-            .entry(provider_name.into())
-            .or_insert(0) += ghs_amount;
+    pub fn record_order(&mut self, ghs_amount: u64, customer_ref: &str, merchant_ref: &str, provider_name: &str) {
+        *self.customer_daily.entry(customer_ref.into()).or_insert(0) += ghs_amount;
+        *self.merchant_daily.entry(merchant_ref.into()).or_insert(0) += ghs_amount;
+        *self.provider_exposure.entry(provider_name.into()).or_insert(0) += ghs_amount;
     }
 
     /// Record a treasury allocation of `omnia_amount` plancks.
     /// Trips the treasury breaker if daily limit exceeded.
     pub fn record_treasury_allocation(&mut self, omnia_amount: u64) {
-        self.daily_treasury_allocated = self
-            .daily_treasury_allocated
-            .saturating_add(omnia_amount);
+        self.daily_treasury_allocated = self.daily_treasury_allocated.saturating_add(omnia_amount);
         if self.daily_treasury_allocated > self.limits.daily_treasury_allocation_limit {
             self.trip("treasury_allocation");
         }
@@ -372,9 +345,7 @@ impl CircuitBreaker {
     /// Record a subsidy spend.
     /// Trips the subsidy breaker if budget exceeded.
     pub fn record_subsidy_spend(&mut self, omnia_amount: u64) {
-        self.aggregate_subsidy_spent = self
-            .aggregate_subsidy_spent
-            .saturating_add(omnia_amount);
+        self.aggregate_subsidy_spent = self.aggregate_subsidy_spent.saturating_add(omnia_amount);
         if self.aggregate_subsidy_spent > self.limits.aggregate_subsidy_budget {
             self.trip("aggregate_subsidy");
         }
@@ -382,11 +353,7 @@ impl CircuitBreaker {
 
     /// Record provider exposure decrease (after reconciliation).
     pub fn reconcile_provider(&mut self, provider_name: &str, ghs_amount: u64) {
-        let current = self
-            .provider_exposure
-            .get(provider_name)
-            .copied()
-            .unwrap_or(0);
+        let current = self.provider_exposure.get(provider_name).copied().unwrap_or(0);
         self.provider_exposure
             .insert(provider_name.into(), current.saturating_sub(ghs_amount));
     }
@@ -426,7 +393,7 @@ mod tests {
     #[test]
     fn price_movement_within_tolerance() {
         let limits = RiskLimits::default(); // 200 bps = 2%
-        // 1% movement — within tolerance
+                                            // 1% movement — within tolerance
         assert!(!limits.price_movement_exceeded(10_000, 10_100));
         // 3% movement — exceeds
         assert!(limits.price_movement_exceeded(10_000, 10_300));
@@ -444,9 +411,7 @@ mod tests {
         // Under limit
         assert!(cb.check_order(100_000, "cust", "merchant", "MTN").is_ok());
         // Over limit
-        assert!(cb
-            .check_order(600_000, "cust", "merchant", "MTN")
-            .is_err());
+        assert!(cb.check_order(600_000, "cust", "merchant", "MTN").is_err());
     }
 
     #[test]
@@ -455,7 +420,7 @@ mod tests {
         // Use amounts under per-order limit (500,000 pesewas = 5,000 GHS)
         // Daily customer limit: 2,000,000 pesewas = 20,000 GHS
         cb.record_order(400_000, "cust1", "merchant", "MTN"); // 4,000 GHS
-        // 4,000 + 4,000 = 8,000 < 20,000 → OK
+                                                              // 4,000 + 4,000 = 8,000 < 20,000 → OK
         assert!(cb.check_order(400_000, "cust1", "merchant", "MTN").is_ok());
         // Accumulate to near limit: 4k*5 = 20k
         for _ in 0..4 {

@@ -8,14 +8,14 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use serde::{Deserialize};
-use utoipa::ToSchema;
+use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::ToSchema;
 
 use crate::state::AppState;
-use omnia_payment_order::{PaymentEngine, PaymentState};
-use omnia_payment_order::engine::Caller;
 use omnia_asset_registry::types::AssetId;
+use omnia_payment_order::engine::Caller;
+use omnia_payment_order::{PaymentEngine, PaymentState};
 
 /// Request body for creating a payment order.
 #[derive(Debug, Deserialize, ToSchema)]
@@ -138,12 +138,7 @@ pub async fn create_order(
                 })),
             )
         })
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("{e}") })),
-            )
-        })
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({ "error": format!("{e}") }))))
 }
 
 /// Handler for `POST /api/v1/payment-orders/:id/advance`.
@@ -192,12 +187,7 @@ pub async fn advance_order(
                 })),
             )
         })
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("{e}") })),
-            )
-        })
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({ "error": format!("{e}") }))))
 }
 
 /// Parse a state name into a PaymentState.

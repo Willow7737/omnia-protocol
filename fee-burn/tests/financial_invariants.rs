@@ -13,10 +13,10 @@
 use proptest::prelude::*;
 
 use omnia_fee_burn::{
-    fee::{ActivityType, FeeCalculation, FeeFormula, FeeResult, OmniaFeeSchedule},
     burn::{BurnAccounting, BurnPolicy, BurnRatio},
-    supply_api::SupplySnapshot,
     error::FeeError,
+    fee::{ActivityType, FeeCalculation, FeeFormula, FeeResult, OmniaFeeSchedule},
+    supply_api::SupplySnapshot,
 };
 
 // --- Property 1 & 2: UBC and OMNIA fee separation ---

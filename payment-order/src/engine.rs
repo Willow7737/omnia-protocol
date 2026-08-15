@@ -19,9 +19,7 @@ use std::collections::HashMap;
 use crate::error::PaymentError;
 use crate::risk::{CircuitBreaker, RiskLimits};
 use crate::state::PaymentState;
-use crate::types::{
-    PaymentOrder, RefundStatus, RiskDecision, StateTransitionEvent, TransitionActor,
-};
+use crate::types::{PaymentOrder, RefundStatus, RiskDecision, StateTransitionEvent, TransitionActor};
 
 /// Who is attempting a transition. The engine maps this to authorization rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +136,7 @@ impl PaymentEngine {
             .record_order(ghs_amount, &customer_ref, "system", &provider_name);
 
         self.orders.insert(order_id.clone(), order);
- Ok(self.orders.get(&order_id).expect("just inserted"))
+        Ok(self.orders.get(&order_id).expect("just inserted"))
     }
 
     /// Get an order by ID.
@@ -149,10 +147,7 @@ impl PaymentEngine {
     }
 
     /// Get a mutable order by ID.
-    pub(crate) fn get_order_mut(
-        &mut self,
-        order_id: &str,
-    ) -> Result<&mut PaymentOrder, PaymentError> {
+    pub(crate) fn get_order_mut(&mut self, order_id: &str) -> Result<&mut PaymentOrder, PaymentError> {
         self.orders
             .get_mut(order_id)
             .ok_or_else(|| PaymentError::OrderNotFound(order_id.into()))
@@ -262,20 +257,14 @@ impl PaymentEngine {
             // PAYMENT_PENDING → PAYMENT_FAILED: authenticated provider
             (PaymentState::PaymentPending, PaymentState::PaymentFailed) => "provider:authenticated",
             // PAYMENT_PENDING → PAYMENT_TIMEOUT: system (timeout monitor)
-            (PaymentState::PaymentPending, PaymentState::PaymentTimeout) => {
-                "system:timeout-monitor"
-            }
+            (PaymentState::PaymentPending, PaymentState::PaymentTimeout) => "system:timeout-monitor",
             // PAYMENT_VERIFIED → RISK_REVIEW: system
             (PaymentState::PaymentVerified, PaymentState::RiskReview) => "system:risk-engine",
             // PAYMENT_VERIFIED → PAYMENT_REVERSED: authenticated provider
-            (PaymentState::PaymentVerified, PaymentState::PaymentReversed) => {
-                "provider:authenticated"
-            }
+            (PaymentState::PaymentVerified, PaymentState::PaymentReversed) => "provider:authenticated",
             // PAYMENT_VERIFIED → PAYMENT_UNDERPAID / OVERPAID: system (verification)
             (PaymentState::PaymentVerified, PaymentState::PaymentUnderpaid)
-            | (PaymentState::PaymentVerified, PaymentState::PaymentOverpaid) => {
-                "system:verification-service"
-            }
+            | (PaymentState::PaymentVerified, PaymentState::PaymentOverpaid) => "system:verification-service",
             // RISK_REVIEW → RISK_APPROVED / RISK_REJECTED: system
             (PaymentState::RiskReview, PaymentState::RiskApproved)
             | (PaymentState::RiskReview, PaymentState::RiskRejected) => "system:risk-engine",
@@ -284,30 +273,18 @@ impl PaymentEngine {
             // RISK_APPROVED → INVENTORY_UNAVAILABLE: treasury
             (PaymentState::RiskApproved, PaymentState::InventoryUnavailable) => "treasury",
             // INVENTORY_RESERVED → ALLOCATION_SUBMITTED: system
-            (PaymentState::InventoryReserved, PaymentState::AllocationSubmitted) => {
-                "system:chain-service"
-            }
+            (PaymentState::InventoryReserved, PaymentState::AllocationSubmitted) => "system:chain-service",
             // INVENTORY_RESERVED → ALLOCATION_FAILED: system
-            (PaymentState::InventoryReserved, PaymentState::AllocationFailed) => {
-                "system:chain-service"
-            }
+            (PaymentState::InventoryReserved, PaymentState::AllocationFailed) => "system:chain-service",
             // ALLOCATION_SUBMITTED → ALLOCATION_FINALIZED: system (chain confirmation)
-            (PaymentState::AllocationSubmitted, PaymentState::AllocationFinalized) => {
-                "system:chain-service"
-            }
+            (PaymentState::AllocationSubmitted, PaymentState::AllocationFinalized) => "system:chain-service",
             // ALLOCATION_SUBMITTED → ALLOCATION_FAILED: system
-            (PaymentState::AllocationSubmitted, PaymentState::AllocationFailed) => {
-                "system:chain-service"
-            }
+            (PaymentState::AllocationSubmitted, PaymentState::AllocationFailed) => "system:chain-service",
             // ALLOCATION_SUBMITTED → ON_CHAIN_TIMEOUT / ON_CHAIN_UNCERTAIN: system
             (PaymentState::AllocationSubmitted, PaymentState::OnChainTimeout)
-            | (PaymentState::AllocationSubmitted, PaymentState::OnChainUncertain) => {
-                "system:chain-service"
-            }
+            | (PaymentState::AllocationSubmitted, PaymentState::OnChainUncertain) => "system:chain-service",
             // ALLOCATION_FINALIZED → DELIVERED: system (delivery)
-            (PaymentState::AllocationFinalized, PaymentState::Delivered) => {
-                "system:delivery-service"
-            }
+            (PaymentState::AllocationFinalized, PaymentState::Delivered) => "system:delivery-service",
             // Refund path transitions
             (PaymentState::PaymentFailed, PaymentState::RefundPending)
             | (PaymentState::PaymentReversed, PaymentState::RefundPending)
@@ -328,25 +305,17 @@ impl PaymentEngine {
             // Quote expiry
             (PaymentState::Quoted, PaymentState::QuoteExpired) => "system:timeout-monitor",
             // Payment timeout → manual review
-            (PaymentState::PaymentTimeout, PaymentState::ManualReview) => {
-                "system:timeout-monitor"
-            }
+            (PaymentState::PaymentTimeout, PaymentState::ManualReview) => "system:timeout-monitor",
             // On-chain failures → manual review
             (PaymentState::OnChainTimeout, PaymentState::ManualReview)
-            | (PaymentState::OnChainUncertain, PaymentState::ManualReview) => {
-                "system:chain-service"
-            }
+            | (PaymentState::OnChainUncertain, PaymentState::ManualReview) => "system:chain-service",
             // Amount discrepancies → manual review
             (PaymentState::PaymentUnderpaid, PaymentState::ManualReview)
-            | (PaymentState::PaymentOverpaid, PaymentState::ManualReview) => {
-                "system:verification-service"
-            }
+            | (PaymentState::PaymentOverpaid, PaymentState::ManualReview) => "system:verification-service",
             // Manual review recovery paths
             (PaymentState::ManualReview, PaymentState::PaymentPending)
             | (PaymentState::ManualReview, PaymentState::RiskReview)
-            | (PaymentState::ManualReview, PaymentState::InventoryReserved) => {
-                "manual-review"
-            }
+            | (PaymentState::ManualReview, PaymentState::InventoryReserved) => "manual-review",
             // Allocation retry
             (PaymentState::AllocationFailed, PaymentState::InventoryReserved) => "system:chain-service",
             _ => "unknown",
@@ -355,34 +324,28 @@ impl PaymentEngine {
         // Now validate caller against required authorization
         let caller_ok = match (required, caller) {
             // System-required transitions
-            ("system:quote-service", Caller::System { service }) => {
-                service == "quote-service"
-            }
-            ("system:payment-service", Caller::System { service }) => {
-                service == "payment-service"
-            }
-            ("system:risk-engine", Caller::System { service }) => {
-                service == "risk-engine"
-            }
-            ("system:chain-service", Caller::System { service }) => {
-                service == "chain-service"
-            }
-            ("system:delivery-service", Caller::System { service }) => {
-                service == "delivery-service"
-            }
-            ("system:refund-service", Caller::System { service }) => {
-                service == "refund-service"
-            }
-            ("system:timeout-monitor", Caller::System { service }) => {
-                service == "timeout-monitor"
-            }
-            ("system:verification-service", Caller::System { service }) => {
-                service == "verification-service"
-            }
+            ("system:quote-service", Caller::System { service }) => service == "quote-service",
+            ("system:payment-service", Caller::System { service }) => service == "payment-service",
+            ("system:risk-engine", Caller::System { service }) => service == "risk-engine",
+            ("system:chain-service", Caller::System { service }) => service == "chain-service",
+            ("system:delivery-service", Caller::System { service }) => service == "delivery-service",
+            ("system:refund-service", Caller::System { service }) => service == "refund-service",
+            ("system:timeout-monitor", Caller::System { service }) => service == "timeout-monitor",
+            ("system:verification-service", Caller::System { service }) => service == "verification-service",
             ("system|sender", Caller::Sender | Caller::System { .. }) => true,
             // Provider-authenticated transitions
-            ("provider:authenticated", Caller::Provider { authenticated: true, .. }) => true,
-            ("provider:authenticated", Caller::Provider { authenticated: false, .. }) => false,
+            (
+                "provider:authenticated",
+                Caller::Provider {
+                    authenticated: true, ..
+                },
+            ) => true,
+            (
+                "provider:authenticated",
+                Caller::Provider {
+                    authenticated: false, ..
+                },
+            ) => false,
             // Treasury transitions
             ("treasury", Caller::Treasury) => true,
             // Manual review
@@ -415,9 +378,7 @@ impl PaymentEngine {
                     // ALLOCATION_FINALIZED → DELIVERED is the completion of
                     // economic delivery — this is the expected happy-path ending.
                 }
-                PaymentState::RefundPending
-                | PaymentState::Refunded
-                | PaymentState::Cancelled => {
+                PaymentState::RefundPending | PaymentState::Refunded | PaymentState::Cancelled => {
                     // Requires on-chain reversal verification before REFUNDED.
                 }
                 _ => {
@@ -497,10 +458,7 @@ mod tests {
         PaymentEngine::new(NOW)
     }
 
-    fn create_and_advance_to(
-        engine: &mut PaymentEngine,
-        target: PaymentState,
-    ) -> String {
+    fn create_and_advance_to(engine: &mut PaymentEngine, target: PaymentState) -> String {
         let order_id = format!("order-{:?}-{:x}", target, NOW);
         engine
             .create_order(
@@ -508,10 +466,10 @@ mod tests {
                 "+233240000000".into(),
                 "recipient-pk".into(),
                 AssetId::OMNIA,
-                100_000, // 1,000 GHS
+                100_000,         // 1,000 GHS
                 200_000_000_000, // 200 OMNIA
                 500_000,
-                1_000, // provider fee
+                1_000,       // provider fee
                 500_000_000, // omnia fee
                 "MTN".into(),
                 NOW,
@@ -519,32 +477,56 @@ mod tests {
             .expect("create order");
 
         let happy_path = [
-            (PaymentState::Quoted, Caller::System {
-                service: "quote-service".into(),
-            }),
-            (PaymentState::PaymentPending, Caller::System {
-                service: "payment-service".into(),
-            }),
-            (PaymentState::PaymentVerified, Caller::Provider {
-                provider_id: "MTN".into(),
-                authenticated: true,
-            }),
-            (PaymentState::RiskReview, Caller::System {
-                service: "risk-engine".into(),
-            }),
-            (PaymentState::RiskApproved, Caller::System {
-                service: "risk-engine".into(),
-            }),
+            (
+                PaymentState::Quoted,
+                Caller::System {
+                    service: "quote-service".into(),
+                },
+            ),
+            (
+                PaymentState::PaymentPending,
+                Caller::System {
+                    service: "payment-service".into(),
+                },
+            ),
+            (
+                PaymentState::PaymentVerified,
+                Caller::Provider {
+                    provider_id: "MTN".into(),
+                    authenticated: true,
+                },
+            ),
+            (
+                PaymentState::RiskReview,
+                Caller::System {
+                    service: "risk-engine".into(),
+                },
+            ),
+            (
+                PaymentState::RiskApproved,
+                Caller::System {
+                    service: "risk-engine".into(),
+                },
+            ),
             (PaymentState::InventoryReserved, Caller::Treasury),
-            (PaymentState::AllocationSubmitted, Caller::System {
-                service: "chain-service".into(),
-            }),
-            (PaymentState::AllocationFinalized, Caller::System {
-                service: "chain-service".into(),
-            }),
-            (PaymentState::Delivered, Caller::System {
-                service: "delivery-service".into(),
-            }),
+            (
+                PaymentState::AllocationSubmitted,
+                Caller::System {
+                    service: "chain-service".into(),
+                },
+            ),
+            (
+                PaymentState::AllocationFinalized,
+                Caller::System {
+                    service: "chain-service".into(),
+                },
+            ),
+            (
+                PaymentState::Delivered,
+                Caller::System {
+                    service: "delivery-service".into(),
+                },
+            ),
         ];
 
         for (state, caller) in &happy_path {
@@ -713,13 +695,7 @@ mod tests {
             .unwrap();
         // Sender cannot advance CREATED → QUOTED (only system:quote-service can)
         let err = engine
-            .advance_state(
-                "auth-test",
-                PaymentState::Quoted,
-                Caller::Sender,
-                NOW + 1000,
-                None,
-            )
+            .advance_state("auth-test", PaymentState::Quoted, Caller::Sender, NOW + 1000, None)
             .unwrap_err();
         assert!(matches!(err, PaymentError::Unauthorized { .. }));
     }
@@ -905,10 +881,7 @@ mod tests {
                 Some("retrying allocation".into()),
             )
             .unwrap();
-        assert_eq!(
-            engine.get_order(&id).unwrap().state,
-            PaymentState::InventoryReserved
-        );
+        assert_eq!(engine.get_order(&id).unwrap().state, PaymentState::InventoryReserved);
     }
 
     #[test]

@@ -112,8 +112,7 @@ impl AssetSupply {
 
     /// Current total supply = minted - burned.
     pub fn total_supply(&self) -> u64 {
-        self.total_minted
-            .saturating_sub(self.total_burned)
+        self.total_minted.saturating_sub(self.total_burned)
     }
 
     /// Verify the supply invariant: total_supply == sum of all compartments.
@@ -182,10 +181,7 @@ impl SupplyTracker {
 
     /// Get the total supply of an asset (0 if not tracked).
     pub fn total_supply(&self, asset_id: AssetId) -> u64 {
-        self.supplies
-            .get(&asset_id)
-            .map(|s| s.total_supply())
-            .unwrap_or(0)
+        self.supplies.get(&asset_id).map(|s| s.total_supply()).unwrap_or(0)
     }
 
     /// Record a mint event.
@@ -205,9 +201,7 @@ impl SupplyTracker {
         definition: &AssetDefinition,
     ) -> Result<SupplyEvent, RegistryError> {
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "mint amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("mint amount must be > 0".into()));
         }
 
         // Spec §4.4: external adapters cannot mint OMNIA
@@ -216,7 +210,9 @@ impl SupplyTracker {
             // is enforced below. This check is specifically for external adapters.
         }
 
-        let supply = self.supplies.get_mut(&asset_id)
+        let supply = self
+            .supplies
+            .get_mut(&asset_id)
             .ok_or_else(|| RegistryError::AssetNotFound(asset_id.as_u32()))?;
 
         // Hard cap enforcement
@@ -275,9 +271,7 @@ impl SupplyTracker {
         definition: &AssetDefinition,
     ) -> Result<SupplyEvent, RegistryError> {
         if amount == 0 {
-            return Err(RegistryError::InvariantViolation(
-                "burn amount must be > 0".into(),
-            ));
+            return Err(RegistryError::InvariantViolation("burn amount must be > 0".into()));
         }
 
         // Spec §7.3: UBC MUST NOT be burned as OMNIA
@@ -285,16 +279,14 @@ impl SupplyTracker {
             return Err(RegistryError::UbcBurnProhibited);
         }
 
-        let supply = self.supplies.get_mut(&asset_id)
+        let supply = self
+            .supplies
+            .get_mut(&asset_id)
             .ok_or_else(|| RegistryError::AssetNotFound(asset_id.as_u32()))?;
 
         let current = supply.total_supply();
         if amount > current {
-            return Err(RegistryError::InsufficientSupply(
-                asset_id.as_u32(),
-                current,
-                amount,
-            ));
+            return Err(RegistryError::InsufficientSupply(asset_id.as_u32(), current, amount));
         }
 
         supply.total_burned = supply
@@ -341,12 +333,9 @@ impl SupplyTracker {
     pub fn verify_all_invariants(&self) -> Result<usize, RegistryError> {
         let count = self.supplies.len();
         for (asset_id, supply) in &self.supplies {
-            supply.verify_invariant().map_err(|e| {
-                RegistryError::InvariantViolation(format!(
-                    "{}: {}",
-                    asset_id, e
-                ))
-            })?;
+            supply
+                .verify_invariant()
+                .map_err(|e| RegistryError::InvariantViolation(format!("{}: {}", asset_id, e)))?;
         }
         Ok(count)
     }
@@ -456,19 +445,13 @@ impl RewardAuthority {
     /// Get the budget for the current year.
     /// Returns 0 if no budget is defined for this year.
     pub fn current_year_budget(&self) -> u64 {
-        self.schedule
-            .reward_for_year(self.current_year)
-            .unwrap_or(0)
+        self.schedule.reward_for_year(self.current_year).unwrap_or(0)
     }
 
     /// Get the remaining budget for the current year.
     pub fn current_year_remaining(&self) -> u64 {
         let budget = self.current_year_budget();
-        let released = self
-            .released_per_year
-            .get(&self.current_year)
-            .copied()
-            .unwrap_or(0);
+        let released = self.released_per_year.get(&self.current_year).copied().unwrap_or(0);
         budget.saturating_sub(released)
     }
 
@@ -598,10 +581,7 @@ impl RewardAuthority {
     /// Verify the reward invariant:
     /// total_released <= total_scheduled - total_slashed
     pub fn verify_invariant(&self) -> bool {
-        self.total_released
-            <= self
-                .total_budget()
-                .saturating_sub(self.total_slashed)
+        self.total_released <= self.total_budget().saturating_sub(self.total_slashed)
     }
 }
 
@@ -643,10 +623,24 @@ mod tests {
         tracker.init_asset(AssetId::OMNIA);
 
         tracker
-            .mint(AssetId::OMNIA, 1_000_000, SupplyAuthority::Genesis, "test".into(), None, &omnia)
+            .mint(
+                AssetId::OMNIA,
+                1_000_000,
+                SupplyAuthority::Genesis,
+                "test".into(),
+                None,
+                &omnia,
+            )
             .unwrap();
         tracker
-            .burn(AssetId::OMNIA, 100_000, SupplyAuthority::Protocol, "fee burn".into(), None, &omnia)
+            .burn(
+                AssetId::OMNIA,
+                100_000,
+                SupplyAuthority::Protocol,
+                "fee burn".into(),
+                None,
+                &omnia,
+            )
             .unwrap();
 
         assert_eq!(tracker.total_supply(AssetId::OMNIA), 900_000);
@@ -665,13 +659,27 @@ mod tests {
 
         // UBC can be minted beyond any cap (EpochEligibility)
         tracker
-            .mint(AssetId::UBC, u64::MAX, SupplyAuthority::EpochEligibility, "epoch reset".into(), None, &ubc)
+            .mint(
+                AssetId::UBC,
+                u64::MAX,
+                SupplyAuthority::EpochEligibility,
+                "epoch reset".into(),
+                None,
+                &ubc,
+            )
             .unwrap();
 
         // OMNIA cannot exceed hard cap
         let cap = omnia.max_supply().unwrap();
         let err = tracker
-            .mint(AssetId::OMNIA, cap + 1, SupplyAuthority::Genesis, "overflow".into(), None, &omnia)
+            .mint(
+                AssetId::OMNIA,
+                cap + 1,
+                SupplyAuthority::Genesis,
+                "overflow".into(),
+                None,
+                &omnia,
+            )
             .unwrap_err();
         assert!(matches!(err, RegistryError::SupplyExceedsHardCap(_, _, _, _)));
     }
@@ -683,11 +691,25 @@ mod tests {
         tracker.init_asset(AssetId::UBC);
 
         tracker
-            .mint(AssetId::UBC, 1_000, SupplyAuthority::EpochEligibility, "epoch".into(), None, &ubc)
+            .mint(
+                AssetId::UBC,
+                1_000,
+                SupplyAuthority::EpochEligibility,
+                "epoch".into(),
+                None,
+                &ubc,
+            )
             .unwrap();
 
         let err = tracker
-            .burn(AssetId::UBC, 100, SupplyAuthority::AccountOwner, "test".into(), None, &ubc)
+            .burn(
+                AssetId::UBC,
+                100,
+                SupplyAuthority::AccountOwner,
+                "test".into(),
+                None,
+                &ubc,
+            )
             .unwrap_err();
         assert!(matches!(err, RegistryError::UbcBurnProhibited));
     }
@@ -711,25 +733,46 @@ mod tests {
         tracker.init_asset(AssetId::OMNIA);
 
         // Mint into account_balances compartment
-        tracker.mint(
-            AssetId::OMNIA, 500_000, SupplyAuthority::Genesis, "user alloc".into(), None, &omnia,
-        ).unwrap();
+        tracker
+            .mint(
+                AssetId::OMNIA,
+                500_000,
+                SupplyAuthority::Genesis,
+                "user alloc".into(),
+                None,
+                &omnia,
+            )
+            .unwrap();
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.account_balances = 500_000;
         }
 
         // Mint into treasury compartment
-        tracker.mint(
-            AssetId::OMNIA, 300_000, SupplyAuthority::Treasury, "treasury".into(), None, &omnia,
-        ).unwrap();
+        tracker
+            .mint(
+                AssetId::OMNIA,
+                300_000,
+                SupplyAuthority::Treasury,
+                "treasury".into(),
+                None,
+                &omnia,
+            )
+            .unwrap();
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.treasury_balances = 300_000;
         }
 
         // Burn from account_balances
-        tracker.burn(
-            AssetId::OMNIA, 50_000, SupplyAuthority::Protocol, "fee burn".into(), None, &omnia,
-        ).unwrap();
+        tracker
+            .burn(
+                AssetId::OMNIA,
+                50_000,
+                SupplyAuthority::Protocol,
+                "fee burn".into(),
+                None,
+                &omnia,
+            )
+            .unwrap();
         if let Some(s) = get_mut(&mut tracker, AssetId::OMNIA) {
             s.account_balances = 450_000;
         }
@@ -746,12 +789,26 @@ mod tests {
         let omnia = AssetDefinition::omnia();
         tracker.init_asset(AssetId::OMNIA);
 
-        tracker.mint(
-            AssetId::OMNIA, 1_000_000, SupplyAuthority::Genesis, "genesis".into(), Some("block-0".into()), &omnia,
-        ).unwrap();
-        tracker.burn(
-            AssetId::OMNIA, 100_000, SupplyAuthority::Protocol, "fee burn".into(), Some("tx-42".into()), &omnia,
-        ).unwrap();
+        tracker
+            .mint(
+                AssetId::OMNIA,
+                1_000_000,
+                SupplyAuthority::Genesis,
+                "genesis".into(),
+                Some("block-0".into()),
+                &omnia,
+            )
+            .unwrap();
+        tracker
+            .burn(
+                AssetId::OMNIA,
+                100_000,
+                SupplyAuthority::Protocol,
+                "fee burn".into(),
+                Some("tx-42".into()),
+                &omnia,
+            )
+            .unwrap();
 
         let events = tracker.events_for(AssetId::OMNIA);
         assert_eq!(events.len(), 2);
@@ -872,7 +929,10 @@ mod tests {
         auth.record_unclaimed(10_000_000_000_000_000, 1);
         assert_eq!(auth.total_released, 40_000_000_000_000_000);
         // Unclaimed amount tracked
-        assert_eq!(auth.unclaimed_per_year.get(&1).copied().unwrap_or(0), 10_000_000_000_000_000);
+        assert_eq!(
+            auth.unclaimed_per_year.get(&1).copied().unwrap_or(0),
+            10_000_000_000_000_000
+        );
     }
 
     #[test]

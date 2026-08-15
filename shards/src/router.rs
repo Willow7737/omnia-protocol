@@ -81,9 +81,7 @@ impl ShardRouter {
             quota,
             nonce_store: Arc::new(InMemoryNonceStore::new()),
             shard_attestation_keys: HashMap::new(),
-            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(
-                crate::fee_burn::FeeBurnConfig::standard(),
-            ),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         }
     }
 
@@ -100,9 +98,7 @@ impl ShardRouter {
             quota: QuotaSystem::default_system(),
             nonce_store: Arc::new(InMemoryNonceStore::new()),
             shard_attestation_keys: HashMap::new(),
-            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(
-                crate::fee_burn::FeeBurnConfig::zero(),
-            ),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::zero()),
         }
     }
 
@@ -151,9 +147,7 @@ impl ShardRouter {
             quota,
             nonce_store,
             shard_attestation_keys: HashMap::new(),
-            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(
-                crate::fee_burn::FeeBurnConfig::standard(),
-            ),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         }
     }
 
@@ -178,9 +172,7 @@ impl ShardRouter {
             quota,
             nonce_store,
             shard_attestation_keys: HashMap::new(),
-            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(
-                crate::fee_burn::FeeBurnConfig::standard(),
-            ),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         })
     }
 

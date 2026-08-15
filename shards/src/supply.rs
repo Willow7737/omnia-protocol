@@ -89,25 +89,21 @@ pub enum SupplyError {
         tracked: u64,
     },
     /// Invalid phase transition (e.g., skipping a phase or going backward).
-    InvalidPhaseTransition {
-        current_phase: u8,
-        target_phase: u8,
-    },
+    InvalidPhaseTransition { current_phase: u8, target_phase: u8 },
     /// Already at the final phase — no further transitions allowed.
-    AlreadyFinalPhase {
-        current_phase: u8,
-    },
+    AlreadyFinalPhase { current_phase: u8 },
     /// Burn would result in negative tracked supply.
-    BurnExceedsSupply {
-        current_supply: u64,
-        requested_burn: u64,
-    },
+    BurnExceedsSupply { current_supply: u64, requested_burn: u64 },
 }
 
 impl std::fmt::Display for SupplyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SupplyError::MintExceedsPhaseCap { current_supply, requested, phase_cap } => {
+            SupplyError::MintExceedsPhaseCap {
+                current_supply,
+                requested,
+                phase_cap,
+            } => {
                 write!(
                     f,
                     "Mint would exceed phase cap: supply {current_supply} + {requested} > cap {phase_cap}"
@@ -119,20 +115,20 @@ impl std::fmt::Display for SupplyError {
                     "Supply invariant violated: calculated {calculated} != tracked {tracked}"
                 )
             }
-            SupplyError::InvalidPhaseTransition { current_phase, target_phase } => {
-                write!(
-                    f,
-                    "Invalid phase transition: {current_phase} -> {target_phase}"
-                )
+            SupplyError::InvalidPhaseTransition {
+                current_phase,
+                target_phase,
+            } => {
+                write!(f, "Invalid phase transition: {current_phase} -> {target_phase}")
             }
             SupplyError::AlreadyFinalPhase { current_phase } => {
                 write!(f, "Already at final phase {current_phase}")
             }
-            SupplyError::BurnExceedsSupply { current_supply, requested_burn } => {
-                write!(
-                    f,
-                    "Burn exceeds supply: {requested_burn} > {current_supply}"
-                )
+            SupplyError::BurnExceedsSupply {
+                current_supply,
+                requested_burn,
+            } => {
+                write!(f, "Burn exceeds supply: {requested_burn} > {current_supply}")
             }
         }
     }
@@ -199,8 +195,7 @@ impl SupplyTracker {
 
     /// Get the current total supply (minted - burned).
     pub fn total_supply(&self) -> u64 {
-        self.total_minted
-            .saturating_sub(self.total_burned)
+        self.total_minted.saturating_sub(self.total_burned)
     }
 
     /// Get the maximum supply for the current phase.
@@ -210,8 +205,7 @@ impl SupplyTracker {
 
     /// Get the remaining mintable supply in the current phase.
     pub fn remaining_mintable(&self) -> u64 {
-        self.current_phase_cap()
-            .saturating_sub(self.total_supply())
+        self.current_phase_cap().saturating_sub(self.total_supply())
     }
 
     /// Check the supply invariant: `total_minted - total_burned == total_supply`.
@@ -303,10 +297,7 @@ impl SupplyTracker {
         }
         self.current_phase = next_phase;
         self.last_transition_block = block_height;
-        self.transition_count = self
-            .transition_count
-            .checked_add(1)
-            .expect("transition_count overflow");
+        self.transition_count = self.transition_count.checked_add(1).expect("transition_count overflow");
         Ok(())
     }
 
@@ -556,7 +547,7 @@ mod tests {
     fn test_transition_then_mint_within_new_cap() {
         let mut tracker = SupplyTracker::with_genesis_mint(40_000_000).unwrap();
         tracker.transition_phase(1000).unwrap(); // 0->1, cap=60M
-        // Can still mint up to 60M
+                                                 // Can still mint up to 60M
         tracker.record_mint(15_000_000).unwrap();
         assert_eq!(tracker.total_supply(), 55_000_000);
         // But not beyond

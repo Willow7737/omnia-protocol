@@ -196,7 +196,7 @@ impl AssetDefinition {
             transferability: Transferability::NonTransferable,
             mint_policy: MintPolicy::EpochEligibility,
             burn_policy: BurnPolicy::Prohibited, // UBC MUST NOT be burned as OMNIA (Spec §7.3)
-            fee_policy: FeePolicy::NotAccepted, // UBC is for compute, not fees
+            fee_policy: FeePolicy::NotAccepted,  // UBC is for compute, not fees
             chain_scope: ChainScope::Native,
             status: AssetStatus::Active,
             existential_deposit: 0,
@@ -217,8 +217,7 @@ impl AssetDefinition {
 
     /// Return true if transfers are allowed for this asset.
     pub fn is_transferable(&self) -> bool {
-        self.status == AssetStatus::Active
-            && matches!(self.transferability, Transferability::Transferable)
+        self.status == AssetStatus::Active && matches!(self.transferability, Transferability::Transferable)
     }
 
     /// Return the max supply if bounded, None if unbounded or fixed-at-current.

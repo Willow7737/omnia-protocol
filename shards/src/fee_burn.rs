@@ -151,10 +151,7 @@ impl FeeBurnConfig {
     ///
     /// Returns `FeeBurnError::GovernanceCapOutOfRange` if `governance_cap_pct`
     /// is not in `[MIN_GOVERNANCE_BURN_CAP_PCT, MAX_GOVERNANCE_BURN_CAP_PCT]`.
-    pub fn new(
-        baseline_pct: u8,
-        governance_cap_pct: u8,
-    ) -> Result<Self, FeeBurnError> {
+    pub fn new(baseline_pct: u8, governance_cap_pct: u8) -> Result<Self, FeeBurnError> {
         if baseline_pct < MIN_BASELINE_BURN_PCT || baseline_pct > MAX_BASELINE_BURN_PCT {
             return Err(FeeBurnError::BaselineRateOutOfRange {
                 requested: baseline_pct,
@@ -162,9 +159,7 @@ impl FeeBurnConfig {
                 max: MAX_BASELINE_BURN_PCT,
             });
         }
-        if governance_cap_pct < MIN_GOVERNANCE_BURN_CAP_PCT
-            || governance_cap_pct > MAX_GOVERNANCE_BURN_CAP_PCT
-        {
+        if governance_cap_pct < MIN_GOVERNANCE_BURN_CAP_PCT || governance_cap_pct > MAX_GOVERNANCE_BURN_CAP_PCT {
             return Err(FeeBurnError::GovernanceCapOutOfRange {
                 requested: governance_cap_pct,
                 min: MIN_GOVERNANCE_BURN_CAP_PCT,
@@ -293,12 +288,7 @@ impl FeeBurnTracker {
     /// Returns an error if `burned_amount` does not match
     /// [`calculate_burn`](Self::calculate_burn) for the given fee.
     /// This catch-consistency check prevents accounting drift.
-    pub fn record_burn(
-        &mut self,
-        fee: u64,
-        burned_amount: u64,
-        domain: &str,
-    ) -> Result<(), ShardError> {
+    pub fn record_burn(&mut self, fee: u64, burned_amount: u64, domain: &str) -> Result<(), ShardError> {
         let expected = self.calculate_burn(fee);
         if burned_amount != expected {
             return Err(ShardError::ValidationFailed(format!(
@@ -393,28 +383,19 @@ mod tests {
     #[test]
     fn test_new_baseline_out_of_range_low() {
         let result = FeeBurnConfig::new(6, 15);
-        assert!(matches!(
-            result,
-            Err(FeeBurnError::BaselineRateOutOfRange { .. })
-        ));
+        assert!(matches!(result, Err(FeeBurnError::BaselineRateOutOfRange { .. })));
     }
 
     #[test]
     fn test_new_governance_cap_out_of_range_low() {
         let result = FeeBurnConfig::new(2, 5);
-        assert!(matches!(
-            result,
-            Err(FeeBurnError::GovernanceCapOutOfRange { .. })
-        ));
+        assert!(matches!(result, Err(FeeBurnError::GovernanceCapOutOfRange { .. })));
     }
 
     #[test]
     fn test_new_governance_cap_out_of_range_high() {
         let result = FeeBurnConfig::new(2, 30);
-        assert!(matches!(
-            result,
-            Err(FeeBurnError::GovernanceCapOutOfRange { .. })
-        ));
+        assert!(matches!(result, Err(FeeBurnError::GovernanceCapOutOfRange { .. })));
     }
 
     #[test]
@@ -429,10 +410,7 @@ mod tests {
     fn test_set_governance_rate_exceeds_cap() {
         let mut cfg = FeeBurnConfig::standard();
         let result = cfg.set_governance_rate(20);
-        assert!(matches!(
-            result,
-            Err(FeeBurnError::GovernanceRateExceedsCap { .. })
-        ));
+        assert!(matches!(result, Err(FeeBurnError::GovernanceRateExceedsCap { .. })));
     }
 
     #[test]

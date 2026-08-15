@@ -5,17 +5,17 @@
 //! endpoint returns the expected status codes and response shapes.
 
 use anyhow::Result;
+use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
 use omnia_economics::EconomicsState;
+use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
 use omnia_node::api::auth::create_token;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
 use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
-use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
-use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
 use omnia_payment_order::PaymentEngine;
-use omnia_shards:{
+use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
     ShardRouter,
 };
@@ -155,7 +155,9 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuar
         ceremony_server: None,
         asset_registry: Arc::new(RwLock::new(omnia_asset_registry::AssetRegistry::new())),
         supply_tracker: Arc::new(RwLock::new(omnia_asset_registry::SupplyTracker::new())),
-        treasury: Arc::new(RwLock::new(omnia_asset_registry::Treasury::new().expect("treasury init"))),
+        treasury: Arc::new(RwLock::new(
+            omnia_asset_registry::Treasury::new().expect("treasury init"),
+        )),
         fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
         burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
         payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),

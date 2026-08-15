@@ -123,8 +123,5 @@ pub async fn get_treasury_accounting(
         })
         .collect();
 
-    Ok((
-        StatusCode::OK,
-        Json(json!({ "accounting": categories })),
-    ))
+    Ok((StatusCode::OK, Json(json!({ "accounting": categories }))))
 }

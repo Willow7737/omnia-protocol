@@ -86,11 +86,11 @@ pub use validator::DomainValidator;
 // Re-export shard-specific types for convenience
 pub use biological::{BiologicalOp, BiologicalState, BiologicalValidator, ConsentRecord};
 pub use bridge::{
-    BridgeError, BridgeOperator, BridgePaymentOrder, BridgePaymentStatus, BridgeRegistry, CircuitBreaker,
-    CircuitState, MobileProvider, MockBridgeOperator,
+    BridgeError, BridgeOperator, BridgePaymentOrder, BridgePaymentStatus, BridgeRegistry, CircuitBreaker, CircuitState,
+    MobileProvider, MockBridgeOperator,
 };
 pub use computational::{ComputationalOp, ComputationalState, ComputationalValidator, TaskStatus};
-pub use fee_burn::{FeeBurnConfig, FeeBurnStats, FeeBurnTracker, FeeBurnError};
+pub use fee_burn::{FeeBurnConfig, FeeBurnError, FeeBurnStats, FeeBurnTracker};
 pub use financial::{AccountBalance as FinancialAccountBalance, FinancialOp, FinancialState, FinancialValidator};
 pub use identity::{
     format_did, AgentCapability, AgentIdentity, BiometricAnchor, Did, DidDocument, DidError, DidUpdate, EncryptedShare,

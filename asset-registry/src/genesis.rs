@@ -103,10 +103,7 @@ impl GenesisPlan {
         for (bucket, total) in &totals {
             let cap = bucket.hard_cap();
             if *total > cap {
-                violations.push(format!(
-                    "bucket {} allocated {} but cap is {}",
-                    bucket, total, cap
-                ));
+                violations.push(format!("bucket {} allocated {} but cap is {}", bucket, total, cap));
             }
         }
         violations
@@ -301,28 +298,19 @@ impl TreasuryAccounting {
 
     /// Get the balance for a category.
     pub fn balance(&self, category: &TreasuryCategory) -> u64 {
-        self.category_balances
-            .get(category.label())
-            .copied()
-            .unwrap_or(0)
+        self.category_balances.get(category.label()).copied().unwrap_or(0)
     }
 
     /// Add to a category balance.
     pub fn credit(&mut self, category: TreasuryCategory, amount: u64) {
-        *self
-            .category_balances
-            .entry(category.label().into())
-            .or_insert(0) += amount;
+        *self.category_balances.entry(category.label().into()).or_insert(0) += amount;
     }
 
     /// Subtract from a category balance. Saturates at 0.
     pub fn debit(&mut self, category: TreasuryCategory, amount: u64) -> u64 {
         let current = self.balance(&category);
         let actual = amount.min(current);
-        *self
-            .category_balances
-            .entry(category.label().into())
-            .or_insert(0) -= actual;
+        *self.category_balances.entry(category.label().into()).or_insert(0) -= actual;
         actual
     }
 
@@ -363,7 +351,10 @@ mod tests {
             "team allocation with 4yr vest".into(),
         );
         let totals = plan.bucket_totals();
-        assert_eq!(totals.get(&AllocationBucket::NetworkIncentives), Some(&400_000_000_000_000_000));
+        assert_eq!(
+            totals.get(&AllocationBucket::NetworkIncentives),
+            Some(&400_000_000_000_000_000)
+        );
         assert_eq!(totals.get(&AllocationBucket::Team), Some(&150_000_000_000_000_000));
         assert_eq!(plan.total_allocation(), 550_000_000_000_000_000);
     }

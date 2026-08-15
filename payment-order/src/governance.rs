@@ -81,8 +81,7 @@ impl GovernanceProposal {
 
     /// Check if the proposal is past its timelock and can be executed.
     pub fn is_executable(&self, now_ms: u64) -> bool {
-        self.status == ProposalStatus::Approved
-            && now_ms >= self.executable_at_ms
+        self.status == ProposalStatus::Approved && now_ms >= self.executable_at_ms
     }
 
     /// Record a vote.
@@ -140,10 +139,10 @@ impl ProposalType {
     /// Return the required timelock duration in milliseconds.
     pub fn timelock_duration_ms(&self) -> u64 {
         match self {
-            Self::Ordinary => 60 * 60 * 1_000, // 60 hours (within 48-72 range)
+            Self::Ordinary => 60 * 60 * 1_000,                 // 60 hours (within 48-72 range)
             Self::SupplyIssuance => 14 * 24 * 60 * 60 * 1_000, // 14 days
-            Self::EmergencyPause => 0, // immediate
-            Self::PostIncident => 48 * 60 * 60 * 1_000, // 48 hours
+            Self::EmergencyPause => 0,                         // immediate
+            Self::PostIncident => 48 * 60 * 60 * 1_000,        // 48 hours
         }
     }
 }
@@ -238,12 +237,7 @@ impl DelegationCooldown {
 
     /// Attempt to change delegation.
     /// Returns Ok if the cooldown has expired, Err if still cooling down.
-    pub fn set_delegation(
-        &mut self,
-        delegator: &str,
-        new_delegate: &str,
-        now_ms: u64,
-    ) -> Result<(), PaymentError> {
+    pub fn set_delegation(&mut self, delegator: &str, new_delegate: &str, now_ms: u64) -> Result<(), PaymentError> {
         if let Some((_, expires)) = self.delegations.get(delegator) {
             if now_ms < *expires {
                 return Err(PaymentError::InvariantViolation(format!(
@@ -261,9 +255,7 @@ impl DelegationCooldown {
 
     /// Get the current delegate for a delegator.
     pub fn get_delegate(&self, delegator: &str) -> Option<&str> {
-        self.delegations
-            .get(delegator)
-            .map(|(delegate, _)| delegate.as_str())
+        self.delegations.get(delegator).map(|(delegate, _)| delegate.as_str())
     }
 }
 
@@ -303,7 +295,9 @@ mod tests {
             7000,
         );
         // Approve first
-        for _ in 0..10 { p.vote(true); }
+        for _ in 0..10 {
+            p.vote(true);
+        }
         p.finalize_vote();
         assert_eq!(p.status, ProposalStatus::Approved);
         // 13 days — not yet executable (14 day timelock)

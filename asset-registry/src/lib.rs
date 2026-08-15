@@ -55,12 +55,12 @@ pub mod types;
 
 pub use error::RegistryError;
 pub use genesis::{
-    GenesisAllocation, GenesisPlan, IssuanceAuthority, RewardSchedule, TreasuryAccounting,
-    TreasuryCategory, UnclaimedRewardPolicy,
+    GenesisAllocation, GenesisPlan, IssuanceAuthority, RewardSchedule, TreasuryAccounting, TreasuryCategory,
+    UnclaimedRewardPolicy,
 };
 pub use registry::AssetRegistry;
 pub use supply::{RewardAuthority, SupplyChange, SupplyEvent, SupplyTracker};
 pub use treasury::{
-    AllocationBucket, CircuitBreakerConfig, InventoryReservation, PilotInventory, ReservationState,
-    Treasury, TreasuryEvent, VestingSchedule, OMNIA_PLANCKS, HARD_CAP,
+    AllocationBucket, CircuitBreakerConfig, InventoryReservation, PilotInventory, ReservationState, Treasury,
+    TreasuryEvent, VestingSchedule, HARD_CAP, OMNIA_PLANCKS,
 };

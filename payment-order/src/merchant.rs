@@ -192,7 +192,7 @@ mod tests {
         let receipt = MerchantReceipt {
             payment_id: "p-1".into(),
             merchant_id: "m-1".into(),
-            ghs_price: 50_000, // 500 GHS
+            ghs_price: 50_000,             // 500 GHS
             omnia_amount: 100_000_000_000, // 100 OMNIA
             exchange_rate: 500_000,
             protocol_fee: 1_000_000, // 0.001 OMNIA

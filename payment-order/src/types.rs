@@ -272,13 +272,13 @@ mod tests {
             "+233240000000".into(),
             "recipient-pk-123".into(),
             AssetId::OMNIA,
-            50_000_000, // 500 GHS in pesewas
-            100_000_000_000, // 100 OMNIA in plancks
-            500_000, // exchange rate
+            50_000_000,        // 500 GHS in pesewas
+            100_000_000_000,   // 100 OMNIA in plancks
+            500_000,           // exchange rate
             1_700_000_000_000, // quote timestamp
             1_700_000_300_000, // quote expiry (5 min)
-            1_000_000, // provider fee (1 GHS)
-            500_000_000, // omnia fee (0.5 OMNIA)
+            1_000_000,         // provider fee (1 GHS)
+            500_000_000,       // omnia fee (0.5 OMNIA)
             "MTN".into(),
             1_700_000_000_000,
         )
@@ -327,15 +327,14 @@ mod tests {
     #[test]
     fn event_history_is_immutable_audit_trail() {
         let mut order = test_order();
-        order
-            .record_transition(
-                PaymentState::Quoted,
-                TransitionActor::System {
-                    service: "quote".into(),
-                },
-                1000,
-                None,
-            );
+        order.record_transition(
+            PaymentState::Quoted,
+            TransitionActor::System {
+                service: "quote".into(),
+            },
+            1000,
+            None,
+        );
         order.record_transition(
             PaymentState::PaymentPending,
             TransitionActor::System {

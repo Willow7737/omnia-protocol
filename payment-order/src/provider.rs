@@ -291,10 +291,7 @@ pub trait ProviderAdapter {
     fn verify_callback(&self, callback: &ProviderCallback) -> Result<CallbackVerification, PaymentError>;
 
     /// Query the status of a payment from the provider.
-    fn query_payment_status(
-        &self,
-        provider_tx_ref: &str,
-    ) -> Result<CallbackStatus, PaymentError>;
+    fn query_payment_status(&self, provider_tx_ref: &str) -> Result<CallbackStatus, PaymentError>;
 
     /// Initiate a refund to the customer's mobile-money account.
     fn initiate_refund(

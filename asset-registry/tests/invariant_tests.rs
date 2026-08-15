@@ -11,9 +11,9 @@
 
 use proptest::prelude::*;
 
-use omnia_asset_registry::*;
 use omnia_asset_registry::supply::SupplyAuthority;
 use omnia_asset_registry::types::*;
+use omnia_asset_registry::*;
 
 // --- Invariant: UBC cannot become OMNIA (Spec §4.4) ---
 
@@ -207,18 +207,46 @@ fn supply_events_form_complete_audit_trail() {
     let omnia_def = reg.omnia().unwrap().clone();
 
     // Perform 3 mints and 1 burn
-    reg.supply_tracker_mut().mint(
-        AssetId::OMNIA, 1_000_000, SupplyAuthority::Genesis, "alloc-1".into(), Some("ref-1".into()), &omnia_def,
-    ).unwrap();
-    reg.supply_tracker_mut().mint(
-        AssetId::OMNIA, 500_000, SupplyAuthority::Treasury, "alloc-2".into(), Some("ref-2".into()), &omnia_def,
-    ).unwrap();
-    reg.supply_tracker_mut().burn(
-        AssetId::OMNIA, 100_000, SupplyAuthority::Protocol, "fee-burn".into(), Some("tx-42".into()), &omnia_def,
-    ).unwrap();
-    reg.supply_tracker_mut().mint(
-        AssetId::OMNIA, 200_000, SupplyAuthority::Reward, "reward".into(), Some("era-5".into()), &omnia_def,
-    ).unwrap();
+    reg.supply_tracker_mut()
+        .mint(
+            AssetId::OMNIA,
+            1_000_000,
+            SupplyAuthority::Genesis,
+            "alloc-1".into(),
+            Some("ref-1".into()),
+            &omnia_def,
+        )
+        .unwrap();
+    reg.supply_tracker_mut()
+        .mint(
+            AssetId::OMNIA,
+            500_000,
+            SupplyAuthority::Treasury,
+            "alloc-2".into(),
+            Some("ref-2".into()),
+            &omnia_def,
+        )
+        .unwrap();
+    reg.supply_tracker_mut()
+        .burn(
+            AssetId::OMNIA,
+            100_000,
+            SupplyAuthority::Protocol,
+            "fee-burn".into(),
+            Some("tx-42".into()),
+            &omnia_def,
+        )
+        .unwrap();
+    reg.supply_tracker_mut()
+        .mint(
+            AssetId::OMNIA,
+            200_000,
+            SupplyAuthority::Reward,
+            "reward".into(),
+            Some("era-5".into()),
+            &omnia_def,
+        )
+        .unwrap();
 
     let events = reg.supply_tracker().events_for(AssetId::OMNIA);
     assert_eq!(events.len(), 4);

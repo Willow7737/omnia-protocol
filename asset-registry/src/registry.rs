@@ -74,7 +74,11 @@ impl AssetRegistry {
         let asset_class = def.asset_class;
         self.supply.init_asset(id);
         self.definitions.insert(id, def);
-        let event = RegistryEvent::AssetRegistered { id, symbol, asset_class };
+        let event = RegistryEvent::AssetRegistered {
+            id,
+            symbol,
+            asset_class,
+        };
         self.events.push(event.clone());
         Ok(event)
     }
@@ -100,7 +104,11 @@ impl AssetRegistry {
             self.next_id = id.as_u32() + 1;
         }
 
-        let event = RegistryEvent::AssetRegistered { id, symbol, asset_class };
+        let event = RegistryEvent::AssetRegistered {
+            id,
+            symbol,
+            asset_class,
+        };
         self.events.push(event.clone());
         Ok(event)
     }
@@ -123,9 +131,7 @@ impl AssetRegistry {
 
         if let Some(s) = symbol {
             if s.is_empty() || s.len() > 16 {
-                return Err(RegistryError::InvalidSymbol(
-                    "symbol must be 1–16 chars".into(),
-                ));
+                return Err(RegistryError::InvalidSymbol("symbol must be 1–16 chars".into()));
             }
             def.symbol = s;
         }
@@ -243,10 +249,7 @@ impl AssetRegistry {
             return Err(RegistryError::AssetFrozen(id.as_u32()));
         }
         if !def.is_transferable() {
-            return Err(RegistryError::NonTransferable(
-                id.as_u32(),
-                def.symbol.clone(),
-            ));
+            return Err(RegistryError::NonTransferable(id.as_u32(), def.symbol.clone()));
         }
         Ok(())
     }
@@ -364,15 +367,8 @@ mod tests {
     #[test]
     fn update_metadata() {
         let mut reg = AssetRegistry::with_genesis_assets();
-        reg.update_metadata(
-            AssetId::OMNIA,
-            Some("OMNIA2".into()),
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        reg.update_metadata(AssetId::OMNIA, Some("OMNIA2".into()), None, None, None, None)
+            .unwrap();
         assert_eq!(reg.omnia().unwrap().symbol, "OMNIA2");
     }
 

@@ -72,7 +72,9 @@ impl BurnRatio {
     /// Used for deserialization and internal construction where
     /// the value is known to be valid.
     pub fn from_bps(bps: u16) -> Self {
-        Self { bps: bps.min(Self::ABSOLUTE_CEILING) }
+        Self {
+            bps: bps.min(Self::ABSOLUTE_CEILING),
+        }
     }
 
     /// Return the burn ratio as basis points.
@@ -189,11 +191,7 @@ impl BurnPolicy {
     /// Update burn ratio via governance.
     /// Enforces the governance ceiling (max 25%) and requires the new ratio
     /// to be higher than the initial max (500 bps) to go through governance path.
-    pub fn set_burn_ratio_governance(
-        &mut self,
-        new_ratio: BurnRatio,
-        now_ms: u64,
-    ) -> Result<(), FeeError> {
+    pub fn set_burn_ratio_governance(&mut self, new_ratio: BurnRatio, now_ms: u64) -> Result<(), FeeError> {
         if self.paused {
             return Err(FeeError::BurnPausedWhileChanging);
         }
@@ -375,7 +373,9 @@ mod tests {
     #[test]
     fn burn_policy_governance_change() {
         let mut policy = BurnPolicy::new(BurnRatio::from_bps(100), 1000);
-        policy.set_burn_ratio_governance(BurnRatio::from_bps(1500), 2000).unwrap();
+        policy
+            .set_burn_ratio_governance(BurnRatio::from_bps(1500), 2000)
+            .unwrap();
         assert_eq!(policy.burn_ratio.bps(), 1500);
         assert_eq!(policy.change_sequence, 1);
     }
