@@ -180,6 +180,8 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         // Ceremony write operations
         .route("/ceremony/contribute", post(ceremony::ceremony_contribute))
         .route("/ceremony/finalize", post(ceremony::ceremony_finalize))
+        // Sprint 3: Fee-burn statistics (public for dashboards/monitoring)
+        .route("/economics/fee-burn", get(economics::get_fee_burn_stats))
         // --- Middleware layers (outermost = last added) ---
         // Provide AuthorizedCallers via Extension for handler-level checks
         .layer(Extension(Arc::clone(&authorized)))

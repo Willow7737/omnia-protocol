@@ -728,3 +728,39 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+/// Handler for `GET /api/v1/economics/fee-burn`.
+///
+/// Returns the current fee-burn statistics: total burned, burn rate,
+/// per-domain breakdown. Public endpoint for monitoring dashboards.
+#[utoipa::path(
+    get,
+    path = "/api/v1/economics/fee-burn",
+    responses(
+        (status = 200, description = "Fee-burn statistics"),
+    )
+)]
+pub async fn get_fee_burn_stats(
+    State(state): State<AppState>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let stats = {
+        let router = state.shard_router.lock().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("router lock poisoned: {e}")})),
+            )
+        })?;
+        router.fee_burn_stats()
+    };
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "total_burned": stats.total_burned,
+            "burn_event_count": stats.burn_event_count,
+            "effective_burn_pct": stats.effective_burn_pct,
+            "baseline_burn_pct": stats.baseline_burn_pct,
+            "governance_burn_pct": stats.governance_burn_pct,
+            "governance_burn_cap_pct": stats.governance_burn_cap_pct,
+        })),
+    ))
+}
