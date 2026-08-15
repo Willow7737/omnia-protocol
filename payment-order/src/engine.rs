@@ -149,7 +149,7 @@ impl PaymentEngine {
     }
 
     /// Get a mutable order by ID.
-    fn get_order_mut(
+    pub(crate) fn get_order_mut(
         &mut self,
         order_id: &str,
     ) -> Result<&mut PaymentOrder, PaymentError> {

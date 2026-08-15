@@ -354,3 +354,26 @@ Stage Summary:
 - Sprint 5: bridge.rs — 24 tests, BridgeOperator trait + CircuitBreaker + MockBridgeOperator + BridgeRegistry
 - Integration: FeeBurnTracker in ShardRouter, API endpoint /economics/fee-burn
 - Total new code: ~1800 lines, 79 new tests, zero regressions
+
+---
+Task ID: 3-5-integration
+Agent: main
+Task: Integrate Sprint 3-5 financial pallets into node runtime and push to GitHub
+
+Work Log:
+- Verified all 3 pallets compile and pass 160 tests (asset-registry: 70, fee-burn: 40, payment-order: 65)
+- Added omnia-asset-registry, omnia-fee-burn, omnia-payment-order to node/Cargo.toml
+- Extended AppState with 6 new fields: asset_registry, supply_tracker, treasury, fee_schedule, burn_accounting, payment_engine
+- Created 5 new API modules: treasury.rs, supply.rs, fees.rs, bridge.rs, payment_orders.rs
+- Added 11 new REST endpoints covering Spec §4-§7, §8, §15
+- Updated all AppState construction sites (main.rs, http.rs, api_integration.rs, integration.rs)
+- Fixed accidentally-removed tokio dependency
+- All 243 tests pass (160 pallet + 83 node lib)
+- Committed and pushed to GitHub (dev branch)
+
+Stage Summary:
+- Sprint 3 (fee-burn): pallet was already complete, wired into node + API
+- Sprint 4 (supply): pallet was already complete, wired into node + API  
+- Sprint 5 (bridge): shards/src/bridge.rs already complete, wired into node + API
+- Integration: 11 new endpoints, AppState extended, all tests green
+- Pushed: aa41a1f..12454d5 to dev

@@ -117,4 +117,11 @@ pub enum PaymentError {
     /// Internal overflow during amount calculation.
     #[error("arithmetic overflow: {0}")]
     ArithmeticOverflow(String),
+
+    /// A treasury integration operation failed.
+    #[error("treasury integration: {detail}")]
+    TreasuryIntegration {
+        /// Detail of the failure.
+        detail: String,
+    },
 }

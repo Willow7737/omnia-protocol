@@ -1,8 +1,15 @@
-//! Supply tracking with auditable events — Spec §4.4, §6.1, §7.3
+//! Supply tracking with auditable events — Spec §4.4, §5.3, §6.1, §7.3
 //!
 //! Every supply change MUST emit an auditable event containing:
 //! asset ID, amount, authority, reason, reference, timestamp, and
 //! resulting total supply (Spec §4.4).
+//!
+//! ## Reward Authority (§5.3)
+//!
+//! The [`RewardAuthority`] wraps a [`crate::genesis::RewardSchedule`] and
+//! enforces that reward mints never exceed the per-year budget. It tracks
+//! how much has been released per year and per-era, and applies the
+//! unclaimed/slashed policies.
 
 use std::collections::BTreeMap;
 
@@ -351,6 +358,253 @@ impl Default for SupplyTracker {
     }
 }
 
+// ------------------------------------------------------------------
+// Reward Authority (Spec §5.3)
+// ------------------------------------------------------------------
+
+/// Enforces the reward schedule from Spec §5.3.
+///
+/// Per Spec §5.3, the reward authority:
+/// - "No reward authority may mint outside the hard cap."
+/// - Releases only the approved per-year reward budget
+/// - Tracks per-year and per-era releases
+/// - Handles unclaimed rewards per [`crate::genesis::UnclaimedRewardPolicy`]
+/// - Handles slashed validator rewards per [`crate::genesis::SlashedRewardPolicy`]
+///
+/// The proposed initial schedule is:
+///
+/// | Year | OMNIA Reward |
+/// |------|-------------|
+/// | 1    | 80,000,000  |
+/// | 2    | 60,000,000  |
+/// | 3    | 45,000,000  |
+/// | 4    | 34,000,000  |
+///
+/// "The remaining 181,000,000 MUST have a fully specified schedule
+/// before the reward pool is activated." (Spec §5.3)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RewardAuthority {
+    /// The reward schedule defining per-year budgets.
+    pub schedule: crate::genesis::RewardSchedule,
+    /// How much has been released per year (year → plancks released).
+    pub released_per_year: BTreeMap<u32, u64>,
+    /// How much has been slashed per year (year → plancks slashed).
+    pub slashed_per_year: BTreeMap<u32, u64>,
+    /// How much was unclaimed and returned to treasury per year.
+    pub unclaimed_per_year: BTreeMap<u32, u64>,
+    /// Total amount released across all years.
+    pub total_released: u64,
+    /// Total amount slashed across all years.
+    pub total_slashed: u64,
+    /// Whether the reward pool is active.
+    /// Per Spec §5.3, the remaining 181M needs a fully specified
+    /// schedule before activation. During pilot, rewards are NOT
+    /// automatically minted.
+    pub active: bool,
+    /// The current era/year for reward calculations.
+    /// In production this is derived from block height or epoch.
+    pub current_year: u32,
+}
+
+impl Default for RewardAuthority {
+    fn default() -> Self {
+        Self::new(crate::genesis::RewardSchedule::canonical())
+    }
+}
+
+impl RewardAuthority {
+    /// Create a new reward authority with the given schedule.
+    /// The authority starts INACTIVE — it must be explicitly activated
+    /// after governance approval and schedule finalization.
+    pub fn new(schedule: crate::genesis::RewardSchedule) -> Self {
+        Self {
+            schedule,
+            released_per_year: BTreeMap::new(),
+            slashed_per_year: BTreeMap::new(),
+            unclaimed_per_year: BTreeMap::new(),
+            total_released: 0,
+            total_slashed: 0,
+            active: false,
+            current_year: 0,
+        }
+    }
+
+    /// Activate the reward authority.
+    /// Returns error if already active.
+    pub fn activate(&mut self, start_year: u32) -> Result<(), RegistryError> {
+        if self.active {
+            return Err(RegistryError::InvariantViolation(
+                "reward authority already active".into(),
+            ));
+        }
+        self.active = true;
+        self.current_year = start_year;
+        Ok(())
+    }
+
+    /// Deactivate the reward authority (emergency pause).
+    /// Per Spec §12: emergency pause with no silent balance alteration.
+    pub fn deactivate(&mut self) {
+        self.active = false;
+    }
+
+    /// Set the current year (called at era boundaries).
+    pub fn set_year(&mut self, year: u32) {
+        self.current_year = year;
+    }
+
+    /// Get the budget for the current year.
+    /// Returns 0 if no budget is defined for this year.
+    pub fn current_year_budget(&self) -> u64 {
+        self.schedule
+            .reward_for_year(self.current_year)
+            .unwrap_or(0)
+    }
+
+    /// Get the remaining budget for the current year.
+    pub fn current_year_remaining(&self) -> u64 {
+        let budget = self.current_year_budget();
+        let released = self
+            .released_per_year
+            .get(&self.current_year)
+            .copied()
+            .unwrap_or(0);
+        budget.saturating_sub(released)
+    }
+
+    /// Get the total budget across all scheduled years.
+    pub fn total_budget(&self) -> u64 {
+        self.schedule.total_scheduled()
+    }
+
+    /// Get the total remaining budget across all future years.
+    pub fn total_remaining(&self) -> u64 {
+        self.total_budget()
+            .saturating_sub(self.total_released)
+            .saturating_sub(self.total_slashed)
+    }
+
+    /// Validate that a reward mint of `amount` is within the current
+    /// year's budget. Does NOT mutate state — the actual minting is
+    /// done via `SupplyTracker::mint` after validation.
+    ///
+    /// Returns `Ok(())` if the mint is allowed.
+    /// Returns `Err` if:
+    /// - The authority is not active
+    /// - The year has no scheduled budget
+    /// - The amount would exceed the year's remaining budget
+    pub fn validate_reward_mint(&self, amount: u64, year: u32) -> Result<(), RegistryError> {
+        if !self.active {
+            return Err(RegistryError::RewardAuthorityInactive);
+        }
+
+        let budget = self
+            .schedule
+            .reward_for_year(year)
+            .ok_or_else(|| RegistryError::RewardYearNotScheduled(year))?;
+
+        let released = self.released_per_year.get(&year).copied().unwrap_or(0);
+        let remaining = budget.saturating_sub(released);
+
+        if amount > remaining {
+            return Err(RegistryError::RewardBudgetExceeded {
+                year,
+                requested: amount,
+                remaining,
+                budget,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Record that a reward mint has occurred.
+    /// Call this AFTER the actual `SupplyTracker::mint` succeeds.
+    pub fn record_release(&mut self, amount: u64, year: u32) {
+        *self.released_per_year.entry(year).or_insert(0) += amount;
+        self.total_released = self.total_released.saturating_add(amount);
+    }
+
+    /// Record a slashed validator reward.
+    /// Per Spec §5.3: "treatment of inactive or slashed validators."
+    /// The amount is removed from the year's released total and handled
+    /// per the slashed policy.
+    pub fn record_slash(&mut self, amount: u64, year: u32) {
+        *self.slashed_per_year.entry(year).or_insert(0) += amount;
+        self.total_slashed = self.total_slashed.saturating_add(amount);
+
+        // Apply slashed policy
+        match self.schedule.slashed_policy {
+            crate::genesis::SlashedRewardPolicy::Burned => {
+                // Slashed amount is effectively burned — it was already
+                // minted but is now removed from circulation.
+                // The actual burn is done via SupplyTracker::burn.
+            }
+            crate::genesis::SlashedRewardPolicy::ReturnToPool => {
+                // Return to the year's budget — reduce released count
+                let released = self.released_per_year.get(&year).copied().unwrap_or(0);
+                if released >= amount {
+                    *self.released_per_year.get_mut(&year).expect("just accessed") -= amount;
+                    self.total_released = self.total_released.saturating_sub(amount);
+                }
+            }
+            crate::genesis::SlashedRewardPolicy::ReturnToTreasury => {
+                // Removed from circulation and credited to treasury.
+                // The treasury credit is handled at the accounting layer.
+                // Here we just reduce the released count.
+                let released = self.released_per_year.get(&year).copied().unwrap_or(0);
+                if released >= amount {
+                    *self.released_per_year.get_mut(&year).expect("just accessed") -= amount;
+                    self.total_released = self.total_released.saturating_sub(amount);
+                }
+            }
+        }
+    }
+
+    /// Record unclaimed rewards per the unclaimed policy.
+    /// Per Spec §5.3: "treatment of unclaimed rewards."
+    pub fn record_unclaimed(&mut self, amount: u64, year: u32) {
+        *self.unclaimed_per_year.entry(year).or_insert(0) += amount;
+
+        match self.schedule.unclaimed_policy {
+            crate::genesis::UnclaimedRewardPolicy::ReturnToTreasury => {
+                // Reduce released count — tokens return to treasury.
+                let released = self.released_per_year.get(&year).copied().unwrap_or(0);
+                if released >= amount {
+                    *self.released_per_year.get_mut(&year).expect("just accessed") -= amount;
+                    self.total_released = self.total_released.saturating_sub(amount);
+                }
+            }
+            crate::genesis::UnclaimedRewardPolicy::RollForward => {
+                // Tokens stay available for next period — no change to released.
+            }
+            crate::genesis::UnclaimedRewardPolicy::PermanentlyLost => {
+                // Tokens are burned — handled at supply tracker level.
+                let released = self.released_per_year.get(&year).copied().unwrap_or(0);
+                if released >= amount {
+                    *self.released_per_year.get_mut(&year).expect("just accessed") -= amount;
+                    self.total_released = self.total_released.saturating_sub(amount);
+                }
+            }
+        }
+    }
+
+    /// Check if a given year has a fully specified schedule.
+    /// Per Spec §5.3, years without a schedule cannot release rewards.
+    pub fn is_year_scheduled(&self, year: u32) -> bool {
+        self.schedule.reward_for_year(year).is_some()
+    }
+
+    /// Verify the reward invariant:
+    /// total_released <= total_scheduled - total_slashed
+    pub fn verify_invariant(&self) -> bool {
+        self.total_released
+            <= self
+                .total_budget()
+                .saturating_sub(self.total_slashed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -510,5 +764,140 @@ mod tests {
         assert_eq!(events[1].change_type, SupplyChange::Burn);
         assert_eq!(events[1].amount, 100_000);
         assert_eq!(events[1].resulting_supply, 900_000);
+    }
+
+    // --- RewardAuthority tests (§5.3) ---
+
+    #[test]
+    fn reward_authority_starts_inactive() {
+        let auth = RewardAuthority::default();
+        assert!(!auth.active);
+        assert_eq!(auth.total_released, 0);
+        assert_eq!(auth.total_budget(), 219_000_000_000_000_000);
+    }
+
+    #[test]
+    fn reward_authority_activate() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        assert!(auth.active);
+        assert_eq!(auth.current_year, 1);
+    }
+
+    #[test]
+    fn reward_authority_double_activate_fails() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        assert!(auth.activate(2).is_err());
+    }
+
+    #[test]
+    fn reward_authority_inactive_rejects_mint() {
+        let auth = RewardAuthority::default();
+        let err = auth.validate_reward_mint(1000, 1);
+        assert!(matches!(err, Err(RegistryError::RewardAuthorityInactive)));
+    }
+
+    #[test]
+    fn reward_authority_unscheduled_year_rejected() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        let err = auth.validate_reward_mint(1000, 5); // no year 5 schedule
+        assert!(matches!(err, Err(RegistryError::RewardYearNotScheduled(5))));
+    }
+
+    #[test]
+    fn reward_authority_within_budget() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        // Year 1 budget: 80M OMNIA = 80_000_000_000_000_000 plancks
+        let half = 40_000_000_000_000_000;
+        assert!(auth.validate_reward_mint(half, 1).is_ok());
+        auth.record_release(half, 1);
+        assert_eq!(auth.total_released, half);
+        assert_eq!(auth.current_year_remaining(), half);
+        // Second half also OK
+        assert!(auth.validate_reward_mint(half, 1).is_ok());
+    }
+
+    #[test]
+    fn reward_authority_budget_exceeded() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        let budget = 80_000_000_000_000_000u64;
+        auth.record_release(budget, 1);
+        let err = auth.validate_reward_mint(1, 1);
+        assert!(matches!(err, Err(RegistryError::RewardBudgetExceeded { .. })));
+    }
+
+    #[test]
+    fn reward_authority_deactivate() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        auth.deactivate();
+        assert!(!auth.active);
+        // Reactivation allowed after deactivation
+        assert!(auth.activate(2).is_ok());
+        assert_eq!(auth.current_year, 2);
+    }
+
+    #[test]
+    fn reward_authority_slash_return_to_pool() {
+        let mut auth = RewardAuthority::new(crate::genesis::RewardSchedule {
+            unclaimed_policy: crate::genesis::UnclaimedRewardPolicy::ReturnToTreasury,
+            slashed_policy: crate::genesis::SlashedRewardPolicy::ReturnToPool,
+            ..crate::genesis::RewardSchedule::canonical()
+        });
+        auth.activate(1).unwrap();
+        let budget = 80_000_000_000_000_000u64;
+        auth.record_release(budget, 1);
+        assert_eq!(auth.total_released, budget);
+        // Slash 10M — returned to pool
+        auth.record_slash(10_000_000_000_000_000, 1);
+        assert_eq!(auth.total_released, 70_000_000_000_000_000);
+        assert_eq!(auth.total_slashed, 10_000_000_000_000_000);
+        // Remaining should include the returned 10M
+        assert_eq!(auth.current_year_remaining(), 10_000_000_000_000_000);
+    }
+
+    #[test]
+    fn reward_authority_unclaimed_return_to_treasury() {
+        let mut auth = RewardAuthority::new(crate::genesis::RewardSchedule {
+            unclaimed_policy: crate::genesis::UnclaimedRewardPolicy::ReturnToTreasury,
+            slashed_policy: crate::genesis::SlashedRewardPolicy::Burned,
+            ..crate::genesis::RewardSchedule::canonical()
+        });
+        auth.activate(1).unwrap();
+        auth.record_release(50_000_000_000_000_000, 1);
+        auth.record_unclaimed(10_000_000_000_000_000, 1);
+        assert_eq!(auth.total_released, 40_000_000_000_000_000);
+        // Unclaimed amount tracked
+        assert_eq!(auth.unclaimed_per_year.get(&1).copied().unwrap_or(0), 10_000_000_000_000_000);
+    }
+
+    #[test]
+    fn reward_authority_invariant_holds() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        auth.record_release(40_000_000_000_000_000, 1);
+        assert!(auth.verify_invariant());
+        // Even after a slash
+        auth.record_slash(5_000_000_000_000_000, 1);
+        assert!(auth.verify_invariant());
+    }
+
+    #[test]
+    fn reward_authority_multi_year_tracking() {
+        let mut auth = RewardAuthority::default();
+        auth.activate(1).unwrap();
+        // Release full year 1
+        auth.record_release(80_000_000_000_000_000, 1);
+        // Move to year 2
+        auth.set_year(2);
+        // Year 2 has 60M budget
+        assert_eq!(auth.current_year_budget(), 60_000_000_000_000_000);
+        assert_eq!(auth.current_year_remaining(), 60_000_000_000_000_000);
+        // Total remaining = 219M - 80M released = 139M
+        assert_eq!(auth.total_remaining(), 139_000_000_000_000_000);
     }
 }

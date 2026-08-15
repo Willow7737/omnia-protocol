@@ -59,7 +59,7 @@ pub use genesis::{
     TreasuryCategory, UnclaimedRewardPolicy,
 };
 pub use registry::AssetRegistry;
-pub use supply::{SupplyChange, SupplyEvent, SupplyTracker};
+pub use supply::{RewardAuthority, SupplyChange, SupplyEvent, SupplyTracker};
 pub use treasury::{
     AllocationBucket, CircuitBreakerConfig, InventoryReservation, PilotInventory, ReservationState,
     Treasury, TreasuryEvent, VestingSchedule, OMNIA_PLANCKS, HARD_CAP,

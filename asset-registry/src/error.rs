@@ -81,4 +81,25 @@ pub enum RegistryError {
     /// Insufficient balance for an asset-scoped transfer.
     #[error("insufficient balance for asset {0}: have {1}, need {2}")]
     InsufficientBalance(u32, u64, u64),
+
+    /// Reward authority is not active.
+    #[error("reward authority is not active (Spec §5.3)")]
+    RewardAuthorityInactive,
+
+    /// No reward budget scheduled for the given year.
+    #[error("no reward budget scheduled for year {0} (Spec §5.3)")]
+    RewardYearNotScheduled(u32),
+
+    /// Reward mint would exceed the year's budget.
+    #[error("reward budget exceeded for year {year}: requested {requested}, remaining {remaining}, budget {budget} (Spec §5.3)")]
+    RewardBudgetExceeded {
+        /// The year whose budget was exceeded.
+        year: u32,
+        /// Amount requested.
+        requested: u64,
+        /// Remaining budget.
+        remaining: u64,
+        /// Total budget for the year.
+        budget: u64,
+    },
 }

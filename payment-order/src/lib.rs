@@ -38,6 +38,7 @@ pub mod provider;
 pub mod reconciliation;
 pub mod risk;
 pub mod state;
+pub mod treasury_adapter;
 pub mod types;
 
 pub use engine::PaymentEngine;
@@ -53,4 +54,5 @@ pub use reconciliation::{
 };
 pub use risk::{CircuitBreaker, RiskLimits};
 pub use state::PaymentState;
+pub use treasury_adapter::{TreasuryBridgeAdapter, TreasuryBridgeResult};
 pub use types::PaymentOrder;
