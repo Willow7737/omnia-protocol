@@ -89,11 +89,24 @@ pub enum SupplyError {
         tracked: u64,
     },
     /// Invalid phase transition (e.g., skipping a phase or going backward).
-    InvalidPhaseTransition { current_phase: u8, target_phase: u8 },
+    InvalidPhaseTransition {
+        /// The current supply phase.
+        current_phase: u8,
+        /// The target supply phase that is invalid.
+        target_phase: u8,
+    },
     /// Already at the final phase — no further transitions allowed.
-    AlreadyFinalPhase { current_phase: u8 },
+    AlreadyFinalPhase {
+        /// The current phase, which is already the final phase.
+        current_phase: u8,
+    },
     /// Burn would result in negative tracked supply.
-    BurnExceedsSupply { current_supply: u64, requested_burn: u64 },
+    BurnExceedsSupply {
+        /// The current total supply.
+        current_supply: u64,
+        /// The amount requested to be burned.
+        requested_burn: u64,
+    },
 }
 
 impl std::fmt::Display for SupplyError {

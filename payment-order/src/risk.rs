@@ -134,11 +134,7 @@ impl RiskLimits {
             return true;
         }
         // Calculate basis point difference: |quoted - current| / quoted * 10000
-        let diff = if quoted_rate > current_rate {
-            quoted_rate - current_rate
-        } else {
-            current_rate - quoted_rate
-        };
+        let diff = quoted_rate.abs_diff(current_rate);
         let bps = (diff as u128 * 10_000) / quoted_rate as u128;
         bps > self.price_movement_tolerance_bps as u128
     }

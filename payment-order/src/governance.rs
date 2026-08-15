@@ -50,6 +50,7 @@ pub struct GovernanceProposal {
 
 impl GovernanceProposal {
     /// Create a new proposal with the appropriate timelock.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         proposal_id: String,
         proposal_type: ProposalType,
@@ -226,13 +227,19 @@ pub struct DelegationCooldown {
     pub cooldown_ms: u64,
 }
 
-impl DelegationCooldown {
-    /// Create with default cooldown (e.g., 24 hours).
-    pub fn new() -> Self {
+impl Default for DelegationCooldown {
+    fn default() -> Self {
         Self {
             delegations: std::collections::BTreeMap::new(),
             cooldown_ms: 24 * 60 * 60 * 1_000,
         }
+    }
+}
+
+impl DelegationCooldown {
+    /// Create with default cooldown (e.g., 24 hours).
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Attempt to change delegation.

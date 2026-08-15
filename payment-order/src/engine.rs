@@ -27,13 +27,24 @@ pub enum Caller {
     /// The sender / wallet user.
     Sender,
     /// A system service (quote, risk, chain, delivery, etc.).
-    System { service: String },
+    System {
+        /// The name of the system service.
+        service: String,
+    },
     /// The treasury service (inventory operations).
     Treasury,
     /// An authenticated mobile-money provider callback.
-    Provider { provider_id: String, authenticated: bool },
+    Provider {
+        /// The provider's identifier.
+        provider_id: String,
+        /// Whether the callback was authenticated.
+        authenticated: bool,
+    },
     /// A manual reviewer (operations team).
-    ManualReview { reviewer: String },
+    ManualReview {
+        /// The reviewer's identifier.
+        reviewer: String,
+    },
 }
 
 impl Caller {
@@ -87,6 +98,7 @@ impl PaymentEngine {
 
     /// Create a new payment order and register it.
     /// Returns the created order.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_order(
         &mut self,
         order_id: String,
@@ -194,35 +206,37 @@ impl PaymentEngine {
         let omnia_quantity = order.omnia_quantity;
 
         // Mutate the order — record the transition
-        let order = self.get_order_mut(order_id)?;
-        let event = order.record_transition(next_state, caller.to_actor(), now_ms, reason);
+        let event = {
+            let order = self.get_order_mut(order_id)?;
+            let event = order.record_transition(next_state, caller.to_actor(), now_ms, reason);
 
-        // Post-transition side-effects on the order (no self borrow needed)
-        match order.state {
-            PaymentState::RefundPending => {
-                order.refund_status = RefundStatus::Pending;
+            // Post-transition side-effects on the order (no self borrow needed)
+            match order.state {
+                PaymentState::RefundPending => {
+                    order.refund_status = RefundStatus::Pending;
+                }
+                PaymentState::Refunded => {
+                    order.refund_status = RefundStatus::Completed;
+                }
+                PaymentState::RiskApproved => {
+                    order.risk_decision = RiskDecision::Approved;
+                }
+                PaymentState::RiskRejected => {
+                    order.risk_decision = RiskDecision::Rejected {
+                        reason: "risk engine rejected".into(),
+                    };
+                }
+                PaymentState::AllocationFailed => {
+                    order.risk_decision = RiskDecision::Rejected {
+                        reason: "on-chain allocation failed".into(),
+                    };
+                }
+                _ => {}
             }
-            PaymentState::Refunded => {
-                order.refund_status = RefundStatus::Completed;
-            }
-            PaymentState::RiskApproved => {
-                order.risk_decision = RiskDecision::Approved;
-            }
-            PaymentState::RiskRejected => {
-                order.risk_decision = RiskDecision::Rejected {
-                    reason: "risk engine rejected".into(),
-                };
-            }
-            PaymentState::AllocationFailed => {
-                order.risk_decision = RiskDecision::Rejected {
-                    reason: "on-chain allocation failed".into(),
-                };
-            }
-            _ => {}
-        }
+            event
+        };
 
-        // Circuit breaker updates (after mutable borrow on order is dropped)
-        drop(order);
+        // Circuit breaker updates (mutable borrow on order is now released)
         match next_state {
             PaymentState::RefundPending => {
                 self.circuit_breaker.record_refund_pending(ghs_amount);

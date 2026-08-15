@@ -14,16 +14,28 @@ use crate::types::*;
 pub enum RegistryEvent {
     /// A new asset was registered.
     AssetRegistered {
+        /// The registered asset identifier.
         id: AssetId,
+        /// Ticker symbol of the registered asset.
         symbol: String,
+        /// Classification of the registered asset.
         asset_class: AssetClass,
     },
     /// An asset's metadata was updated.
-    AssetMetadataUpdated { id: AssetId },
+    AssetMetadataUpdated {
+        /// The asset whose metadata was updated.
+        id: AssetId,
+    },
     /// An asset was frozen (no transfers/mints/burns).
-    AssetFrozen { id: AssetId },
+    AssetFrozen {
+        /// The frozen asset identifier.
+        id: AssetId,
+    },
     /// An asset was unfrozen.
-    AssetUnfrozen { id: AssetId },
+    AssetUnfrozen {
+        /// The unfrozen asset identifier.
+        id: AssetId,
+    },
 }
 
 /// The full asset registry.

@@ -15,27 +15,39 @@ use utoipa::ToSchema;
 use crate::state::AppState;
 use omnia_asset_registry::types::AssetId;
 use omnia_payment_order::engine::Caller;
-use omnia_payment_order::{PaymentEngine, PaymentState};
+use omnia_payment_order::PaymentState;
 
 /// Request body for creating a payment order.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateOrderRequest {
+    /// Unique order identifier.
     pub order_id: String,
+    /// Customer mobile-money number or wallet ID.
     pub customer_ref: String,
+    /// Recipient wallet public key or account ID.
     pub recipient_ref: String,
+    /// GHS amount in pesewas (smallest GHS unit).
     pub ghs_amount: u64,
+    /// OMNIA quantity in plancks (10^-9 OMNIA).
     pub omnia_quantity: u64,
+    /// Exchange rate applied (GHS per OMNIA in fixed-point).
     pub exchange_rate: u64,
+    /// Mobile-money provider fee in GHS pesewas.
     pub provider_fee: u64,
+    /// Omnia protocol fee in OMNIA plancks.
     pub omnia_fee: u64,
+    /// Mobile-money provider name (e.g., "MTN", "Telecel", "AT").
     pub provider_name: String,
 }
 
 /// Request body for advancing an order's state.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AdvanceOrderRequest {
+    /// Target state to advance the order to.
     pub next_state: String,
+    /// Who is requesting the transition (e.g., "system:risk-engine", "provider:MTN").
     pub caller: String,
+    /// Optional reason or reference for the transition.
     pub reason: Option<String>,
 }
 

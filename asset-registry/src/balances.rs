@@ -31,29 +31,51 @@ pub type AccountId = [u8; 32];
 pub enum BalanceEvent {
     /// Tokens transferred between accounts.
     Transferred {
+        /// The asset that was transferred.
         asset_id: AssetId,
+        /// Sender account.
         from: AccountId,
+        /// Recipient account.
         to: AccountId,
+        /// Number of tokens transferred.
         amount: u64,
     },
     /// Tokens minted to an account.
     Minted {
+        /// The asset that was minted.
         asset_id: AssetId,
+        /// Recipient account.
         to: AccountId,
+        /// Number of tokens minted.
         amount: u64,
+        /// Authority that authorized the mint.
         authority: SupplyAuthority,
     },
     /// Tokens burned from an account.
     Burned {
+        /// The asset that was burned.
         asset_id: AssetId,
+        /// Account tokens were burned from.
         from: AccountId,
+        /// Number of tokens burned.
         amount: u64,
+        /// Authority that authorized the burn.
         authority: SupplyAuthority,
     },
     /// Account balance frozen (e.g., legal hold).
-    Frozen { asset_id: AssetId, account: AccountId },
+    Frozen {
+        /// The asset for which the account is frozen.
+        asset_id: AssetId,
+        /// The frozen account.
+        account: AccountId,
+    },
     /// Account balance unfrozen.
-    Unfrozen { asset_id: AssetId, account: AccountId },
+    Unfrozen {
+        /// The asset for which the account was unfrozen.
+        asset_id: AssetId,
+        /// The unfrozen account.
+        account: AccountId,
+    },
 }
 
 /// Per-account balance state for a single asset.
@@ -260,14 +282,18 @@ impl AssetScopedBalances {
         let recipient = asset_balances.entry(*to).or_default();
         if recipient.frozen {
             // Rollback sender
-            asset_balances.get_mut(from).unwrap().free += amount;
+            if let Some(s) = asset_balances.get_mut(from) {
+                s.free += amount;
+            }
             return Err(RegistryError::AssetFrozen(asset_id.as_u32()));
         }
         let new_recipient_free = match recipient.free.checked_add(amount) {
             Some(v) => v,
             None => {
                 // Rollback sender
-                asset_balances.get_mut(from).unwrap().free += amount;
+                if let Some(s) = asset_balances.get_mut(from) {
+                    s.free += amount;
+                }
                 return Err(RegistryError::SupplyAccounting("recipient balance overflow".into()));
             }
         };

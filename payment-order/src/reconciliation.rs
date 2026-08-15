@@ -293,7 +293,7 @@ impl OrderReconciliation {
 
         self.status = if required_reconciliations == 0 {
             ReconciliationStatus::Unreconciled
-        } else if completed as u8 >= required_reconciliations {
+        } else if completed >= required_reconciliations {
             ReconciliationStatus::Reconciled
         } else {
             ReconciliationStatus::PartiallyReconciled

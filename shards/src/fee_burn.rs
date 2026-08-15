@@ -66,11 +66,30 @@ pub const BPS_DENOMINATOR: u64 = 10_000;
 #[derive(Debug, Clone, PartialEq)]
 pub enum FeeBurnError {
     /// The baseline burn rate is outside the allowed range [0, 5].
-    BaselineRateOutOfRange { requested: u8, min: u8, max: u8 },
+    BaselineRateOutOfRange {
+        /// The requested baseline burn rate that was out of range.
+        requested: u8,
+        /// Minimum allowed baseline burn rate.
+        min: u8,
+        /// Maximum allowed baseline burn rate.
+        max: u8,
+    },
     /// The governance burn cap is outside the allowed range [10, 25].
-    GovernanceCapOutOfRange { requested: u8, min: u8, max: u8 },
+    GovernanceCapOutOfRange {
+        /// The requested governance burn cap that was out of range.
+        requested: u8,
+        /// Minimum allowed governance burn cap.
+        min: u8,
+        /// Maximum allowed governance burn cap.
+        max: u8,
+    },
     /// The governance-set burn rate exceeds the governance burn cap.
-    GovernanceRateExceedsCap { rate: u8, cap: u8 },
+    GovernanceRateExceedsCap {
+        /// The governance burn rate that was set.
+        rate: u8,
+        /// The governance burn cap that was exceeded.
+        cap: u8,
+    },
 }
 
 impl std::fmt::Display for FeeBurnError {
@@ -152,14 +171,15 @@ impl FeeBurnConfig {
     /// Returns `FeeBurnError::GovernanceCapOutOfRange` if `governance_cap_pct`
     /// is not in `[MIN_GOVERNANCE_BURN_CAP_PCT, MAX_GOVERNANCE_BURN_CAP_PCT]`.
     pub fn new(baseline_pct: u8, governance_cap_pct: u8) -> Result<Self, FeeBurnError> {
-        if baseline_pct < MIN_BASELINE_BURN_PCT || baseline_pct > MAX_BASELINE_BURN_PCT {
+        #[allow(clippy::absurd_extreme_comparisons)]
+        if !(MIN_BASELINE_BURN_PCT..=MAX_BASELINE_BURN_PCT).contains(&baseline_pct) {
             return Err(FeeBurnError::BaselineRateOutOfRange {
                 requested: baseline_pct,
                 min: MIN_BASELINE_BURN_PCT,
                 max: MAX_BASELINE_BURN_PCT,
             });
         }
-        if governance_cap_pct < MIN_GOVERNANCE_BURN_CAP_PCT || governance_cap_pct > MAX_GOVERNANCE_BURN_CAP_PCT {
+        if !(MIN_GOVERNANCE_BURN_CAP_PCT..=MAX_GOVERNANCE_BURN_CAP_PCT).contains(&governance_cap_pct) {
             return Err(FeeBurnError::GovernanceCapOutOfRange {
                 requested: governance_cap_pct,
                 min: MIN_GOVERNANCE_BURN_CAP_PCT,

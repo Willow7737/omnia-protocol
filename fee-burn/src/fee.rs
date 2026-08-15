@@ -217,6 +217,7 @@ pub struct FeeResult {
 /// validator_amount = priority_fee + validator_share_of_base
 /// protocol_amount = protocol_share_of_base
 /// ```
+#[derive(Default)]
 pub struct FeeFormula {
     /// The fee schedule.
     pub schedule: OmniaFeeSchedule,
@@ -227,10 +228,7 @@ pub struct FeeFormula {
 impl FeeFormula {
     /// Create a fee formula with the standard schedule and default burn ratio.
     pub fn new() -> Self {
-        Self {
-            schedule: OmniaFeeSchedule::standard(),
-            burn_ratio: BurnRatio::default(),
-        }
+        Self::default()
     }
 
     /// Create a fee formula with a custom schedule and burn ratio.

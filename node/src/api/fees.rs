@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 use utoipa::ToSchema;
 
 use crate::state::AppState;
-use omnia_fee_burn::{ActivityType, FeeCalculation, FeeFormula};
+use omnia_fee_burn::{ActivityType, FeeFormula};
 
 /// Handler for `GET /api/v1/fees/burn-policy`.
 #[utoipa::path(

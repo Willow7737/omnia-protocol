@@ -39,6 +39,7 @@ pub struct SupplySnapshot {
 
 impl SupplySnapshot {
     /// Create a supply snapshot from component values.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         asset_id: u32,
         total_minted: u64,

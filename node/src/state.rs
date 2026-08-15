@@ -30,7 +30,7 @@ use tokio::sync::{Mutex, RwLock};
 use omnia_shards::ShardRouter;
 
 use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
-use omnia_fee_burn::{BurnAccounting, BurnPolicy, FeeFormula, OmniaFeeSchedule};
+use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
 use omnia_payment_order::PaymentEngine;
 
 #[cfg(feature = "zk")]

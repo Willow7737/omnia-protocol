@@ -252,45 +252,76 @@ impl Default for CircuitBreakerConfig {
 pub enum TreasuryEvent {
     /// OMNIA was allocated from a treasury bucket.
     Allocated {
+        /// The allocation bucket.
         bucket: AllocationBucket,
+        /// Amount of OMNIA allocated.
         amount: u64,
+        /// Recipient of the allocation.
         recipient: String,
+        /// Reason for the allocation.
         reason: String,
+        /// Optional reference for the allocation.
         reference: Option<String>,
+        /// Event sequence number.
         sequence: u64,
     },
     /// A bucket was funded at genesis.
     BucketFunded {
+        /// The funded allocation bucket.
         bucket: AllocationBucket,
+        /// Amount of OMNIA funded into the bucket.
         amount: u64,
+        /// Authority that funded the bucket.
         authority: SupplyAuthority,
     },
     /// Pilot inventory was allocated.
     PilotAllocated {
+        /// Amount of OMNIA allocated from pilot inventory.
         amount: u64,
+        /// Recipient of the pilot allocation.
         recipient: String,
+        /// Optional reference for the allocation.
         reference: Option<String>,
     },
     /// Circuit breaker was tripped (paused).
-    CircuitBreakerTripped { reason: String },
+    CircuitBreakerTripped {
+        /// Reason the circuit breaker was tripped.
+        reason: String,
+    },
     /// Circuit breaker was reset (unpaused).
     CircuitBreakerReset,
     /// Vesting release occurred.
-    VestingRelease { amount: u64, recipient: String },
+    VestingRelease {
+        /// Amount of OMNIA released from vesting.
+        amount: u64,
+        /// Recipient of the vesting release.
+        recipient: String,
+    },
     /// Inventory was reserved for a payment order.
     InventoryReserved {
+        /// Reference identifier for the reservation.
         reference: String,
+        /// Amount of OMNIA reserved.
         amount: u64,
+        /// Intended recipient of the reserved inventory.
         recipient: String,
     },
     /// An inventory reservation was released (expired or cancelled).
     ReservationReleased {
+        /// Reference identifier for the released reservation.
         reference: String,
+        /// Amount of OMNIA released back.
         amount: u64,
+        /// Reason the reservation was released.
         reason: String,
     },
     /// Pilot refund — escrow returned to treasury.
-    PilotRefunded { amount: u64, reference: String },
+    PilotRefunded {
+        /// Amount of OMNIA refunded.
+        amount: u64,
+        /// Reference for the refund.
+        reference: String,
+    },
 }
 
 /// Per-bucket spending tracker for circuit breaker enforcement.
@@ -764,6 +795,7 @@ impl Treasury {
     /// - Bucket has sufficient remaining capacity
     /// - Hard cap not exceeded
     /// - Daily and monthly spending limits
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate(
         &mut self,
         bucket: AllocationBucket,
@@ -856,6 +888,7 @@ impl Treasury {
     ///
     /// This is a sub-allocation of the TreasuryReserve bucket.
     /// Enforces all pilot-specific limits in addition to circuit breakers.
+    #[allow(clippy::too_many_arguments)]
     pub fn allocate_pilot(
         &mut self,
         amount: u64,
@@ -1189,7 +1222,7 @@ impl Treasury {
         supply_tracker: &mut SupplyTracker,
         _definition: &AssetDefinition,
     ) -> Result<TreasuryEvent, RegistryError> {
-        let schedule = self.vesting_schedules.get_mut(recipient).ok_or_else(|| {
+        let schedule = self.vesting_schedules.get_mut(recipient).ok_or({
             RegistryError::AssetNotFound(u32::MAX) // reuse; no treasury-specific not-found
         })?;
 

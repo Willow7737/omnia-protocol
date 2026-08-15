@@ -96,7 +96,7 @@ impl BurnRatio {
             RoundingRule::Up => {
                 // Check if there's a remainder that would round down
                 let exact = amount as u128 * self.bps as u128;
-                if exact % 10_000 != 0 && burned < amount {
+                if !exact.is_multiple_of(10_000) && burned < amount {
                     burned = burned.saturating_add(1);
                 }
             }
@@ -128,7 +128,7 @@ impl std::fmt::Display for BurnRatio {
 // --- Burn Policy ---
 
 /// The burn policy for an asset, per Spec §7.3.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BurnPolicy {
     /// Current burn ratio.
     pub burn_ratio: BurnRatio,
@@ -140,18 +140,6 @@ pub struct BurnPolicy {
     pub last_change_ms: u64,
     /// Sequence number for governance changes.
     pub change_sequence: u64,
-}
-
-impl Default for BurnPolicy {
-    fn default() -> Self {
-        Self {
-            burn_ratio: BurnRatio::default(),
-            paused: false,
-            pause_reason: None,
-            last_change_ms: 0,
-            change_sequence: 0,
-        }
-    }
 }
 
 impl BurnPolicy {
@@ -248,6 +236,7 @@ impl BurnAccounting {
     }
 
     /// Record a burn event.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_burn(
         &mut self,
         asset_id: u32,

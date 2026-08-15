@@ -328,16 +328,29 @@ pub enum BridgeError {
     CircuitOpen,
     /// The mobile money provider returned an error.
     ProviderError {
+        /// The mobile money provider that returned the error.
         provider: MobileProvider,
+        /// The provider-specific error code.
         code: String,
+        /// The provider-specific error message.
         message: String,
     },
     /// Invalid phone number format.
     InvalidPhoneNumber(String),
     /// Amount is below the minimum allowed.
-    AmountBelowMinimum { min_pesewas: u64, requested: u64 },
+    AmountBelowMinimum {
+        /// The minimum allowed amount in pesewas.
+        min_pesewas: u64,
+        /// The requested amount in pesewas.
+        requested: u64,
+    },
     /// Amount exceeds the maximum allowed.
-    AmountAboveMaximum { max_pesewas: u64, requested: u64 },
+    AmountAboveMaximum {
+        /// The maximum allowed amount in pesewas.
+        max_pesewas: u64,
+        /// The requested amount in pesewas.
+        requested: u64,
+    },
     /// Payment order not found.
     OrderNotFound(String),
     /// Duplicate order ID.
@@ -350,7 +363,9 @@ pub enum BridgeError {
     ProviderNotConfigured(MobileProvider),
     /// Rate limit exceeded for this provider.
     RateLimited {
+        /// The provider that rate-limited the request.
         provider: MobileProvider,
+        /// Suggested retry delay in milliseconds.
         retry_after_ms: u64,
     },
 }

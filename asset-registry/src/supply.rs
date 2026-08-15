@@ -484,7 +484,7 @@ impl RewardAuthority {
         let budget = self
             .schedule
             .reward_for_year(year)
-            .ok_or_else(|| RegistryError::RewardYearNotScheduled(year))?;
+            .ok_or(RegistryError::RewardYearNotScheduled(year))?;
 
         let released = self.released_per_year.get(&year).copied().unwrap_or(0);
         let remaining = budget.saturating_sub(released);

@@ -222,9 +222,7 @@ fn build_test_app_state(port: u16) -> AppState {
         ceremony_server: None,
         asset_registry: Arc::new(RwLock::new(omnia_asset_registry::AssetRegistry::new())),
         supply_tracker: Arc::new(RwLock::new(omnia_asset_registry::SupplyTracker::new())),
-        treasury: Arc::new(RwLock::new(
-            omnia_asset_registry::Treasury::new().expect("treasury init"),
-        )),
+        treasury: Arc::new(RwLock::new(omnia_asset_registry::Treasury::new())),
         fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
         burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
         payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),

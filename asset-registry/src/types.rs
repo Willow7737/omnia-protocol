@@ -70,7 +70,10 @@ pub enum MintPolicy {
     /// Only the genesis authority can mint (one-time allocation).
     GenesisOnly,
     /// Bounded treasury or governance policy controls minting.
-    Bounded { max_supply: u64 },
+    Bounded {
+        /// Maximum supply cap for this asset.
+        max_supply: u64,
+    },
     /// External chain or qualified partner controls issuance.
     External,
     /// Epoch/eligibility protocol controls issuance (e.g., UBC reset).
@@ -110,9 +113,15 @@ pub enum ChainScope {
     /// Native to the Omnia chain (OMNIA, UBC).
     Native,
     /// External chain with a network identifier (e.g., "bitcoin-mainnet").
-    External { chain_id: String },
+    External {
+        /// Identifier of the external chain.
+        chain_id: String,
+    },
     /// Bridged — exists on Omnia as a representation of an external asset.
-    Bridged { source_chain: String },
+    Bridged {
+        /// The source chain this asset is bridged from.
+        source_chain: String,
+    },
 }
 
 /// Operational status of an asset.

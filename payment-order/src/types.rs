@@ -34,15 +34,27 @@ pub enum TransitionActor {
     /// The sender / wallet initiated the order.
     Sender,
     /// The system (quote service, risk engine, chain service, etc.).
-    System { service: String },
+    System {
+        /// The name of the system service.
+        service: String,
+    },
     /// Backend verification service.
-    Backend { service: String },
+    Backend {
+        /// The name of the backend service.
+        service: String,
+    },
     /// Treasury service (inventory reservation).
     Treasury,
     /// Manual review by an operations team member.
-    ManualReview { reviewer: String },
+    ManualReview {
+        /// The reviewer's identifier.
+        reviewer: String,
+    },
     /// An external provider callback.
-    Provider { provider_id: String },
+    Provider {
+        /// The provider's identifier.
+        provider_id: String,
+    },
 }
 
 /// Risk decision attached to an order after risk review.
@@ -53,7 +65,10 @@ pub enum RiskDecision {
     /// Risk check passed.
     Approved,
     /// Risk check failed.
-    Rejected { reason: String },
+    Rejected {
+        /// The reason for rejection.
+        reason: String,
+    },
 }
 
 /// Refund status tracking.
@@ -66,7 +81,10 @@ pub enum RefundStatus {
     /// Refund completed.
     Completed,
     /// Refund failed (may be retried).
-    Failed { reason: String },
+    Failed {
+        /// The reason for failure.
+        reason: String,
+    },
 }
 
 /// The full payment order per Spec §8.3.
@@ -155,6 +173,7 @@ impl PaymentOrder {
     ///
     /// The initial event history contains a single `StateTransitionEvent`
     /// recording the creation.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         order_id: String,
         customer_ref: String,
