@@ -153,6 +153,14 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache 2>/dev/null || true
           echo "=== Disk space after cleanup ==="
           df -h /
+      - name: Diagnose Cargo.lock resolution
+        shell: bash
+        run: |
+          cp Cargo.lock /tmp/Cargo.lock.committed
+          cargo +${{ matrix.rust }} generate-lockfile
+          echo "=== Cargo.lock diff generated on ${{ matrix.os }} ==="
+          git diff -- Cargo.lock || true
+          cp /tmp/Cargo.lock.committed Cargo.lock
       - name: Verify Cargo.lock is up to date
         run: cargo +${{ matrix.rust }} test --locked --workspace --exclude omnia-fuzz --no-run
       - name: Clean debug artifacts before tests (Linux/macOS)
