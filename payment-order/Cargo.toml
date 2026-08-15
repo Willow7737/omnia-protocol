@@ -1,0 +1,20 @@
+[package]
+name = "omnia-payment-order"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "Payment order state machine — Financial Specification §8.2, §8.3, §15"
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+omnia-asset-registry = { path = "../asset-registry" }
+
+[dev-dependencies]
+proptest = "1.4"
+
+[features]
+default = []

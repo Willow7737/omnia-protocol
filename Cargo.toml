@@ -6,6 +6,7 @@ members = [
     "omnia-network",
     "omnia-adapters",
     "asset-registry",
+    "payment-order",
     "substrate",
     "shards",
     "binding",
