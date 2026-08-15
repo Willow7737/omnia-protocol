@@ -60,3 +60,7 @@ pub use genesis::{
 };
 pub use registry::AssetRegistry;
 pub use supply::{SupplyChange, SupplyEvent, SupplyTracker};
+pub use treasury::{
+    AllocationBucket, CircuitBreakerConfig, InventoryReservation, PilotInventory, ReservationState,
+    Treasury, TreasuryEvent, VestingSchedule, OMNIA_PLANCKS, HARD_CAP,
+};

@@ -5064,6 +5064,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-fee-burn"
+version = "0.1.92"
+dependencies = [
+ "omnia-asset-registry",
+ "omnia-payment-order",
+ "proptest",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "omnia-fuzz"
 version = "0.1.92"
 dependencies = [
@@ -5155,6 +5166,16 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "omnia-payment-order"
+version = "0.1.92"
+dependencies = [
+ "omnia-asset-registry",
+ "proptest",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
