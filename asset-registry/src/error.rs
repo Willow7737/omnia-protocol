@@ -58,4 +58,27 @@ pub enum RegistryError {
     /// Supply accounting error.
     #[error("supply accounting error: {0}")]
     SupplyAccounting(String),
+
+    /// Treasury allocation would exceed a hard limit (Spec §6.2, §15).
+    #[error("treasury limit exceeded ({limit_type}): requested {requested}, allowed {allowed}")]
+    TreasuryLimitExceeded {
+        /// Type of limit that was exceeded.
+        limit_type: String,
+        /// Amount requested.
+        requested: u64,
+        /// Maximum allowed.
+        allowed: u64,
+    },
+
+    /// Treasury is paused (circuit breaker tripped).
+    #[error("treasury paused: {0}")]
+    TreasuryPaused(String),
+
+    /// Wallet not in approved treasury wallet list.
+    #[error("wallet {0} not authorized for treasury operations")]
+    UnauthorizedTreasuryWallet(String),
+
+    /// Insufficient balance for an asset-scoped transfer.
+    #[error("insufficient balance for asset {0}: have {1}, need {2}")]
+    InsufficientBalance(u32, u64, u64),
 }

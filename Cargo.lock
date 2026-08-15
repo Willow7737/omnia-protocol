@@ -4910,6 +4910,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "omnia-asset-registry"
+version = "0.1.92"
+dependencies = [
+ "hex",
+ "postcard",
+ "proptest",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "omnia-benches"
 version = "0.1.92"
 dependencies = [

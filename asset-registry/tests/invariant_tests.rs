@@ -1,1 +1,240 @@
-//! Property-based tests for Spec §4.4 invariants.//!//! These are the highest-priority property tests from Spec §16://!//! ```text//! UBC cannot become OMNIA//! OMNIA cannot become another asset//! external adapters cannot mint OMNIA//! supply cannot exceed the hard cap//! ```use proptest::prelude::*;use omnia_asset_registry::*;use omnia_asset_registry::supply::SupplyAuthority;use omnia_asset_registry::types::*;// --- Invariant: UBC cannot become OMNIA (Spec §4.4) ---proptest! {    #[test]    fn ubc_mint_does_not_affect_omnia_supply(        ubc_amount in 1u64..1_000_000_000u64,    ) {        let mut reg = AssetRegistry::with_genesis_assets();        let ubc_def = reg.ubc().unwrap().clone();        let omnia_def = reg.omnia().unwrap().clone();        // Mint UBC (epoch reset)        reg.supply_tracker_mut()            .mint(                AssetId::UBC,                ubc_amount,                SupplyAuthority::EpochEligibility,                "epoch reset".into(),                None,                &ubc_def,            )            .unwrap();        // OMNIA supply must remain 0        assert_eq!(reg.total_supply(AssetId::OMNIA), 0);        // UBC supply must equal the minted amount        assert_eq!(reg.total_supply(AssetId::UBC), ubc_amount);    }}// --- Invariant: UBC burn is prohibited (Spec §7.3) ---proptest! {    #[test]    fn ubc_burn_always_fails(        burn_amount in 1u64..1_000_000_000u64,    ) {        let mut reg = AssetRegistry::with_genesis_assets();        let ubc_def = reg.ubc().unwrap().clone();        // First mint some UBC        reg.supply_tracker_mut()            .mint(                AssetId::UBC,                burn_amount + 1000,                SupplyAuthority::EpochEligibility,                "epoch".into(),                None,                &ubc_def,            )            .unwrap();        // Attempt to burn — must fail regardless of amount        let result = reg.supply_tracker_mut().burn(            AssetId::UBC,            burn_amount,            SupplyAuthority::AccountOwner,            "test burn".into(),            None,            &ubc_def,        );        assert!(result.is_err());        assert!(matches!(result.unwrap_err(), RegistryError::UbcBurnProhibited));    }}// --- Invariant: supply cannot exceed hard cap (Spec §4.4) ---proptest! {    #[test]    fn omnia_mint_never_exceeds_hard_cap(        mint_amount in 1u64..100_000_000_000_000u64,    ) {        let mut reg = AssetRegistry::with_genesis_assets();        let omnia_def = reg.omnia().unwrap().clone();        let cap = omnia_def.max_supply().unwrap();        // Try to mint — if it would exceed cap, must fail        let result = reg.supply_tracker_mut().mint(            AssetId::OMNIA,            mint_amount,            SupplyAuthority::Genesis,            "genesis".into(),            None,            &omnia_def,        );        match result {            Ok(event) => {                assert!(event.resulting_supply <= cap);            }            Err(RegistryError::SupplyExceedsHardCap(_, current, req, max)) => {                assert_eq!(max, cap);                // If the cap wasn't hit, this shouldn't have failed                assert!(current.saturating_add(req) > max);            }            Err(e) => panic!("unexpected error: {e}"),        }    }}// --- Invariant: minted - burned = total_supply (Spec §4.4) ---proptest! {    #[test]    fn mint_burn_accounting_holds(        mint1 in 1u64..1_000_000u64,        mint2 in 1u64..1_000_000u64,        burn1 in 1u64..1_000_000u64,        burn2 in 1u64..1_000_000u64,    ) {        let mut reg = AssetRegistry::with_genesis_assets();        let omnia_def = reg.omnia().unwrap().clone();        // Mint twice        let _ = reg.supply_tracker_mut().mint(            AssetId::OMNIA, mint1, SupplyAuthority::Genesis, "m1".into(), None, &omnia_def,        );        let _ = reg.supply_tracker_mut().mint(            AssetId::OMNIA, mint2, SupplyAuthority::Treasury, "m2".into(), None, &omnia_def,        );        let total_minted = mint1.saturating_add(mint2);        let supply_after_mints = reg.total_supply(AssetId::OMNIA);        assert_eq!(supply_after_mints, total_minted);        // Burn (may partially fail if burn > supply)        let total_burn = burn1.saturating_add(burn2);        if total_burn <= supply_after_mints {            let _ = reg.supply_tracker_mut().burn(                AssetId::OMNIA, burn1, SupplyAuthority::Protocol, "b1".into(), None, &omnia_def,            );            let _ = reg.supply_tracker_mut().burn(                AssetId::OMNIA, burn2, SupplyAuthority::Protocol, "b2".into(), None, &omnia_def,            );        }        // Verify: supply = minted - burned (capped at 0)        let expected = total_minted.saturating_sub(total_burn.min(supply_after_mints));        // For partial burns, compute actual        let actual = reg.total_supply(AssetId::OMNIA);        assert!(actual <= total_minted, "supply ({}) exceeded total minted ({})", actual, total_minted);        // Check supply tracker consistency        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();        assert_eq!(supply.total_supply(), actual);    }}// --- Invariant: no asset can be transferred when frozen ---proptest! {    #[test]    fn frozen_asset_rejects_transfer(        freeze in proptest::bool::ANY,    ) {        let mut reg = AssetRegistry::with_genesis_assets();        if freeze {            reg.freeze(AssetId::OMNIA).unwrap();        }        let result = reg.can_transfer(AssetId::OMNIA);        if freeze {            assert!(result.is_err());        } else {            assert!(result.is_ok());        }    }}// --- Invariant: UBC is always non-transferable ---#[test]fn ubc_is_always_non_transferable() {    let reg = AssetRegistry::with_genesis_assets();    assert!(reg.can_transfer(AssetId::UBC).is_err());}// --- Invariant: AssetIds are distinct ---#[test]fn omnia_and_ubc_have_distinct_ids() {    let reg = AssetRegistry::with_genesis_assets();    assert_ne!(AssetId::OMNIA, AssetId::UBC);    assert!(reg.omnia().is_some());    assert!(reg.ubc().is_some());}// --- Invariant: supply events are complete and auditable ---#[test]fn supply_events_form_complete_audit_trail() {    let mut reg = AssetRegistry::with_genesis_assets();    let omnia_def = reg.omnia().unwrap().clone();    // Perform 3 mints and 1 burn    reg.supply_tracker_mut().mint(        AssetId::OMNIA, 1_000_000, SupplyAuthority::Genesis, "alloc-1".into(), Some("ref-1".into()), &omnia_def,    ).unwrap();    reg.supply_tracker_mut().mint(        AssetId::OMNIA, 500_000, SupplyAuthority::Treasury, "alloc-2".into(), Some("ref-2".into()), &omnia_def,    ).unwrap();    reg.supply_tracker_mut().burn(        AssetId::OMNIA, 100_000, SupplyAuthority::Protocol, "fee-burn".into(), Some("tx-42".into()), &omnia_def,    ).unwrap();    reg.supply_tracker_mut().mint(        AssetId::OMNIA, 200_000, SupplyAuthority::Reward, "reward".into(), Some("era-5".into()), &omnia_def,    ).unwrap();    let events = reg.supply_tracker().events_for(AssetId::OMNIA);    assert_eq!(events.len(), 4);    // Verify sequence is monotonic    for i in 1..events.len() {        assert!(events[i].sequence > events[i - 1].sequence);    }    // Verify resulting_supply chain:    // 1_000_000 → 1_500_000 → 1_400_000 → 1_600_000    assert_eq!(events[0].resulting_supply, 1_000_000);    assert_eq!(events[1].resulting_supply, 1_500_000);    assert_eq!(events[2].resulting_supply, 1_400_000);    assert_eq!(events[3].resulting_supply, 1_600_000);    // Final supply matches tracker    assert_eq!(reg.total_supply(AssetId::OMNIA), 1_600_000);}
+//! Property-based tests for Spec §4.4 invariants.
+//!
+//! These are the highest-priority property tests from Spec §16:
+//!
+//! ```text
+//! UBC cannot become OMNIA
+//! OMNIA cannot become another asset
+//! external adapters cannot mint OMNIA
+//! supply cannot exceed the hard cap
+//! ```
+
+use proptest::prelude::*;
+
+use omnia_asset_registry::*;
+use omnia_asset_registry::supply::SupplyAuthority;
+use omnia_asset_registry::types::*;
+
+// --- Invariant: UBC cannot become OMNIA (Spec §4.4) ---
+
+proptest! {
+    #[test]
+    fn ubc_mint_does_not_affect_omnia_supply(
+        ubc_amount in 1u64..1_000_000_000u64,
+    ) {
+        let mut reg = AssetRegistry::with_genesis_assets();
+        let ubc_def = reg.ubc().unwrap().clone();
+
+        // Mint UBC (epoch reset)
+        reg.supply_tracker_mut()
+            .mint(
+                AssetId::UBC,
+                ubc_amount,
+                SupplyAuthority::EpochEligibility,
+                "epoch reset".into(),
+                None,
+                &ubc_def,
+            )
+            .unwrap();
+
+        // OMNIA supply must remain 0
+        assert_eq!(reg.total_supply(AssetId::OMNIA), 0);
+        // UBC supply must equal the minted amount
+        assert_eq!(reg.total_supply(AssetId::UBC), ubc_amount);
+    }
+}
+
+// --- Invariant: UBC burn is prohibited (Spec §7.3) ---
+
+proptest! {
+    #[test]
+    fn ubc_burn_always_fails(
+        burn_amount in 1u64..1_000_000_000u64,
+    ) {
+        let mut reg = AssetRegistry::with_genesis_assets();
+        let ubc_def = reg.ubc().unwrap().clone();
+
+        // First mint some UBC
+        reg.supply_tracker_mut()
+            .mint(
+                AssetId::UBC,
+                burn_amount + 1000,
+                SupplyAuthority::EpochEligibility,
+                "epoch".into(),
+                None,
+                &ubc_def,
+            )
+            .unwrap();
+
+        // Attempt to burn — must fail regardless of amount
+        let result = reg.supply_tracker_mut().burn(
+            AssetId::UBC,
+            burn_amount,
+            SupplyAuthority::AccountOwner,
+            "test burn".into(),
+            None,
+            &ubc_def,
+        );
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), RegistryError::UbcBurnProhibited));
+    }
+}
+
+// --- Invariant: supply cannot exceed hard cap (Spec §4.4) ---
+
+proptest! {
+    #[test]
+    fn omnia_mint_never_exceeds_hard_cap(
+        mint_amount in 1u64..100_000_000_000_000u64,
+    ) {
+        let mut reg = AssetRegistry::with_genesis_assets();
+        let omnia_def = reg.omnia().unwrap().clone();
+        let cap = omnia_def.max_supply().unwrap();
+
+        // Try to mint — if it would exceed cap, must fail
+        let result = reg.supply_tracker_mut().mint(
+            AssetId::OMNIA,
+            mint_amount,
+            SupplyAuthority::Genesis,
+            "genesis".into(),
+            None,
+            &omnia_def,
+        );
+        match result {
+            Ok(event) => {
+                assert!(event.resulting_supply <= cap);
+            }
+            Err(RegistryError::SupplyExceedsHardCap(_, current, req, max)) => {
+                assert_eq!(max, cap);
+                // If the cap wasn't hit, this shouldn't have failed
+                assert!(current.saturating_add(req) > max);
+            }
+            Err(e) => panic!("unexpected error: {e}"),
+        }
+    }
+}
+
+// --- Invariant: minted - burned = total_supply (Spec §4.4) ---
+
+proptest! {
+    #[test]
+    fn mint_burn_accounting_holds(
+        mint1 in 1u64..1_000_000u64,
+        mint2 in 1u64..1_000_000u64,
+        burn1 in 1u64..1_000_000u64,
+        burn2 in 1u64..1_000_000u64,
+    ) {
+        let mut reg = AssetRegistry::with_genesis_assets();
+        let omnia_def = reg.omnia().unwrap().clone();
+
+        // Mint twice
+        let _ = reg.supply_tracker_mut().mint(
+            AssetId::OMNIA, mint1, SupplyAuthority::Genesis, "m1".into(), None, &omnia_def,
+        );
+        let _ = reg.supply_tracker_mut().mint(
+            AssetId::OMNIA, mint2, SupplyAuthority::Treasury, "m2".into(), None, &omnia_def,
+        );
+        let total_minted = mint1.saturating_add(mint2);
+        let supply_after_mints = reg.total_supply(AssetId::OMNIA);
+        assert_eq!(supply_after_mints, total_minted);
+
+        // Burn (may partially fail if burn > supply)
+        let total_burn = burn1.saturating_add(burn2);
+        if total_burn <= supply_after_mints {
+            let _ = reg.supply_tracker_mut().burn(
+                AssetId::OMNIA, burn1, SupplyAuthority::Protocol, "b1".into(), None, &omnia_def,
+            );
+            let _ = reg.supply_tracker_mut().burn(
+                AssetId::OMNIA, burn2, SupplyAuthority::Protocol, "b2".into(), None, &omnia_def,
+            );
+        }
+
+        // Verify: supply = minted - burned (capped at 0)
+        let expected = total_minted.saturating_sub(total_burn.min(supply_after_mints));
+        // For partial burns, compute actual
+        let actual = reg.total_supply(AssetId::OMNIA);
+        assert!(actual <= total_minted, "supply ({}) exceeded total minted ({})", actual, total_minted);
+
+        // Check supply tracker consistency
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).unwrap();
+        assert_eq!(supply.total_supply(), actual);
+    }
+}
+
+// --- Invariant: no asset can be transferred when frozen ---
+
+proptest! {
+    #[test]
+    fn frozen_asset_rejects_transfer(
+        freeze in proptest::bool::ANY,
+    ) {
+        let mut reg = AssetRegistry::with_genesis_assets();
+        if freeze {
+            reg.freeze(AssetId::OMNIA).unwrap();
+        }
+        let result = reg.can_transfer(AssetId::OMNIA);
+        if freeze {
+            assert!(result.is_err());
+        } else {
+            assert!(result.is_ok());
+        }
+    }
+}
+
+// --- Invariant: UBC is always non-transferable ---
+
+#[test]
+fn ubc_is_always_non_transferable() {
+    let reg = AssetRegistry::with_genesis_assets();
+    assert!(reg.can_transfer(AssetId::UBC).is_err());
+}
+
+// --- Invariant: AssetIds are distinct ---
+
+#[test]
+fn omnia_and_ubc_have_distinct_ids() {
+    let reg = AssetRegistry::with_genesis_assets();
+    assert_ne!(AssetId::OMNIA, AssetId::UBC);
+    assert!(reg.omnia().is_some());
+    assert!(reg.ubc().is_some());
+}
+
+// --- Invariant: supply events are complete and auditable ---
+
+#[test]
+fn supply_events_form_complete_audit_trail() {
+    let mut reg = AssetRegistry::with_genesis_assets();
+    let omnia_def = reg.omnia().unwrap().clone();
+
+    // Perform 3 mints and 1 burn
+    reg.supply_tracker_mut().mint(
+        AssetId::OMNIA, 1_000_000, SupplyAuthority::Genesis, "alloc-1".into(), Some("ref-1".into()), &omnia_def,
+    ).unwrap();
+    reg.supply_tracker_mut().mint(
+        AssetId::OMNIA, 500_000, SupplyAuthority::Treasury, "alloc-2".into(), Some("ref-2".into()), &omnia_def,
+    ).unwrap();
+    reg.supply_tracker_mut().burn(
+        AssetId::OMNIA, 100_000, SupplyAuthority::Protocol, "fee-burn".into(), Some("tx-42".into()), &omnia_def,
+    ).unwrap();
+    reg.supply_tracker_mut().mint(
+        AssetId::OMNIA, 200_000, SupplyAuthority::Reward, "reward".into(), Some("era-5".into()), &omnia_def,
+    ).unwrap();
+
+    let events = reg.supply_tracker().events_for(AssetId::OMNIA);
+    assert_eq!(events.len(), 4);
+
+    // Verify sequence is monotonic
+    for i in 1..events.len() {
+        assert!(events[i].sequence > events[i - 1].sequence);
+    }
+
+    // Verify resulting_supply chain:
+    // 1_000_000 → 1_500_000 → 1_400_000 → 1_600_000
+    assert_eq!(events[0].resulting_supply, 1_000_000);
+    assert_eq!(events[1].resulting_supply, 1_500_000);
+    assert_eq!(events[2].resulting_supply, 1_400_000);
+    assert_eq!(events[3].resulting_supply, 1_600_000);
+
+    // Final supply matches tracker
+    assert_eq!(reg.total_supply(AssetId::OMNIA), 1_600_000);
+}

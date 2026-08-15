@@ -1,15 +1,26 @@
 //! # Omnia Asset Registry
 //!
-//! On-chain asset registry and supply tracking per the
-//! [Financial Specification §4](https://github.com/Willow7737/omnia-protocol/blob/main/docs/financial/financial-specification.md).
+//! On-chain asset registry, supply tracking, treasury allocation, and
+//! asset-scoped balances per the
+//! [Financial Specification](https://github.com/Willow7737/omnia-protocol/blob/main/docs/financial/financial-specification.md).
 //!
 //! ## Design Principles
 //!
 //! 1. **Asset-scoped balances**: `balance[asset_id][account_id] = amount`
 //! 2. **No cross-asset contamination**: no operation can move one asset as another
 //! 3. **Auditable supply changes**: every mint/burn emits a `SupplyChange` event
-//! 4. **Hard cap enforcement**: `circulating + locked + treasury + escrow + unissued ≤ cap`
+//! 4. **Hard cap enforcement**: `circulating + locked + treasury + escrow + unissued <= cap`
 //! 5. **UBC/OMNIA separation**: UBC cannot become OMNIA; external adapters cannot mint OMNIA
+//! 6. **Treasury allocates, never mints**: per Spec §6.1, treasury moves already-issued OMNIA
+//!
+//! ## Modules
+//!
+//! - [`types`] — Core asset types (AssetId, AssetDefinition, AssetClass, etc.)
+//! - [`registry`] — Asset registration, queries, freeze/unfreeze
+//! - [`supply`] — Supply tracking with auditable events
+//! - [`treasury`] — Treasury allocation with hard limits (Spec §5.2, §6)
+//! - [`balances`] — Asset-scoped balance ledger (Spec §4.3)
+//! - [`error`] — Error types
 //!
 //! ## Invariants (Spec §4.4)
 //!
@@ -34,12 +45,13 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-mod error;
-mod registry;
-mod supply;
-mod types;
+pub mod balances;
+pub mod error;
+pub mod registry;
+pub mod supply;
+pub mod treasury;
+pub mod types;
 
 pub use error::RegistryError;
 pub use registry::AssetRegistry;
 pub use supply::{SupplyChange, SupplyEvent, SupplyTracker};
-pub use types::*;

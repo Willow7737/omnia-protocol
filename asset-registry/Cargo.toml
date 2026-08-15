@@ -3,12 +3,13 @@ name = "omnia-asset-registry"
 version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
-description = "Asset registry and supply tracking — Financial Specification §4"
+description = "Asset registry, supply tracking, treasury allocation, and balances — Financial Specification §4–§6"
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 
 [dependencies]
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 postcard = { version = "1", features = ["alloc"] }
 thiserror = "2.0"

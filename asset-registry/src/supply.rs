@@ -168,6 +168,11 @@ impl SupplyTracker {
         self.supplies.get(&asset_id)
     }
 
+    /// Get mutable reference to the supply state for an asset.
+    pub fn get_mut(&mut self, asset_id: AssetId) -> Option<&mut AssetSupply> {
+        self.supplies.get_mut(&asset_id)
+    }
+
     /// Get the total supply of an asset (0 if not tracked).
     pub fn total_supply(&self, asset_id: AssetId) -> u64 {
         self.supplies
@@ -354,7 +359,7 @@ mod tests {
     // Helper to get mutable supply for test compartment adjustments.
     // In production, compartment tracking is managed by the financial shard.
     fn get_mut<'a>(tracker: &'a mut SupplyTracker, asset_id: AssetId) -> Option<&'a mut AssetSupply> {
-        tracker.supplies.get_mut(&asset_id)
+        tracker.get_mut(asset_id)
     }
 
     #[test]
@@ -476,7 +481,7 @@ mod tests {
         }
 
         // Verify invariant: total_supply (750k) == 450k + 0 + 300k + 0
-        let supply = tracker.get(&AssetId::OMNIA).unwrap();
+        let supply = tracker.get(AssetId::OMNIA).unwrap();
         assert_eq!(supply.verify_invariant().unwrap(), 750_000);
         assert_eq!(tracker.total_supply(AssetId::OMNIA), 750_000);
     }

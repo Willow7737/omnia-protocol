@@ -142,7 +142,7 @@ pub struct AssetDefinition {
     pub symbol: String,
     /// Human-readable display name (e.g., "Omnia Token").
     pub display_name: String,
-    /// Decimal precision (e.g., 12 for OMNIA per Substrate convention, 8 for BTC).
+    /// Decimal precision (9 for OMNIA, 8 for BTC).
     pub decimals: u8,
     /// Asset classification per Spec §4.2.
     pub asset_class: AssetClass,
@@ -171,17 +171,17 @@ impl AssetDefinition {
             asset_id: AssetId::OMNIA,
             symbol: "OMNIA".into(),
             display_name: "Omnia Token".into(),
-            decimals: 12,
+            decimals: 9,
             asset_class: AssetClass::NativeEconomicAsset,
             transferability: Transferability::Transferable,
             mint_policy: MintPolicy::Bounded {
-                max_supply: 1_000_000_000_000_000_000_000, // 1B * 10^12
+                max_supply: 1_000_000_000_000_000_000, // 1B * 10^9
             },
             burn_policy: BurnPolicy::AuthorizedOnly,
             fee_policy: FeePolicy::BaseAndPriority,
             chain_scope: ChainScope::Native,
             status: AssetStatus::Active,
-            existential_deposit: 1_000_000_000_000, // 1 OMNIA
+            existential_deposit: 1_000_000_000, // 1 OMNIA
         }
     }
 
@@ -191,7 +191,7 @@ impl AssetDefinition {
             asset_id: AssetId::UBC,
             symbol: "UBC".into(),
             display_name: "Utility Balance Credit".into(),
-            decimals: 12,
+            decimals: 9,
             asset_class: AssetClass::ParticipationAllowance,
             transferability: Transferability::NonTransferable,
             mint_policy: MintPolicy::EpochEligibility,
@@ -239,14 +239,14 @@ mod tests {
         let omnia = AssetDefinition::omnia();
         assert_eq!(omnia.asset_id, AssetId::OMNIA);
         assert_eq!(omnia.symbol, "OMNIA");
-        assert_eq!(omnia.decimals, 12);
+        assert_eq!(omnia.decimals, 9);
         assert_eq!(omnia.asset_class, AssetClass::NativeEconomicAsset);
         assert_eq!(omnia.transferability, Transferability::Transferable);
         assert_eq!(omnia.status, AssetStatus::Active);
         assert!(omnia.is_omnia());
         assert!(!omnia.is_ubc());
         assert!(omnia.is_transferable());
-        assert_eq!(omnia.max_supply(), Some(1_000_000_000_000_000_000_000u64));
+        assert_eq!(omnia.max_supply(), Some(1_000_000_000_000_000_000u64));
     }
 
     #[test]
@@ -254,7 +254,7 @@ mod tests {
         let ubc = AssetDefinition::ubc();
         assert_eq!(ubc.asset_id, AssetId::UBC);
         assert_eq!(ubc.symbol, "UBC");
-        assert_eq!(ubc.decimals, 12);
+        assert_eq!(ubc.decimals, 9);
         assert_eq!(ubc.asset_class, AssetClass::ParticipationAllowance);
         assert_eq!(ubc.transferability, Transferability::NonTransferable);
         assert!(!ubc.is_transferable());
