@@ -47,11 +47,16 @@
 
 pub mod balances;
 pub mod error;
+pub mod genesis;
 pub mod registry;
 pub mod supply;
 pub mod treasury;
 pub mod types;
 
 pub use error::RegistryError;
+pub use genesis::{
+    GenesisAllocation, GenesisPlan, IssuanceAuthority, RewardSchedule, TreasuryAccounting,
+    TreasuryCategory, UnclaimedRewardPolicy,
+};
 pub use registry::AssetRegistry;
 pub use supply::{SupplyChange, SupplyEvent, SupplyTracker};

@@ -1,13 +1,15 @@
 //! # Omnia Payment Order State Machine
 //!
-//! 24-state payment lifecycle per Financial Specification §8.2, §8.3, §15.
+//! 25-state payment lifecycle per Financial Specification §8.2, §8.3, §15.
 //!
 //! ## Architecture
 //!
-//! - [`state`] — 24 `PaymentState` variants + transition matrix
+//! - [`state`] — 25 `PaymentState` variants + transition matrix
 //! - [`types`] — `PaymentOrder` struct (all Spec §8.3 fields)
 //! - [`engine`] — `PaymentEngine`: state transitions, authorization, idempotency
 //! - [`risk`] — Circuit-breaker limits per Spec §15
+//! - [`provider`] — Provider adapter trait, quote types, subsidy tracking (Spec §8.1, §8.4, §8.5)
+//! - [`reconciliation`] — Double-entry ledger, 6-way reconciliation, daily controls (Spec §14)
 //! - [`error`] — `PaymentError` types
 //!
 //! ## Key Invariants
@@ -30,12 +32,25 @@
 
 pub mod engine;
 pub mod error;
+pub mod governance;
+pub mod merchant;
+pub mod provider;
+pub mod reconciliation;
 pub mod risk;
 pub mod state;
 pub mod types;
 
 pub use engine::PaymentEngine;
 pub use error::PaymentError;
+pub use provider::{
+    CallbackStatus, CallbackVerification, MobileMoneyProvider, OmniaQuote, ProviderAdapter,
+    ProviderCallback, SubsidyRecord, SubsidyTracker,
+};
+pub use reconciliation::{
+    CheckResult, DailyReconciliationReport, Discrepancy, DiscrepancyStatus, LedgerEntry,
+    LedgerEntryType, OrderReconciliation, ReconciliationCheck, ReconciliationStatus,
+    ReconciliationSummary, Resolution,
+};
 pub use risk::{CircuitBreaker, RiskLimits};
 pub use state::PaymentState;
 pub use types::PaymentOrder;
