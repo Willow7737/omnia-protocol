@@ -12,6 +12,7 @@
 | [monitoring.md](monitoring.md)                                   | Monitoring setup — Grafana, Prometheus, alert rules                 |
 | [deployment.md](deployment.md)                                   | Deployment procedures — Docker Compose, Kubernetes/Helm             |
 | [runbook.md](runbook.md)                                         | Operations runbook — key rotation, slashing, partition recovery     |
+| [financial-layer-rollout.md](financial-layer-rollout.md)         | Rolling the financial-layer release across the standing 5-node mesh |
 | [feature-flags.md](feature-flags.md)                             | Feature flag reference                                              |
 | [cli-and-api.md](cli-and-api.md)                                 | CLI subcommands and REST API reference                              |
 | [self-hosted-runner-setup.md](self-hosted-runner-setup.md)       | Self-hosted GitHub Actions runner setup guide                       |
