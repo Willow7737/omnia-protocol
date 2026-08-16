@@ -51,9 +51,7 @@ pub struct InMemoryPaymentStore {
     side_effects: std::sync::Mutex<
         HashMap<String, HashSet<String>>, // order_id -> set of completed effect types
     >,
-    order_snapshots: std::sync::Mutex<
-        HashMap<String, PaymentOrder>,
-    >,
+    order_snapshots: std::sync::Mutex<HashMap<String, PaymentOrder>>,
 }
 
 impl InMemoryPaymentStore {
@@ -72,10 +70,7 @@ impl PaymentStore for InMemoryPaymentStore {
         let order_events = events.entry(event.order_id.clone()).or_default();
 
         // Idempotency: if we already have this sequence, skip
-        if order_events
-            .iter()
-            .any(|e| e.sequence == event.sequence)
-        {
+        if order_events.iter().any(|e| e.sequence == event.sequence) {
             return Ok(());
         }
 
@@ -108,9 +103,7 @@ impl PaymentStore for InMemoryPaymentStore {
             .side_effects
             .lock()
             .map_err(|_| PaymentError::PersistenceError("lock poisoned".into()))?;
-        Ok(effects
-            .get(order_id)
-            .is_some_and(|set| set.contains(effect_type)))
+        Ok(effects.get(order_id).is_some_and(|set| set.contains(effect_type)))
     }
 
     fn list_active_orders(&self) -> Result<Vec<String>, PaymentError> {
@@ -146,10 +139,7 @@ impl PaymentStore for InMemoryPaymentStore {
 /// Recover a `PaymentOrder` from stored events by replaying them.
 /// If a snapshot exists, it is used as the base and only newer events
 /// are replayed on top.
-pub fn recover_order(
-    store: &dyn PaymentStore,
-    order_id: &str,
-) -> Result<Option<PaymentOrder>, PaymentError> {
+pub fn recover_order(store: &dyn PaymentStore, order_id: &str) -> Result<Option<PaymentOrder>, PaymentError> {
     // Try snapshot first
     let base = store.load_order_snapshot(order_id)?;
     let events = store.load_events(order_id)?;
@@ -160,11 +150,7 @@ pub fn recover_order(
 
     // Determine the starting point
     let (mut order, start_seq) = if let Some(snapshot) = base {
-        let last_seq = snapshot
-            .event_history
-            .last()
-            .map(|e| e.sequence)
-            .unwrap_or(0);
+        let last_seq = snapshot.event_history.last().map(|e| e.sequence).unwrap_or(0);
         (snapshot, last_seq + 1)
     } else {
         // Reconstruct from first event (creation)
@@ -174,13 +160,13 @@ pub fn recover_order(
             String::new(), // customer_ref — not in event
             String::new(), // recipient_ref — not in event
             omnia_asset_registry::types::AssetId::OMNIA,
-            0, // ghs_amount — not in event
-            0, // omnia_quantity — not in event
-            0, // exchange_rate
-            0, // quote_timestamp_ms
-            0, // quote_expiry_ms
-            0, // provider_fee
-            0, // omnia_fee
+            0,             // ghs_amount — not in event
+            0,             // omnia_quantity — not in event
+            0,             // exchange_rate
+            0,             // quote_timestamp_ms
+            0,             // quote_expiry_ms
+            0,             // provider_fee
+            0,             // omnia_fee
             String::new(), // provider_name
             creation.timestamp_ms,
         );
@@ -291,9 +277,7 @@ mod tests {
 
         assert!(!store.is_side_effect_done("o1", "treasury_reserve").expect("check"));
 
-        store
-            .mark_side_effect_done("o1", "treasury_reserve")
-            .expect("mark");
+        store.mark_side_effect_done("o1", "treasury_reserve").expect("mark");
         assert!(store.is_side_effect_done("o1", "treasury_reserve").expect("check"));
         assert!(!store.is_side_effect_done("o1", "treasury_consume").expect("check"));
     }
@@ -303,14 +287,9 @@ mod tests {
         let store = InMemoryPaymentStore::new();
         let order = make_test_order();
 
-        assert!(store
-            .load_order_snapshot("order-persist-1")
-            .expect("load")
-            .is_none());
+        assert!(store.load_order_snapshot("order-persist-1").expect("load").is_none());
 
-        store
-            .save_order_snapshot(&order)
-            .expect("save");
+        store.save_order_snapshot(&order).expect("save");
         let loaded = store
             .load_order_snapshot("order-persist-1")
             .expect("load")

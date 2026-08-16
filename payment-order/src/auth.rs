@@ -20,11 +20,24 @@ use crate::PaymentError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Credential {
     /// A JWT token with claims.
-    Jwt { subject: String, claims: JwtClaims },
+    Jwt {
+        /// Authenticated subject identifier.
+        subject: String,
+        /// Parsed claims used for expiry and scope checks.
+        claims: JwtClaims,
+    },
     /// An API key (service-to-service).
-    ApiKey { key_id: String, service_name: String },
+    ApiKey {
+        /// Stable key identifier.
+        key_id: String,
+        /// Service name bound to the key.
+        service_name: String,
+    },
     /// An mTLS client certificate.
-    Mtls { common_name: String },
+    Mtls {
+        /// Certificate common name.
+        common_name: String,
+    },
 }
 
 /// Extracted JWT claims relevant to authorization.
@@ -46,7 +59,7 @@ pub struct JwtClaims {
 /// authorized service roles.
 #[derive(Debug, Clone, Default)]
 pub struct ServiceRoleRegistry {
- /// Map from API key ID to service name.
+    /// Map from API key ID to service name.
     api_key_services: HashSet<(String, String)>,
     /// Map from mTLS common name to service name.
     mtls_services: HashSet<(String, String)>,
@@ -98,10 +111,7 @@ impl ServiceRoleRegistry {
     pub fn resolve(&self, credential: &Credential, now_ms: u64) -> Result<Caller, PaymentError> {
         match credential {
             Credential::ApiKey { key_id, service_name } => {
-                if self
-                    .api_key_services
-                    .contains(&(key_id.clone(), service_name.clone()))
-                {
+                if self.api_key_services.contains(&(key_id.clone(), service_name.clone())) {
                     Ok(Caller::System {
                         service: service_name.clone(),
                     })
@@ -173,11 +183,7 @@ impl ServiceRoleRegistry {
     }
 
     /// Check if a public key is authorized for provider callbacks.
-    pub fn is_authorized_provider_callback(
-        &self,
-        provider_id: &str,
-        public_key: &str,
-    ) -> bool {
+    pub fn is_authorized_provider_callback(&self, provider_id: &str, public_key: &str) -> bool {
         self.provider_callback_keys
             .get(provider_id)
             .is_some_and(|keys| keys.contains(public_key))

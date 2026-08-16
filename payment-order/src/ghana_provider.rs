@@ -14,12 +14,12 @@
 //! In production, this adapter would make real HTTP calls to the
 //! payment partner's API. The sandbox simulates responses.
 
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use std::collections::{HashMap, HashSet};
 
 use crate::error::PaymentError;
-use crate::provider::{
-    CallbackStatus, CallbackVerification, MobileMoneyProvider, ProviderAdapter, ProviderCallback,
-};
+use crate::provider::{CallbackStatus, CallbackVerification, MobileMoneyProvider, ProviderAdapter, ProviderCallback};
 
 /// Minimum GHS amount per payment (100 pesewas = 1 GHS).
 const MIN_PAYMENT_PESEWAS: u64 = 100;
@@ -30,6 +30,7 @@ const GHANA_PREFIX: &str = "+233";
 /// A simulated sandbox transaction.
 #[derive(Debug, Clone)]
 struct SandboxTransaction {
+    provider: MobileMoneyProvider,
     provider_ref: String,
     customer_number: String,
     amount_pesewas: u64,
@@ -50,24 +51,37 @@ impl CallbackSigner {
         }
     }
 
-    /// Generate a deterministic HMAC-like signature for a callback.
-    /// In production, this would use the `hmac` crate with SHA-256.
-    /// The sandbox produces a deterministic hex string from the payload.
+    /// Generate a lowercase hexadecimal HMAC-SHA256 callback signature.
     fn sign(&self, payload: &str) -> String {
-        // Simple deterministic hash for sandbox verification
-        let mut hash = 0u64;
-        for byte in payload.bytes() {
-            hash = hash.wrapping_mul(31).wrapping_add(byte as u64);
-        }
-        for byte in &self.secret {
-            hash = hash.wrapping_mul(31).wrapping_add(*byte as u64);
-        }
-        format!("{hash:016x}")
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(&self.secret).expect("HMAC accepts keys of every non-empty length");
+        mac.update(payload.as_bytes());
+        mac.finalize()
+            .into_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
-    /// Verify a callback signature.
+    /// Verify a callback signature using HMAC verification.
     fn verify(&self, payload: &str, signature: &str) -> bool {
-        self.sign(payload) == signature
+        if signature.is_empty() || !signature.len().is_multiple_of(2) {
+            return false;
+        }
+        let decoded = match (0..signature.len())
+            .step_by(2)
+            .map(|index| u8::from_str_radix(&signature[index..index + 2], 16))
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(bytes) => bytes,
+            Err(_) => return false,
+        };
+        let mut mac = match Hmac::<Sha256>::new_from_slice(&self.secret) {
+            Ok(mac) => mac,
+            Err(_) => return false,
+        };
+        mac.update(payload.as_bytes());
+        mac.verify_slice(&decoded).is_ok()
     }
 }
 
@@ -101,11 +115,7 @@ impl GhanaSandboxProvider {
     }
 
     /// Create a sandbox that simulates a given failure rate (0.0–1.0).
-    pub fn with_failure_rate(
-        provider: MobileMoneyProvider,
-        hmac_secret: &[u8],
-        failure_rate: f64,
-    ) -> Self {
+    pub fn with_failure_rate(provider: MobileMoneyProvider, hmac_secret: &[u8], failure_rate: f64) -> Self {
         Self {
             provider,
             transactions: std::sync::Mutex::new(HashMap::new()),
@@ -119,19 +129,13 @@ impl GhanaSandboxProvider {
     fn validate_phone(&self, phone: &str) -> Result<(), PaymentError> {
         if !phone.starts_with(GHANA_PREFIX) {
             return Err(PaymentError::InvalidProviderData {
-                detail: format!(
-                    "phone number {} must start with {}",
-                    phone, GHANA_PREFIX
-                ),
+                detail: format!("phone number {} must start with {}", phone, GHANA_PREFIX),
             });
         }
         let digits: String = phone.chars().filter(|c| c.is_ascii_digit()).collect();
         if digits.len() != 12 {
             return Err(PaymentError::InvalidProviderData {
-                detail: format!(
-                    "Ghana phone number must be 12 digits, got {}",
-                    digits.len()
-                ),
+                detail: format!("Ghana phone number must be 12 digits, got {}", digits.len()),
             });
         }
         Ok(())
@@ -139,34 +143,24 @@ impl GhanaSandboxProvider {
 
     /// Simulate a callback for a given order. Returns the callback
     /// that the provider would send to our webhook.
-    pub fn simulate_callback(
-        &self,
-        order_id: &str,
-        status: CallbackStatus,
-    ) -> ProviderCallback {
+    pub fn simulate_callback(&self, order_id: &str, status: CallbackStatus) -> ProviderCallback {
         let txns = self.transactions.lock().expect("lock");
-        let txn = txns
-            .get(order_id)
-            .cloned()
-            .unwrap_or(SandboxTransaction {
-                provider_ref: format!("sim-{}", order_id),
-                customer_number: "+233240000000".to_string(),
-                amount_pesewas: 0,
-                status: CallbackStatus::Pending,
-            });
+        let txn = txns.get(order_id).cloned().unwrap_or(SandboxTransaction {
+            provider: self.provider,
+            provider_ref: format!("sim-{}", order_id),
+            customer_number: "+233240000000".to_string(),
+            amount_pesewas: 0,
+            status: CallbackStatus::Pending,
+        });
 
         let payload = format!(
             "{}:{}:{}:{}:{}",
-            txn.provider_ref,
-            order_id,
-            txn.amount_pesewas,
-            txn.customer_number,
-            status as u8,
+            txn.provider_ref, order_id, txn.amount_pesewas, txn.customer_number, status as u8,
         );
         let signature = self.signer.sign(&payload);
 
         ProviderCallback {
-            provider: self.provider,
+            provider: txn.provider,
             provider_tx_ref: txn.provider_ref.clone(),
             order_id: order_id.to_string(),
             status,
@@ -182,15 +176,11 @@ impl GhanaSandboxProvider {
     fn make_nonce(order_id: &str, timestamp_ms: u64) -> String {
         format!("{}:{}", order_id, timestamp_ms)
     }
-}
 
-impl ProviderAdapter for GhanaSandboxProvider {
-    fn provider(&self) -> MobileMoneyProvider {
-        self.provider
-    }
-
-    fn initiate_payment(
+    /// Initiate a sandbox payment for a selected Ghana provider.
+    pub fn initiate_payment_for(
         &self,
+        provider: MobileMoneyProvider,
         customer_number: &str,
         amount_pesewas: u64,
         order_id: &str,
@@ -205,13 +195,9 @@ impl ProviderAdapter for GhanaSandboxProvider {
             });
         }
 
-        let provider_ref = format!(
-            "{}/{}",
-            self.provider.id().to_lowercase(),
-            order_id
-        );
-
+        let provider_ref = format!("{}/{}", provider.id().to_lowercase(), order_id);
         let txn = SandboxTransaction {
+            provider,
             provider_ref: provider_ref.clone(),
             customer_number: customer_number.to_string(),
             amount_pesewas,
@@ -220,8 +206,22 @@ impl ProviderAdapter for GhanaSandboxProvider {
 
         let mut txns = self.transactions.lock().expect("lock");
         txns.insert(order_id.to_string(), txn);
-
         Ok(provider_ref)
+    }
+}
+
+impl ProviderAdapter for GhanaSandboxProvider {
+    fn provider(&self) -> MobileMoneyProvider {
+        self.provider
+    }
+
+    fn initiate_payment(
+        &self,
+        customer_number: &str,
+        amount_pesewas: u64,
+        order_id: &str,
+    ) -> Result<String, PaymentError> {
+        self.initiate_payment_for(self.provider, customer_number, amount_pesewas, order_id)
     }
 
     fn verify_callback(&self, callback: &ProviderCallback) -> Result<CallbackVerification, PaymentError> {
@@ -246,8 +246,7 @@ impl ProviderAdapter for GhanaSandboxProvider {
             true // zero-amount callbacks (failures) are always plausible
         } else {
             let txns = self.transactions.lock().expect("lock");
-            txns
-                .get(&callback.order_id)
+            txns.get(&callback.order_id)
                 .map(|txn| {
                     let expected = txn.amount_pesewas as i64;
                     let received = callback.amount_received_pesewas as i64;
@@ -275,10 +274,7 @@ impl ProviderAdapter for GhanaSandboxProvider {
         })
     }
 
-    fn query_payment_status(
-        &self,
-        provider_tx_ref: &str,
-    ) -> Result<CallbackStatus, PaymentError> {
+    fn query_payment_status(&self, provider_tx_ref: &str) -> Result<CallbackStatus, PaymentError> {
         let txns = self.transactions.lock().expect("lock");
         for txn in txns.values() {
             if txn.provider_ref == provider_tx_ref {
@@ -371,9 +367,7 @@ mod tests {
             .expect("initiate");
 
         let cb1 = provider.simulate_callback("order-cb-2", CallbackStatus::Success);
-        provider
-            .verify_callback(&cb1)
-            .expect("first verify");
+        provider.verify_callback(&cb1).expect("first verify");
 
         // Same callback again = replay
         let cb2 = provider.simulate_callback("order-cb-2", CallbackStatus::Success);
@@ -404,9 +398,7 @@ mod tests {
             .initiate_payment("+233240000000", 50_000, "order-qs-1")
             .expect("initiate");
 
-        let status = provider
-            .query_payment_status(&ref_str)
-            .expect("query");
+        let status = provider.query_payment_status(&ref_str).expect("query");
         assert_eq!(status, CallbackStatus::Pending);
     }
 
@@ -422,18 +414,14 @@ mod tests {
             .expect("refund");
         assert!(refund_ref.starts_with("refund:"));
 
-        let status = provider
-            .query_payment_status(&ref_str)
-            .expect("query");
+        let status = provider.query_payment_status(&ref_str).expect("query");
         assert_eq!(status, CallbackStatus::Reversed);
     }
 
     #[test]
     fn query_unknown_ref_fails() {
         let provider = make_provider();
-        let err = provider
-            .query_payment_status("unknown-ref")
-            .expect_err("should fail");
+        let err = provider.query_payment_status("unknown-ref").expect_err("should fail");
         assert!(matches!(err, PaymentError::ProviderNotFound { .. }));
     }
 

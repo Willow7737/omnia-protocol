@@ -65,7 +65,7 @@
 
 | Task / Deliverable | PL | AL | EL | GL | CL | RE | BE | FE | SM | OP |
 |--------------------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Payment-order service (24-state machine) | A | **R** | I | I | I | I | **R** | I | C | I |
+| Payment-order service (25-state machine) | A | **R** | I | I | I | I | **R** | I | C | I |
 | Normalized provider adapter (MTN/Telecel/AT) | A | C | I | I | C | I | **R** | I | C | I |
 | Quote service (time-limited, all §8.4 fields) | A | I | C | I | I | I | **R** | C | I | I |
 | Webhook verification (authenticated, idempotent) | A | I | I | I | I | I | **R** | I | **R** | I |

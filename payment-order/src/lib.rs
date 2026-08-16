@@ -49,17 +49,17 @@ pub use auth::{Credential, JwtClaims, ServiceRoleRegistry};
 pub use engine::{Clock, FixedClock, PaymentEngine, SystemClock};
 pub use error::PaymentError;
 pub use ghana_provider::GhanaSandboxProvider;
-pub use persistence::{InMemoryPaymentStore, PaymentStore, SideEffect, recover_order};
+pub use persistence::{recover_order, InMemoryPaymentStore, PaymentStore, SideEffect};
 pub use provider::{
     CallbackStatus, CallbackVerification, MobileMoneyProvider, OmniaQuote, ProviderAdapter, ProviderCallback,
     SubsidyRecord, SubsidyTracker,
 };
+pub use quote_service::{QuoteRequest, QuoteService, QuoteServiceConfig, SignedQuote};
 pub use reconciliation::{
     CheckResult, DailyReconciliationReport, Discrepancy, DiscrepancyStatus, LedgerEntry, LedgerEntryType,
     OrderReconciliation, ReconciliationCheck, ReconciliationStatus, ReconciliationSummary, Resolution,
 };
 pub use risk::{CircuitBreaker, RiskLimits};
 pub use state::PaymentState;
-pub use quote_service::{QuoteRequest, QuoteService, QuoteServiceConfig, SignedQuote};
 pub use treasury_adapter::{TreasuryBridgeAdapter, TreasuryBridgeResult};
 pub use types::PaymentOrder;

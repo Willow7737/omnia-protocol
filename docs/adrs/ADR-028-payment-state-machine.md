@@ -227,15 +227,15 @@ Circuit breakers MUST be able to pause new allocations without destroying existi
 
 ### Negative
 
-- **24 states total**: This is more complex than typical payment state machines. Justification: the Financial Spec requires distinct handling for underpaid/overpaid, uncertain on-chain states, and inventory unavailability — merging these would lose critical distinction for reconciliation and compliance.
+- **25 states total**: This is more complex than typical payment state machines. Justification: the Financial Spec requires distinct handling for underpaid/overpaid, uncertain on-chain states, and inventory unavailability — merging these would lose critical distinction for reconciliation and compliance.
 - **Manual review bottleneck**: `MANUAL_REVIEW` is a human-in-the-loop state. At scale, this needs tooling (dashboard, auto-triage rules, SLA monitoring). This is an operations concern, not a protocol concern.
-- **State explosion in tests**: 24 states with ~35 transitions means the test matrix is large. Property-based testing is essential.
+- **State explosion in tests**: 25 states with ~35 transitions means the test matrix is large. Property-based testing is essential.
 
 ## Implementation Plan
 
 | Phase | Work | Duration |
 |-------|------|----------|
-| Phase 1 | Define `PaymentState` enum (24 variants), `PaymentOrder` struct with all Spec §8.3 fields | Sprint 1 Week 1 |
+| Phase 1 | Define `PaymentState` enum (25 variants), `PaymentOrder` struct with all Spec §8.3 fields | Sprint 1 Week 1 |
 | Phase 1 | Implement transition matrix and `advance_state()` with per-transition authorization | Sprint 1 Week 1–2 |
 | Phase 1 | Add timeout hooks for `QUOTE_EXPIRED`, `PAYMENT_TIMEOUT`, `ON_CHAIN_TIMEOUT` | Sprint 1 Week 2 |
 | Phase 1 | Unit tests: every valid transition, every invalid transition, idempotency on terminal states | Sprint 1 Week 2–3 |

@@ -608,3 +608,32 @@ Omnia is a public-interest protocol. Join the conversation:
 <p align="center">
   <a href="https://www.buymeacoffee.com/willow7737"><img src="https://img.buymeacoffee.com/button-api/?text=Support us&emoji=&slug=willow7737&button_colour=FFDD00&font_colour=000000&font_family=Lato&outline_colour=000000&coffee_colour=ffffff" /></a>
 </p>
+
+
+## Ghana-first OMNIA financial path
+
+The dev branch now contains the first end-to-end financial path for the Ghana pilot. **UBC remains a free, epoch-reset, non-transferable participation allowance. OMNIA is the transferable native asset**, with nine decimal places and a floating value. The pilot distribution rail is Ghana mobile money; it allocates existing treasury inventory and does not auto-mint or promise a fixed GHS redemption rate.
+
+### Quote-backed acquisition
+
+Clients cannot submit an exchange rate, fee, quantity, caller role, or payment-success assertion. The node computes the economic terms, signs the quote with Ed25519, stores the quote context, binds initiation to the authenticated caller, and rejects expired or already-consumed quotes.
+
+| Endpoint | Auth boundary | Purpose |
+| :--- | :--- | :--- |
+| `POST /api/v1/payment-orders/quote` | Wallet JWT | Generate a signed quote from GHS pesewas and `Mtn`, `Telecel`, or `At`. |
+| `POST /api/v1/payment-orders/initiate` | Wallet JWT | Initiate an order from `quote_id`; all economics come from server-side quote storage. |
+| `POST /api/v1/payment-orders/callback` | Provider HMAC + service role | Verify provider signature, replay protection, order binding, and amount binding. |
+| `GET /api/v1/payment-orders/:id` | Wallet JWT | Read the authenticated caller's authoritative order snapshot. |
+| `POST /api/v1/payment-orders/:id/advance` | Registered internal service role | Perform only an authorization-matrix-approved state transition. |
+
+The payment engine persists event-sourced snapshots and side-effect records. Treasury reservations, consumption, release, provider references, and callback outcomes are represented explicitly so recovery is idempotent. The state machine has twenty-five states, and only the delivery states are economically successful; failures and refunds never masquerade as delivery.
+
+### Merchant settlement interface
+
+Merchant onboarding and QR/invoice creation are available through `/api/v1/merchants/register` and `/api/v1/merchants/:id/payment-request`. Merchant owners can read `/api/v1/merchants/:id/payments` and `/api/v1/merchants/:id/receipt/:payment_id`. A delivery service can confirm a payment only with the registered `delivery-service` service role. Merchant QR payloads carry a GHS price, quote expiry, OMNIA amount, payment ID, and optional Ed25519 settlement public key; the wallet signs the resulting transferable OMNIA payment locally.
+
+### Runtime services
+
+`AppState` now shares the quote service, event-sourced payment store, service-role registry, Ghana sandbox provider, and in-memory merchant registry across production and HTTP test fixtures. The Ghana provider uses HMAC-SHA256 callback authentication and constant-time signature comparison. The treasury bucket path consumes approved pre-minted, unassigned inventory before minting any shortfall, and the asset-registry suite includes a no-double-mint invariant test.
+
+The protocol remains explicit about its launch boundary: the Ghana provider is a sandbox adapter until a regulated production mobile-money integration, operational secret management, reconciliation process, refund policy, and legal review are completed. The code path is therefore suitable for controlled testnet/pilot validation, not a claim that OMNIA is already legal tender or redeemable at a fixed GHS rate.

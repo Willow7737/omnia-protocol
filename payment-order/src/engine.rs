@@ -201,6 +201,50 @@ impl PaymentEngine {
         Ok(self.orders.get(&order_id).expect("just inserted"))
     }
 
+    /// Create an order from a server-signed quote.
+    ///
+    /// This is the quote-backed creation path used by the node API. The
+    /// caller supplies no economic terms; every term is copied from the
+    /// already-validated server quote.
+    pub fn create_order_from_quote(
+        &mut self,
+        order_id: String,
+        customer_ref: String,
+        recipient_ref: String,
+        quote: &crate::provider::OmniaQuote,
+        now_ms: u64,
+    ) -> Result<&PaymentOrder, PaymentError> {
+        if self.orders.contains_key(&order_id) {
+            return Err(PaymentError::OrderAlreadyExists(order_id));
+        }
+        if quote.ghs_amount > self.limits.per_order_ghs_limit {
+            return Err(PaymentError::PerOrderLimitExceeded {
+                amount: quote.ghs_amount,
+                limit: self.limits.per_order_ghs_limit,
+            });
+        }
+        let order = PaymentOrder::new(
+            order_id.clone(),
+            customer_ref.clone(),
+            recipient_ref,
+            omnia_asset_registry::types::AssetId::OMNIA,
+            quote.ghs_amount,
+            quote.omnia_quantity,
+            quote.exchange_rate,
+            quote.created_at_ms,
+            quote.expires_at_ms,
+            quote.provider_fee_ghs,
+            quote.omnia_fee,
+            quote.provider.id().to_string(),
+            now_ms,
+        );
+        self.circuit_breaker.maybe_reset_daily(now_ms);
+        self.circuit_breaker
+            .record_order(quote.ghs_amount, &customer_ref, "quote-service", quote.provider.id());
+        self.orders.insert(order_id.clone(), order);
+        Ok(self.orders.get(&order_id).expect("just inserted"))
+    }
+
     /// Get an order by ID.
     pub fn get_order(&self, order_id: &str) -> Result<&PaymentOrder, PaymentError> {
         self.orders
@@ -213,6 +257,34 @@ impl PaymentEngine {
         self.orders
             .get_mut(order_id)
             .ok_or_else(|| PaymentError::OrderNotFound(order_id.into()))
+    }
+
+    /// Record the provider transaction reference for an order.
+    pub fn set_provider_ref(&mut self, order_id: &str, provider_ref: String) -> Result<(), PaymentError> {
+        self.get_order_mut(order_id)?.provider_ref = Some(provider_ref);
+        Ok(())
+    }
+
+    /// Record the amount confirmed by the provider.
+    pub fn set_ghs_received(&mut self, order_id: &str, amount: u64) -> Result<(), PaymentError> {
+        self.get_order_mut(order_id)?.ghs_received = Some(amount);
+        Ok(())
+    }
+
+    /// Record the reservation reference returned by treasury.
+    pub fn set_inventory_reservation_ref(
+        &mut self,
+        order_id: &str,
+        reservation_ref: String,
+    ) -> Result<(), PaymentError> {
+        self.get_order_mut(order_id)?.inventory_reservation_ref = Some(reservation_ref);
+        Ok(())
+    }
+
+    /// Record the finalized allocation transaction hash.
+    pub fn set_allocation_tx_hash(&mut self, order_id: &str, tx_hash: String) -> Result<(), PaymentError> {
+        self.get_order_mut(order_id)?.allocation_tx_hash = Some(tx_hash);
+        Ok(())
     }
 
     /// Advance an order's state.

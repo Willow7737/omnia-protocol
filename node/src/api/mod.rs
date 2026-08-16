@@ -21,6 +21,7 @@ pub mod events;
 pub mod fees;
 pub mod financial;
 pub mod governance;
+pub mod merchants;
 pub mod node;
 pub mod payment_orders;
 pub mod shards;
@@ -154,7 +155,10 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
         // Wallet challenge/signature login — issues JWTs, so must be public.
         .route("/auth/challenge", post(wallet_auth::request_challenge))
-        .route("/auth/login", post(wallet_auth::login));
+        .route("/auth/login", post(wallet_auth::login))
+        // Provider callbacks authenticate with HMAC plus a registered service key,
+        // not with a wallet JWT.
+        .route("/payment-orders/callback", post(payment_orders::provider_callback));
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
@@ -202,10 +206,23 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         // Bridge (§8, §15)
         .route("/bridge/providers", get(bridge::list_providers))
         .route("/bridge/health", get(bridge::bridge_health))
-        // Payment orders (§8)
-        .route("/payment-orders/create", post(payment_orders::create_order))
+        // Payment orders (§8): economic terms come only from signed quotes.
+        .route("/payment-orders/quote", post(payment_orders::request_quote))
+        .route("/payment-orders/initiate", post(payment_orders::initiate_payment))
         .route("/payment-orders/:id", get(payment_orders::get_order))
         .route("/payment-orders/:id/advance", post(payment_orders::advance_order))
+        // Merchant onboarding and settlement (§9).
+        .route("/merchants/register", post(merchants::register_merchant))
+        .route(
+            "/merchants/:id/payment-request",
+            post(merchants::create_payment_request),
+        )
+        .route("/merchants/:id/payments", get(merchants::list_payments))
+        .route("/merchants/:id/receipt/:payment_id", get(merchants::get_receipt))
+        .route(
+            "/merchants/:id/payments/:payment_id/confirm",
+            post(merchants::confirm_payment),
+        )
         // --- Middleware layers (outermost = last added) ---
         // Provide AuthorizedCallers via Extension for handler-level checks
         .layer(Extension(Arc::clone(&authorized)))

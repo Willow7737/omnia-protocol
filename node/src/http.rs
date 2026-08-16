@@ -303,6 +303,9 @@ mod tests {
         #[cfg(feature = "metrics")]
         let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
+        let (quote_service, payment_store, service_role_registry, ghana_provider) =
+            crate::state::default_payment_services();
+
         AppState {
             config,
             substrate: Arc::new(RwLock::new(substrate)),
@@ -327,6 +330,11 @@ mod tests {
             fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
             burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
             payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),
+            quote_service,
+            payment_store,
+            service_role_registry,
+            ghana_provider,
+            merchant_registry: Arc::new(std::sync::Mutex::new(crate::api::merchants::MerchantRegistry::new())),
         }
     }
 

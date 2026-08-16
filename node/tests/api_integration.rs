@@ -31,7 +31,7 @@ use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
 use omnia_node::api::auth::Claims;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
-use omnia_node::state::{AppState, NodeMetrics};
+use omnia_node::state::{default_payment_services, AppState, NodeMetrics};
 use omnia_payment_order::PaymentEngine;
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
@@ -204,6 +204,8 @@ fn build_test_app_state(port: u16) -> AppState {
         readiness_max_finalization_age: 600,
     };
 
+    let (quote_service, payment_store, service_role_registry, ghana_provider) = default_payment_services();
+
     AppState {
         config,
         substrate: Arc::new(RwLock::new(substrate)),
@@ -226,6 +228,13 @@ fn build_test_app_state(port: u16) -> AppState {
         fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
         burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
         payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),
+        quote_service,
+        payment_store,
+        service_role_registry,
+        ghana_provider,
+        merchant_registry: Arc::new(std::sync::Mutex::new(
+            omnia_node::api::merchants::MerchantRegistry::new(),
+        )),
     }
 }
 

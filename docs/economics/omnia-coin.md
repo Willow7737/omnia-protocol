@@ -21,7 +21,7 @@ This document records every material decision about the OMNIA token, as derived 
 | **Token Name** | OMNIA | Spec §3.2 |
 | **Network** | Omnia Protocol (Substrate-based) |
 | **Standard** | Native Substrate BALANCE pallet (to evolve to asset-registry model per Spec §4) |
-| **Decimals** | 12 (Substrate default) | Spec §4.1 (inferred from planck convention) |
+| **Decimals** | 9 | `asset-registry/src/types.rs` (`AssetId::OMNIA`) |
 | **Transferability** | Fully transferable | Spec §3.2 |
 | **Value Behavior** | Floating — no fixed GHS redemption promise | Spec §10, §19 |
 | **Hard Cap** | 1,000,000,000 OMNIA (working assumption, subject to final genesis reconciliation) | Spec §5.1 |

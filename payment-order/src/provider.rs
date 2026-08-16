@@ -143,6 +143,26 @@ pub struct OmniaQuote {
 }
 
 impl OmniaQuote {
+    /// Return the canonical bytes signed by the quote service.
+    pub fn signing_payload(&self) -> Vec<u8> {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.quote_id,
+            self.ghs_amount,
+            self.omnia_quantity,
+            self.exchange_rate,
+            self.provider_fee_ghs,
+            self.omnia_fee,
+            self.spread_bps,
+            self.estimated_delivery_secs,
+            self.created_at_ms,
+            self.expires_at_ms,
+            self.provider.id(),
+            "OMNIA",
+        )
+        .into_bytes()
+    }
+
     /// Return true if the quote has not expired.
     pub fn is_valid(&self, now_ms: u64) -> bool {
         now_ms < self.expires_at_ms

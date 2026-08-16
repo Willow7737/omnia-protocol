@@ -5298,9 +5298,12 @@ dependencies = [
 name = "omnia-payment-order"
 version = "0.1.95"
 dependencies = [
+ "ed25519-dalek",
+ "hmac",
  "omnia-asset-registry",
  "proptest",
  "serde",
+ "sha2 0.10.9",
  "thiserror 2.0.20",
 ]
 

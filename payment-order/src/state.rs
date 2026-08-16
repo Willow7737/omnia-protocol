@@ -1,13 +1,13 @@
 //! Payment state enum and transition matrix — Spec §8.2
 //!
-//! 24 states total: 10 happy-path (including CREATED), 14 failure/recovery.
+//! 25 states total: 10 happy-path (including CREATED), 15 failure/recovery.
 //! ~35 valid transitions. Terminal states: DELIVERED, REFUNDED, CANCELLED.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::PaymentError;
 
-/// All 24 payment states per Financial Specification §8.2.
+/// All 25 payment states per Financial Specification §8.2.
 ///
 /// ## Happy path
 ///
@@ -544,7 +544,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // Count: 24 states, 3 terminals
+    // Count: 25 states, 3 terminals
     // ------------------------------------------------------------------
 
     #[test]

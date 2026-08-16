@@ -722,15 +722,33 @@ impl Treasury {
             });
         }
 
-        // Record the mint in supply tracker
-        supply_tracker.mint(
-            AssetId::OMNIA,
-            amount,
-            authority.clone(),
-            format!("genesis fund: {} bucket", bucket.label()),
-            None,
-            definition,
-        )?;
+        // A genesis loader may have already recorded the approved mint before
+        // assigning it to treasury buckets. Consume that unassigned supply
+        // first; only mint a shortfall. This prevents a pre-mint + fund_bucket
+        // sequence from counting the same allocation twice.
+        let unassigned_supply = supply_tracker
+            .get(AssetId::OMNIA)
+            .map(|supply| {
+                supply.total_supply().saturating_sub(
+                    supply
+                        .account_balances
+                        .saturating_add(supply.locked_balances)
+                        .saturating_add(supply.treasury_balances)
+                        .saturating_add(supply.escrow_balances),
+                )
+            })
+            .unwrap_or(0);
+        let mint_shortfall = amount.saturating_sub(unassigned_supply);
+        if mint_shortfall > 0 {
+            supply_tracker.mint(
+                AssetId::OMNIA,
+                mint_shortfall,
+                authority.clone(),
+                format!("genesis fund: {} bucket", bucket.label()),
+                None,
+                definition,
+            )?;
+        }
 
         // Move from supply account_balances to treasury_balances compartment
         if let Some(supply) = supply_tracker.get_mut(AssetId::OMNIA) {
@@ -1472,6 +1490,40 @@ mod tests {
             100_000_000 * OMNIA_PLANCKS
         );
         assert_eq!(reg.total_supply(AssetId::OMNIA), 100_000_000 * OMNIA_PLANCKS);
+    }
+
+    #[test]
+    fn fund_bucket_reuses_pre_minted_supply_without_double_minting() {
+        let mut treasury = Treasury::with_genesis_buckets();
+        let mut reg = AssetRegistry::with_genesis_assets();
+        let def = test_omnia_def();
+        let amount = 100_000 * OMNIA_PLANCKS;
+
+        reg.supply_tracker_mut()
+            .mint(
+                AssetId::OMNIA,
+                amount,
+                SupplyAuthority::Genesis,
+                "approved genesis supply".into(),
+                Some("genesis-1".into()),
+                &def,
+            )
+            .expect("pre-mint should succeed");
+        treasury
+            .fund_bucket(
+                AllocationBucket::TreasuryReserve,
+                amount,
+                SupplyAuthority::Genesis,
+                reg.supply_tracker_mut(),
+                &def,
+            )
+            .expect("bucket funding should consume pre-minted supply");
+
+        let supply = reg.supply_tracker().get(AssetId::OMNIA).expect("supply exists");
+        assert_eq!(supply.total_minted, amount);
+        assert_eq!(supply.total_supply(), amount);
+        assert_eq!(supply.treasury_balances, amount);
+        supply.verify_invariant().expect("compartment invariant holds");
     }
 
     #[test]

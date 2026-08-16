@@ -32,9 +32,9 @@ use omnia_network::{Multiaddr, NetworkConfig, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 // C-14: PipelineRouter import removed — workers were dead code.
 // The pipeline module is retained for future implementation.
-use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
+use omnia_node::state::{default_payment_services, AppState};
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, MutexShardRouter,
     PhysicalShard, ShardRouter,
@@ -416,6 +416,8 @@ async fn main() -> Result<()> {
         "Persistent node keypair ready for event signing (also registered as validator above)"
     );
 
+    let (quote_service, payment_store, service_role_registry, ghana_provider) = default_payment_services();
+
     let app_state = AppState {
         config: config.clone(),
         substrate: Arc::clone(&substrate_for_consensus),
@@ -445,6 +447,13 @@ async fn main() -> Result<()> {
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0),
         ))),
+        quote_service,
+        payment_store,
+        service_role_registry,
+        ghana_provider,
+        merchant_registry: Arc::new(std::sync::Mutex::new(
+            omnia_node::api::merchants::MerchantRegistry::new(),
+        )),
     };
 
     // 6. Build and start the HTTP server

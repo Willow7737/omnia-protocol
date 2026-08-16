@@ -31,13 +31,14 @@ use omnia_shards::ShardRouter;
 
 use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
 use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
-use omnia_payment_order::PaymentEngine;
+use omnia_payment_order::{GhanaSandboxProvider, PaymentEngine, PaymentStore, QuoteService, ServiceRoleRegistry};
 
 #[cfg(feature = "zk")]
 use omnia_adapters::setup::CeremonyServer;
 use omnia_adapters::SettlementAdapter;
 
 use crate::api::events::StoredEvent;
+use crate::api::merchants::MerchantRegistry;
 use crate::api::node::PeerInfo;
 use crate::config::NodeConfig;
 
@@ -413,6 +414,53 @@ impl NodeMetrics {
     }
 }
 
+/// Construct the shared payment services used by the node and test harnesses.
+///
+/// The environment variables are intentionally explicit so production
+/// deployments can inject real secrets; the fallback values are sandbox-only.
+pub fn default_payment_services() -> (
+    Arc<std::sync::Mutex<QuoteService>>,
+    Arc<dyn PaymentStore + Send + Sync>,
+    Arc<ServiceRoleRegistry>,
+    Arc<GhanaSandboxProvider>,
+) {
+    let quote_seed =
+        std::env::var("OMNIA_QUOTE_SIGNING_SEED").unwrap_or_else(|_| "omnia-dev-only-quote-signing-seed".to_string());
+    let provider_secret = std::env::var("OMNIA_GHANA_PROVIDER_SECRET")
+        .unwrap_or_else(|_| "omnia-dev-only-ghana-provider-secret".to_string());
+    let provider_key = std::env::var("OMNIA_GHANA_PROVIDER_KEY").unwrap_or_else(|_| "sandbox-provider-key".to_string());
+
+    let mut registry = ServiceRoleRegistry::new();
+    for service in [
+        "quote-service",
+        "payment-service",
+        "risk-engine",
+        "timeout-monitor",
+        "verification-service",
+        "chain-service",
+        "delivery-service",
+        "refund-service",
+    ] {
+        registry.register_api_key(service.to_string(), service.to_string());
+    }
+    for provider in ["MTN", "TELECEL", "AT"] {
+        registry.register_provider_callback_key(provider.to_string(), provider_key.clone());
+    }
+
+    (
+        Arc::new(std::sync::Mutex::new(QuoteService::new(
+            omnia_payment_order::QuoteServiceConfig::default(),
+            quote_seed.into_bytes(),
+        ))),
+        Arc::new(omnia_payment_order::InMemoryPaymentStore::new()),
+        Arc::new(registry),
+        Arc::new(GhanaSandboxProvider::new(
+            omnia_payment_order::MobileMoneyProvider::Mtn,
+            provider_secret.as_bytes(),
+        )),
+    )
+}
+
 /// Shared application state accessible to all HTTP handlers.
 ///
 /// This struct is wrapped in `Arc` by `axum` and passed to handlers
@@ -508,4 +556,14 @@ pub struct AppState {
     pub burn_accounting: Arc<RwLock<BurnAccounting>>,
     /// Payment engine — 25-state order lifecycle (§8).
     pub payment_engine: Arc<std::sync::Mutex<PaymentEngine>>,
+    /// Server-side signed-quote service. The mutex protects quote ID allocation.
+    pub quote_service: Arc<std::sync::Mutex<QuoteService>>,
+    /// Event-sourced payment persistence. The concrete store may be replaced by a durable adapter.
+    pub payment_store: Arc<dyn PaymentStore + Send + Sync>,
+    /// Authenticated service-role registry for provider and internal callbacks.
+    pub service_role_registry: Arc<ServiceRoleRegistry>,
+    /// Ghana mobile-money sandbox provider adapter.
+    pub ghana_provider: Arc<GhanaSandboxProvider>,
+    /// Merchant profiles, payment requests, and receipts for the current runtime.
+    pub merchant_registry: Arc<std::sync::Mutex<MerchantRegistry>>,
 }

@@ -8,13 +8,13 @@
 //! - `system` or the sender may move a reserved order to `CANCELLED`.
 //! - Unauthorized callers must be rejected.
 
+use omnia_asset_registry::types::AssetId;
 use omnia_payment_order::engine::Caller;
 use omnia_payment_order::risk::RiskLimits;
 use omnia_payment_order::state::PaymentState;
 use omnia_payment_order::types::{PaymentOrder, RefundStatus, StateTransitionEvent, TransitionActor};
 use omnia_payment_order::PaymentEngine;
 use omnia_payment_order::PaymentError;
-use omnia_asset_registry::types::AssetId;
 
 const NOW: u64 = 1_700_000_000_000;
 
@@ -49,7 +49,9 @@ fn advance_to_inventory_reserved(engine: &mut PaymentEngine, order_id: &str) {
         .advance_state(
             order_id,
             PaymentState::Quoted,
-            Caller::System { service: "quote-service".into() },
+            Caller::System {
+                service: "quote-service".into(),
+            },
             NOW + 1000,
             Some("quoted".into()),
         )
@@ -58,7 +60,9 @@ fn advance_to_inventory_reserved(engine: &mut PaymentEngine, order_id: &str) {
         .advance_state(
             order_id,
             PaymentState::PaymentPending,
-            Caller::System { service: "payment-service".into() },
+            Caller::System {
+                service: "payment-service".into(),
+            },
             NOW + 2000,
             None,
         )
@@ -67,7 +71,10 @@ fn advance_to_inventory_reserved(engine: &mut PaymentEngine, order_id: &str) {
         .advance_state(
             order_id,
             PaymentState::PaymentVerified,
-            Caller::Provider { provider_id: "MTN".into(), authenticated: true },
+            Caller::Provider {
+                provider_id: "MTN".into(),
+                authenticated: true,
+            },
             NOW + 3000,
             Some("provider-ref".into()),
         )
@@ -76,7 +83,9 @@ fn advance_to_inventory_reserved(engine: &mut PaymentEngine, order_id: &str) {
         .advance_state(
             order_id,
             PaymentState::RiskReview,
-            Caller::System { service: "risk-engine".into() },
+            Caller::System {
+                service: "risk-engine".into(),
+            },
             NOW + 4000,
             None,
         )
@@ -85,7 +94,9 @@ fn advance_to_inventory_reserved(engine: &mut PaymentEngine, order_id: &str) {
         .advance_state(
             order_id,
             PaymentState::RiskApproved,
-            Caller::System { service: "risk-engine".into() },
+            Caller::System {
+                service: "risk-engine".into(),
+            },
             NOW + 5000,
             None,
         )
@@ -114,7 +125,9 @@ fn reserved_to_refund_pending_by_refund_service() {
         .advance_state(
             "order-rp-1",
             PaymentState::RefundPending,
-            Caller::System { service: "refund-service".into() },
+            Caller::System {
+                service: "refund-service".into(),
+            },
             NOW + 7000,
             Some("customer requested refund".into()),
         )
@@ -134,7 +147,9 @@ fn reserved_to_cancelled_by_system() {
         .advance_state(
             "order-cs-1",
             PaymentState::Cancelled,
-            Caller::System { service: "payment-service".into() },
+            Caller::System {
+                service: "payment-service".into(),
+            },
             NOW + 7000,
             Some("system cancelled".into()),
         )
@@ -172,7 +187,9 @@ fn reserved_to_allocation_submitted_by_chain_service() {
         .advance_state(
             "order-as-1",
             PaymentState::AllocationSubmitted,
-            Caller::System { service: "chain-service".into() },
+            Caller::System {
+                service: "chain-service".into(),
+            },
             NOW + 7000,
             None,
         )
@@ -191,7 +208,9 @@ fn reserved_to_allocation_failed_by_chain_service() {
         .advance_state(
             "order-af-1",
             PaymentState::AllocationFailed,
-            Caller::System { service: "chain-service".into() },
+            Caller::System {
+                service: "chain-service".into(),
+            },
             NOW + 7000,
             Some("gas estimation failed".into()),
         )
@@ -214,7 +233,9 @@ fn reserved_to_refund_pending_rejected_for_wrong_service() {
         .advance_state(
             "order-rp-rej-1",
             PaymentState::RefundPending,
-            Caller::System { service: "risk-engine".into() },
+            Caller::System {
+                service: "risk-engine".into(),
+            },
             NOW + 7000,
             None,
         )
@@ -250,7 +271,10 @@ fn reserved_to_refund_pending_rejected_for_unauthenticated_provider() {
         .advance_state(
             "order-rp-rej-3",
             PaymentState::RefundPending,
-            Caller::Provider { provider_id: "MTN".into(), authenticated: false },
+            Caller::Provider {
+                provider_id: "MTN".into(),
+                authenticated: false,
+            },
             NOW + 7000,
             None,
         )
@@ -268,7 +292,10 @@ fn reserved_to_cancelled_rejected_for_provider() {
         .advance_state(
             "order-c-rej-1",
             PaymentState::Cancelled,
-            Caller::Provider { provider_id: "MTN".into(), authenticated: true },
+            Caller::Provider {
+                provider_id: "MTN".into(),
+                authenticated: true,
+            },
             NOW + 7000,
             None,
         )
@@ -304,7 +331,9 @@ fn reserved_to_delivered_rejected() {
         .advance_state(
             "order-d-rej-1",
             PaymentState::Delivered,
-            Caller::System { service: "delivery-service".into() },
+            Caller::System {
+                service: "delivery-service".into(),
+            },
             NOW + 7000,
             None,
         )
@@ -326,7 +355,9 @@ fn full_refund_path_from_reserved() {
         .advance_state(
             "order-full-rf-1",
             PaymentState::RefundPending,
-            Caller::System { service: "refund-service".into() },
+            Caller::System {
+                service: "refund-service".into(),
+            },
             NOW + 7000,
             Some("customer requested".into()),
         )
@@ -336,7 +367,9 @@ fn full_refund_path_from_reserved() {
         .advance_state(
             "order-full-rf-1",
             PaymentState::Refunded,
-            Caller::System { service: "refund-service".into() },
+            Caller::System {
+                service: "refund-service".into(),
+            },
             NOW + 8000,
             None,
         )
@@ -361,7 +394,9 @@ fn refund_from_reserved_has_correct_audit_trail() {
         .advance_state(
             "order-audit-1",
             PaymentState::RefundPending,
-            Caller::System { service: "refund-service".into() },
+            Caller::System {
+                service: "refund-service".into(),
+            },
             NOW + 7000,
             Some("test refund".into()),
         )
@@ -378,6 +413,8 @@ fn refund_from_reserved_has_correct_audit_trail() {
     assert_eq!(last.sequence, 7);
     assert_eq!(
         last.actor,
-        TransitionActor::System { service: "refund-service".into() }
+        TransitionActor::System {
+            service: "refund-service".into()
+        }
     );
 }
