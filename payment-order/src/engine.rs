@@ -306,6 +306,7 @@ impl PaymentEngine {
             | (PaymentState::PaymentOverpaid, PaymentState::RefundPending)
             | (PaymentState::RiskRejected, PaymentState::RefundPending)
             | (PaymentState::InventoryUnavailable, PaymentState::RefundPending)
+            | (PaymentState::InventoryReserved, PaymentState::RefundPending)
             | (PaymentState::AllocationFailed, PaymentState::RefundPending)
             | (PaymentState::ManualReview, PaymentState::RefundPending) => "system:refund-service",
             // REFUND_PENDING → REFUNDED: system
@@ -315,6 +316,7 @@ impl PaymentEngine {
             | (PaymentState::Quoted, PaymentState::Cancelled)
             | (PaymentState::RiskRejected, PaymentState::Cancelled)
             | (PaymentState::InventoryUnavailable, PaymentState::Cancelled)
+            | (PaymentState::InventoryReserved, PaymentState::Cancelled)
             | (PaymentState::ManualReview, PaymentState::Cancelled) => "system|sender",
             // Quote expiry
             (PaymentState::Quoted, PaymentState::QuoteExpired) => "system:timeout-monitor",

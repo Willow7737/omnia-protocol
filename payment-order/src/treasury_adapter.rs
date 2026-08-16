@@ -341,19 +341,7 @@ mod tests {
                 .expect("adapter reserve");
         }
 
-        // Fail and refund
-        engine
-            .advance_state(
-                "order-refund-test",
-                PaymentState::PaymentFailed,
-                Caller::Provider {
-                    provider_id: "MTN".into(),
-                    authenticated: true,
-                },
-                NOW + 7000,
-                Some("failed".into()),
-            )
-            .expect("fail");
+        // Refund after inventory reservation, before allocation.
         engine
             .advance_state(
                 "order-refund-test",
@@ -368,7 +356,7 @@ mod tests {
 
         let order = engine.get_order_mut("order-refund-test").expect("exists");
         let result = adapter
-            .process_transition(order, PaymentState::PaymentFailed, NOW + 8000)
+            .process_transition(order, PaymentState::InventoryReserved, NOW + 8000)
             .expect("release");
         assert!(matches!(result, TreasuryBridgeResult::Released));
     }

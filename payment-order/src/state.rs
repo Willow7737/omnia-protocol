@@ -202,7 +202,10 @@ impl PaymentState {
             // ---- Inventory ----
             (Self::RiskApproved, Self::InventoryUnavailable)
             | (Self::InventoryUnavailable, Self::RefundPending)
-            | (Self::InventoryUnavailable, Self::Cancelled) => Ok(()),
+            | (Self::InventoryUnavailable, Self::Cancelled)
+            // A reserved order may be cancelled or refunded before allocation.
+            | (Self::InventoryReserved, Self::RefundPending)
+            | (Self::InventoryReserved, Self::Cancelled) => Ok(()),
 
             // ---- Allocation failures ----
             (Self::InventoryReserved, Self::AllocationFailed)
