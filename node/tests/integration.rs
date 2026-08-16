@@ -66,6 +66,7 @@ struct ServerGuards {
 ///
 /// The server runs in a background tokio task and will be stopped
 /// when the shutdown handle is dropped.
+#[allow(clippy::await_holding_lock)]
 async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuards) {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // Set JWT secret before building the router so auth middleware can read it

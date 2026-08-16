@@ -15,6 +15,8 @@ ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 hmac = "0.12"
 sha2 = "0.10"
 omnia-asset-registry = { path = "../asset-registry" }
+redb = "2"
+serde_json = "1.0"
 
 [dev-dependencies]
 proptest = "1.4"

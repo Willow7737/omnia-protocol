@@ -124,32 +124,31 @@ fn multi_node_throughput(c: &mut Criterion) {
     // which exceeds the job timeout. The 3-node number is sufficient
     // for regression detection — the scaling curve can be measured
     // manually on a self-hosted runner.
-    for &n_nodes in &[3usize] {
-        group.bench_with_input(BenchmarkId::new("n_nodes", n_nodes), &n_nodes, |b, &n| {
-            b.iter_custom(|iters| {
-                let mut total = Duration::ZERO;
-                for _ in 0..iters {
-                    let mut net = ChaosNetwork::new(n);
-                    net.warmup();
+    let n_nodes = 3usize;
+    group.bench_with_input(BenchmarkId::new("n_nodes", n_nodes), &n_nodes, |b, &n| {
+        b.iter_custom(|iters| {
+            let mut total = Duration::ZERO;
+            for _ in 0..iters {
+                let mut net = ChaosNetwork::new(n);
+                net.warmup();
 
-                    total += Duration::from_nanos(time_ns(|| {
-                        // Submit 100 events round-robin across all nodes
-                        for i in 0..100u8 {
-                            let node_idx = (i as usize) % n;
-                            let _ = net.submit_event(node_idx, vec![i]);
-                        }
-                        // Advance until all events are committed
-                        let mut rounds = 0;
-                        while net.committed_count() < 100 && rounds < 500 {
-                            net.advance(1);
-                            rounds += 1;
-                        }
-                    }));
-                }
-                total
-            });
+                total += Duration::from_nanos(time_ns(|| {
+                    // Submit 100 events round-robin across all nodes
+                    for i in 0..100u8 {
+                        let node_idx = (i as usize) % n;
+                        let _ = net.submit_event(node_idx, vec![i]);
+                    }
+                    // Advance until all events are committed
+                    let mut rounds = 0;
+                    while net.committed_count() < 100 && rounds < 500 {
+                        net.advance(1);
+                        rounds += 1;
+                    }
+                }));
+            }
+            total
         });
-    }
+    });
 
     group.finish();
 }

@@ -106,6 +106,12 @@ Launch-critical production settlement is available via live Ethereum (`ethereum-
 - **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`) plus quote-backed payment-order routes and merchant settlement routes.
 - **Pilot boundary**: the wallet surface is integrated against the sandbox/provider contract. Production mobile-money credentials, regulated provider onboarding, webhook operations, reconciliation, refund operations, and merchant operations tooling remain deployment work; the client never decides economic terms or payment success.
 
+### Financial payment path — **CONTROLLED PILOT / DURABLE RUNTIME INTEGRATED** ✅⚠️
+
+- **Status**: quote service, authenticated orders, Ghana sandbox, treasury allocation, merchant API, redb event/snapshot/side-effect persistence, restart recovery sweep, and production configuration gates are implemented.
+- **Remaining production boundary**: a real Ghana provider adapter and contract-tested credentials, separately operated reconciliation/refund service, chain-delivery finality worker, backup/restore drills, merchant operations tooling, and independent Ghana legal/compliance sign-off are still required before real customer funds.
+- **Reference**: [`docs/financial/production-readiness.md`](financial/production-readiness.md).
+
 ### Validator Network — **RUNNING** (5 nodes) ✅⚠️
 
 - **Status**: A standing 5-node geo-distributed mesh runs continuously on

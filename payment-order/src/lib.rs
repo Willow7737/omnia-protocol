@@ -49,7 +49,7 @@ pub use auth::{Credential, JwtClaims, ServiceRoleRegistry};
 pub use engine::{Clock, FixedClock, PaymentEngine, SystemClock};
 pub use error::PaymentError;
 pub use ghana_provider::GhanaSandboxProvider;
-pub use persistence::{recover_order, InMemoryPaymentStore, PaymentStore, SideEffect};
+pub use persistence::{recover_order, InMemoryPaymentStore, PaymentStore, RedbPaymentStore, SideEffect};
 pub use provider::{
     CallbackStatus, CallbackVerification, MobileMoneyProvider, OmniaQuote, ProviderAdapter, ProviderCallback,
     SubsidyRecord, SubsidyTracker,

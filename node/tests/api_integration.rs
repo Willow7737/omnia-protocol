@@ -265,6 +265,7 @@ fn configure_test_server_env(authorized_callers: Option<&str>, rate_limit_rps: O
 /// Like `setup_server` but allows pre-registering DIDs in the economics
 /// state before the server starts. Uses the same ENV_LOCK + EnvGuard pattern
 /// as `setup_server` to avoid env var races with parallel tests.
+#[allow(clippy::await_holding_lock)]
 async fn setup_server_with_economics<F>(pre_register: F) -> TestServer
 where
     F: FnOnce(&mut EconomicsState),
@@ -318,6 +319,7 @@ where
 
 /// Like [`setup_server_with_economics`] but exposes the **financial**
 /// shard state, so a test can pre-fund transferable balances.
+#[allow(clippy::await_holding_lock)]
 async fn setup_server_with_financial<F>(pre_fund: F) -> TestServer
 where
     F: FnOnce(&mut omnia_shards::FinancialState),
@@ -413,6 +415,7 @@ struct TestServer {
 ///
 /// The env vars and the serialisation lock are released when the returned
 /// [`TestServer`] is dropped.
+#[allow(clippy::await_holding_lock)]
 async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -2681,6 +2684,7 @@ fn build_test_app_state_with_settlement(
 
 /// Spawn a test server that uses [`LiveTestSettlementAdapter`] so the
 /// submit-root handler can reach the root-determination logic.
+#[allow(clippy::await_holding_lock)]
 async fn setup_live_settlement_server() -> TestServer {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     configure_test_server_env(Some(ADMIN_CALLER), None);
@@ -2719,6 +2723,7 @@ async fn setup_live_settlement_server() -> TestServer {
 /// Spawn a test server with a live settlement adapter and a known Lane 0
 /// root injected into the Substrate.  Returns the server and the 32-byte
 /// root that was injected (hex-encoded with `0x` prefix).
+#[allow(clippy::await_holding_lock)]
 async fn setup_live_settlement_server_with_root() -> (TestServer, String) {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     configure_test_server_env(Some(ADMIN_CALLER), None);

@@ -154,6 +154,9 @@ async fn main() -> Result<()> {
     // This must happen before any request hits the auth middleware.
     omnia_node::api::auth::init_jwt_secret();
 
+    omnia_node::state::validate_payment_runtime_config()
+        .map_err(|error| anyhow::anyhow!("Invalid payment runtime configuration: {error}"))?;
+
     tracing::info!(
         node_id = config.node_id,
         http_port = config.http_port,
@@ -457,6 +460,7 @@ async fn main() -> Result<()> {
     };
 
     // 6. Build and start the HTTP server
+    let _payment_recovery_worker = omnia_node::payment_worker::spawn(Arc::new(app_state.clone()));
     let app = omnia_node::http::build_http_router().with_state(app_state.clone());
     let listen_addr = format!("0.0.0.0:{}", config.http_port);
 

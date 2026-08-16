@@ -31,7 +31,8 @@ fn test_node(id: u8) -> NodeId {
 #[tokio::test]
 async fn test_financial_shard_wired_into_substrate() {
     // 1. Create substrate with 1-node consensus
-    let config = SubstrateConfig::with_network_size(test_node(1), 1);
+    let config =
+        SubstrateConfig::try_with_network_size(test_node(1), 1).expect("test consensus configuration should be valid");
     let mut substrate = Substrate::new(config);
 
     // 2. Create shard router with financial shard, shared via Arc<Mutex>
@@ -99,7 +100,8 @@ async fn test_financial_shard_wired_into_substrate() {
 #[tokio::test]
 async fn test_identity_shard_wired_into_substrate() {
     // 1. Create substrate with 1-node consensus
-    let config = SubstrateConfig::with_network_size(test_node(1), 1);
+    let config =
+        SubstrateConfig::try_with_network_size(test_node(1), 1).expect("test consensus configuration should be valid");
     let mut substrate = Substrate::new(config);
 
     // 2. Create shard router with identity shard, shared via Arc<Mutex>

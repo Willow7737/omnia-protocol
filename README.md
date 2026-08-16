@@ -637,3 +637,10 @@ Merchant onboarding and QR/invoice creation are available through `/api/v1/merch
 `AppState` now shares the quote service, event-sourced payment store, service-role registry, Ghana sandbox provider, and in-memory merchant registry across production and HTTP test fixtures. The Ghana provider uses HMAC-SHA256 callback authentication and constant-time signature comparison. The treasury bucket path consumes approved pre-minted, unassigned inventory before minting any shortfall, and the asset-registry suite includes a no-double-mint invariant test.
 
 The protocol remains explicit about its launch boundary: the Ghana provider is a sandbox adapter until a regulated production mobile-money integration, operational secret management, reconciliation process, refund policy, and legal review are completed. The code path is therefore suitable for controlled testnet/pilot validation, not a claim that OMNIA is already legal tender or redeemable at a fixed GHS rate.
+
+
+## Financial runtime hardening
+
+The Ghana-first financial path now supports a durable `RedbPaymentStore` when `OMNIA_PAYMENT_STORE_PATH` is configured. It persists payment events, snapshots, and side-effect markers atomically so provider callbacks, refunds, treasury reservations, and delivery operations can be retried idempotently after restart. The live node also runs a conservative recovery sweep that reconstructs active orders and reports replay failures without claiming provider success or chain delivery.
+
+Set `OMNIA_RUNTIME_MODE=production` to enable fail-closed startup validation. Production mode requires a durable payment-store path plus non-placeholder quote-signing and Ghana-provider secrets. Development and test nodes may retain the in-memory store and sandbox adapter. Deployment, backup, reconciliation, refund, chain-delivery, and Ghana compliance requirements are documented in [`docs/financial/production-readiness.md`](docs/financial/production-readiness.md).

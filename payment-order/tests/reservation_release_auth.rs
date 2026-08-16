@@ -12,7 +12,7 @@ use omnia_asset_registry::types::AssetId;
 use omnia_payment_order::engine::Caller;
 use omnia_payment_order::risk::RiskLimits;
 use omnia_payment_order::state::PaymentState;
-use omnia_payment_order::types::{PaymentOrder, RefundStatus, StateTransitionEvent, TransitionActor};
+use omnia_payment_order::types::{RefundStatus, TransitionActor};
 use omnia_payment_order::PaymentEngine;
 use omnia_payment_order::PaymentError;
 

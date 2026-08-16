@@ -31,7 +31,10 @@ use omnia_shards::ShardRouter;
 
 use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
 use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
-use omnia_payment_order::{GhanaSandboxProvider, PaymentEngine, PaymentStore, QuoteService, ServiceRoleRegistry};
+use omnia_payment_order::{
+    GhanaSandboxProvider, InMemoryPaymentStore, PaymentEngine, PaymentStore, QuoteService, RedbPaymentStore,
+    ServiceRoleRegistry,
+};
 
 #[cfg(feature = "zk")]
 use omnia_adapters::setup::CeremonyServer;
@@ -414,16 +417,47 @@ impl NodeMetrics {
     }
 }
 
-/// Construct the shared payment services used by the node and test harnesses.
+/// Shared payment services used by the node and test harnesses.
 ///
-/// The environment variables are intentionally explicit so production
-/// deployments can inject real secrets; the fallback values are sandbox-only.
-pub fn default_payment_services() -> (
+/// The tuple keeps each service's ownership and synchronization boundary
+/// explicit while allowing constructors to share one stable return type.
+pub type PaymentServices = (
     Arc<std::sync::Mutex<QuoteService>>,
     Arc<dyn PaymentStore + Send + Sync>,
     Arc<ServiceRoleRegistry>,
     Arc<GhanaSandboxProvider>,
-) {
+);
+
+/// Validate settings required for a production payment runtime.
+///
+/// Development and test nodes may use the in-memory store and deterministic
+/// sandbox defaults. Production nodes must explicitly provide durable storage
+/// and all signing/provider secrets so a restart cannot silently lose payment
+/// state or run with forgeable credentials.
+pub fn validate_payment_runtime_config() -> Result<(), String> {
+    if std::env::var("OMNIA_RUNTIME_MODE").as_deref() != Ok("production") {
+        return Ok(());
+    }
+
+    for (name, placeholder) in [
+        ("OMNIA_PAYMENT_STORE_PATH", ""),
+        ("OMNIA_QUOTE_SIGNING_SEED", "omnia-dev-only-quote-signing-seed"),
+        ("OMNIA_GHANA_PROVIDER_SECRET", "omnia-dev-only-ghana-provider-secret"),
+        ("OMNIA_GHANA_PROVIDER_KEY", "sandbox-provider-key"),
+    ] {
+        let value = std::env::var(name).map_err(|_| format!("{name} must be set in production mode"))?;
+        if value.trim().is_empty() || value == placeholder {
+            return Err(format!("{name} contains a development placeholder"));
+        }
+    }
+    Ok(())
+}
+
+/// Construct the shared payment services used by the node and test harnesses.
+///
+/// The environment variables are intentionally explicit so production
+/// deployments can inject real secrets; the fallback values are sandbox-only.
+pub fn default_payment_services() -> PaymentServices {
     let quote_seed =
         std::env::var("OMNIA_QUOTE_SIGNING_SEED").unwrap_or_else(|_| "omnia-dev-only-quote-signing-seed".to_string());
     let provider_secret = std::env::var("OMNIA_GHANA_PROVIDER_SECRET")
@@ -447,12 +481,31 @@ pub fn default_payment_services() -> (
         registry.register_provider_callback_key(provider.to_string(), provider_key.clone());
     }
 
+    let payment_store: Arc<dyn PaymentStore + Send + Sync> = match std::env::var("OMNIA_PAYMENT_STORE_PATH") {
+        Ok(path) if !path.trim().is_empty() => {
+            let path = std::path::PathBuf::from(path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap_or_else(|error| {
+                    panic!(
+                        "cannot create OMNIA_PAYMENT_STORE_PATH parent {}: {error}",
+                        parent.display()
+                    )
+                });
+            }
+            match RedbPaymentStore::open(&path) {
+                Ok(store) => Arc::new(store),
+                Err(error) => panic!("cannot open OMNIA_PAYMENT_STORE_PATH {}: {error}", path.display()),
+            }
+        }
+        _ => Arc::new(InMemoryPaymentStore::new()),
+    };
+
     (
         Arc::new(std::sync::Mutex::new(QuoteService::new(
             omnia_payment_order::QuoteServiceConfig::default(),
             quote_seed.into_bytes(),
         ))),
-        Arc::new(omnia_payment_order::InMemoryPaymentStore::new()),
+        payment_store,
         Arc::new(registry),
         Arc::new(GhanaSandboxProvider::new(
             omnia_payment_order::MobileMoneyProvider::Mtn,

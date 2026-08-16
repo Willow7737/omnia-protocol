@@ -112,10 +112,7 @@ fn read_order(state: &AppState, order_id: &str) -> Result<omnia_payment_order::P
         .payment_engine
         .lock()
         .map_err(|error| format!("payment engine lock poisoned: {error}"))?;
-    engine
-        .get_order(order_id)
-        .map(|order| order.clone())
-        .map_err(|error| error.to_string())
+    engine.get_order(order_id).cloned().map_err(|error| error.to_string())
 }
 
 fn advance_and_persist(

@@ -13,6 +13,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use redb::ReadableTable;
+
 use crate::error::PaymentError;
 use crate::types::{PaymentOrder, StateTransitionEvent};
 
@@ -229,7 +231,7 @@ mod tests {
 
     const NOW: u64 = 1_700_000_000_000;
 
-    fn make_test_order() -> PaymentOrder {
+    pub(super) fn make_test_order() -> PaymentOrder {
         PaymentOrder::new(
             "order-persist-1".into(),
             "+233240000000".into(),
@@ -345,5 +347,226 @@ mod tests {
     fn side_effect_as_str() {
         assert_eq!(SideEffect::TreasuryReserve.as_str(), "treasury_reserve");
         assert_eq!(SideEffect::ProviderRefund.as_str(), "provider_refund");
+    }
+}
+
+/// Redb-backed durable implementation for production payment-order state.
+///
+/// Each write uses one redb transaction. Events are stored per order as an
+/// append-only sequence, snapshots are replaced atomically, and side effects
+/// are represented by presence keys so retries are idempotent after restart.
+#[derive(Debug)]
+pub struct RedbPaymentStore {
+    db: redb::Database,
+}
+
+const REDB_EVENTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("payment_events");
+const REDB_SIDE_EFFECTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("payment_side_effects");
+const REDB_SNAPSHOTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("payment_snapshots");
+const REDB_MARKER: &[u8] = b"done";
+
+impl RedbPaymentStore {
+    /// Open or create the payment database at `path`.
+    pub fn open(path: &std::path::Path) -> Result<Self, PaymentError> {
+        let db = redb::Database::create(path).map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        Ok(Self { db })
+    }
+
+    fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, PaymentError> {
+        serde_json::to_vec(value).map_err(|error| PaymentError::PersistenceError(error.to_string()))
+    }
+
+    fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, PaymentError> {
+        serde_json::from_slice(bytes).map_err(|error| PaymentError::PersistenceError(error.to_string()))
+    }
+
+    fn side_effect_key(order_id: &str, effect_type: &str) -> String {
+        format!("{order_id}\0{effect_type}")
+    }
+}
+
+impl PaymentStore for RedbPaymentStore {
+    fn append_event(&self, event: &StateTransitionEvent) -> Result<(), PaymentError> {
+        let write = self
+            .db
+            .begin_write()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        {
+            let mut table = write
+                .open_table(REDB_EVENTS)
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+            let mut events: Vec<StateTransitionEvent> = table
+                .get(event.order_id.as_str())
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?
+                .map(|value| Self::decode(value.value()))
+                .transpose()?
+                .unwrap_or_default();
+            if !events.iter().any(|stored| stored.sequence == event.sequence) {
+                events.push(event.clone());
+                events.sort_by_key(|stored| stored.sequence);
+                let bytes = Self::encode(&events)?;
+                table
+                    .insert(event.order_id.as_str(), bytes.as_slice())
+                    .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+            }
+        }
+        write
+            .commit()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))
+    }
+
+    fn load_events(&self, order_id: &str) -> Result<Vec<StateTransitionEvent>, PaymentError> {
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        let table = match read.open_table(REDB_EVENTS) {
+            Ok(table) => table,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(Vec::new()),
+            Err(error) => return Err(PaymentError::PersistenceError(error.to_string())),
+        };
+        table
+            .get(order_id)
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?
+            .map(|value| Self::decode(value.value()))
+            .transpose()
+            .map(|events| events.unwrap_or_default())
+    }
+
+    fn mark_side_effect_done(&self, order_id: &str, effect_type: &str) -> Result<(), PaymentError> {
+        let key = Self::side_effect_key(order_id, effect_type);
+        let write = self
+            .db
+            .begin_write()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        {
+            let mut table = write
+                .open_table(REDB_SIDE_EFFECTS)
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+            table
+                .insert(key.as_str(), REDB_MARKER)
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        }
+        write
+            .commit()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))
+    }
+
+    fn is_side_effect_done(&self, order_id: &str, effect_type: &str) -> Result<bool, PaymentError> {
+        let key = Self::side_effect_key(order_id, effect_type);
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        let table = match read.open_table(REDB_SIDE_EFFECTS) {
+            Ok(table) => table,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(false),
+            Err(error) => return Err(PaymentError::PersistenceError(error.to_string())),
+        };
+        Ok(table
+            .get(key.as_str())
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?
+            .is_some())
+    }
+
+    fn list_active_orders(&self) -> Result<Vec<String>, PaymentError> {
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        let table = match read.open_table(REDB_SNAPSHOTS) {
+            Ok(table) => table,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(Vec::new()),
+            Err(error) => return Err(PaymentError::PersistenceError(error.to_string())),
+        };
+        let mut active = Vec::new();
+        let rows = table
+            .iter()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        for row in rows {
+            let (key, value) = row.map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+            let order: PaymentOrder = Self::decode(value.value())?;
+            if !order.is_terminal() {
+                active.push(key.value().to_string());
+            }
+        }
+        Ok(active)
+    }
+
+    fn save_order_snapshot(&self, order: &PaymentOrder) -> Result<(), PaymentError> {
+        let bytes = Self::encode(order)?;
+        let write = self
+            .db
+            .begin_write()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        {
+            let mut table = write
+                .open_table(REDB_SNAPSHOTS)
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+            table
+                .insert(order.order_id.as_str(), bytes.as_slice())
+                .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        }
+        write
+            .commit()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))
+    }
+
+    fn load_order_snapshot(&self, order_id: &str) -> Result<Option<PaymentOrder>, PaymentError> {
+        let read = self
+            .db
+            .begin_read()
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?;
+        let table = match read.open_table(REDB_SNAPSHOTS) {
+            Ok(table) => table,
+            Err(redb::TableError::TableDoesNotExist(_)) => return Ok(None),
+            Err(error) => return Err(PaymentError::PersistenceError(error.to_string())),
+        };
+        table
+            .get(order_id)
+            .map_err(|error| PaymentError::PersistenceError(error.to_string()))?
+            .map(|value| Self::decode(value.value()))
+            .transpose()
+    }
+}
+
+#[cfg(test)]
+mod durable_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temporary_database_path() -> std::path::PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("omnia-payment-store-{suffix}.redb"))
+    }
+
+    #[test]
+    fn redb_store_survives_reopen_and_is_idempotent() {
+        let path = temporary_database_path();
+        let order = super::tests::make_test_order();
+        {
+            let store = RedbPaymentStore::open(&path).expect("open store");
+            store.save_order_snapshot(&order).expect("save snapshot");
+            store.append_event(&order.event_history[0]).expect("append event");
+            store.append_event(&order.event_history[0]).expect("idempotent append");
+            store
+                .mark_side_effect_done("order-persist-1", "treasury_reserve")
+                .expect("mark effect");
+        }
+        {
+            let store = RedbPaymentStore::open(&path).expect("reopen store");
+            assert_eq!(store.load_events("order-persist-1").expect("load events").len(), 1);
+            assert!(store
+                .load_order_snapshot("order-persist-1")
+                .expect("load snapshot")
+                .is_some());
+            assert!(store
+                .is_side_effect_done("order-persist-1", "treasury_reserve")
+                .expect("check effect"));
+        }
+        let _ = std::fs::remove_file(path);
     }
 }

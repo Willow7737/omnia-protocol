@@ -22,5 +22,6 @@
 pub mod api;
 pub mod config;
 pub mod http;
+pub mod payment_worker;
 pub mod pipeline;
 pub mod state;
