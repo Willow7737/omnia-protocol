@@ -238,7 +238,10 @@ pub async fn create_payment_request(
         merchant_id: merchant_id.clone(),
         customer_wallet: caller.caller_id.clone(),
         ghs_price: body.ghs_price_pesewas,
-        omnia_amount: quote.quote.omnia_quantity,
+        // Merchant settlement transfers the quoted net amount. The protocol fee
+        // remains disclosed separately and is settled by the delivery/fee path,
+        // rather than being silently subtracted a second time in the receipt.
+        omnia_amount: quote.quote.net_omnia(),
         exchange_rate: quote.quote.exchange_rate,
         quote_expiry_ms: quote.quote.expires_at_ms,
         protocol_fee: quote.quote.omnia_fee,
@@ -252,7 +255,7 @@ pub async fn create_payment_request(
         "merchant_id": merchant_id,
         "payment_id": payment_id,
         "ghs_price_pesewas": body.ghs_price_pesewas,
-        "omnia_amount_plancks": quote.quote.omnia_quantity,
+        "omnia_amount_plancks": quote.quote.net_omnia(),
         "quote_expiry_ms": quote.quote.expires_at_ms,
         "merchant_public_key": record.settlement_public_key,
     });
@@ -329,7 +332,7 @@ pub async fn confirm_payment(
         omnia_amount: payment.omnia_amount,
         exchange_rate: payment.exchange_rate,
         protocol_fee: payment.protocol_fee,
-        net_omnia: payment.omnia_amount.saturating_sub(payment.protocol_fee),
+        net_omnia: payment.omnia_amount,
         confirmed_at_ms: now_ms(),
         tx_reference: body
             .tx_reference
