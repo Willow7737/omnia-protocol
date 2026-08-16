@@ -153,6 +153,28 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/errors", get(errors::error_codes))
         .route("/ceremony/state", get(ceremony::ceremony_state))
         .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
+        // Protocol-wide monitoring reads (§4.4, §5, §6, §7, §8, §15).
+        //
+        // These are aggregates over the whole protocol — supply totals, treasury
+        // buckets, fee policy, provider health — with no per-account data and no
+        // caller-derived response. They are what the public dashboard and status
+        // pages render, so requiring a JWT would leave those surfaces blank for
+        // anyone not signed in. Every handler here takes only `State`; none reads
+        // `CallerIdentity`, which is what makes serving them outside the auth
+        // layer well-defined rather than merely convenient.
+        //
+        // Per-account reads (`/economics/balance/:did`, `/financial/balance/:pubkey`),
+        // fee *calculation*, and every mutation stay authenticated below.
+        .route("/supply", get(supply::get_supply))
+        .route("/supply/invariants", get(supply::verify_supply_invariants))
+        .route("/treasury/status", get(treasury::get_treasury_status))
+        .route("/treasury/inventory", get(treasury::get_pilot_inventory))
+        .route("/treasury/accounting", get(treasury::get_treasury_accounting))
+        .route("/fees/burn-policy", get(fees::get_burn_policy))
+        .route("/fees/stats", get(fees::get_fee_stats))
+        .route("/economics/fee-burn", get(economics::get_fee_burn_stats))
+        .route("/bridge/providers", get(bridge::list_providers))
+        .route("/bridge/health", get(bridge::bridge_health))
         // Wallet challenge/signature login — issues JWTs, so must be public.
         .route("/auth/challenge", post(wallet_auth::request_challenge))
         .route("/auth/login", post(wallet_auth::login))
@@ -189,23 +211,10 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         // Ceremony write operations
         .route("/ceremony/contribute", post(ceremony::ceremony_contribute))
         .route("/ceremony/finalize", post(ceremony::ceremony_finalize))
-        // Sprint 3: Fee-burn statistics (public for dashboards/monitoring)
-        .route("/economics/fee-burn", get(economics::get_fee_burn_stats))
-        // Sprint 3–5: Financial pallet endpoints (Spec §4–§7, §8, §15)
-        // Treasury (§5, §6) — public for monitoring
-        .route("/treasury/status", get(treasury::get_treasury_status))
-        .route("/treasury/inventory", get(treasury::get_pilot_inventory))
-        .route("/treasury/accounting", get(treasury::get_treasury_accounting))
-        // Supply (§4.4, §5.1) — public for monitoring
-        .route("/supply", get(supply::get_supply))
-        .route("/supply/invariants", get(supply::verify_supply_invariants))
-        // Fees and burn (§7)
-        .route("/fees/burn-policy", get(fees::get_burn_policy))
+        // Fee calculation is a POST that prices a hypothetical operation, not a
+        // monitoring read, so it stays behind the JWT with the other non-reads.
+        // The monitoring aggregates it sits beside are served publicly above.
         .route("/fees/calculate", post(fees::calculate_fee))
-        .route("/fees/stats", get(fees::get_fee_stats))
-        // Bridge (§8, §15)
-        .route("/bridge/providers", get(bridge::list_providers))
-        .route("/bridge/health", get(bridge::bridge_health))
         // Payment orders (§8): economic terms come only from signed quotes.
         .route("/payment-orders/quote", post(payment_orders::request_quote))
         .route("/payment-orders/initiate", post(payment_orders::initiate_payment))

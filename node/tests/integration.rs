@@ -357,3 +357,72 @@ async fn test_openapi_json_disabled() -> Result<()> {
     assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");
     Ok(())
 }
+
+/// Protocol-wide monitoring reads must be reachable without a JWT.
+///
+/// These routes previously sat inside the authenticated router while their own
+/// comments described them as "public for dashboards/monitoring". The code won,
+/// silently: the public dashboard would have started returning 401 on its
+/// treasury, supply and fee panels the moment the financial layer shipped.
+/// Pinning both directions here means that drift fails a test instead of a
+/// status page.
+#[tokio::test]
+async fn test_monitoring_reads_are_public() -> Result<()> {
+    let (base_url, _handle, _guards) = start_test_server().await;
+    let client = reqwest::Client::new();
+
+    for path in [
+        "/api/v1/supply",
+        "/api/v1/supply/invariants",
+        "/api/v1/treasury/status",
+        "/api/v1/treasury/inventory",
+        "/api/v1/treasury/accounting",
+        "/api/v1/fees/burn-policy",
+        "/api/v1/fees/stats",
+        "/api/v1/economics/fee-burn",
+        "/api/v1/bridge/providers",
+        "/api/v1/bridge/health",
+    ] {
+        let resp = client.get(format!("{base_url}{path}")).send().await?;
+        assert_ne!(
+            resp.status(),
+            401,
+            "{path} must be reachable without a token — it is a protocol-wide aggregate rendered by public dashboards"
+        );
+        assert_ne!(resp.status(), 404, "{path} should be routed");
+    }
+
+    Ok(())
+}
+
+/// The other half of the boundary: widening the monitoring reads must not have
+/// widened anything that exposes a single account or changes state.
+#[tokio::test]
+async fn test_account_and_mutation_routes_still_require_auth() -> Result<()> {
+    let (base_url, _handle, _guards) = start_test_server().await;
+    let client = reqwest::Client::new();
+
+    let unauthenticated_gets = [
+        "/api/v1/economics/balance/did:omnia:abc",
+        "/api/v1/financial/balance/deadbeef",
+    ];
+    for path in unauthenticated_gets {
+        let resp = client.get(format!("{base_url}{path}")).send().await?;
+        assert_eq!(
+            resp.status(),
+            401,
+            "{path} exposes one account and must stay authenticated"
+        );
+    }
+
+    // Fee calculation prices a hypothetical operation; it is a POST, not a
+    // monitoring read, and stays behind the JWT with the other non-reads.
+    let resp = client
+        .post(format!("{base_url}/api/v1/fees/calculate"))
+        .json(&json!({ "operation": "transfer" }))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 401, "/fees/calculate must stay authenticated");
+
+    Ok(())
+}
