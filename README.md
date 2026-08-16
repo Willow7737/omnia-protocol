@@ -88,12 +88,19 @@ All five on v0.1.76+, stake 1 each. Three regions (eu-central, us-east,
 ap-southeast) with two continents. Only node A exposes HTTP publicly; B–E
 are validators reachable over the P2P mesh but not the REST API.
 
-Lane 0 is doing real work on it:
+The mesh is fully peered and currently idle — nothing has been submitted to
+it since the v0.1.95 rollout, so the Lane 0 counters read zero:
 
 ```jsonc
 // GET /api/v1/node/info  (node A)
-{ "peers": 4, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
+{ "peers": 4, "version": "0.1.95", "protocol_version": "4.0.0",
+  "lane0": { "acks_accepted": 0, "acks_rejected": 0, "events_finalized": 0 } }
 ```
+
+Zero counters here mean no traffic, not a stalled lane. What Lane 0 does
+under load is recorded in
+[benchmark-gates.md](docs/reference/benchmark-gates.md): 10k-event bursts
+reaching 100% propagation and full quorum finality across all five nodes.
 
 **Readiness contract.** `/readyz` reports the node as ready when it is
 operational for traffic: it has the configured minimum peer count and is
@@ -101,7 +108,7 @@ not in fast-sync. It does **not** require recent traffic, Lane 1 canonical
 commits, or Lane 0 preconfirmations, so quiet networks stay ready:
 
 ```jsonc
-{ "status": "ready", "peers": 4, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 9 }
+{ "status": "ready", "peers": 4, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 0 }
 ```
 
 Use `/api/v1/node/info` and Prometheus finality metrics to monitor Lane 0
@@ -333,7 +340,7 @@ cargo bench --no-run
 | Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
 | Mobile wallet              | ✅ **Shipped (v1)**     | [`Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) — dual-mode auth, live against the testnet node |
-| Validator network          | ✅ **Running** (3 nodes) | Geo-distributed EU/US/Asia mesh — but all three run by the same operator, so not yet trust-distributed |
+| Validator network          | ✅ **Running** (5 nodes) | Geo-distributed EU/US/Asia mesh — but all five run by the same operator, so not yet trust-distributed |
 | Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
 | Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
 | Production ZK hash gadget  | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
@@ -464,10 +471,18 @@ _Goal: Performance Validation_
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
 - ✅ Public testnet endpoint **live** (single node at `78.47.43.136.sslip.io`, 0 peers)
-- ✅ **Standing validator network — live.** A 3-node geo-distributed mesh
-  (EU / US-East / Asia) runs continuously with 2 peers each and Lane 0
-  finalizing events. Measured RTTs match the benchmark baseline exactly.
-- 🔄 **Independent operators — not yet.** All three nodes are run by the
+- ✅ **Standing validator network — live.** A 5-node geo-distributed mesh
+  (Nuremberg / Ashburn / Singapore / Helsinki / Falkenstein) runs
+  continuously with 4 peers each. Measured RTTs match the benchmark baseline
+  exactly. Five equal-stake validators put Lane 0 finality at 4-of-5 acks, so
+  the network now tolerates one node down — at three nodes, quorum was all
+  three and fault tolerance was zero. The mesh is fully peered but **idle**:
+  no events have been submitted since the v0.1.95 rollout, so the Lane 0
+  counters read zero. That is an absence of traffic, not an absence of
+  liveness — the 10k-burst runs in
+  [benchmark-gates.md](docs/reference/benchmark-gates.md) are what Lane 0
+  does under load.
+- 🔄 **Independent operators — not yet.** All five nodes are run by the
   same operator, so the network is geo-distributed but not yet
   trust-distributed. The external operator onboarding path is documented,
   but third-party validators are still the remaining step; see
