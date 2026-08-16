@@ -5,13 +5,16 @@
 //! - `POST /api/v1/payment-orders/create`     — create a new payment order
 //! - `POST /api/v1/payment-orders/:id/advance` — advance order state
 
+use std::sync::Arc;
+
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
+use axum::{Extension, Json};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use utoipa::ToSchema;
 
+use crate::api::auth::{AuthorizedCallers, CallerIdentity};
 use crate::state::AppState;
 use omnia_asset_registry::types::AssetId;
 use omnia_payment_order::engine::Caller;
@@ -45,8 +48,8 @@ pub struct CreateOrderRequest {
 pub struct AdvanceOrderRequest {
     /// Target state to advance the order to.
     pub next_state: String,
-    /// Who is requesting the transition (e.g., "system:risk-engine", "provider:MTN").
-    pub caller: String,
+    /// The authenticated subject is used as the actor; callers cannot spoof a
+    /// system service or treasury identity in this request body.
     /// Optional reason or reference for the transition.
     pub reason: Option<String>,
 }
@@ -165,6 +168,8 @@ pub async fn create_order(
 )]
 pub async fn advance_order(
     State(state): State<AppState>,
+    Extension(identity): Extension<CallerIdentity>,
+    Extension(authorized): Extension<Arc<AuthorizedCallers>>,
     Path(order_id): Path<String>,
     Json(body): Json<AdvanceOrderRequest>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
@@ -173,8 +178,19 @@ pub async fn advance_order(
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
 
+    if !authorized.is_authorized(&identity.caller_id) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(
+                json!({ "error": format!("caller '{}' is not authorized for payment-order operations", identity.caller_id) }),
+            ),
+        ));
+    }
+
     let next_state = parse_state(&body.next_state)?;
-    let caller = parse_caller(&body.caller)?;
+    let caller = Caller::ManualReview {
+        reviewer: identity.caller_id.clone(),
+    };
 
     let mut engine = state.payment_engine.lock().map_err(|e| {
         (
@@ -193,6 +209,7 @@ pub async fn advance_order(
                     "from_state": format!("{:?}", event.from_state),
                     "to_state": format!("{:?}", event.to_state),
                     "actor": format!("{:?}", event.actor),
+                    "authenticated_subject": identity.caller_id,
                     "sequence": event.sequence,
                     "timestamp_ms": event.timestamp_ms,
                     "reason": event.reason,
@@ -229,34 +246,4 @@ fn parse_state(name: &str) -> Result<PaymentState, (StatusCode, Json<Value>)> {
             Json(json!({ "error": format!("unknown state: {name}") })),
         )),
     }
-}
-
-/// Parse a caller string into a Caller enum.
-fn parse_caller(s: &str) -> Result<Caller, (StatusCode, Json<Value>)> {
-    if s == "treasury" {
-        return Ok(Caller::Treasury);
-    }
-    if let Some(service) = s.strip_prefix("system:") {
-        return Ok(Caller::System {
-            service: service.to_string(),
-        });
-    }
-    if let Some(provider_id) = s.strip_prefix("provider:") {
-        return Ok(Caller::Provider {
-            provider_id: provider_id.to_string(),
-            authenticated: true,
-        });
-    }
-    if let Some(reviewer) = s.strip_prefix("reviewer:") {
-        return Ok(Caller::ManualReview {
-            reviewer: reviewer.to_string(),
-        });
-    }
-    if s == "sender" {
-        return Ok(Caller::Sender);
-    }
-    Err((
-        StatusCode::BAD_REQUEST,
-        Json(json!({ "error": format!("unknown caller format: {s}") })),
-    ))
 }
