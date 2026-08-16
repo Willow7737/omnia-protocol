@@ -66,10 +66,44 @@ impl Caller {
     }
 }
 
+/// Clock trait for time injection.
+/// Enables testing without system clock and production use
+/// with a real clock. Per Audit Priority 3: the engine must
+/// use real time, not return 0.
+pub trait Clock: Send + Sync {
+    /// Return the current time in milliseconds since epoch.
+    fn now_ms(&self) -> u64;
+}
+
+/// System clock using `std::time::SystemTime`.
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now_ms(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+}
+
+/// A fixed clock that always returns a constant time.
+/// Useful for testing.
+pub struct FixedClock {
+    /// The fixed time in ms.
+    pub time_ms: u64,
+}
+
+impl Clock for FixedClock {
+    fn now_ms(&self) -> u64 {
+        self.time_ms
+    }
+}
+
 /// The payment engine — sole authority for state transitions.
 ///
-/// Holds risk limits and optional circuit breaker. Orders are passed in
-/// and returned mutated (with new event appended).
+/// Holds risk limits, optional circuit breaker, and an injected clock.
+/// Orders are passed in and returned mutated (with new event appended).
 pub struct PaymentEngine {
     /// Circuit breaker for risk limit enforcement.
     pub circuit_breaker: CircuitBreaker,
@@ -77,22 +111,38 @@ pub struct PaymentEngine {
     pub limits: RiskLimits,
     /// Active orders keyed by order_id.
     orders: HashMap<String, PaymentOrder>,
+    /// Injected clock for time-dependent operations.
+    clock: Box<dyn Clock>,
 }
 
 impl PaymentEngine {
-    /// Create a new payment engine with default risk limits.
+    /// Create a new payment engine with default risk limits and system clock.
     pub fn new(now_ms: u64) -> Self {
         let limits = RiskLimits::default();
         Self::with_limits(limits, now_ms)
     }
 
     /// Create a new payment engine with custom risk limits.
+    /// Uses a fixed clock at `now_ms` for backward compatibility.
     pub fn with_limits(limits: RiskLimits, now_ms: u64) -> Self {
         let cb = CircuitBreaker::with_limits(limits.clone(), now_ms);
         Self {
             circuit_breaker: cb,
             limits,
             orders: HashMap::new(),
+            clock: Box::new(FixedClock { time_ms: now_ms }),
+        }
+    }
+
+    /// Create a payment engine with an injected clock.
+    /// This is the recommended constructor for production use.
+    pub fn with_clock(limits: RiskLimits, clock: Box<dyn Clock>, now_ms: u64) -> Self {
+        let cb = CircuitBreaker::with_limits(limits.clone(), now_ms);
+        Self {
+            circuit_breaker: cb,
+            limits,
+            orders: HashMap::new(),
+            clock,
         }
     }
 
@@ -422,13 +472,12 @@ impl PaymentEngine {
         Ok(())
     }
 
-    /// Helper: return a reasonable current time for quote checks.
-    /// In production, this would be injected. For now, returns 0 which
-    /// means quote checks are only done when explicitly tested.
+    /// Return the current time from the injected clock.
+    /// Per Audit Priority 3: this must use a real clock in production,
+    /// not return 0. The previous implementation returned 0 which
+    /// effectively disabled quote expiry enforcement.
     fn current_time(&self) -> u64 {
-        // In production, this would use a clock dependency.
-        // Tests pass now_ms explicitly via advance_state.
-        0
+        self.clock.now_ms()
     }
 
     /// Get the number of active (non-terminal) orders.

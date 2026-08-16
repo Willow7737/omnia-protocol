@@ -124,4 +124,29 @@ pub enum PaymentError {
         /// Detail of the failure.
         detail: String,
     },
+
+    /// A persistence operation failed.
+    #[error("persistence error: {0}")]
+    PersistenceError(String),
+
+    /// Provider data is invalid (bad phone number, bad callback).
+    #[error("invalid provider data: {detail}")]
+    InvalidProviderData {
+        /// Detail of the invalid data.
+        detail: String,
+    },
+
+    /// The provider or transaction reference was not found.
+    #[error("provider/transaction not found: {provider}")]
+    ProviderNotFound {
+        /// The provider or reference that was not found.
+        provider: String,
+    },
+
+    /// A callback was rejected (bad signature, replay, amount mismatch).
+    #[error("callback rejected: {reason}")]
+    CallbackRejected {
+        /// Why the callback was rejected.
+        reason: String,
+    },
 }

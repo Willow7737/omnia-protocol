@@ -30,19 +30,26 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod auth;
 pub mod engine;
 pub mod error;
+pub mod ghana_provider;
 pub mod governance;
 pub mod merchant;
+pub mod persistence;
 pub mod provider;
+pub mod quote_service;
 pub mod reconciliation;
 pub mod risk;
 pub mod state;
 pub mod treasury_adapter;
 pub mod types;
 
-pub use engine::PaymentEngine;
+pub use auth::{Credential, JwtClaims, ServiceRoleRegistry};
+pub use engine::{Clock, FixedClock, PaymentEngine, SystemClock};
 pub use error::PaymentError;
+pub use ghana_provider::GhanaSandboxProvider;
+pub use persistence::{InMemoryPaymentStore, PaymentStore, SideEffect, recover_order};
 pub use provider::{
     CallbackStatus, CallbackVerification, MobileMoneyProvider, OmniaQuote, ProviderAdapter, ProviderCallback,
     SubsidyRecord, SubsidyTracker,
@@ -53,5 +60,6 @@ pub use reconciliation::{
 };
 pub use risk::{CircuitBreaker, RiskLimits};
 pub use state::PaymentState;
+pub use quote_service::{QuoteRequest, QuoteService, QuoteServiceConfig, SignedQuote};
 pub use treasury_adapter::{TreasuryBridgeAdapter, TreasuryBridgeResult};
 pub use types::PaymentOrder;

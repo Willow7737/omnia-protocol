@@ -21,34 +21,48 @@
 //! OMNIA tokens are released in phases, each with a declining maximum
 //! supply cap:
 //!
-//! | Phase | Max Supply | Description                       |
-//! |-------|-----------|-----------------------------------|
-//! | 0     | 80,000,000| Genesis / initial distribution     |
-//! | 1     | 60,000,000| Post-pilot contraction             |
-//! | 2     | 45,000,000| Mainnet maturity                   |
-//! | 3     | 34,000,000| Long-term equilibrium              |
+//! | Phase | Max Supply    | Description                       |
+//! |-------|---------------|-----------------------------------|
+//! | 0     | 80,000,000    | Genesis / initial distribution     |
+//! | 1     | 60,000,000    | Post-pilot contraction             |
+//! | 2     | 45,000,000    | Mainnet maturity                   |
+//! | 3     | 34,000,000    | Long-term equilibrium              |
 //!
 //! Phase transitions are triggered by governance proposals and require
 //! a supermajority vote. The schedule is immutable — governance can
 //! trigger a transition but cannot alter the caps.
+//!
+//! # Denomination
+//!
+//! All amounts in this module are in **plancks** (10⁻⁹ OMNIA), matching
+//! the rest of the financial stack (fee-burn, payment-order, treasury).
+//! 1 OMNIA = 1,000,000,000 plancks.
 
 use serde::{Deserialize, Serialize};
 
 // ------------------------------------------------------------------
-// Supply phase constants (§5.3)
+// Denomination constants
 // ------------------------------------------------------------------
 
-/// Phase 0: Genesis / initial distribution.
-pub const PHASE_0_MAX_SUPPLY: u64 = 80_000_000;
+/// OMNIA uses 9 decimal places. 1 whole OMNIA = 10^9 plancks.
+/// This constant converts whole OMNIA to plancks.
+pub const OMNIA_DECIMALS: u64 = 1_000_000_000;
 
-/// Phase 1: Post-pilot contraction.
-pub const PHASE_1_MAX_SUPPLY: u64 = 60_000_000;
+// ------------------------------------------------------------------
+// Supply phase constants (§5.3) — in plancks
+// ------------------------------------------------------------------
 
-/// Phase 2: Mainnet maturity.
-pub const PHASE_2_MAX_SUPPLY: u64 = 45_000_000;
+/// Phase 0: Genesis / initial distribution (80,000,000 OMNIA in plancks).
+pub const PHASE_0_MAX_SUPPLY: u64 = 80_000_000 * OMNIA_DECIMALS;
 
-/// Phase 3: Long-term equilibrium.
-pub const PHASE_3_MAX_SUPPLY: u64 = 34_000_000;
+/// Phase 1: Post-pilot contraction (60,000,000 OMNIA in plancks).
+pub const PHASE_1_MAX_SUPPLY: u64 = 60_000_000 * OMNIA_DECIMALS;
+
+/// Phase 2: Mainnet maturity (45,000,000 OMNIA in plancks).
+pub const PHASE_2_MAX_SUPPLY: u64 = 45_000_000 * OMNIA_DECIMALS;
+
+/// Phase 3: Long-term equilibrium (34,000,000 OMNIA in plancks).
+pub const PHASE_3_MAX_SUPPLY: u64 = 34_000_000 * OMNIA_DECIMALS;
 
 /// The final phase — no further transitions are possible.
 pub const FINAL_PHASE: u8 = 3;
@@ -397,6 +411,15 @@ mod tests {
         assert_eq!(PHASE_MAX_SUPPLIES.len(), 4);
     }
 
+    #[test]
+    fn test_decimals_constant() {
+        // Verify the conversion constant is 10^9
+        assert_eq!(OMNIA_DECIMALS, 1_000_000_000);
+        // Verify phase caps are correctly scaled to plancks
+        assert_eq!(PHASE_0_MAX_SUPPLY, 80_000_000 * OMNIA_DECIMALS);
+        assert_eq!(PHASE_3_MAX_SUPPLY, 34_000_000 * OMNIA_DECIMALS);
+    }
+
     // ------------------------------------------------------------------
     // SupplyTracker: construction
     // ------------------------------------------------------------------
@@ -413,9 +436,10 @@ mod tests {
 
     #[test]
     fn test_genesis_mint_valid() {
-        let tracker = SupplyTracker::with_genesis_mint(50_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_minted, 50_000_000);
-        assert_eq!(tracker.total_supply(), 50_000_000);
+        let tracker =
+            SupplyTracker::with_genesis_mint(50_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        assert_eq!(tracker.total_minted, 50_000_000 * OMNIA_DECIMALS);
+        assert_eq!(tracker.total_supply(), 50_000_000 * OMNIA_DECIMALS);
     }
 
     #[test]
@@ -426,7 +450,8 @@ mod tests {
 
     #[test]
     fn test_genesis_mint_at_exact_cap() {
-        let tracker = SupplyTracker::with_genesis_mint(PHASE_0_MAX_SUPPLY).expect("test assertion failed");
+        let tracker =
+            SupplyTracker::with_genesis_mint(PHASE_0_MAX_SUPPLY).expect("test assertion failed");
         assert_eq!(tracker.total_supply(), PHASE_0_MAX_SUPPLY);
         assert_eq!(tracker.remaining_mintable(), 0);
     }
@@ -438,9 +463,11 @@ mod tests {
     #[test]
     fn test_record_mint_basic() {
         let mut tracker = SupplyTracker::new();
-        tracker.record_mint(1_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_minted, 1_000_000);
-        assert_eq!(tracker.total_supply(), 1_000_000);
+        tracker
+            .record_mint(1_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_minted, 1_000_000 * OMNIA_DECIMALS);
+        assert_eq!(tracker.total_supply(), 1_000_000 * OMNIA_DECIMALS);
     }
 
     #[test]
@@ -452,21 +479,28 @@ mod tests {
 
     #[test]
     fn test_record_mint_exceeds_cap() {
-        let mut tracker = SupplyTracker::with_genesis_mint(79_999_999).expect("test assertion failed");
-        let result = tracker.record_mint(2);
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(79_999_999 * OMNIA_DECIMALS).expect("test assertion failed");
+        let result = tracker.record_mint(2 * OMNIA_DECIMALS);
         assert!(matches!(result, Err(SupplyError::MintExceedsPhaseCap { .. })));
         // Supply unchanged
-        assert_eq!(tracker.total_minted, 79_999_999);
+        assert_eq!(tracker.total_minted, 79_999_999 * OMNIA_DECIMALS);
     }
 
     #[test]
     fn test_record_mint_multiple() {
         let mut tracker = SupplyTracker::new();
-        tracker.record_mint(10_000_000).expect("test assertion failed");
-        tracker.record_mint(20_000_000).expect("test assertion failed");
-        tracker.record_mint(30_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_minted, 60_000_000);
-        assert_eq!(tracker.total_supply(), 60_000_000);
+        tracker
+            .record_mint(10_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        tracker
+            .record_mint(20_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        tracker
+            .record_mint(30_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_minted, 60_000_000 * OMNIA_DECIMALS);
+        assert_eq!(tracker.total_supply(), 60_000_000 * OMNIA_DECIMALS);
     }
 
     // ------------------------------------------------------------------
@@ -475,31 +509,39 @@ mod tests {
 
     #[test]
     fn test_record_burn_basic() {
-        let mut tracker = SupplyTracker::with_genesis_mint(10_000_000).expect("test assertion failed");
-        tracker.record_burn(3_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_burned, 3_000_000);
-        assert_eq!(tracker.total_supply(), 7_000_000);
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(10_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        tracker
+            .record_burn(3_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_burned, 3_000_000 * OMNIA_DECIMALS);
+        assert_eq!(tracker.total_supply(), 7_000_000 * OMNIA_DECIMALS);
     }
 
     #[test]
     fn test_record_burn_zero_is_noop() {
-        let mut tracker = SupplyTracker::with_genesis_mint(10_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(10_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.record_burn(0).expect("test assertion failed");
         assert_eq!(tracker.total_burned, 0);
     }
 
     #[test]
     fn test_record_burn_exceeds_supply() {
-        let mut tracker = SupplyTracker::with_genesis_mint(10_000_000).expect("test assertion failed");
-        let result = tracker.record_burn(10_000_001);
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(10_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        let result = tracker.record_burn(10_000_001 * OMNIA_DECIMALS);
         assert!(matches!(result, Err(SupplyError::BurnExceedsSupply { .. })));
         assert_eq!(tracker.total_burned, 0);
     }
 
     #[test]
     fn test_record_burn_full_supply() {
-        let mut tracker = SupplyTracker::with_genesis_mint(10_000_000).expect("test assertion failed");
-        tracker.record_burn(10_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(10_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        tracker
+            .record_burn(10_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
         assert_eq!(tracker.total_supply(), 0);
     }
 
@@ -509,7 +551,8 @@ mod tests {
 
     #[test]
     fn test_transition_phase_0_to_1() {
-        let mut tracker = SupplyTracker::with_genesis_mint(50_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(50_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(1000).expect("test assertion failed");
         assert_eq!(tracker.current_phase, 1);
         assert_eq!(tracker.current_phase_cap(), PHASE_1_MAX_SUPPLY);
@@ -519,7 +562,8 @@ mod tests {
 
     #[test]
     fn test_transition_phase_1_to_2() {
-        let mut tracker = SupplyTracker::with_genesis_mint(40_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(40_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(1000).expect("test assertion failed"); // 0->1
         tracker.transition_phase(2000).expect("test assertion failed"); // 1->2
         assert_eq!(tracker.current_phase, 2);
@@ -528,7 +572,8 @@ mod tests {
 
     #[test]
     fn test_transition_full_path() {
-        let mut tracker = SupplyTracker::with_genesis_mint(30_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(30_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(100).expect("test assertion failed"); // 0->1
         tracker.transition_phase(200).expect("test assertion failed"); // 1->2
         tracker.transition_phase(300).expect("test assertion failed"); // 2->3
@@ -539,7 +584,8 @@ mod tests {
 
     #[test]
     fn test_transition_from_final_phase_fails() {
-        let mut tracker = SupplyTracker::with_genesis_mint(30_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(30_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(100).expect("test assertion failed");
         tracker.transition_phase(200).expect("test assertion failed");
         tracker.transition_phase(300).expect("test assertion failed");
@@ -549,7 +595,8 @@ mod tests {
 
     #[test]
     fn test_transition_supply_exceeds_new_cap() {
-        let mut tracker = SupplyTracker::with_genesis_mint(70_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(70_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         // Phase 1 cap is 60M, but supply is 70M — transition should fail
         let result = tracker.transition_phase(1000);
         assert!(matches!(result, Err(SupplyError::MintExceedsPhaseCap { .. })));
@@ -558,13 +605,16 @@ mod tests {
 
     #[test]
     fn test_transition_then_mint_within_new_cap() {
-        let mut tracker = SupplyTracker::with_genesis_mint(40_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(40_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(1000).expect("test assertion failed"); // 0->1, cap=60M
-                                                                        // Can still mint up to 60M
-        tracker.record_mint(15_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_supply(), 55_000_000);
+        // Can still mint up to 60M
+        tracker
+            .record_mint(15_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_supply(), 55_000_000 * OMNIA_DECIMALS);
         // But not beyond
-        let result = tracker.record_mint(6_000_000);
+        let result = tracker.record_mint(6_000_000 * OMNIA_DECIMALS);
         assert!(matches!(result, Err(SupplyError::MintExceedsPhaseCap { .. })));
     }
 
@@ -575,14 +625,19 @@ mod tests {
     #[test]
     fn test_invariant_holds_after_mint() {
         let mut tracker = SupplyTracker::new();
-        tracker.record_mint(5_000_000).expect("test assertion failed");
+        tracker
+            .record_mint(5_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
         assert!(tracker.check_invariant().is_ok());
     }
 
     #[test]
     fn test_invariant_holds_after_burn() {
-        let mut tracker = SupplyTracker::with_genesis_mint(10_000_000).expect("test assertion failed");
-        tracker.record_burn(3_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(10_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        tracker
+            .record_burn(3_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
         assert!(tracker.check_invariant().is_ok());
     }
 
@@ -592,15 +647,18 @@ mod tests {
 
     #[test]
     fn test_snapshot_contents() {
-        let mut tracker = SupplyTracker::with_genesis_mint(50_000_000).expect("test assertion failed");
-        tracker.record_burn(5_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(50_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        tracker
+            .record_burn(5_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
         let snap = tracker.snapshot();
-        assert_eq!(snap.total_minted, 50_000_000);
-        assert_eq!(snap.total_burned, 5_000_000);
-        assert_eq!(snap.total_supply, 45_000_000);
+        assert_eq!(snap.total_minted, 50_000_000 * OMNIA_DECIMALS);
+        assert_eq!(snap.total_burned, 5_000_000 * OMNIA_DECIMALS);
+        assert_eq!(snap.total_supply, 45_000_000 * OMNIA_DECIMALS);
         assert_eq!(snap.current_phase, 0);
         assert_eq!(snap.phase_cap, PHASE_0_MAX_SUPPLY);
-        assert_eq!(snap.remaining_mintable, 35_000_000);
+        assert_eq!(snap.remaining_mintable, 35_000_000 * OMNIA_DECIMALS);
         assert!(!snap.phase_description.is_empty());
     }
 
@@ -610,13 +668,16 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip() {
-        let mut tracker = SupplyTracker::with_genesis_mint(50_000_000).expect("test assertion failed");
-        tracker.record_burn(5_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(50_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
+        tracker
+            .record_burn(5_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
         tracker.transition_phase(1000).expect("test assertion failed");
         let bytes = tracker.to_bytes().expect("test assertion failed");
         let restored = SupplyTracker::from_bytes(&bytes).expect("test assertion failed");
-        assert_eq!(restored.total_minted, 50_000_000);
-        assert_eq!(restored.total_burned, 5_000_000);
+        assert_eq!(restored.total_minted, 50_000_000 * OMNIA_DECIMALS);
+        assert_eq!(restored.total_burned, 5_000_000 * OMNIA_DECIMALS);
         assert_eq!(restored.current_phase, 1);
         assert_eq!(restored.last_transition_block, 1000);
     }
@@ -640,7 +701,8 @@ mod tests {
 
     #[test]
     fn test_phase_3_no_further_minting_after_full() {
-        let mut tracker = SupplyTracker::with_genesis_mint(34_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(34_000_000 * OMNIA_DECIMALS).expect("test assertion failed");
         tracker.transition_phase(100).expect("test assertion failed");
         tracker.transition_phase(200).expect("test assertion failed");
         tracker.transition_phase(300).expect("test assertion failed");
@@ -651,14 +713,19 @@ mod tests {
 
     #[test]
     fn test_burn_creates_minting_headroom() {
-        let mut tracker = SupplyTracker::with_genesis_mint(80_000_000).expect("test assertion failed");
+        let mut tracker =
+            SupplyTracker::with_genesis_mint(PHASE_0_MAX_SUPPLY).expect("test assertion failed");
         // Supply is at cap, can't mint
         assert!(tracker.record_mint(1).is_err());
         // Burn 10M
-        tracker.record_burn(10_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_supply(), 70_000_000);
+        tracker
+            .record_burn(10_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_supply(), 70_000_000 * OMNIA_DECIMALS);
         // Now can mint 10M
-        tracker.record_mint(10_000_000).expect("test assertion failed");
-        assert_eq!(tracker.total_supply(), 80_000_000);
+        tracker
+            .record_mint(10_000_000 * OMNIA_DECIMALS)
+            .expect("test assertion failed");
+        assert_eq!(tracker.total_supply(), PHASE_0_MAX_SUPPLY);
     }
 }
