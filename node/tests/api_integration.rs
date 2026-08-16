@@ -25,14 +25,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use jsonwebtoken::{encode, EncodingKey, Header};
-use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
 use omnia_economics::EconomicsState;
-use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
 use omnia_node::api::auth::Claims;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
 use omnia_node::state::{default_payment_services, AppState, NodeMetrics};
-use omnia_payment_order::PaymentEngine;
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
     ShardRouter,
@@ -2734,7 +2731,7 @@ async fn setup_live_settlement_server_with_root() -> (TestServer, String) {
     let known_root = [0xAB_u8; 32];
     let root_hex = format!("0x{}", hex::encode(known_root));
 
-    let mut app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
+    let app_state = build_test_app_state_with_settlement(port, Arc::new(LiveTestSettlementAdapter));
     app_state.substrate.write().await.test_inject_lane0_root(known_root);
 
     let app = http::build_http_router().with_state(app_state);
