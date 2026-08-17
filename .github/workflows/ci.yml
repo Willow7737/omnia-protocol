@@ -38,6 +38,12 @@ jobs:
       - run: cargo doc --workspace --no-deps --exclude omnia-fuzz
         env:
           RUSTDOCFLAGS: "-D warnings"
+      # Regression tests for the release tooling in scripts/. Standard library
+      # only and no network, so this runs in well under a second. It guards the
+      # Cargo.lock sync used by release-please.yml, where a silent failure would
+      # otherwise surface much later as a `--locked` build error on a release PR.
+      - name: Release tooling tests (scripts/)
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - name: Verify exemption notes
         run: |
           python3 -c "

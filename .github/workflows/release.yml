@@ -46,11 +46,22 @@ jobs:
           echo "Release tag: $TAG"
           echo "Version: $VERSION"
 
-      # release-please cannot reliably update Cargo.toml because our
-      # version lives under [workspace.package] (nested TOML), which
-      # breaks its JSONPath-based version extraction. So we sync here.
-      # If any file is stale, we fix it, commit, and force-move the tag
-      # so all downstream jobs (which checkout the tag) get the fix.
+      # Belt-and-braces version sync against the tag.
+      #
+      # This used to be the only thing bumping Cargo.toml, on the theory that
+      # release-please "cannot reliably update Cargo.toml because our version
+      # lives under [workspace.package] (nested TOML)". That diagnosis was
+      # wrong: nested TOML is fine, and $.workspace.package.version updates it
+      # correctly, preserving surrounding comments. What was actually missing
+      # was the `jsonpath` key on the extra-files entry — without it
+      # release-please's generic TOML updater calls JSONPath with an undefined
+      # path and the whole run dies before it opens a PR.
+      #
+      # release-please now owns Cargo.toml, and release-please.yml syncs
+      # Cargo.lock on the release branch. This step stays as a safety net for
+      # tags pushed by hand, and for Chart.yaml/values.yaml which release-please
+      # does not manage. If any file is stale, we fix it, commit, and force-move
+      # the tag so all downstream jobs (which checkout the tag) get the fix.
       - name: Sync all version files to release tag
         run: |
           EXPECTED="${{ steps.version.outputs.version }}"

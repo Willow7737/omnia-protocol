@@ -8,12 +8,21 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 # Copy workspace root manifest and lockfile
 COPY Cargo.toml Cargo.lock ./
-# Copy only the production crate manifests (10 crates)
+# Copy only the production crate manifests (13 crates).
+#
+# This list must cover every [workspace] member that the sed below does NOT
+# strip. A member that is neither copied nor stripped makes `cargo fetch` fail
+# with "failed to load manifest for workspace member" — which is how the
+# financial-layer crates (asset-registry, payment-order, fee-burn) broke the
+# image build after they were added to the workspace.
 COPY omnia-primitives/Cargo.toml omnia-primitives/
 COPY omnia-consensus/Cargo.toml omnia-consensus/
 COPY omnia-crypto/Cargo.toml omnia-crypto/
 COPY omnia-network/Cargo.toml omnia-network/
 COPY omnia-adapters/Cargo.toml omnia-adapters/
+COPY asset-registry/Cargo.toml asset-registry/
+COPY payment-order/Cargo.toml payment-order/
+COPY fee-burn/Cargo.toml fee-burn/
 COPY shards/Cargo.toml shards/
 COPY binding/Cargo.toml binding/
 COPY economics/Cargo.toml economics/
@@ -21,12 +30,13 @@ COPY node/Cargo.toml node/
 COPY substrate/Cargo.toml substrate/
 # CI-only crates (benches, fuzz, chaos-tests, tests) are excluded by .dockerignore.
 # 1) Strip them from workspace members
-# 2) Create stub source files for the remaining 10 crates
+# 2) Create stub source files for the remaining 13 crates
 # 3) Remove the lockfile — cargo will regenerate it for the reduced workspace
 # 4) Pre-fetch all dependencies
 RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
     mkdir -p omnia-primitives/src omnia-consensus/src omnia-crypto/src \
     omnia-network/src omnia-adapters/src omnia-adapters/examples \
+    asset-registry/src payment-order/src fee-burn/src \
     shards/src binding/src \
     economics/src node/src substrate/src && \
     echo "" > omnia-primitives/src/lib.rs && \
@@ -37,6 +47,9 @@ RUN sed -i '/"chaos-tests"/d;/"fuzz"/d;/"benches"/d;/"tests"/d' Cargo.toml && \
     echo "fn main() {}" > omnia-adapters/examples/bitcoin_regtest_e2e.rs && \
     echo "fn main() {}" > omnia-adapters/examples/bitcoin_testnet4_verify.rs && \
     echo "fn main() {}" > omnia-adapters/examples/bitcoin_testnet4_finality_verify.rs && \
+    echo "" > asset-registry/src/lib.rs && \
+    echo "" > payment-order/src/lib.rs && \
+    echo "" > fee-burn/src/lib.rs && \
     echo "" > shards/src/lib.rs && \
     echo "" > binding/src/lib.rs && \
     echo "" > economics/src/lib.rs && \
