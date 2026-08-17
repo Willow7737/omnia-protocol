@@ -788,7 +788,7 @@ mod tests {
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
-            .unwrap();
+            .expect("test assertion failed");
 
         // Step 2: Configure recovery with 5 custodians, threshold=3
         let secret = b"my-super-secret-recovery-key";
@@ -803,15 +803,15 @@ mod tests {
                 &vc,
                 Some(&original_pk),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Verify recovery config was stored
-        let config = state.recovery_registry.get(&did).unwrap();
+        let config = state.recovery_registry.get(&did).expect("test assertion failed");
         assert_eq!(config.threshold, 3);
         assert_eq!(config.total_shares, 5);
 
         // Verify encrypted shares were persisted
-        let encrypted = state.shares.get(&did).unwrap();
+        let encrypted = state.shares.get(&did).expect("test assertion failed");
         assert_eq!(encrypted.len(), 5);
         for enc in encrypted {
             assert_eq!(enc.version, 2); // v2 = AES-256-GCM
@@ -819,7 +819,7 @@ mod tests {
         }
 
         // Step 3: Decrypt shares and simulate 3 custodians providing shares
-        let all_shares = state.decrypt_shares(&did).unwrap();
+        let all_shares = state.decrypt_shares(&did).expect("test assertion failed");
         assert_eq!(all_shares.len(), 5);
 
         // Pick 3 out of 5 shares (e.g., custodians 1, 3, 5)
@@ -827,7 +827,7 @@ mod tests {
             vec![all_shares[0].clone(), all_shares[2].clone(), all_shares[4].clone()];
 
         // Step 4: Reconstruct the secret
-        let reconstructed = ShamirRecovery::reconstruct(&recovering_shares).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&recovering_shares).expect("test assertion failed");
         assert_eq!(reconstructed, secret.to_vec());
 
         // Step 5: Derive new keypair from the reconstructed secret
@@ -847,10 +847,10 @@ mod tests {
                 &vc,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Verify new keypair is in authentication set
-        let updated_doc = state.dids.get(&did).unwrap();
+        let updated_doc = state.dids.get(&did).expect("test assertion failed");
         assert!(
             updated_doc.authentication.contains(&new_public_key),
             "New derived key should be in authentication set"
@@ -879,11 +879,11 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"test-secret-for-aes-gcm";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
 
         // Persist and then decrypt
-        state.persist_shares(&did, &shares).unwrap();
-        let decrypted = state.decrypt_shares(&did).unwrap();
+        state.persist_shares(&did, &shares).expect("test assertion failed");
+        let decrypted = state.decrypt_shares(&did).expect("test assertion failed");
 
         // Verify roundtrip: decrypted shares should match original
         assert_eq!(decrypted.len(), shares.len());
@@ -893,7 +893,7 @@ mod tests {
         }
 
         // Verify the decrypted shares can reconstruct the secret
-        let reconstructed = ShamirRecovery::reconstruct(&decrypted).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&decrypted).expect("test assertion failed");
         assert_eq!(reconstructed, secret.to_vec());
     }
 
@@ -918,10 +918,10 @@ mod tests {
         let doc = DidDocument::new(did.clone(), pk, 0);
         state.dids.insert(did.clone(), doc);
 
-        let shares = ShamirRecovery::split(b"secret", 2, 3).unwrap();
-        state.persist_shares(&did, &shares).unwrap();
+        let shares = ShamirRecovery::split(b"secret", 2, 3).expect("test assertion failed");
+        state.persist_shares(&did, &shares).expect("test assertion failed");
 
-        let encrypted = state.shares.get(&did).unwrap();
+        let encrypted = state.shares.get(&did).expect("test assertion failed");
         for enc in encrypted {
             assert_eq!(enc.version, 2); // v2 = AES-256-GCM
         }
@@ -936,17 +936,17 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"test-secret-for-aes-gcm";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
-        state.persist_shares(&did, &shares).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
+        state.persist_shares(&did, &shares).expect("test assertion failed");
 
         // Verify version 2
-        let encrypted = state.shares.get(&did).unwrap();
+        let encrypted = state.shares.get(&did).expect("test assertion failed");
         for enc in encrypted {
             assert_eq!(enc.version, 2);
         }
 
         // Decrypt and verify roundtrip
-        let decrypted = state.decrypt_shares(&did).unwrap();
+        let decrypted = state.decrypt_shares(&did).expect("test assertion failed");
         assert_eq!(decrypted.len(), shares.len());
         for (orig, dec) in shares.iter().zip(decrypted.iter()) {
             assert_eq!(orig.index, dec.index);
@@ -954,7 +954,7 @@ mod tests {
         }
 
         // Verify reconstruction
-        let reconstructed = ShamirRecovery::reconstruct(&decrypted).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&decrypted).expect("test assertion failed");
         assert_eq!(reconstructed, secret.to_vec());
     }
 
@@ -967,11 +967,11 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"tamper-detection-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
-        state.persist_shares(&did, &shares).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
+        state.persist_shares(&did, &shares).expect("test assertion failed");
 
         // Tamper with a ciphertext byte
-        let encrypted_shares = state.shares.get_mut(&did).unwrap();
+        let encrypted_shares = state.shares.get_mut(&did).expect("test assertion failed");
         if !encrypted_shares[0].ciphertext.is_empty() {
             encrypted_shares[0].ciphertext[0] ^= 0xFF;
         }
@@ -991,7 +991,7 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"v1-backward-compat-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
 
         // Manually create v1 (XOR) encrypted shares
         let mut v1_encrypted = Vec::new();
@@ -1020,8 +1020,8 @@ mod tests {
         state.shares.insert(did.clone(), v1_encrypted);
 
         // Decrypt v1 shares should still work
-        let decrypted = state.decrypt_shares(&did).unwrap();
-        let reconstructed = ShamirRecovery::reconstruct(&decrypted).unwrap();
+        let decrypted = state.decrypt_shares(&did).expect("test assertion failed");
+        let reconstructed = ShamirRecovery::reconstruct(&decrypted).expect("test assertion failed");
         assert_eq!(reconstructed, secret.to_vec());
     }
 
@@ -1034,11 +1034,11 @@ mod tests {
         state.dids.insert(did.clone(), doc);
 
         let secret = b"wrong-key-test-secret";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
-        state.persist_shares(&did, &shares).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
+        state.persist_shares(&did, &shares).expect("test assertion failed");
 
         // Corrupt the custodian index to use wrong decryption key
-        let encrypted_shares = state.shares.get_mut(&did).unwrap();
+        let encrypted_shares = state.shares.get_mut(&did).expect("test assertion failed");
         encrypted_shares[0].custodian = 99; // Wrong custodian index
 
         // Decryption should fail (derived key won't match)
@@ -1057,7 +1057,7 @@ mod tests {
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
-            .unwrap();
+            .expect("test assertion failed");
 
         // Configure recovery with 5 custodians, threshold=3
         let secret = b"recovery-auth-secret";
@@ -1072,10 +1072,10 @@ mod tests {
                 &vc,
                 Some(&original_pk),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Recover with 3 shares
-        let all_shares = state.decrypt_shares(&did).unwrap();
+        let all_shares = state.decrypt_shares(&did).expect("test assertion failed");
         let recovering_shares: Vec<RecoveryShare> =
             vec![all_shares[0].clone(), all_shares[2].clone(), all_shares[4].clone()];
 
@@ -1089,10 +1089,10 @@ mod tests {
                 &vc,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Verify new key is in authentication
-        let updated_doc = state.dids.get(&did).unwrap();
+        let updated_doc = state.dids.get(&did).expect("test assertion failed");
         let new_public_key = derive_identity_key(secret);
         assert!(
             updated_doc.authentication.contains(&new_public_key),
@@ -1119,7 +1119,7 @@ mod tests {
         let doc = DidDocument::new(did.clone(), original_pk, 1000);
         state
             .apply(&IdentityOp::CreateDid { document: doc }, &vc, Some(&original_pk))
-            .unwrap();
+            .expect("test assertion failed");
 
         let secret = b"replay-prevention-secret";
         state
@@ -1133,9 +1133,9 @@ mod tests {
                 &vc,
                 Some(&original_pk),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        let shares = state.decrypt_shares(&did).unwrap();
+        let shares = state.decrypt_shares(&did).expect("test assertion failed");
 
         // First recovery
         state
@@ -1147,9 +1147,9 @@ mod tests {
                 &vc,
                 None,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
-        let doc_after_first = state.dids.get(&did).unwrap();
+        let doc_after_first = state.dids.get(&did).expect("test assertion failed");
         assert_eq!(doc_after_first.recovery_count, 1);
 
         // Second recovery with same shares should fail (replay prevention)
@@ -1166,7 +1166,7 @@ mod tests {
             replay_result.is_err(),
             "Recovery with same shares should be rejected as replay"
         );
-        match replay_result.unwrap_err() {
+        match replay_result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => {
                 assert!(
                     msg.to_lowercase().contains("replay"),
@@ -1176,7 +1176,7 @@ mod tests {
             other => panic!("expected ValidationFailed, got {other:?}"),
         }
 
-        let doc_after_second = state.dids.get(&did).unwrap();
+        let doc_after_second = state.dids.get(&did).expect("test assertion failed");
         // recovery_count should still be 1 since the second recovery was rejected
         assert_eq!(doc_after_second.recovery_count, 1);
         // The recovered key should be in authentication exactly once

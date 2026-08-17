@@ -303,6 +303,9 @@ mod tests {
         #[cfg(feature = "metrics")]
         let metrics = NodeMetrics::new().expect("Failed to create metrics");
 
+        let (quote_service, payment_store, service_role_registry, ghana_provider) =
+            crate::state::default_payment_services();
+
         AppState {
             config,
             substrate: Arc::new(RwLock::new(substrate)),
@@ -320,6 +323,18 @@ mod tests {
             settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
             #[cfg(feature = "zk")]
             ceremony_server: None,
+            // Sprint 3–5 financial pallet state
+            asset_registry: Arc::new(RwLock::new(omnia_asset_registry::AssetRegistry::new())),
+            supply_tracker: Arc::new(RwLock::new(omnia_asset_registry::SupplyTracker::new())),
+            treasury: Arc::new(RwLock::new(omnia_asset_registry::Treasury::new())),
+            fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
+            burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
+            payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),
+            quote_service,
+            payment_store,
+            service_role_registry,
+            ghana_provider,
+            merchant_registry: Arc::new(std::sync::Mutex::new(crate::api::merchants::MerchantRegistry::new())),
         }
     }
 
@@ -338,9 +353,14 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::OK);
     }
@@ -352,14 +372,21 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "not_ready");
         assert_eq!(body["reason"], "no_peers");
     }
@@ -371,14 +398,21 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::SERVICE_UNAVAILABLE);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "not_ready");
         assert_eq!(body["reason"], "syncing");
     }
@@ -391,14 +425,21 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "ready");
         assert_eq!(body["finalized_height"], 0);
         assert_eq!(body["lane0_enabled"], false);
@@ -413,27 +454,34 @@ mod tests {
         let state = make_test_state(vec![make_peer("peer1")], false, 0);
         {
             let mut substrate = state.substrate.write().await;
-            let keypair = state.keypair.as_ref().unwrap();
-            let validators =
-                omnia_substrate::lane0::ValidatorSet::new([(keypair.verifying_key().to_bytes(), 1)]).unwrap();
+            let keypair = state.keypair.as_ref().expect("test assertion failed");
+            let validators = omnia_substrate::lane0::ValidatorSet::new([(keypair.verifying_key().to_bytes(), 1)])
+                .expect("test assertion failed");
             substrate.init_lane0(validators);
             substrate.add_validator(state.config.node_id_bytes(), keypair.clone(), 1);
             let mut event = omnia_substrate::Event::genesis(state.config.node_id_bytes(), vec![1, 2, 3])
                 .expect("valid genesis event");
             event.sign_with_keypair(keypair).expect("signing");
-            substrate.submit_event(event).await.unwrap();
+            substrate.submit_event(event).await.expect("test assertion failed");
         }
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "ready");
         assert_eq!(body["finalized_height"], 0);
         assert_eq!(body["lane0_enabled"], true);
@@ -447,14 +495,21 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "ready");
         assert_eq!(body["peers"], 1);
         assert_eq!(body["finalized_height"], 1);
@@ -473,7 +528,7 @@ mod tests {
 
         // "Previous run": persist a consensus state with 4 committed events.
         {
-            let store = RedbConsensusStore::open(&db_path).unwrap();
+            let store = RedbConsensusStore::open(&db_path).expect("test assertion failed");
             store
                 .save_state(&PersistedConsensusState {
                     current_round: 6,
@@ -485,7 +540,7 @@ mod tests {
                     first_event_for_sequence: std::collections::HashMap::new(),
                     version: 2,
                 })
-                .unwrap();
+                .expect("test assertion failed");
         }
 
         // "Restart": fresh AppState with an EMPTY HTTP event store, whose
@@ -498,15 +553,22 @@ mod tests {
 
         let app = build_http_router().with_state(state);
         let response = app
-            .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         let _ = std::fs::remove_file(&db_path);
 
         assert_eq!(response.status(), HttpStatus::OK);
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "ready");
         assert_eq!(
             body["finalized_height"], 4,
@@ -521,14 +583,21 @@ mod tests {
         let app = build_http_router().with_state(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .expect("test assertion failed"),
+            )
             .await
-            .unwrap();
+            .expect("test assertion failed");
 
         assert_eq!(response.status(), HttpStatus::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("test assertion failed");
+        let body: serde_json::Value = serde_json::from_slice(&body).expect("test assertion failed");
         assert_eq!(body["status"], "alive");
     }
 }

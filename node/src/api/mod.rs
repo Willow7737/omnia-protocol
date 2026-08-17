@@ -13,14 +13,20 @@
 
 pub mod admin;
 pub mod auth;
+pub mod bridge;
 pub mod ceremony;
 pub mod economics;
 pub mod errors;
 pub mod events;
+pub mod fees;
 pub mod financial;
 pub mod governance;
+pub mod merchants;
 pub mod node;
+pub mod payment_orders;
 pub mod shards;
+pub mod supply;
+pub mod treasury;
 pub mod wallet_auth;
 
 use std::sync::Arc;
@@ -147,9 +153,34 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         .route("/errors", get(errors::error_codes))
         .route("/ceremony/state", get(ceremony::ceremony_state))
         .route("/ceremony/transcript", get(ceremony::ceremony_transcript))
+        // Protocol-wide monitoring reads (§4.4, §5, §6, §7, §8, §15).
+        //
+        // These are aggregates over the whole protocol — supply totals, treasury
+        // buckets, fee policy, provider health — with no per-account data and no
+        // caller-derived response. They are what the public dashboard and status
+        // pages render, so requiring a JWT would leave those surfaces blank for
+        // anyone not signed in. Every handler here takes only `State`; none reads
+        // `CallerIdentity`, which is what makes serving them outside the auth
+        // layer well-defined rather than merely convenient.
+        //
+        // Per-account reads (`/economics/balance/:did`, `/financial/balance/:pubkey`),
+        // fee *calculation*, and every mutation stay authenticated below.
+        .route("/supply", get(supply::get_supply))
+        .route("/supply/invariants", get(supply::verify_supply_invariants))
+        .route("/treasury/status", get(treasury::get_treasury_status))
+        .route("/treasury/inventory", get(treasury::get_pilot_inventory))
+        .route("/treasury/accounting", get(treasury::get_treasury_accounting))
+        .route("/fees/burn-policy", get(fees::get_burn_policy))
+        .route("/fees/stats", get(fees::get_fee_stats))
+        .route("/economics/fee-burn", get(economics::get_fee_burn_stats))
+        .route("/bridge/providers", get(bridge::list_providers))
+        .route("/bridge/health", get(bridge::bridge_health))
         // Wallet challenge/signature login — issues JWTs, so must be public.
         .route("/auth/challenge", post(wallet_auth::request_challenge))
-        .route("/auth/login", post(wallet_auth::login));
+        .route("/auth/login", post(wallet_auth::login))
+        // Provider callbacks authenticate with HMAC plus a registered service key,
+        // not with a wallet JWT.
+        .route("/payment-orders/callback", post(payment_orders::provider_callback));
 
     // Authenticated routes — JWT required (write endpoints + sensitive reads)
     let authenticated_routes = Router::new()
@@ -180,6 +211,27 @@ pub fn build_api_router_with(authorized: Arc<AuthorizedCallers>) -> Router<AppSt
         // Ceremony write operations
         .route("/ceremony/contribute", post(ceremony::ceremony_contribute))
         .route("/ceremony/finalize", post(ceremony::ceremony_finalize))
+        // Fee calculation is a POST that prices a hypothetical operation, not a
+        // monitoring read, so it stays behind the JWT with the other non-reads.
+        // The monitoring aggregates it sits beside are served publicly above.
+        .route("/fees/calculate", post(fees::calculate_fee))
+        // Payment orders (§8): economic terms come only from signed quotes.
+        .route("/payment-orders/quote", post(payment_orders::request_quote))
+        .route("/payment-orders/initiate", post(payment_orders::initiate_payment))
+        .route("/payment-orders/:id", get(payment_orders::get_order))
+        .route("/payment-orders/:id/advance", post(payment_orders::advance_order))
+        // Merchant onboarding and settlement (§9).
+        .route("/merchants/register", post(merchants::register_merchant))
+        .route(
+            "/merchants/:id/payment-request",
+            post(merchants::create_payment_request),
+        )
+        .route("/merchants/:id/payments", get(merchants::list_payments))
+        .route("/merchants/:id/receipt/:payment_id", get(merchants::get_receipt))
+        .route(
+            "/merchants/:id/payments/:payment_id/confirm",
+            post(merchants::confirm_payment),
+        )
         // --- Middleware layers (outermost = last added) ---
         // Provide AuthorizedCallers via Extension for handler-level checks
         .layer(Extension(Arc::clone(&authorized)))

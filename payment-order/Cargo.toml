@@ -1,0 +1,25 @@
+[package]
+name = "omnia-payment-order"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+description = "Payment order state machine — Financial Specification §8.2, §8.3, §15"
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+hmac = "0.12"
+sha2 = "0.10"
+omnia-asset-registry = { path = "../asset-registry" }
+redb = "2"
+serde_json = "1.0"
+
+[dev-dependencies]
+proptest = "1.4"
+
+[features]
+default = []

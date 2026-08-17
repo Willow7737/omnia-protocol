@@ -54,13 +54,13 @@ fn signed_child(kp: &NodeKeypair, seq: u64, parent_id: EventId) -> Event {
 fn build_chain(graph: &mut CausalGraph, kp: &NodeKeypair, depth: usize) -> EventId {
     let genesis = signed_genesis(kp);
     let genesis_id = genesis.id;
-    graph.insert(genesis).unwrap();
+    graph.insert(genesis).expect("test assertion failed");
 
     let mut last_id = genesis_id;
     for seq in 1..depth {
         let event = signed_child(kp, seq as u64, last_id);
         last_id = event.id;
-        graph.insert(event).unwrap();
+        graph.insert(event).expect("test assertion failed");
     }
     last_id
 }
@@ -80,7 +80,7 @@ fn graph_depth_at_limit_works() {
     assert_eq!(stats.total_events, depth);
     assert_eq!(stats.max_depth, depth);
 
-    let event = graph.get(&last_id).unwrap();
+    let event = graph.get(&last_id).expect("test assertion failed");
     assert!(event.verify_hash().expect("verify_hash"));
 
     println!("[depth] Built chain of {depth} events, max_depth = {}", stats.max_depth);
@@ -126,7 +126,7 @@ fn tip_count_at_max_tips() {
     for _ in 0..tip_target {
         let kp = generate_keypair();
         let event = signed_genesis(&kp);
-        graph.insert(event).unwrap();
+        graph.insert(event).expect("test assertion failed");
     }
 
     let stats = graph.stats();
@@ -149,7 +149,7 @@ fn tip_consolidation_on_overflow() {
     for _ in 0..overflow_count {
         let kp = generate_keypair();
         let event = signed_genesis(&kp);
-        graph.insert(event).unwrap();
+        graph.insert(event).expect("test assertion failed");
     }
 
     let stats = graph.stats();
@@ -196,7 +196,7 @@ fn event_pool_overflow_rejected() {
     for _ in 0..max {
         let kp = generate_keypair();
         let event = signed_genesis(&kp);
-        pool.insert(event).unwrap();
+        pool.insert(event).expect("test assertion failed");
     }
 
     let kp = generate_keypair();
@@ -246,7 +246,7 @@ fn payload_exceeding_max_size_rejected() {
 
     let result = event.validate();
     assert!(result.is_err(), "oversized payload should be rejected");
-    let msg = format!("{}", result.unwrap_err());
+    let msg = format!("{}", result.expect_err("test assertion failed"));
     assert!(
         msg.contains("Payload too large"),
         "Expected PayloadTooLarge, got: {msg}"
@@ -284,7 +284,7 @@ fn crdt_batch_at_max_size() {
 
     let result = merger.apply_batch(&ops);
     assert!(result.is_ok(), "batch at MAX_CRDT_BATCH_SIZE should succeed");
-    let r = result.unwrap();
+    let r = result.expect("test assertion failed");
     assert_eq!(r.applied_count, MAX_CRDT_BATCH_SIZE);
     assert!(r.atomic);
 
@@ -329,7 +329,7 @@ fn crdt_gcounter_overflow_in_batch() {
         node_id: node,
         amount: u64::MAX - 10,
     }];
-    merger.apply_batch(&setup).unwrap();
+    merger.apply_batch(&setup).expect("test assertion failed");
 
     let overflow = vec![CrdtBatchOp::GCounterIncrement {
         key: "overflow_test".to_string(),
@@ -353,7 +353,7 @@ fn gcounter_increment_overflow_returns_error() {
     let mut counter = GCounter::new();
     let node = test_node(1);
 
-    counter.increment(node, u64::MAX).unwrap();
+    counter.increment(node, u64::MAX).expect("test assertion failed");
     assert_eq!(counter.node_value(&node), u64::MAX);
 
     let result = counter.increment(node, 1);
@@ -368,8 +368,8 @@ fn gcounter_value_saturates_on_multi_node_overflow() {
     let n1 = test_node(1);
     let n2 = test_node(2);
 
-    counter.increment(n1, u64::MAX).unwrap();
-    counter.increment(n2, 1).unwrap();
+    counter.increment(n1, u64::MAX).expect("test assertion failed");
+    counter.increment(n2, 1).expect("test assertion failed");
 
     assert_eq!(counter.value(), u64::MAX);
     assert!(counter.value_checked().is_err());
@@ -384,8 +384,8 @@ fn gcounter_merge_is_idempotent() {
     let n1 = test_node(1);
     let n2 = test_node(2);
 
-    a.increment(n1, 100).unwrap();
-    b.increment(n2, 200).unwrap();
+    a.increment(n1, 100).expect("test assertion failed");
+    b.increment(n2, 200).expect("test assertion failed");
 
     let mut merged = a.clone();
     CvRDT::merge(&mut merged, &b);
@@ -489,7 +489,7 @@ fn vrf_leader_selection_many_candidates() {
     let mut leader_counts: HashMap<NodeId, usize> = HashMap::new();
     let rounds = 10_000;
     for round in 0..rounds {
-        let leader = select_leader(&candidates, seed, round).unwrap();
+        let leader = select_leader(&candidates, seed, round).expect("test assertion failed");
         *leader_counts.entry(leader).or_insert(0) += 1;
     }
 
@@ -516,7 +516,7 @@ fn vrf_deterministic_compute_and_verify() {
     assert_eq!(output.output.len(), 32);
     assert_eq!(output.proof.len(), 64);
 
-    deterministic_verify(&kp.verifying_key(), input, &output).unwrap();
+    deterministic_verify(&kp.verifying_key(), input, &output).expect("test assertion failed");
 
     println!("[vrf] deterministic_compute + verify roundtrip succeeds");
 }
@@ -545,12 +545,13 @@ fn governance_quorum_enforcement_67_percent() {
     }
 
     gov.create_proposal("prop1".to_string(), "test proposal".to_string(), 10, 0)
-        .unwrap();
+        .expect("test assertion failed");
 
     // 6 out of 10 voters: total weight = 60, total possible = 100
     // 60 * 100 = 6000 < 100 * 67 = 6700 → quorum NOT met
     for i in 0..6 {
-        gov.vote(&format!("voter{i}"), "prop1", VoteChoice::For, 0).unwrap();
+        gov.vote(&format!("voter{i}"), "prop1", VoteChoice::For, 0)
+            .expect("test assertion failed");
     }
 
     let result = gov.finalize_proposal("prop1", 11, 1_000_000);
@@ -573,11 +574,14 @@ fn governance_quorum_met_at_67_percent() {
     gov.set_weight("charlie", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-        .unwrap();
+        .expect("test assertion failed");
 
-    gov.vote("alice", "prop1", VoteChoice::For, 0).unwrap();
-    gov.vote("bob", "prop1", VoteChoice::For, 1).unwrap();
-    gov.vote("charlie", "prop1", VoteChoice::For, 2).unwrap();
+    gov.vote("alice", "prop1", VoteChoice::For, 0)
+        .expect("test assertion failed");
+    gov.vote("bob", "prop1", VoteChoice::For, 1)
+        .expect("test assertion failed");
+    gov.vote("charlie", "prop1", VoteChoice::For, 2)
+        .expect("test assertion failed");
 
     let result = gov.finalize_proposal("prop1", 11, 1_000_000);
     assert!(result.is_ok(), "All voters voting → quorum met, proposal passes");
@@ -591,9 +595,10 @@ fn governance_double_vote_prevention() {
     gov.set_weight("alice", 100, 0);
 
     gov.create_proposal("prop1".to_string(), "test".to_string(), 10, 0)
-        .unwrap();
+        .expect("test assertion failed");
 
-    gov.vote("alice", "prop1", VoteChoice::For, 0).unwrap();
+    gov.vote("alice", "prop1", VoteChoice::For, 0)
+        .expect("test assertion failed");
 
     let result = gov.vote("alice", "prop1", VoteChoice::Against, 1);
     assert!(matches!(result, Err(omnia_economics::EconomicsError::DuplicateVote(_))));
@@ -609,9 +614,9 @@ fn governance_quadratic_voting_weight() {
     gov.set_weight("minnow", 100, 0);
     gov.set_weight("dust", 1, 0);
 
-    assert_eq!(*gov.voting_weights.get("whale").unwrap(), 100);
-    assert_eq!(*gov.voting_weights.get("minnow").unwrap(), 10);
-    assert_eq!(*gov.voting_weights.get("dust").unwrap(), 1);
+    assert_eq!(*gov.voting_weights.get("whale").expect("test assertion failed"), 100);
+    assert_eq!(*gov.voting_weights.get("minnow").expect("test assertion failed"), 10);
+    assert_eq!(*gov.voting_weights.get("dust").expect("test assertion failed"), 1);
 
     println!("[governance] Quadratic voting: whale=100, minnow=10, dust=1");
 }
@@ -629,12 +634,12 @@ fn throughput_benchmark_causal_graph() {
     let start = Instant::now();
     let genesis = signed_genesis(&kp);
     let mut last_id = genesis.id;
-    graph.insert(genesis).unwrap();
+    graph.insert(genesis).expect("test assertion failed");
 
     for seq in 1..event_count {
         let event = signed_child(&kp, seq as u64, last_id);
         last_id = event.id;
-        graph.insert(event).unwrap();
+        graph.insert(event).expect("test assertion failed");
     }
     let elapsed = start.elapsed();
 
@@ -676,14 +681,14 @@ fn throughput_benchmark_consensus_engine() {
     let event_count = 1_000;
     let genesis = signed_genesis(&kp);
     let mut last_id = genesis.id;
-    graph.insert(genesis.clone()).unwrap();
+    graph.insert(genesis.clone()).expect("test assertion failed");
     engine.process_event(&genesis, &graph).ok();
 
     let start = Instant::now();
     for seq in 1..event_count {
         let event = signed_child(&kp, seq as u64, last_id);
         last_id = event.id;
-        graph.insert(event.clone()).unwrap();
+        graph.insert(event.clone()).expect("test assertion failed");
         engine.process_event(&event, &graph).ok();
     }
     let elapsed = start.elapsed();
@@ -718,14 +723,14 @@ fn merkle_proof_generation_and_verification() {
 
     let genesis = signed_genesis(&kp);
     event_ids.push(genesis.id);
-    graph.insert(genesis).unwrap();
+    graph.insert(genesis).expect("test assertion failed");
 
     let mut last_id = event_ids[0];
     for seq in 1..num_events {
         let event = signed_child(&kp, seq as u64, last_id);
         last_id = event.id;
         event_ids.push(event.id);
-        graph.insert(event).unwrap();
+        graph.insert(event).expect("test assertion failed");
     }
 
     let state_root = graph.state_root();
@@ -777,14 +782,14 @@ fn merkle_proof_single_event() {
     let kp = generate_keypair();
     let event = signed_genesis(&kp);
     let eid = event.id;
-    graph.insert(event).unwrap();
+    graph.insert(event).expect("test assertion failed");
 
     let root = graph.state_root();
     assert_ne!(root, [0u8; 32]);
 
     let proof = graph.merkle_proof(&eid);
     assert!(proof.is_some());
-    assert!(proof.unwrap().is_empty());
+    assert!(proof.expect("test assertion failed").is_empty());
 
     println!("[merkle] Single event: proof is empty, leaf hash = state root");
 }
@@ -845,9 +850,9 @@ fn memory_estimate_per_event() {
 
     let genesis = signed_genesis(&kp);
     let genesis_id = genesis.id;
-    graph.insert(genesis).unwrap();
+    graph.insert(genesis).expect("test assertion failed");
 
-    let event = graph.get(&genesis_id).unwrap();
+    let event = graph.get(&genesis_id).expect("test assertion failed");
     let event_struct_size = std::mem::size_of_val(event);
 
     println!("[memory] Event struct size (on stack reference): {event_struct_size} bytes");
@@ -858,12 +863,12 @@ fn memory_estimate_per_event() {
     let kp2 = generate_keypair();
     let gen2 = signed_genesis(&kp2);
     let mut last_id = gen2.id;
-    graph2.insert(gen2).unwrap();
+    graph2.insert(gen2).expect("test assertion failed");
 
     for seq in 1..n {
         let event = signed_child(&kp2, seq as u64, last_id);
         last_id = event.id;
-        graph2.insert(event).unwrap();
+        graph2.insert(event).expect("test assertion failed");
     }
 
     let estimated_per_event = 546usize;
@@ -921,7 +926,7 @@ fn provenance_log_deep_chain() {
         let rf = RfFingerprint::new([0x55u8; 32], VectorClock::new(), holder.clone(), 950_000);
         let commitment =
             QuantumCommitment::new_classical(format!("transfer{i}").as_bytes(), vec![0u8; 64], VectorClock::new());
-        log.transfer(holder, rf, commitment).unwrap();
+        log.transfer(holder, rf, commitment).expect("test assertion failed");
     }
 
     assert_eq!(log.len(), transfer_count + 1);
@@ -945,7 +950,7 @@ fn quota_system_ubc_limits() {
     quota.register_did("did:omnia:alice");
     assert_eq!(quota.balance_of("did:omnia:alice"), Some(1000));
 
-    quota.spend("did:omnia:alice", 1000).unwrap();
+    quota.spend("did:omnia:alice", 1000).expect("test assertion failed");
     assert_eq!(quota.balance_of("did:omnia:alice"), Some(0));
 
     let result = quota.spend("did:omnia:alice", 1);
@@ -958,7 +963,7 @@ fn quota_system_ubc_limits() {
 fn quota_system_epoch_reset() {
     let mut quota = QuotaSystem::default_system();
     quota.register_did("did:omnia:bob");
-    quota.spend("did:omnia:bob", 500).unwrap();
+    quota.spend("did:omnia:bob", 500).expect("test assertion failed");
     assert_eq!(quota.balance_of("did:omnia:bob"), Some(500));
 
     quota.advance_epoch();

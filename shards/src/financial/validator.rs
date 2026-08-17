@@ -612,11 +612,11 @@ mod tests {
             amount: 500,
         };
         let event = make_signed_event(&keypair, vec![1]);
-        state.apply(&mint, &event).unwrap();
+        state.apply(&mint, &event).expect("test assertion failed");
 
         // Serialize and deserialize
-        let bytes = state.to_bytes().unwrap();
-        let restored = FinancialState::from_bytes(&bytes).unwrap();
+        let bytes = state.to_bytes().expect("test assertion failed");
+        let restored = FinancialState::from_bytes(&bytes).expect("test assertion failed");
 
         assert_eq!(restored.balance_of(&account_a), 500);
         assert_eq!(restored.balance_of(&account_b), 0);

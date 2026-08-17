@@ -29,11 +29,19 @@ use tokio::sync::{Mutex, RwLock};
 
 use omnia_shards::ShardRouter;
 
+use omnia_asset_registry::{AssetRegistry, SupplyTracker, Treasury};
+use omnia_fee_burn::{BurnAccounting, OmniaFeeSchedule};
+use omnia_payment_order::{
+    GhanaSandboxProvider, InMemoryPaymentStore, PaymentEngine, PaymentStore, QuoteService, RedbPaymentStore,
+    ServiceRoleRegistry,
+};
+
 #[cfg(feature = "zk")]
 use omnia_adapters::setup::CeremonyServer;
 use omnia_adapters::SettlementAdapter;
 
 use crate::api::events::StoredEvent;
+use crate::api::merchants::MerchantRegistry;
 use crate::api::node::PeerInfo;
 use crate::config::NodeConfig;
 
@@ -409,6 +417,103 @@ impl NodeMetrics {
     }
 }
 
+/// Shared payment services used by the node and test harnesses.
+///
+/// The tuple keeps each service's ownership and synchronization boundary
+/// explicit while allowing constructors to share one stable return type.
+pub type PaymentServices = (
+    Arc<std::sync::Mutex<QuoteService>>,
+    Arc<dyn PaymentStore + Send + Sync>,
+    Arc<ServiceRoleRegistry>,
+    Arc<GhanaSandboxProvider>,
+);
+
+/// Validate settings required for a production payment runtime.
+///
+/// Development and test nodes may use the in-memory store and deterministic
+/// sandbox defaults. Production nodes must explicitly provide durable storage
+/// and all signing/provider secrets so a restart cannot silently lose payment
+/// state or run with forgeable credentials.
+pub fn validate_payment_runtime_config() -> Result<(), String> {
+    if std::env::var("OMNIA_RUNTIME_MODE").as_deref() != Ok("production") {
+        return Ok(());
+    }
+
+    for (name, placeholder) in [
+        ("OMNIA_PAYMENT_STORE_PATH", ""),
+        ("OMNIA_QUOTE_SIGNING_SEED", "omnia-dev-only-quote-signing-seed"),
+        ("OMNIA_GHANA_PROVIDER_SECRET", "omnia-dev-only-ghana-provider-secret"),
+        ("OMNIA_GHANA_PROVIDER_KEY", "sandbox-provider-key"),
+    ] {
+        let value = std::env::var(name).map_err(|_| format!("{name} must be set in production mode"))?;
+        if value.trim().is_empty() || value == placeholder {
+            return Err(format!("{name} contains a development placeholder"));
+        }
+    }
+    Ok(())
+}
+
+/// Construct the shared payment services used by the node and test harnesses.
+///
+/// The environment variables are intentionally explicit so production
+/// deployments can inject real secrets; the fallback values are sandbox-only.
+pub fn default_payment_services() -> PaymentServices {
+    let quote_seed =
+        std::env::var("OMNIA_QUOTE_SIGNING_SEED").unwrap_or_else(|_| "omnia-dev-only-quote-signing-seed".to_string());
+    let provider_secret = std::env::var("OMNIA_GHANA_PROVIDER_SECRET")
+        .unwrap_or_else(|_| "omnia-dev-only-ghana-provider-secret".to_string());
+    let provider_key = std::env::var("OMNIA_GHANA_PROVIDER_KEY").unwrap_or_else(|_| "sandbox-provider-key".to_string());
+
+    let mut registry = ServiceRoleRegistry::new();
+    for service in [
+        "quote-service",
+        "payment-service",
+        "risk-engine",
+        "timeout-monitor",
+        "verification-service",
+        "chain-service",
+        "delivery-service",
+        "refund-service",
+    ] {
+        registry.register_api_key(service.to_string(), service.to_string());
+    }
+    for provider in ["MTN", "TELECEL", "AT"] {
+        registry.register_provider_callback_key(provider.to_string(), provider_key.clone());
+    }
+
+    let payment_store: Arc<dyn PaymentStore + Send + Sync> = match std::env::var("OMNIA_PAYMENT_STORE_PATH") {
+        Ok(path) if !path.trim().is_empty() => {
+            let path = std::path::PathBuf::from(path);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap_or_else(|error| {
+                    panic!(
+                        "cannot create OMNIA_PAYMENT_STORE_PATH parent {}: {error}",
+                        parent.display()
+                    )
+                });
+            }
+            match RedbPaymentStore::open(&path) {
+                Ok(store) => Arc::new(store),
+                Err(error) => panic!("cannot open OMNIA_PAYMENT_STORE_PATH {}: {error}", path.display()),
+            }
+        }
+        _ => Arc::new(InMemoryPaymentStore::new()),
+    };
+
+    (
+        Arc::new(std::sync::Mutex::new(QuoteService::new(
+            omnia_payment_order::QuoteServiceConfig::default(),
+            quote_seed.into_bytes(),
+        ))),
+        payment_store,
+        Arc::new(registry),
+        Arc::new(GhanaSandboxProvider::new(
+            omnia_payment_order::MobileMoneyProvider::Mtn,
+            provider_secret.as_bytes(),
+        )),
+    )
+}
+
 /// Shared application state accessible to all HTTP handlers.
 ///
 /// This struct is wrapped in `Arc` by `axum` and passed to handlers
@@ -491,4 +596,27 @@ pub struct AppState {
     /// When absent, ceremony endpoints return 503 Service Unavailable.
     #[cfg(feature = "zk")]
     pub ceremony_server: Option<Arc<RwLock<CeremonyServer>>>,
+    // ── Sprint 3–5 financial pallet state (Spec §4–§7, §8, §15) ──────
+    /// Asset registry — tracks registered assets (OMNIA, UBC, future assets).
+    pub asset_registry: Arc<RwLock<AssetRegistry>>,
+    /// Per-asset supply tracker — enforces hard cap and compartment invariants (§4.4).
+    pub supply_tracker: Arc<RwLock<SupplyTracker>>,
+    /// Treasury — allocation buckets, pilot inventory, vesting, circuit breaker (§5, §6).
+    pub treasury: Arc<RwLock<Treasury>>,
+    /// Fee schedule — activity-based fee calculation (§7.1, §7.2).
+    pub fee_schedule: Arc<RwLock<OmniaFeeSchedule>>,
+    /// Burn accounting — tracks total burned per asset, burn ratio (§7.3).
+    pub burn_accounting: Arc<RwLock<BurnAccounting>>,
+    /// Payment engine — 25-state order lifecycle (§8).
+    pub payment_engine: Arc<std::sync::Mutex<PaymentEngine>>,
+    /// Server-side signed-quote service. The mutex protects quote ID allocation.
+    pub quote_service: Arc<std::sync::Mutex<QuoteService>>,
+    /// Event-sourced payment persistence. The concrete store may be replaced by a durable adapter.
+    pub payment_store: Arc<dyn PaymentStore + Send + Sync>,
+    /// Authenticated service-role registry for provider and internal callbacks.
+    pub service_role_registry: Arc<ServiceRoleRegistry>,
+    /// Ghana mobile-money sandbox provider adapter.
+    pub ghana_provider: Arc<GhanaSandboxProvider>,
+    /// Merchant profiles, payment requests, and receipts for the current runtime.
+    pub merchant_registry: Arc<std::sync::Mutex<MerchantRegistry>>,
 }

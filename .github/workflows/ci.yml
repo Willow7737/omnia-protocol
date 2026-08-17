@@ -124,7 +124,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
+        rust: ["1.91.0"]
     steps:
       - uses: actions/checkout@v5
       - name: Remove conflicting Homebrew rustup (macOS)
@@ -154,7 +154,7 @@ jobs:
           echo "=== Disk space after cleanup ==="
           df -h /
       - name: Verify Cargo.lock is up to date
-        run: cargo test --locked --workspace --exclude omnia-fuzz --no-run
+        run: cargo +${{ matrix.rust }} test --locked --workspace --exclude omnia-fuzz --no-run
       - name: Clean debug artifacts before tests (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -548,14 +548,14 @@ jobs:
         run: |
           export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
-            cargo build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
+            cargo +1.91.0 build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
           sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build1.sha
       - name: Clean and rebuild
         run: |
           cargo clean
           export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           RUSTFLAGS="-C link-arg=-Wl,--build-id=none" \
-            cargo build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
+            cargo +1.91.0 build --release --locked --target x86_64-unknown-linux-gnu -p omnia-node --no-default-features --features full
           sha256sum target/x86_64-unknown-linux-gnu/release/omnia-node > /tmp/build2.sha
       - name: Compare builds
         run: |

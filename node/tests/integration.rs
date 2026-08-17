@@ -9,9 +9,9 @@ use omnia_economics::EconomicsState;
 use omnia_node::api::auth::create_token;
 use omnia_node::config::NodeConfig;
 use omnia_node::http;
-use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
+use omnia_node::state::{default_payment_services, AppState};
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, PhysicalShard,
     ShardRouter,
@@ -66,6 +66,7 @@ struct ServerGuards {
 ///
 /// The server runs in a background tokio task and will be stopped
 /// when the shutdown handle is dropped.
+#[allow(clippy::await_holding_lock)]
 async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuards) {
     let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // Set JWT secret before building the router so auth middleware can read it
@@ -84,7 +85,7 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuar
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("Failed to bind to random port");
-    let port = listener.local_addr().unwrap().port();
+    let port = listener.local_addr().expect("test assertion failed").port();
 
     let node_id_bytes = {
         let mut id = [0u8; 32];
@@ -133,6 +134,8 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuar
         readiness_max_finalization_age: 600,
     };
 
+    let (quote_service, payment_store, service_role_registry, ghana_provider) = default_payment_services();
+
     let app_state = AppState {
         config,
         substrate: Arc::new(RwLock::new(substrate)),
@@ -150,6 +153,19 @@ async fn start_test_server() -> (String, tokio::task::JoinHandle<()>, ServerGuar
         settlement: Arc::new(omnia_adapters::MockSettlementAdapter::new()),
         #[cfg(feature = "zk")]
         ceremony_server: None,
+        asset_registry: Arc::new(RwLock::new(omnia_asset_registry::AssetRegistry::new())),
+        supply_tracker: Arc::new(RwLock::new(omnia_asset_registry::SupplyTracker::new())),
+        treasury: Arc::new(RwLock::new(omnia_asset_registry::Treasury::new())),
+        fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
+        burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
+        payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(0))),
+        quote_service,
+        payment_store,
+        service_role_registry,
+        ghana_provider,
+        merchant_registry: Arc::new(std::sync::Mutex::new(
+            omnia_node::api::merchants::MerchantRegistry::new(),
+        )),
     };
 
     let app = http::build_http_router().with_state(app_state);
@@ -339,5 +355,74 @@ async fn test_openapi_json_disabled() -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client.get(format!("{base_url}/api-docs/openapi.json")).send().await?;
     assert_eq!(resp.status(), 404, "OpenAPI JSON should be 404 when feature disabled");
+    Ok(())
+}
+
+/// Protocol-wide monitoring reads must be reachable without a JWT.
+///
+/// These routes previously sat inside the authenticated router while their own
+/// comments described them as "public for dashboards/monitoring". The code won,
+/// silently: the public dashboard would have started returning 401 on its
+/// treasury, supply and fee panels the moment the financial layer shipped.
+/// Pinning both directions here means that drift fails a test instead of a
+/// status page.
+#[tokio::test]
+async fn test_monitoring_reads_are_public() -> Result<()> {
+    let (base_url, _handle, _guards) = start_test_server().await;
+    let client = reqwest::Client::new();
+
+    for path in [
+        "/api/v1/supply",
+        "/api/v1/supply/invariants",
+        "/api/v1/treasury/status",
+        "/api/v1/treasury/inventory",
+        "/api/v1/treasury/accounting",
+        "/api/v1/fees/burn-policy",
+        "/api/v1/fees/stats",
+        "/api/v1/economics/fee-burn",
+        "/api/v1/bridge/providers",
+        "/api/v1/bridge/health",
+    ] {
+        let resp = client.get(format!("{base_url}{path}")).send().await?;
+        assert_ne!(
+            resp.status(),
+            401,
+            "{path} must be reachable without a token — it is a protocol-wide aggregate rendered by public dashboards"
+        );
+        assert_ne!(resp.status(), 404, "{path} should be routed");
+    }
+
+    Ok(())
+}
+
+/// The other half of the boundary: widening the monitoring reads must not have
+/// widened anything that exposes a single account or changes state.
+#[tokio::test]
+async fn test_account_and_mutation_routes_still_require_auth() -> Result<()> {
+    let (base_url, _handle, _guards) = start_test_server().await;
+    let client = reqwest::Client::new();
+
+    let unauthenticated_gets = [
+        "/api/v1/economics/balance/did:omnia:abc",
+        "/api/v1/financial/balance/deadbeef",
+    ];
+    for path in unauthenticated_gets {
+        let resp = client.get(format!("{base_url}{path}")).send().await?;
+        assert_eq!(
+            resp.status(),
+            401,
+            "{path} exposes one account and must stay authenticated"
+        );
+    }
+
+    // Fee calculation prices a hypothetical operation; it is a POST, not a
+    // monitoring read, and stays behind the JWT with the other non-reads.
+    let resp = client
+        .post(format!("{base_url}/api/v1/fees/calculate"))
+        .json(&json!({ "operation": "transfer" }))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 401, "/fees/calculate must stay authenticated");
+
     Ok(())
 }

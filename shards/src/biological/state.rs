@@ -244,7 +244,7 @@ mod tests {
                 &vc,
                 Some(&subject),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // 2. Query with a 1-byte (malformed) ZK proof — should fail
         let result = state.apply(
@@ -258,7 +258,7 @@ mod tests {
             None,
         );
         assert!(result.is_err(), "ZK proof should be rejected without real_verification");
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => {
                 assert!(
                     msg.contains("real_verification")
@@ -291,7 +291,7 @@ mod tests {
                 &vc,
                 Some(&subject),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Query with empty ZK proof — should fail
         let result = state.apply(
@@ -305,7 +305,7 @@ mod tests {
             None,
         );
         assert!(result.is_err(), "empty ZK proof should be rejected");
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => {
                 assert!(
                     msg.contains("real_verification")
@@ -338,7 +338,7 @@ mod tests {
                 &vc,
                 Some(&subject),
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Query with a well-formed (128+ byte) ZK proof — should STILL fail
         // because real_verification is not enabled

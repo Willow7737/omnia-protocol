@@ -1,0 +1,388 @@
+//! Server-generated signed quotes — Audit Priority 4
+//!
+//! Per the Omnia Checkpoint Audit:
+//! "Quantity, rate, fees, quote expiry, and recipient asset must come from
+//!  a server-generated signed quote. The client may request a quote, but it
+//!  must not define the economic terms that the server later settles."
+//!
+//! This module provides the `QuoteService` which:
+//! 1. Accepts a quote request (customer, GHS amount, provider)
+//! 2. Generates all economic terms server-side
+//! 3. Signs the quote with the server's private key
+//! 4. The quote can be verified by any party with the server's public key
+//! 5. The quote has a strict time-to-live
+
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+
+use crate::error::PaymentError;
+use crate::provider::{MobileMoneyProvider, OmniaQuote};
+
+/// OMNIA decimals: 9 decimal places, 1 OMNIA = 10^9 plancks.
+const OMNIA_DECIMALS: u64 = 1_000_000_000;
+
+/// GHS decimals: 2 decimal places, 1 GHS = 100 pesewas.
+const GHS_DECIMALS: u64 = 100;
+
+/// Default quote validity: 5 minutes in ms.
+const DEFAULT_QUOTE_TTL_MS: u64 = 300_000;
+
+/// Default estimated delivery time: 120 seconds.
+const DEFAULT_DELIVERY_SECS: u64 = 120;
+
+/// A quote request from the client/wallet.
+/// The client specifies ONLY what they want to buy — all economic
+/// terms are determined server-side.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuoteRequest {
+    /// The customer's mobile-money number (E.164 format).
+    pub customer_number: String,
+    /// The amount the customer wants to spend in GHS (in pesewas).
+    pub ghs_amount_pesewas: u64,
+    /// The preferred provider.
+    pub provider: MobileMoneyProvider,
+    /// Optional: the recipient wallet public key.
+    pub recipient_ref: Option<String>,
+}
+
+/// A signed quote from the server.
+/// The signature covers all economic terms, binding them to the
+/// server's authority.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedQuote {
+    /// The underlying quote data.
+    pub quote: OmniaQuote,
+    /// Ed25519 signature over the quote fields.
+    /// Covers: quote_id, ghs_amount, omnia_quantity, exchange_rate,
+    /// provider_fee_ghs, omnia_fee, expires_at_ms, provider.
+    pub signature: Vec<u8>,
+    /// The public key of the signing server (for verification).
+    pub signer_public_key: Vec<u8>,
+}
+
+impl SignedQuote {
+    /// Verify the quote signature and expiry.
+    pub fn verify(&self, now_ms: u64) -> bool {
+        if !self.quote.is_valid(now_ms) {
+            return false;
+        }
+        let public_key: [u8; 32] = match self.signer_public_key.as_slice().try_into() {
+            Ok(bytes) => bytes,
+            Err(_) => return false,
+        };
+        let signature = match Signature::from_slice(&self.signature) {
+            Ok(signature) => signature,
+            Err(_) => return false,
+        };
+        VerifyingKey::from_bytes(&public_key)
+            .ok()
+            .is_some_and(|key| key.verify(&self.quote.signing_payload(), &signature).is_ok())
+    }
+
+    /// Return the quote ID.
+    pub fn quote_id(&self) -> &str {
+        &self.quote.quote_id
+    }
+}
+
+/// Configuration for the quote service.
+#[derive(Debug, Clone)]
+pub struct QuoteServiceConfig {
+    /// Base exchange rate: GHS pesewas per OMNIA planck.
+    /// E.g., if 1 GHS = 0.2 OMNIA, rate = 100 / 200_000_000 = 0.0000005
+    /// Stored as fixed-point: rate * 1_000_000
+    pub exchange_rate_bps: u64,
+    /// Protocol fee in basis points of OMNIA quantity.
+    pub omnia_fee_bps: u64,
+    /// Provider fee in GHS pesewas (flat or computed from provider).
+    pub provider_fee_pesewas: u64,
+    /// Quote time-to-live in ms.
+    pub quote_ttl_ms: u64,
+    /// Estimated delivery time in seconds.
+    pub estimated_delivery_secs: u64,
+    /// Spread in basis points (price impact for large orders).
+    pub spread_bps: u64,
+    /// Maximum single-order GHS amount (pesewas).
+    pub max_ghs_per_order: u64,
+}
+
+impl Default for QuoteServiceConfig {
+    fn default() -> Self {
+        Self {
+            exchange_rate_bps: 500_000,      // ~0.5 GHS per OMNIA
+            omnia_fee_bps: 25,               // 0.25% protocol fee
+            provider_fee_pesewas: 1_000_000, // 10,000 GHS = 100 GHS
+            quote_ttl_ms: DEFAULT_QUOTE_TTL_MS,
+            estimated_delivery_secs: DEFAULT_DELIVERY_SECS,
+            spread_bps: 50,                   // 0.5% spread
+            max_ghs_per_order: 5_000_000_000, // 50,000,000 GHS = 50K GHS
+        }
+    }
+}
+
+/// The server-side quote generation service.
+/// This is the ONLY way to create quotes — clients cannot generate them.
+pub struct QuoteService {
+    config: QuoteServiceConfig,
+    /// Server signing key used for quote signatures.
+    signing_key: SigningKey,
+    /// Server public key for verification and disclosure.
+    server_public_key: Vec<u8>,
+    /// Monotonic quote counter for unique IDs.
+    next_quote_id: u64,
+    /// Server-side signed quotes keyed by quote ID.
+    quotes: HashMap<String, SignedQuote>,
+    /// Server-side request context keyed by quote ID.
+    quote_contexts: HashMap<String, (String, Option<String>)>,
+    /// Quote IDs that have already been used to initiate an order.
+    used_quotes: HashSet<String>,
+}
+
+impl QuoteService {
+    /// Create a new quote service with the given config and server public key.
+    pub fn new(config: QuoteServiceConfig, seed_material: Vec<u8>) -> Self {
+        let mut seed = [0u8; 32];
+        for (index, byte) in seed_material.iter().enumerate() {
+            seed[index % seed.len()] ^= *byte;
+        }
+        let signing_key = SigningKey::from_bytes(&seed);
+        let server_public_key = signing_key.verifying_key().to_bytes().to_vec();
+        Self {
+            config,
+            signing_key,
+            server_public_key,
+            next_quote_id: 1,
+            quotes: HashMap::new(),
+            quote_contexts: HashMap::new(),
+            used_quotes: HashSet::new(),
+        }
+    }
+
+    /// Create a quote service from a full Ed25519 seed.
+    pub fn from_seed(config: QuoteServiceConfig, seed: [u8; 32]) -> Self {
+        let signing_key = SigningKey::from_bytes(&seed);
+        let server_public_key = signing_key.verifying_key().to_bytes().to_vec();
+        Self {
+            config,
+            signing_key,
+            server_public_key,
+            next_quote_id: 1,
+            quotes: HashMap::new(),
+            quote_contexts: HashMap::new(),
+            used_quotes: HashSet::new(),
+        }
+    }
+
+    /// Return a previously generated quote by ID.
+    pub fn get_quote(&self, quote_id: &str) -> Option<SignedQuote> {
+        self.quote_contexts
+            .get(quote_id)
+            .and_then(|_| self.quotes.get(quote_id).cloned())
+    }
+
+    /// Return the customer and recipient context bound to a quote.
+    pub fn get_quote_context(&self, quote_id: &str) -> Option<(String, Option<String>)> {
+        self.quote_contexts.get(quote_id).cloned()
+    }
+
+    /// Mark a quote as used exactly once.
+    pub fn mark_quote_used(&mut self, quote_id: &str) -> Result<(), PaymentError> {
+        if !self.quote_contexts.contains_key(quote_id) {
+            return Err(PaymentError::OrderNotFound(format!("quote:{quote_id}")));
+        }
+        if !self.used_quotes.insert(quote_id.to_string()) {
+            return Err(PaymentError::InvariantViolation(format!(
+                "quote already used: {quote_id}"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Return whether a quote has already been used.
+    pub fn is_quote_used(&self, quote_id: &str) -> bool {
+        self.used_quotes.contains(quote_id)
+    }
+
+    /// Generate a quote for the given request.
+    /// All economic terms are computed server-side.
+    pub fn generate_quote(&mut self, request: &QuoteRequest, now_ms: u64) -> Result<SignedQuote, PaymentError> {
+        // Validate GHS amount
+        if request.ghs_amount_pesewas == 0 {
+            return Err(PaymentError::RiskLimitExceeded {
+                limit_type: "min_ghs".into(),
+                requested: 0,
+                allowed: GHS_DECIMALS, // minimum 1 GHS
+            });
+        }
+        if request.ghs_amount_pesewas > self.config.max_ghs_per_order {
+            return Err(PaymentError::PerOrderLimitExceeded {
+                amount: request.ghs_amount_pesewas,
+                limit: self.config.max_ghs_per_order,
+            });
+        }
+
+        if self.config.exchange_rate_bps == 0 {
+            return Err(PaymentError::InvalidProviderData {
+                detail: "quote exchange rate must be non-zero".into(),
+            });
+        }
+
+        // Exact fixed-point conversion:
+        // OMNIA plancks = GHS pesewas × 10^6 × 10^9 / (100 × rate_bps).
+        let numerator = (request.ghs_amount_pesewas as u128)
+            .checked_mul(1_000_000u128)
+            .and_then(|value| value.checked_mul(OMNIA_DECIMALS as u128))
+            .ok_or_else(|| PaymentError::ArithmeticOverflow("quote quantity numerator".into()))?;
+        let denominator = (GHS_DECIMALS as u128)
+            .checked_mul(self.config.exchange_rate_bps as u128)
+            .ok_or_else(|| PaymentError::ArithmeticOverflow("quote quantity denominator".into()))?;
+        let omnia_quantity_u128 = numerator / denominator;
+        let omnia_quantity = u64::try_from(omnia_quantity_u128)
+            .map_err(|_| PaymentError::ArithmeticOverflow("quote quantity".into()))?;
+
+        // Compute protocol fee
+        let omnia_fee = omnia_quantity.saturating_mul(self.config.omnia_fee_bps) / 10_000;
+
+        // Generate unique quote ID
+        let quote_id = format!("Q-{}-{:x}", self.next_quote_id, now_ms);
+        self.next_quote_id = self.next_quote_id.saturating_add(1);
+
+        // Build the quote
+        let quote = OmniaQuote {
+            quote_id: quote_id.clone(),
+            ghs_amount: request.ghs_amount_pesewas,
+            omnia_quantity,
+            exchange_rate: self.config.exchange_rate_bps,
+            provider_fee_ghs: self.config.provider_fee_pesewas,
+            omnia_fee,
+            spread_bps: self.config.spread_bps,
+            estimated_delivery_secs: self.config.estimated_delivery_secs,
+            created_at_ms: now_ms,
+            expires_at_ms: now_ms.saturating_add(self.config.quote_ttl_ms),
+            provider: request.provider,
+        };
+
+        let signature = self.signing_key.sign(&quote.signing_payload()).to_bytes().to_vec();
+
+        let signed_quote = SignedQuote {
+            quote,
+            signature,
+            signer_public_key: self.server_public_key.clone(),
+        };
+        self.quote_contexts.insert(
+            signed_quote.quote.quote_id.clone(),
+            (request.customer_number.clone(), request.recipient_ref.clone()),
+        );
+        self.quotes
+            .insert(signed_quote.quote.quote_id.clone(), signed_quote.clone());
+        Ok(signed_quote)
+    }
+
+    /// Verify a previously-generated signed quote.
+    pub fn verify_quote(quote: &SignedQuote, now_ms: u64) -> bool {
+        quote.verify(now_ms)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_service() -> QuoteService {
+        QuoteService::new(QuoteServiceConfig::default(), b"test-server-pubkey".to_vec())
+    }
+
+    fn make_request(ghs_pesewas: u64) -> QuoteRequest {
+        QuoteRequest {
+            customer_number: "+233240000000".into(),
+            ghs_amount_pesewas: ghs_pesewas,
+            provider: MobileMoneyProvider::Mtn,
+            recipient_ref: Some("wallet-pk-123".into()),
+        }
+    }
+
+    #[test]
+    fn generate_basic_quote() {
+        let mut svc = make_service();
+        let req = make_request(100_000); // 1,000 GHS
+        let signed = svc
+            .generate_quote(&req, 1_700_000_000_000)
+            .expect("test assertion failed");
+
+        assert!(signed.quote.omnia_quantity > 0);
+        assert_eq!(signed.quote.ghs_amount, 100_000);
+        assert!(signed.quote.expires_at_ms > signed.quote.created_at_ms);
+        assert!(!signed.signature.is_empty());
+    }
+
+    #[test]
+    fn quote_is_time_limited() {
+        let mut svc = make_service();
+        let req = make_request(100_000);
+        let signed = svc
+            .generate_quote(&req, 1_700_000_000_000)
+            .expect("test assertion failed");
+
+        // Valid before expiry
+        assert!(QuoteService::verify_quote(&signed, 1_700_000_200_000));
+
+        // Invalid at/after expiry
+        assert!(!QuoteService::verify_quote(&signed, signed.quote.expires_at_ms,));
+    }
+
+    #[test]
+    fn quote_omnia_fee_calculated() {
+        let mut svc = make_service();
+        let req = make_request(100_000); // 1,000 GHS
+        let signed = svc
+            .generate_quote(&req, 1_700_000_000_000)
+            .expect("test assertion failed");
+
+        // Fee should be 0.25% of omnia_quantity
+        let expected_fee = signed.quote.omnia_quantity.saturating_mul(25) / 10_000;
+        assert_eq!(signed.quote.omnia_fee, expected_fee);
+    }
+
+    #[test]
+    fn reject_zero_ghs() {
+        let mut svc = make_service();
+        let req = make_request(0);
+        let err = svc.generate_quote(&req, 1_700_000_000_000).expect_err("should fail");
+        assert!(matches!(err, PaymentError::RiskLimitExceeded { .. }));
+    }
+
+    #[test]
+    fn reject_excessive_ghs() {
+        let mut svc = make_service();
+        let req = make_request(100_000_000_000); // 1B GHS
+        let err = svc.generate_quote(&req, 1_700_000_000_000).expect_err("should fail");
+        assert!(matches!(err, PaymentError::PerOrderLimitExceeded { .. }));
+    }
+
+    #[test]
+    fn quote_ids_are_unique() {
+        let mut svc = make_service();
+        let req = make_request(100_000);
+        let q1 = svc
+            .generate_quote(&req, 1_700_000_000_000)
+            .expect("test assertion failed");
+        let q2 = svc
+            .generate_quote(&req, 1_700_000_001_000)
+            .expect("test assertion failed");
+        assert_ne!(q1.quote_id(), q2.quote_id());
+    }
+
+    #[test]
+    fn net_omnia_after_fee() {
+        let mut svc = make_service();
+        let req = make_request(100_000);
+        let signed = svc
+            .generate_quote(&req, 1_700_000_000_000)
+            .expect("test assertion failed");
+
+        let net = signed.quote.net_omnia();
+        assert!(net < signed.quote.omnia_quantity);
+        assert_eq!(net, signed.quote.omnia_quantity - signed.quote.omnia_fee);
+    }
+}

@@ -32,9 +32,9 @@ use omnia_network::{Multiaddr, NetworkConfig, OmniaNetwork};
 use omnia_node::config::{CliArgs, CliCommand, NodeConfig};
 // C-14: PipelineRouter import removed — workers were dead code.
 // The pipeline module is retained for future implementation.
-use omnia_node::state::AppState;
 #[cfg(feature = "metrics")]
 use omnia_node::state::NodeMetrics;
+use omnia_node::state::{default_payment_services, AppState};
 use omnia_shards::{
     BiologicalShard, ComputationalShard, EconomicsShard, FeeSchedule, FinancialShard, IdentityShard, MutexShardRouter,
     PhysicalShard, ShardRouter,
@@ -153,6 +153,9 @@ async fn main() -> Result<()> {
     // 2c. Initialize the JWT secret cache from the environment.
     // This must happen before any request hits the auth middleware.
     omnia_node::api::auth::init_jwt_secret();
+
+    omnia_node::state::validate_payment_runtime_config()
+        .map_err(|error| anyhow::anyhow!("Invalid payment runtime configuration: {error}"))?;
 
     tracing::info!(
         node_id = config.node_id,
@@ -416,6 +419,8 @@ async fn main() -> Result<()> {
         "Persistent node keypair ready for event signing (also registered as validator above)"
     );
 
+    let (quote_service, payment_store, service_role_registry, ghana_provider) = default_payment_services();
+
     let app_state = AppState {
         config: config.clone(),
         substrate: Arc::clone(&substrate_for_consensus),
@@ -433,9 +438,29 @@ async fn main() -> Result<()> {
         settlement,
         #[cfg(feature = "zk")]
         ceremony_server,
+        // Sprint 3–5: Initialize financial pallet state (Spec §4–§7, §8, §15)
+        asset_registry: Arc::new(RwLock::new(omnia_asset_registry::AssetRegistry::new())),
+        supply_tracker: Arc::new(RwLock::new(omnia_asset_registry::SupplyTracker::new())),
+        treasury: Arc::new(RwLock::new(omnia_asset_registry::Treasury::new())),
+        fee_schedule: Arc::new(RwLock::new(omnia_fee_burn::OmniaFeeSchedule::default())),
+        burn_accounting: Arc::new(RwLock::new(omnia_fee_burn::BurnAccounting::new())),
+        payment_engine: Arc::new(std::sync::Mutex::new(omnia_payment_order::PaymentEngine::new(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        ))),
+        quote_service,
+        payment_store,
+        service_role_registry,
+        ghana_provider,
+        merchant_registry: Arc::new(std::sync::Mutex::new(
+            omnia_node::api::merchants::MerchantRegistry::new(),
+        )),
     };
 
     // 6. Build and start the HTTP server
+    let _payment_recovery_worker = omnia_node::payment_worker::spawn(Arc::new(app_state.clone()));
     let app = omnia_node::http::build_http_router().with_state(app_state.clone());
     let listen_addr = format!("0.0.0.0:{}", config.http_port);
 

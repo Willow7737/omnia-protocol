@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn test_transfer_request_deserializes_valid() {
         let json = r#"{"from_did":"did:omnia:abc","to_did":"did:omnia:def","amount":100}"#;
-        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        let req: TransferRequest = serde_json::from_str(json).expect("test assertion failed");
         assert_eq!(req.from_did, "did:omnia:abc");
         assert_eq!(req.to_did, "did:omnia:def");
         assert_eq!(req.amount, 100);
@@ -563,7 +563,7 @@ mod tests {
         // Tagged so it's self-identifying and never a valid ShardPayload.
         assert!(bytes.starts_with(TRANSFER_PAYLOAD_TAG));
         let body = &bytes[TRANSFER_PAYLOAD_TAG.len()..];
-        let decoded: TransferEventPayload = postcard::from_bytes(body).unwrap();
+        let decoded: TransferEventPayload = postcard::from_bytes(body).expect("test assertion failed");
         assert_eq!(decoded.from_did, p.from_did);
         assert_eq!(decoded.to_did, p.to_did);
         assert_eq!(decoded.amount, p.amount);
@@ -592,7 +592,7 @@ mod tests {
     fn test_transfer_request_without_authorization_deserializes() {
         // Deployed v1 clients send no authorization block — must stay valid.
         let json = r#"{"from_did":"did:omnia:abc","to_did":"did:omnia:def","amount":100}"#;
-        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        let req: TransferRequest = serde_json::from_str(json).expect("test assertion failed");
         assert!(req.authorization.is_none());
     }
 
@@ -602,8 +602,8 @@ mod tests {
             "from_did":"did:omnia:abc","to_did":"did:omnia:def","amount":100,
             "authorization":{"public_key":"aa","nonce":"bb","signature":"cc"}
         }"#;
-        let req: TransferRequest = serde_json::from_str(json).unwrap();
-        let auth = req.authorization.unwrap();
+        let req: TransferRequest = serde_json::from_str(json).expect("test assertion failed");
+        let auth = req.authorization.expect("test assertion failed");
         assert_eq!(auth.public_key, "aa");
         assert_eq!(auth.nonce, "bb");
         assert_eq!(auth.signature, "cc");
@@ -626,7 +626,7 @@ mod tests {
         let bytes = encode_signed_transfer_payload(&p);
         assert!(bytes.starts_with(TRANSFER_PAYLOAD_TAG_V2));
         let body = &bytes[TRANSFER_PAYLOAD_TAG_V2.len()..];
-        let decoded: SignedTransferEventPayload = postcard::from_bytes(body).unwrap();
+        let decoded: SignedTransferEventPayload = postcard::from_bytes(body).expect("test assertion failed");
         assert_eq!(decoded.transfer.from_did, p.transfer.from_did);
         assert_eq!(decoded.wallet_pubkey, p.wallet_pubkey);
         assert_eq!(decoded.nonce, p.nonce);
@@ -702,14 +702,14 @@ mod tests {
         // itself should succeed — the validation is in the handler, not
         // the type. This test documents that boundary.
         let json = r#"{"from_did":"a","to_did":"b","amount":0}"#;
-        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        let req: TransferRequest = serde_json::from_str(json).expect("test assertion failed");
         assert_eq!(req.amount, 0);
     }
 
     #[test]
     fn test_transfer_request_accepts_large_amount() {
         let json = r#"{"from_did":"a","to_did":"b","amount":18446744073709551615}"#;
-        let req: TransferRequest = serde_json::from_str(json).unwrap();
+        let req: TransferRequest = serde_json::from_str(json).expect("test assertion failed");
         assert_eq!(req.amount, u64::MAX);
     }
 
@@ -727,4 +727,40 @@ mod tests {
         let result: Result<TransferRequest, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
+}
+
+/// Handler for `GET /api/v1/economics/fee-burn`.
+///
+/// Returns the current fee-burn statistics: total burned, burn rate,
+/// per-domain breakdown. Public endpoint for monitoring dashboards.
+#[utoipa::path(
+    get,
+    path = "/api/v1/economics/fee-burn",
+    responses(
+        (status = 200, description = "Fee-burn statistics"),
+    )
+)]
+pub async fn get_fee_burn_stats(
+    State(state): State<AppState>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+    let stats = {
+        let router = state.shard_router.lock().map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("router lock poisoned: {e}")})),
+            )
+        })?;
+        router.fee_burn_stats()
+    };
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "total_burned": stats.total_burned,
+            "burn_event_count": stats.burn_event_count,
+            "effective_burn_pct": stats.effective_burn_pct,
+            "baseline_burn_pct": stats.baseline_burn_pct,
+            "governance_burn_pct": stats.governance_burn_pct,
+            "governance_burn_cap_pct": stats.governance_burn_cap_pct,
+        })),
+    ))
 }

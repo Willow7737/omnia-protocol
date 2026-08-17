@@ -376,17 +376,17 @@ async fn test_docker_compose_5node_e2e() {
     for (i, event_id) in event_ids.iter().enumerate() {
         let event = get_event(&client, 9090, event_id).await;
         assert_eq!(
-            event["id"].as_str().unwrap(),
+            event["id"].as_str().expect("test assertion failed"),
             event_id,
             "Retrieved event ID should match for event {i}"
         );
         assert_eq!(
-            event["event_type"].as_str().unwrap(),
+            event["event_type"].as_str().expect("test assertion failed"),
             "docker-test",
             "Event type should be 'docker-test' for event {i}"
         );
         assert_eq!(
-            event["status"].as_str().unwrap(),
+            event["status"].as_str().expect("test assertion failed"),
             "submitted",
             "Event status should be 'submitted' for event {i}"
         );
@@ -454,7 +454,7 @@ async fn test_docker_compose_5node_e2e() {
     register_params.insert("did".to_string(), json!(test_did));
     let result = submit_shard_op(&client, 9090, "register", register_params).await;
     assert_eq!(
-        result["status"].as_str().unwrap(),
+        result["status"].as_str().expect("test assertion failed"),
         "processed",
         "Register operation should be processed"
     );

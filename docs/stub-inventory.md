@@ -2,7 +2,7 @@
 
 This document catalogs all stub, placeholder, and partial implementations in the Omnia Protocol codebase. Items are tracked so they are not mistaken for production-ready features.
 
-> Last updated: 2026-08-11 (Bitcoin adapter promoted to live; validator network expanded to 5 nodes)
+> Last updated: 2026-08-16 (quote-backed financial path and merchant pilot interfaces integrated)
 
 ---
 
@@ -99,11 +99,18 @@ Launch-critical production settlement is available via live Ethereum (`ethereum-
 
 ## Phase 1: Features
 
-### Mobile Wallet — **SHIPPED** ✅
+### Mobile Wallet — **SHIPPED / FINANCIAL PILOT SURFACE INTEGRATED** ✅⚠️
 
 - **Status**: v1 shipped July 2026 — lives in its own repo: [Willow7737/Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet)
-- **What shipped**: Flutter wallet with dual-mode auth (on-device Ed25519 challenge/signature login **or** Google/GitHub/email via Supabase + `mint-node-jwt` edge function), UBC balance/send/history with per-transaction detail, governance voting, QR-based transfers, address book, biometric app lock, team news feed, in-app notifications — verified end-to-end against the live testnet node
-- **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`)
+- **What shipped**: Flutter wallet with dual-mode auth (on-device Ed25519 challenge/signature login **or** Google/GitHub/email via Supabase + `mint-node-jwt` edge function), UBC balance/send/history with per-transaction detail, governance voting, QR-based transfers, address book, biometric app lock, team news feed, in-app notifications, Buy OMNIA quote/status flow, and merchant QR payment submission.
+- **Node-side support**: `node/src/api/wallet_auth.rs` (`/auth/challenge`, `/auth/login`, `/auth/register`) plus quote-backed payment-order routes and merchant settlement routes.
+- **Pilot boundary**: the wallet surface is integrated against the sandbox/provider contract. Production mobile-money credentials, regulated provider onboarding, webhook operations, reconciliation, refund operations, and merchant operations tooling remain deployment work; the client never decides economic terms or payment success.
+
+### Financial payment path — **CONTROLLED PILOT / DURABLE RUNTIME INTEGRATED** ✅⚠️
+
+- **Status**: quote service, authenticated orders, Ghana sandbox, treasury allocation, merchant API, redb event/snapshot/side-effect persistence, restart recovery sweep, and production configuration gates are implemented.
+- **Remaining production boundary**: a real Ghana provider adapter and contract-tested credentials, separately operated reconciliation/refund service, chain-delivery finality worker, backup/restore drills, merchant operations tooling, and independent Ghana legal/compliance sign-off are still required before real customer funds.
+- **Reference**: [`docs/financial/production-readiness.md`](financial/production-readiness.md).
 
 ### Validator Network — **RUNNING** (5 nodes) ✅⚠️
 
@@ -139,6 +146,15 @@ Launch-critical production settlement is available via live Ethereum (`ethereum-
 
 ---
 
+## Financial payment path — **IMPLEMENTED FOR CONTROLLED PILOT** ✅⚠️
+
+- **Files**: `payment-order/src/{auth.rs,ghana_provider.rs,persistence.rs,quote_service.rs,engine.rs}`, `node/src/api/{payment_orders.rs,merchants.rs}`, `node/src/state.rs`
+- **What exists**: Ed25519-signed server quotes with integer arithmetic, server-side quote storage and expiry, authenticated JWT wallet identity, HMAC-SHA256 provider callbacks with replay protection, event-sourced order persistence and recovery, a 25-state payment engine, treasury reservation/consume/release integration, merchant onboarding/payment request/history/receipt interfaces, and shared runtime AppState wiring.
+- **What is deliberately not claimed**: the sandbox adapter is not a regulated production mobile-money rail; no fixed GHS redemption is promised; OMNIA pilot distribution uses existing treasury inventory rather than automatic minting; merchant confirmation requires the delivery-service role.
+- **Remaining launch prerequisites**: production provider adapter and credentials, regulated compliance/KYC/AML controls, durable payment-store deployment, secret rotation, operational reconciliation and refund queues, on-chain delivery worker integration, and independent merchant operations tooling.
+
+---
+
 ## ZK Circuit Notes
 
 ### Poseidon Hash Parameters — **PRODUCTION** but with caveats ✅
@@ -159,7 +175,8 @@ Launch-critical production settlement is available via live Ethereum (`ethereum-
 | Solana Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/solana.rs`   | Phase 1               |
 | Celestia Settlement  | 0     | ✅⚠️ IMPLEMENTED (security caveat) | `omnia-adapters/src/settlement/celestia.rs` | Security fix required |
 | Cosmos Settlement    | 0     | ⚠️ STUB — NotImplemented/deprecated | `omnia-adapters/src/settlement/cosmos.rs`   | Phase 1               |
-| Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅ SHIPPED (v1, July 2026) | Dual-mode auth, live vs. testnet node | Done |
+| Mobile Wallet        | [Omnia-Wallet](https://github.com/Willow7737/Omnia-Wallet) | ✅⚠️ SHIPPED + financial pilot surface | Dual-mode auth, Buy OMNIA, merchant QR payment; regulated rail pending | Done / pilot |
+| Financial payment path | 8/9 | ✅⚠️ CONTROLLED PILOT | Quote service, authenticated orders, Ghana sandbox, treasury allocation, merchant API | Pilot / production rail pending |
 | Validator Network    | —     | ✅⚠️ RUNNING (5 nodes, 4 peers, 3 regions, one operator) | — | Phase 1               |
 | Conviction Voting    | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |
 | Delegation           | 5     | 🌑 NOT STARTED                     | —                                           | Phase 1               |

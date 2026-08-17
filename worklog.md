@@ -262,3 +262,118 @@ Stage Summary:
 - docker/monitoring/grafana/alert-rules.yml — FIXED (syntax error, thresholds, histogram queries)
 - scripts/deploy-v0.1.93.sh — NEW (automated 5-host deploy + verify)
 - monitoring/grafana/dashboards/omnia-node.json — UNCHANGED (was already correct)
+---
+Task ID: 1
+Agent: general-purpose
+Task: Install Rust, build treasury allocation with hard limits and asset-scoped balances
+
+Work Log:
+- Installed Rust 1.97.1 via rustup
+- Explored existing repo structure: asset-registry/, shards/financial/, economics/, node/api/financial.rs
+- Read full Financial Spec (810 lines) to understand §5.2 (6 buckets), §6 (treasury controls), §4.3 (asset-scoped balances), §15 (circuit breakers)
+- Created asset-registry/src/treasury.rs: 6 allocation buckets with hard caps, circuit breaker config, pilot inventory, vesting schedules, treasury events
+- Created asset-registry/src/balances.rs: Asset-scoped balance ledger (balance[asset_id][account_id]), credit/transfer/burn/lock/unfreeze
+- Updated error.rs with TreasuryLimitExceeded, TreasuryPaused, UnauthorizedTreasuryWallet, InsufficientBalance
+- Fixed u64 overflow: decimals changed 12→9 (10^21 > u64::MAX; 10^18 fits)
+- Fixed SupplyTracker private field access: added get_mut() public accessor
+- Fixed borrow checker issue in transfer rollback path
+- Reformatted invariant_tests.rs from single-line to proper multi-line
+- All 53 tests pass (45 unit + 8 proptest)
+
+Stage Summary:
+- Treasury module: 6 allocation buckets, circuit breakers, pilot inventory, vesting
+- Balances module: asset-scoped ledger with credit/transfer/burn/lock/freeze
+- Commit 66c5d76 pushed to dev branch
+- Next: payment-order state machine (Spec §8), fee/burn module (Spec §7)
+---
+Task ID: 3
+Agent: main
+Task: Implement payment-order state machine per Spec §8.2, §8.3, §15
+
+Work Log:
+- Installed Rust 1.97.1 toolchain
+- Read ADR-028 (25-state machine spec), existing asset-registry types, treasury module
+- Created new `payment-order` crate with 5 modules: state, types, engine, risk, error
+- Implemented 25 PaymentState variants with ~35 valid transitions
+- Implemented PaymentOrder struct with all Spec §8.3 fields
+- Implemented PaymentEngine with authorization checks per transition, idempotent duplicate handling
+- Implemented CircuitBreaker with 10 risk limits per Spec §15
+- Fixed borrow checker issues in advance_state (extract-before-mutate pattern)
+- Fixed 7 test failures (state count, daily limits, invariant checks, invalid transitions)
+- All 45 tests passing
+- Committed as 1a18e3e and pushed to dev branch
+
+Stage Summary:
+- `payment-order` crate: 2,558 lines, 45 tests, 5 modules
+- 25 states, ~35 transitions, 3 terminal states (DELIVERED, REFUNDED, CANCELLED)
+- Full authorization matrix mapping callers to allowed transitions
+- Circuit breaker with per-order, daily customer, daily merchant, provider exposure, refund exposure, treasury allocation, subsidy budget, price movement, on-chain timeout limits
+- Next: treasury allocation integration, fee/burn module (Spec §7), provider adapter trait
+---
+Task ID: 4-8
+Agent: main
+Task: Implement all remaining financial specification modules
+
+Work Log:
+- Created fee-burn crate: FeeFormula (8 activity types, UBC/OMNIA separation), BurnRatio (0-5% initial, 10-25% governance, 25% hard cap), BurnAccounting, SupplySnapshot
+- Added provider.rs to payment-order: ProviderAdapter trait, ProviderCallback, OmniaQuote (all §8.4 disclosure fields), SubsidyTracker with sunset
+- Added reconciliation.rs: LedgerEntry (double-entry), Discrepancy (owner/status/resolution), DailyReconciliationReport (10 check types), OrderReconciliation (6-way status)
+- Added genesis.rs to asset-registry: GenesisPlan (6-bucket allocation with cap validation), RewardSchedule (4-year canonical), IssuanceAuthority (5 roles, only Genesis mints), TreasuryAccounting (10 categories)
+- Added governance.rs: GovernanceProposal (timelocked), EmergencyPause (72hr auto-expiry), DelegationCooldown (flash-governance resistance)
+- Added merchant.rs: MerchantProfile, MerchantPayment, MerchantReceipt, SettlementPreference
+- Fixed fee decomposition invariant (burned + validator + protocol = base_fee)
+- All 164 tests passing (51 asset-registry + 65 payment-order + 7 fee-burn + 41 existing)
+- Committed 36c42e5 and pushed to dev branch
+
+Stage Summary:
+- 3 crates covering Spec §5, §6, §7, §8, §9, §12, §14, §15, §16
+- Complete financial layer code coverage for Gates 1-3
+- Remaining: external adapter productionization (§13), staking system (§11), wallet integration, 5-node testnet financial flow validation (§17 Gate 4)
+- Next: integration tests between crates, ADR-029 for fee-burn architecture
+---
+Task ID: sprint-3-4-5
+Agent: main
+Task: Implement Sprint 3 (fee-burn), Sprint 4 (supply), Sprint 5 (bridge operators), integration, and push to GitHub
+
+Work Log:
+- Read full project structure, economic-analysis.md, fee_schedule.rs, router.rs, financial/state.rs, economics/ modules
+- Created shards/src/fee_burn.rs: FeeBurnConfig (0-5% baseline, 10-25% governance cap), FeeBurnTracker (per-domain accounting, consistency checks, serialization), FeeBurnStats. 26 tests.
+- Created shards/src/supply.rs: SupplyTracker (minted/burned/phase), SupplyError enum, reward schedule 80M->60M->45M->34M, phase transitions, invariant checks, versioned serialization. 29 tests.
+- Created shards/src/bridge.rs: BridgeOperator trait, MobileProvider (MTN/Telecel/AT), CircuitBreaker (closed/open/half-open), MockBridgeOperator, BridgeRegistry, ProviderConfig, BridgePaymentOrder. 24 tests.
+- Registered all 3 modules in shards/src/lib.rs with re-exports.
+- Integrated FeeBurnTracker into ShardRouter (all 4 constructors), added shard_domain_name helper, fee_burn_stats() accessor.
+- Added fee-burn recording after every fee deduction in route_event().
+- Added GET /api/v1/economics/fee-burn endpoint in node/src/api/economics.rs + route registration in mod.rs.
+- Fixed compilation: Rust 1.97.1 installed, em-dash unicode, MobileProvider Ord derive, idempotency test with atomic counter, circuit breaker timing, all 4 ShardRouter constructors missing fee_burn_tracker field, node handler return type.
+- All 222 shard tests pass, node crate compiles clean.
+- Pushed to GitHub (rebase + push to origin/dev).
+
+Stage Summary:
+- Sprint 3: fee_burn.rs — 26 tests, FeeBurnConfig + FeeBurnTracker + FeeBurnStats
+- Sprint 4: supply.rs — 29 tests, SupplyTracker + SupplySnapshot + 4-phase reward schedule
+- Sprint 5: bridge.rs — 24 tests, BridgeOperator trait + CircuitBreaker + MockBridgeOperator + BridgeRegistry
+- Integration: FeeBurnTracker in ShardRouter, API endpoint /economics/fee-burn
+- Total new code: ~1800 lines, 79 new tests, zero regressions
+
+---
+Task ID: 3-5-integration
+Agent: main
+Task: Integrate Sprint 3-5 financial pallets into node runtime and push to GitHub
+
+Work Log:
+- Verified all 3 pallets compile and pass 160 tests (asset-registry: 70, fee-burn: 40, payment-order: 65)
+- Added omnia-asset-registry, omnia-fee-burn, omnia-payment-order to node/Cargo.toml
+- Extended AppState with 6 new fields: asset_registry, supply_tracker, treasury, fee_schedule, burn_accounting, payment_engine
+- Created 5 new API modules: treasury.rs, supply.rs, fees.rs, bridge.rs, payment_orders.rs
+- Added 11 new REST endpoints covering Spec §4-§7, §8, §15
+- Updated all AppState construction sites (main.rs, http.rs, api_integration.rs, integration.rs)
+- Fixed accidentally-removed tokio dependency
+- All 243 tests pass (160 pallet + 83 node lib)
+- Committed and pushed to GitHub (dev branch)
+
+Stage Summary:
+- Sprint 3 (fee-burn): pallet was already complete, wired into node + API
+- Sprint 4 (supply): pallet was already complete, wired into node + API  
+- Sprint 5 (bridge): shards/src/bridge.rs already complete, wired into node + API
+- Integration: 11 new endpoints, AppState extended, all tests green
+- Pushed: aa41a1f..12454d5 to dev

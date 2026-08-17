@@ -62,6 +62,9 @@ pub struct ShardRouter {
     /// — deliberately not reachable from consensus payloads, so no network
     /// participant can register a key for a shard they do not control.
     shard_attestation_keys: HashMap<ShardId, [u8; 32]>,
+    /// Fee-burn tracker — records what portion of fees are permanently
+    /// destroyed (deflationary pressure). Integrated in Sprint 3 (§7.3).
+    fee_burn_tracker: crate::fee_burn::FeeBurnTracker,
 }
 
 impl ShardRouter {
@@ -78,6 +81,7 @@ impl ShardRouter {
             quota,
             nonce_store: Arc::new(InMemoryNonceStore::new()),
             shard_attestation_keys: HashMap::new(),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         }
     }
 
@@ -94,6 +98,7 @@ impl ShardRouter {
             quota: QuotaSystem::default_system(),
             nonce_store: Arc::new(InMemoryNonceStore::new()),
             shard_attestation_keys: HashMap::new(),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::zero()),
         }
     }
 
@@ -142,6 +147,7 @@ impl ShardRouter {
             quota,
             nonce_store,
             shard_attestation_keys: HashMap::new(),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         }
     }
 
@@ -166,6 +172,7 @@ impl ShardRouter {
             quota,
             nonce_store,
             shard_attestation_keys: HashMap::new(),
+            fee_burn_tracker: crate::fee_burn::FeeBurnTracker::new(crate::fee_burn::FeeBurnConfig::standard()),
         })
     }
 
@@ -427,6 +434,28 @@ impl ShardRouter {
                 );
                 ShardError::InsufficientFee(format!("Quota exceeded: {e}"))
             })?;
+        }
+
+        // Sprint 3 (§7.3): Record fee-burn portion for deflationary tracking.
+        // The burn is calculated from the effective burn rate and recorded
+        // per-domain for on-chain transparency. This is a tracking event
+        // — the UBC was already destroyed by `quota.spend()` above.
+        if fee > 0 {
+            let burned = self.fee_burn_tracker.calculate_burn(fee);
+            if burned > 0 {
+                let domain = shard_domain_name(&payload.operation);
+                // Log-only: if the consistency check ever fails, something is
+                // deeply wrong with the burn calculation, but we don't reject
+                // the operation for a tracking failure.
+                if let Err(e) = self.fee_burn_tracker.record_burn(fee, burned, domain) {
+                    tracing::error!(
+                        fee,
+                        burned,
+                        error = %e,
+                        "Fee-burn tracking failed (non-fatal)"
+                    );
+                }
+            }
         }
 
         // Capture the operation's debug representation before `route()` moves it.
@@ -721,5 +750,33 @@ impl ShardRouter {
     #[doc(hidden)]
     pub fn last_acknowledged_nonce(&self, creator: &[u8; 32]) -> Option<u64> {
         self.last_nonces.get(creator).copied()
+    }
+
+    /// Get fee-burn statistics for API exposure.
+    pub fn fee_burn_stats(&self) -> crate::fee_burn::FeeBurnStats {
+        self.fee_burn_tracker.stats()
+    }
+
+    /// Get a reference to the fee-burn tracker.
+    pub fn fee_burn_tracker(&self) -> &crate::fee_burn::FeeBurnTracker {
+        &self.fee_burn_tracker
+    }
+
+    /// Get a mutable reference to the fee-burn tracker.
+    pub fn fee_burn_tracker_mut(&mut self) -> &mut crate::fee_burn::FeeBurnTracker {
+        &mut self.fee_burn_tracker
+    }
+}
+
+/// Map a shard operation to its domain name string for fee-burn tracking.
+fn shard_domain_name(op: &ShardOp) -> &'static str {
+    match op {
+        ShardOp::Financial(_) => "financial",
+        ShardOp::Computational(_) => "computational",
+        ShardOp::Physical(_) => "physical",
+        ShardOp::Identity(_) => "identity",
+        ShardOp::Biological(_) => "biological",
+        ShardOp::CrossShard(_) => "cross_shard",
+        ShardOp::Economics(_) => "economics",
     }
 }

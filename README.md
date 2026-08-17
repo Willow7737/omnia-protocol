@@ -31,7 +31,7 @@
 
 ---
 
-## 🚪 Choose Your Path
+## 🚪 Choose Your Path 
 
 | If you are...           | Start Here                                                                     | Next Step                                                                      |
 | ----------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
@@ -88,12 +88,19 @@ All five on v0.1.76+, stake 1 each. Three regions (eu-central, us-east,
 ap-southeast) with two continents. Only node A exposes HTTP publicly; B–E
 are validators reachable over the P2P mesh but not the REST API.
 
-Lane 0 is doing real work on it:
+The mesh is fully peered and currently idle — nothing has been submitted to
+it since the v0.1.95 rollout, so the Lane 0 counters read zero:
 
 ```jsonc
 // GET /api/v1/node/info  (node A)
-{ "peers": 4, "lane0": { "acks_accepted": 27, "acks_rejected": 0, "events_finalized": 9 } }
+{ "peers": 4, "version": "0.1.95", "protocol_version": "4.0.0",
+  "lane0": { "acks_accepted": 0, "acks_rejected": 0, "events_finalized": 0 } }
 ```
+
+Zero counters here mean no traffic, not a stalled lane. What Lane 0 does
+under load is recorded in
+[benchmark-gates.md](docs/reference/benchmark-gates.md): 10k-event bursts
+reaching 100% propagation and full quorum finality across all five nodes.
 
 **Readiness contract.** `/readyz` reports the node as ready when it is
 operational for traffic: it has the configured minimum peer count and is
@@ -101,7 +108,7 @@ not in fast-sync. It does **not** require recent traffic, Lane 1 canonical
 commits, or Lane 0 preconfirmations, so quiet networks stay ready:
 
 ```jsonc
-{ "status": "ready", "peers": 4, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 9 }
+{ "status": "ready", "peers": 4, "finalized_height": 0, "lane0_enabled": true, "lane0_finalized_events": 0 }
 ```
 
 Use `/api/v1/node/info` and Prometheus finality metrics to monitor Lane 0
@@ -333,7 +340,7 @@ cargo bench --no-run
 | Cosmos settlement adapter  | ⚠️ **STUB**             | Implements trait, no-op methods                      |
 | Proof-of-useful-work       | ⚠️ **STUB**             | 3 types defined, no real verification                |
 | Mobile wallet              | ✅ **Shipped (v1)**     | [`Omnia-Wallet`](https://github.com/Willow7737/Omnia-Wallet) — dual-mode auth, live against the testnet node |
-| Validator network          | ✅ **Running** (3 nodes) | Geo-distributed EU/US/Asia mesh — but all three run by the same operator, so not yet trust-distributed |
+| Validator network          | ✅ **Running** (5 nodes) | Geo-distributed EU/US/Asia mesh — but all five run by the same operator, so not yet trust-distributed |
 | Conviction voting          | 🌑 Not started          | Planned for post-testnet                             |
 | Delegation                 | 🌑 Not started          | Planned for post-testnet                             |
 | Production ZK hash gadget  | ✅ Poseidon implemented | Cauchy MDS + BLAKE3 round constants (not Grain LFSR) |
@@ -464,10 +471,18 @@ _Goal: Performance Validation_
 - 🔄 14 medium-priority findings tracked (see [status.md](docs/reference/status.md))
 - 📋 External security audit
 - ✅ Public testnet endpoint **live** (single node at `78.47.43.136.sslip.io`, 0 peers)
-- ✅ **Standing validator network — live.** A 3-node geo-distributed mesh
-  (EU / US-East / Asia) runs continuously with 2 peers each and Lane 0
-  finalizing events. Measured RTTs match the benchmark baseline exactly.
-- 🔄 **Independent operators — not yet.** All three nodes are run by the
+- ✅ **Standing validator network — live.** A 5-node geo-distributed mesh
+  (Nuremberg / Ashburn / Singapore / Helsinki / Falkenstein) runs
+  continuously with 4 peers each. Measured RTTs match the benchmark baseline
+  exactly. Five equal-stake validators put Lane 0 finality at 4-of-5 acks, so
+  the network now tolerates one node down — at three nodes, quorum was all
+  three and fault tolerance was zero. The mesh is fully peered but **idle**:
+  no events have been submitted since the v0.1.95 rollout, so the Lane 0
+  counters read zero. That is an absence of traffic, not an absence of
+  liveness — the 10k-burst runs in
+  [benchmark-gates.md](docs/reference/benchmark-gates.md) are what Lane 0
+  does under load.
+- 🔄 **Independent operators — not yet.** All five nodes are run by the
   same operator, so the network is geo-distributed but not yet
   trust-distributed. The external operator onboarding path is documented,
   but third-party validators are still the remaining step; see
@@ -608,3 +623,39 @@ Omnia is a public-interest protocol. Join the conversation:
 <p align="center">
   <a href="https://www.buymeacoffee.com/willow7737"><img src="https://img.buymeacoffee.com/button-api/?text=Support us&emoji=&slug=willow7737&button_colour=FFDD00&font_colour=000000&font_family=Lato&outline_colour=000000&coffee_colour=ffffff" /></a>
 </p>
+
+
+## Ghana-first OMNIA financial path
+
+The dev branch now contains the first end-to-end financial path for the Ghana pilot. **UBC remains a free, epoch-reset, non-transferable participation allowance. OMNIA is the transferable native asset**, with nine decimal places and a floating value. The pilot distribution rail is Ghana mobile money; it allocates existing treasury inventory and does not auto-mint or promise a fixed GHS redemption rate.
+
+### Quote-backed acquisition
+
+Clients cannot submit an exchange rate, fee, quantity, caller role, or payment-success assertion. The node computes the economic terms, signs the quote with Ed25519, stores the quote context, binds initiation to the authenticated caller, and rejects expired or already-consumed quotes.
+
+| Endpoint | Auth boundary | Purpose |
+| :--- | :--- | :--- |
+| `POST /api/v1/payment-orders/quote` | Wallet JWT | Generate a signed quote from GHS pesewas and `Mtn`, `Telecel`, or `At`. |
+| `POST /api/v1/payment-orders/initiate` | Wallet JWT | Initiate an order from `quote_id`; all economics come from server-side quote storage. |
+| `POST /api/v1/payment-orders/callback` | Provider HMAC + service role | Verify provider signature, replay protection, order binding, and amount binding. |
+| `GET /api/v1/payment-orders/:id` | Wallet JWT | Read the authenticated caller's authoritative order snapshot. |
+| `POST /api/v1/payment-orders/:id/advance` | Registered internal service role | Perform only an authorization-matrix-approved state transition. |
+
+The payment engine persists event-sourced snapshots and side-effect records. Treasury reservations, consumption, release, provider references, and callback outcomes are represented explicitly so recovery is idempotent. The state machine has twenty-five states, and only the delivery states are economically successful; failures and refunds never masquerade as delivery.
+
+### Merchant settlement interface
+
+Merchant onboarding and QR/invoice creation are available through `/api/v1/merchants/register` and `/api/v1/merchants/:id/payment-request`. Merchant owners can read `/api/v1/merchants/:id/payments` and `/api/v1/merchants/:id/receipt/:payment_id`. A delivery service can confirm a payment only with the registered `delivery-service` service role. Merchant QR payloads carry a GHS price, quote expiry, OMNIA amount, payment ID, and optional Ed25519 settlement public key; the wallet signs the resulting transferable OMNIA payment locally.
+
+### Runtime services
+
+`AppState` now shares the quote service, event-sourced payment store, service-role registry, Ghana sandbox provider, and in-memory merchant registry across production and HTTP test fixtures. The Ghana provider uses HMAC-SHA256 callback authentication and constant-time signature comparison. The treasury bucket path consumes approved pre-minted, unassigned inventory before minting any shortfall, and the asset-registry suite includes a no-double-mint invariant test.
+
+The protocol remains explicit about its launch boundary: the Ghana provider is a sandbox adapter until a regulated production mobile-money integration, operational secret management, reconciliation process, refund policy, and legal review are completed. The code path is therefore suitable for controlled testnet/pilot validation, not a claim that OMNIA is already legal tender or redeemable at a fixed GHS rate.
+
+
+## Financial runtime hardening
+
+The Ghana-first financial path now supports a durable `RedbPaymentStore` when `OMNIA_PAYMENT_STORE_PATH` is configured. It persists payment events, snapshots, and side-effect markers atomically so provider callbacks, refunds, treasury reservations, and delivery operations can be retried idempotently after restart. The live node also runs a conservative recovery sweep that reconstructs active orders and reports replay failures without claiming provider success or chain delivery.
+
+Set `OMNIA_RUNTIME_MODE=production` to enable fail-closed startup validation. Production mode requires a durable payment-store path plus non-placeholder quote-signing and Ghana-provider secrets. Development and test nodes may retain the in-memory store and sandbox adapter. Deployment, backup, reconciliation, refund, chain-delivery, and Ghana compliance requirements are documented in [`docs/financial/production-readiness.md`](docs/financial/production-readiness.md).

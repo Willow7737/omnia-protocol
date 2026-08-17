@@ -233,8 +233,11 @@ mod tests {
     #[tokio::test]
     async fn test_pipeline_router_submit_warm() {
         let (router, _hot_rx, mut warm_rx, _cold_rx) = PipelineRouter::new();
-        router.submit_warm(WarmWork { event_id: [1u8; 32] }).await.unwrap();
-        let work = warm_rx.recv().await.unwrap();
+        router
+            .submit_warm(WarmWork { event_id: [1u8; 32] })
+            .await
+            .expect("test assertion failed");
+        let work = warm_rx.recv().await.expect("test assertion failed");
         assert_eq!(work.event_id, [1u8; 32]);
     }
 
@@ -244,8 +247,8 @@ mod tests {
         router
             .submit_cold(ColdWork::SnapshotReplication { round: 42 })
             .await
-            .unwrap();
-        let work = cold_rx.recv().await.unwrap();
+            .expect("test assertion failed");
+        let work = cold_rx.recv().await.expect("test assertion failed");
         match work {
             ColdWork::SnapshotReplication { round } => assert_eq!(round, 42),
             _ => panic!("Expected SnapshotReplication"),

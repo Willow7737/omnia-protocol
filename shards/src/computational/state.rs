@@ -203,7 +203,7 @@ mod tests {
                 },
                 &vc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // 2. Submit a 1-byte (malformed) proof
         state
@@ -214,12 +214,12 @@ mod tests {
                 },
                 &vc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // 3. Verify the 1-byte proof — should fail without real_verification
         let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
         assert!(result.is_err(), "ZK proof should be rejected without real_verification");
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => {
                 assert!(
                     msg.contains("real_verification") || msg.contains("too short"),
@@ -249,17 +249,17 @@ mod tests {
                 },
                 &vc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Submit an empty proof
         state
             .apply(&ComputationalOp::SubmitProof { task_id, proof: vec![] }, &vc)
-            .unwrap();
+            .expect("test assertion failed");
 
         // Verify the empty proof — should fail
         let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);
         assert!(result.is_err(), "ZK proof should be rejected without real_verification");
-        match result.unwrap_err() {
+        match result.expect_err("test assertion failed") {
             ShardError::ValidationFailed(msg) => {
                 assert!(
                     msg.contains("real_verification") || msg.contains("too short"),
@@ -286,7 +286,7 @@ mod tests {
                 },
                 &vc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Submit a well-formed (128+ byte) proof
         state
@@ -297,7 +297,7 @@ mod tests {
                 },
                 &vc,
             )
-            .unwrap();
+            .expect("test assertion failed");
 
         // Verify — should STILL fail because real_verification is not enabled
         let result = state.apply(&ComputationalOp::VerifyProof { task_id }, &vc);

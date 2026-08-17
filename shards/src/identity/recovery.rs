@@ -234,7 +234,7 @@ mod tests {
     fn test_gf_inverse_roundtrip() {
         // a * a^(-1) = 1 for any non-zero a
         for a in [1u8, 2, 0x57, 0x83, 0xFF] {
-            let inv = ShamirRecovery::gf_inverse(a).unwrap();
+            let inv = ShamirRecovery::gf_inverse(a).expect("test assertion failed");
             assert_eq!(ShamirRecovery::gf_mul(a, inv), 1);
         }
     }
@@ -242,40 +242,40 @@ mod tests {
     #[test]
     fn test_split_and_reconstruct_threshold() {
         let secret = b"my super secret key";
-        let shares = ShamirRecovery::split(secret, 3, 5).unwrap();
+        let shares = ShamirRecovery::split(secret, 3, 5).expect("test assertion failed");
         assert_eq!(shares.len(), 5);
 
         // Reconstruct with exactly threshold shares
-        let reconstructed = ShamirRecovery::reconstruct(&shares[0..3]).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&shares[0..3]).expect("test assertion failed");
         assert_eq!(reconstructed, secret);
 
         // Reconstruct with a different set of threshold shares
-        let reconstructed = ShamirRecovery::reconstruct(&shares[1..4]).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&shares[1..4]).expect("test assertion failed");
         assert_eq!(reconstructed, secret);
 
         // Reconstruct with all shares
-        let reconstructed = ShamirRecovery::reconstruct(&shares).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&shares).expect("test assertion failed");
         assert_eq!(reconstructed, secret);
     }
 
     #[test]
     fn test_insufficient_shares_reveal_nothing() {
         let secret = b"my super secret key";
-        let shares = ShamirRecovery::split(secret, 3, 5).unwrap();
+        let shares = ShamirRecovery::split(secret, 3, 5).expect("test assertion failed");
 
         // With fewer than threshold shares, reconstruction should produce
         // different data (not the secret)
         let result = ShamirRecovery::reconstruct(&shares[0..2]);
         assert!(result.is_ok());
-        assert_ne!(result.unwrap(), secret);
+        assert_ne!(result.expect("test assertion failed"), secret);
     }
 
     #[test]
     fn test_single_byte_secret() {
         let secret = b"\x42";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
 
-        let reconstructed = ShamirRecovery::reconstruct(&shares[0..2]).unwrap();
+        let reconstructed = ShamirRecovery::reconstruct(&shares[0..2]).expect("test assertion failed");
         assert_eq!(reconstructed, secret);
     }
 
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_reconstruct_duplicate_indices() {
         let secret = b"test";
-        let shares = ShamirRecovery::split(secret, 2, 3).unwrap();
+        let shares = ShamirRecovery::split(secret, 2, 3).expect("test assertion failed");
         // Duplicate the first share
         let dup_shares = vec![shares[0].clone(), shares[0].clone()];
         assert!(ShamirRecovery::reconstruct(&dup_shares).is_err());
