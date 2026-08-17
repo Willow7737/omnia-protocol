@@ -46,8 +46,33 @@ jobs:
       # read RELEASE_PLEASE_TOKEN". Neither checkout persists credentials, and
       # the push authenticates explicitly, so nothing leaves a token in
       # .git/config for that code to find.
-      - name: Check out main for the trusted sync script
+      # The branch name is parsed in a shell step rather than with fromJson in
+      # a `with:`/`env:` expression. When release-please opens no PR, its `pr`
+      # output is an empty string, and `fromJson('')` fails the whole workflow
+      # template with "Error reading JToken from JsonReader" — the step's `if:`
+      # does not stop that expression from being evaluated. Here an empty
+      # output simply yields an empty `branch`, and the steps below skip.
+      - name: Resolve the release PR branch
+        id: relpr
         if: steps.release.outputs.prs_created == 'true'
+        env:
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+          branch=$(python3 -c "
+          import json, os
+          raw = os.environ.get('PR_JSON') or ''
+          print(json.loads(raw).get('headBranchName', '') if raw.strip() else '')
+          ")
+          if [ -z "$branch" ]; then
+            echo "::notice::no release PR branch to sync"
+          else
+            echo "resolved release branch: $branch"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Check out main for the trusted sync script
+        if: steps.relpr.outputs.branch != ''
         uses: actions/checkout@v4
         with:
           # Pinned: workflow_dispatch can run this from any ref, and without
@@ -56,20 +81,20 @@ jobs:
           persist-credentials: false
 
       - name: Stage the trusted sync script
-        if: steps.release.outputs.prs_created == 'true'
+        if: steps.relpr.outputs.branch != ''
         run: cp scripts/sync-cargo-lock-version.py "$RUNNER_TEMP/sync-cargo-lock-version.py"
 
       - name: Check out the release PR branch
-        if: steps.release.outputs.prs_created == 'true'
+        if: steps.relpr.outputs.branch != ''
         uses: actions/checkout@v4
         with:
-          ref: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          ref: ${{ steps.relpr.outputs.branch }}
           persist-credentials: false
 
       - name: Sync Cargo.lock on the release PR
-        if: steps.release.outputs.prs_created == 'true'
+        if: steps.relpr.outputs.branch != ''
         env:
-          PR_BRANCH: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          PR_BRANCH: ${{ steps.relpr.outputs.branch }}
           GIT_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
