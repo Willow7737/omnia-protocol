@@ -14,7 +14,7 @@ image:
   # L-28 fix (audit v0.1.68): default tag pinned to a specific release
   # version rather than `latest` (or empty), so Helm deployments are
   # reproducible. Override per-environment in your own values file.
-  tag: "0.1.92"
+  tag: "0.1.96"
 
 node:
   id: ""
