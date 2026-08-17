@@ -206,9 +206,22 @@ count and zero finality:
 ```bash
 for ip in localhost 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
   printf "%-16s " "$ip"
-  curl -s "http://$ip:9090/api/v1/node/info" | python3 -c "import sys,json; d=json.load(sys.stdin); l=d['lane0']; print('acks_ok=', l['acks_accepted'], 'acks_rej=', l['acks_rejected'], 'final=', l['events_finalized'])"
+  curl -s "http://$ip:9090/api/v1/node/info" | python3 -c "import sys,json; d=json.load(sys.stdin); l=d['lane0']; print('validators=', l['validator_count'], 'acks_ok=', l['acks_accepted'], 'acks_rej=', l['acks_rejected'], 'final=', l['events_finalized'])"
 done
 ```
+
+`validators=5` on every host is the direct check for the failure mode in the
+troubleshooting table below: a host whose `OMNIA_LANE0_VALIDATORS` differs
+reports a different size here, and that is visible immediately instead of
+being inferred from stalled finality. `validator_count` is `null` when Lane 0
+is disabled on that node — which is itself a finding on a validator host.
+
+Note that this is **not** the same number as `count` from
+`GET /api/v1/validators`. That endpoint reports the `validator_candidates`
+staking registry, where only the genesis node is currently registered, so it
+answers `1` on the five-node mesh. It carries `lane0_validator_count`
+alongside for exactly this reason. Do not build a dashboard on `count` and
+call it the validator count.
 
 Certificates are grow-only sets of the same acks, so healthy nodes converge.
 Counts that cluster into groups — 36/36/14 for one build and 24/24 for

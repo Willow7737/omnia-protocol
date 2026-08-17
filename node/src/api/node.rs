@@ -62,6 +62,7 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
     let lane0 = {
         let substrate = state.substrate.read().await;
         let epoch = substrate.lane0_epoch();
+        let validator_set = substrate.lane0_validator_set();
         substrate.lane0_stats().map(|(accepted, rejected, finalized)| {
             json!({
                 "acks_accepted": accepted,
@@ -70,6 +71,15 @@ pub async fn node_info(State(state): State<AppState>) -> Json<Value> {
                 // Number of validator-set rotations applied (ADR-025
                 // Stage 4). 0 = original operator-configured set.
                 "epoch": epoch,
+                // Size and stake of the **active Lane 0 set** — the nodes
+                // that actually sign quorum acks. This is not the same
+                // number as `count` from GET /api/v1/validators, which
+                // reports the `validator_candidates` staking registry; on
+                // the current testnet that registry holds one entry while
+                // five nodes validate Lane 0. Clients asking "how big is
+                // this network" need the value below.
+                "validator_count": validator_set.map(|(count, _)| count),
+                "validator_stake": validator_set.map(|(_, stake)| stake),
             })
         })
     };
@@ -141,6 +151,14 @@ pub struct PeerInfo {
 /// (persistent redb store). Stake comes from the substrate's
 /// `validator_candidates` registry. The keypair itself is intentionally
 /// NOT exposed — only the public NodeId (hex-encoded) is returned.
+///
+/// **`count` is the size of the staking registry, not of the network.**
+/// The nodes that actually finalize events are the Lane 0 validator set
+/// (`OMNIA_LANE0_VALIDATORS`), which is a separate population: on the
+/// current testnet five nodes validate Lane 0 while one is a registered
+/// candidate, so this endpoint answers `count: 1`. `lane0_validator_count`
+/// is included in the response so a client rendering it can show the real
+/// figure; it is `null` when Lane 0 is disabled.
 #[utoipa::path(
     get,
     path = "/api/v1/validators",
@@ -150,14 +168,14 @@ pub struct PeerInfo {
 )]
 pub async fn list_validators(State(state): State<AppState>) -> Json<Value> {
     // Read consensus round and validator candidates from the substrate.
-    let (validators_with_stake, current_round) = {
+    let (validators_with_stake, current_round, lane0_set) = {
         let substrate = state.substrate.read().await;
         let round = substrate.current_round();
         let entries: Vec<(String, u64)> = substrate
             .validator_candidates_iter()
             .map(|(node_id, stake)| (hex::encode(node_id), stake))
             .collect();
-        (entries, round)
+        (entries, round, substrate.lane0_validator_set())
     };
 
     // Read slash points and jail status from the slashing engine.
@@ -219,5 +237,14 @@ pub async fn list_validators(State(state): State<AppState>) -> Json<Value> {
         "jailed_count": jailed_count,
         "total_stake": total_stake,
         "current_round": current_round,
+        // The Lane 0 set is a *different* population from the staking
+        // registry above, and on the current testnet it is much larger:
+        // five nodes validate Lane 0 while only the genesis node is a
+        // registered candidate. Reported here so a client rendering this
+        // response cannot mistake `count` for the network's validator
+        // count — it is the registry size, nothing more. `null` when Lane 0
+        // is disabled on this node.
+        "lane0_validator_count": lane0_set.map(|(count, _)| count),
+        "lane0_total_stake": lane0_set.map(|(_, stake)| stake),
     }))
 }
