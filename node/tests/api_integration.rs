@@ -438,6 +438,57 @@ async fn setup_server(rate_limit_rps: Option<u64>) -> TestServer {
     }
 }
 
+/// Like [`setup_server`] but boots with Lane 0 enabled and `validators`
+/// members, each with stake 1.
+///
+/// The default fixture leaves Lane 0 disabled, which is exactly the case
+/// where the validator-count fields report `null`. To assert they report the
+/// **real** fast-path set size — the number that differs from the staking
+/// registry's `count` on the live mesh — Lane 0 has to actually be on.
+#[allow(clippy::await_holding_lock)]
+async fn setup_server_with_lane0(validators: usize) -> TestServer {
+    let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    configure_test_server_env(Some(ADMIN_CALLER), None);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind to random port");
+    let port = listener.local_addr().expect("test assertion failed").port();
+
+    let app_state = build_test_app_state(port);
+    {
+        let keys: Vec<_> = (0..validators)
+            .map(|_| omnia_substrate::crypto::generate_keypair())
+            .collect();
+        let set = omnia_substrate::lane0::ValidatorSet::new(keys.iter().map(|k| (k.verifying_key().to_bytes(), 1)))
+            .expect("non-empty validator set with non-zero stake");
+        app_state.substrate.write().await.init_lane0(set);
+    }
+
+    let app = http::build_http_router().with_state(app_state);
+
+    let handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("Test server error");
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    TestServer {
+        base_url: format!("http://127.0.0.1:{port}"),
+        _handle: handle,
+        _env_guard: EnvGuard {
+            keys: vec![
+                "OMNIA_JWT_SECRET",
+                "OMNIA_AUTHORIZED_CALLERS",
+                "OMNIA_JWT_ALLOW_LEGACY_HS256",
+                "OMNIA_RATE_LIMIT_RPS",
+            ],
+        },
+        _lock: lock,
+    }
+}
+
 // ===========================================================================
 //  1. AUTH TEST MATRIX — every endpoint × every auth state
 // ===========================================================================
@@ -458,6 +509,79 @@ async fn test_auth_node_info() {
     assert_eq!(resp.status(), 200, "Public endpoint should be accessible without auth");
     let body: Value = resp.json().await.expect("test assertion failed");
     assert!(body["node_id"].is_string(), "Response should contain node_id");
+}
+
+/// A client cannot tell "how many validators secure this network" from
+/// `GET /api/v1/validators` alone: that endpoint reports the
+/// `validator_candidates` staking registry, and on the live five-node mesh
+/// only the genesis node is registered, so it answers `count: 1`. The
+/// fast-path set size lives on `lane0` in node info, and these two tests pin
+/// it in both directions — reported when Lane 0 is on, explicitly `null`
+/// when it is off (never silently absent, never a misleading zero).
+#[tokio::test]
+async fn test_node_info_reports_lane0_validator_set_size() {
+    let server = setup_server_with_lane0(5).await;
+    let client = reqwest::Client::new();
+
+    let body: Value = client
+        .get(format!("{}/api/v1/node/info", server.base_url))
+        .send()
+        .await
+        .expect("test assertion failed")
+        .json()
+        .await
+        .expect("test assertion failed");
+
+    assert_eq!(
+        body["lane0"]["validator_count"], 5,
+        "node info must report the size of the active Lane 0 set, not the staking registry"
+    );
+    assert_eq!(body["lane0"]["validator_stake"], 5, "five validators at stake 1 each");
+}
+
+#[tokio::test]
+async fn test_validators_endpoint_reports_lane0_count_alongside_registry() {
+    let server = setup_server_with_lane0(5).await;
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .get(format!("{}/api/v1/validators", server.base_url))
+        .send()
+        .await
+        .expect("test assertion failed");
+    assert_eq!(resp.status(), 200, "validators is a public endpoint for dashboards");
+    let body: Value = resp.json().await.expect("test assertion failed");
+
+    // `count` is the staking registry, which the fixture leaves empty. That
+    // is the whole point: a caller reading only `count` would conclude the
+    // network has no validators while five are finalizing Lane 0.
+    assert_eq!(body["count"], 0, "no candidates registered in this fixture");
+    assert_eq!(
+        body["lane0_validator_count"], 5,
+        "the response must carry the fast-path set size so `count` cannot be mistaken for it"
+    );
+}
+
+#[tokio::test]
+async fn test_lane0_validator_count_is_null_when_lane0_disabled() {
+    let server = setup_server(None).await;
+    let client = reqwest::Client::new();
+
+    let body: Value = client
+        .get(format!("{}/api/v1/validators", server.base_url))
+        .send()
+        .await
+        .expect("test assertion failed")
+        .json()
+        .await
+        .expect("test assertion failed");
+
+    assert!(
+        body.get("lane0_validator_count").is_some_and(Value::is_null),
+        "with Lane 0 off the field must be present and null — a client has to be able to \
+         distinguish 'not running Lane 0' from 'zero validators', got {:?}",
+        body.get("lane0_validator_count")
+    );
 }
 
 // ---- GET /api/v1/node/peers ----
