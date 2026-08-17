@@ -128,7 +128,12 @@ class RealWorkspace(unittest.TestCase):
         out, _, seen = sclv.sync(text, members, "9.9.9")
 
         self.assertEqual(members - seen, set(), "every member must be in the lockfile")
-        changed = sum(1 for a, b in zip(text.splitlines(), out.splitlines()) if a != b)
+
+        before, after = text.splitlines(), out.splitlines()
+        # Compare lengths first: zip() stops at the shorter sequence, so on its
+        # own it would not notice the sync appending or dropping lines.
+        self.assertEqual(len(before), len(after), "sync must not add or remove lines")
+        changed = sum(1 for a, b in zip(before, after, strict=True) if a != b)
         self.assertEqual(changed, len(members), "exactly one line per member")
         self.assertEqual(out.count('version = "9.9.9"'), len(members))
 
