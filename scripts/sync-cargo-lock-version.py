@@ -43,6 +43,9 @@ SEMVER = re.compile(
 PACKAGE_BLOCK = re.compile(r"(?ms)^\[\[package\]\]\n.*?(?=^\[\[package\]\]|\Z)")
 NAME_LINE = re.compile(r'^name\s*=\s*"([^"]+)"', re.M)
 VERSION_LINE = re.compile(r'^version\s*=\s*"([^"]+)"', re.M)
+# Workspace members are path packages and never carry `source`. A registry
+# or git package sharing a member's name does, and must be left alone.
+SOURCE_LINE = re.compile(r"^source\s*=", re.M)
 
 
 def workspace_members(manifest: pathlib.Path) -> set[str]:
@@ -86,6 +89,10 @@ def workspace_members(manifest: pathlib.Path) -> set[str]:
 def sync(text: str, members: set[str], version: str) -> tuple[str, list[str], set[str]]:
     """Rewrite the version of every workspace member's `[[package]]` block.
 
+    Blocks carrying a `source` key are skipped: those are registry or git
+    packages, and a dependency that happens to share a workspace member's name
+    must not be rewritten. Matching on name alone would corrupt it.
+
     Returns the updated lockfile text, the members whose version actually
     changed, and the members that were found in the lockfile at all.
     """
@@ -95,7 +102,7 @@ def sync(text: str, members: set[str], version: str) -> tuple[str, list[str], se
     def fix_block(match: re.Match[str]) -> str:
         block = match.group(0)
         name = NAME_LINE.search(block)
-        if not name or name.group(1) not in members:
+        if not name or name.group(1) not in members or SOURCE_LINE.search(block):
             return block
         seen.add(name.group(1))
 
@@ -122,7 +129,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not SEMVER.match(args.version):
+    # fullmatch, not match: Python's `$` also matches before a trailing
+    # newline, so `1.2.3\n` would pass and be written into the lockfile.
+    if not SEMVER.fullmatch(args.version):
         sys.exit(f"error: '{args.version}' is not a valid SemVer version")
     if not args.lock.is_file():
         sys.exit(f"error: {args.lock} not found")

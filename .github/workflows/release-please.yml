@@ -50,6 +50,9 @@ jobs:
         if: steps.release.outputs.prs_created == 'true'
         uses: actions/checkout@v4
         with:
+          # Pinned: workflow_dispatch can run this from any ref, and without
+          # `ref` the "trusted" copy would come from whatever ref dispatched it.
+          ref: main
           persist-credentials: false
 
       - name: Stage the trusted sync script
