@@ -110,7 +110,12 @@ utoipa = "5"
 # Swagger UI embeds ~11MB of JS/CSS assets into the binary.
 # Make it optional so release builds can omit it and meet the ≤12MB target.
 # Enable with --features swagger-ui for development.
-utoipa-swagger-ui = { version = "8", features = ["axum"], optional = true }  # Interactive API docs UI
+# `vendored` embeds the Swagger UI assets in the build dependency instead of
+# downloading them. Without it the build script shells out to `curl -sSL`,
+# which has no `--fail`: on a rate-limit or 5xx GitHub response curl writes the
+# error body to the target file and exits 0, and the build then dies with
+# `InvalidArchive("Could not find EOCD")` on what is actually an HTML page.
+utoipa-swagger-ui = { version = "8", features = ["axum", "vendored"], optional = true }  # Interactive API docs UI
 
 [features]
 default = ["full"]
