@@ -30,6 +30,44 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please bumps Cargo.toml (extra-files, jsonpath
+      # $.workspace.package.version) but cannot bump Cargo.lock: its generic
+      # TOML updater takes one JSONPath, and `$.package[*].version` would
+      # rewrite every third-party dependency while a name filter silently
+      # matches nothing. Left stale, `cargo test --locked` in ci.yml fails on
+      # the release PR itself, so the lockfile is synced here instead.
+      # This job has no checkout of its own — release-please works entirely
+      # over the API — so the release branch is fetched explicitly here.
+      - name: Check out the release PR branch
+        if: steps.release.outputs.prs_created == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Sync Cargo.lock on the release PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          PR_BRANCH: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
+        run: |
+          set -euo pipefail
+          # The version comes from the manifest on the release branch, which
+          # release-please has already bumped. steps.release.outputs.version is
+          # only set when a release is *cut* (the PR is merged), not when it is
+          # opened, and the `pr` output carries no version field.
+          PR_VERSION=$(python3 -c "import json;print(json.load(open('.release-please-manifest.json'))['.'])")
+          echo "release branch $PR_BRANCH is at $PR_VERSION"
+          python3 scripts/sync-cargo-lock-version.py "$PR_VERSION"
+          if git diff --quiet Cargo.lock; then
+            echo "Cargo.lock already matches $PR_VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore: sync Cargo.lock to $PR_VERSION"
+          git push origin "$PR_BRANCH"
+
       - name: Output release info
         if: steps.release.outputs.release_created
         run: |
