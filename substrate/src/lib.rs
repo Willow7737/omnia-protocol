@@ -1547,6 +1547,21 @@ impl Substrate {
         self.lane0_validators.as_ref().map(|_| self.lane0_store.epoch())
     }
 
+    /// Size and total stake of the **active Lane 0 validator set**, or
+    /// `None` when Lane 0 is disabled.
+    ///
+    /// This is the set that actually finalizes events on the fast path —
+    /// `OMNIA_LANE0_VALIDATORS` as configured, or whatever a Lane 1
+    /// validator-set change last rotated it to (ADR-025). It is deliberately
+    /// distinct from the `validator_candidates` staking registry surfaced by
+    /// `GET /api/v1/validators`: on the current testnet only the genesis node
+    /// is registered as a candidate, while all five nodes are Lane 0
+    /// validators. Anything reporting "how many validators are securing this
+    /// network" wants this number, not the registry count.
+    pub fn lane0_validator_set(&self) -> Option<(usize, u64)> {
+        self.lane0_validators.as_ref().map(|set| (set.len(), set.total_stake()))
+    }
+
     /// The state root agreed on by the quorum for the most recently
     /// Lane-0-finalized event (the rolling BLAKE3 commitment).
     /// Returns `None` when Lane 0 is disabled or no event has reached
@@ -2123,6 +2138,47 @@ mod tests {
         assert!(
             substrate.lane0_stats().is_some(),
             "Lane 0 must remain enabled after rotation"
+        );
+    }
+
+    #[test]
+    fn test_lane0_validator_set_reports_size_and_stake() {
+        let config = test_config(1);
+        let mut substrate = Substrate::new(config);
+        assert_eq!(
+            substrate.lane0_validator_set(),
+            None,
+            "no set to report until Lane 0 is enabled"
+        );
+
+        // Five validators is the live testnet's shape, and the number the
+        // staking registry does *not* report — /api/v1/validators sees one
+        // candidate. This accessor is what tells a client the real size.
+        let keys: Vec<_> = (0..5).map(|_| generate_keypair()).collect();
+        let set = lane0::ValidatorSet::new(keys.iter().map(|k| (k.verifying_key().to_bytes(), 3))).expect("valid set");
+        substrate.init_lane0(set);
+
+        assert_eq!(substrate.lane0_validator_set(), Some((5, 15)));
+    }
+
+    #[test]
+    fn test_lane0_validator_set_follows_rotation() {
+        let config = test_config(1);
+        let mut substrate = Substrate::new(config);
+
+        let key1 = generate_keypair();
+        substrate.init_lane0(lane0::ValidatorSet::new([(key1.verifying_key().to_bytes(), 1)]).expect("valid set"));
+        assert_eq!(substrate.lane0_validator_set(), Some((1, 1)));
+
+        let rotated: Vec<_> = (0..3).map(|_| generate_keypair()).collect();
+        substrate.rotate_lane0_validators(
+            lane0::ValidatorSet::new(rotated.iter().map(|k| (k.verifying_key().to_bytes(), 7))).expect("valid set"),
+        );
+
+        assert_eq!(
+            substrate.lane0_validator_set(),
+            Some((3, 21)),
+            "the accessor must track the active set, not the boot set"
         );
     }
 
