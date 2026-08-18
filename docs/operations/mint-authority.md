@@ -24,16 +24,15 @@ FinancialOp::Mint { to, amount } => {
 }
 ```
 
-So the holder of the matching **private** key can mint. The only ceiling on that
-path is `total_supply.checked_add` — arithmetic overflow. The treasury bucket
-caps in `/api/v1/treasury/status` constrain treasury allocation, not this.
+`event.creator_pubkey` is the raw 32-byte Ed25519 key that signed the event
+(`omnia-primitives/src/event.rs`), so the comparison is coherent: the holder of
+the matching **private** key can mint. The only ceiling on that path is
+`total_supply.checked_add` — arithmetic overflow. The treasury bucket caps in
+`/api/v1/treasury/status` constrain treasury *allocation*, not this.
 
-Two consequences follow, and both are the reason this document exists:
+Two consequences follow:
 
-1. **The private key is a supply-control key.** Treat it like one. It should not
-   live on a validator host, and it should not be the same key a node uses for
-   its own identity — see `node/src/main.rs`, which logs a warning when it
-   detects exactly that.
+1. **The private key is a supply-control key.** Treat it like one.
 2. **The public key is a shared genesis parameter.** Byte-identical on all five
    hosts, like `OMNIA_LANE0_VALIDATORS`. Hosts that disagree disagree about who
    may create supply, and per
@@ -45,27 +44,85 @@ work, `/api/v1/supply` answers zeros. It is a *choice*, not a default to drift
 into: those routes serve unauthenticated, so on the public ingress an unset
 value reads as a complete, working-looking, entirely zero economy.
 
+## 0. Which keys can actually mint today
+
+**Read this before generating anything.** It constrains the choice more than the
+security argument does.
+
+Minting requires a committed event whose `creator_pubkey` is the configured
+authority. Today there is exactly one way to get an event onto the chain through
+the API, and it does not let you choose the signing key:
+
+| Path | What it does |
+|:--|:--|
+| `POST /api/v1/events` | Signs with **this node's own persistent keypair** (`node/src/api/events.rs`, `state.keypair`). The request body carries `payload` and `event_type` only — there is no field for a caller-supplied signature. |
+| `POST /api/v1/shards/financial/operations` | Returns **501 Not Implemented** — `handle_generic_shard_op` in `node/src/api/shards.rs`. The financial shard has no operations endpoint. |
+| `POST /api/v1/shards/economics/operations` | Real, but its `mint` is `EconomicsOp::MintUbc` on the *economics* shard — different shard, different state — and the code notes it applies to local state only. |
+
+So:
+
+- **The validator key of a node you can submit through** can mint. Send a
+  `FinancialOp::Mint` payload to that node's `/api/v1/events`; the node signs as
+  itself, `creator_pubkey` matches, the mint is authorised.
+- **A fresh, dedicated, offline key cannot mint** — not because it is refused,
+  but because no API path will ever sign an event with it. Configuring one
+  enables a check that nothing can satisfy: minting stays impossible, and the
+  node logs `Financial shard mint authority configured` exactly as if it had
+  worked.
+
+A dedicated offline authority is the right destination — it is what
+`docs/governance/treasury-multisig-policy.md` §2 asks for, and `node/src/main.rs`
+warns when the authority equals the node's own key for good reason: whoever
+compromises that host gets the money. But it needs an endpoint that accepts an
+externally-signed `FinancialOp::Mint`, and that endpoint does not exist yet.
+Until it does, the honest options are:
+
+1. **Leave it unset** and say so publicly. Minting is off, which is what an
+   unfunded testnet actually is.
+2. **Use the bootstrap node's validator key**, accepting that node A's key is
+   now also the mint key, and that node A is the public ingress. Workable for a
+   testnet; not a mainnet posture.
+
+Choose 1 or 2 deliberately. Do not configure a fresh offline key expecting it to
+work — it will look configured and mint nothing.
+
 ## 1. Generate the keypair
 
-Generate **off the validator hosts**, on a machine you control. Any host with
-the repo and a Rust toolchain will do:
+Only needed for a dedicated authority, which cannot mint yet — see §0. For
+option 2 the key already exists: it is the node's `validator_pubkey`, readable
+from `/api/v1/node/info`.
+
+Generate **off the validator hosts**, on a machine you control.
+
+The passphrase goes through the environment, never the command line.
+`--passphrase` places it in `argv`, which any local user can read from `ps` or
+`/proc/<pid>/cmdline`; the CLI accepts `OMNIA_KEYGEN_PASSPHRASE` for exactly
+this reason (`node/src/config.rs`). A `VAR=value command` prefix puts the value
+in the child's environment, not in anyone's `argv`:
 
 ```bash
 mkdir -p ~/omnia-mint && chmod 700 ~/omnia-mint
-cargo run -p omnia-node -- keygen \
-  --output-dir ~/omnia-mint \
-  --passphrase "$(read -rsp 'passphrase: ' p && echo "$p")"
+
+IFS= read -rsp 'keygen passphrase: ' MINT_PASS && echo
+OMNIA_KEYGEN_PASSPHRASE="$MINT_PASS" \
+  cargo run -p omnia-node -- keygen --output-dir ~/omnia-mint
+unset MINT_PASS
 ```
 
-Or, without a toolchain, from the published image. Note the path — it is
-`<owner>/<repo>/omnia-node`, because `release.yml` builds the tag from the full
-repository slug — and the `--user`, because the image runs as `USER omnia` and
-would otherwise be unable to write to a directory your account owns:
+Or from the published image. Note the tag path — `<owner>/<repo>/omnia-node`,
+because `release.yml` builds it from the full repository slug — and the `--user`,
+because the image runs as `USER omnia` and could not otherwise write to a
+directory your account owns. `-e VAR` with no `=` forwards the value from your
+environment without placing it in the command line:
 
 ```bash
-docker run --rm -it --user "$(id -u):$(id -g)" -v ~/omnia-mint:/out \
+IFS= read -rsp 'keygen passphrase: ' OMNIA_KEYGEN_PASSPHRASE && echo
+export OMNIA_KEYGEN_PASSPHRASE
+docker run --rm -i --user "$(id -u):$(id -g)" \
+  -e OMNIA_KEYGEN_PASSPHRASE -v ~/omnia-mint:/out \
   ghcr.io/willow7737/omnia-protocol/omnia-node:latest \
-  keygen --output-dir /out --passphrase 'CHOOSE-A-REAL-ONE'
+  keygen --output-dir /out
+unset OMNIA_KEYGEN_PASSPHRASE
 ```
 
 It writes two files and prints the public key:
@@ -75,31 +132,19 @@ It writes two files and prints the public key:
 | `validator_pubkey.txt` | the 64 hex characters — this is what goes in `.env` |
 | `validator_key.enc` | the private key, AES-256-GCM, mode `0600` |
 
-Without `--passphrase` the private key is written as `validator_key.bin`,
+Without a passphrase the private key is written as `validator_key.bin`,
 unencrypted, and the command says so in a box. Do not use that here.
 
 > The output filenames are `validator_*`, the same prefix the per-node validator
 > keys use. Generate into a scratch directory as above — never into a node's
 > `OMNIA_KEY_DIR` — so there is no chance of confusing this key with a node
 > identity later. (The node's own key is `node_key.bin`, so nothing is
-> overwritten; the risk is to your ability to tell them apart, which matters
-> more for this key than for any other.)
+> overwritten; the risk is to your ability to tell them apart.)
 
-Then:
-
-- Move `validator_key.enc` to wherever you keep supply-control material. Not a
-  validator host, not the deployment repo, not `docker/.env`.
-- Keep the passphrase separately from the file. A passphrase stored beside the
-  key it protects is an unencrypted key with extra steps.
-- Record the public key somewhere you can compare against later. §4 depends on
-  having something to compare *to*.
-
-`docs/governance/treasury-multisig-policy.md` §2 separates issuance authority
-from node operation and §4 requires 3-of-5 multisig with hardware wallets for
-treasury keys. A single Ed25519 key is not that, and the protocol's
-`mint_authority` field cannot express a threshold today. This procedure gets the
-separation right; the threshold remains open, and is a pre-mainnet gate rather
-than something this runbook can close.
+Then move `validator_key.enc` to wherever you keep supply-control material —
+not a validator host, not the deployment repository, not `docker/.env` — and
+keep the passphrase somewhere else again. A passphrase stored beside the key it
+protects is an unencrypted key with extra steps.
 
 ## 2. Distribute the public key
 
@@ -108,51 +153,105 @@ restarted with a new value while others still hold the old one is the split in
 §4 of the rollout runbook.
 
 Either drive it from the validator console — Fleet → **Shared configuration**,
-which writes to every host and refuses to restart anything unless all five come
-back byte-identical — or, by hand, on each host.
+which writes to every host and reads each file back to confirm before you
+restart anything — or by hand as below.
 
-> **Check the path first.** This repository disagrees with itself about where
-> the deployment checkout lives: `geo-testnet.md` says `/opt/omnia-protocol`
-> (eighteen times), and so does the validator console's fact gatherer, while
-> `financial-layer-rollout.md` §2 says `~/omnia-protocol`. Connected as root
-> those are `/opt/omnia-protocol` and `/root/omnia-protocol` — different
-> directories, and editing `.env` in the wrong one changes nothing while
-> appearing to succeed. Run `ls -d /opt/omnia-protocol ~/omnia-protocol` on one
-> host and use whichever exists. The commands below assume `/opt`.
+### 2.1 Establish the deployment path once
+
+This repository disagrees with itself about where the checkout lives:
+`geo-testnet.md` says `/opt/omnia-protocol` (eighteen times), and so does the
+console's fact gatherer, while `financial-layer-rollout.md` §2 says
+`~/omnia-protocol`. As root those are different directories, and editing `.env`
+in the wrong one changes nothing while appearing to succeed. Resolve it once, on
+each host, and use `DEPLOY_DIR` everywhere afterwards:
 
 ```bash
-cd /opt/omnia-protocol
-cp docker/.env docker/.env.bak.$(date +%s)
-
-# replace the line if present, append it if not — never both
-if grep -q '^OMNIA_MINT_AUTHORITY=' docker/.env; then
-  sed -i "s|^OMNIA_MINT_AUTHORITY=.*|OMNIA_MINT_AUTHORITY=$PUBKEY|" docker/.env
-else
-  printf 'OMNIA_MINT_AUTHORITY=%s\n' "$PUBKEY" >> docker/.env
-fi
+for d in /opt/omnia-protocol "$HOME/omnia-protocol"; do
+  [ -f "$d/docker/.env" ] && DEPLOY_DIR="$d" && break
+done
+[ -n "${DEPLOY_DIR:-}" ] || { echo "no deployment checkout found" >&2; exit 1; }
+echo "using $DEPLOY_DIR"
 ```
 
-A duplicated key is not a syntax error and does not warn: the compose file reads
-the last occurrence, so a stray earlier line is silently ignored on one host and
-silently authoritative on another if the order differs. Check before restarting:
+### 2.2 Set the value
+
+`PUBKEY` must be assigned and checked before the file is touched. Left unset it
+expands to nothing, silently clears the authority, and then compares equal
+everywhere — the agreement check in §3 would report five-way agreement on an
+empty value:
 
 ```bash
+IFS= read -rp 'mint authority public key (64 hex): ' PUBKEY
+PUBKEY="${PUBKEY#0x}"
+printf '%s' "$PUBKEY" | grep -Eq '^[0-9a-fA-F]{64}$' \
+  || { echo "not 64 hex characters — refusing to write" >&2; exit 1; }
+```
+
+Back the file up **outside the checkout**. `docker/.env` also holds
+`OMNIA_JWT_SECRET`, so a `.bak` beside it is a second copy of the fleet's shared
+secret sitting in a git working tree, where `git stash -u` and stray `rsync`
+calls can reach it:
+
+```bash
+install -d -m 0700 /root/omnia-env-backups
+install -m 0600 "$DEPLOY_DIR/docker/.env" "/root/omnia-env-backups/env.$(date +%s)"
+```
+
+Then rewrite. Dropping every existing line and appending one collapses
+duplicates rather than adding to them, and is idempotent — running it twice
+leaves exactly one assignment. A plain `sed -i s///` rewrites each duplicate in
+place and leaves the count unchanged, which then fails the check below with no
+repair step:
+
+```bash
+cd "$DEPLOY_DIR"
+umask 077
+grep -v '^OMNIA_MINT_AUTHORITY=' docker/.env > docker/.env.tmp
+printf 'OMNIA_MINT_AUTHORITY=%s\n' "$PUBKEY" >> docker/.env.tmp
+chmod --reference=docker/.env docker/.env.tmp 2>/dev/null || chmod 600 docker/.env.tmp
+mv docker/.env.tmp docker/.env
+
 grep -c '^OMNIA_MINT_AUTHORITY=' docker/.env   # expect exactly 1
 ```
 
+A duplicated key is not a syntax error and does not warn: compose reads the last
+occurrence, so a stray earlier line is silently ignored on one host and silently
+authoritative on another if the order differs.
+
 ## 3. Confirm agreement before restarting anything
 
-From your workstation, across all five:
+The loop must fail closed. An `ssh` that fails yields an empty value, and five
+empty values group into a single line with a count of five — reporting perfect
+agreement on nothing read at all. A host counts only on a successful exit status
+*and* a well-formed key:
 
 ```bash
-for h in 78.47.43.136 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217; do
-  printf '%-16s ' "$h"
-  ssh root@"$h" "grep '^OMNIA_MINT_AUTHORITY=' /opt/omnia-protocol/docker/.env | cut -d= -f2-"
-done | sort -k2 | uniq -c -f1
+HOSTS="78.47.43.136 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217"
+REMOTE='d=/opt/omnia-protocol; [ -f "$d/docker/.env" ] || d=$HOME/omnia-protocol;
+        grep "^OMNIA_MINT_AUTHORITY=" "$d/docker/.env" | tail -1 | cut -d= -f2-'
+
+ok=0; seen=""
+for h in $HOSTS; do
+  if ! v=$(ssh -o BatchMode=yes root@"$h" "$REMOTE" 2>/dev/null); then
+    echo "FAIL $h — could not read"; continue
+  fi
+  if ! printf '%s' "$v" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+    echo "FAIL $h — unset or malformed: '$v'"; continue
+  fi
+  echo "ok   $h $v"; seen="$seen$v"$'\n'; ok=$((ok+1))
+done
+
+if [ "$ok" -eq 5 ] && [ "$(printf '%s' "$seen" | sort -u | wc -l)" -eq 1 ]; then
+  echo "AGREED on all 5"
+else
+  echo "NOT AGREED — do not restart"
+fi
 ```
 
-One line, count 5. Anything else — stop and fix it before §4. This is the whole
-point of doing the distribution as a separate step from the restart.
+Anything other than `AGREED on all 5` — stop and fix it before §4. Doing the
+distribution and the restart as separate steps is the entire point: a fleet that
+holds a new value but has not restarted is simply a fleet running the old value,
+which is a safe place to stand.
 
 ## 4. Restart, in order
 
@@ -162,7 +261,7 @@ time; 4-of-5 quorum keeps finality alive throughout, and taking two down at once
 stalls it.
 
 ```bash
-cd /opt/omnia-protocol
+cd "$DEPLOY_DIR"
 docker compose -f docker/docker-compose.wan.yml up -d
 ```
 
@@ -178,41 +277,74 @@ and see [financial-layer-rollout.md](./financial-layer-rollout.md) §4.
 
 ## 5. Verify it took effect
 
-Setting the variable is not evidence that the node read it. Two checks, and the
-second is the one that matters.
-
 **The node logged the authority it loaded.** `node/src/main.rs` logs at startup
-in every case — configured, configured-and-equal-to-this-node's-own-key, or
-absent:
+in every case:
 
 ```bash
 docker compose -f docker/docker-compose.wan.yml logs --tail=200 \
   | grep -i 'mint authority\|minting on the financial shard'
 ```
 
-Expect `Financial shard mint authority configured` with your key. If you instead
-see `No mint_authority configured … minting on the financial shard is DISABLED`,
-the variable did not reach the container — check that the compose file forwards
-it (`grep MINT_AUTHORITY docker/docker-compose.wan.yml`, expect the
+Expect `Financial shard mint authority configured` with your key. If you see
+`No mint_authority configured … minting on the financial shard is DISABLED`, the
+variable did not reach the container — check that the compose file forwards it
+(`grep MINT_AUTHORITY docker/docker-compose.wan.yml`, expect the
 `${OMNIA_MINT_AUTHORITY:-}` line).
 
-**Mint something.** Zero counters prove nothing here; they read zero before the
-change too. Submit one signed `Mint` event with the private key from §1 and
-watch `/api/v1/supply` move:
+**That log line is not proof that minting works.** It reports what was parsed
+out of the environment, nothing more, and it appears identically for an
+authority that no reachable key can sign for.
+
+### Actually minting
+
+Possible only under option 2 in §0 — the authority is the validator key of the
+node you submit through. The payload is a postcard-serialised `ShardPayload`
+(`shards/src/payload.rs`) carrying `ShardOp::Financial(FinancialOp::Mint)`,
+hex-encoded, sent to that node's `/api/v1/events`, which signs it with the
+node's own key. `route_event` decodes the payload and dispatches on the variant,
+so the `shard_id` field and the enum variant must agree.
+
+Build the hex with the workspace's own types rather than by hand — the encoding
+is postcard, which is not self-describing, and a hand-rolled byte string decodes
+as something else rather than failing:
+
+```rust
+let payload = ShardPayload {
+    shard_id: ShardId::financial(),
+    operation: ShardOp::Financial(FinancialOp::Mint { to, amount }),
+    nonce,                    // strictly increasing per creator
+};
+println!("{}", hex::encode(payload.to_bytes()?));
+```
+
+```bash
+curl -s -X POST http://localhost:9090/api/v1/events \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d "{\"payload\":\"$HEX\",\"event_type\":\"generic\"}"
+```
+
+Then watch supply move:
 
 ```bash
 curl -s https://78.47.43.136.sslip.io/api/v1/supply
 ```
 
-Until that number moves, all you have verified is that a node started. A wrong
-key produces a node that starts perfectly and rejects every mint with
-`Unauthorized: caller is not the mint authority` — which looks, from the
-outside, exactly like a network nobody has minted on yet.
+Until that number changes, all you have verified is that a node started. A wrong
+key — or a dedicated offline key, per §0 — produces a node that starts perfectly
+and rejects every mint with `Unauthorized: caller is not the mint authority`,
+which from outside looks exactly like a network nobody has minted on yet.
+
+> **Known gap.** No endpoint accepts an externally-signed `FinancialOp::Mint`,
+> which is what forces the choice in §0. Adding one — a financial-shard
+> operations route taking a caller-supplied `creator_pubkey` and signature,
+> verified with `verify_strict`, in the shape `node/src/api/economics.rs`
+> already uses for signed transfers — is the change that would make a dedicated
+> offline mint authority usable. It should land before mainnet.
 
 ## 6. Afterwards
 
 `README.md` and the dashboards describe the economy as zero because it has been.
 Once supply is non-zero that stops being true, and the reason it is written down
 at all is that the previous claim outlived its accuracy while sitting next to an
-endpoint anyone could curl. See [financial-layer-rollout.md](./financial-layer-rollout.md) §5
-for the list of files.
+endpoint anyone could curl. See
+[financial-layer-rollout.md](./financial-layer-rollout.md) §5 for the file list.
