@@ -104,10 +104,17 @@ in the child's environment, not in anyone's `argv`:
 mkdir -p ~/omnia-mint && chmod 700 ~/omnia-mint
 
 IFS= read -rsp 'keygen passphrase: ' MINT_PASS && echo
+[ -n "$MINT_PASS" ] || { echo "empty passphrase — refusing" >&2; return 1 2>/dev/null || exit 1; }
 OMNIA_KEYGEN_PASSPHRASE="$MINT_PASS" \
   cargo run -p omnia-node -- keygen --output-dir ~/omnia-mint
 unset MINT_PASS
 ```
+
+The empty check is load-bearing. clap treats an environment variable set to the
+empty string as *provided*, not absent, so `OMNIA_KEYGEN_PASSPHRASE=` yields
+`Some("")` and `run_keygen` takes the **encrypted** branch with an empty
+passphrase. You get a `validator_key.enc` protected by nothing, and the warning
+box that a plaintext `validator_key.bin` would have printed never appears.
 
 Or from the published image. Note the tag path — `<owner>/<repo>/omnia-node`,
 because `release.yml` builds it from the full repository slug — and the `--user`,
@@ -117,6 +124,7 @@ environment without placing it in the command line:
 
 ```bash
 IFS= read -rsp 'keygen passphrase: ' OMNIA_KEYGEN_PASSPHRASE && echo
+[ -n "$OMNIA_KEYGEN_PASSPHRASE" ] || { echo "empty passphrase — refusing" >&2; exit 1; }
 export OMNIA_KEYGEN_PASSPHRASE
 docker run --rm -i --user "$(id -u):$(id -g)" \
   -e OMNIA_KEYGEN_PASSPHRASE -v ~/omnia-mint:/out \
@@ -204,15 +212,38 @@ place and leaves the count unchanged, which then fails the check below with no
 repair step:
 
 ```bash
+set -euo pipefail
 cd "$DEPLOY_DIR"
 umask 077
-grep -v '^OMNIA_MINT_AUTHORITY=' docker/.env > docker/.env.tmp
-printf 'OMNIA_MINT_AUTHORITY=%s\n' "$PUBKEY" >> docker/.env.tmp
-chmod --reference=docker/.env docker/.env.tmp 2>/dev/null || chmod 600 docker/.env.tmp
-mv docker/.env.tmp docker/.env
+tmp=$(mktemp docker/.env.tmp.XXXXXX)
+trap 'rm -f "$tmp"' EXIT
 
-grep -c '^OMNIA_MINT_AUTHORITY=' docker/.env   # expect exactly 1
+awk '!/^OMNIA_MINT_AUTHORITY=/' docker/.env > "$tmp"
+printf 'OMNIA_MINT_AUTHORITY=%s\n' "$PUBKEY" >> "$tmp"
+chmod --reference=docker/.env "$tmp" 2>/dev/null || chmod 600 "$tmp"
+
+# Validate before the file is replaced, not after.
+count=$(awk '/^OMNIA_MINT_AUTHORITY=/{n++} END {print n+0}' "$tmp")
+[ "$count" -eq 1 ] || { echo "expected exactly one assignment, got $count" >&2; exit 1; }
+grep -q '^OMNIA_JWT_SECRET=' "$tmp" || { echo "JWT secret missing from rewrite" >&2; exit 1; }
+
+mv "$tmp" docker/.env
+trap - EXIT
 ```
+
+Three details matter here.
+
+`awk`, not `grep -v`: under `set -e`, `grep` exits 1 when it matches nothing, so
+a `.env` containing only this one key would abort the script mid-rewrite.
+
+The check runs against the temporary file **before** `mv`, and aborts rather
+than printing. The earlier version replaced `.env` first and then printed a
+count nobody was required to read — so a partial read (`grep` failing on an
+unreadable file) installed a truncated `.env` over a good one, taking
+`OMNIA_JWT_SECRET` with it. The `trap` removes the temporary file on any exit
+path.
+
+The `OMNIA_JWT_SECRET` assertion is a cheap canary for exactly that truncation.
 
 A duplicated key is not a syntax error and does not warn: compose reads the last
 occurrence, so a stray earlier line is silently ignored on one host and silently
@@ -226,32 +257,55 @@ agreement on nothing read at all. A host counts only on a successful exit status
 *and* a well-formed key:
 
 ```bash
+set -uo pipefail
 HOSTS="78.47.43.136 178.156.163.211 5.223.85.30 46.62.218.24 46.224.103.217"
 REMOTE='d=/opt/omnia-protocol; [ -f "$d/docker/.env" ] || d=$HOME/omnia-protocol;
         grep "^OMNIA_MINT_AUTHORITY=" "$d/docker/.env" | tail -1 | cut -d= -f2-'
 
-ok=0; seen=""
+# The key you intended to distribute — not merely whatever the hosts agree on.
+EXPECT=$(printf '%s' "${PUBKEY:?set PUBKEY to the intended authority}" \
+         | tr 'A-F' 'a-f')
+
+ok=0
 for h in $HOSTS; do
   if ! v=$(ssh -o BatchMode=yes root@"$h" "$REMOTE" 2>/dev/null); then
     echo "FAIL $h — could not read"; continue
   fi
-  if ! printf '%s' "$v" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+  v=$(printf '%s' "$v" | tr -d '[:space:]' | tr 'A-F' 'a-f')
+  if ! printf '%s' "$v" | grep -Eq '^[0-9a-f]{64}$'; then
     echo "FAIL $h — unset or malformed: '$v'"; continue
   fi
-  echo "ok   $h $v"; seen="$seen$v"$'\n'; ok=$((ok+1))
+  if [ "$v" != "$EXPECT" ]; then
+    echo "FAIL $h — holds a different key: $v"; continue
+  fi
+  echo "ok   $h"; ok=$((ok+1))
 done
 
-if [ "$ok" -eq 5 ] && [ "$(printf '%s' "$seen" | sort -u | wc -l)" -eq 1 ]; then
-  echo "AGREED on all 5"
+if [ "$ok" -eq 5 ]; then
+  echo "AGREED on all 5, and on the intended key"
 else
-  echo "NOT AGREED — do not restart"
+  echo "NOT AGREED — do not restart" >&2
+  exit 1
 fi
 ```
 
-Anything other than `AGREED on all 5` — stop and fix it before §4. Doing the
-distribution and the restart as separate steps is the entire point: a fleet that
-holds a new value but has not restarted is simply a fleet running the old value,
-which is a safe place to stand.
+Two things this does that the obvious version does not.
+
+**It compares against `PUBKEY`, not just against itself.** Five hosts agreeing
+is not the same as five hosts holding the key you meant to distribute — if §2
+silently edited the wrong checkout (see 2.1), all five still agree, on the *old*
+value, and a self-comparison reports success. The expected key is the input, not
+the majority.
+
+**It exits nonzero when it fails.** Printing `NOT AGREED` and returning 0 means
+a wrapper script, or a `&&`-chained paste, proceeds to the restart anyway.
+
+Hex case is normalised on both sides, so a host written `0xAB…` and one written
+`ab…` are not reported as a divergence they are not.
+
+Doing the distribution and the restart as separate steps is the entire point: a
+fleet that holds a new value but has not restarted is simply a fleet running the
+old value, which is a safe place to stand.
 
 ## 4. Restart, in order
 
@@ -304,41 +358,74 @@ hex-encoded, sent to that node's `/api/v1/events`, which signs it with the
 node's own key. `route_event` decodes the payload and dispatches on the variant,
 so the `shard_id` field and the enum variant must agree.
 
-Build the hex with the workspace's own types rather than by hand — the encoding
-is postcard, which is not self-describing, and a hand-rolled byte string decodes
+Two inputs have no API to look them up, so decide them before you start:
+
+* **`nonce`** — `route_event` keeps `last_nonces` per `creator_pubkey`, defaults
+  it to 0, and requires `last_nonce < nonce <= last_nonce + NONCE_GAP_LIMIT`.
+  Nothing exposes the current value: `/api/v1/financial/balance/*` reports the
+  *transfer* nonce, which is a different counter, and substituting it will be
+  rejected as a replay. On a node whose key has submitted no shard payloads,
+  start at `1` and increment; otherwise raise it until the submission stops
+  returning `Replay detected`, which names the last nonce it saw.
+* **`to`** — the recipient `AccountId`, and **`amount`**, in base units.
+
+Build the hex with the workspace's own types rather than by hand. The encoding
+is postcard, which is not self-describing, so a hand-rolled byte string decodes
 as something else rather than failing:
 
 ```rust
+// A sketch, not a runnable binary: fill in to/amount/nonce and build it inside
+// the workspace so the types come from shards/src/payload.rs.
 let payload = ShardPayload {
     shard_id: ShardId::financial(),
     operation: ShardOp::Financial(FinancialOp::Mint { to, amount }),
-    nonce,                    // strictly increasing per creator
+    nonce,
 };
 println!("{}", hex::encode(payload.to_bytes()?));
 ```
 
+Submit it. The token goes in a file, not on the command line — `-H @file` is
+curl's documented form, and it keeps the bearer token out of `argv` where `ps`
+would show it, exactly as the passphrase does in §1:
+
 ```bash
-curl -s -w '\n%{http_code}\n' -X POST http://localhost:9090/api/v1/events \
-  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d "{\"payload\":\"$HEX\",\"event_type\":\"generic\"}"
+set -euo pipefail
+: "${HEX:?set HEX to the payload printed above}"
+printf '%s' "$HEX" | grep -Eq '^[0-9a-fA-F]+$' || { echo "HEX is not hex" >&2; exit 1; }
+
+umask 077
+hdr=$(mktemp); trap 'rm -f "$hdr"' EXIT
+IFS= read -rsp 'API token: ' TOKEN && echo
+[ -n "$TOKEN" ] || { echo "empty token" >&2; exit 1; }
+printf 'Authorization: Bearer %s\n' "$TOKEN" > "$hdr"
+unset TOKEN
+
+code=$(curl --show-error --silent -o /tmp/mint.out -w '%{http_code}' \
+  -X POST http://localhost:9090/api/v1/events \
+  -H @"$hdr" -H 'content-type: application/json' \
+  -d "{\"payload\":\"$HEX\",\"event_type\":\"generic\"}")
+
+cat /tmp/mint.out; echo
+[ "$code" = "201" ] || { echo "submission failed: HTTP $code" >&2; exit 1; }
 ```
 
-A successful submission answers **`201 Created`**:
+`201 Created` answers with:
 
 ```json
 {"event_id": "<64 hex characters>", "status": "submitted"}
 ```
 
-Check that before looking at supply, so a rejected *request* is not mistaken for
-a rejected *mint*: `400` means the hex payload would not parse, `413` that it
-exceeded `MAX_PAYLOAD_SIZE`, `500` that the node has no persistent keypair
-configured.
+`400` means the hex payload would not parse, `413` that it exceeded
+`MAX_PAYLOAD_SIZE`, `500` that the node has no persistent keypair configured.
+The explicit `%{http_code}` check is used in preference to `--fail-with-body`,
+which needs curl 7.76.0 or newer and is not on every host.
 
-**`201` is not evidence that anything was minted.** It says the event was
-signed and submitted. The authority check runs later, when the committed event
-is applied to the financial shard — a mint the authority does not cover is
-rejected there, well after the API has answered `submitted`. Supply is the only
-thing that distinguishes the two:
+**`201` is not evidence that anything was minted.** It says the event was signed
+and submitted. The authority check runs later, when the committed event is
+applied to the financial shard — a mint the authority does not cover is rejected
+there, well after the API has answered `submitted`, and the rejection appears in
+the node log rather than in the HTTP response. Supply is the only thing that
+distinguishes the two:
 
 ```bash
 curl -s https://78.47.43.136.sslip.io/api/v1/supply
