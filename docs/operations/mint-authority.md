@@ -318,12 +318,27 @@ println!("{}", hex::encode(payload.to_bytes()?));
 ```
 
 ```bash
-curl -s -X POST http://localhost:9090/api/v1/events \
+curl -s -w '\n%{http_code}\n' -X POST http://localhost:9090/api/v1/events \
   -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d "{\"payload\":\"$HEX\",\"event_type\":\"generic\"}"
 ```
 
-Then watch supply move:
+A successful submission answers **`201 Created`**:
+
+```json
+{"event_id": "<64 hex characters>", "status": "submitted"}
+```
+
+Check that before looking at supply, so a rejected *request* is not mistaken for
+a rejected *mint*: `400` means the hex payload would not parse, `413` that it
+exceeded `MAX_PAYLOAD_SIZE`, `500` that the node has no persistent keypair
+configured.
+
+**`201` is not evidence that anything was minted.** It says the event was
+signed and submitted. The authority check runs later, when the committed event
+is applied to the financial shard — a mint the authority does not cover is
+rejected there, well after the API has answered `submitted`. Supply is the only
+thing that distinguishes the two:
 
 ```bash
 curl -s https://78.47.43.136.sslip.io/api/v1/supply
