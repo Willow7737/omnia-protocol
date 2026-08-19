@@ -5000,7 +5000,7 @@ dependencies = [
  "ark-bn254",
  "ark-crypto-primitives",
  "ark-ec",
- "ark-ff 0.4.2",
+ "ark-ff 0.6.0",
  "ark-groth16",
  "ark-r1cs-std",
  "ark-relations",
@@ -5048,7 +5048,7 @@ name = "omnia-benches"
 version = "0.1.100"
 dependencies = [
  "ark-bn254",
- "ark-ff 0.4.2",
+ "ark-ff 0.6.0",
  "criterion",
  "iai-callgrind",
  "omnia-adapters",
@@ -5333,7 +5333,7 @@ version = "0.1.100"
 dependencies = [
  "ark-bn254",
  "ark-ec",
- "ark-ff 0.4.2",
+ "ark-ff 0.6.0",
  "ark-groth16",
  "ark-relations",
  "ark-serialize 0.4.2",
