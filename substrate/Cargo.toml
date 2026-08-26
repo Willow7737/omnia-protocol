@@ -47,7 +47,7 @@ serde_json = "1.0"
 
 # Embedded key-value store for persistent slashing state
 # redb is a pure-Rust, ACID-compliant, simple embedded database.
-redb = "2"
+redb = "4"
 
 # BLS12-381 signature aggregation — reduces N signature verifications to 1
 # Spec: Boneh-Lynn-Shacham (BLS) signatures
