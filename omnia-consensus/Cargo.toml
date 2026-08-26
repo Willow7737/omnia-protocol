@@ -10,7 +10,7 @@ omnia-primitives = { path = "../omnia-primitives" }
 omnia-crypto = { path = "../omnia-crypto" }
 # VRF ticket API in vrf_election (AUDIT-2026-07 C1) takes Ed25519 keys.
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
-redb = "2.0"
+redb = "4.2"
 postcard = { version = "1", features = ["alloc"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

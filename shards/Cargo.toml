@@ -27,7 +27,7 @@ ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 # Persistent nonce storage — needed for replay protection that survives restarts.
 # redb is a pure-Rust, ACID-compliant, simple embedded database that is
 # production-ready and cross-platform (works on Linux/macOS/Windows).
-redb = "2"
+redb = "4"
 
 [features]
 default = []

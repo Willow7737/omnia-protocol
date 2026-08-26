@@ -63,7 +63,7 @@ tower-http = { version = "0.6", features = ["cors"] }
 # Embedded database for persistent nonce and slashing state — redb provides
 # fast, ACID-compliant key-value storage used by RedbNonceStore and RedbSlashingStore.
 # redb is pure Rust, stable, and production-ready.
-redb = "2"
+redb = "4"
 
 # Hex encoding for event IDs and node identifiers in JSON responses
 hex = "0.4"
