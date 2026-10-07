@@ -137,7 +137,7 @@ jobs:
       # ── Upload artifacts ───────────────────────────────────────────
       - name: Upload criterion results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: criterion-regression-results
           path: |
@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload criterion data
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: criterion-data
           path: target/criterion/
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload ZK criterion results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: zk-criterion-results
           path: |
@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload network-sim results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: network-sim-results
           path: |
@@ -430,7 +430,7 @@ jobs:
 
       - name: Upload iai results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: iai-callgrind-results
           path: |
@@ -510,7 +510,7 @@ jobs:
 
       - name: Upload multi-sample results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: multi-sample-results
           path: |
