@@ -529,7 +529,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download criterion data
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: criterion-data
           path: target/criterion/
